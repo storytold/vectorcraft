@@ -3117,6 +3117,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Quest
 	Coin Shine	Münze
 	Boss Alert	Boss
+	Status Effects	Statuseffekte
+	Poison Tint	Gift
+	Freeze Edge	Frost
+	Burn Aura	Brand
+	Stun Pulse	Betäubung
+	Stealth Fade	Schleichen
+	Shield Buff	Schild
 	Shape	Form
 	Shape Builder	Formerstellung
 	Shape Builder Regions	Formerstellungsbereiche
@@ -4007,6 +4014,7 @@ theme	Appearance	Erscheinungsbild
 	Stop Script	Skript stoppen
 	Show External Script Warning	Warnung bei externen Skripten anzeigen
 	A Script Is Running	Ein Skript wird ausgeführt
+	Script Alert	Skriptmeldung
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ein Skript kann die geöffneten Dokumente ändern und über die ausgeführten Befehle Dateien schreiben. Führen Sie nur Skripte aus, denen Sie vertrauen.
 	Do not show this warning again	Diese Warnung nicht mehr anzeigen
 	Stop the script and undo what it did? Then quit again.	Skript stoppen und seine Änderungen rückgängig machen? Beenden Sie danach erneut.
@@ -5702,6 +5710,12 @@ axis	Y Axis	Y-Achse
 	Flag	Flagge
 	Crosshair	Fadenkreuz
 	Checkpoint	Kontrollpunkt
+	Inventory Icons	Inventar-Symbole
+	Sword	Schwert
+	Shield	Schild
+	Potion	Trank
+	Key	Schlüssel
+	Gem	Edelstein
 	Open Symbol Library	Symbol-Bibliothek öffnen
 	Save Symbol Library	Symbol-Bibliothek speichern
 	Save Symbol Library…	Symbol-Bibliothek speichern…
@@ -6371,3 +6385,9 @@ breakText	Glyphs	Glyphen
 	{ms} ms, {calls} host calls	{ms} ms, {calls} Host-Aufrufe
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ältere Zeilen verworfen, {cut} Zeilen gekürzt
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` und `last` müssen Nummern von Zeilen sein, die die Konsole enthält, `first` vor `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Zurückgestellte Effekte aktualisieren
+	Deferred Effects	Zurückgestellte Effekte
+@msg	no plug-in effect is deferred	kein Plug-in-Effekt ist zurückgestellt
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Mit {n} zurückgestelltem Plug-in-Effekt geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt ihn aus.|Mit {n} zurückgestellten Plug-in-Effekten geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt sie aus.

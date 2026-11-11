@@ -115,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
+            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; an image larger than 64 Mpx or 32,768 px a side is refused; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
             has_selection,
             rasterize
         ),
@@ -670,7 +670,9 @@ fn render_pixels(
     opts: &vectorcraft_render::RenderOptions,
     color: RasterColorModel,
 ) -> Result<(vectorcraft_render::Rendered, Option<&'static str>)> {
-    if region.width() * region.height() * scale * scale > MAX_PIXELS || region.width() * scale > 65535.0 || region.height() * scale > 65535.0 {
+    // No side longer than the renderer draws: it would cut the image off there.
+    let side = f64::from(vectorcraft_render::MAX_RASTER_SIDE);
+    if region.width() * region.height() * scale * scale > MAX_PIXELS || region.width() * scale > side || region.height() * scale > side {
         return Err(EngineError::Other("image would be too large; lower the resolution".into()));
     }
     let mut r = vectorcraft_render::Renderer::new();

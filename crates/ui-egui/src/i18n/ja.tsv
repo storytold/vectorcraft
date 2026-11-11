@@ -807,6 +807,13 @@ digits	Malayalam	マラヤーラム数字
 	Quest Outline	クエスト
 	Coin Shine	コイン
 	Boss Alert	ボス
+	Status Effects	ステータス効果
+	Poison Tint	毒
+	Freeze Edge	凍結
+	Burn Aura	火傷
+	Stun Pulse	気絶
+	Stealth Fade	ステルス
+	Shield Buff	シールド
 	Outlines and Rules	アウトラインと罫線
 	Hand-Drawn	手描き風
 	Gradient Finishes	グラデーション仕上げ
@@ -4864,6 +4871,7 @@ swatch	Bright Violet	ビビッドバイオレット
 	Stop Script	スクリプトを停止
 	Show External Script Warning	外部スクリプトの警告を表示
 	A Script Is Running	スクリプトの実行中
+	Script Alert	スクリプトの通知
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
 	Do not show this warning again	今後この警告を表示しない
 	Stop the script and undo what it did? Then quit again.	スクリプトを停止して変更を取り消しますか？その後、もう一度終了してください。
@@ -5801,6 +5809,12 @@ axis	Y Axis	Y 軸
 	Flag	旗
 	Crosshair	クロスヘア
 	Checkpoint	チェックポイント
+	Inventory Icons	インベントリアイコン
+	Sword	剣
+	Shield	盾
+	Potion	ポーション
+	Key	鍵
+	Gem	宝石
 	Open Symbol Library	シンボルライブラリを開く
 	Save Symbol Library	シンボルライブラリを保存
 	Save Symbol Library…	シンボルライブラリを保存…
@@ -6470,3 +6484,9 @@ breakText	Glyphs	字形
 	{ms} ms, {calls} host calls	{ms} ms、ホスト呼び出し {calls} 回
 	{dropped} earlier lines dropped, {cut} lines cut	古い行 {dropped} 行を破棄、{cut} 行を切り詰め
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` と `last` には、コンソールが保持している行の番号を、`first` が `last` より前になるよう指定してください
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	保留中の効果を更新
+	Deferred Effects	保留中の効果
+@msg	no plug-in effect is deferred	保留中のプラグイン効果はありません
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	プラグイン効果を {n} 件保留して開きました。「効果 › 保留中の効果を更新」で実行します。

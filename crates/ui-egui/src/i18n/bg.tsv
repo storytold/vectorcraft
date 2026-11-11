@@ -3071,6 +3071,13 @@ digits	Malayalam	Малаялам
 	Quest Outline	Квест
 	Coin Shine	Монета
 	Boss Alert	Бос
+	Status Effects	Статус ефекти
+	Poison Tint	Отрова
+	Freeze Edge	Замразяване
+	Burn Aura	Изгаряне
+	Stun Pulse	Зашеметяване
+	Stealth Fade	Скритост
+	Shield Buff	Щит
 	Shape	Фигура
 	Shape Builder	Създател на фигури
 	Shape Builder Regions	Области на създателя на фигури
@@ -3980,6 +3987,7 @@ axis	Both	И двете
 	Stop Script	Спри скрипта
 	Show External Script Warning	Показвай предупреждение за външни скриптове
 	A Script Is Running	Изпълнява се скрипт
+	Script Alert	Известие от скрипт
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скриптът може да променя отворените документи и да записва файлове чрез командите, които изпълнява. Изпълнявайте само скриптове, на които имате доверие.
 	Do not show this warning again	Не показвай повече това предупреждение
 	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
@@ -5891,6 +5899,12 @@ axis	Y Axis	Y ос
 	Flag	Флаг
 	Crosshair	Мерник
 	Checkpoint	Контролна точка
+	Inventory Icons	Икони на инвентара
+	Sword	Меч
+	Shield	Щит
+	Potion	Отвара
+	Key	Ключ
+	Gem	Скъпоценен камък
 	Open Symbol Library	Отваряне на библиотека със символи
 	Save Symbol Library	Запазване на библиотека със символи
 	Save Symbol Library…	Запази библиотека със символи…
@@ -6509,3 +6523,7 @@ breakText	Glyphs	Глифи
 	Ended by an internal fault	Прекратен поради вътрешна грешка
 	{ms} ms, {calls} host calls	{ms} ms, {calls} извиквания към хоста
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} по-ранни реда премахнати, {cut} реда съкратени
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Обновяване на отложените ефекти
+	Deferred Effects	Отложени ефекти

@@ -143,6 +143,20 @@ fn a_script_runs_its_own_file_whatever_its_name_ends_with() {
 }
 
 #[test]
+fn a_listed_script_reads_its_included_files_and_runs_files_beside_it() {
+    let dir = folder("include");
+    let mut app = app(&dir);
+    write(&dir, "lib/two.jsxinc", DRAW);
+    write(&dir, "lib/one.js", "vc.run('shape.rectangle', {x:40,y:0,width:10,height:10});");
+    let main = write(&dir, "Main.jsx", "#include \"lib/two.jsxinc\"\n$.evalFile('lib/one.js');\n");
+    read(&app);
+    menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": main })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(objects(&app), 3, "{}", app.ui.status);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn script_and_folder_names_are_shown_as_they_are_in_every_language() {
     let dir = folder("language");
     let app = app(&dir);

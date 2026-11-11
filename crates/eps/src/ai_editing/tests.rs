@@ -3494,6 +3494,9 @@ fn typed() -> Document {
         v_scale: 90.0,
         stroke: solid(Color::rgb(0.0, 0.5, 0.0)),
         stroke_width: 0.5,
+        stroke_cap: vectorcraft_doc::LineCap::Square,
+        stroke_join: vectorcraft_doc::LineJoin::Bevel,
+        stroke_miter_limit: 2.5,
         all_caps: true,
         ..regular.clone()
     };
@@ -3610,7 +3613,7 @@ fn type_lines(doc: &Document) -> Vec<String> {
         for r in &t.runs {
             let s = &r.style;
             out.push(format!(
-                "  run {:?} {} {} {} {:?} {} {} {} {} fill {} stroke {} {} caps={} small={:?} tcy={} roman={}",
+                "  run {:?} {} {} {} {:?} {} {} {} {} fill {} stroke {} {} {:?} {:?} {} caps={} small={:?} tcy={} roman={}",
                 r.text,
                 s.font_family,
                 s.font_style,
@@ -3623,6 +3626,9 @@ fn type_lines(doc: &Document) -> Vec<String> {
                 paint(&s.fill),
                 paint(&s.stroke),
                 r3(s.stroke_width),
+                s.stroke_cap,
+                s.stroke_join,
+                r3(s.stroke_miter_limit),
                 s.all_caps,
                 s.small_caps.map(r3),
                 s.tate_chu_yoko,
@@ -3761,6 +3767,22 @@ fn type_comes_back_as_type() {
     let back = read_back(&doc);
     same_lines(&type_lines(&back), &type_lines(&doc));
     assert_eq!(back.text_threads.len(), 1, "the thread comes back");
+}
+
+/// A run without a stroke whose stroke's cap, join and miter limit aren't the defaults loses
+/// nothing that draws: the save reports no attributes left out.
+#[test]
+fn an_unstroked_run_with_a_stroke_style_loses_nothing() {
+    use vectorcraft_doc::{CharStyle, LineCap, LineJoin, TextObject};
+    for miter in [3.0, f64::NAN] {
+        let st = CharStyle { stroke_cap: LineCap::Round, stroke_join: LineJoin::Bevel, stroke_miter_limit: miter, ..style(14.0, Color::BLACK) };
+        let mut doc = Document::new(200.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = text_node(&mut doc, TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "Plain", st));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.is_empty(), "{miter}: {:?}", out.warnings);
+    }
 }
 
 #[test]

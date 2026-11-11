@@ -2984,6 +2984,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Görev
 	Coin Shine	Jeton
 	Boss Alert	Boss
+	Status Effects	Durum Etkileri
+	Poison Tint	Zehir
+	Freeze Edge	Donma
+	Burn Aura	Yanma
+	Stun Pulse	Sersemletme
+	Stealth Fade	Gizlilik
+	Shield Buff	Kalkan
 	Shape	Şekil
 	Shape Builder	Şekil Oluşturucu
 	Shape Builder Regions	Şekil Oluşturucu Bölgeleri
@@ -3883,6 +3890,7 @@ axis	Both	Her İkisi
 	Stop Script	Betiği Durdur
 	Show External Script Warning	Harici Betik Uyarısını Göster
 	A Script Is Running	Bir Betik Çalışıyor
+	Script Alert	Betik Uyarısı
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
 	Do not show this warning again	Bu uyarıyı bir daha gösterme
 	Stop the script and undo what it did? Then quit again.	Betik durdurulsun ve yaptıkları geri alınsın mı? Ardından yeniden çıkın.
@@ -6075,6 +6083,12 @@ axis	Y Axis	Y ekseni
 	Flag	Bayrak
 	Crosshair	Nişangah
 	Checkpoint	Kontrol noktası
+	Inventory Icons	Envanter Simgeleri
+	Sword	Kılıç
+	Shield	Kalkan
+	Potion	İksir
+	Key	Anahtar
+	Gem	Mücevher
 	Open Symbol Library	Sembol Kitaplığını Aç
 	Save Symbol Library	Sembol Kitaplığını Kaydet
 	Save Symbol Library…	Sembol Kitaplığını Kaydet…
@@ -6740,3 +6754,9 @@ breakText	Glyphs	Glifler
 	{ms} ms, {calls} host calls	{ms} ms, {calls} ana bilgisayar çağrısı
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eski satır atıldı, {cut} satır kesildi
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Ertelenen Efektleri Yenile
+	Deferred Effects	Ertelenen Efektler
+@msg	no plug-in effect is deferred	ertelenen eklenti efekti yok
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} eklenti efekti ertelenerek açıldı. Efekt › Ertelenen Efektleri Yenile bunları çalıştırır.

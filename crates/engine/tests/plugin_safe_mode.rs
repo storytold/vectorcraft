@@ -462,3 +462,43 @@ fn expand_appearance_keeps_a_plug_in_effect_safe_mode_skips() {
     safe_mode::set_active(Some(safe_mode::Source::Flag));
     s.execute("effect.expandAppearance", &json!({})).unwrap();
 }
+
+/// In Safe Mode, a plug-in effect on a dimension selected with the art it measures does not stop
+/// Expand Appearance: the dimension is left as it is, its effect included, and the art expands.
+#[test]
+fn expand_appearance_in_safe_mode_leaves_a_dimension_selected_with_its_art() {
+    let _f = fresh();
+    let mut s = Session::new();
+    let fx = wat::parse_str(tpl::returning(&tpl::manifest("test.sm.dim", "effect", "{}"), r#"{"objects":[]}"#)).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&fx)})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let art = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 72, "height": 72})).unwrap()["id"].clone();
+    s.execute("paint.setStroke", &json!({"ids": [art], "color": "#000000"})).unwrap();
+    s.execute("appearance.addStroke", &json!({})).unwrap();
+    let source = json!({"kind": "segment", "edge": {"node": art, "subpath": 0, "segment": 0}});
+    let dim = s.execute("dimension.create", &json!({"source": source})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [dim]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "plugin.test.sm.dim"})).unwrap();
+    s.execute("select.set", &json!({"ids": [art, dim]})).unwrap();
+    let node = |s: &mut Session, id: &Value| {
+        let inspect = s.execute("document.inspect", &json!({})).unwrap();
+        let mut found = Value::Null;
+        let mut stack = vec![inspect["layers"].clone()];
+        while let Some(v) = stack.pop() {
+            match v {
+                Value::Array(a) => stack.extend(a),
+                Value::Object(o) if o.get("id") == Some(id) => found = Value::Object(o),
+                Value::Object(o) => stack.extend(o.into_iter().map(|(_, v)| v)),
+                _ => {}
+            }
+        }
+        found
+    };
+    let kept = node(&mut s, &dim);
+    let measured = node(&mut s, &art);
+    safe_mode::set_active(Some(safe_mode::Source::Flag));
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    safe_mode::set_active(None);
+    assert_ne!(node(&mut s, &art), measured, "the art expands");
+    assert_eq!(node(&mut s, &dim), kept, "the dimension and its effect stay as they are");
+}

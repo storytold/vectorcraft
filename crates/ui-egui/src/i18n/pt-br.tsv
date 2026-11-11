@@ -2648,6 +2648,13 @@ digits	Malayalam	Malaiala
 	Quest Outline	Missão
 	Coin Shine	Moeda
 	Boss Alert	Chefe
+	Status Effects	Efeitos de status
+	Poison Tint	Veneno
+	Freeze Edge	Congelamento
+	Burn Aura	Queimadura
+	Stun Pulse	Atordoamento
+	Stealth Fade	Furtividade
+	Shield Buff	Escudo
 	Shape	Forma
 	Shape Builder	Construtor de Formas
 	Shape Builder Regions	Regiões do Construtor de Formas
@@ -5068,6 +5075,7 @@ axis	Both	Ambos
 	Stop Script	Parar script
 	Show External Script Warning	Mostrar aviso de scripts externos
 	A Script Is Running	Um script está em execução
+	Script Alert	Alerta do script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Um script pode alterar os documentos abertos e gravar arquivos pelos comandos que executa. Execute apenas scripts em que você confia.
 	Do not show this warning again	Não mostrar este aviso novamente
 	Stop the script and undo what it did? Then quit again.	Parar o script e desfazer o que ele fez? Depois, saia novamente.
@@ -6034,6 +6042,12 @@ axis	Y Axis	Eixo Y
 	Flag	Bandeira
 	Crosshair	Mira
 	Checkpoint	Ponto de verificação
+	Inventory Icons	Ícones de inventário
+	Sword	Espada
+	Shield	Escudo
+	Potion	Poção
+	Key	Chave
+	Gem	Gema
 	Open Symbol Library	Abrir Biblioteca de Símbolos
 	Save Symbol Library	Salvar Biblioteca de Símbolos
 	Save Symbol Library…	Salvar Biblioteca de Símbolos…
@@ -6857,3 +6871,9 @@ swatch	Yellow Green	Verde-amarelado
 	{ms} ms, {calls} host calls	{ms} ms, {calls} chamadas ao host
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} linhas anteriores descartadas, {cut} linhas cortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Atualizar Efeitos Adiados
+	Deferred Effects	Efeitos Adiados
+@msg	no plug-in effect is deferred	nenhum efeito de plug-in está adiado
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aberto com {n} efeito de plug-in adiado. Efeito › Atualizar Efeitos Adiados o executa.|Aberto com {n} efeitos de plug-in adiados. Efeito › Atualizar Efeitos Adiados os executa.

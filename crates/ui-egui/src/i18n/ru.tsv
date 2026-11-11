@@ -3188,6 +3188,13 @@ digits	Malayalam	Малаялам
 	Quest Outline	Квест
 	Coin Shine	Монета
 	Boss Alert	Босс
+	Status Effects	Эффекты статуса
+	Poison Tint	Яд
+	Freeze Edge	Заморозка
+	Burn Aura	Ожог
+	Stun Pulse	Оглушение
+	Stealth Fade	Скрытность
+	Shield Buff	Щит
 	Shape	Фигура
 	Shape Builder	Создание фигур
 	Shape Builder Regions	Области создания фигур
@@ -4128,6 +4135,7 @@ axis	Both	Оба
 	Stop Script	Остановить скрипт
 	Show External Script Warning	Показывать предупреждение о внешних скриптах
 	A Script Is Running	Выполняется скрипт
+	Script Alert	Сообщение скрипта
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт может изменять открытые документы и записывать файлы с помощью выполняемых команд. Запускайте только те скрипты, которым доверяете.
 	Do not show this warning again	Больше не показывать это предупреждение
 	Stop the script and undo what it did? Then quit again.	Остановить скрипт и отменить его изменения? Затем выйдите ещё раз.
@@ -5730,6 +5738,12 @@ axis	Y Axis	Ось Y
 	Flag	Флаг
 	Crosshair	Прицел
 	Checkpoint	Контрольная точка
+	Inventory Icons	Иконки инвентаря
+	Sword	Меч
+	Shield	Щит
+	Potion	Зелье
+	Key	Ключ
+	Gem	Самоцвет
 	Open Symbol Library	Открыть библиотеку символов
 	Save Symbol Library	Сохранить библиотеку символов
 	Save Symbol Library…	Сохранить библиотеку символов…
@@ -6873,3 +6887,9 @@ shape	Open	Открытый
 	{ms} ms, {calls} host calls	{ms} мс, вызовов хоста: {calls}
 	{dropped} earlier lines dropped, {cut} lines cut	Отброшено прежних строк: {dropped}, обрезано строк: {cut}
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Обновить отложенные эффекты
+	Deferred Effects	Отложенные эффекты
+@msg	no plug-in effect is deferred	нет отложенных эффектов модулей
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Открыто с {n} отложенным эффектом модуля. Эффект › Обновить отложенные эффекты выполнит его.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.

@@ -181,6 +181,12 @@ pub(crate) struct Interp {
     pub(crate) held: Rc<HeldCount>,
     /// Set by the host to end the current slice of a resumable run at the next safe point.
     pub(crate) pause: Rc<std::cell::Cell<bool>>,
+    /// The outermost loop of a resumable run is running ([`crate::Realm::advance`]).
+    pub(crate) in_slice: bool,
+    /// True while a host function runs where it may wait ([`crate::HostError::Wait`]).
+    pub(crate) can_wait: Rc<std::cell::Cell<bool>>,
+    /// A host function's call waits for its result: the value on top of the stack stands in for it.
+    pub(crate) waiting: bool,
     /// The message of the uncatchable error a host function ended the run with.
     pub(crate) host_abort: Option<String>,
     /// How much a value passed to or from a host function may carry.
@@ -191,6 +197,8 @@ pub(crate) struct Interp {
     pub(crate) evaluated: u32,
     /// The tag of the source the last run's error was raised in.
     pub(crate) error_tag: u32,
+    /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
+    pub(crate) strict_writes: bool,
 }
 
 /// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
@@ -380,11 +388,15 @@ impl Interp {
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
             pause: Rc::default(),
+            in_slice: false,
+            can_wait: Rc::default(),
+            waiting: false,
             host_abort: None,
             data_limits: crate::DataLimits::default(),
             source_tag: crate::realm::UNKNOWN_SOURCE,
             evaluated: 0,
             error_tag: crate::realm::UNKNOWN_SOURCE,
+            strict_writes: false,
         };
         crate::builtins::install(&mut interp);
         interp.fuel = limits.fuel;
@@ -423,7 +435,7 @@ impl Interp {
 
     // ---- the operand stack ----
 
-    fn push(&mut self, v: Value) -> JsResult<()> {
+    pub(crate) fn push(&mut self, v: Value) -> JsResult<()> {
         self.stack.push(v);
         Ok(())
     }
@@ -691,6 +703,18 @@ impl Interp {
         self.frames.last().is_some_and(|f| f.code.strict)
     }
 
+    /// Does a property write the running code makes throw when it cannot be made? It does in
+    /// strict mode code and in code from a source with [`crate::bytecode::Source::strict_writes`].
+    fn strict_writes(&self) -> bool {
+        self.frames.last().is_some_and(|f| f.code.strict || f.code.source.strict_writes)
+    }
+
+    /// [`crate::bytecode::Source::strict_writes`] for source compiled now: the running code's,
+    /// or the realm's between runs.
+    pub(crate) fn writes_mode(&self) -> bool {
+        self.frames.last().map_or(self.strict_writes, |f| f.code.source.strict_writes)
+    }
+
     fn exec(&mut self, op: Op) -> JsResult<()> {
         match op {
             Op::Undefined => self.push(Value::Undefined),
@@ -909,11 +933,14 @@ impl Interp {
                     _ => Ok(()),
                 }
             }
-            Resolved::Obj { object, .. } => self.put(object, name.clone(), v, strict),
+            Resolved::Obj { object, .. } => {
+                let throw = self.strict_writes();
+                self.put(object, name.clone(), v, throw)
+            }
             Resolved::Unresolved if strict => Err(self.not_defined(name)),
             Resolved::Unresolved => {
-                let global = self.global;
-                self.put(global, name.clone(), v, false)
+                let (global, throw) = (self.global, self.strict_writes());
+                self.put(global, name.clone(), v, throw)
             }
         }
     }
@@ -1444,7 +1471,10 @@ impl Interp {
     fn put_value(&mut self, base: &Value, k: Key, v: Value) -> JsResult<()> {
         let strict = self.strict();
         match base {
-            Value::Object(o) => self.put(*o, k, v, strict),
+            Value::Object(o) => {
+                let throw = self.strict_writes();
+                self.put(*o, k, v, throw)
+            }
             Value::Undefined | Value::Null => {
                 let message = format!(
                     "cannot set property '{}' of {}",
@@ -1855,12 +1885,14 @@ impl Interp {
                     self.temp_roots.truncate(mark);
                     return Ok(Prepared::Done(r?));
                 }
-                Func::Data { f, name, text } => {
+                Func::Data { f, name, read } => {
                     // The arguments are read before the function runs, and a result being built
                     // keeps itself reachable.
-                    return Ok(Prepared::Done(self.call_data(&f, &name, &args, text)?));
+                    return Ok(Prepared::Done(self.call_data(&f, &name, &args, &read)?));
                 }
-                Func::Eval { f, end, name } => return Ok(Prepared::Done(self.call_evaluator(&f, &end, &name, &args)?)),
+                Func::Eval { f, end, strict_writes, name } => {
+                    return Ok(Prepared::Done(self.call_evaluator(&f, &end, &strict_writes, &name, &args)?));
+                }
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
                     return match host(&js_args) {
@@ -2129,11 +2161,17 @@ impl Interp {
     /// Parses and compiles source for eval code or a script, counting it against the source
     /// limit.
     pub(crate) fn compile_source(&mut self, units: &[u16], strict: bool, kind: CodeKind) -> Result<Rc<Code>, CompileError> {
+        let writes = self.writes_mode();
+        self.compile_source_writes(units, strict, writes, kind)
+    }
+
+    /// [`Interp::compile_source`], with [`crate::bytecode::Source::strict_writes`] set to `writes`.
+    pub(crate) fn compile_source_writes(&mut self, units: &[u16], strict: bool, writes: bool, kind: CodeKind) -> Result<Rc<Code>, CompileError> {
         self.source_units = self.source_units.saturating_add(units.len());
         let remaining = self.options.max_source_units.saturating_sub(self.source_units.saturating_sub(units.len()));
         let options = Options { strict, max_source_units: remaining, ..self.options.clone() };
         let program = crate::parse_utf16(units, &options).map_err(CompileError::Syntax)?;
-        let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: self.source_tag });
+        let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: self.source_tag, strict_writes: writes });
         compile_program(&program, &source, kind).map_err(|e| match e {
             CompileFail::Syntax(s) => CompileError::Syntax(s),
             CompileFail::Internal(m) => CompileError::Internal(m),
