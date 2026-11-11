@@ -309,9 +309,21 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "fileDialog": app.picks.waiting_kind(),
     });
     let ids = unreadable_library_ids(app);
-    hide_library_ids(&mut inspected, &ids);
+    for field in PANEL_FIELDS.iter().chain(&LIBRARY_ID_FIELDS) {
+        if let Some(v) = inspected["ui"].get_mut(*field) {
+            hide_library_ids(v, &ids);
+        }
+    }
+    let pairs: Vec<_> = ids.iter().map(|(id, shown)| (id.as_str(), shown.as_str())).collect();
+    if let Some(sets) = inspected["ui"].get_mut("action_sets") {
+        swap_library_params(sets, &pairs);
+    }
     inspected
 }
+
+/// The fields of the UI state, by their keys in `ui.inspect`'s `ui`, that hold library ids or panel
+/// ids besides [`PANEL_FIELDS`]: the library panels, the Color Guide's limit and the workspaces.
+const LIBRARY_ID_FIELDS: [&str; 4] = ["library_panels", "color_guide_limit", "custom_workspaces", "workspace_changes"];
 
 /// The fields of the UI state, by their keys in `ui.inspect`'s `ui`, that hold panel ids: the panel
 /// popped out of the collapsed column, the docking layout, closed panels' places and groups, the panels
@@ -322,9 +334,11 @@ const PANEL_FIELDS: [&str; 7] =
 /// The ids of the loaded libraries (`loaded/<path>`) that the UI state refers to and whose file the
 /// request may not read, each with the id a reply shows instead: `loaded/<file name>`, as a library
 /// loaded without a path is named. The UI state refers to a library by its bare id in a library panel
-/// and the Color Guide's limit, and by a panel id (`library:<kind>:loaded/<path>`) in the fields of
-/// [`PANEL_FIELDS`] and the workspaces' layouts. Text the person types (a command palette query, a
-/// workspace's name) is not read. When another of those ids already shows that name, the next free one
+/// and the Color Guide's limit, by a panel id (`library:<kind>:loaded/<path>`) in the fields of
+/// [`PANEL_FIELDS`] and the workspaces' layouts, and by either in the `library` and `panel` params of
+/// recorded actions' steps. Text the person types (a command palette query, a workspace's or an
+/// action's name) is not read. When another of those ids, or a library loaded in the session, already
+/// has that id, the next free one
 /// of `loaded/<file name> (2)`, `(3)` and so on is shown, in the sorted order of the full ids, so that
 /// two libraries stay two and `ui.inspect` and `ui.docking` show a library under the same id.
 fn unreadable_library_ids(app: &VectorcraftApp) -> Vec<(String, String)> {
@@ -333,6 +347,7 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Vec<(String, String)> {
     for field in PANEL_FIELDS {
         collect_library_panel_ids(&ui[field], &mut ids);
     }
+    collect_library_params(&ui["action_sets"], &mut ids);
     for workspace in ["custom_workspaces", "workspace_changes"].iter().filter_map(|k| ui[k].as_array()).flatten() {
         for (_, layout) in workspace.as_object().into_iter().flatten().filter(|(k, _)| k.as_str() != "name") {
             collect_library_panel_ids(layout, &mut ids);
@@ -343,10 +358,15 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Vec<(String, String)> {
         add_library_id(id, &mut ids);
     }
     let mut hidden = Vec::new();
-    let mut taken = std::collections::BTreeSet::new();
+    // The ids of the libraries loaded in the session, so that a hidden one does not take the id of
+    // one loaded without a path.
+    let s = &app.session;
+    let loaded = s.swatch_libraries.infos().chain(s.style_libraries.infos()).chain(s.symbol_libraries.infos()).chain(s.brush_libraries.infos());
+    let mut taken: std::collections::BTreeSet<String> = loaded.map(|info| info.id.clone()).collect();
     for id in ids {
         let path = &id["loaded/".len()..];
-        let name = vectorcraft_engine::cmd::fileio::file_name(path);
+        // Either separator: a path saved on another platform counts as a path here too.
+        let name = path.rsplit(['/', '\\']).find(|part| !part.is_empty()).unwrap_or(path).to_string();
         if name != path && !readable(path) {
             hidden.push((id, name));
         } else {
@@ -402,27 +422,78 @@ fn collect_library_panel_ids(v: &Value, ids: &mut std::collections::BTreeSet<Str
 /// Writes each id of `ids` as the id the reply shows instead, wherever `v` holds it: in a library's
 /// id, in its panel's id (`library:swatches:loaded/<path>`) and in keys.
 fn hide_library_ids(v: &mut Value, ids: &[(String, String)]) {
-    if ids.is_empty() {
+    let pairs: Vec<_> = ids.iter().map(|(id, shown)| (id.as_str(), shown.as_str())).collect();
+    swap_library_ids(v, &pairs);
+}
+
+/// Text that a person or a script wrote, by its key: a command palette query, a script's report and a
+/// workspace's name. [`swap_library_ids`] leaves it as written.
+const TEXT_FIELDS: [&str; 3] = ["palette_query", "scriptReport", "name"];
+
+/// Writes each `from` id of `pairs` as its `to` id wherever `v` holds it as a whole id ([`swap_whole_ids`]),
+/// in strings and keys, except in the [`TEXT_FIELDS`].
+fn swap_library_ids(v: &mut Value, pairs: &[(&str, &str)]) {
+    if pairs.is_empty() {
         return;
     }
-    let hide = |s: &mut String| {
-        for (id, shown) in ids {
-            if s.contains(id.as_str()) {
-                *s = s.replace(id.as_str(), shown);
+    match v {
+        Value::String(s) => {
+            if let Some(swapped) = swap_whole_ids(s, pairs) {
+                *s = swapped;
             }
         }
-    };
-    match v {
-        Value::String(s) => hide(s),
-        Value::Array(items) => items.iter_mut().for_each(|item| hide_library_ids(item, ids)),
+        Value::Array(items) => items.iter_mut().for_each(|item| swap_library_ids(item, pairs)),
         Value::Object(fields) => {
-            for (mut key, mut item) in std::mem::take(fields) {
-                hide(&mut key);
-                hide_library_ids(&mut item, ids);
-                fields.insert(key, item);
+            for (key, mut item) in std::mem::take(fields) {
+                if TEXT_FIELDS.contains(&key.as_str()) {
+                    fields.insert(key, item);
+                    continue;
+                }
+                swap_library_ids(&mut item, pairs);
+                fields.insert(swap_whole_ids(&key, pairs).unwrap_or(key), item);
             }
         }
         _ => {}
+    }
+}
+
+/// `s` with each `from` id of `pairs` written as its `to` id where it is a whole id: the whole string,
+/// or a part that starts the string or follows a `:`, `"` or `` ` `` (a panel id, a quoted id) and ends
+/// the string or a quote. An id that only begins or ends a longer one stays. `None` when nothing changed.
+fn swap_whole_ids(s: &str, pairs: &[(&str, &str)]) -> Option<String> {
+    let mut out: Option<String> = None;
+    for (from, to) in pairs {
+        let text = out.as_deref().unwrap_or(s);
+        if !text.contains(from) {
+            continue;
+        }
+        let mut next = String::with_capacity(text.len());
+        let mut copied = 0;
+        for (at, _) in text.match_indices(from) {
+            let end = at + from.len();
+            let starts = at == 0 || text[..at].ends_with([':', '"', '`']);
+            let ends = end == text.len() || text[end..].starts_with(['"', '`']);
+            if at >= copied && starts && ends {
+                next.push_str(&text[copied..at]);
+                next.push_str(to);
+                copied = end;
+            }
+        }
+        if copied > 0 {
+            next.push_str(&text[copied..]);
+            out = Some(next);
+        }
+    }
+    out
+}
+
+/// Does `v` hold a string or a key that names a loaded library (`loaded/…`)?
+fn names_a_loaded_library(v: &Value) -> bool {
+    match v {
+        Value::String(s) => s.contains("loaded/"),
+        Value::Array(items) => items.iter().any(names_a_loaded_library),
+        Value::Object(fields) => fields.iter().any(|(key, item)| key.contains("loaded/") || names_a_loaded_library(item)),
+        _ => false,
     }
 }
 
@@ -439,9 +510,43 @@ fn readable(path: &str) -> bool {
     vectorcraft_engine::file_access::check_read(path).is_ok()
 }
 
+/// Does a recorded step's param `key` hold a file or folder path: `path`, `folder` or a name ending in
+/// `Folder` (`destinationFolder`, `searchFolder`)?
+fn is_path_param(key: &str) -> bool {
+    matches!(key, "path" | "folder") || key.ends_with("Folder")
+}
+
+/// The params of each step of each action of action set `set` (`ui.action_sets`).
+fn steps_mut(set: &mut Value) -> impl Iterator<Item = &mut serde_json::Map<String, Value>> {
+    let actions = set.get_mut("actions").and_then(Value::as_array_mut).into_iter().flatten();
+    let steps = actions.filter_map(|action| action.get_mut("steps").and_then(Value::as_array_mut)).flatten();
+    steps.filter_map(|step| step.get_mut(1).and_then(Value::as_object_mut))
+}
+
+/// Takes out of a recorded step's params, at any depth (the commands of a `command.batch` step), the
+/// paths the request may not read: a path param ([`is_path_param`]) and each path of a `paths` list.
+fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>) {
+    params.retain(|key, v| !(is_path_param(key) && v.as_str().is_some_and(|p| !readable(p))));
+    if let Some(Value::Array(paths)) = params.get_mut("paths") {
+        paths.retain(|p| p.as_str().is_none_or(readable));
+    }
+    for v in params.values_mut() {
+        leave_out_unreadable_values(v);
+    }
+}
+
+/// [`leave_out_unreadable_params`] on each object `v` holds.
+fn leave_out_unreadable_values(v: &mut Value) {
+    match v {
+        Value::Object(fields) => leave_out_unreadable_params(fields),
+        Value::Array(items) => items.iter_mut().for_each(leave_out_unreadable_values),
+        _ => {}
+    }
+}
+
 /// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
-/// a library panel's file and folder preferences (saved, and in an open Preferences dialog) outside
-/// the read root. The UI state itself is not changed.
+/// a library panel's file, folder preferences (saved, and in an open Preferences dialog) and the paths
+/// in recorded actions' steps outside the read root. The UI state itself is not changed.
 fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
     if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
         files.retain(|f| f.as_str().is_some_and(readable));
@@ -452,6 +557,9 @@ fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
                 panel.remove("path");
             }
         }
+    }
+    for step in ui.get_mut("action_sets").and_then(Value::as_array_mut).into_iter().flatten().flat_map(steps_mut) {
+        leave_out_unreadable_params(step);
     }
     if let Some(Value::Object(prefs)) = ui.get_mut("engine_prefs") {
         leave_out_unreadable_folders(prefs);
@@ -468,8 +576,9 @@ fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
 /// empty value (no folder) and a scratch disk choice ([`SCRATCH_CHOICES`]) stay.
 fn leave_out_unreadable_folders(prefs: &mut serde_json::Map<String, Value>) {
     for key in PREF_FOLDERS {
-        let Some(path) = prefs.get(key).and_then(Value::as_str).map(str::trim) else { continue };
-        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || readable(path) {
+        let Some(written) = prefs.get(key).and_then(Value::as_str) else { continue };
+        let path = written.trim();
+        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || readable(written) {
             continue;
         }
         prefs.remove(key);
@@ -499,7 +608,83 @@ fn modifiers(p: &Value) -> egui::Modifiers {
     egui::Modifiers { alt: b("alt"), ctrl: b("ctrl"), shift: b("shift"), mac_cmd: b("cmd") && cfg!(target_os = "macos"), command: b("cmd") }
 }
 
+/// The params that name a library or a library panel, at any depth of a request (`ui.set {panel}`,
+/// `engine.execute {params: {panel}}`, `ui.libraryPanel {panel, library}`), with the docking
+/// commands' destinations (`window.panel.move {anchor, before}`, `window.panel.float {onto, above,
+/// below}`) and a list of panels.
+const LIBRARY_PARAMS: [&str; 8] = ["panel", "library", "anchor", "before", "onto", "above", "below", "panels"];
+
+/// The param of `window.panel.layout` that holds a serialized docking action: each panel id in it is
+/// translated.
+const DOCKING_ACTION: &str = "action";
+
+/// Runs a control request. A library loaded from outside the read root keeps the id `ui.inspect`
+/// shows for it ([`unreadable_library_ids`]) both ways: a request may name it or its panel by that id
+/// in a [`LIBRARY_PARAMS`] param, and the reply to such a request shows that id.
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    let ids = if names_a_loaded_library(&req.params) { unreadable_library_ids(app) } else { Vec::new() };
+    let shown: Vec<_> = ids.iter().map(|(id, shown)| (shown.as_str(), id.as_str())).collect();
+    let mut params = req.params.clone();
+    if shown.is_empty() || !swap_library_params(&mut params, &shown) {
+        return dispatch(app, ctx, req);
+    }
+    let named = ControlRequest { method: req.method.clone(), params, reply: req.reply.clone(), state: req.state.clone(), seq: req.seq };
+    match dispatch(app, ctx, &named) {
+        Outcome::Done(mut reply) => {
+            hide_library_ids(&mut reply, &ids);
+            Outcome::Done(reply)
+        }
+        outcome => outcome,
+    }
+}
+
+/// Writes each `from` id of `pairs` in the [`LIBRARY_PARAMS`] params of `params`, at any depth, as its
+/// `to` id → whether one was.
+fn swap_library_params(params: &mut Value, pairs: &[(&str, &str)]) -> bool {
+    match params {
+        Value::Array(items) => items.iter_mut().fold(false, |swapped, item| swap_library_params(item, pairs) | swapped),
+        Value::Object(fields) => fields.iter_mut().fold(false, |swapped, (key, item)| {
+            let this = match item {
+                Value::String(s) if LIBRARY_PARAMS.contains(&key.as_str()) => swap_whole_ids(s, pairs).map(|to| *s = to).is_some(),
+                Value::Array(items) if LIBRARY_PARAMS.contains(&key.as_str()) => items.iter_mut().fold(false, |swapped, item| {
+                    let this = item.as_str().and_then(|s| swap_whole_ids(s, pairs)).map(|to| *item = Value::String(to)).is_some();
+                    this | swapped
+                }),
+                Value::Object(_) if key == DOCKING_ACTION => {
+                    let before = item.clone();
+                    swap_library_ids(item, pairs);
+                    *item != before
+                }
+                _ => swap_library_params(item, pairs),
+            };
+            this | swapped
+        }),
+        _ => false,
+    }
+}
+
+/// Adds to `ids` the loaded library ids that the [`LIBRARY_PARAMS`] params of `v` name, at any depth:
+/// a library's id or its panel's id.
+fn collect_library_params(v: &Value, ids: &mut std::collections::BTreeSet<String>) {
+    match v {
+        Value::Array(items) => items.iter().for_each(|item| collect_library_params(item, ids)),
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                if !LIBRARY_PARAMS.contains(&key.as_str()) {
+                    collect_library_params(item, ids);
+                    continue;
+                }
+                for s in item.as_str().into_iter().chain(item.as_array().into_iter().flatten().filter_map(Value::as_str)) {
+                    add_library_id(s, ids);
+                    collect_library_panel_ids(&json!(s), ids);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let s = |k: &str| p.get(k).and_then(Value::as_str);
     match req.method.as_str() {

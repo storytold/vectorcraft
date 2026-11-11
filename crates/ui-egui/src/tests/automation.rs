@@ -425,6 +425,124 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.inspect` checks a folder preference as it is written: the read root's path with a space before
+/// it is a relative path, outside the root, and is left out.
+#[test]
+fn ui_inspect_checks_a_folder_preference_as_written() {
+    let (mut app, tx, base) = confined("inspect-folder-space");
+    let inside = s(base.join("in"));
+    app.ui.engine_prefs = json!({"fontsFolder": inside, "templatesFolder": format!(" {inside}")});
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let prefs = r["result"]["ui"]["engine_prefs"].as_object().unwrap();
+    assert_eq!(prefs.get("fontsFolder").and_then(Value::as_str), Some(inside.as_str()), "{r}");
+    assert!(!prefs.contains_key("templatesFolder"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` rewrites a hidden library's id only in the fields that hold library and panel ids:
+/// status text that is that id stays as written.
+#[test]
+fn ui_inspect_keeps_status_text_that_is_a_hidden_library_id() {
+    let (mut app, tx, base) = confined("inspect-status-id");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.status = theirs.clone();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
+    assert_eq!(r["result"]["ui"]["status"], json!(theirs), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` hides a library loaded from outside the read root in the steps of a recorded action
+/// (its `library` and `panel` params), also when nothing else names it, and keeps the action's name.
+#[test]
+fn ui_inspect_hides_a_hidden_library_in_recorded_steps() {
+    let (mut app, tx, base) = confined("inspect-action-steps");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": theirs, "steps": [
+            ["swatch.library.add", {"library": theirs}],
+            ["window.panel", {"panel": format!("library:swatches:{theirs}")}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let action = &r["result"]["ui"]["action_sets"][0]["actions"][0];
+    assert_eq!(action["name"], json!(theirs), "{r}");
+    assert_eq!(
+        action["steps"],
+        json!([["swatch.library.add", {"library": "loaded/b.svg"}], ["window.panel", {"panel": "library:swatches:loaded/b.svg"}]]),
+        "{r}"
+    );
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded action's steps the file paths (`path`, `folder`, a name ending
+/// in `Folder`, `paths`) outside the read root, also in a batch step's commands, and keeps the ones
+/// inside it.
+#[test]
+fn ui_inspect_leaves_out_recorded_paths_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-action-paths");
+    let (a, b) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")));
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": "files", "steps": [
+            ["file.open", {"path": a}],
+            ["file.open", {"path": b}],
+            ["file.place", {"paths": [a, b]}],
+            ["batch.run", {"folder": s(base.join("outside"))}],
+            ["action.batch", {"destinationFolder": s(base.join("outside"))}],
+            ["command.batch", {"commands": [{"command": "file.open", "params": {"path": b}}]}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let want = json!([
+        ["file.open", {"path": a}],
+        ["file.open", {}],
+        ["file.place", {"paths": [a]}],
+        ["batch.run", {}],
+        ["action.batch", {}],
+        ["command.batch", {"commands": [{"command": "file.open", "params": {}}]}],
+    ]);
+    assert_eq!(steps, &want, "{r}");
+    assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 6, "the UI state is not changed");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` hides a library loaded from outside the read root whose id holds a path written with
+/// either separator, also one saved on another platform.
+#[test]
+fn ui_inspect_hides_a_library_path_with_either_separator() {
+    let (mut app, tx, base) = confined("inspect-separators");
+    app.ui.color_guide_limit = r"loaded/C:\Users\someone\b.svg".to_string();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
+    app.ui.color_guide_limit = "loaded//home/someone/c.svg".to_string();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/c.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A hidden library does not take the id of a library loaded without a path under the same file
+/// name: it shows as `loaded/<file name> (2)`, and a request that names the other library reaches it.
+#[test]
+fn ui_inspect_keeps_a_hidden_library_off_a_loaded_librarys_id() {
+    let (mut app, tx, base) = confined("inspect-loaded-id");
+    let svg = std::fs::read_to_string(base.join("in/a.svg")).unwrap();
+    let loaded = app.session.execute("swatch.library.load", &json!({"data": svg, "name": "b.svg"})).unwrap();
+    assert_eq!(loaded["library"], "loaded/b.svg");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    app.ui.color_guide_limit = theirs;
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg (2)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A closed panel's former place, as `ui.docking_hidden` keeps it.
 fn hidden_place() -> craft_ui::docking::Location<String> {
     serde_json::from_value(json!({"floating": null, "anchor": null, "placement": {"Tab": {"before": null}}, "size": null, "stack": null})).unwrap()
@@ -516,6 +634,71 @@ fn ui_inspect_keeps_text_that_only_looks_like_a_library_id() {
     assert_eq!(r["result"]["scriptReport"]["log"], json!([text]), "{r}");
     assert_eq!(r["result"]["ui"]["palette_query"], json!(query), "{r}");
     assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/d.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` rewrites a hidden library's id only where a string is that whole id: a readable
+/// library's id that begins with it stays, and a script's report line and a command palette query
+/// that hold it stay as written.
+#[test]
+fn ui_inspect_rewrites_only_whole_hidden_library_ids() {
+    let (mut app, tx, base) = confined("inspect-whole-id");
+    let hidden = format!("loaded/{}", s(base.join("i")));
+    let readable = format!("loaded/{}", s(base.join("in/a.svg")));
+    assert!(readable.starts_with(&hidden));
+    let panel = |id: &str| -> crate::panels::library_panel::LibraryPanel { serde_json::from_value(json!({"kind": "swatches", "id": id})).unwrap() };
+    app.ui.library_panels = vec![panel(&hidden), panel(&readable)];
+    let query = format!("library:swatches:{hidden}");
+    app.ui.palette_query = query.clone();
+    let text = format!("found {hidden}");
+    let source = format!("vc.log({})", json!(text));
+    app.session.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_pump().is_some() {
+            break;
+        }
+    }
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ids: Vec<_> = r["result"]["ui"]["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
+    assert_eq!(ids, [json!("loaded/i"), json!(readable)], "{r}");
+    assert_eq!(r["result"]["scriptReport"]["log"], json!([text]), "{r}");
+    assert_eq!(r["result"]["ui"]["palette_query"], json!(query), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A client can name a hidden library by the id `ui.inspect` shows: `ui.set {panel}` with that panel id
+/// reopens the closed panel of the library, and the reply does not show its path.
+#[test]
+fn ui_set_reopens_a_hidden_librarys_panel_by_its_shown_id() {
+    let (mut app, tx, base) = confined("set-hidden-panel");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let real = format!("library:swatches:{theirs}");
+    app.ui.docking_hidden.insert(real.clone(), hidden_place());
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let shown = "library:swatches:loaded/b.svg";
+    assert!(r["result"]["ui"]["docking_hidden"].as_object().unwrap().contains_key(shown), "{r}");
+    let r = request(&mut app, &tx, "ui.set", json!({"panel": shown}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!app.ui.docking_hidden.contains_key(&real), "the closed panel is reopened: {r}");
+    let layout = crate::panel_docking::layout_of(&app.ui);
+    assert!(layout.contains(&real) && !layout.contains(&shown.to_string()), "no second panel: {layout:?}");
+    let hidden = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    // A docking command takes the shown id as its destination too.
+    let r = request(
+        &mut app,
+        &tx,
+        "engine.execute",
+        json!({"command": "window.panel.move", "params": {"panel": "layers", "anchor": shown, "zone": "tab"}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    // An error that quotes the panel shows the id the client gave, and other text is not rewritten.
+    let r = request(&mut app, &tx, "ui.set", json!({"panel": "library:bogus:loaded/b.svg"}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    let r = request(&mut app, &tx, "ui.set", json!({"status": "loaded/b.svg"}));
+    assert_eq!((r["ok"].as_bool(), app.ui.status.as_str()), (Some(true), "loaded/b.svg"), "{r}");
     let _ = std::fs::remove_dir_all(base);
 }
 
