@@ -525,6 +525,51 @@ fn many_objects_of_one_name_are_numbered_in_turn() {
     assert!(text.contains("(Dot_00000000000000019999_)"));
 }
 
+/// A document with one top-level layer for each of the 27 layer colour presets, named after its
+/// position.
+fn every_layer_preset() -> Document {
+    let mut doc = Document::new(100.0, 100.0);
+    doc.layers.clear();
+    for i in 0..vectorcraft_doc::LAYER_COLORS.len() {
+        let id = doc.alloc_id();
+        doc.layers.push(Arc::new(Node::layer(id, &format!("P{i}"), LayerColor::Preset(u8::try_from(i).unwrap()))));
+    }
+    doc
+}
+
+/// #6502: Yellow, Magenta and Cyan (presets 4, 5 and 6) are written as the file's indexes 6, 4
+/// and 5, with their own RGB beside them; every other preset keeps its position.
+#[test]
+fn layer_presets_are_written_with_the_files_colour_index() {
+    let text = program(&every_layer_preset());
+    for (i, (_, [r, g, b])) in vectorcraft_doc::LAYER_COLORS.iter().enumerate() {
+        let index = match i {
+            4 => 6,
+            5 => 4,
+            6 => 5,
+            i => i,
+        };
+        let want = format!(" {index} {r} {g} {b} 0 50 0 Lb\n(P{i}) Ln\n");
+        assert!(text.contains(&want), "missing {want:?}");
+    }
+}
+
+/// #6502: every preset comes back as itself after a save and an open.
+#[test]
+fn layer_presets_survive_a_round_trip() {
+    let doc = read_back(&every_layer_preset());
+    let colors: Vec<LayerColor> = doc
+        .layers
+        .iter()
+        .map(|l| match l.kind {
+            NodeKind::Layer { color, .. } => color,
+            _ => panic!("{:?}", l.kind),
+        })
+        .collect();
+    let want: Vec<LayerColor> = (0..27u8).map(LayerColor::Preset).collect();
+    assert_eq!(colors, want);
+}
+
 #[test]
 fn layers_have_fourteen_operands() {
     let text = program(&sample());

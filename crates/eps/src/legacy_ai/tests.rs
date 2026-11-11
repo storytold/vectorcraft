@@ -940,6 +940,35 @@ fn names_outside_windows_1252_are_replaced_and_kept_apart() {
     assert_eq!(inks(&read), want);
 }
 
+/// #6502: the legacy writer gives Yellow, Magenta and Cyan (presets 4, 5 and 6) the file's
+/// indexes 6, 4 and 5, and they open as the same presets.
+#[test]
+fn layer_presets_are_written_with_the_files_colour_index() {
+    let mut doc = Document::new(100.0, 100.0);
+    doc.layers.clear();
+    for i in 3..8u8 {
+        let id = doc.alloc_id();
+        doc.layers.push(Arc::new(Node::layer(id, &format!("P{i}"), vectorcraft_doc::LayerColor::Preset(i))));
+    }
+    let out = write(&doc);
+    let text = String::from_utf8_lossy(&out.bytes).replace("\r\n", "\n");
+    for (i, index) in [(3, 3), (4, 6), (5, 4), (6, 5), (7, 7)] {
+        let [r, g, b] = vectorcraft_doc::LAYER_COLORS[i].1;
+        let want = format!(" 0 {index} {r} {g} {b} Lb\n(P{i}) Ln\n");
+        assert!(text.contains(&want), "missing {want:?} in\n{text}");
+    }
+    let read = crate::import(&out.bytes).unwrap().document;
+    let colors: Vec<_> = read
+        .layers
+        .iter()
+        .filter_map(|l| match l.kind {
+            NodeKind::Layer { color, .. } => Some(color),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(colors, (3..8u8).map(vectorcraft_doc::LayerColor::Preset).collect::<Vec<_>>());
+}
+
 #[test]
 fn losses_are_warned() {
     let mut doc = sample();
