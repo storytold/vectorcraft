@@ -980,7 +980,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.copyScriptConsole",
         "Copy Script Console",
         "",
-        "{first?, last?: numbers of lines the Script Console holds, both or neither} copy those lines of the Script Console to the clipboard as the panel shows them, each with its run's number and script name; without them every line, after a line counting the lines it dropped and cut (Script Console panel: Copy Selected, Copy All; script.console gives the lines) → {lines: n}",
+        "{first?, last?: numbers of lines the Script Console holds, both or neither} copy those lines of the Script Console to the clipboard as the panel shows them, each with its run's number and script name; without them every line, after a line counting the lines it dropped and cut when it dropped or cut any, which n does not count (Script Console panel: Copy Selected, Copy All; script.console gives the lines) → {lines: n}",
     ),
     (
         "window.graphicStyleLibrary",

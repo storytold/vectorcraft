@@ -1636,11 +1636,12 @@ at the bottom of the panel and in its menu. Output goes on while the panel is cl
 
 - `script.console {}` returns `{lines: [{run, name, kind, text}], droppedLines, truncatedLines}`. `run` is the
   run's number in the session, and `kind` is `start`, `output`, `log`, `error`, `end` or `report`. An end line's text
-  is `ended: ` followed by `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`.
+  is `ended:`, a space, and then `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`.
 - `script.console.clear {}` empties the console, sets its counts to zero and returns `{cleared}`. A running script
   goes on writing, and `scriptReport` keeps the last run's console.
 - `ui.copyScriptConsole {first?, last?}` copies lines `first` to `last` to the clipboard as the panel shows them, or
-  every line after a line with the counts when both are left out. Pass both or neither. It returns `{lines}`.
+  every line when both are left out. When the console has dropped or cut any lines, a copy of every line starts with a
+  line that counts them. Pass both or neither. It returns `{lines}`, which does not count that line.
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "$.writeln(\"layers: \", 3);"}'
