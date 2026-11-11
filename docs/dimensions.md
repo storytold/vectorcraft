@@ -74,14 +74,27 @@ paths and text as ordinary art. Object › Expand, Object › Expand Appearance,
 and Object › Path › Outline Stroke turn a dimension whose art they change into a plain group of that
 art, also when they reach only a part of it: moving or scaling the group does not redraw it, it does
 not follow the art it measured, and undoing the command gives the live dimension back. The menus dim
-Object › Expand… while a whole dimension is selected, because its label has appearance items;
-Object › Expand Appearance and the `object.expand` command still reach it. A dimension selected with
-the art it measures also becomes a plain group when Object › Expand, Object › Expand Appearance or
-Object › Path › Outline Stroke changes only that art and the art no longer fits the dimension's link,
-for example because its number of anchors changed. When the art keeps its id and anchor count and the
-dimension's own art does not change, the dimension stays live and its label shows the new length. Pasted
-dimensions keep their geometry and drop their links, so they never bind to unrelated art in another
-document.
+Object › Expand… while a whole dimension is selected without the art it measures, because its label
+has appearance items; Object › Expand Appearance and the `object.expand` command still reach it.
+
+When a whole dimension is selected together with art it measures, directly or in selected groups
+without fills, strokes or effects of their own, Object › Expand, Object › Expand Appearance and
+Object › Path › Outline Stroke leave the dimension's lines and label as they are and change only the
+other art. The menus do not dim Object › Expand… for the label of such a dimension. If the new art no
+longer fits the dimension's link, for example because its number of anchors changed, the dimension
+stays where it was, no longer linked, as it does when its art is deleted. Undoing the command links
+it again. When the art keeps its id and anchor count, the dimension stays linked and its label shows
+the new length. When the dimension is all the command would change, the command changes nothing and
+reports the error it gives for a selection with nothing to change: "Expand: nothing to expand",
+"Expand Appearance: the selection has a basic appearance" or "Outline Stroke: no stroked paths
+selected". A selected group with fills, strokes or effects of its own changes everything it holds
+when its appearance expands, its dimensions included: a geometry effect is baked into their lines
+and label, which become a plain group, and a blur, feather or inner glow turns them into part of the
+image that replaces the group's art. Type › Create Outlines still outlines the label of a dimension
+selected with its art, which turns the dimension into a plain group.
+
+Pasted dimensions keep their geometry and drop their links, so they never bind to unrelated art in
+another document.
 
 ## Commands
 

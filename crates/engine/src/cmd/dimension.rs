@@ -272,9 +272,9 @@ impl EndedLink {
 }
 
 /// The [`reached`] dimensions become plain groups, whose art does not redraw or follow what it
-/// measured. A command that replaces art calls this before it changes anything, since replacing
-/// the art a dimension measures would otherwise leave the dimension unlinked, and then
-/// [`restore_unchanged`].
+/// measured. A command that replaces art calls this before it changes anything and
+/// [`restore_unchanged`] after, so that a dimension whose own art the command changed stays a
+/// plain group.
 pub(crate) fn end_links(doc: &mut Document, roots: &[NodeId]) -> Vec<EndedLink> {
     let mut ended = Vec::new();
     for id in reached(doc, roots) {
@@ -287,16 +287,154 @@ pub(crate) fn end_links(doc: &mut Document, roots: &[NodeId]) -> Vec<EndedLink> 
     ended
 }
 
-/// The dimensions in `ended` whose art is as it was are live again.
-pub(crate) fn restore_unchanged(doc: &mut Document, ended: Vec<EndedLink>) {
+/// The dimensions in `ended` whose own art is as it was are live again. One whose measured art the
+/// command changed from `before` so that the art no longer fits its link stays where it was, no
+/// longer linked, as [`refresh`] leaves a dimension whose art was deleted.
+pub(crate) fn restore_unchanged(before: &Document, doc: &mut Document, ended: Vec<EndedLink>) {
     for e in ended {
-        if doc.node(e.id).and_then(Node::children).is_some_and(|art| *art == e.art)
-            && let Some(n) = doc.node_mut(e.id)
-        {
-            n.extras_mut().dimension = Some(Box::new(e.recipe));
+        if !doc.node(e.id).and_then(Node::children).is_some_and(|art| *art == e.art) {
+            continue;
+        }
+        let recipe = if e.source_kept(before, doc) { e.recipe } else { unlinked(&e.recipe) };
+        if let Some(n) = doc.node_mut(e.id) {
+            n.extras_mut().dimension = Some(Box::new(recipe));
             doc.dimensions = true;
         }
     }
+}
+
+/// `old` where it was, no longer linked. A move it had on its own and not yet drawn is kept when
+/// the moved dimension is valid.
+fn unlinked(old: &Dimension) -> Dimension {
+    let mut unlinked = old.clone();
+    unlinked.source = None;
+    unlinked.moved = None;
+    if let Some(v) = old.moved {
+        let mut shifted = unlinked.clone();
+        (shifted.a, shifted.b, shifted.vertex) = (shifted.a + v, shifted.b + v, shifted.vertex + v);
+        if shifted.validate().is_ok() {
+            unlinked = shifted;
+        }
+    }
+    unlinked
+}
+
+/// The whole dimensions under `roots` that are selected together with art they measure (art under
+/// `roots`), each one a root or held by groups without fills, strokes or effects of their own.
+/// Object › Expand, Object › Expand Appearance and Object › Path › Outline Stroke leave their
+/// lines and label as they are. A group with an appearance of its own changes everything it holds
+/// when it expands, its dimensions included.
+pub(crate) fn with_their_art(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    if !doc.dimensions {
+        return Vec::new();
+    }
+    let mut found = Vec::new();
+    for root in roots {
+        let Some(n) = doc.node(*root) else { continue };
+        n.walk(&mut |c| {
+            if let Some(source) = c.extras().dimension.as_ref().and_then(|d| d.source.as_ref()) {
+                found.push((*root, c.id, source.nodes()));
+            }
+        });
+    }
+    let under_roots = |id: NodeId| doc.ancestry(id).is_some_and(|a| a.iter().any(|a| roots.contains(a)));
+    found
+        .into_iter()
+        .filter(|(root, id, _)| {
+            let Some(ancestry) = doc.ancestry(*id) else { return false };
+            let from = ancestry.iter().position(|a| a == root).unwrap_or(ancestry.len());
+            ancestry.get(from..ancestry.len().saturating_sub(1)).unwrap_or_default().iter().all(|a| doc.node(*a).is_some_and(plain_group))
+        })
+        .filter(|(_, _, measured)| measured.iter().any(|m| under_roots(*m)))
+        .map(|(_, id, _)| id)
+        .collect()
+}
+
+/// A group or layer without fills, strokes or effects of its own.
+fn plain_group(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && n.appearance.items.is_empty() && n.appearance.effects.is_empty()
+}
+
+/// A dimension [`lift`] took out of the document, with its place, the export assets that list it or
+/// its parts (with their places in the asset list) and its parts' variable bindings.
+pub(crate) struct Lifted {
+    parent: Option<NodeId>,
+    index: usize,
+    node: Arc<Node>,
+    assets: Vec<(usize, vectorcraft_doc::assets::ExportAsset)>,
+    bindings: Vec<(NodeId, std::collections::BTreeSet<String>)>,
+}
+
+impl Lifted {
+    pub(crate) fn id(&self) -> NodeId {
+        self.node.id
+    }
+}
+
+/// Takes the [`with_their_art`] dimensions under `roots` out of `doc`, so a command that replaces
+/// art does not reach them; [`put_back`] puts them back.
+pub(crate) fn lift(doc: &mut Document, roots: &[NodeId]) -> Vec<Lifted> {
+    let mut lifted = Vec::new();
+    for id in with_their_art(doc, roots) {
+        let Some((parent, index, _)) = doc.position(id) else { continue };
+        let mut parts = std::collections::BTreeSet::new();
+        if let Some(n) = doc.node(id) {
+            n.walk(&mut |c| {
+                parts.insert(c.id);
+            });
+        }
+        let assets = doc.assets.iter().enumerate().filter(|(_, a)| a.nodes.iter().any(|n| parts.contains(n))).map(|(i, a)| (i, a.clone())).collect();
+        let bindings = doc.variables.bindings.iter().filter(|(n, _)| parts.contains(n)).map(|(n, b)| (*n, b.clone())).collect();
+        if let Ok(node) = doc.remove(id) {
+            lifted.push(Lifted { parent, index, node, assets, bindings });
+        }
+    }
+    lifted
+}
+
+/// Each dimension [`lift`] took out, as it was, back in its place in `doc`, with its parts back in
+/// the export assets that listed them and their variable bindings back: edits made while it was out
+/// let go of them. A dimension whose group is gone goes on top of the first layer.
+pub(crate) fn put_back(doc: &mut Document, lifted: Vec<Lifted>) {
+    for l in lifted.into_iter().rev() {
+        let parent = if doc.children(l.parent).is_some() { l.parent } else { doc.layers.first().map(|layer| layer.id) };
+        let Ok(ch) = doc.children_mut(parent) else { continue };
+        let i = if parent == l.parent { l.index.min(ch.len()) } else { ch.len() };
+        ch.insert(i, l.node);
+        doc.dimensions = true;
+        for (at, saved) in l.assets {
+            let there: Vec<NodeId> = saved.nodes.iter().copied().filter(|n| doc.node(*n).is_some()).collect();
+            if let Some(a) = doc.assets.iter_mut().find(|a| a.id == saved.id) {
+                for (k, n) in there.iter().enumerate() {
+                    if !a.nodes.contains(n) {
+                        let k = k.min(a.nodes.len());
+                        a.nodes.insert(k, *n);
+                    }
+                }
+            } else if !there.is_empty() {
+                let at = at.min(doc.assets.len());
+                doc.assets.insert(at, vectorcraft_doc::assets::ExportAsset { nodes: there, ..saved });
+            }
+        }
+        for (n, b) in l.bindings {
+            doc.variables.bindings.entry(n).or_insert(b);
+        }
+    }
+}
+
+/// `doc` without the [`with_their_art`] dimensions under `roots`, to see what a command that leaves
+/// them alone would change: `doc` itself when there are none.
+pub(crate) fn without_kept<'a>(doc: &'a Document, roots: &[NodeId]) -> std::borrow::Cow<'a, Document> {
+    let ids = with_their_art(doc, roots);
+    if ids.is_empty() {
+        return std::borrow::Cow::Borrowed(doc);
+    }
+    let mut view = doc.clone();
+    for id in ids {
+        // A dimension already gone (inside another one removed) needs nothing more.
+        let _ = view.remove(id);
+    }
+    std::borrow::Cow::Owned(view)
 }
 
 /// Called inside every edit, so dimensions and their undo history stay in step with the art they
@@ -320,17 +458,7 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
             // The art it measured was deleted, or rebuilt with other anchors, or no longer fits
             // (an ellipse that was a circle): it stays where it was, no longer linked, in this
             // same undo step, rather than attaching to a different edge.
-            let mut unlinked = old.clone();
-            unlinked.source = None;
-            unlinked.moved = None;
-            if let Some(v) = moved {
-                let mut shifted = unlinked.clone();
-                (shifted.a, shifted.b, shifted.vertex) = (shifted.a + v, shifted.b + v, shifted.vertex + v);
-                if shifted.validate().is_ok() {
-                    unlinked = shifted;
-                }
-            }
-            if replace(doc, id, unlinked).is_err()
+            if replace(doc, id, unlinked(&old)).is_err()
                 && let Some(n) = doc.node_mut(id)
             {
                 // Its recipe cannot be drawn again: its art stays as it is, as a plain group.

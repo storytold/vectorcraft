@@ -66,7 +66,7 @@ pub use ast::{
     PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, UnaryOp, UpdateOp, VarDecl,
 };
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
-pub use host::{Data, DataLimits, HostError, HostFunction, HostItem};
+pub use host::{Arg, Data, DataLimits, HostError, HostFunction, HostItem};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
 pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, UNKNOWN_SOURCE};

@@ -2397,6 +2397,7 @@ file-filter	Templates	範本
 	Stop Script	停止指令碼
 	Show External Script Warning	顯示外部指令碼警告
 	A Script Is Running	指令碼正在執行
+	Script Alert	指令碼提示
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	指令碼可以變更開啟的文件，並可透過其執行的命令寫入檔案。請只執行您信任的指令碼。
 	Do not show this warning again	不再顯示此警告
 	Stop the script and undo what it did? Then quit again.	要停止指令碼並還原其變更嗎？然後請再次結束。
@@ -4134,6 +4135,13 @@ digits	Malayalam	馬來亞拉姆數字
 	Quest Outline	任務
 	Coin Shine	金幣
 	Boss Alert	首領
+	Status Effects	狀態效果
+	Poison Tint	中毒
+	Freeze Edge	冰凍
+	Burn Aura	灼燒
+	Stun Pulse	暈眩
+	Stealth Fade	隱身
+	Shield Buff	護盾
 	Shape	形狀
 	Shape Builder	形狀建立
 	Shape Builder Regions	形狀建立區域
