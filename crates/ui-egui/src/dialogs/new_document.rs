@@ -241,6 +241,19 @@ impl Buttons {
     }
 }
 
+/// Mirrors the document chooser's two major panes without changing saved document fields.
+/// The columns use an egui left-to-right row, so changing their insertion order changes
+/// their physical positions; non-Hebrew languages retain the original layout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DocumentPane {
+    Presets,
+    Details,
+}
+
+fn pane_order(lang_code: &str) -> [DocumentPane; 2] {
+    if lang_code == "he" { [DocumentPane::Details, DocumentPane::Presets] } else { [DocumentPane::Presets, DocumentPane::Details] }
+}
+
 fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     sync(app, &mut d);
@@ -251,20 +264,28 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // window.
         super::modal::drag_band(ui, ui.max_rect().top() + 44.0);
         ui.horizontal_top(|ui| {
-            egui::Frame::NONE.inner_margin(egui::Margin { left: 22, right: 14, top: 14, bottom: 18 }).show(ui, |ui| {
-                ui.vertical(|ui| {
-                    ui.set_width(640.0);
-                    ui.set_min_height(HEIGHT - 32.0);
-                    b.create |= presets(app, ui, &mut d);
-                });
-            });
-            egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin::same(18)).show(ui, |ui| {
-                ui.vertical(|ui| {
-                    ui.set_width(DETAILS);
-                    ui.set_min_height(HEIGHT);
-                    details(app, ui, &mut d, &mut b);
-                });
-            });
+            for pane in pane_order(crate::i18n::current().code()) {
+                match pane {
+                    DocumentPane::Presets => {
+                        egui::Frame::NONE.inner_margin(egui::Margin { left: 22, right: 14, top: 14, bottom: 18 }).show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.set_width(640.0);
+                                ui.set_min_height(HEIGHT - 32.0);
+                                b.create |= presets(app, ui, &mut d);
+                            });
+                        });
+                    }
+                    DocumentPane::Details => {
+                        egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin::same(18)).show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.set_width(DETAILS);
+                                ui.set_min_height(HEIGHT);
+                                details(app, ui, &mut d, &mut b);
+                            });
+                        });
+                    }
+                }
+            }
         });
         // While More Settings' pop-up is open, a click outside it only closes it.
         if b.popup {
@@ -724,6 +745,16 @@ mod tests {
     use vectorcraft_engine::Session;
 
     use crate::VectorcraftApp;
+
+    /// The real dialog's horizontal row draws panes in this order. Hebrew mirrors
+    /// the physical columns while English and all other locales remain unchanged.
+    #[test]
+    fn hebrew_document_dialog_mirrors_panes_without_changing_ltr() {
+        use super::DocumentPane::{Details, Presets};
+        assert_eq!(super::pane_order("en"), [Presets, Details]);
+        assert_eq!(super::pane_order("fr"), [Presets, Details]);
+        assert_eq!(super::pane_order("he"), [Details, Presets]);
+    }
 
     /// Cards translate the built-in presets' names only: Recent and Saved show the user's names.
     #[test]
