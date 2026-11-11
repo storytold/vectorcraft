@@ -3594,6 +3594,31 @@ fn a_glyph_choice_taken_away_reports_the_glyph_drawn() {
     assert_eq!(chosen(&mut s, caps, 1), json!(drawn));
 }
 
+/// A run that holds a choice for its first character and goes on past it, as a file may have,
+/// draws Source Serif 4's fi ligature for the f and the i after that character. `gid: null` for the
+/// i leaves the text as it is and reports the ligature, as `text.glyphAlternates` does.
+#[test]
+fn a_glyph_choice_taken_away_inside_a_ligature_reports_the_ligature() {
+    let db = vectorcraft_text::FontDb::global();
+    let face = db.face("Source Serif 4", "Regular").expect("the bundled face");
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xfin", "size": 40, "font": "Source Serif 4"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let mut runs = obj(&s, id).runs;
+    runs[0].style.glyph_alternate = Some(face.choice('x', face.glyph_for('x')));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let Some(NodeKind::Text(text)) = doc.node_mut(id).map(|n| &mut n.kind) else { panic!("text") };
+    text.runs = runs.clone();
+    let ligature = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().find(|g| g.byte == 1 && g.len == 2).expect("f + i is one glyph").gid;
+    let chosen = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 2})).unwrap()["chosen"].clone();
+    assert_eq!(chosen, json!(ligature));
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": null})).unwrap();
+    assert_eq!(r["gid"], chosen, "the ligature drawn for the i");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no edit");
+    assert_eq!(obj(&s, id).runs, runs, "the runs are kept");
+}
+
 /// A fallback face draws Ka with the vowel sign I in one cluster, the vowel sign first. The glyph
 /// reported for Ka is the fallback face's glyph for Ka, laid out or overflowing, not the vowel
 /// sign's.
