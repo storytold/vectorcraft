@@ -722,6 +722,13 @@
 	Quest Outline	Quest
 	Coin Shine	Koin
 	Boss Alert	Boss
+	Status Effects	Efek Status
+	Poison Tint	Racun
+	Freeze Edge	Beku
+	Burn Aura	Bakar
+	Stun Pulse	Pingsan
+	Stealth Fade	Menghilang
+	Shield Buff	Perisai
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
 	Gradient Finishes	Finishing gradien
@@ -6536,3 +6543,7 @@ breakText	Glyphs	Glif
 @plural	{n} host call|{n} host calls	{n} panggilan host
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} baris lama dibuang
 @plural	{n} line cut|{n} lines cut	{n} baris dipotong
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Segarkan efek yang ditunda
+	Deferred Effects	Efek yang ditunda

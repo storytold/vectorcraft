@@ -3117,6 +3117,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Quest
 	Coin Shine	Münze
 	Boss Alert	Boss
+	Status Effects	Statuseffekte
+	Poison Tint	Gift
+	Freeze Edge	Frost
+	Burn Aura	Brand
+	Stun Pulse	Betäubung
+	Stealth Fade	Schleichen
+	Shield Buff	Schild
 	Shape	Form
 	Shape Builder	Formerstellung
 	Shape Builder Regions	Formerstellungsbereiche
@@ -6384,3 +6391,9 @@ breakText	Glyphs	Glyphen
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ältere Zeile verworfen|{n} ältere Zeilen verworfen
 @plural	{n} line cut|{n} lines cut	{n} Zeile gekürzt|{n} Zeilen gekürzt
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` und `last` müssen Nummern von Zeilen sein, die die Konsole enthält, `first` vor `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Zurückgestellte Effekte aktualisieren
+	Deferred Effects	Zurückgestellte Effekte
+@msg	no plug-in effect is deferred	kein Plug-in-Effekt ist zurückgestellt
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Mit {n} zurückgestelltem Plug-in-Effekt geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt ihn aus.|Mit {n} zurückgestellten Plug-in-Effekten geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt sie aus.

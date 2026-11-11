@@ -3955,6 +3955,13 @@ digits	Malayalam	Malaiàlam
 	Quest Outline	Missió
 	Coin Shine	Moneda
 	Boss Alert	Cap
+	Status Effects	Efectes d’estat
+	Poison Tint	Verí
+	Freeze Edge	Congelació
+	Burn Aura	Cremada
+	Stun Pulse	Atordiment
+	Stealth Fade	Sigil
+	Shield Buff	Escut
 	Shape	Forma
 	Shape Builder	Constructor de formes
 	Shape Builder Delete	Suprimeix del constructor de formes
@@ -6778,3 +6785,9 @@ breakText	Glyphs	Glifs
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} línia anterior descartada|{n} línies anteriors descartades
 @plural	{n} line cut|{n} lines cut	{n} línia tallada|{n} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Actualitza els efectes ajornats
+	Deferred Effects	Efectes ajornats
+@msg	no plug-in effect is deferred	no hi ha cap efecte de complement ajornat
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	S’ha obert amb {n} efecte de complement ajornat. Efecte › Actualitza els efectes ajornats l’executa.|S’ha obert amb {n} efectes de complement ajornats. Efecte › Actualitza els efectes ajornats els executa.

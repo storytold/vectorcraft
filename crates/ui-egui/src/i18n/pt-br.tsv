@@ -2648,6 +2648,13 @@ digits	Malayalam	Malaiala
 	Quest Outline	Missão
 	Coin Shine	Moeda
 	Boss Alert	Chefe
+	Status Effects	Efeitos de status
+	Poison Tint	Veneno
+	Freeze Edge	Congelamento
+	Burn Aura	Queimadura
+	Stun Pulse	Atordoamento
+	Stealth Fade	Furtividade
+	Shield Buff	Escudo
 	Shape	Forma
 	Shape Builder	Construtor de Formas
 	Shape Builder Regions	Regiões do Construtor de Formas
@@ -6870,3 +6877,9 @@ swatch	Yellow Green	Verde-amarelado
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} linha anterior descartada|{n} linhas anteriores descartadas
 @plural	{n} line cut|{n} lines cut	{n} linha cortada|{n} linhas cortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Atualizar Efeitos Adiados
+	Deferred Effects	Efeitos Adiados
+@msg	no plug-in effect is deferred	nenhum efeito de plug-in está adiado
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aberto com {n} efeito de plug-in adiado. Efeito › Atualizar Efeitos Adiados o executa.|Aberto com {n} efeitos de plug-in adiados. Efeito › Atualizar Efeitos Adiados os executa.

@@ -4135,6 +4135,13 @@ digits	Malayalam	馬來亞拉姆數字
 	Quest Outline	任務
 	Coin Shine	金幣
 	Boss Alert	首領
+	Status Effects	狀態效果
+	Poison Tint	中毒
+	Freeze Edge	冰凍
+	Burn Aura	灼燒
+	Stun Pulse	暈眩
+	Stealth Fade	隱身
+	Shield Buff	護盾
 	Shape	形狀
 	Shape Builder	形狀建立
 	Shape Builder Regions	形狀建立區域
@@ -6433,3 +6440,9 @@ breakText	Glyphs	字符
 @plural	{n} earlier line dropped|{n} earlier lines dropped	已捨棄 {n} 行較早內容
 @plural	{n} line cut|{n} lines cut	已截斷 {n} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	重新整理延後的效果
+	Deferred Effects	延後的效果
+@msg	no plug-in effect is deferred	沒有延後的增效模組效果
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	開啟時延後了 {n} 個增效模組效果。效果 › 重新整理延後的效果可執行它們。

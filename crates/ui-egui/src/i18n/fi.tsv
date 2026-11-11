@@ -774,6 +774,13 @@
 	Quest Outline	Tehtävä
 	Coin Shine	Kolikko
 	Boss Alert	Bossi
+	Status Effects	Tilatehosteet
+	Poison Tint	Myrkky
+	Freeze Edge	Jäädytys
+	Burn Aura	Poltto
+	Stun Pulse	Tainnutus
+	Stealth Fade	Hiipiminen
+	Shield Buff	Kilpi
 	Outlines and Rules	Ääriviivat ja viivat
 	Hand-Drawn	Käsin piirretyt
 	Gradient Finishes	Liukuväriviimeistelyt
@@ -6832,3 +6839,9 @@ breakText	Glyphs	Merkit
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} aiempi rivi poistettu|{n} aiempaa riviä poistettu
 @plural	{n} line cut|{n} lines cut	{n} rivi katkaistu|{n} riviä katkaistu
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ja `last` on oltava konsolin säilyttämien rivien numeroita, `first` ennen arvoa `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Päivitä lykätyt tehosteet
+	Deferred Effects	Lykätyt tehosteet
+@msg	no plug-in effect is deferred	yhtään laajennustehostetta ei ole lykätty
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Avattiin, ja {n} laajennustehoste lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa sen.|Avattiin, ja {n} laajennustehostetta lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa ne.

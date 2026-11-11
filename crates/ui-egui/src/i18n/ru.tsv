@@ -3188,6 +3188,13 @@ digits	Malayalam	Малаялам
 	Quest Outline	Квест
 	Coin Shine	Монета
 	Boss Alert	Босс
+	Status Effects	Эффекты статуса
+	Poison Tint	Яд
+	Freeze Edge	Заморозка
+	Burn Aura	Ожог
+	Stun Pulse	Оглушение
+	Stealth Fade	Скрытность
+	Shield Buff	Щит
 	Shape	Фигура
 	Shape Builder	Создание фигур
 	Shape Builder Regions	Области создания фигур
@@ -6886,3 +6893,9 @@ shape	Open	Открытый
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} прежняя строка отброшена|{n} прежние строки отброшены|{n} прежних строк отброшено
 @plural	{n} line cut|{n} lines cut	{n} строка обрезана|{n} строки обрезаны|{n} строк обрезано
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Обновить отложенные эффекты
+	Deferred Effects	Отложенные эффекты
+@msg	no plug-in effect is deferred	нет отложенных эффектов модулей
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Открыто с {n} отложенным эффектом модуля. Эффект › Обновить отложенные эффекты выполнит его.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.

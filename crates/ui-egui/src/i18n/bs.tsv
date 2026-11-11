@@ -776,6 +776,13 @@
 	Quest Outline	Zadatak
 	Coin Shine	Novčić
 	Boss Alert	Bos
+	Status Effects	Statusni efekti
+	Poison Tint	Otrov
+	Freeze Edge	Zamrzavanje
+	Burn Aura	Izgaranje
+	Stun Pulse	Omamljenost
+	Stealth Fade	Nevidljivost
+	Shield Buff	Štit
 	Outlines and Rules	Obrisi i linije
 	Hand-Drawn	Ručno crtano
 	Gradient Finishes	Gradijentne završnice
@@ -6573,3 +6580,7 @@ shape	Open	Otvoren
 @plural	{n} host call|{n} host calls	{n} poziv hosta|{n} poziva hosta|{n} poziva hosta
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} raniji red uklonjen|{n} ranija reda uklonjena|{n} ranijih redova uklonjeno
 @plural	{n} line cut|{n} lines cut	{n} red skraćen|{n} reda skraćena|{n} redova skraćeno
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Osvježi odgođene efekte
+	Deferred Effects	Odgođeni efekti

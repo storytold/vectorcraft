@@ -670,6 +670,13 @@
 	Quest Outline	ქვესტი
 	Coin Shine	მონეტა
 	Boss Alert	ბოსი
+	Status Effects	სტატუსის ეფექტები
+	Poison Tint	შხამი
+	Freeze Edge	გაყინვა
+	Burn Aura	დაწვა
+	Stun Pulse	დაბნეულობა
+	Stealth Fade	შენიღბვა
+	Shield Buff	ფარი
 	Outlines and Rules	კონტურები და ხაზები
 	Hand-Drawn	ხელით დახატული
 	Gradient Finishes	გრადიენტული ზედაპირები
@@ -6858,3 +6865,9 @@ font-script	Japanese	იაპონური
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ძველი სტრიქონი წაიშალა
 @plural	{n} line cut|{n} lines cut	{n} სტრიქონი შემოკლდა
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	გადადებული ეფექტების განახლება
+	Deferred Effects	გადადებული ეფექტები
+@msg	no plug-in effect is deferred	პლაგინის ეფექტი არ არის გადადებული
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.

@@ -722,6 +722,13 @@
 	Quest Outline	Quest
 	Coin Shine	Mønt
 	Boss Alert	Boss
+	Status Effects	Statuseffekter
+	Poison Tint	Gift
+	Freeze Edge	Frost
+	Burn Aura	Brænd
+	Stun Pulse	Bedøvelse
+	Stealth Fade	Snige
+	Shield Buff	Skjold
 	Outlines and Rules	Konturer og linjer
 	Hand-Drawn	Håndtegnet
 	Gradient Finishes	Gradientfinish
@@ -6536,3 +6543,7 @@ breakText	Glyphs	Glyffer
 @plural	{n} host call|{n} host calls	{n} værtskald|{n} værtskald
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} tidligere linje fjernet|{n} tidligere linjer fjernet
 @plural	{n} line cut|{n} lines cut	{n} linje afkortet|{n} linjer afkortet
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Opdatér udskudte effekter
+	Deferred Effects	Udskudte effekter

@@ -800,6 +800,13 @@ digits	Malayalam	말라얄람어
 	Quest Outline	퀘스트
 	Coin Shine	코인
 	Boss Alert	보스
+	Status Effects	상태 효과
+	Poison Tint	독
+	Freeze Edge	빙결
+	Burn Aura	화상
+	Stun Pulse	기절
+	Stealth Fade	은신
+	Shield Buff	방패
 	Outlines and Rules	윤곽선과 괘선
 	Hand-Drawn	손그림
 	Gradient Finishes	그레이디언트 마감
@@ -6379,3 +6386,9 @@ breakText	Glyphs	글리프
 @plural	{n} earlier line dropped|{n} earlier lines dropped	이전 줄 {n}개 삭제됨
 @plural	{n} line cut|{n} lines cut	줄 {n}개 잘림
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	보류된 효과 새로 고침
+	Deferred Effects	보류된 효과
+@msg	no plug-in effect is deferred	보류된 플러그인 효과가 없습니다
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	플러그인 효과 {n}개를 보류하고 열었습니다. 효과 › 보류된 효과 새로 고침으로 실행합니다.

@@ -736,6 +736,13 @@
 	Quest Outline	Quest
 	Coin Shine	Munt
 	Boss Alert	Baas
+	Status Effects	Statuseffecten
+	Poison Tint	Gif
+	Freeze Edge	Bevriezing
+	Burn Aura	Brand
+	Stun Pulse	Verdoving
+	Stealth Fade	Sluipen
+	Shield Buff	Schild
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
 	Gradient Finishes	Verloopafwerkingen
@@ -6587,3 +6594,7 @@ breakText	Glyphs	Glyphs
 @plural	{n} host call|{n} host calls	{n} host-aanroep|{n} host-aanroepen
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eerdere regel verwijderd|{n} eerdere regels verwijderd
 @plural	{n} line cut|{n} lines cut	{n} regel ingekort|{n} regels ingekort
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
+	Deferred Effects	Uitgestelde effecten

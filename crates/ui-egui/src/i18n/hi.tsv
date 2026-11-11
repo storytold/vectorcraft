@@ -4267,6 +4267,13 @@ antiAlias	Sharp	शार्प
 	Quest Outline	क्वेस्ट
 	Coin Shine	सिक्का
 	Boss Alert	बॉस
+	Status Effects	स्थिति प्रभाव
+	Poison Tint	ज़हर
+	Freeze Edge	ठंड
+	Burn Aura	जलन
+	Stun Pulse	स्तब्ध
+	Stealth Fade	छिपना
+	Shield Buff	ढाल
 	Shaft:	दस्ता:
 	Shape	शेप
 	Shape Builder	शेप बिल्डर
@@ -8238,3 +8245,9 @@ theme	Appearance	अपीयरेंस
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} पुरानी पंक्ति हटाई गई|{n} पुरानी पंक्तियाँ हटाई गईं
 @plural	{n} line cut|{n} lines cut	{n} पंक्ति काटी गई|{n} पंक्तियाँ काटी गईं
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	स्थगित इफ़ेक्ट्स रिफ्रेश करें
+	Deferred Effects	स्थगित इफ़ेक्ट्स
+@msg	no plug-in effect is deferred	कोई प्लग-इन इफ़ेक्ट स्थगित नहीं है
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} प्लग-इन इफ़ेक्ट स्थगित रखकर खोला गया। इफ़ेक्ट › स्थगित इफ़ेक्ट्स रिफ्रेश करें इसे चलाता है।|{n} प्लग-इन इफ़ेक्ट्स स्थगित रखकर खोला गया। इफ़ेक्ट › स्थगित इफ़ेक्ट्स रिफ्रेश करें इन्हें चलाता है।
