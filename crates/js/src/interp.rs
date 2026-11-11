@@ -185,6 +185,12 @@ pub(crate) struct Interp {
     pub(crate) host_abort: Option<String>,
     /// How much a value passed to or from a host function may carry.
     pub(crate) data_limits: crate::DataLimits,
+    /// The tag the source compiled next gets ([`crate::Realm::error_source`]).
+    pub(crate) source_tag: u32,
+    /// The sources [`crate::HostItem::Evaluator`] functions have given in this realm.
+    pub(crate) evaluated: u32,
+    /// The tag of the source the last run's error was raised in.
+    pub(crate) error_tag: u32,
 }
 
 /// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
@@ -376,6 +382,9 @@ impl Interp {
             pause: Rc::default(),
             host_abort: None,
             data_limits: crate::DataLimits::default(),
+            source_tag: crate::realm::UNKNOWN_SOURCE,
+            evaluated: 0,
+            error_tag: crate::realm::UNKNOWN_SOURCE,
         };
         crate::builtins::install(&mut interp);
         interp.fuel = limits.fuel;
@@ -1851,6 +1860,7 @@ impl Interp {
                     // keeps itself reachable.
                     return Ok(Prepared::Done(self.call_data(&f, &name, &args, text)?));
                 }
+                Func::Eval { f, end, name } => return Ok(Prepared::Done(self.call_evaluator(&f, &end, &name, &args)?)),
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
                     return match host(&js_args) {
@@ -2123,7 +2133,7 @@ impl Interp {
         let remaining = self.options.max_source_units.saturating_sub(self.source_units.saturating_sub(units.len()));
         let options = Options { strict, max_source_units: remaining, ..self.options.clone() };
         let program = crate::parse_utf16(units, &options).map_err(CompileError::Syntax)?;
-        let source = Rc::new(Source { lines: program.lines.clone(), text: units.into() });
+        let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: self.source_tag });
         compile_program(&program, &source, kind).map_err(|e| match e {
             CompileFail::Syntax(s) => CompileError::Syntax(s),
             CompileFail::Internal(m) => CompileError::Internal(m),

@@ -151,6 +151,7 @@ mod save;
 mod saveoptions;
 mod scalestrokes;
 mod script_console;
+mod script_include;
 mod script_run;
 mod scripts;
 mod select_ids_first;
