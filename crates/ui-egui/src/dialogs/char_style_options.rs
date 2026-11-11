@@ -251,7 +251,8 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
         "v_scale" => tl!("Vertical Scale"),
         "baseline_shift" => tl!("Baseline Shift"),
         "rotation" => tl!("Character Rotation"),
-        "fill_tint" | "stroke_tint" => tl!("Tint"),
+        "fill_tint" => tl!("Fill Tint"),
+        "stroke_tint" => tl!("Stroke Tint"),
         "stroke_width" => tl!("Weight"),
         _ => return Err("unknown character style number field".into()),
     };
@@ -1649,8 +1650,8 @@ mod tests {
     fn color_tint_and_weight_outside_their_limits_are_errors() {
         let linked = json!({"type": "solid", "color": {"model": "gray", "k": 0.5}, "swatch": "Ink"});
         for (key, value, message) in [
-            ("fill_tint", "150", "Tint must be a number from 0 to 100"),
-            ("stroke_tint", "-1", "Tint must be a number from 0 to 100"),
+            ("fill_tint", "150", "Fill Tint must be a number from 0 to 100"),
+            ("stroke_tint", "-1", "Stroke Tint must be a number from 0 to 100"),
             ("stroke_width", "-1", "Weight must be a number from 0 to 4000000"),
             ("stroke_width", "thick", "Weight must be a number"),
         ] {
