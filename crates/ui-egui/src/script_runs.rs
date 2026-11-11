@@ -15,6 +15,7 @@ pub fn poll(app: &mut VectorcraftApp) {
     if !app.session.script_running() {
         return;
     }
+    script_run::settle_close(app);
     if ask(app) {
         return;
     }
@@ -31,6 +32,7 @@ pub fn poll(app: &mut VectorcraftApp) {
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::GROWTH_KIND) {
         app.ui.dialog = None;
     }
+    script_run::settle_close(app);
     match result {
         Ok(_) => app.status(format!("Ran {name}")),
         Err(e) => failed(app, e.to_string()),

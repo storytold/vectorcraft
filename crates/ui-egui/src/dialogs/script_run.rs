@@ -182,6 +182,22 @@ pub(crate) fn ask_to_close(app: &mut VectorcraftApp) {
     app.ui.dialog = Some(Dialog::new(CLOSE_KIND, fields));
 }
 
+/// Closes the question quitting asks once the run it asks about has ended, and forgets the
+/// script's dialog it was asked over once the run no longer waits at that dialog, so Cancel does
+/// not show it again.
+pub(crate) fn settle_close(app: &mut VectorcraftApp) {
+    if !app.ui.dialog.as_ref().is_some_and(|d| d.kind == CLOSE_KIND) {
+        return;
+    }
+    if !app.session.script_running() {
+        app.ui.dialog = None;
+    } else if app.session.script_dialog().is_none()
+        && let Some(d) = app.ui.dialog.as_mut()
+    {
+        d.fields.remove(super::PARENT);
+    }
+}
+
 /// Shows the dialog the running script waits at.
 pub(crate) fn open_notice(app: &mut VectorcraftApp, d: &ScriptDialog) {
     let fields = json!({

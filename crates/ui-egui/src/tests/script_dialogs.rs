@@ -221,6 +221,32 @@ fn close_while_notification_waits_abandons_or_resumes() {
 }
 
 #[test]
+fn close_question_ends_with_a_run_stopped_another_way() {
+    let mut app = app();
+    start(&mut app, &format!("{DRAW} vc.log(prompt('Name', ''));"));
+    assert!(until_dialog(&mut app));
+    dialogs::script_run::ask_to_close(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CLOSE_KIND);
+    assert_eq!(app.run("script.stop", json!({})).unwrap()["stopped"], true);
+    script_runs::poll(&mut app);
+    assert!(!app.session.script_running());
+    assert!(app.ui.dialog.is_none(), "the question about a run that has ended closes");
+    dialogs::cancel(&mut app);
+    assert!(app.ui.dialog.is_none(), "Cancel does not show the stopped script's dialog again");
+    assert_eq!(objects(&app), 0);
+    // Asked to stop, the run no longer waits at its dialog before its next slice ends it.
+    let mut app = self::app();
+    start(&mut app, &format!("{DRAW} vc.log(prompt('Name', ''));"));
+    assert!(until_dialog(&mut app));
+    dialogs::script_run::ask_to_close(&mut app);
+    app.run("script.stop", json!({})).unwrap();
+    dialogs::script_run::settle_close(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CLOSE_KIND, "the run has not ended yet");
+    dialogs::cancel(&mut app);
+    assert!(app.ui.dialog.is_none(), "Cancel does not show a dialog the run no longer waits at");
+}
+
+#[test]
 fn notification_layout_with_long_text_and_small_window() {
     let mut app = app();
     let long = "word ".repeat(3_000);
