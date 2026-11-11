@@ -4,6 +4,35 @@ use super::*;
 const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registered");
 
 #[test]
+fn hebrew_locale_file_flow_and_plural_categories() {
+    let he = Lang::from_code("he").expect("Hebrew is registered");
+    assert_eq!(he.name(), "עברית");
+    assert!(!he.complete_menus(), "the first catalog is intentionally partial");
+    for tag in ["he", "he-IL", "he_IL.UTF-8", "HE-il", "he-Hebr-IL"] {
+        assert_eq!(lang_from_tag(tag), Some(he), "{tag}");
+    }
+    assert_eq!(Lang::from_pref("he"), he);
+    for (english, expected) in [
+        ("File", "קובץ"),
+        ("Open…", "פתיחה…"),
+        ("Save", "שמירה"),
+        ("Save As…", "שמירה בשם…"),
+        ("Close", "סגירה"),
+        ("Edit", "עריכה"),
+        ("Undo", "ביטול פעולה"),
+        ("Redo", "ביצוע חוזר"),
+        ("Export As SVG…", "ייצוא כ־SVG…"),
+    ] {
+        assert_eq!(tr(he, english), expected);
+    }
+    assert_eq!(tr(he, "untranslated VectorCraft sentinel"), "untranslated VectorCraft sentinel");
+    assert_eq!([0, 1, 2, 3, 10, 20, 21].map(he.0.plural), [2, 0, 1, 2, 2, 2, 2]);
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rows.len() >= 80, "expected a useful initial file/edit catalog");
+}
+
+#[test]
 fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     let hi = Lang::from_code("hi").expect("hi registered");
     for tag in ["hi", "hi-IN", "hi_IN.UTF-8", "HI-in", "hi-Deva-IN"] {

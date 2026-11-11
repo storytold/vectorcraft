@@ -84,6 +84,16 @@ fn plural_east_slavic(n: u64) -> usize {
     }
 }
 
+/// Hebrew integer cardinal forms: one=1, two=2, other=0 or 3+ (CLDR/Intl).
+/// A Hebrew `@plural` row should therefore have three translation forms.
+fn plural_hebrew(n: u64) -> usize {
+    match n {
+        1 => 0,
+        2 => 1,
+        _ => 2,
+    }
+}
+
 /// Polish: only 1 is `one`; 2–4 (but not 12–14) `few`; everything else (0, 5–21, 25…) `many`
 /// (unlike Russian and Ukrainian, 21, 31 … take `many`: "21 warstw").
 fn plural_polish(n: u64) -> usize {
@@ -97,8 +107,18 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 28] = [
+pub static LANGUAGES: [LangInfo; 29] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
+    // Hebrew is a draft, partial catalog. Save command ids stay English; labels use logical
+    // character order, and untranslated strings deliberately fall back to English.
+    LangInfo {
+        code: "he",
+        name: "עברית",
+        source: include_str!("i18n/he.tsv"),
+        plural: plural_hebrew,
+        complete_menus: false,
+        catalog: OnceLock::new(),
+    },
     // Hindi shares the integer zero/one rule with French. Desktop UI fonts are loaded lazily
     // from installed faces by ui_fonts; the web needs a Devanagari font in its font set.
     LangInfo {
