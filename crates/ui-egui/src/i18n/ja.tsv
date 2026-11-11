@@ -6484,3 +6484,9 @@ breakText	Glyphs	字形
 	{ms} ms, {calls} host calls	{ms} ms、ホスト呼び出し {calls} 回
 	{dropped} earlier lines dropped, {cut} lines cut	古い行 {dropped} 行を破棄、{cut} 行を切り詰め
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` と `last` には、コンソールが保持している行の番号を、`first` が `last` より前になるよう指定してください
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	保留中の効果を更新
+	Deferred Effects	保留中の効果
+@msg	no plug-in effect is deferred	保留中のプラグイン効果はありません
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	プラグイン効果を {n} 件保留して開きました。「効果 › 保留中の効果を更新」で実行します。

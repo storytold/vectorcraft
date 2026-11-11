@@ -8283,3 +8283,9 @@ digits	Hindi	Hindi
 	{ms} ms, {calls} host calls	{ms} ms, {calls} värdanrop
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidigare rader borttagna, {cut} rader avkortade
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uppdatera uppskjutna effekter
+	Deferred Effects	Uppskjutna effekter
+@msg	no plug-in effect is deferred	ingen plugineffekt är uppskjuten
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Öppnades med {n} uppskjuten plugineffekt. Effekt › Uppdatera uppskjutna effekter kör den.|Öppnades med {n} uppskjutna plugineffekter. Effekt › Uppdatera uppskjutna effekter kör dem.

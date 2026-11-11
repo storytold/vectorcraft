@@ -137,6 +137,19 @@ An export runs where the export runs: with Background Export on, on the export's
 plug-in between two of those 20 M-instruction slices; nothing is written then. An import stops the same way when the
 open it runs in is cancelled, and nothing opens then.
 
+### Live effects while a document opens
+
+While the app draws a document on screen, the live-effect runs of its first view share a 2,000 ms budget
+(`vectorcraft_plugins::deferred::OPENING_BUDGET_MS`, VectorCraft's own value), measured from the first run. Each run
+takes the lesser of its 5 s limit and what is left of the budget; once the budget is spent no run starts, and a result
+that comes back after it is not used. A stage left out this way, or one that times out, traps, returns output the host
+refuses or has no plug-in, draws its input art unchanged and is deferred. The status bar then says how many stages
+are deferred, and later drawings leave them as they are until their input or parameters change. Effect › Refresh
+Deferred Effects (`effect.refreshDeferred`) runs them again with a fresh budget, and `effect.deferredStatus` lists
+them with the reason (`budget`, `timeout`, `missing`, `failed`, `safeMode`). Each document has its own budget.
+Exports, Expand Appearance and commands run every stage under the 5 s limit. The web build has no clock for the
+budget, so there the first view runs no live effect and Refresh Deferred Effects runs them.
+
 ### Heavy filters
 
 Some filters do heavy but legitimate work, such as routing a plotter's pen, packing shapes onto a sheet or running a
