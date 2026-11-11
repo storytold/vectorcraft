@@ -3467,6 +3467,50 @@ fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
     assert_eq!(query["chosen"], json!(glyph.gid), "an overflowing character reports the fallback glyph it is drawn with");
 }
 
+/// `text.setGlyphAlternate` with `gid: null` reports the glyph the character is drawn with, as
+/// `text.glyphAlternates` does: the fallback face's glyph for a character the font lacks, laid out
+/// or overflowing, and the capital that All Caps draws for an a.
+#[test]
+fn a_glyph_choice_taken_away_reports_the_glyph_drawn() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let mut s = session();
+    let reset = |s: &mut Session, id: NodeId, start: usize| {
+        s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": start, "gid": null})).unwrap()["gid"].clone()
+    };
+    let chosen = |s: &mut Session, id: NodeId, start: usize| {
+        s.execute("text.glyphAlternates", &json!({"id": id.0, "start": start})).unwrap()["chosen"].clone()
+    };
+
+    let ch = 'Ƃ';
+    assert_eq!(face.glyph_for(ch), 0);
+    let point = json!({"x": 0, "y": 0, "text": ch.to_string(), "font": alternates_family(true)});
+    let id = NodeId(s.execute("text.create", &point).unwrap()["id"].as_u64().unwrap());
+    let drawn = vectorcraft_text::layout(db, &obj(&s, id)).glyphs[0].gid;
+    assert_ne!(drawn, 0);
+    assert_eq!(reset(&mut s, id, 0), json!(drawn), "the fallback glyph");
+    assert_eq!(chosen(&mut s, id, 0), json!(drawn));
+
+    let area = json!({"x": 0, "y": 300, "text": ch.to_string(), "font": alternates_family(true), "area": {"width": 200, "height": 2}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(reset(&mut s, boxed, 0), json!(drawn), "the overflowing character's fallback glyph");
+
+    let caps = NodeId(
+        s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("text.setRangeStyle", &json!({"id": caps.0, "start": 0, "end": 4, "allCaps": true})).unwrap();
+    let drawn = vectorcraft_text::layout(db, &obj(&s, caps)).glyphs.iter().find(|g| g.byte == 1).expect("the a is laid out").gid;
+    assert_ne!(drawn, face.glyph_for('a'), "All Caps draws the a as A");
+    assert_eq!(reset(&mut s, caps, 1), json!(drawn), "the capital drawn");
+    assert_eq!(chosen(&mut s, caps, 1), json!(drawn));
+}
+
 /// A fallback face draws Ka with the vowel sign I in one cluster, the vowel sign first. The glyph
 /// reported for Ka is the fallback face's glyph for Ka, laid out or overflowing, not the vowel
 /// sign's.
