@@ -544,7 +544,11 @@ fn merge(chain: &[&Piece]) -> std::result::Result<TextObject, usize> {
         for (k, w) in off.windows(2).enumerate() {
             let (delta, Some(&(s, e))) = (w[1] - w[0], before.get(k)) else { continue };
             if delta.abs() > 1e-9 {
-                edit::style_range(&mut m.runs, s, e, |st| st.tracking += delta / st.size.max(1e-6) * 1000.0);
+                // Thousandths of the em as the Horizontal Scale draws it (`spacing_scale`).
+                let vertical = m.vertical;
+                edit::style_range(&mut m.runs, s, e, |st| {
+                    st.tracking += delta / (st.size * vectorcraft_text::spacing_scale(st, vertical)).max(1e-6) * 1000.0;
+                });
                 if !TRACKING.contains(&edit::style_at(&m.runs, s).tracking) {
                     return Err(k + 1);
                 }
