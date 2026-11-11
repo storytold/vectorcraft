@@ -63,6 +63,7 @@ impl Loaded {
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
 /// (what browsers, PDF and SVG viewers show).
+#[derive(Clone)]
 pub struct RasterImage {
     /// Content key for `Document::images` (identical files share one blob).
     pub key: String,
