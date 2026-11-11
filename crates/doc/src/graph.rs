@@ -525,7 +525,9 @@ impl GraphSpec {
                 out.push_str(&field(self.categories.get(i).map(String::as_str).unwrap_or_default(), true));
                 out.push(',');
             }
-            out.push_str(&r.iter().map(|v| v.map(|v| v.to_string()).unwrap_or_default()).collect::<Vec<_>>().join(","));
+            let line = r.iter().map(|v| v.map(|v| v.to_string()).unwrap_or_default()).collect::<Vec<_>>().join(",");
+            // A lone blank value would be an empty line, which readers skip; a quoted empty field keeps the row.
+            out.push_str(if line.is_empty() && !labelled { "\"\"" } else { &line });
             out.push('\n');
         }
         out

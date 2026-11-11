@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Vec2};
 
 use super::CYAN;
+use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Default)]
@@ -15,6 +16,8 @@ pub struct MeasureTool {
     dragging: bool,
     /// The line measured before the drag under way, which Escape puts back.
     before: Option<(Point, Point)>,
+    /// Snapping for both ends, its targets kept while nothing they depend on changes.
+    snap: DrawSnap,
 }
 
 /// (distance, angle in degrees counter-clockwise, dx, dy)
@@ -29,10 +32,10 @@ pub fn measure(a: Point, b: Point) -> (f64, f64, f64, f64) {
 /// tool snaps a Shift-drawn end. With Snap to Point alone, the point `p` snaps to (an anchor, or
 /// in line with a ruler guide) is projected instead. When the snapped point lies nearer another
 /// step (the grid rounds it past the halfway angle) or behind the start, it is turned back onto
-/// the pointer's step.
-pub(crate) fn end_point(cx: &ToolContext, a: Point, p: Point, shift: bool) -> Point {
+/// the pointer's step. With View › Snap to Glyph on, the guides of live type are targets too.
+pub(crate) fn end_point(cx: &ToolContext, snap: &mut DrawSnap, a: Point, p: Point, shift: bool) -> Point {
     if !shift {
-        return crate::guides::snap_draw(cx, p, &[]).0;
+        return snap.measure(cx, p, None);
     }
     let d = vectorcraft_geom::constrain_angle_from(p - a, 45.0, cx.constrain_angle);
     let len = d.hypot();
@@ -41,10 +44,10 @@ pub(crate) fn end_point(cx: &ToolContext, a: Point, p: Point, shift: bool) -> Po
     }
     let u = d / len;
     let to_point = cx.snap_to_point && !(cx.smart_guides || cx.snap_to_grid || cx.snap_to_pixel);
-    let s = if to_point { crate::guides::snap_draw(cx, p, &[]).0 } else { p };
+    let s = if to_point { snap.measure(cx, p, None) } else { p };
     let q = a + u * (s - a).dot(u);
     let leave = crate::guides::Leave::segment(cx, a, true);
-    let r = crate::guides::PointSnap::new(cx, || crate::guides::Targets::collect(cx.doc, &[], None)).snap_from(cx, q, Some(&leave)).0;
+    let r = snap.measure(cx, q, Some(&leave));
     let v = r - a;
     if v.cross(u).abs() <= 1e-9 * v.hypot().max(1.0) && v.dot(u) >= 0.0 { r } else { a + u * v.hypot() }
 }
@@ -61,14 +64,14 @@ impl Tool for MeasureTool {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
             PointerKind::Down => {
-                let (p, _) = crate::guides::snap_draw(cx, ev.pos, &[]);
+                let p = self.snap.measure(cx, ev.pos, None);
                 self.before = self.line;
                 self.line = Some((p, p));
                 self.dragging = true;
             }
             PointerKind::Drag | PointerKind::Up if self.dragging => {
                 if let Some((a, _)) = self.line {
-                    self.line = Some((a, end_point(cx, a, ev.pos, ev.mods.shift)));
+                    self.line = Some((a, end_point(cx, &mut self.snap, a, ev.pos, ev.mods.shift)));
                 }
                 self.dragging = ev.kind == PointerKind::Drag;
             }
@@ -86,10 +89,8 @@ impl Tool for MeasureTool {
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let Some((a, b)) = self.line else { return vec![] };
-        if a == b {
-            return vec![];
-        }
+        let guides = self.snap.guides().iter().filter(|_| self.dragging).cloned();
+        let Some((a, b)) = self.line.filter(|(a, b)| a != b) else { return guides.collect() };
         let mut out = vec![Overlay::Line { a, b, color: CYAN, dashed: false }];
         // Measurement Labels decides the readout; the line the tool draws stays.
         if cx.measurement_labels {
@@ -99,6 +100,7 @@ impl Tool for MeasureTool {
                 text: format!("D: {}\nAngle: {ang:.1}°\n{}", cx.len(dist), cx.offset_label(dx, dy)),
             });
         }
+        out.extend(guides);
         out
     }
 
@@ -121,7 +123,11 @@ impl Tool for MeasureTool {
 mod tests {
     use super::*;
     use crate::testutil::*;
-    use vectorcraft_doc::Selection;
+    use crate::{GlyphSnap, ScreenFrame};
+    use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, Selection, TextObject};
+    use vectorcraft_geom::kurbo::{ParamCurve, Shape};
+    use vectorcraft_geom::{Affine, Rect};
+    use vectorcraft_text::{FontDb, layout as layout_text};
 
     #[test]
     fn horizontal_drag_reports_positive_zero_angle() {
@@ -323,5 +329,266 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 130.0, 100.0));
         assert_eq!(t.options(), first);
         assert!((t.options()["distance"].as_f64().unwrap() - 50.0).abs() < 1e-9);
+    }
+
+    /// A document holding point type `text` at (100, 300), 60 pt, turned `angle` radians about
+    /// where it starts, and the type.
+    fn type_doc(text: &str, angle: f64, visible: bool, locked: bool) -> (Document, TextObject) {
+        let mut d = Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let at = Point::new(100.0, 300.0);
+        let mut t = TextObject::point(at, text, CharStyle { size: 60.0, ..Default::default() });
+        t.xf = Affine::rotate_about(angle, at) * t.xf;
+        let mut n = Node::new(id, NodeKind::Text(Box::new(t.clone())));
+        (n.visible, n.locked) = (visible, locked);
+        d.insert(Some(l), 0, n).unwrap();
+        (d, t)
+    }
+
+    /// Where the baseline of `t`'s first line starts on the page, and its unit direction.
+    fn baseline(t: &TextObject) -> (Point, Vec2) {
+        let lay = layout_text(FontDb::global(), t);
+        let (m, line) = (t.xf * lay.line_xf, &lay.lines[0]);
+        let (at, along) = (m * Point::new(line.x0, line.baseline), m * Point::new(line.x0 + 1.0, line.baseline));
+        (at, (along - at) / (along - at).hypot())
+    }
+
+    /// The y of the x-height of `t`'s first glyph, in type that isn't turned.
+    fn x_height(t: &TextObject) -> f64 {
+        let lay = layout_text(FontDb::global(), t);
+        let g = &lay.glyphs[0];
+        (t.xf * g.xf * Point::new(0.0, -FontDb::global().face_by_id(g.font_id).unwrap().x_height())).y
+    }
+
+    /// The bounds on the page of glyph `i` of `t`, which isn't turned.
+    fn glyph_bounds(t: &TextObject, i: usize) -> Rect {
+        t.xf.transform_rect_bbox(layout_text(FontDb::global(), t).glyphs[i].outline.bounding_box())
+    }
+
+    /// Where a measurement dragged from `from` to `to` starts and ends.
+    fn measured(tool: &mut dyn Tool, cx: &ToolContext, from: Point, to: Point, shift: bool) -> (Point, Point) {
+        let mods = Mods { shift, ..Mods::default() };
+        tool.pointer(cx, &PointerEvent::new(PointerKind::Down, from.x, from.y));
+        tool.pointer(cx, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(mods));
+        tool.pointer(cx, &PointerEvent::new(PointerKind::Up, to.x, to.y).with_mods(mods));
+        let o = tool.options();
+        let a = Point::new(o["x"].as_f64().unwrap(), o["y"].as_f64().unwrap());
+        (a, a + Vec2::new(o["dx"].as_f64().unwrap(), o["dy"].as_f64().unwrap()))
+    }
+
+    /// Snap to Glyph: both ends land on a line of type's baseline and x-height and on its glyphs'
+    /// bounds, each only while its option is on. With Snap to Glyph off they stay at the pointer.
+    #[test]
+    fn its_ends_land_on_glyph_guides_with_snap_to_glyph() {
+        let (d, t) = type_doc("Hg", 0.0, true, false);
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let (base, x) = (baseline(&t).0.y, x_height(&t));
+        let (from, to) = (Point::new(400.0, base + 2.0), Point::new(450.0, x + 2.0));
+        let (a, b) = measured(&mut MeasureTool::default(), &on, from, to, false);
+        assert_eq!(a, Point::new(400.0, base), "the press lands on the baseline");
+        assert_eq!(b, Point::new(450.0, x), "the end lands on the x-height");
+        let off = ToolContext { snap_to_glyph: false, ..on };
+        assert_eq!(measured(&mut MeasureTool::default(), &off, from, to, false), (from, to));
+        // The Character panel's options: without Baseline and Glyph Bounds (the bottom of `H` is
+        // on the baseline) the press stays, and without x-height the end does.
+        let o = GlyphSnap { baseline: false, bounds: false, x_height: false, ..GlyphSnap::default() };
+        let without = ToolContext { glyph_snap: o, ..on };
+        assert_eq!(measured(&mut MeasureTool::default(), &without, from, to, false), (from, to));
+        // A corner of the box of `H`, which only Glyph Bounds gives there.
+        let corner = Point::new(glyph_bounds(&t, 0).x1, glyph_bounds(&t, 0).y0);
+        let near = corner + Vec2::new(1.5, -1.0);
+        let bounds = ToolContext { glyph_snap: GlyphSnap { anchors: false, ..GlyphSnap::default() }, ..on };
+        let landed = measured(&mut MeasureTool::default(), &bounds, Point::new(400.0, 50.0), near, false).1;
+        assert!(landed.distance(corner) < 1e-9, "{landed:?} vs {corner:?}");
+        let plain = measured(&mut MeasureTool::default(), &off, Point::new(400.0, 50.0), near, false).1;
+        assert!((plain.x - corner.x).abs() > 1e-3, "{plain:?}");
+    }
+
+    /// A Shift-drag's end stays on its 45° step and slides along it to where it meets a glyph guide.
+    #[test]
+    fn a_shift_drag_slides_along_its_step_to_a_glyph_guide() {
+        let (d, t) = type_doc("Hg", 0.0, true, false);
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let x = x_height(&t);
+        let (from, to) = (Point::new(300.0, x - 100.0), Point::new(401.0, x + 1.0));
+        let landed = measured(&mut MeasureTool::default(), &on, from, to, true).1;
+        assert!(landed.distance(Point::new(400.0, x)) < 1e-9, "{landed:?}");
+        let off = ToolContext { snap_to_glyph: false, ..on };
+        let stayed = measured(&mut MeasureTool::default(), &off, from, to, true).1;
+        assert!(stayed.distance(to) < 1e-9, "{stayed:?}");
+    }
+
+    /// Proximity Guides pull an end, with every other option off. Anchor Point does not.
+    #[test]
+    fn proximity_guides_pull_an_end_and_a_glyphs_anchor_points_do_not() {
+        let (d, t) = type_doc("HHHH", 0.0, true, false);
+        let (s, p) = (Selection::default(), paint());
+        let none = GlyphSnap { baseline: false, x_height: false, bounds: false, proximity: false, angular: false, anchors: false };
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let off = ToolContext { snap_to_glyph: false, ..on };
+        let start = Point::new(400.0, 50.0);
+        let end = |c: &ToolContext, to: Point| measured(&mut MeasureTool::default(), c, start, to, false).1;
+        let lay = layout_text(FontDb::global(), &t);
+        let edge = (t.xf * lay.glyphs[1].origin).x;
+        let to = Point::new(edge + 2.0, 100.0);
+        assert_eq!(end(&ToolContext { glyph_snap: GlyphSnap { proximity: true, ..none }, ..on }, to).x, edge);
+        assert_eq!(end(&off, to).x, to.x);
+        let anchor = t.xf * lay.glyphs[1].outline.segments().next().unwrap().start();
+        let to = anchor + Vec2::new(1.5, -1.0);
+        assert_eq!(end(&ToolContext { glyph_snap: GlyphSnap { anchors: true, ..none }, ..on }, to), end(&off, to));
+    }
+
+    /// While a drag snaps with Snap to Glyph on, the guide shows; the drag's end hides it, and with
+    /// Snap to Glyph off there is only the measured line and its readout.
+    #[test]
+    fn a_drag_shows_the_glyph_guide_it_lands_on() {
+        let (d, t) = type_doc("Hg", 0.0, true, false);
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let to = Point::new(450.0, baseline(&t).0.y + 2.0);
+        let guides = |c: &ToolContext, to: Point, up: bool| {
+            let mut tool = MeasureTool::default();
+            tool.pointer(c, &PointerEvent::new(PointerKind::Down, 400.0, 50.0));
+            tool.pointer(c, &PointerEvent::new(if up { PointerKind::Up } else { PointerKind::Drag }, to.x, to.y));
+            tool.overlays(c).iter().filter(|o| !matches!(o, Overlay::Measure { .. })).count() - 1
+        };
+        assert!(guides(&on, to, false) > 0, "the guide shows during the drag");
+        assert_eq!(guides(&on, to, true), 0, "the guide goes when the drag ends");
+        // Off, an end still lines up with a rectangle's top edge, as it always has, with no guide.
+        let (rect, _) = doc_with_rect();
+        let off = ToolContext { snap_to_glyph: false, ..cx(&rect, &s, &p) };
+        let near = Point::new(450.0, 101.0);
+        assert_eq!(measured(&mut MeasureTool::default(), &off, Point::new(400.0, 50.0), near, false).1.y, 100.0);
+        assert_eq!(guides(&off, near, false), 0, "no guide with Snap to Glyph off");
+    }
+
+    /// In rotated type the guides run at its angle: the end lands on the baseline, only with
+    /// Angular Guides on.
+    #[test]
+    fn its_ends_land_on_the_guides_of_rotated_type() {
+        let (d, t) = type_doc("H", 30f64.to_radians(), true, false);
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let (at, dir) = baseline(&t);
+        let to = at + dir * 250.0 + Vec2::new(-dir.y, dir.x) * 2.0;
+        let off_line = |c: &ToolContext| (measured(&mut MeasureTool::default(), c, Point::new(20.0, 20.0), to, false).1 - at).cross(dir).abs();
+        assert!(off_line(&on) < 1e-6, "{}", off_line(&on));
+        let flat = ToolContext { glyph_snap: GlyphSnap { angular: false, ..GlyphSnap::default() }, ..on };
+        assert!(off_line(&flat) > 1.0, "{}", off_line(&flat));
+    }
+
+    /// A paragraph gives glyph bounds only: no x-height, and the box of a glyph on a later line.
+    #[test]
+    fn a_paragraph_gives_the_measure_tool_glyph_bounds_only() {
+        let (d, t) = type_doc("H\nH", 0.0, true, false);
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let start = Point::new(400.0, 50.0);
+        let to = Point::new(450.0, x_height(&t) + 2.0);
+        assert_eq!(measured(&mut MeasureTool::default(), &on, start, to, false).1, to, "no x-height guide");
+        let lay = layout_text(FontDb::global(), &t);
+        assert_eq!(lay.lines.len(), 2);
+        let top = glyph_bounds(&t, lay.glyphs.len() - 1).y0;
+        assert_eq!(measured(&mut MeasureTool::default(), &on, start, Point::new(450.0, top - 2.0), false).1, Point::new(450.0, top));
+    }
+
+    /// Hidden type gives no guides. Locked type does, as it does for the drawing tools.
+    #[test]
+    fn hidden_type_gives_no_glyph_guides_and_locked_type_does() {
+        let (s, p) = (Selection::default(), paint());
+        let drag = |d: &Document, base: f64| {
+            let c = ToolContext { snap_to_glyph: true, ..cx(d, &s, &p) };
+            measured(&mut MeasureTool::default(), &c, Point::new(400.0, 50.0), Point::new(450.0, base + 2.0), false).1
+        };
+        let (hidden, t) = type_doc("Hg", 0.0, false, false);
+        let base = baseline(&t).0.y;
+        assert_eq!(drag(&hidden, base).y, base + 2.0);
+        let (locked, _) = type_doc("Hg", 0.0, true, true);
+        assert_eq!(drag(&locked, base).y, base);
+    }
+
+    /// Grid and pixel snapping come first; Snap to Glyph needs Smart Guides and Alignment Guides.
+    #[test]
+    fn glyph_guides_keep_their_place_among_the_other_snaps() {
+        let (d, t) = type_doc("Hg", 0.0, true, false);
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let base = baseline(&t).0.y;
+        let (start, to) = (Point::new(400.0, 50.0), Point::new(450.0, base + 2.0));
+        let end = |c: &ToolContext| measured(&mut MeasureTool::default(), c, start, to, false).1;
+        assert_eq!(end(&on), Point::new(to.x, base));
+        let grid = ToolContext { snap_to_grid: true, ..on };
+        assert_eq!(end(&grid), vectorcraft_geom::snap::snap_point_to_grid(to, grid.grid_step()));
+        assert_eq!(end(&ToolContext { snap_to_pixel: true, ..on }), Point::new(to.x.round(), to.y.round()));
+        assert_eq!(end(&ToolContext { smart_guides: false, snap_to_point: true, ..on }), to);
+        assert_eq!(end(&ToolContext { alignment_guides: false, ..on }), to);
+    }
+
+    /// The snapping distance is in screen pixels, so a zoomed-out view reaches farther; type
+    /// outside the window gives no guides.
+    #[test]
+    fn glyph_guides_follow_the_view() {
+        let (d, t) = type_doc("Hg", 0.0, true, false);
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let base = baseline(&t).0.y;
+        let (start, to) = (Point::new(400.0, 50.0), Point::new(450.0, base - 5.0));
+        let end = |c: &ToolContext| measured(&mut MeasureTool::default(), c, start, to, false).1;
+        assert_eq!(end(&on), to, "5 pt is out of reach at 100%");
+        assert_eq!(end(&ToolContext { zoom: 0.25, ..on }), Point::new(to.x, base));
+        let frame = |origin: Point| ScreenFrame { origin, right: Vec2::new(1.0, 0.0), down: Vec2::new(0.0, 1.0), size: (800.0, 600.0) };
+        let near = Point::new(to.x, base + 2.0);
+        let end = |c: &ToolContext| measured(&mut MeasureTool::default(), c, start, near, false).1;
+        assert_eq!(end(&ToolContext { screen: Some(frame(Point::ZERO)), ..on }), Point::new(to.x, base));
+        assert_eq!(end(&ToolContext { screen: Some(frame(Point::new(0.0, 1000.0))), ..on }), near);
+    }
+
+    /// A drag lays out the type once: it keeps the guides its press gathered until the document
+    /// or a snapping option changes.
+    #[test]
+    fn a_drag_keeps_the_glyph_guides_its_press_gathered() {
+        let (d, t) = type_doc("Hg", 0.0, true, false);
+        let (empty, s, p) = (Document::new(500.0, 500.0), Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let base = baseline(&t).0.y;
+        let to = Point::new(450.0, base + 2.0);
+        let end = |tool: &MeasureTool| {
+            let o = tool.options();
+            o["y"].as_f64().unwrap() + o["dy"].as_f64().unwrap()
+        };
+        let mut tool = MeasureTool::default();
+        tool.pointer(&on, &PointerEvent::new(PointerKind::Down, 400.0, 50.0));
+        // The same revision: the guides of the press still serve, though this document has no type.
+        let later = ToolContext { snap_to_glyph: true, ..cx(&empty, &s, &p) };
+        tool.pointer(&later, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+        assert_eq!(end(&tool), base);
+        // A new revision gathers them again.
+        let edited = ToolContext { revision: (1, 0), ..later };
+        tool.pointer(&edited, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+        assert_eq!(end(&tool), to.y);
+        // So does turning Snap to Glyph off during the drag.
+        let mut tool = MeasureTool::default();
+        tool.pointer(&on, &PointerEvent::new(PointerKind::Down, 400.0, 50.0));
+        tool.pointer(&ToolContext { snap_to_glyph: false, ..on }, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+        assert_eq!(end(&tool), to.y);
+    }
+
+    /// Escape brings back the last result, and the next drag still lands on the guides.
+    #[test]
+    fn escape_leaves_the_glyph_guides_for_the_next_drag() {
+        let (d, t) = type_doc("Hg", 0.0, true, false);
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let base = baseline(&t).0.y;
+        let mut tool = MeasureTool::default();
+        let to = Point::new(450.0, base + 2.0);
+        let first = measured(&mut tool, &on, Point::new(400.0, 50.0), to, false);
+        tool.pointer(&on, &PointerEvent::new(PointerKind::Down, 300.0, 60.0));
+        tool.pointer(&on, &PointerEvent::new(PointerKind::Drag, 320.0, base + 2.0));
+        tool.key(&on, ToolKey::Escape, Mods::default());
+        assert!((tool.options()["y"].as_f64().unwrap() - first.0.y).abs() < 1e-9);
+        assert_eq!(measured(&mut tool, &on, Point::new(300.0, 60.0), to, false).1, Point::new(450.0, base));
     }
 }

@@ -133,7 +133,7 @@ impl Space {
 }
 
 /// A named colour or ink's full colour: `[c m y k /DeviceCMYK (name) /kind]` or `[r g b /DeviceRGB …]`.
-fn ink(a: &[V]) -> Option<Color> {
+pub(super) fn ink(a: &[V]) -> Option<Color> {
     let at = a.iter().position(|v| matches!(v, V::Name(_)))?;
     let nums: Vec<f32> = a.get(..at)?.iter().map(|v| v.num().filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0) as f32)).collect::<Option<_>>()?;
     match (a.get(at).and_then(V::text).as_deref(), nums.as_slice()) {

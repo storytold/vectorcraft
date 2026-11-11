@@ -32,6 +32,26 @@ fn use_preview_bounds_shows_the_visual_size_and_checks_the_align_flyout() {
     assert!(texts(&mut app, crate::panels::align::menu).iter().any(|t| t == "✓ Use Preview Bounds"));
 }
 
+/// The panel menu's Measure Type by Glyph Bounds is checked while `typeGlyphBounds` is on, and the
+/// bounding box of selected point type then measures its glyphs without a change to the document.
+#[test]
+fn measure_type_by_glyph_bounds_is_checked_and_resizes_the_box() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 200, "size": 100, "text": "Hg"})).unwrap();
+    assert!(texts(&mut app, menu).iter().any(|t| t == "   Measure Type by Glyph Bounds"));
+    let em = app.selection_box().unwrap().rect;
+    let revision = app.session.active().unwrap().revision;
+    set_pref(&mut app, "typeGlyphBounds", true);
+    assert!(app.session.prefs.type_glyph_bounds);
+    assert!(texts(&mut app, menu).iter().any(|t| t == "✓ Measure Type by Glyph Bounds"));
+    assert_eq!(app.session.active().unwrap().revision, revision);
+    let glyphs = app.selection_box().unwrap().rect;
+    assert!(glyphs.height() < em.height() - 10.0, "{glyphs:?} inside {em:?}");
+    set_pref(&mut app, "typeGlyphBounds", false);
+    assert_eq!(app.selection_box().unwrap().rect, em);
+}
+
 #[test]
 fn use_preview_bounds_shows_the_size_after_geometry_effects() {
     // A 100 × 50 rectangle without a stroke, with Offset Path 10: 120 × 70 as drawn.

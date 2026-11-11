@@ -26,6 +26,7 @@ mod command;
 pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
+pub mod custom_dictionary;
 pub mod dimension;
 mod document_setup;
 mod duotone;
@@ -109,6 +110,7 @@ pub mod save_style_library;
 pub mod save_swatch_library;
 pub mod save_symbol_library;
 pub mod script_check;
+pub mod script_run;
 pub mod shape_builder_options;
 pub(crate) mod shapes;
 pub mod shortcut_import;
@@ -152,8 +154,8 @@ pub(crate) use export_for_screens::{
     saved_options as screen_saved_options, saved_rows as screen_saved_rows,
 };
 pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
-pub(crate) use new_document::preset_name;
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
+pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;
 pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
 pub use tools::open_tool_dialog;
@@ -320,6 +322,7 @@ registry! {
     BrushDelete: [brush_delete::KIND] => brush_delete::SPEC,
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
+    ResetPreferences: [confirm::RESET_PREFS] => confirm::RESET_PREFS_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
@@ -404,6 +407,9 @@ registry! {
     PluginImport: [plugin::IMPORT_KIND] => plugin::IMPORT_SPEC,
     PluginInstall: [plugin::INSTALL_KIND] => plugin::INSTALL_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
+    ScriptRun: [script_run::KIND] => script_run::SPEC,
+    ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,
+    ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
@@ -428,6 +434,7 @@ registry! {
     NewBrush: [new_brush::KIND] => new_brush::SPEC,
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     EditViews: [edit_views::KIND] => edit_views::SPEC,
+    EditCustomDictionary: [custom_dictionary::KIND] => custom_dictionary::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
@@ -498,6 +505,9 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == layer_options::KIND {
         layer_options::note_set(d, &field, &value);
     }
+    if d.kind == "preferences" {
+        crate::prefs_dialog::note_set(d, &field, &value);
+    }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     d.fields.insert(field, value);
     if let Some(field) = dxf {
@@ -560,6 +570,10 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
 /// opened over (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
+    // More Settings' pop-up and Save Preset end on their own; New Document stays.
+    if app.ui.dialog.as_mut().is_some_and(new_document::close_popup) {
+        return;
+    }
     if let Some(d) = app.ui.dialog.take() {
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
@@ -569,6 +583,10 @@ pub fn cancel(app: &mut VectorcraftApp) {
         }
         if d.kind == safe_mode::STOPPED {
             safe_mode::cancel_stopped(app);
+        }
+        // The growth question's Cancel button is its Stop button.
+        if d.kind == script_run::GROWTH_KIND {
+            app.session.script_request_stop();
         }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec

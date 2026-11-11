@@ -146,6 +146,7 @@ pub(super) fn inkscape_pages(xml: &roxmltree::Document, user: Affine) -> Option<
             show_video_safe_areas: false,
             video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
+            guide_label: None,
         })
         .collect();
     (!pages.is_empty()).then_some(pages)

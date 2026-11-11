@@ -213,6 +213,17 @@ impl Targets {
         t.index()
     }
 
+    /// Targets for the ends of a measurement: [`Self::collect`]'s, and with `glyphs` (Snap to Glyph
+    /// on) the guides those options ask for from the live text in `visible` (all of it for None),
+    /// without the outlines' anchor points, which Anchor Point gives the Pen and moved objects.
+    pub fn for_measure(doc: &Document, visible: Option<Rect>, glyphs: Option<GlyphSnap>) -> Self {
+        let mut t = Self::collect(doc, &[], None);
+        if let Some(o) = glyphs {
+            t.push_glyphs(doc, &[], visible, GlyphSnap { anchors: false, ..o });
+        }
+        t.index()
+    }
+
     /// Targets for a dragged direction handle of path `id`: the other art, and the anchors of `id`
     /// (its bounds and the segments through the handle move with it, so they would chase it).
     pub fn for_handle(doc: &Document, id: NodeId) -> Self {

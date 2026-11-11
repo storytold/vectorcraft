@@ -117,6 +117,7 @@ impl VectorcraftApp {
             smart_guides: self.ui.view.smart_guides,
             guides: self.ui.view.guides,
             snap_to_grid: self.ui.view.snap_to_grid,
+            pixel_preview: self.ui.view.pixel_preview,
             snap_to_pixel: self.ui.view.snap_to_pixel,
             // View › Hide Edges: the canvas draws neither the bounding box (with the type widget)
             // nor the Live Corners widgets, and the tools do not answer the pointer on them.
@@ -137,13 +138,14 @@ impl VectorcraftApp {
     /// frame: it is measured once per revision.
     pub fn selection_box(&mut self) -> Option<vectorcraft_doc::OrientedBox> {
         let st = self.session.active()?;
-        let key = (st.uid, st.revision, self.session.prefs.use_preview_bounds);
+        let measure = self.session.bounds_measure();
+        let key = (st.uid, st.revision, measure);
         if let Some((k, b)) = self.canvas.selection_box
             && k == key
         {
             return b;
         }
-        let b = match vectorcraft_effects::preview::anchor_bounds(&st.selection, &st.doc, self.session.prefs.use_preview_bounds) {
+        let b = match vectorcraft_effects::preview::anchor_bounds_with(&st.selection, &st.doc, measure) {
             Some(r) => Some(vectorcraft_doc::OrientedBox::aligned(r)),
             None => self.session.transform_box(&st.selection.objects),
         };

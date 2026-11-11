@@ -283,6 +283,7 @@ font-technology	Variable	Варіативні
 	Average…	Усереднити…
 	Axis:	Вісь:
 	Background Color:	Колір тла:
+	Guide Label:	Мітка напрямних:
 	Show Center Mark	Показати центральну позначку
 	Show Cross Hairs	Показати перехрестя
 	Show Video Safe Areas	Показати безпечні зони відео
@@ -291,7 +292,6 @@ font-technology	Variable	Варіативні
 	Update While Dragging	Оновлювати під час перетягування
 	Hide Video Rulers	Приховати відео-лінійки
 	Background Contents	Вміст фону
-	Background Contents:	Вміст фону:
 	Background:	Фон:
 	Backspace	Backspace
 	Bar Graph Tool	Інструмент «Гістограма»
@@ -577,6 +577,7 @@ font-technology	Variable	Варіативні
 	Coming soon — tracked in the parity plan	Незабаром відстежується в плані розвитку
 	Command Click to Select Objects Behind	Cmd+клацання для вибору об’єктів позаду
 	Command Dialog	Діалогове вікно команди
+	Command API Reference	Довідник API команд
 	Community	Спільнота
 	Compatibility:	Сумісність:
 	Compatible Gradient and Gradient Mesh Printing	Сумісний друк градієнтів та градієнтних сіток
@@ -663,7 +664,6 @@ font-technology	Variable	Варіативні
 	Couldn't {} {name}: {e}	Не вдалося {} {name}: {e}
 	Create	Створити
 	Create Clipping Mask	Створити відсічну маску
-	Create Document	Створити документ
 	Create from Guides	Створити з напрямних
 	Create from Selection	Створити із виділення
 	Create From:	Створити з:
@@ -1273,6 +1273,7 @@ file-filter	Swatch libraries	Бібліотеки зразків
 file-filter	Flattener presets	Набори зведення
 file-filter	PDF presets	Набори PDF
 file-filter	Print presets	Набори друку
+file-filter	Preferences	Налаштування
 file-filter	Export presets	Набори параметрів експорту
 file-filter	SVG Compressed	Стиснутий SVG
 file-filter	PDF-compatible .ai	.ai, сумісний з PDF
@@ -1919,6 +1920,8 @@ file-filter	Templates	Шаблони
 	Lock (⌘2)	Заблокувати (⌘2)
 	Lock Grid	Заблокувати сітку
 	Lock Guides	Заблокувати напрямні
+	Lock Guides by Default	Блокувати напрямні за замовчуванням
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Напрямні монтажної області з Cmd/Ctrl + перетягуванням з лінійки
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння
@@ -2167,7 +2170,6 @@ file-filter	Templates	Шаблони
 	New Color Group…	Нова колірна група…
 	New Document Presets	Набір нових документів
 	New file	Новий файл
-	New from Template	Створити із шаблону
 	New from Template…	Створити із шаблону…
 	New Graphic Style	Новий графічний стиль
 	New Graphic Style (Alt-click to name it)	Новий графічний стиль (Alt+клацання, щоб задати ім’я)
@@ -2845,6 +2847,12 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Скинути функції OpenType
 	Reset Panel	Скинути панель
 	Reset Preferences	Скинути налаштування
+	Export Preferences…	Експортувати налаштування…
+	Import Preferences…	Імпортувати налаштування…
+	Save the applied preferences to a JSON file	Зберегти застосовані налаштування у файл JSON
+	Apply the preferences in a file Export Preferences saved	Застосувати налаштування з файлу, збереженого командою «Експортувати налаштування»
+	Export Preferences	Експортувати налаштування
+	Import Preferences	Імпортувати налаштування
 	Search Preferences	Пошук у налаштуваннях
 	No settings found	Налаштування не знайдено
 	Reset Profiles	Скинути профілі
@@ -2868,6 +2876,8 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивний
 	Restore	Відновити
 	Restore every preference to its default (applied on OK)	Відновити всі параметри за промовчанням (застосовується при натисканні ОК)
+	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
 	Restore Recovered Documents	Відновити відновлені документи
 	Restored documents open unsaved: save them to keep them.	Відновлені документи відкриваються незбереженими: збережіть їх, щоб залишити.
 	Restrict printing, editing and other tasks	Обмежити друк, редагування та інші завдання
@@ -2959,6 +2969,7 @@ digits	Malayalam	Малаялам
 	Save PDF Preset	Зберегти набір PDF
 	Save Perspective Grid Preset	Зберегти набір сітки перспективи
 	Save Preset	Зберегти набір
+	Save Document Preset	Зберегти набір документа
 	Preset {number}	Набір {number}
 	Save Preset…	Зберегти набір…
 	Save Print Preset	Зберегти набір друку
@@ -3167,6 +3178,13 @@ digits	Malayalam	Малаялам
 	Settings…	Параметри…
 	Setup…	Налаштування…
 	Shadows and Glows	Тіні та свічення
+	Game HUD	Ігровий HUD
+	Health Fill	Здоров'я
+	Mana Glow	Мана
+	Damage Flash	Шкода
+	Quest Outline	Квест
+	Coin Shine	Монета
+	Boss Alert	Бос
 	Shape	Фігура
 	Shape Builder	Створення фігур
 	Shape Builder Regions	Області створення фігур
@@ -3539,7 +3557,6 @@ effect	Points	Точки
 	Template	Шаблон
 	Templates	Шаблони
 	Templates Folder	Папка шаблонів
-	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, що відображається в комірці:
 	Text Export Options	Параметри експорту тексту
 	Text Fill & Stroke Color	Колір заливки та обведення тексту
@@ -4094,6 +4111,31 @@ axis	Both	Обидві
 @msg	Combine Slices: the slices have no bounds	Об’єднання фрагментів: фрагменти не мають кордонів
 @msg	Convert to Artboards: selection has no area	Перетворення на монтажні області: виділення не має області
 @msg	Convert to Shape: no rectangles or ellipses selected	Перетворення на фігуру: не виділено прямокутники або еліпси
+	Run	Виконати
+	Run Script	Виконати скрипт
+	Stop Script	Зупинити скрипт
+	Show External Script Warning	Показувати попередження про зовнішні скрипти
+	A Script Is Running	Виконується скрипт
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
+	Do not show this warning again	Більше не показувати це попередження
+	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Цей скрипт додав дуже багато об’єктів. Продовжити чи зупинити його та скасувати його зміни?
+@msg	Choose a .js or .jsx script	Виберіть скрипт .js або .jsx
+@msg	Ran {name}	Виконано: {name}
+@msg	The script was stopped and its changes were undone	Скрипт зупинено, його зміни скасовано
+@msg	a script is running: stop it or wait for it to finish	виконується скрипт: зупиніть його або дочекайтеся завершення
+@msg	this is a compiled script, which cannot be run; use its source text	це скомпільований скрипт, його не можна виконати; використайте його вихідний текст
+@msg	the script is not UTF-8 text	скрипт не є текстом UTF-8
+@msg	the script is too large to run	скрипт завеликий для виконання
+@msg	a drag or an undo group is open; finish it before running a script	відкрито перетягування або групу скасування; завершіть їх перед запуском скрипта
+@msg	the script left a document that cannot be kept	скрипт залишив документ, який не можна зберегти
+@msg	the script is no longer in the Scripts folder	скрипт більше не міститься в папці Scripts
+	Some scripts were not listed	Деякі сценарії не показано
+	The Scripts folder cannot be read	Не вдалося прочитати папку Scripts
+@msg	the script's run is no longer available	виконання скрипта більше не доступне
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	невдала команда змінила кроки скасування, які не вдалося відновити, тому скрипт зупинено
+@msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
+@msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
@@ -4274,6 +4316,7 @@ axis	Both	Обидві
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` має бути null, назвою кольору шару або #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio має бути числом від 0,1 до 10
 @msg	the Color Picker is not open	палітра кольорів не відкрита
 @msg	the Simplify slider is not open	повзунок «Спростити» не відкрито
@@ -4337,6 +4380,11 @@ axis	Both	Обидві
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	внутрішня помилка `{cmd}`: {msg} (документ залишений у попередньому стані; будь ласка, повідомте про цю помилку)
 @msg	internal error: {msg} (please report this bug)	внутрішня помилка: {msg} (будь ласка, повідомте про цю помилку)
 @msg	invalid PDF setting: {0}	неприпустимий параметр PDF: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): її записано з UserUnit {unit}, тому застосунки, які ігнорують UserUnit, показують її в стільки ж разів меншою
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): сторінки {label} записуються без UserUnit, у пунктах, і застосунки, що дотримуються обмеження, обрізають сторінку до 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	у PDF 1.5 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб зберегти розмір: файл записується як PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	сторінка монтажної області {n} має розмір {size} і задовга та завузька для сторін сторінки PDF від 3 до 14 400 одиниць: її записано з UserUnit {unit}, що тримає коротку сторону не менше 3 одиниць, а застосунки, які дотримуються межі, обрізають довгу сторону до 14 400 одиниць
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	файли {label} вміщують дійсні числа до {max}, а сторінці монтажної області {n} завдовжки {side} pt потрібні більші: виберіть PDF 1.6 або новіший без стандарту PDF/X чи меншу монтажну область
 @msg	invalid image data for `{0}`	неприпустимі дані зображення для `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	неприпустимі параметри для `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	не є зображенням, яке читає VectorCraft
@@ -4441,6 +4489,7 @@ axis	Both	Обидві
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Завантажено «{name}»: пропущено {n} крок|Завантажено «{name}»: пропущено {n} кроки|Завантажено «{name}»: пропущено {n} кроків
 @msg	not an action set file	це не файл набору дій
 @msg	the action set file is larger than 8 MiB	файл набору дій більший за 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: довідник був би більшим за {MAX_BYTES} байтів
 @msg	the action set file holds more than 1,000 actions	файл набору дій містить понад 1000 дій
 @msg	the action set file needs a later version of VectorCraft	для файлу набору дій потрібна новіша версія VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	у файлі набору дій є дія з понад 10 000 кроків
@@ -4673,6 +4722,20 @@ axis	Both	Обидві
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
 @msg	unknown panel `{raw}`	невідома панель `{raw}`
 @msg	unknown preference `{key}`	невідоме налаштування `{key}`
+@msg	Preferences imported.	Налаштування імпортовано.
+@msg	not a preferences file: {e}	не є файлом налаштувань: {e}
+@msg	not a preferences file: no JSON object	не є файлом налаштувань: немає об’єкта JSON
+@msg	not a preferences file (format `{format}`)	не є файлом налаштувань (формат `{format}`)
+@msg	not a preferences file: no `format`	не є файлом налаштувань: немає `format`
+@msg	not a preferences file: no `version`	не є файлом налаштувань: немає `version`
+@msg	not a preferences file: no `prefs`	не є файлом налаштувань: немає `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	файл збережено новішою версією VectorCraft (версія {v})
+@msg	the file holds no preferences	файл не містить налаштувань
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` вказує теку, а файли налаштувань не містять тек
+@msg	the file is larger than 1 MB	файл більший за 1 МБ
+@msg	give `path` or `data`	вкажіть `path` або `data`
+@msg	`{key}` must be an object	`{key}` має бути об’єктом
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` виконується окремо, а не як крок пакета
 @msg	unknown preset (one of {_1})	невідомий набір (один із: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	невідомий набір `{name}` (high, medium, low або збережений: див. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	невідомий набір `{name}` (див. flattener.presets.list)
@@ -5176,7 +5239,8 @@ lighting	Light	Світло
 	Bevel both sides	Фаска з обох боків
 	Presets	Набори
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Об'єкт може мати лише один 3D-ефект. Змініть параметри наявного ефекту або спершу вилучіть його.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}: поки що потрібен контур або складений контур. Спершу перетворіть текст, зображення та групи на контури.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label}: поки що потрібен контур, складений контур, текст, група, перехід або екземпляр символу. Спершу розберіть інші об'єкти.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}: із зображення не можна побудувати тіло. Спершу трасуйте його командою Об’єкт › Трасування зображення › Створити.
 @msg	{label} requires a shape with at least two anchors	{label}: потрібна фігура щонайменше з двома опорними точками
 @msg	The shape is too complex for a 3D effect	Фігура надто складна для 3D-ефекту
 @msg	The 3D surface is too complex; simplify the shape	3D-поверхня надто складна; спростіть фігуру
@@ -5184,6 +5248,11 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; did you mean `{near}`?	невідомий параметр `{key}`; можливо, ви мали на увазі `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	невідомий параметр `{key}`; команда не має параметрів
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
+@msg	the params must be an object, not {got}	параметри мають бути об'єктом, а не {got}
+@msg	unknown parameter `{path}`; the object takes no keys	невідомий параметр `{path}`; об'єкт не приймає ключів
+@msg	unknown parameter `{path}`; it takes: {keys}	невідомий параметр `{path}`; приймає: {keys}
+@msg	missing `{path}`	відсутнє `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` має бути {expected}, а не {got}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: це не зображення PNG, JPEG, WebP, TIFF чи BMP
@@ -5230,6 +5299,7 @@ lighting	Light	Світло
 	Preview (1 inch on the page)	Попередній перегляд (1 дюйм на сторінці)
 	Set as Default	Встановити за замовчуванням
 	 out from a highlighted edge to place its dimension  |  	 назовні від підсвіченого краю, щоб розмістити його розмір  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 по двох точках, потім перемістіть і клацніть, щоб розмістити вирівняний, горизонтальний або вертикальний розмір  |  
 	 cancels  |  Double-click the tool for options	 скасовує  |  Подвійне клацання по інструменту відкриває параметри
 	Linear	Лінійний
 	Angular	Кутовий
@@ -5264,12 +5334,14 @@ lighting	Light	Світло
 @msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
 @msg	Measured segment no longer exists	Виміряний сегмент більше не існує
 @msg	Non-finite dimension	Розмір не є скінченним числом
+@msg	Only linear dimensions are horizontal or vertical	Лише лінійні розміри бувають горизонтальними або вертикальними
 @msg	Scale Text Attributes: selected type has no scale to bake	Масштабувати атрибути тексту: у вибраного тексту немає масштабу для застосування
 @msg	Scale must be drawing:real, for example 1:10	Масштаб має бути у вигляді креслення:реальність, наприклад 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Співвідношення масштабу має бути від 1:1000000 до 1000000:1
 @msg	Second measured segment no longer exists	Другий виміряний сегмент більше не існує
 @msg	Unknown dimension mode	Невідомий режим розміру
 @msg	Unknown dimension option {k}	Невідомий параметр розміру {k}
+@msg	Unknown dimension orientation	Невідома орієнтація розміру
 @msg	Unknown dimension style	Невідомий стиль розміру
 @msg	Unknown unit	Невідома одиниця
 # Revolve cap description
@@ -5533,6 +5605,20 @@ axis	Y Axis	Вісь Y
 	Show its progress, see Cancel and write log lines	Показувати свій поступ, помічати скасування і записувати рядки журналу
 	Keep settings of its own	Зберігати власні налаштування
 	Keep a cache of its own, which you can clear	Зберігати власний кеш, який можна очистити
+	Run these commands on the document: {ids}	Виконувати в документі ці команди: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» вказує в `commandAllowlist` команду `{id}`, яку модуль викликати не може
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: у `commandAllowlist` маніфесту її немає
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID або аргументи лежать поза пам’яттю модуля
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID або аргументи не в UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: аргументи не є об’єктом JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` може оголошувати лише фільтр зі звичайним бюджетом
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	виклики команд ({MAX_CALLS} викликів і {MAX_CALL_BYTES} байтів за запуск)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	розмір виклику команди (vc_call `{shown}`: {len} байтів, межа {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	щонайбільше {MAX_ALLOWED_COMMANDS} команд у `commandAllowlist`
+@msg	a plug-in may not call this command	модуль не може викликати цю команду
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	для `commandAllowlist` потрібен дозвіл `commands`, а для `commands` потрібен `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` вказує `{shown}`, що не є ID команди або вказане двічі
 	Clear Plug-in Cache	Очистити кеш модуля
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	дозволу `{permission}` потрібен рівень API модулів {PROGRESS_API}: укажіть `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль імпортує `env.{name}` з іншим типом, ніж у хоста: у хоста тип {signature}
@@ -5619,6 +5705,14 @@ axis	Y Axis	Вісь Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
 	Add to Symbols	Додати до символів
 	Basic Shapes	Базові фігури
+	Button	Кнопка
+	Panel	Панель
+	UI Frames	UI-рамки
+	Map Markers	Маркери карти
+	Pin	Шпилька
+	Flag	Прапор
+	Crosshair	Приціл
+	Checkpoint	Контрольна точка
 	Open Symbol Library	Відкрити бібліотеку символів
 	Save Symbol Library	Зберегти бібліотеку символів
 	Save Symbol Library…	Зберегти бібліотеку символів…
@@ -5673,6 +5767,11 @@ axis	Y Axis	Вісь Y
 	User Brush Library 9	Користувацька бібліотека пензлів 9
 	User Brush Library 10	Користувацька бібліотека пензлів 10
 	Art Ribbons	Художні стрічки
+	Zigzag	Зигзаг
+	Burst Ray	Ударний промінь
+	Dash Trail	Пунктирний слід
+	Speed Line	Лінія швидкості
+	Game Trails	Ігрові сліди
 	Calligraphic Nibs	Каліграфічні пера
 	Pattern Borders	Візерункові облямівки
 	Scatter Shapes	Розсіяні фігури
@@ -5693,6 +5792,8 @@ axis	Y Axis	Вісь Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Точковий текст
 	Area Text	Текст в області
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Вимірювати текст за межами гліфа
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показати параметри прив’язки до гліфа
 	Hide Snap to Glyph Options	Приховати параметри прив’язки до гліфа
@@ -6110,7 +6211,7 @@ breakText	Glyphs	Гліфи
 	Reset Symbol Instance	Скинути екземпляр символу
 @msg	type must be static or dynamic, not {v}	type має бути static або dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` — статичний символ: спершу встановіть для нього тип символу «Динамічний»
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	У контуру, складеного контуру або тексту, виділеного в екземплярі символу, можна змінити лише суцільний колір заливки й обведення
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	У контуру, складеного контуру або тексту, виділеного в екземплярі символу, можна змінити лише заливку, обведення, непрозорість і режим накладання
 @msg	path must be a list of child indices	path має бути списком індексів дочірніх об’єктів
 @msg	no object at path {shown} in the symbol's art	у графіці символу немає об’єкта за шляхом {shown}
 @msg	give fill, stroke, opacity and/or blend	вкажіть fill, stroke, opacity та/або blend
@@ -6260,3 +6361,24 @@ breakText	Glyphs	Гліфи
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
 @msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`
+	Ignore All	Пропустити все
+	Add to Dictionary	Додати до словника
+	No Suggestions	Немає варіантів
+	Edit Custom Dictionary	Редагувати словник користувача
+	Entry:	Запис:
+# Script Console
+	Script Console	Консоль скриптів
+	Clear Script Console	Очистити консоль скриптів
+	Copy Script Console	Копіювати консоль скриптів
+	Copy All	Копіювати все
+	Copy Selected	Копіювати виділене
+	Finished	Завершено
+	Ended with an error	Завершено з помилкою
+	Out of fuel	Вичерпано ліміт інструкцій
+	Ended at a host limit	Завершено на ліміті хоста
+	Ended at a limit	Завершено на ліміті
+	Stopped	Зупинено
+	Ended by an internal fault	Завершено через внутрішню помилку
+	{ms} ms, {calls} host calls	{ms} мс, викликів хоста: {calls}
+	{dropped} earlier lines dropped, {cut} lines cut	Відкинуто попередніх рядків: {dropped}, обрізано рядків: {cut}
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` і `last` мають бути номерами рядків, які зберігає консоль, причому `first` не пізніше `last`

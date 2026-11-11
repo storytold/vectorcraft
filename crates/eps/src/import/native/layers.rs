@@ -1,4 +1,4 @@
-use super::build::{PAGE_MOVE, Page, build, build_from, build_on_page, build_without_page, reid_page_art};
+use super::build::{PAGE_MOVE, Page, alone_scale, build, build_from, build_on_page, build_without_page, reid_page_art};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -137,7 +137,7 @@ pub fn layered_ai_from(
         all.push(format!("{LAYERS_UNREAD} from its editing data ({why}): they come from its PDF part"));
         all
     };
-    let AiLayers { data, structure } = layers;
+    let AiLayers { data, structure, alone } = layers;
     let data = match data {
         Ok(data) => data,
         Err(why) => return (visible, unread(warnings, &why), false),
@@ -180,6 +180,18 @@ pub fn layered_ai_from(
     let built = structure
         .unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new))
         .and_then(|structure| build_from(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit));
+    // Layers that waited on the page only for their envelopes of type open alone, as they would
+    // have without them, each envelope keeping its drawn art, unless one opened live with the page.
+    let live = matches!(&built, Ok((done, _)) if holds_type_envelope(&done.layers));
+    if !live
+        && let Some((mut done, notes)) = alone.and_then(|(pages, unit)| {
+            let structure = ai::read_over_page(&data, false, names).ok()?;
+            build_without_page(structure, &data, &pages, unit).ok()?.ok()
+        })
+    {
+        done.setup.bleed = visible.setup.bleed;
+        return (done, notes, true);
+    }
     match built {
         Ok((mut done, notes)) => {
             done.setup.bleed = visible.setup.bleed;
@@ -189,6 +201,17 @@ pub fn layered_ai_from(
         }
         Err(why) => from_pdf_part(visible, warnings, &why),
     }
+}
+
+/// Is there an envelope of type (one whose contents hold type) in `nodes` or what they hold?
+fn holds_type_envelope(nodes: &[Arc<Node>]) -> bool {
+    fn holds_type(n: &Node) -> bool {
+        matches!(n.kind, NodeKind::Text(_)) || n.children().is_some_and(|c| c.iter().any(|c| holds_type(c)))
+    }
+    nodes.iter().any(|n| match &n.kind {
+        NodeKind::Envelope { content, .. } => content.iter().any(|c| holds_type(c)),
+        _ => n.children().is_some_and(|c| holds_type_envelope(c)),
+    })
 }
 
 /// The `.ai` whose editing copy is `private` (as [`layered_ai`] takes it) from its layers alone,
@@ -201,20 +224,27 @@ pub fn layered_ai_from(
 pub fn ai_layers_alone(private: &[u8], pages: &[(f64, f64)], unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), AiLayers> {
     let data = match ai::decode_private(private) {
         Ok(data) => data,
-        Err(why) => return Err(AiLayers { data: Err(why), structure: None }),
+        Err(why) => return Err(AiLayers { data: Err(why), structure: None, alone: None }),
     };
     if !has_layers(&data) {
-        return Err(AiLayers { data: Ok(data), structure: None });
+        return Err(AiLayers { data: Ok(data), structure: None, alone: None });
     }
     // An image past the hard limits is read as an unread box, which the PDF part's art replaces.
     let structure = match ai::read_over_page(&data, false, names) {
         Ok(structure) => structure,
-        Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)) }),
+        Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)), alone: None }),
     };
+    // An envelope of type opens live only where the layers with it draw as the page, as the other
+    // live envelopes do: the PDF part is imported to compare them with. Should none open live, the
+    // layers open alone as they would have, the envelopes keeping their drawn art ([`layered_ai_from`]).
+    if structure.warped_type.has_envelopes() && alone_scale(&structure, &data, pages, unit).is_some() {
+        let alone = Some((pages.to_vec(), unit));
+        return Err(AiLayers { data: Ok(data), structure: Some(Ok(Box::new(structure))), alone });
+    }
     match build_without_page(structure, &data, pages, unit) {
         Ok(Ok((doc, notes))) => Ok((doc, notes)),
-        Ok(_) => Err(AiLayers { data: Ok(data), structure: None }),
-        Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)) }),
+        Ok(_) => Err(AiLayers { data: Ok(data), structure: None, alone: None }),
+        Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)), alone: None }),
     }
 }
 
@@ -226,12 +256,15 @@ pub struct AiLayers {
     /// Its layers read with [`ai::read`] as [`layered_ai`] reads them, or why they can't be; `None`
     /// when they are still to be read.
     structure: Option<Result<Box<ai::Structure>, String>>,
+    /// The pages and their unit the layers open on without the PDF part, when they wait on it only
+    /// for their envelopes of type ([`ai_layers_alone`]).
+    alone: Option<(Vec<(f64, f64)>, f64)>,
 }
 
 impl AiLayers {
     /// The editing copy `private` (as [`layered_ai`] takes it), decoded.
     pub fn decode(private: &[u8]) -> Self {
-        Self { data: ai::decode_private(private), structure: None }
+        Self { data: ai::decode_private(private), structure: None, alone: None }
     }
 }
 

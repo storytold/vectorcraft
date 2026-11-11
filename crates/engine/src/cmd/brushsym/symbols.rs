@@ -390,9 +390,9 @@ fn expanded_bound(d: &Document, inst: &Node, own: bool) -> u64 {
     most.saturating_add(1).saturating_add(mask)
 }
 
-/// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). Returns the
-/// art's ids. Fails before any edit when the instances together would make more than
-/// [`MAX_EXPAND_NODES`] objects.
+/// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). A hidden or
+/// locked instance's art stays hidden or locked. Returns the art's ids. Fails before any edit when
+/// the instances together would make more than [`MAX_EXPAND_NODES`] objects.
 fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId>> {
     let total = ids.iter().filter_map(|id| d.node(*id)).fold(0u64, |sum, n| sum.saturating_add(expanded_bound(d, n, own)));
     if total > MAX_EXPAND_NODES as u64 {
@@ -401,8 +401,10 @@ fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId
     let mut out = vec![];
     for id in ids {
         let Some(inst) = d.node(*id).cloned() else { continue };
-        let Some(art) = expanded_instance(d, &inst, own) else { continue };
+        let Some(mut art) = expanded_instance(d, &inst, own) else { continue };
         let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
+        art.visible &= inst.visible;
+        art.locked |= inst.locked;
         let aid = art.id;
         d.remove(*id)?;
         d.insert(par, idx, art)?;
@@ -491,9 +493,13 @@ pub(super) fn symbol_break_link(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(EngineError::Other("no symbol instances selected".into()));
     }
+    let iso = s.doc()?.isolation;
     let out = s.edit("Break Link to Symbol", |d, sel| {
         let out = break_links(d, &ids, true)?;
-        sel.set(out.iter().copied());
+        // Art that is hidden or locked, or in a hidden or locked group or layer, is left out of the
+        // selection.
+        let locks = d.locked_artboards();
+        sel.set(out.iter().copied().filter(|id| crate::cmd::select::is_selectable(d, iso, &locks, *id)));
         Ok(out)
     })?;
     Ok(json!({ "ids": ids_json(&out) }))

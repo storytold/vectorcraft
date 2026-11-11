@@ -14,8 +14,8 @@
 //!
 //! A second test runs the same ES5 tests through the interpreter, each in a new realm after the
 //! suite's `assert.js`, `sta.js` and the files its `includes:` names: every test that must parse
-//! and uses only the built-ins the interpreter has (those that name a missing global or method,
-//! in their own source or an included file, are counted as skipped, as are `async` tests). A test
+//! and uses only the built-ins the interpreter has (those whose code, or an included file's, uses a
+//! missing global or method are counted as skipped, as are `async` tests). A test
 //! passes when it completes, or, for `negative: phase: runtime`, when it throws an object whose
 //! `constructor` is the global its `type:` names. Its counts are printed apart from the parse
 //! counts, and its failures go to `run-failures.txt`.
@@ -31,7 +31,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use vectorcraft_js::{JsValue, Limits, Options, Realm, RunErrorKind, TokenKind, parse, tokenize};
+use vectorcraft_js::{JsValue, Limits, Options, Punct, Realm, RunErrorKind, Token, TokenKind, parse, tokenize};
 
 /// A test file's metadata, from its `/*--- … ---*/` block.
 #[derive(Default)]
@@ -248,15 +248,41 @@ fn missing_builtins<'a>(provided: &[&str]) -> HashSet<&'a str> {
     MISSING_BUILTINS.split_whitespace().filter(|name| !provided.contains(name)).collect()
 }
 
-/// The source names a missing built-in, as an identifier, a property name or a word inside a
-/// string literal (code passed to `eval` or `Function`), or does not parse as ES5 (the tests that
-/// use `let` and `const`).
-fn needs_missing_builtin(source: &str, missing: &HashSet<&str>) -> bool {
-    let Ok(tokens) = tokenize(source, &Options::default()) else { return true };
-    tokens.iter().any(|t| match &t.kind {
+/// The code of `sources` (a test and the harness files it includes) uses a missing built-in, or
+/// one of them does not parse as ES5 (the tests that use `let` and `const`). A name counts as an
+/// identifier or a property name, as a string literal that is the name alone (a property key, as
+/// in `this["Map"]`), and as a word in any string literal when one of the sources can run a string
+/// as code. Comments, and strings that only mention the name in a message, do not count.
+fn needs_missing_builtin(sources: &[&str], missing: &HashSet<&str>) -> bool {
+    let mut lists = Vec::with_capacity(sources.len());
+    for source in sources {
+        let Ok(tokens) = tokenize(source, &Options::default()) else { return true };
+        lists.push(tokens);
+    }
+    let strings_are_code = lists.iter().any(|tokens| runs_strings_as_code(tokens));
+    lists.iter().flatten().any(|t| match &t.kind {
         TokenKind::Ident(name) => missing.contains(name.as_str()),
         TokenKind::String(units) => {
-            String::from_utf16_lossy(units).split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')).any(|word| missing.contains(word))
+            let text = String::from_utf16_lossy(units);
+            missing.contains(text.as_str())
+                || (strings_are_code && text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')).any(|word| missing.contains(word)))
+        }
+        _ => false,
+    })
+}
+
+/// The tokens can run a string as code: they name `eval`, `Function` or a `constructor` property,
+/// as an identifier or as a string key (`this["eval"]`), called directly or through an alias.
+/// `Function.prototype` alone does not count.
+fn runs_strings_as_code(tokens: &[Token]) -> bool {
+    const RUNNERS: [&str; 3] = ["eval", "Function", "constructor"];
+    tokens.iter().enumerate().any(|(i, t)| match &t.kind {
+        TokenKind::String(units) => RUNNERS.iter().any(|r| r.encode_utf16().eq(units.iter().copied())),
+        TokenKind::Ident(name) if name == "eval" || name == "constructor" => true,
+        TokenKind::Ident(name) if name == "Function" => {
+            let prototype = tokens.get(i + 1).is_some_and(|d| d.is_punct(Punct::Dot))
+                && tokens.get(i + 2).is_some_and(|p| matches!(&p.kind, TokenKind::Ident(p) if p == "prototype"));
+            !prototype
         }
         _ => false,
     })
@@ -428,7 +454,7 @@ fn run_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, later: bool) -> (
         }
         let counts = if meta.es5 { &mut es5_counts } else { &mut later_counts };
         let includes: String = meta.includes.iter().map(|i| read(&harness_dir.join(i)) + "\n").collect();
-        if meta.flags.iter().any(|f| f == "async") || needs_missing_builtin(&source, missing) || needs_missing_builtin(&includes, missing) {
+        if meta.flags.iter().any(|f| f == "async") || needs_missing_builtin(&[&source, &includes], missing) {
             counts.skipped += 1;
             continue;
         }
@@ -466,4 +492,69 @@ fn run_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, later: bool) -> (
         }
     }
     (es5_counts, later_counts)
+}
+
+/// `needs_missing_builtin` with `Map`, `Symbol` and `Set` missing.
+fn skips(sources: &[&str]) -> bool {
+    let missing: HashSet<&str> = ["Map", "Symbol", "Set"].into_iter().collect();
+    needs_missing_builtin(sources, &missing)
+}
+
+#[test]
+fn a_missing_name_in_a_message_string_does_not_skip() {
+    assert!(!skips(&[r##"if (x !== 1) { $ERROR("#1: new Map() should not be needed"); }"##]));
+    assert!(!skips(&[r#"assert.sameValue(f(), 1, 'Set the value: ' + "a Symbol");"#]));
+    // Quotes escaped inside the string, and a regular expression literal holding quotes.
+    assert!(!skips(&[r#"var r = /"Map'/; var s = "say \"Map\" and \'Set\'";"#]));
+    // A string in an included harness file is a message too.
+    assert!(!skips(&["var x = 1;", r#"function check(v) { if (!v) throw new Test262Error("no Symbol"); }"#]));
+}
+
+#[test]
+fn a_missing_name_in_code_skips() {
+    assert!(skips(&["var m = new Map();"]));
+    assert!(skips(&["var s = this.Symbol;"]));
+    assert!(skips(&["", "function helper() { return typeof Set; }"]));
+    // A name both in a message and in code.
+    assert!(skips(&[r#"var m = new Map(); assert(m, "Map");"#]));
+}
+
+#[test]
+fn a_missing_name_in_a_string_that_can_run_as_code_skips() {
+    assert!(skips(&[r#"eval("new Map()");"#]));
+    assert!(skips(&[r#"var e = eval; var s = "Symbol()"; e(s);"#]));
+    assert!(skips(&[r#"var f = Function("return Set");"#]));
+    assert!(skips(&[r#"var f = new Function("a", "return new Map(a)");"#]));
+    assert!(skips(&[r#"var f = Function.apply(null, ["return Symbol"]);"#]));
+    assert!(skips(&[r#"var f = (function () {}).constructor("return Set");"#]));
+    assert!(skips(&[r#"var F = Function; F("return new Map()")();"#]));
+    assert!(skips(&[r#"var C = Function.prototype.constructor; C("return new Map()")();"#]));
+    assert!(skips(&[r#"this["eval"]("new Map()");"#]));
+    assert!(skips(&[r#"var F = this['Function']; F("return new Map()")();"#]));
+    // The string is in the test and the eval in an included file.
+    assert!(skips(&[r#"run("new Map()");"#, "function run(code) { return eval(code); }"]));
+}
+
+#[test]
+fn a_string_that_is_only_a_missing_name_skips() {
+    // A property key reads the global by name, with or without `eval` in the source.
+    assert!(skips(&[r#"var M = this["Map"];"#]));
+    assert!(skips(&[r#"for (var k in this) { if (k === 'Set') { throw 1; } }"#]));
+    assert!(skips(&[r#"var names = ["Object", "Symbol"];"#]));
+}
+
+#[test]
+fn comments_and_longer_names_do_not_skip() {
+    assert!(!skips(&["// new Map()\n/* Symbol() */ var x = 1;"]));
+    assert!(!skips(&["var Mapping = 1, Settings = 2; Symbolic = 3;"]));
+    assert!(!skips(&[r#"eval("var Mapping = 1, Settings = 2;");"#]));
+    // `Function.prototype` alone does not make strings code.
+    assert!(!skips(&[r#"assert(Function.prototype, "a Map");"#]));
+}
+
+#[test]
+fn a_source_that_does_not_parse_as_es5_skips() {
+    assert!(skips(&["let x = 1;"]));
+    assert!(skips(&["var x = 1;", "const y = 2;"]));
+    assert!(skips(&["var s = `${x}`;"]));
 }

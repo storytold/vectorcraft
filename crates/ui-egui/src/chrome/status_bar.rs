@@ -179,12 +179,18 @@ pub(super) fn status_readouts(app: &VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         }
         right = left - gap;
     }
-    let busy: Vec<&str> = app
-        .background
-        .jobs
-        .iter()
-        .filter(|j| !j.label.is_empty() && !j.cancelled())
-        .map(|j| j.label.as_str())
+    let script = app.session.script_running().then_some("Running a script");
+    if script.is_some() {
+        let left = (right - 52.0).max(area.left());
+        let stop = egui::Rect::from_min_max(egui::pos2(left, area.top() + 1.0), egui::pos2(right, area.bottom() - 1.0));
+        if ui.put(stop, egui::Button::new(tl!("Stop")).small()).clicked() {
+            app.session.script_interrupt().set();
+        }
+        right = left - gap;
+    }
+    let busy: Vec<&str> = script
+        .into_iter()
+        .chain(app.background.jobs.iter().filter(|j| !j.label.is_empty() && !j.cancelled()).map(|j| j.label.as_str()))
         .chain(app.opening.pending.iter().map(|p| p.label.as_str()))
         .chain(app.placing.pending.iter().map(|p| p.label.as_str()))
         .collect();

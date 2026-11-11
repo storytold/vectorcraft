@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's solid fill and stroke for this instance only, as the Eyedropper Options allow, and a sampled gradient or pattern, a source that is not a path, compound path or type, or options that pick up neither color, are refused. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md) → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's fill and stroke (solid, none, gradient or pattern) for this instance only, as the Eyedropper Options allow, and a source that is not a path, compound path or type, or options that pick up neither color, are refused. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md) → {ids}",
             has_doc,
             copy_from
         ),
@@ -1204,11 +1204,10 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let attrs = s.prefs.eyedropper.attrs(p).map_err(|e| bad(C, e))?;
     // An object of a dynamic symbol instance's art selected with Direct Selection takes the clicked
-    // object's solid fill and stroke, as the Eyedropper Options allow, for this instance only. A
-    // gradient or pattern sampled for it, a source that is not a path, compound path or type (a
-    // symbol instance's own appearance is empty), and options that pick up neither color are
-    // refused, and the paint defaults stay as they are. A path of a compound path stands for the
-    // compound path, which holds the paint.
+    // object's fill and stroke, as the Eyedropper Options allow, for this instance only. A source
+    // that is not a path, compound path or type (a symbol instance's own appearance is empty) and
+    // options that pick up neither color are refused, and the paint defaults stay as they are. A
+    // path of a compound path stands for the compound path, which holds the paint.
     if !reverse
         && !append
         && !defaults_only
@@ -1219,11 +1218,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         let src = Arc::new(d.node(super::path::compound_or_self(d, clicked)).ok_or(EngineError::NoNode(clicked))?.clone());
         let (fill, stroke) = (super::paint::proxy_paint(&src, false, None), super::paint::proxy_paint(&src, true, None));
         let a = attrs.appearance;
-        if !vectorcraft_doc::symbol_overrides::takes_part_paint(&src)
-            || !(a.fill.color || a.stroke.color)
-            || (a.fill.color && !super::paint::part_takes(&fill))
-            || (a.stroke.color && !super::paint::part_takes(&stroke))
-        {
+        if !vectorcraft_doc::symbol_overrides::takes_part_paint(&src) || !(a.fill.color || a.stroke.color) {
             return Err(super::brushsym::part_only());
         }
         super::brushsym::edit_part(s, id, &path, "Eyedropper", |o| {

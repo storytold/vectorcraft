@@ -341,7 +341,7 @@ impl<'s> Lexer<'s> {
         } else {
             self.decimal()
         };
-        if self.peek().is_some_and(|c| c == BACKSLASH || is_id_start(c) || is_decimal_digit(c)) {
+        if self.code_point(self.pos).is_some_and(|(c, _)| c == BACKSLASH || is_id_start(c) || is_decimal_digit(c)) {
             return Err(self.error_at(self.pos, "identifier starts immediately after numeric literal"));
         }
         let mut token = self.token(TokenKind::Number(value), start, line, column, false);

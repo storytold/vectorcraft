@@ -70,11 +70,12 @@ mod presets;
 mod print;
 mod settings;
 mod streams;
+mod surface;
 mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
-pub use export::{export, export_with_report, page_areas};
+pub use export::{check_page_sizes, export, export_with_report, page_areas};
 pub use file_info::{FileInfo, file_info};
 #[cfg(any(test, feature = "read-count"))]
 pub use import::imports_of;

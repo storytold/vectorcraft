@@ -7,6 +7,9 @@ impl Session {
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
     /// undo step labelled `label`; inside one it just mutates (the interaction commits later).
     pub fn edit<T>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         // An edit made while typing (the Transform panel) is a step of its own: inside the typing
         // session, the next keystroke's preview would start again from before it (#1881).
         if !self.previewing && cmd::typing_in_progress(self) {
@@ -109,7 +112,7 @@ impl Session {
             },
             Err(e) => Err(e),
         };
-        match result {
+        let r = match result {
             Ok(v) => {
                 st.selection.prune(&st.doc);
                 // An edit that selects what it unlocks, shows or pastes leaves locked guides out,
@@ -150,7 +153,12 @@ impl Session {
                 cmd::globaledit::follow_history(st);
                 Err(e)
             }
+        };
+        // An edit a frontend makes itself, outside a command, keeps to the shared budget too.
+        if r.is_ok() && self.depth == 0 && !self.in_tool_actions {
+            self.trim_histories();
         }
+        r
     }
 
     /// [`Session::edit`] with the step named `template`, its `{name}` placeholder filled with `name`
@@ -225,6 +233,9 @@ impl Session {
     }
 
     pub fn begin_interaction(&mut self, label: &str) -> Result<()> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         // Typing in progress is kept first: a drag or a dialog's preview would otherwise start
         // from the snapshot taken before the typing, and drop it (#1881).
         if label != "Typing" && cmd::typing_in_progress(self) {
@@ -262,6 +273,9 @@ impl Session {
 
     /// Re-apply `cmd` on top of the interaction snapshot (replacing the previous preview).
     pub fn preview(&mut self, cmd: &str, params: &Value) -> Result<Value> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
@@ -385,6 +399,9 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         self.journal.push(preview);
         self.journal_in_undo_groups(doc, &grouped, journal);
+        if self.depth == 0 {
+            self.trim_histories();
+        }
         Ok(())
     }
 

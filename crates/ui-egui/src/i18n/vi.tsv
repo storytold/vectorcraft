@@ -312,6 +312,7 @@ font-technology	Variable	Biến thiên
 	Axis:	Trục:
 	Back	Sau
 	Background Color:	Màu nền:
+	Guide Label:	Nhãn đường căn:
 	Show Center Mark	Hiện dấu tâm
 	Show Cross Hairs	Hiện đường chữ thập
 	Show Video Safe Areas	Hiện vùng an toàn video
@@ -320,7 +321,6 @@ font-technology	Variable	Biến thiên
 	Update While Dragging	Cập nhật khi kéo
 	Hide Video Rulers	Ẩn thước video
 	Background Contents	Nội dung nền
-	Background Contents:	Nội dung nền:
 	Background:	Nền:
 	Backspace	Backspace
 	Balance	Cân bằng
@@ -672,6 +672,7 @@ font-technology	Variable	Biến thiên
 	Coming soon — tracked in the parity plan	Sắp ra mắt — đang theo dõi trong kế hoạch đối chiếu tính năng
 	Command Click to Select Objects Behind	Command-bấm để chọn đối tượng phía sau
 	Command Dialog	Hộp thoại lệnh
+	Command API Reference	Tài liệu tham khảo API lệnh
 	Commits	Commit
 	Community	Cộng đồng
 	Company	Công ty
@@ -765,7 +766,6 @@ font-technology	Variable	Biến thiên
 	Create	Tạo
 	Create Clipping Mask	Tạo mặt nạ cắt
 	Create Compound Path From Ellipses	Tạo đường dẫn phức từ hình elip
-	Create Document	Tạo tài liệu
 	Create from Guides	Tạo từ đường căn
 	Create from Selection	Tạo từ vùng chọn
 	Create From:	Tạo từ:
@@ -1476,6 +1476,7 @@ file-filter	Swatch libraries	Thư viện mẫu màu
 file-filter	Flattener presets	Thiết lập sẵn làm phẳng
 file-filter	PDF presets	Thiết lập sẵn PDF
 file-filter	Print presets	Thiết lập sẵn in
+file-filter	Preferences	Tùy chọn
 file-filter	Export presets	Cài đặt sẵn xuất
 file-filter	SVG Compressed	SVG nén
 file-filter	PDF-compatible .ai	.ai tương thích PDF
@@ -2203,6 +2204,8 @@ digits	Hindi	Hindi
 	Lock (⌘2)	Khóa (⌘2)
 	Lock Grid	Khóa lưới
 	Lock Guides	Khóa đường căn
+	Lock Guides by Default	Khóa đường căn theo mặc định
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Đường căn bảng vẽ với Cmd/Ctrl + kéo từ thước
 	Lock Others	Khóa các mục khác
 	Lock Slices	Khóa lát cắt
 	Lock Station Point	Khóa điểm trạm
@@ -2408,7 +2411,6 @@ digits	Hindi	Hindi
 	New Design	Thiết kế mới
 	New Document Presets	Thiết lập sẵn tài liệu mới
 	New file	Tệp mới
-	New from Template	Mới từ mẫu
 	New from Template…	Mới từ mẫu…
 	New Graphic Style	Kiểu đồ họa mới
 	New Graphic Style (Alt-click to name it)	Kiểu đồ họa mới (Alt-bấm để đặt tên)
@@ -3126,6 +3128,12 @@ mark-style	Japanese	Kiểu Nhật
 	Reset OpenType Features	Đặt lại tính năng OpenType
 	Reset Panel	Đặt lại bảng
 	Reset Preferences	Đặt lại tùy chọn
+	Export Preferences…	Xuất tùy chọn…
+	Import Preferences…	Nhập tùy chọn…
+	Save the applied preferences to a JSON file	Lưu các tùy chọn đang áp dụng vào tệp JSON
+	Apply the preferences in a file Export Preferences saved	Áp dụng các tùy chọn trong tệp do Xuất tùy chọn lưu
+	Export Preferences	Xuất tùy chọn
+	Import Preferences	Nhập tùy chọn
 	Search Preferences	Tìm trong tùy chọn
 	No settings found	Không tìm thấy cài đặt
 	Reset Profiles	Đặt lại hồ sơ màu
@@ -3159,6 +3167,8 @@ mark-style	Japanese	Kiểu Nhật
 	Responsive	Đáp ứng
 	Restore	Khôi phục
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
+	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
 	Restored documents open unsaved: save them to keep them.	Tài liệu đã khôi phục mở ở trạng thái chưa lưu: hãy lưu để giữ lại.
 	Restrict printing, editing and other tasks	Hạn chế in, chỉnh sửa và các tác vụ khác
@@ -3272,6 +3282,7 @@ mark-style	Japanese	Kiểu Nhật
 	Save PDF Preset	Lưu thiết lập sẵn PDF
 	Save Perspective Grid Preset	Lưu thiết lập sẵn lưới phối cảnh
 	Save Preset	Lưu thiết lập sẵn
+	Save Document Preset	Lưu thiết lập sẵn tài liệu
 	Preset {number}	Thiết lập sẵn {number}
 	Save Preset…	Lưu thiết lập sẵn…
 	Save Print Preset	Lưu thiết lập sẵn in
@@ -3499,6 +3510,13 @@ mark-style	Japanese	Kiểu Nhật
 	Setup…	Thiết lập…
 	Shading	Tô bóng
 	Shadows and Glows	Bóng và ánh sáng
+	Game HUD	HUD trò chơi
+	Health Fill	Máu
+	Mana Glow	Mana
+	Damage Flash	Sát thương
+	Quest Outline	Nhiệm vụ
+	Coin Shine	Xu
+	Boss Alert	Trùm
 	Shape	Hình dạng
 	Shape Builder	Tạo hình dạng
 	Shape Builder Regions	Vùng Tạo hình dạng
@@ -3873,7 +3891,6 @@ mark-style	Japanese	Kiểu Nhật
 	Template	Mẫu
 	Templates	Mẫu
 	Templates Folder	Thư mục mẫu
-	Templates…	Mẫu…
 	Text	Văn bản
 	Text Displayed in Cell:	Văn bản hiển thị trong ô:
 	Text Export Options	Tùy chọn xuất văn bản
@@ -4466,6 +4483,7 @@ theme	Appearance	Giao diện
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis phải là "vertical", "horizontal" hoặc góc theo độ, không phải `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black hoặc màu như "#ff8800"
 @msg	bad color {v}	màu không hợp lệ {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` là null, tên một màu lớp hoặc #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio phải là một số từ 0,1 đến 10
 @msg	the Color Picker is not open	Bộ chọn màu chưa được mở
 @msg	the Simplify slider is not open	Thanh trượt Đơn giản hóa chưa được mở
@@ -4512,6 +4530,31 @@ theme	Appearance	Giao diện
 @msg	compressed (RLE) bitmaps can't be read yet	bitmap nén (RLE) chưa thể đọc được
 @msg	Convert to Artboards: selection has no area	Chuyển thành bảng vẽ: vùng chọn không có diện tích
 @msg	Convert to Shape: no rectangles or ellipses selected	Chuyển thành hình dạng: chưa chọn hình chữ nhật hay hình elip
+	Run	Chạy
+	Run Script	Chạy tập lệnh
+	Stop Script	Dừng tập lệnh
+	Show External Script Warning	Hiện cảnh báo tập lệnh bên ngoài
+	A Script Is Running	Một tập lệnh đang chạy
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
+	Do not show this warning again	Không hiện lại cảnh báo này
+	Stop the script and undo what it did? Then quit again.	Dừng tập lệnh và hoàn tác những gì nó đã làm? Sau đó hãy thoát lại.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Tập lệnh này đã thêm rất nhiều đối tượng. Tiếp tục, hay dừng lại và hoàn tác những gì nó đã làm?
+@msg	Choose a .js or .jsx script	Chọn một tập lệnh .js hoặc .jsx
+@msg	Ran {name}	Đã chạy {name}
+@msg	The script was stopped and its changes were undone	Tập lệnh đã dừng và các thay đổi của nó đã được hoàn tác
+@msg	a script is running: stop it or wait for it to finish	một tập lệnh đang chạy: hãy dừng nó hoặc chờ nó kết thúc
+@msg	this is a compiled script, which cannot be run; use its source text	đây là tập lệnh đã biên dịch, không thể chạy; hãy dùng văn bản nguồn của nó
+@msg	the script is not UTF-8 text	tập lệnh không phải là văn bản UTF-8
+@msg	the script is too large to run	tập lệnh quá lớn để chạy
+@msg	a drag or an undo group is open; finish it before running a script	đang có thao tác kéo hoặc nhóm hoàn tác; hãy hoàn thành trước khi chạy tập lệnh
+@msg	the script left a document that cannot be kept	tập lệnh để lại một tài liệu không thể giữ
+@msg	the script is no longer in the Scripts folder	tập lệnh không còn trong thư mục Scripts
+	Some scripts were not listed	Một số tập lệnh không được liệt kê
+	The Scripts folder cannot be read	Không thể đọc thư mục Scripts
+@msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	một lệnh thất bại đã thay đổi các bước hoàn tác không thể khôi phục, nên tập lệnh đã bị dừng
+@msg	a recovery copy could not be written, so the script was not run	không thể ghi bản sao khôi phục nên tập lệnh không được chạy
+@msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
 @msg	could not decode image: {0}	không thể giải mã ảnh: {0}
@@ -4596,6 +4639,11 @@ theme	Appearance	Giao diện
 @msg	Invalid panel layout; restored the default dock	Bố cục bảng không hợp lệ; đã phục hồi dock mặc định
 @msg	invalid parameters for `{cmd}`: {msg}	tham số không hợp lệ cho `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	cài đặt PDF không hợp lệ: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): trang được ghi với UserUnit là {unit}, nên các ứng dụng bỏ qua UserUnit sẽ hiển thị nó nhỏ đi bấy nhiêu lần
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): các trang {label} được ghi không có UserUnit, theo đơn vị điểm, và các ứng dụng tuân theo giới hạn sẽ cắt trang ở 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 không có UserUnit, thứ mà trang dài hơn 14.400 pt (200 in) cần để giữ kích thước: tệp được ghi dưới dạng PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	trang của bảng vẽ {n} có kích thước {size}, quá dài và hẹp so với cạnh trang PDF từ 3 đến 14.400 đơn vị: trang được ghi với UserUnit {unit}, giữ cạnh ngắn từ 3 đơn vị trở lên, và các ứng dụng tuân theo giới hạn sẽ cắt cạnh dài ở 14.400 đơn vị
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	tệp {label} chỉ chứa số thực tối đa {max}, còn trang của bảng vẽ {n} dài {side} pt cần số lớn hơn: hãy chọn PDF 1.6 trở lên không theo tiêu chuẩn PDF/X, hoặc một bảng vẽ nhỏ hơn
 @msg	invalid restored panel group	nhóm bảng được phục hồi không hợp lệ
 @msg	is not an image VectorCraft reads	không phải ảnh mà VectorCraft đọc được
 @msg	it ends inside a group or compound path	nó kết thúc bên trong một nhóm hoặc đường dẫn phức
@@ -4750,6 +4798,7 @@ theme	Appearance	Giao diện
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Đã tải “{name}”: bỏ qua {n} bước
 @msg	not an action set file	không phải tệp bộ hành động
 @msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: tài liệu tham khảo sẽ lớn hơn {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	tệp bộ hành động chứa hơn 1.000 hành động
 @msg	the action set file needs a later version of VectorCraft	tệp bộ hành động cần phiên bản VectorCraft mới hơn
 @msg	an action in the action set file has more than 10,000 steps	một hành động trong tệp bộ hành động có hơn 10.000 bước
@@ -5119,7 +5168,26 @@ theme	Appearance	Giao diện
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tham số không xác định `{key}`; ý bạn là `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tham số không xác định `{key}`; lệnh này không nhận tham số
 @msg	unknown parameter `{key}`; the command takes: {keys}	tham số không xác định `{key}`; lệnh nhận: {keys}
+@msg	the params must be an object, not {got}	các tham số phải là một đối tượng, không phải {got}
+@msg	unknown parameter `{path}`; the object takes no keys	tham số không xác định `{path}`; đối tượng không nhận khóa nào
+@msg	unknown parameter `{path}`; it takes: {keys}	tham số không xác định `{path}`; nhận: {keys}
+@msg	missing `{path}`	thiếu `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` phải là {expected}, không phải {got}
 @msg	unknown preference `{key}`	tùy chọn không xác định `{key}`
+@msg	Preferences imported.	Đã nhập tùy chọn.
+@msg	not a preferences file: {e}	không phải tệp tùy chọn: {e}
+@msg	not a preferences file: no JSON object	không phải tệp tùy chọn: không có đối tượng JSON
+@msg	not a preferences file (format `{format}`)	không phải tệp tùy chọn (định dạng `{format}`)
+@msg	not a preferences file: no `format`	không phải tệp tùy chọn: thiếu `format`
+@msg	not a preferences file: no `version`	không phải tệp tùy chọn: thiếu `version`
+@msg	not a preferences file: no `prefs`	không phải tệp tùy chọn: thiếu `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	tệp được lưu bằng phiên bản VectorCraft mới hơn (phiên bản {v})
+@msg	the file holds no preferences	tệp không chứa tùy chọn nào
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` chỉ định một thư mục, và tệp tùy chọn không chứa thư mục
+@msg	the file is larger than 1 MB	tệp lớn hơn 1 MB
+@msg	give `path` or `data`	hãy cung cấp `path` hoặc `data`
+@msg	`{key}` must be an object	`{key}` phải là một đối tượng
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` chạy riêng, không phải là một bước trong lô
 @msg	unknown preset (one of {_1})	thiết lập sẵn không xác định (một trong {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (high, medium, low hoặc thiết lập đã lưu: xem flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (xem flattener.presets.list)
@@ -5171,7 +5239,8 @@ theme	Appearance	Giao diện
 @msg	{C}: no effect at index {from}	{C}: không có hiệu ứng tại chỉ mục {from}
 @msg	{depth}-bit PSD files in this colour mode can't be read	tệp PSD {depth}-bit ở chế độ màu này không thể đọc được
 @msg	{key} must be a finite coordinate	{key} phải là tọa độ hữu hạn
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} hiện yêu cầu một đường dẫn hoặc đường dẫn phức. Hãy chuyển văn bản, hình ảnh và nhóm thành đường dẫn trước.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} hiện yêu cầu một đường dẫn, đường dẫn phức, văn bản, nhóm, hòa trộn hoặc thực thể ký hiệu. Hãy mở rộng các đối tượng khác trước.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} không thể tạo khối từ hình ảnh: hãy vector hóa ảnh trước bằng Đối tượng › Vector hóa ảnh › Tạo.
 @msg	{label} produced an empty result	{label} tạo ra kết quả trống
 @msg	{label} requires a shape with at least two anchors	{label} yêu cầu một hình dạng có ít nhất hai điểm neo
 @msg	{label}: lost track of a shape's style	{label}: mất dấu kiểu của hình dạng
@@ -5233,6 +5302,7 @@ theme	Appearance	Giao diện
 	Preview (1 inch on the page)	Xem trước (1 inch trên trang)
 	Set as Default	Đặt làm mặc định
 	 out from a highlighted edge to place its dimension  |  	 ra ngoài từ một cạnh được tô sáng để đặt kích thước của nó  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 hai điểm, rồi di chuyển và bấm để đặt kích thước căn theo hai điểm, nằm ngang hoặc thẳng đứng  |  
 	 cancels  |  Double-click the tool for options	 để hủy  |  Nhấp đúp vào công cụ để mở tùy chọn
 	Linear	Tuyến tính
 	Angular	Góc
@@ -5265,12 +5335,14 @@ theme	Appearance	Giao diện
 @msg	Measured anchor no longer exists	Điểm neo được đo không còn tồn tại
 @msg	Measured segment no longer exists	Đoạn được đo không còn tồn tại
 @msg	Non-finite dimension	Kích thước không phải là số hữu hạn
+@msg	Only linear dimensions are horizontal or vertical	Chỉ kích thước tuyến tính mới nằm ngang hoặc thẳng đứng
 @msg	Scale Text Attributes: selected type has no scale to bake	Tỷ lệ thuộc tính văn bản: văn bản được chọn không có tỷ lệ để áp dụng
 @msg	Scale must be drawing:real, for example 1:10	Tỷ lệ phải có dạng bản vẽ:thực tế, ví dụ 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Tỷ lệ phải nằm trong khoảng 1:1000000 đến 1000000:1
 @msg	Second measured segment no longer exists	Đoạn được đo thứ hai không còn tồn tại
 @msg	Unknown dimension mode	Chế độ kích thước không xác định
 @msg	Unknown dimension option {k}	Tùy chọn kích thước không xác định {k}
+@msg	Unknown dimension orientation	Hướng kích thước không xác định
 @msg	Unknown dimension style	Kiểu kích thước không xác định
 @msg	Unknown unit	Đơn vị không xác định
 # Revolve cap description
@@ -5534,6 +5606,20 @@ axis	Y Axis	Trục Y
 	Show its progress, see Cancel and write log lines	Hiển thị tiến độ, nhận biết yêu cầu hủy và ghi các dòng nhật ký
 	Keep settings of its own	Lưu cài đặt riêng
 	Keep a cache of its own, which you can clear	Lưu bộ nhớ đệm riêng mà bạn có thể xóa
+	Run these commands on the document: {ids}	Chạy các lệnh này trên tài liệu: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” liệt kê `{id}` trong `commandAllowlist`, lệnh mà plug-in không được gọi
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: `commandAllowlist` của manifest không liệt kê lệnh này
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID hoặc đối số nằm ngoài bộ nhớ của mô-đun
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID hoặc đối số không phải UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: đối số không phải là đối tượng JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	chỉ bộ lọc có ngân sách thông thường mới khai báo `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	lệnh gọi lệnh ({MAX_CALLS} lần gọi và {MAX_CALL_BYTES} byte mỗi lần chạy)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	kích thước lệnh gọi lệnh (vc_call `{shown}`: {len} byte, giới hạn {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	tối đa {MAX_ALLOWED_COMMANDS} lệnh trong `commandAllowlist`
+@msg	a plug-in may not call this command	plug-in không được gọi lệnh này
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` cần quyền `commands`, và `commands` cần một `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` nêu `{shown}`, không phải ID lệnh hoặc được liệt kê hai lần
 	Clear Plug-in Cache	Xóa bộ nhớ đệm của plug-in
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `{permission}` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	mô-đun nhập `env.{name}` với kiểu khác với kiểu của máy chủ: kiểu của máy chủ là {signature}
@@ -5620,6 +5706,14 @@ axis	Y Axis	Trục Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all hoặc một phạm vi như 1, 3-5, không phải {v}
 	Add to Symbols	Thêm vào ký hiệu
 	Basic Shapes	Hình cơ bản
+	Button	Nút
+	Panel	Bảng
+	UI Frames	Khung UI
+	Map Markers	Đánh dấu bản đồ
+	Pin	Ghim
+	Flag	Cờ
+	Crosshair	Tâm ngắm
+	Checkpoint	Điểm kiểm tra
 	Open Symbol Library	Mở thư viện ký hiệu
 	Save Symbol Library	Lưu thư viện ký hiệu
 	Save Symbol Library…	Lưu thư viện ký hiệu…
@@ -5674,6 +5768,11 @@ axis	Y Axis	Trục Y
 	User Brush Library 9	Thư viện cọ người dùng 9
 	User Brush Library 10	Thư viện cọ người dùng 10
 	Art Ribbons	Dải băng nghệ thuật
+	Zigzag	Zigzag
+	Burst Ray	Tia va chạm
+	Dash Trail	Vệt đứt đoạn
+	Speed Line	Đường tốc độ
+	Game Trails	Vệt game
 	Calligraphic Nibs	Ngòi bút thư pháp
 	Pattern Borders	Viền họa tiết
 	Scatter Shapes	Hình phân tán
@@ -5694,6 +5793,8 @@ axis	Y Axis	Trục Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Chữ điểm
 	Area Text	Chữ vùng
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Đo chữ theo giới hạn glyph
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Hiện tùy chọn hút vào glyph
 	Hide Snap to Glyph Options	Ẩn tùy chọn hút vào glyph
@@ -6111,7 +6212,7 @@ breakText	Glyphs	Glyph
 	Reset Symbol Instance	Đặt lại đối tượng ký hiệu
 @msg	type must be static or dynamic, not {v}	type phải là static hoặc dynamic, không phải {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` là ký hiệu tĩnh: trước tiên hãy đặt Kiểu ký hiệu thành Động
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Chỉ có thể thay đổi màu đặc của màu tô và nét của đường dẫn, đường dẫn phức hoặc chữ được chọn trong một đối tượng ký hiệu
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Chỉ có thể đổi tô, nét, độ đục và hòa trộn của đường dẫn, đường dẫn phức hợp hoặc chữ được chọn trong một thực thể ký hiệu
 @msg	path must be a list of child indices	path phải là danh sách chỉ số con
 @msg	no object at path {shown} in the symbol's art	không có đối tượng tại đường dẫn {shown} trong hình của ký hiệu
 @msg	give fill, stroke, opacity and/or blend	hãy cung cấp fill, stroke, opacity và/hoặc blend
@@ -6261,3 +6362,24 @@ breakText	Glyphs	Glyph
 	Align to Pixel Grid	Căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`
+	Ignore All	Bỏ qua tất cả
+	Add to Dictionary	Thêm vào từ điển
+	No Suggestions	Không có gợi ý
+	Edit Custom Dictionary	Chỉnh sửa từ điển tùy chỉnh
+	Entry:	Mục nhập:
+# Script Console
+	Script Console	Bảng điều khiển tập lệnh
+	Clear Script Console	Xóa bảng điều khiển tập lệnh
+	Copy Script Console	Sao chép bảng điều khiển tập lệnh
+	Copy All	Sao chép tất cả
+	Copy Selected	Sao chép mục đã chọn
+	Finished	Đã xong
+	Ended with an error	Kết thúc do lỗi
+	Out of fuel	Đã hết giới hạn lệnh
+	Ended at a host limit	Kết thúc ở giới hạn của máy chủ
+	Ended at a limit	Kết thúc ở giới hạn
+	Stopped	Đã dừng
+	Ended by an internal fault	Kết thúc do lỗi nội bộ
+	{ms} ms, {calls} host calls	{ms} ms, {calls} lệnh gọi máy chủ
+	{dropped} earlier lines dropped, {cut} lines cut	Đã bỏ {dropped} dòng cũ, đã cắt {cut} dòng
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` và `last` phải là số thứ tự của các dòng mà bảng điều khiển đang giữ, `first` đứng trước `last`
