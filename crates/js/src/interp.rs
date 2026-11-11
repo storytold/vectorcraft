@@ -311,8 +311,13 @@ fn index_keys_bytes(len: usize) -> usize {
 /// random source (the browser's crypto on the web), or the standard library's randomly keyed
 /// hasher when that fails; never zero.
 fn random_seed() -> u64 {
+    random_seed_from(getrandom::u64())
+}
+
+/// [`random_seed`] from what the OS random source returned.
+pub(crate) fn random_seed_from(os: Result<u64, getrandom::Error>) -> u64 {
     use std::hash::{BuildHasher, Hasher};
-    getrandom::u64().unwrap_or_else(|_| {
+    os.unwrap_or_else(|_| {
         let mut h = std::collections::hash_map::RandomState::new().build_hasher();
         h.write_u64(0x9e37_79b9_7f4a_7c15);
         h.finish()
