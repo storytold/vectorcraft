@@ -2984,6 +2984,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Görev
 	Coin Shine	Jeton
 	Boss Alert	Boss
+	Status Effects	Durum Etkileri
+	Poison Tint	Zehir
+	Freeze Edge	Donma
+	Burn Aura	Yanma
+	Stun Pulse	Sersemletme
+	Stealth Fade	Gizlilik
+	Shield Buff	Kalkan
 	Shape	Şekil
 	Shape Builder	Şekil Oluşturucu
 	Shape Builder Regions	Şekil Oluşturucu Bölgeleri
@@ -3883,6 +3890,7 @@ axis	Both	Her İkisi
 	Stop Script	Betiği Durdur
 	Show External Script Warning	Harici Betik Uyarısını Göster
 	A Script Is Running	Bir Betik Çalışıyor
+	Script Alert	Betik Uyarısı
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
 	Do not show this warning again	Bu uyarıyı bir daha gösterme
 	Stop the script and undo what it did? Then quit again.	Betik durdurulsun ve yaptıkları geri alınsın mı? Ardından yeniden çıkın.

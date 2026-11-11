@@ -663,6 +663,26 @@ proptest! {
         survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
     }
 
+    /// Clip paths made of text, of `<use>` elements showing text, and of both with shapes, each with
+    /// hostile attributes, clipping art that may clip by them in turn.
+    #[test]
+    fn svg_text_clip_paths_never_panic(
+        text in prop::collection::vec(arb_svg_attr(), 0..5),
+        used in prop::collection::vec(arb_svg_attr(), 0..5),
+        clip in prop::collection::vec(arb_svg_attr(), 0..3),
+        body in prop::collection::vec(arb_svg_element(1), 0..3),
+    ) {
+        let svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs><text id=\"t\" font-size=\"20\"{}>ab<tspan dy=\"3\">c</tspan></text></defs><clipPath id=\"e\"{}><text y=\"30\"{}>Clip<tspan x=\"5\" y=\"60\">it</tspan></text><use href=\"#t\"{}/><rect width=\"5\" height=\"5\"/></clipPath><clipPath id=\"f\" clip-path=\"url(#e)\"><use xlink:href=\"#t\" x=\"9\"/></clipPath><rect width=\"90\" height=\"90\" clip-path=\"url(#e)\"/><g clip-path=\"url(#f)\">{}</g></svg>",
+            text.concat(),
+            clip.concat(),
+            text.concat(),
+            used.concat(),
+            body.concat()
+        );
+        survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
+    }
+
     #[test]
     fn svg_mutated_export_never_panics(
         cut in 0usize..20_000,

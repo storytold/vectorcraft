@@ -800,6 +800,13 @@ digits	Malayalam	말라얄람어
 	Quest Outline	퀘스트
 	Coin Shine	코인
 	Boss Alert	보스
+	Status Effects	상태 효과
+	Poison Tint	독
+	Freeze Edge	빙결
+	Burn Aura	화상
+	Stun Pulse	기절
+	Stealth Fade	은신
+	Shield Buff	방패
 	Outlines and Rules	윤곽선과 괘선
 	Hand-Drawn	손그림
 	Gradient Finishes	그레이디언트 마감
@@ -4791,6 +4798,7 @@ theme	Appearance	외관
 	Stop Script	스크립트 중지
 	Show External Script Warning	외부 스크립트 경고 표시
 	A Script Is Running	스크립트 실행 중
+	Script Alert	스크립트 알림
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
 	Do not show this warning again	이 경고를 다시 표시하지 않음
 	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.

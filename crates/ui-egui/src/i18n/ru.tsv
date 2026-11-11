@@ -3188,6 +3188,13 @@ digits	Malayalam	Малаялам
 	Quest Outline	Квест
 	Coin Shine	Монета
 	Boss Alert	Босс
+	Status Effects	Эффекты статуса
+	Poison Tint	Яд
+	Freeze Edge	Заморозка
+	Burn Aura	Ожог
+	Stun Pulse	Оглушение
+	Stealth Fade	Скрытность
+	Shield Buff	Щит
 	Shape	Фигура
 	Shape Builder	Создание фигур
 	Shape Builder Regions	Области создания фигур
@@ -4128,6 +4135,7 @@ axis	Both	Оба
 	Stop Script	Остановить скрипт
 	Show External Script Warning	Показывать предупреждение о внешних скриптах
 	A Script Is Running	Выполняется скрипт
+	Script Alert	Сообщение скрипта
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт может изменять открытые документы и записывать файлы с помощью выполняемых команд. Запускайте только те скрипты, которым доверяете.
 	Do not show this warning again	Больше не показывать это предупреждение
 	Stop the script and undo what it did? Then quit again.	Остановить скрипт и отменить его изменения? Затем выйдите ещё раз.
