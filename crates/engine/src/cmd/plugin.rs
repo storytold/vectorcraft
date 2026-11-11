@@ -742,15 +742,17 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
     // grant only once it is there; when the grant can't be written, the store gets the module it
     // held back. A failed write of that module is only logged: the store then holds the new module,
-    // which the grant doesn't cover. A stored module that can't be read back isn't replaced by one
-    // that needs a grant.
+    // which the grant doesn't cover. A write that reports a failure may still have put the old
+    // module back, so the store is read again to tell which module it holds. A stored module that
+    // can't be read back isn't replaced by one that needs a grant.
     let previous = s.stored_plugin_bytes(plugin.id());
     let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
+    let holds_new = |s: &Session| s.stored_plugin_bytes(plugin.id()).is_ok_and(|held| held.as_deref() == Some(&bytes[..]));
     if m.asks_permissions() {
         let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
         registry::grant(g.clone());
         if stored && !s.store_grant(&m.id, Some(g)) {
-            stored = !s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
+            stored = !s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref()) && holds_new(s);
         }
     } else {
         // This module takes the id over, so nothing the user approved for the id applies any more.
@@ -763,7 +765,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         // stays; one that can't be opened or read may approve the old bytes once it reads again.
         if stored && !s.store_grant(&m.id, None) && s.holds_plugin_grant(&m.id) {
             let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(plugin.id(), held.as_deref()));
-            stored = !back;
+            stored = !back && holds_new(s);
             if !back || matches!(previous, Ok(None)) {
                 s.ignore_stored_grant(&m.id);
             }
