@@ -151,11 +151,16 @@ impl FlattenOptions {
 
     /// Whether colorized image `n`, art of `d`, counts as transparency by itself. With
     /// [`Self::keeps_colorize`], an image colorized with a solid paint whose pixels are grayscale
-    /// or 1-bit doesn't: the EPS writer draws it in that paint.
+    /// or 1-bit doesn't: the EPS writer draws it in that paint. An image whose pixels don't take
+    /// the paint ([`vectorcraft_doc::ImageBlob::takes_colorize`]) never counts: it draws uncolorized.
     pub(crate) fn counts_colorize(&self, d: &Document, n: &Node) -> bool {
         let NodeKind::Image(im) = &n.kind else { return true };
+        let blob = d.image_blob(im);
+        if blob.is_some_and(|b| !b.takes_colorize()) {
+            return false;
+        }
         let solid = matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }));
-        !self.keeps_colorize || !solid || d.image_blob(im).is_some_and(|b| b.gray_source().is_none())
+        !self.keeps_colorize || !solid || blob.is_some_and(|b| b.gray_source().is_none())
     }
 
     /// `n` shows an image whose see-through pixels count as transparency.
@@ -164,8 +169,15 @@ impl FlattenOptions {
     }
 
     /// Whether a group that splits into `regions` atomic regions is rasterized whole.
-    pub(super) fn rasterize_all(&self, regions: usize) -> bool {
+    pub(crate) fn rasterize_all(&self, regions: usize) -> bool {
         self.balance <= 0.0 || (self.balance < 100.0 && regions as f64 > 10f64.powf(self.balance / 20.0))
+    }
+
+    /// The most atomic regions a group can split into without being rasterized whole, when a group
+    /// with more needs none of its regions: `None` at a balance of 0 or 100, and with Clip Complex
+    /// Regions (a group rasterized whole is clipped to all of its regions).
+    pub(crate) fn region_limit(&self) -> Option<usize> {
+        (!self.clip_complex_regions && self.balance > 0.0 && self.balance < 100.0).then(|| 10f64.powf(self.balance / 20.0).floor() as usize)
     }
 }
 

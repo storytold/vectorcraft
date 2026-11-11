@@ -4,6 +4,8 @@ use super::{
     holds_instance, holds_plugin_effect, images, kurbo, lru, mask_value, painted_items, plain_image, polygon_length, rects_overlap,
     shape_masked_image, single_plain_fill, text_geom_snapped, white_shape_mask,
 };
+use crate::kept_paths::{self, KeptPath};
+use crate::node_checks::{holds_measured_three_d, measures_three_d};
 
 impl Renderer {
     /// Cached cull bounds of a node (containers union their cached children), symbol instances
@@ -28,21 +30,92 @@ impl Renderer {
                 }
                 acc
             }
-            _ => brush_fx::cull_bounds(symbols, a),
+            // A 3D effect's art, measured as this renderer draws and keeps it ([`Self::fx_art`]): one
+            // build for the measure and the draw. Crop Marks and Vector Halftone draw other art, and
+            // an object whose 3D effect builds nothing (Revolve on a group, a solid too complex) is
+            // drawn otherwise, measured as below.
+            _ if measures_three_d(a)
+                && let Some(b) = {
+                    let art = self.measured_fx_art(symbols.document(), a);
+                    self.three_d_art_bounds(symbols, &art)
+                } =>
+            {
+                // Culling leaves room for brush art as for any object ([`brush_fx::cull_bounds`]);
+                // the measure is made again when the brush library changes ([`Self::check_symbols`]).
+                if self.brush_library.is_none() {
+                    self.brush_library = Some(self.brushes.library_key_now(symbols.document(), self.stamp));
+                }
+                let pad = brush_fx::pad(symbols, a);
+                b.map(|b| fx::with_own_raster_reach(symbols, a, b).inflate(pad, pad))
+            }
+            _ => self.kept_bounds(symbols, a).unwrap_or_else(|| brush_fx::cull_bounds(symbols, a)),
         };
         self.geom.insert(key, GeomEntry { node: a.clone(), bounds: b, path: None, stamp: self.stamp });
         b
     }
 
+    /// The kept path of long path or compound path `a` ([`KeptPath`]), made, or brought up to date
+    /// from the one kept for its id, when it is not `a`'s yet. `None` when `a` has none.
+    fn kept_path(&mut self, a: &Arc<Node>) -> Option<&mut KeptPath> {
+        if !kept_paths::kept(a) {
+            return None;
+        }
+        let stamp = self.stamp;
+        let made = match self.kept.get_mut(&a.id) {
+            Some(k) if Arc::ptr_eq(&k.node, a) => true,
+            Some(k) => {
+                // The object the path was made from, when no longer drawn, shares the path through
+                // its `geom` entry: dropping that entry lets the path change in place.
+                let old = Arc::as_ptr(&k.node) as usize;
+                if self.geom.get(&old).is_some_and(|e| Arc::ptr_eq(&e.node, &k.node) && e.stamp != stamp) {
+                    self.geom.remove(&old);
+                }
+                k.update(a)
+            }
+            None => false,
+        };
+        if !made {
+            let k = KeptPath::new(a, stamp)?;
+            self.kept.insert(a.id, k);
+        }
+        let k = self.kept.get_mut(&a.id)?;
+        k.stamp = stamp;
+        Some(k)
+    }
+
+    /// Cull bounds of long path or compound path `a` measured from its kept path
+    /// ([`Self::kept_path`]): the same as [`brush_fx::cull_bounds`]. `None` when it has no kept path
+    /// or is measured another way ([`brush_fx::path_cull_bounds`]).
+    fn kept_bounds(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Option<Option<Rect>> {
+        let k = self.kept_path(a)?;
+        brush_fx::path_cull_bounds(symbols, a, || {
+            let b = k.geometric()?;
+            let bp = k.path.clone();
+            Some(a.appearance.stroked_bounds_by(b, |s| {
+                let tips = k.tips(s);
+                s.bounds_with_tips(&bp, b, tips)
+            }))
+        })
+    }
+
     /// Drop the cached bounds of symbol instances and of the objects that hold them when `doc`'s
     /// symbols are not those of the document last drawn (by name and art): those bounds measured
-    /// the instances by their symbol's art.
+    /// the instances by their symbol's art. Likewise drop those of objects measured by a 3D
+    /// effect's art, and of the objects that hold them, when the brush library has changed.
     pub(crate) fn check_symbols(&mut self, doc: &Document) {
         let same = self.symbols.len() == doc.symbols.len()
             && self.symbols.iter().zip(&doc.symbols).all(|((name, art), s)| *name == s.name && std::ptr::eq(art.as_ptr(), Arc::as_ptr(&s.art)));
         if !same {
             self.geom.retain(|_, e| !holds_instance(&e.node));
             self.symbols = doc.symbols.iter().map(|s| (s.name.clone(), Arc::downgrade(&s.art))).collect();
+        }
+        // That art is measured with the art its brushed strokes draw ([`Self::bounds_of`]). Without
+        // such bounds, nothing is checked.
+        if let Some(was) = self.brush_library
+            && self.brushes.library_key_now(doc, self.stamp) != was
+        {
+            self.geom.retain(|_, e| !holds_measured_three_d(&e.node));
+            self.brush_library = None;
         }
     }
 
@@ -53,15 +126,28 @@ impl Renderer {
     /// objects with a plug-in effect. Rasters of raster effects and evaluations of live objects hold
     /// the revision in their keys when what they draw has a plug-in effect (`fx::Inputs`,
     /// `live::resources_key`).
-    pub(crate) fn check_plugins(&mut self) {
+    ///
+    /// The same caches are dropped when a live-effect plug-in that paints its pieces is installed
+    /// and the names of `doc`'s swatches or patterns have changed since the last check: whether its
+    /// pieces are used depends on those names.
+    pub(crate) fn check_plugins(&mut self, doc: &Document) {
         let revision = effects::plugin_revision();
-        if revision == self.plugin_revision {
-            return;
+        let mut stale = false;
+        if revision != self.plugin_revision {
+            self.plugin_revision = revision;
+            self.painting_plugins = effects::any_plugin_paints_output();
+            stale = true;
         }
-        self.plugin_revision = revision;
-        self.fx_geom.retain(|_, e| !effects::has_plugin_effect(&e.node));
-        self.geom.retain(|_, e| !holds_plugin_effect(&e.node) && !holds_instance(&e.node));
-        self.fx_arts.retain(|(node, ..)| !effects::has_plugin_effect(node));
+        if self.painting_plugins {
+            let names = fx::paint_names(doc);
+            stale |= names != self.paint_names;
+            self.paint_names = names;
+        }
+        if stale {
+            self.fx_geom.retain(|_, e| !effects::has_plugin_effect(&e.node));
+            self.geom.retain(|_, e| !holds_plugin_effect(&e.node) && !holds_instance(&e.node));
+            self.fx_arts.retain(|(node, ..)| !effects::has_plugin_effect(node));
+        }
     }
 
     /// Cached region a clip group's clipping path `a` clips to ([`effects::clip_outline`]):
@@ -105,7 +191,10 @@ impl Renderer {
         {
             return Some(p.clone());
         }
-        let p = Arc::new(a.stroke_path()?);
+        let p = match self.kept_path(a) {
+            Some(k) => k.path.clone(),
+            None => Arc::new(a.stroke_path()?),
+        };
         let bounds = self.bounds_of(symbols, a);
         self.geom.insert(key, GeomEntry { node: a.clone(), bounds, path: Some(p.clone()), stamp: self.stamp });
         Some(p)
@@ -127,19 +216,10 @@ impl Renderer {
         self.path_of(f.symbols, &owner)
     }
 
-    /// Symbol editing mode on screen: `id` is the instance editing was entered from, which is not
-    /// drawn (with its masks and effects), since the editing layer holds a copy of its art in its
-    /// place.
-    fn edited_instance(f: &Frame, id: NodeId) -> bool {
-        f.opts.isolated.is_some() && f.doc.symbol_edit.as_ref().is_some_and(|e| e.instance == Some(id))
-    }
-
     /// Whether `a` is left out of this frame: hidden, a skipped template or guide, the instance a
     /// symbol is edited from, or culled.
     fn skipped(&mut self, f: &Frame, a: &Arc<Node>) -> bool {
-        let skipped_view_item = (f.opts.skip_templates || f.opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
-            || (f.opts.skip_templates || f.opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
-        if !a.visible || skipped_view_item || f.opts.hidden.contains(&a.id) || Self::edited_instance(f, a.id) {
+        if crate::node_checks::left_out(f.opts, f.doc, a) {
             return true;
         }
         match self.bounds_of(f.symbols, a) {
@@ -170,7 +250,7 @@ impl Renderer {
             && let Some(region) = self.clip_of(&m.art)
             && shape_masked_image(a, im, &region.0)
         {
-            self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(a, f.ink), a.extras().pixelated);
+            self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(f.doc, a, f.ink), a.extras().pixelated);
             self.stats.drawn += 1;
             return;
         }
@@ -438,7 +518,7 @@ impl Renderer {
                         && let NodeKind::Image(im) = &image.kind
                         && plain_image(image, im, &region.0)
                     {
-                        self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(image, f.ink), image.extras().pixelated);
+                        self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(f.doc, image, f.ink), image.extras().pixelated);
                         self.stats.drawn += 1;
                         return;
                     }
@@ -488,7 +568,7 @@ impl Renderer {
                 }
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
-            NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(n, f.ink), n.extras().pixelated),
+            NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
                     // The instance draws when the frame has room for its art's objects; a symbol
@@ -574,11 +654,8 @@ impl Renderer {
     /// `fx_owner`, so its path, its live-effect geometry and, through [`Self::draw_kept_node`], a
     /// live object's evaluation come from the caches.
     fn draw_outline_member(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>) {
-        if !c.visible
-            || f.opts.hidden.contains(&c.id)
-            || f.opts.hide_guides && matches!(c.kind, NodeKind::Path { guide: true, .. })
-            || Self::edited_instance(f, c.id)
-        {
+        // Left out as any object is ([`Self::skipped`]).
+        if crate::node_checks::left_out(f.opts, f.doc, c) {
             return;
         }
         match self.bounds_of(f.symbols, c) {

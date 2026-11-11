@@ -115,6 +115,13 @@ impl BrushCache {
         self.library(doc, stamp);
         self.key
     }
+
+    /// [`Self::library_key`] checked now, between frames: `doc` may be the document of the last
+    /// frame, edited in place.
+    pub(crate) fn library_key_now(&mut self, doc: &Document, stamp: u64) -> u64 {
+        self.checked = (u64::MAX, 0);
+        self.library_key(doc, stamp)
+    }
 }
 
 /// Cull bounds that allow for brush art reaching past the stroke (scatter, wide nibs), symbol
@@ -123,6 +130,16 @@ pub(crate) fn cull_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     let b = crate::fx::cull_bounds(symbols, n)?;
     let pad = pad(symbols, n);
     Some(b.inflate(pad, pad))
+}
+
+/// [`cull_bounds`] of path or compound path `n` made from `visual`, its visual bounds, when the
+/// renderer measures it by those ([`crate::fx::path_cull_bounds`]); else `None`.
+pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnOnce() -> Option<Rect>) -> Option<Option<Rect>> {
+    let b = crate::fx::path_cull_bounds(symbols, n, visual)?;
+    Some(b.map(|b| {
+        let pad = pad(symbols, n);
+        b.inflate(pad, pad)
+    }))
 }
 
 /// How far brush art can paint past `n`'s brushed strokes, or past the brushed strokes in the art

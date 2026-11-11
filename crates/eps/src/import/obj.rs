@@ -21,6 +21,11 @@ impl DictRef {
         note(Made::Dict(Rc::downgrade(&d)));
         Self(d)
     }
+
+    /// Is `o` this very dictionary?
+    pub fn same(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &o.0)
+    }
 }
 
 /// An array or a dictionary a program made.
@@ -370,6 +375,16 @@ impl<T: Clone + Held> Shared<T> {
     }
 }
 
+/// Equal when [`Shared::same`]: the same storage and run of it (the identity of a PostScript
+/// composite object, not its contents).
+impl<T: Held> PartialEq for Shared<T> {
+    fn eq(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.buf, &o.buf) && self.at == o.at && self.len == o.len
+    }
+}
+
+impl<T: Held> Eq for Shared<T> {}
+
 /// Hashes what [`Shared::same`] compares: the storage and the run of it.
 impl<T: Held> Hash for Shared<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -432,6 +447,16 @@ macro_rules! ops {
         impl Op {
             /// Every operator with its name (`systemdict`).
             pub const ALL: &'static [(Op, &'static str)] = &[$((Op::$v, $n)),*];
+
+            /// The operators of the CIDInit procedure set (PLRM 3rd ed., §5.11.4), found through
+            /// it rather than systemdict.
+            pub const PROCSET: &'static [Op] = &[
+                Op::BeginCMap, Op::EndCMap, Op::UseCMap, Op::BeginCodeSpaceRange, Op::EndCodeSpaceRange, Op::UseFont,
+                Op::BeginBfChar, Op::EndBfChar, Op::BeginBfRange, Op::EndBfRange, Op::BeginCidChar, Op::EndCidChar,
+                Op::BeginCidRange, Op::EndCidRange, Op::BeginNotDefChar, Op::EndNotDefChar, Op::BeginNotDefRange,
+                Op::EndNotDefRange, Op::BeginRearrangedFont, Op::EndRearrangedFont, Op::BeginUseMatrix, Op::EndUseMatrix,
+                Op::StartData,
+            ];
 
             pub fn name(self) -> &'static str {
                 match self { $(Op::$v => $n),* }
@@ -532,6 +557,15 @@ ops! {
     SetVmThreshold = "setvmthreshold", VmReclaim = "vmreclaim", StartJob = "startjob", CurrentObjectFormat = "currentobjectformat",
     Revision = "revision", SerialNumber = "serialnumber", Read = "read", FilePosition = "fileposition",
     SetFilePosition = "setfileposition", DeleteFile = "deletefile", RenameFile = "renamefile", Run = "run",
+    // CID-keyed fonts: `composefont`, and the operators of the CIDInit procedure set (CMaps and
+    // `StartData`, which FontSetInit has too), which aren't in systemdict (see `Op::PROCSET`).
+    ComposeFont = "composefont", BeginCMap = "begincmap", EndCMap = "endcmap", UseCMap = "usecmap",
+    BeginCodeSpaceRange = "begincodespacerange", EndCodeSpaceRange = "endcodespacerange", UseFont = "usefont",
+    BeginBfChar = "beginbfchar", EndBfChar = "endbfchar", BeginBfRange = "beginbfrange", EndBfRange = "endbfrange",
+    BeginCidChar = "begincidchar", EndCidChar = "endcidchar", BeginCidRange = "begincidrange", EndCidRange = "endcidrange",
+    BeginNotDefChar = "beginnotdefchar", EndNotDefChar = "endnotdefchar", BeginNotDefRange = "beginnotdefrange",
+    EndNotDefRange = "endnotdefrange", BeginRearrangedFont = "beginrearrangedfont", EndRearrangedFont = "endrearrangedfont",
+    BeginUseMatrix = "beginusematrix", EndUseMatrix = "endusematrix", StartData = "StartData",
     // User paths.
     UFill = "ufill", UEoFill = "ueofill", UStroke = "ustroke", UAppend = "uappend", UPath = "upath", SetBBox = "setbbox",
 }

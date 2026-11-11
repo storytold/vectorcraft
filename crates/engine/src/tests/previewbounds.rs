@@ -618,6 +618,77 @@ fn set_bounds_leaves_the_height_of_lines_with_no_height() {
     assert!(close(geometric(&s, ids[1]), Rect::new(8.3, 100.0, 30.0, 100.0)), "{:?}", geometric(&s, ids[1]));
 }
 
+/// A line with a 2 pt stroke and butt caps, selected, with Use Preview Bounds on.
+fn butt_line(s: &mut Session, from: (f64, f64), to: (f64, f64)) -> NodeId {
+    let id = NodeId(run(s, "shape.line", json!({"x1": from.0, "y1": from.1, "x2": to.0, "y2": to.1}))["id"].as_u64().unwrap());
+    run(s, "stroke.set", json!({"weight": 2, "cap": "butt"}));
+    preview(s, true);
+    run(s, "select.set", json!({"ids": [id.0]}));
+    id
+}
+
+#[test]
+fn set_bounds_gives_a_butt_line_the_whole_height() {
+    // A butt cap ends at the anchor, so 10 mm (28.3465 pt) is the length of the line itself.
+    let mut s = session();
+    let id = butt_line(&mut s, (100.0, 100.0), (100.0, 140.0));
+    assert!(close(s.transform_bounds(&[id]).unwrap(), Rect::new(99.0, 100.0, 101.0, 140.0)), "{:?}", s.transform_bounds(&[id]));
+    run(&mut s, "object.setBounds", json!({"height": 28.3465, "reference": 0, "strokes": false}));
+    assert!(close(geometric(&s, id), Rect::new(100.0, 100.0, 100.0, 128.3465)), "{:?}", geometric(&s, id));
+    assert!(close(s.transform_bounds(&[id]).unwrap(), Rect::new(99.0, 100.0, 101.0, 128.3465)), "{:?}", s.transform_bounds(&[id]));
+}
+
+#[test]
+fn set_bounds_gives_a_diagonal_butt_line_the_size_out_of_proportion() {
+    // The stroke's corners follow the line's slope, which a scale out of proportion changes.
+    let mut s = session();
+    let id = butt_line(&mut s, (100.0, 100.0), (130.0, 140.0));
+    let before = s.transform_bounds(&[id]).unwrap();
+    // The stroke's corners reach 0.8 pt across x and 0.6 pt across y at this 3-4-5 slope.
+    assert!(close(before, Rect::new(99.2, 99.4, 130.8, 140.6)), "{before:?}");
+    run(&mut s, "object.setBounds", json!({"height": 100, "reference": 0, "strokes": false}));
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!((v.height() - 100.0).abs() < 1e-6, "{v:?}");
+}
+
+#[test]
+fn set_bounds_gives_a_butt_path_with_slanted_corners_the_size_out_of_proportion() {
+    // Square ends, but the bevel join at the apex sets the top edge by the slanted segments'
+    // corners, which a scale out of proportion moves.
+    let mut s = session();
+    let anchors = json!([{"x": 100, "y": 150}, {"x": 100, "y": 140}, {"x": 110, "y": 100}, {"x": 120, "y": 140}, {"x": 120, "y": 150}]);
+    let id = NodeId(run(&mut s, "path.create", json!({"anchors": anchors}))["id"].as_u64().unwrap());
+    run(&mut s, "stroke.set", json!({"weight": 2, "cap": "butt", "join": "bevel"}));
+    preview(&mut s, true);
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.setBounds", json!({"width": 60, "height": 20, "reference": 0, "strokes": false}));
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!((v.width() - 60.0).abs() < 1e-6 && (v.height() - 20.0).abs() < 1e-6, "{v:?}");
+}
+
+#[test]
+fn set_bounds_gives_a_symbol_instance_of_a_diagonal_butt_line_the_size_out_of_proportion() {
+    let mut s = session();
+    butt_line(&mut s, (100.0, 100.0), (130.0, 140.0));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Line"}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.setBounds", json!({"width": 20, "height": 100, "reference": 0, "strokes": false}));
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!((v.width() - 20.0).abs() < 1e-6 && (v.height() - 100.0).abs() < 1e-6, "{v:?}");
+}
+
+#[test]
+fn align_places_a_vertical_butt_line_by_its_end_points() {
+    // With Use Preview Bounds on, a butt line's ends line up with the top of a rectangle without
+    // a stroke.
+    let mut s = session();
+    rect(&mut s, 20.0, 50.0, 0.0);
+    let id = butt_line(&mut s, (200.0, 160.0), (200.0, 190.0));
+    run(&mut s, "select.all", json!({}));
+    run(&mut s, "object.align", json!({"vertical": "top"}));
+    assert!(close(geometric(&s, id), Rect::new(200.0, 100.0, 200.0, 130.0)), "{:?}", geometric(&s, id));
+}
+
 /// The rectangles of [`thin_and_thick`] in a group, the thick one in a group of its own inside it
 /// when `nested`, selected with an unstroked rectangle from x 100 to 110 when `plain`. Returns the
 /// selected objects.
@@ -876,6 +947,31 @@ fn a_handle_drag_keeps_the_opposite_edge_of_the_offset_shape() {
         let (_, g) = drag_box(&mut s, id, (300.0, 200.0), (350.0, 250.0), Mods::default());
         assert_eq!(g, Rect::new(100.0, 100.0, 350.0, 250.0), "strokes {strokes}");
     }
+}
+
+#[test]
+fn a_hover_checks_the_memo_as_often_however_many_objects_are_selected() {
+    let checks = |objects: u32| {
+        let mut s = session();
+        for i in 0..objects {
+            rect(&mut s, f64::from(i), 1.0, 0.0);
+        }
+        run(&mut s, "select.all", json!({}));
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        // Off the art, so the hover walks every selected object and finds no anchor or center.
+        let hover = |s: &mut Session| {
+            s.pointer(&PointerEvent::new(PointerKind::Move, 350.0, 350.0), v).unwrap();
+            s.cursor(Point::new(350.0, 350.0), Mods::default(), v)
+        };
+        hover(&mut s);
+        let before = s.preview_memo.checks();
+        hover(&mut s);
+        s.preview_memo.checks() - before
+    };
+    let few = checks(3);
+    assert!(few > 0, "a hover asks the memo");
+    assert_eq!(checks(60), few, "a check compares the whole selection: one per object is quadratic");
 }
 
 #[test]

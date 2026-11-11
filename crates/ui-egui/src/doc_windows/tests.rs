@@ -257,11 +257,11 @@ fn tile_brings_floating_documents_back_into_the_grid() {
     app.run("window.arrange.tile", json!({})).unwrap();
     app.run("window.arrange.floatInWindow", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(i, _)| *i).collect();
+    let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(w, _)| w.0).collect();
     assert_eq!(docs, [0, 1], "a floating document leaves the grid; the tabbed ones share it");
     assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 3}));
     frame(&mut app, &ctx, vec![]);
-    let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(i, _)| *i).collect();
+    let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(w, _)| w.0).collect();
     assert_eq!(docs, [0, 1, 2]);
     assert!(app.ui.floating.is_empty());
 }
@@ -437,7 +437,7 @@ fn closing_an_os_window_keeps_it_while_its_unsaved_document_stays_open() {
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
     app.run("window.arrange.floatInWindow", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let vid = viewport_id(app.session.documents()[1].uid);
+    let vid = viewport_id(&app.ui.floating[0]);
     host.borrow_mut().close = true;
     frame(&mut app, &ctx, vec![]);
     host.borrow_mut().close = false;
@@ -449,6 +449,41 @@ fn closing_an_os_window_keeps_it_while_its_unsaved_document_stays_open() {
         "its OS window is kept open: {:?}",
         host.borrow().commands
     );
+}
+
+/// The update prompt, opening on its own, takes the keyboard once from a document's OS window that
+/// has it, and leaves the keyboard alone when none of those windows has it.
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn the_update_prompt_takes_the_keyboard_from_a_document_window() {
+    let _host = native_host();
+    let ctx = egui::Context::default();
+    ctx.set_embed_viewports(false);
+    let mut app = app_with(2);
+    if !native(&app, &ctx) {
+        // Wayland: the windows are inside the main window.
+        return;
+    }
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let focus_commands = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::updates_ui::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out.viewport_output.get(&egui::ViewportId::ROOT).map_or(0, |v| v.commands.iter().filter(|c| **c == egui::ViewportCommand::Focus).count())
+    };
+
+    app.ui.floating[0].focused = true;
+    assert_eq!(focus_commands(&mut app), 0, "no prompt is open");
+    crate::updates_ui::open_prompt_for_test(&mut app);
+    assert_eq!(focus_commands(&mut app), 1, "the main window gets the keyboard");
+    assert_eq!(focus_commands(&mut app), 0, "once");
+
+    crate::updates_ui::close_dialogs_for_test(&mut app);
+    assert_eq!(focus_commands(&mut app), 0, "the prompt closed");
+    app.ui.floating[0].focused = false;
+    crate::updates_ui::open_prompt_for_test(&mut app);
+    assert_eq!(focus_commands(&mut app), 0, "no document window has the keyboard");
 }
 
 /// Where the last frame drew the title of `title`'s tab in the tab strip.
@@ -724,4 +759,169 @@ fn the_arrange_items_are_enabled_as_the_documents_allow() {
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
     assert_eq!(states(&app), [true, true, true, true, false], "consolidated");
+}
+
+/// The title of window `w`'s tab.
+fn title_of(app: &VectorcraftApp, w: Win) -> String {
+    crate::chrome::document_window_title(app, w).unwrap()
+}
+
+#[test]
+fn new_window_opens_a_numbered_view_with_its_own_zoom() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let name = app.session.documents()[0].title();
+    assert!(!title_of(&app, (0, 1)).contains(&format!("{name}:")), "one view: no number");
+    let zoom = app.view().unwrap().zoom;
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap(), json!({"index": 0, "view": 2}));
+    assert_eq!(windows(&app), [(0, 1), (0, 2)]);
+    assert_eq!(current(&app), Some((0, 2)), "the new view is the current window");
+    assert_eq!(app.view().unwrap().zoom, zoom, "it opens where the first view is");
+    assert!(title_of(&app, (0, 1)).starts_with(&format!("{name}:1 @")), "{}", title_of(&app, (0, 1)));
+    assert!(title_of(&app, (0, 2)).starts_with(&format!("{name}:2 @")), "{}", title_of(&app, (0, 2)));
+    let shapes = frame(&mut app, &ctx, vec![]);
+    assert!(tab_drawn(&shapes, &format!("{name}:1")) && tab_drawn(&shapes, &format!("{name}:2")), "each view has a tab");
+    // Each view keeps its own zoom.
+    app.run("view.zoomIn", json!({})).unwrap();
+    let zoomed = app.view().unwrap().zoom;
+    assert_ne!(zoomed, zoom);
+    show_window(&mut app, (0, 1));
+    assert_eq!(app.view().unwrap().zoom, zoom, "the first view did not zoom");
+    assert_eq!(view(&app, (0, 2)).unwrap().zoom, zoomed);
+    show_window(&mut app, (0, 2));
+    assert_eq!(app.view().unwrap().zoom, zoomed);
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap(), json!({"index": 0, "view": 3}));
+}
+
+#[test]
+fn an_edit_in_one_view_shows_in_the_other() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    app.run("window.newWindow", json!({})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.canvas.panes.last.iter().map(|(w, _)| *w).collect::<Vec<_>>(), [(0, 1), (0, 2)], "one pane per view");
+    view_mut(&mut app, (0, 1)).unwrap().zoom = 0.5;
+    app.view_mut().unwrap().zoom = 2.0;
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let d = &app.session.documents()[0];
+    let shown = app.canvas.panes.shown.get(&(d.uid, 1)).map(|(k, _)| (k.revision, k.zoom));
+    assert_eq!(shown, Some((d.revision, 0.5)), "the other view's pane shows the edit at its own zoom");
+    assert_eq!(app.view().unwrap().zoom, 2.0, "the view edited in keeps its zoom");
+}
+
+#[test]
+fn closing_a_view_leaves_the_document_open() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    app.run("window.newWindow", json!({})).unwrap();
+    app.run("window.newWindow", json!({})).unwrap();
+    show_window(&mut app, (0, 2));
+    assert_eq!(app.run("file.close", json!({})).unwrap(), json!({"index": 0, "views": 2}));
+    assert!(app.ui.dialog.is_none(), "closing a view does not ask to save");
+    assert_eq!((app.session.documents().len(), windows(&app)), (1, vec![(0, 1), (0, 3)]));
+    assert_eq!(current(&app), Some((0, 3)), "the next view becomes the current window");
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.run("file.close", json!({})).unwrap(), json!({"index": 0, "views": 1}));
+    assert_eq!(windows(&app), [(0, 1)], "the view left is the document's only view again");
+    let name = app.session.documents()[0].title();
+    assert!(!title_of(&app, (0, 1)).contains(&format!("{name}:")), "{}", title_of(&app, (0, 1)));
+    // The last view: the document closes, asking to save it first.
+    app.run("file.close", json!({})).unwrap();
+    assert!(app.ui.dialog.is_some(), "the changed document asks to be saved");
+    assert_eq!(app.session.documents().len(), 1);
+}
+
+#[test]
+fn arrange_treats_each_view_as_a_window() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    assert!(!enabled(&app, "window.arrange.tile") && !enabled(&app, "window.arrange.cascade"), "one window");
+    app.run("window.newWindow", json!({})).unwrap();
+    assert!(enabled(&app, "window.arrange.tile") && enabled(&app, "window.arrange.cascade"), "two views of one document");
+    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 2}));
+    app.run("window.arrange.cascade", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let uid = app.session.documents()[0].uid;
+    let floating: Vec<(u64, u32)> = app.ui.floating.iter().map(|w| (w.uid, w.view)).collect();
+    assert_eq!(floating, [(uid, 1), (uid, 2)], "each view in a window of its own, in tab order");
+    assert_ne!(app.ui.floating[0].place.min, app.ui.floating[1].place.min, "stacked down and to the right");
+    assert!(docked_windows(&app).is_empty());
+    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
+    assert!(app.ui.floating.is_empty());
+    assert_eq!(docked_windows(&app), [(0, 1), (0, 2)]);
+    // Float in Window floats the current view only.
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    assert_eq!(app.ui.floating.iter().map(|w| (w.uid, w.view)).collect::<Vec<_>>(), [(uid, 2)]);
+    assert_eq!(docked_windows(&app), [(0, 1)], "the first view keeps its tab");
+    frame(&mut app, &ctx, vec![]);
+    let shapes = frame(&mut app, &ctx, vec![]);
+    let name = app.session.documents()[0].title();
+    assert!(tab_drawn(&shapes, &format!("{name}:1")) && !tab_drawn(&shapes, &format!("{name}:2")));
+    // A new view of a floating view floats too.
+    app.run("window.newWindow", json!({})).unwrap();
+    assert!(floats(&app, (0, 3)), "it opens beside the view it came from");
+    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+    assert!(docked_windows(&app).is_empty());
+    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({"index": 0, "view": 3})).unwrap()["floating"], json!([0, 0]));
+    assert_eq!((docked_windows(&app), current(&app)), (vec![(0, 3)], Some((0, 3))));
+}
+
+#[test]
+fn each_pane_draws_its_own_views_outline_or_preview() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    app.run("window.newWindow", json!({})).unwrap();
+    show_window(&mut app, (0, 1));
+    app.run("view.outline", json!({})).unwrap();
+    show_window(&mut app, (0, 2));
+    assert!(!app.outline_view(), "the second view is in Preview");
+    app.run("window.arrange.tile", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let uid = app.session.documents()[0].uid;
+    assert_eq!(app.canvas.panes.shown.get(&(uid, 1)).map(|(k, _)| k.outline), Some(true), "the first view's pane is in Outline");
+}
+
+#[test]
+fn next_and_previous_document_step_through_the_views() {
+    let mut app = app_with(2);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("window.newWindow", json!({})).unwrap();
+    assert_eq!(app.run("window.nextDocument", json!({})).unwrap(), json!({"index": 1}));
+    assert_eq!(app.run("window.nextDocument", json!({})).unwrap(), json!({"index": 0, "view": 1}));
+    assert_eq!(app.run("window.nextDocument", json!({})).unwrap(), json!({"index": 0, "view": 2}));
+    assert_eq!(current(&app), Some((0, 2)));
+    assert_eq!(app.run("window.previousDocument", json!({})).unwrap(), json!({"index": 0, "view": 1}));
+    assert_eq!(app.run("window.previousDocument", json!({})).unwrap(), json!({"index": 1}));
+}
+
+#[test]
+fn switching_views_resets_the_tool() {
+    let mut app = app_with(2);
+    app.run("window.newWindow", json!({})).unwrap();
+    let before = app.session.tool_resets();
+    show_window(&mut app, (1, 1));
+    assert_eq!(app.session.tool_resets(), before + 1, "another view of the current document resets the tool");
+    show_window(&mut app, (1, 1));
+    assert_eq!(app.session.tool_resets(), before + 1, "the current view stays as it is");
+}
+
+#[test]
+fn switching_views_targets_the_artboard_the_view_shows() {
+    let mut app = app_with(1);
+    app.run("artboard.new", json!({})).unwrap();
+    app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+    crate::panels::artboards::select(&mut app, 0);
+    app.run("window.newWindow", json!({})).unwrap();
+    crate::panels::artboards::select(&mut app, 1);
+    assert_eq!(app.session.tool_options()["active"], json!(1));
+    show_window(&mut app, (0, 1));
+    assert_eq!(app.session.tool_options()["active"], json!(0), "the first view shows the first artboard");
+    show_window(&mut app, (0, 2));
+    assert_eq!(app.session.tool_options()["active"], json!(1));
 }

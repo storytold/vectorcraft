@@ -1824,6 +1824,44 @@ fn pattern_and_symbol_art_with_plugin_effects_follow_the_plugins_installed() {
     plugin_change_draws_as_new(with_art(d, vec![group]), ID, Some(triangle(82.0, 32.0, 10.0)), Some(triangle(82.0, 32.0, 30.0)));
 }
 
+/// A document draws plug-in effects ([`draws_plugin_effects`]) when an object in its layers, in a
+/// symbol's or a pattern's art, or in a brush's art has a visible plug-in effect, and not when its
+/// objects have no effect, another effect or a hidden plug-in effect.
+#[test]
+fn a_document_draws_plugin_effects_where_any_of_its_art_has_one() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind};
+    use vectorcraft_geom::shapes::rectangle;
+    let plugin = || effect("plugin.test.render.draws", serde_json::json!({}));
+    let square = |d: &mut Document, effects: Vec<vectorcraft_doc::Effect>| {
+        filled(d, rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Paint::solid(Color::BLACK), effects)
+    };
+    let mut cases: Vec<(&str, Document, bool)> = vec![];
+    for (name, effects, draws) in [
+        ("no effect", vec![], false),
+        ("another effect", vec![drop_shadow()], false),
+        ("hidden plug-in effect", vec![vectorcraft_doc::Effect { visible: false, ..plugin() }], false),
+        ("plug-in effect", vec![plugin()], true),
+    ] {
+        let mut d = Document::new(200.0, 100.0);
+        let n = square(&mut d, effects);
+        cases.push((name, with_art(d, vec![n]), draws));
+    }
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, vec![plugin()]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Shaped".into(), art: Arc::new(art) });
+    cases.push(("symbol art", d, true));
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, vec![plugin()]);
+    d.patterns.push(vectorcraft_doc::pattern::PatternDef::new("Shaped", vec![Arc::new(art)]));
+    cases.push(("pattern art", d, true));
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, vec![plugin()]);
+    vectorcraft_brush::store(&mut d, &[Brush { name: "Shaped".into(), kind: BrushKind::Art(ArtBrush { art, ..Default::default() }) }]);
+    cases.push(("brush art", d, true));
+    let wrong: Vec<&str> = cases.iter().filter(|(_, d, draws)| draws_plugin_effects(d) != *draws).map(|(name, ..)| *name).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
 fn effect(id: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
     vectorcraft_doc::Effect { id: id.into(), params, visible: true }
 }
@@ -2421,4 +2459,126 @@ fn compound_paths_draw_from_kept_paths_and_let_old_ones_go() {
     drop(d);
     assert!(r.geom.len() < 1024);
     assert_eq!(Arc::strong_count(&old), 1, "the renderer no longer keeps the compound path drawn before the move");
+}
+
+/// A `w`×`h` CMYK document showing `blob` as image `key` of `w`×`h` pixels, one point a pixel.
+fn cmyk_doc_with(key: &str, blob: ImageBlob, w: u32, h: u32) -> Document {
+    let mut d = Document::new_with_mode(w as f64, h as f64, vectorcraft_doc::ColorMode::Cmyk);
+    d.images.insert(key.into(), blob);
+    let (id, layer) = (d.alloc_id(), d.layers[0].id);
+    let im = ImageObject { key: key.into(), width: w, height: h, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    d
+}
+
+/// #4155: an image drawn reduced on the ink planes is separated from the mip it draws, never at
+/// its full size. Separating a 141-megapixel image for each plane before shrinking it took
+/// seconds a frame, and its full-size planes overflowed the store, so every frame did it again.
+#[test]
+fn a_reduced_image_is_separated_from_its_mip_not_its_full_pixels() {
+    let _fonts = fonts_steady();
+    let d = cmyk_doc_with("img", ImageBlob::new("image/png", png(64, 64, 111)), 64, 64);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let _ = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 64.0, 64.0), 0.25, &on);
+    let full = blob_key(&d.images["img"]).0;
+    let quarter = images::ImageKey { mip: 2, ..full.clone() };
+    let s = images::store();
+    for plane in [Ink::Cmy, Ink::K] {
+        assert!(s.peek(&ink::ink_key(&full, plane)).is_none(), "the {plane:?} plane was made at full size");
+        let made = s.peek(&ink::ink_key(&quarter, plane)).unwrap_or_else(|| panic!("no {plane:?} plane of the quarter mip"));
+        assert_eq!((made.width(), made.height()), (16, 16));
+    }
+}
+
+/// A CMYK image drawn reduced paints its own inks, averaged, as at full size: not its displayed
+/// colours separated again, which would change how much of its dark is black ink.
+#[test]
+fn a_reduced_cmyk_image_paints_its_own_inks() {
+    let _fonts = fonts_steady();
+    // Inks a separation of their displayed colour would not give back: rich in black.
+    let ink = [0u8, 102, 255, 140];
+    let blob = ImageBlob::cmyk_tiff(&vectorcraft_doc::cmyk::Inks::new(8, 8, ink.repeat(64)).unwrap()).unwrap();
+    let d = cmyk_doc_with("inks", blob, 8, 8);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let inks = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 8.0, 8.0), 0.25, &on);
+    for px in inks.as_chunks::<4>().0 {
+        assert!(px.iter().zip(ink).all(|(a, b)| a.abs_diff(b) <= 1), "{px:?} vs {ink:?}");
+    }
+}
+
+/// On the ink planes, a reduced image shows the average of its pixels as they show at full size:
+/// 1-pixel black and white lines show as the mid grey they make. Separating the full pixels and
+/// averaging the planes made that grey a dark brown, 44 levels off.
+#[test]
+fn a_reduced_image_on_the_ink_planes_shows_its_average() {
+    let _fonts = fonts_steady();
+    let lines = image::RgbaImage::from_fn(64, 64, |x, _| image::Rgba(if x % 2 == 0 { [0, 0, 0, 255] } else { [255; 4] }));
+    let mut bytes = vec![];
+    lines.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    let mut d = cmyk_doc_with("lines", ImageBlob::new("image/png", bytes), 64, 64);
+    // Transparency beside the image: the document blends in CMYK, drawing on its ink planes.
+    let shape = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 0.0, 110.0, 10.0));
+    let mut veil = Node::path(d.alloc_id(), shape, vectorcraft_doc::Appearance::basic(Paint::solid(Color::gray(0.5)), Paint::None, 0.0));
+    veil.opacity = 0.5;
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, veil).unwrap();
+    let full = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions::default()).pixels;
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let reduced = Renderer::new().render(&d, 16, 16, Affine::scale(0.25), &on).pixels;
+    for (i, px) in reduced.as_chunks::<4>().0.iter().enumerate() {
+        let (bx, by) = (i % 16 * 4, i / 16 * 4);
+        let block = |c: usize| (0..16).map(|j| u32::from(full[((by + j / 4) * 64 + bx + j % 4) * 4 + c])).sum::<u32>().div_ceil(16) as u8;
+        let want = [block(0), block(1), block(2)];
+        assert!(px.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 2), "pixel {i}: {px:?}, the full frame averages {want:?}");
+    }
+}
+
+/// A `w`×`h` PNG with a different colour in every pixel, so a pixel drawn from the wrong place
+/// shows; its pixels depend on `seed` (each test its own image: the store is shared).
+fn varied_png(w: u32, h: u32, seed: u8) -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 5 + y) as u8, (x / 3 + y * 7) as u8, (x ^ y) as u8 ^ seed, 255]));
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
+}
+
+/// #4155: an image drawn larger than a tile with its colours made again (here separated into ink
+/// planes) has them made only for the tiles in view. Zoomed in on a 141-megapixel photo, the whole
+/// photo was separated for every view, taking seconds each time.
+#[test]
+fn a_zoomed_in_image_is_separated_only_where_it_shows() {
+    let _fonts = fonts_steady();
+    let (w, h) = (2 * images::TILE + 100, 40);
+    let d = cmyk_doc_with("wide", ImageBlob::new("image/png", varied_png(w, h, 1)), w, h);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let _ = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 300.0, 40.0), 1.0, &on);
+    let full = blob_key(&d.images["wide"]).0;
+    let s = images::store();
+    for plane in [Ink::Cmy, Ink::K] {
+        assert!(s.peek(&ink::ink_key(&full, plane)).is_none(), "the whole {plane:?} plane was made");
+        let tile = |col: u16| ink::ink_key(&images::ImageKey { tile: Some((col, 0)), ..full.clone() }, plane);
+        assert!(s.peek(&tile(0)).is_some(), "the {plane:?} plane of the tile in view was made");
+        assert!(s.peek(&tile(1)).is_none() && s.peek(&tile(2)).is_none(), "tiles out of view were made");
+    }
+}
+
+/// An image drawn from tiles draws the pixels it draws whole, across the tiles' edges too.
+#[test]
+fn a_tiled_image_draws_what_the_whole_image_draws() {
+    let _fonts = fonts_steady();
+    let (w, h) = (2 * images::TILE + 100, 40);
+    let d = cmyk_doc_with("seams", ImageBlob::new("image/png", varied_png(w, h, 2)), w, h);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    // Across the edge between the first two tiles.
+    let (x0, x1) = (f64::from(images::TILE) - 150.0, f64::from(images::TILE) + 150.0);
+    let drawn = Renderer::new().render_region_inks(&d, Rect::new(x0, 0.0, x1, 40.0), 1.0, &on);
+    let (key, full) = crate::blobs::blob_pixmap(&d.images["seams"], false).unwrap();
+    let plane = |ink| ink::ink_image(&key, &full, ink, d.images.get("seams"), false).1;
+    let bytes = |pm: &Pixmap| pm.data().iter().flat_map(|p| [p.r, p.g, p.b, p.a]).collect::<Vec<u8>>();
+    let whole = ink::amounts(&bytes(&plane(Ink::Cmy)), &bytes(&plane(Ink::K)));
+    for (i, got) in drawn.as_chunks::<4>().0.iter().enumerate() {
+        let (x, y) = (x0 as usize + i % 300, i / 300);
+        let want = &whole[(y * w as usize + x) * 4..][..4];
+        assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(*b) <= 1), "pixel ({x}, {y}): {got:?}, whole {want:?}");
+    }
 }

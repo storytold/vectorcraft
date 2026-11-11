@@ -1,6 +1,6 @@
 use super::labels::{label_field, name_field, take_previous_label};
-use super::numeric::{STEP_DECIMALS, field_text, round_to, step_to_multiple};
-use super::text::{after_shift_enter, select_all, shift_enter_keeps_focus};
+use super::numeric::{STEP_DECIMALS, STEPS, field_text, round_to, step_to_multiple};
+use super::text::{after_shift_enter, select_all, select_all_on_focus, shift_enter_keeps_focus};
 use super::{Color, Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, id_with, pos2, vec2};
 
 /// Drag phase of a live slider/handle: previews while dragging, commits on release.
@@ -42,6 +42,9 @@ pub struct SliderValue {
     /// steps from `value` (±1 for an arrow, ±10 with Shift or Page Up/Down). `None` steps to whole
     /// numbers.
     pub step: Option<fn(f64, f64) -> f64>,
+    /// The places the field shows, which a screen reader's set-value action rounds to; `None`
+    /// keeps the number it sets.
+    pub decimals: Option<usize>,
 }
 
 /// Two values are the same when they show the same number, range and text, whatever their keys' steps
@@ -55,20 +58,20 @@ impl PartialEq for SliderValue {
 impl SliderValue {
     /// `value` on a rail over `range`, without a text.
     pub fn number(value: f64, range: std::ops::RangeInclusive<f64>) -> Self {
-        Self { value, range, text: None, step: None }
+        Self { value, range, text: None, step: None, decimals: None }
     }
 
     /// `value` on a rail over `range` as [`plain_field`] shows it with `suffix` and at most
     /// `decimals` places: the number it shows (`value` rounded) and its text.
     pub fn field(value: f64, range: std::ops::RangeInclusive<f64>, suffix: &str, decimals: usize) -> Self {
         let number = field_text(value, "", decimals);
-        Self { value: number.parse().unwrap_or(value), range, text: Some(format!("{number}{suffix}")), step: None }
+        Self { value: number.parse().unwrap_or(value), range, text: Some(format!("{number}{suffix}")), step: None, decimals: Some(decimals) }
     }
 
     /// `value` on a rail over `range`, with `text`, for a field that writes its own text (a length
     /// in the document's unit, an egui `DragValue`).
     pub fn text(value: f64, range: std::ops::RangeInclusive<f64>, text: String) -> Self {
-        Self { value, range, text: Some(text), step: None }
+        Self { value, range, text: Some(text), step: None, decimals: None }
     }
 
     /// This value, stepped by the keys with `step` instead of to whole numbers (see
@@ -119,8 +122,11 @@ pub fn color_slider_valued(
 /// While it has the focus, → and ↑ raise the number `shown` holds to the next whole number and ←
 /// and ↓ lower it to the next whole number, Shift with an arrow, Page Up and Page Down add or take
 /// ten, and Home and End set the start and the end of `shown`'s range. Screen readers' increment
-/// and decrement actions step the number as → and ← do. A number past the range steps from the
-/// range's nearer end, and no step goes past either end. With `shown` `None` (a blank field), or
+/// and decrement actions step the number as → and ← do, and their set-value action sets it within
+/// the range they get (the range, extended to a number past its end), rounded to
+/// [`SliderValue::decimals`] (a value that is not a finite number leaves it as it is). A number
+/// past the range steps from the range's nearer end, and no step goes past
+/// either end. With `shown` `None` (a blank field), or
 /// in a disabled `ui`, the keys and actions leave the rail as it is. Returns the new value from 0
 /// to 1 that a click or a drag gives, its phase, and the number in `shown`'s units that a key or
 /// an action gives.
@@ -167,6 +173,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
     let stepped = shown.filter(|_| ui.is_enabled()).and_then(|s| {
         ui.ctx().accesskit_node_builder(id, |node| {
             node.set_numeric_value_step(1.0);
+            node.add_action(egui::accesskit::Action::SetValue);
             node.add_action(egui::accesskit::Action::Increment);
             node.add_action(egui::accesskit::Action::Decrement);
         });
@@ -185,7 +192,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
 /// The number of slider `id` (`s`) after this frame's keys while it is `focused`, and after screen
 /// readers' actions on it ([`color_slider_stepped`]); `None` when they leave it as it was.
 fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f64> {
-    use egui::accesskit::Action;
+    use egui::accesskit::{Action, ActionData};
     use egui::{Event, Key};
     let (lo, hi) = (*s.range.start(), *s.range.end());
     if !lo.is_finite() || !hi.is_finite() || hi <= lo {
@@ -235,11 +242,27 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
             ui.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
         }
     }
+    // A set-value request is rounded to the field's places when it has them and otherwise kept as
+    // asked; only the keys' and the steps' numbers are rounded to `STEP_DECIMALS`.
+    let mut exact = false;
     ui.input(|i| {
         let n = i.num_accesskit_action_requests(id, Action::Increment) as f64 - i.num_accesskit_action_requests(id, Action::Decrement) as f64;
         v = by(v, n).clamp(lo, hi);
+        // The last set-value request this frame.
+        let set = i.accesskit_action_requests(id, Action::SetValue).last().and_then(|request| match request.data {
+            Some(ActionData::NumericValue(value)) if value.is_finite() => Some(value),
+            _ => None,
+        });
+        if let Some(value) = set {
+            // The number the field would show, as `SliderValue::field` reads it.
+            let shown = s.decimals.map_or(value, |d| field_text(value, "", d).parse().unwrap_or(value));
+            // The range screen readers get (`slider_info`), which takes in a number past the rail.
+            v = shown.clamp(lo.min(s.value), hi.max(s.value));
+            end = true;
+            exact = true;
+        }
     });
-    (v != from || (end && v != s.value)).then_some(round_to(v, STEP_DECIMALS).clamp(lo, hi))
+    (v != from || (end && v != s.value)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
 }
 
 /// The rail of [`color_slider_valued`] with the id `id`: its response, the new value from 0 to 1
@@ -297,31 +320,130 @@ fn gradient_strip(ui: &Ui, rect: Rect, n: usize, vertical: bool, track: &dyn Fn(
     }
 }
 
-/// The Color Picker's 2D colour field: `color_at(x, y)` gives the colour at a point (0..1 each, y
-/// down) and a ring marks `pos`. Returns the clicked or dragged point and the phase.
+/// One axis of a [`color_field`] as keys and screen readers see it: the component's name, how many
+/// of its units the axis spans (an arrow press moves one unit) and the units' suffix.
+#[derive(Clone, Copy, Debug)]
+pub struct FieldAxis<'a> {
+    pub name: &'a str,
+    pub units: f32,
+    pub suffix: &'a str,
+}
+
+/// A press on `resp`, or a click whose press and release came in one frame, gives it the keyboard
+/// focus, so the arrow keys reach it. Escape or a click elsewhere takes the focus away again.
+fn focus_on_press(resp: &Response) {
+    if resp.is_pointer_button_down_on() || resp.clicked() {
+        resp.request_focus();
+    }
+}
+
+/// The arrow keys pressed for control `id` this frame while it has the keyboard focus, in units
+/// ([`STEPS`]: ten with Shift, a tenth with Ctrl/Cmd, else one): (→ minus ←, ↑ minus ↓). The control
+/// takes the arrows of each axis it uses (`horizontal`, `vertical`), which then do not move the focus
+/// to the next widget.
+fn arrow_steps(ui: &Ui, id: egui::Id, horizontal: bool, vertical: bool) -> (f32, f32) {
+    if !ui.memory(|m| m.has_focus(id)) {
+        return (0.0, 0.0);
+    }
+    use egui::Key;
+    let filter = egui::EventFilter { horizontal_arrows: horizontal, vertical_arrows: vertical, ..Default::default() };
+    ui.memory_mut(|m| m.set_focus_lock_filter(id, filter));
+    let (mut x, mut y) = (0.0, 0.0);
+    ui.input_mut(|i| {
+        for (mods, size) in STEPS {
+            let mut count = |key| i.count_and_consume_key(mods, key) as f64 * size;
+            if horizontal {
+                x += count(Key::ArrowRight) - count(Key::ArrowLeft);
+            }
+            if vertical {
+                y += count(Key::ArrowUp) - count(Key::ArrowDown);
+            }
+        }
+    });
+    (x as f32, y as f32)
+}
+
+/// The focus outline of a focused color control.
+fn focus_outline(ui: &Ui, resp: &Response, rect: Rect) {
+    if ui.memory(|m| m.has_focus(resp.id)) {
+        let t = Tokens::get(ui.ctx());
+        ui.painter().rect_stroke(rect.expand(2.0), 0.0, Stroke::new(1.0, t.accent), StrokeKind::Outside);
+    }
+}
+
+/// A 2D color field (the Color Picker's, the Color Wheel panel's square): `color_at(x, y)` gives
+/// the color at a point (0..1 each, y down) and, when `marked`, a ring marks `pos`. A press gives
+/// it the keyboard focus. While it has the focus, → and ← move `pos` across by one unit of
+/// `axes[0]` and ↑ and ↓ move it up and down by one unit of `axes[1]`, marked or not. Screen
+/// readers read `name` and, when `marked`, both components. They read it as a slider over
+/// `axes[0]`'s units (0 when not `marked`), which their increment and decrement actions move as →
+/// and ← do and their set-value action sets, as for a [`hue_ring`]. Returns the clicked or dragged
+/// point, or the point the keys or actions moved to, and the phase. When `marked`, a step past an
+/// edge returns no point.
 pub fn color_field(
     ui: &mut Ui,
     id: impl std::hash::Hash,
+    (name, axes): (&str, [FieldAxis<'_>; 2]),
     size: Vec2,
     pos: (f32, f32),
+    marked: bool,
     color_at: &dyn Fn(f32, f32) -> Color32,
 ) -> (Option<(f32, f32)>, Live) {
+    use egui::accesskit::{Action, ActionData};
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let resp = ui.interact(rect, id_with(ui.scope_id(), id), Sense::click_and_drag());
+    focus_on_press(&resp);
     let painter = ui.painter_at(rect.expand(6.0));
     painter.add(color_mesh(rect, (32, 32), color_at));
     painter.rect_stroke(rect, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
-    let c = pos2(rect.left() + pos.0.clamp(0.0, 1.0) * rect.width(), rect.top() + pos.1.clamp(0.0, 1.0) * rect.height());
-    painter.circle_stroke(c, 5.0, Stroke::new(1.0, Color32::BLACK));
-    painter.circle_stroke(c, 4.0, Stroke::new(1.0, Color32::WHITE));
-    match pointer_phase(&resp) {
-        Some((p, phase)) => {
-            let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
-            (Some((f(p.x, rect.left(), rect.width()), f(p.y, rect.top(), rect.height()))), phase)
-        }
-        None => (None, Live::Idle),
+    focus_outline(ui, &resp, rect);
+    let (x, y) = pos;
+    if marked {
+        let c = pos2(rect.left() + x.clamp(0.0, 1.0) * rect.width(), rect.top() + y.clamp(0.0, 1.0) * rect.height());
+        painter.circle_stroke(c, 5.0, Stroke::new(1.0, Color32::BLACK));
+        painter.circle_stroke(c, 4.0, Stroke::new(1.0, Color32::WHITE));
     }
+    let value = |v: f32, a: &FieldAxis| format!("{}{}", (v.clamp(0.0, 1.0) * a.units).round(), a.suffix);
+    let text = marked.then(|| {
+        crate::i18n::fmt(
+            tl!("{name1} {value1}, {name2} {value2}"),
+            &[("name1", axes[0].name), ("value1", &value(x, &axes[0])), ("name2", axes[1].name), ("value2", &value(1.0 - y, &axes[1]))],
+        )
+    });
+    let shown = if marked { f64::from(x.clamp(0.0, 1.0) * axes[0].units) } else { 0.0 };
+    resp.widget_info(|| egui::WidgetInfo { current_text_value: text.clone(), ..egui::WidgetInfo::slider(ui.is_enabled(), shown, name) });
+    ui.ctx().accesskit_node_builder(resp.id, |node| {
+        node.set_min_numeric_value(0.0);
+        node.set_max_numeric_value(f64::from(axes[0].units));
+        node.set_numeric_value_step(1.0);
+        for action in [Action::SetValue, Action::Increment, Action::Decrement] {
+            node.add_action(action);
+        }
+    });
+    let (dx, dy) = arrow_steps(ui, resp.id, true, true);
+    let (steps, set) = ui.input(|i| {
+        let steps =
+            i.num_accesskit_action_requests(resp.id, Action::Increment) as f32 - i.num_accesskit_action_requests(resp.id, Action::Decrement) as f32;
+        let set = i.accesskit_action_requests(resp.id, Action::SetValue).find_map(|r| match r.data {
+            Some(ActionData::NumericValue(v)) if v.is_finite() => Some(v as f32),
+            _ => None,
+        });
+        (steps, set)
+    });
+    if let Some((p, phase)) = pointer_phase(&resp) {
+        let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
+        return (Some((f(p.x, rect.left(), rect.width()), f(p.y, rect.top(), rect.height()))), phase);
+    }
+    let across = set.map_or(x + (dx + steps) / axes[0].units, |v| v / axes[0].units);
+    let moved = (across.clamp(0.0, 1.0), (y - dy / axes[1].units).clamp(0.0, 1.0));
+    // A step past an edge leaves the point where it is. Without a marker there is no color yet, so
+    // a key or an action applies even when the point stays.
+    let asked = set.is_some() || dx + steps != 0.0 || dy != 0.0;
+    if moved != (x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)) || (asked && !marked) {
+        return (Some(moved), Live::Released);
+    }
+    (None, Live::Idle)
 }
 
 /// A smoothly shaded colour area: a `cols` × `rows` grid over `rect` with `color_at(x, y)` (0..1
@@ -409,48 +531,167 @@ pub fn hex_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
     let label = take_previous_label(ui);
     ui.label(egui::RichText::new("#").size(15.0).color(t.text));
     let id = id_with(ui.scope_id(), id);
+    hex_text(ui, id, hex, |ui, buf, editing| {
+        let resp = egui::Frame::NONE
+            .fill(t.input)
+            .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
+            .corner_radius(5)
+            .inner_margin(egui::Margin::symmetric(6, 4))
+            .show(ui, |ui| {
+                // As tall as the other fields (26 points with the margin), whatever the font's line
+                // height: egui 0.37 gives a TextEdit the theme's interact height, so lower it here too.
+                ui.spacing_mut().interact_size.y = 18.0;
+                ui.set_height(18.0);
+                ui.add(
+                    egui::TextEdit::singleline(buf)
+                        .id(id)
+                        .frame(egui::Frame::NONE)
+                        .align(egui::Align2::LEFT_CENTER)
+                        .desired_width(62.0)
+                        .char_limit(HEX_FIELD_CHARS)
+                        .font(egui::FontId::proportional(12.5))
+                        .text_color(t.text_strong),
+                )
+            })
+            .inner;
+        name_field(label_field(resp, label), name)
+    })
+}
+
+/// The most characters a hex field's text box holds: six digits and a `#`.
+pub(crate) const HEX_FIELD_CHARS: usize = 7;
+
+/// What happens to a paste into a hex field.
+#[derive(Debug, PartialEq, Eq)]
+enum HexPaste {
+    /// Hex digits that leave at most six digits with the text that stays: the text box inserts them.
+    Insert,
+    /// A full color code: its digits replace the field's, wherever the caret is.
+    Replace(String),
+    /// Anything else: the field stays as it was.
+    Ignore,
+}
+
+/// What a paste of `text` does to a hex field in which `kept` characters stay, not counting a typed `#`
+/// that stays. `whole` says the paste goes over all of the field's text. A code has three or six digits
+/// with or without `#`, and spaces and line breaks around it are ignored. Bare digits that do not go over
+/// the whole text are inserted when the result has at most six digits, except that three digits are
+/// inserted only when exactly three digits stay. Bare digits are not inserted when `before_hash` says the
+/// caret is before a `#` that stays. Any other code replaces the field's text, and any other paste is
+/// ignored.
+fn hex_paste(text: &str, kept: usize, whole: bool, before_hash: bool) -> HexPaste {
+    let code = text.trim();
+    let digits = code.strip_prefix('#').unwrap_or(code);
+    if digits.is_empty() || digits.len() > 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        HexPaste::Ignore
+    } else if digits == text && !whole && !before_hash && kept + digits.len() <= 6 && (digits.len() != 3 || kept == 3) {
+        HexPaste::Insert
+    } else if matches!(digits.len(), 3 | 6) {
+        HexPaste::Replace(digits.to_string())
+    } else {
+        HexPaste::Ignore
+    }
+}
+
+/// Takes this frame's pastes into hex field `id` from the events before its text box reads them, and
+/// applies each one that replaces `buf`, with the caret after the new digits. Returns whether one did.
+fn take_hex_paste(ui: &Ui, id: egui::Id, buf: &mut String) -> bool {
+    if !ui.memory(|m| m.has_focus(id)) {
+        return false;
+    }
+    let mut state = egui::TextEdit::load_state(ui.ctx(), id).unwrap_or_default();
+    let (start, selected) = state.cursor.char_range().map_or((0, 0), |r| {
+        let r = r.as_sorted_char_range();
+        (r.start.0, r.end.0 - r.start.0)
+    });
+    let replaced = ui.input_mut(|i| take_hex_pastes(&mut i.events, buf, start, selected));
+    if replaced {
+        state.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(buf.len()))));
+        state.store(ui.ctx(), id);
+    }
+    replaced
+}
+
+/// Removes the pastes from `events` that [`hex_paste`] does not leave to the text box, in order, and
+/// applies each one that replaces `buf`. The caret is at character `start` with `selected` characters
+/// selected. A replacement also drops the bare-digit pastes kept from earlier in the frame, which the text
+/// box would otherwise insert into the new digits. Returns whether a paste replaced `buf`.
+fn take_hex_pastes(events: &mut Vec<egui::Event>, buf: &mut String, start: usize, mut selected: usize) -> bool {
+    let mut replaced = false;
+    let mut kept_events = Vec::with_capacity(events.len());
+    for e in events.drain(..) {
+        let egui::Event::Paste(text) = &e else {
+            kept_events.push(e);
+            continue;
+        };
+        let len = buf.chars().count();
+        let hash = buf.starts_with('#') && start > 0;
+        let before_hash = buf.starts_with('#') && start == 0 && selected == 0;
+        match hex_paste(text, len.saturating_sub(selected + usize::from(hash)), selected > 0 && selected >= len, before_hash) {
+            HexPaste::Insert => kept_events.push(e),
+            HexPaste::Replace(digits) => {
+                *buf = digits;
+                selected = 0;
+                replaced = true;
+                kept_events.retain(|k| !matches!(k, egui::Event::Paste(_)));
+            }
+            HexPaste::Ignore => {}
+        }
+    }
+    *events = kept_events;
+    replaced
+}
+
+/// `digits` with a three-digit code written out as six by doubling each digit. Other text is unchanged.
+fn full_hex(digits: &str) -> String {
+    if digits.len() == 3 && digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        digits.chars().flat_map(|c| [c, c]).collect()
+    } else {
+        digits.to_string()
+    }
+}
+
+/// The text and commit rules of a hex field `id` showing `hex`; `draw` draws its text box with the
+/// text and whether the field has the focus. A click or keyboard focus selects the digits, a pasted
+/// code replaces them ([`hex_paste`]), and Enter, Shift+Enter (which keeps the focus outside dialogs),
+/// a press elsewhere and focus loss commit them. Returns the digits, without `#` and with a three-digit
+/// code written out as six, on commit when they were typed into the field and differ from `hex`.
+pub(crate) fn hex_text(ui: &mut Ui, id: egui::Id, hex: &str, draw: impl FnOnce(&mut Ui, &mut String, bool) -> Response) -> Option<String> {
     let editing = ui.memory(|m| m.has_focus(id));
+    // A press outside the field ends its editing in this frame, so the text typed is committed
+    // before the press acts, as in the numeric fields.
+    if editing
+        && let Some(at) = ui.input(|i| i.pointer.primary_pressed().then(|| i.pointer.interact_pos()).flatten())
+        && ui.ctx().read_response(id).is_some_and(|r| !r.rect.contains(at))
+    {
+        ui.memory_mut(|m| m.surrender_focus(id));
+    }
     // Until the user types into it, the field shows `hex` as it is now, also while it has the
     // focus. Tab can give it the focus in the frame another field commits an edit, before the edit
     // changes `hex`; the text from before that edit is not committed when the focus moves on
-    // (#1692).
+    // (#1692). A field drawn before this one can take the focus on a press, so `editing` is already
+    // false in the frame the field reports `lost_focus`: the text typed is still taken then. Escape
+    // drops it.
     let edited_id = id.with("edited");
-    let edited = editing && ui.data_mut(|d| d.get_temp::<bool>(edited_id)).unwrap_or(false);
+    let had_focus = ui.memory(|m| m.had_focus_last_frame(id)) && !ui.input(|i| i.key_pressed(egui::Key::Escape));
+    let edited = (editing || had_focus) && ui.data_mut(|d| d.get_temp::<bool>(edited_id)).unwrap_or(false);
     let mut buf: String = if edited { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| hex.to_string()) } else { hex.to_string() };
     if after_shift_enter(ui, id) {
         select_all(ui, id, &buf);
     }
     let kept = shift_enter_keeps_focus(ui, id);
-    let resp = egui::Frame::NONE
-        .fill(t.input)
-        .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-        .corner_radius(5)
-        .inner_margin(egui::Margin::symmetric(6, 4))
-        .show(ui, |ui| {
-            // As tall as the other fields (26 points with the margin), whatever the font's line
-            // height: egui 0.37 gives a TextEdit the theme's interact height, so lower it here too.
-            ui.spacing_mut().interact_size.y = 18.0;
-            ui.set_height(18.0);
-            ui.add(
-                egui::TextEdit::singleline(&mut buf)
-                    .id(id)
-                    .frame(egui::Frame::NONE)
-                    .align(egui::Align2::LEFT_CENTER)
-                    .desired_width(62.0)
-                    .char_limit(7)
-                    .font(egui::FontId::proportional(12.5))
-                    .text_color(t.text_strong),
-            )
-        })
-        .inner;
-    let resp = name_field(label_field(resp, label), name);
-    let commit = (resp.lost_focus() || kept) && buf != hex;
+    let pasted = take_hex_paste(ui, id, &mut buf);
+    let resp = draw(ui, &mut buf, editing);
+    select_all_on_focus(ui, &resp, &buf);
+    let digits = full_hex(buf.strip_prefix('#').unwrap_or(&buf));
+    let commit = (resp.lost_focus() || kept) && !digits.eq_ignore_ascii_case(hex);
+    let committed = commit.then_some(digits);
     let focused = ui.memory(|m| m.has_focus(id));
     ui.data_mut(|d| {
-        d.insert_temp(id, buf.clone());
-        d.insert_temp(edited_id, (edited || resp.changed()) && focused && !kept);
+        d.insert_temp(edited_id, (edited || pasted || resp.changed()) && focused && !kept);
+        d.insert_temp(id, buf);
     });
-    commit.then_some(buf)
+    committed
 }
 
 /// Position of hue `h` (degrees) and saturation `s` on a wheel of radius `r` around `c`.
@@ -484,6 +725,152 @@ fn wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
         }
     }
     egui::Shape::mesh(mesh)
+}
+
+/// The width of a [`hue_ring`]'s band.
+const RING_WIDTH: f32 = 14.0;
+/// How far inside its rect a [`hue_ring`]'s band is drawn: a press up to this far outside the band
+/// still picks a hue.
+const RING_MARGIN: f32 = 4.0;
+
+/// The display sRGB of HSB `[h°, s, v]` as an egui color, with no color conversion.
+pub fn hsb32(hsb: [f32; 3]) -> Color32 {
+    let [r, g, b] = vectorcraft_color::hsb_to_rgb(hsb).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    Color32::from_rgb(r, g, b)
+}
+
+/// The square a [`hue_ring`] drawn in `rect` holds: the largest one inside the band's inner edge,
+/// 2 points clear of it.
+pub fn ring_square(rect: Rect) -> Rect {
+    let inner = rect.width().min(rect.height()) / 2.0 - RING_MARGIN - RING_WIDTH - 2.0;
+    Rect::from_center_size(rect.center(), Vec2::splat(inner.max(0.0) * std::f32::consts::SQRT_2))
+}
+
+/// The part of a [`hue_ring`] a press started on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum RingPart {
+    Band,
+    Inner,
+    Corner,
+}
+
+/// What a [`hue_ring`] did this frame.
+pub struct RingResponse {
+    /// The rect the ring is drawn in.
+    pub rect: Rect,
+    /// A new hue (degrees, 0..360) from a press or drag on the band, an arrow key or a screen
+    /// reader, and its phase.
+    pub hue: Option<(f32, Live)>,
+    /// The pointer of a press or drag that started inside the band's inner edge, and its phase.
+    pub inner: Option<(Pos2, Live)>,
+}
+
+/// A hue ring `size` across: a band of hues drawn [`RING_MARGIN`] inside its rect, the hue
+/// increasing counterclockwise from 3 o'clock as on [`harmony_wheel`], with a marker at `hue` when
+/// `marked`. A press on the band, or up to [`RING_MARGIN`] outside it, picks the hue under the
+/// pointer (with Shift, in 45° steps) and gives the ring the keyboard focus. A press inside the
+/// band's inner edge comes back as `inner`, and a press in the rect's corners does nothing. The part
+/// a press starts on keeps the whole drag. While the ring has the focus, → and ↑ raise `hue` by
+/// 1° and ← and ↓ lower it ([`STEPS`]), marked or not, and 360° wraps to 0°. Screen readers read it
+/// as a slider named `name` from 0 to 360 (0 when not `marked`), which their increment, decrement
+/// and set-value actions move.
+pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hue: f32, marked: bool) -> RingResponse {
+    use egui::accesskit::{Action, ActionData};
+    const SEG: u32 = 72;
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
+    let resp = ui.interact(rect, id_with(ui.scope_id(), id), Sense::click_and_drag());
+    let c = rect.center();
+    let outer = size / 2.0 - RING_MARGIN;
+    let inner = outer - RING_WIDTH;
+    let mut mesh = egui::Mesh::default();
+    for k in 0..=SEG {
+        let h = k as f32 * 360.0 / SEG as f32;
+        let col = hsb32([h, 1.0, 1.0]);
+        mesh.colored_vertex(wheel_pos(c, inner, h, 1.0), col);
+        mesh.colored_vertex(wheel_pos(c, outer, h, 1.0), col);
+    }
+    for k in 0..SEG {
+        let a = 2 * k;
+        mesh.add_triangle(a, a + 1, a + 2);
+        mesh.add_triangle(a + 1, a + 3, a + 2);
+    }
+    let painter = ui.painter_at(rect);
+    painter.add(egui::Shape::mesh(mesh));
+    painter.circle_stroke(c, outer, Stroke::new(1.0, t.border));
+    painter.circle_stroke(c, inner, Stroke::new(1.0, t.border));
+    if ui.memory(|m| m.has_focus(resp.id)) {
+        painter.circle_stroke(c, outer + 2.0, Stroke::new(1.0, t.accent));
+    }
+    if marked {
+        let m = wheel_pos(c, (inner + outer) / 2.0, hue, 1.0);
+        painter.circle_stroke(m, RING_WIDTH / 2.0 - 1.0, Stroke::new(1.5, Color32::WHITE));
+        painter.circle_stroke(m, RING_WIDTH / 2.0, Stroke::new(1.0, Color32::BLACK));
+    }
+    resp.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), if marked { f64::from(hue) } else { 0.0 }, name));
+    ui.ctx().accesskit_node_builder(resp.id, |node| {
+        node.set_min_numeric_value(0.0);
+        node.set_max_numeric_value(360.0);
+        node.set_numeric_value_step(1.0);
+        for action in [Action::SetValue, Action::Increment, Action::Decrement] {
+            node.add_action(action);
+        }
+    });
+    let part_at = |p: Pos2| match p.distance(c) {
+        d if d < inner => RingPart::Inner,
+        d if d <= outer + RING_MARGIN => RingPart::Band,
+        _ => RingPart::Corner,
+    };
+    let part_id = resp.id.with("part");
+    if resp.is_pointer_button_down_on()
+        && ui.input(|i| i.pointer.primary_pressed())
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        ui.data_mut(|d| d.insert_temp(part_id, part_at(p)));
+    }
+    let pointer = pointer_phase(&resp);
+    // A click takes the part under it; a drag keeps the part its press started on.
+    let part = match pointer {
+        Some((p, _)) if resp.clicked() => Some(part_at(p)),
+        Some((p, _)) => Some(ui.data(|d| d.get_temp::<RingPart>(part_id)).unwrap_or_else(|| part_at(p))),
+        None => ui.data(|d| d.get_temp::<RingPart>(part_id)),
+    };
+    if resp.clicked() || resp.drag_stopped() {
+        ui.data_mut(|d| d.remove::<RingPart>(part_id));
+    }
+    if part == Some(RingPart::Band) {
+        focus_on_press(&resp);
+    }
+    let (dx, dy) = arrow_steps(ui, resp.id, true, true);
+    let (steps, set) = ui.input(|i| {
+        let steps =
+            i.num_accesskit_action_requests(resp.id, Action::Increment) as f32 - i.num_accesskit_action_requests(resp.id, Action::Decrement) as f32;
+        let set = i.accesskit_action_requests(resp.id, Action::SetValue).find_map(|r| match r.data {
+            Some(ActionData::NumericValue(v)) if v.is_finite() => Some(v.rem_euclid(360.0) as f32),
+            _ => None,
+        });
+        (steps + dx + dy, set)
+    });
+    let mut out = RingResponse { rect, hue: None, inner: None };
+    if let Some((p, phase)) = pointer {
+        match part.unwrap_or_else(|| part_at(p)) {
+            RingPart::Band => {
+                let v = p - c;
+                let h = (-v.y).atan2(v.x).to_degrees();
+                let h = if ui.input(|i| i.modifiers.shift) { (h / 45.0).round() * 45.0 } else { h };
+                out.hue = Some((h.rem_euclid(360.0), phase));
+            }
+            RingPart::Inner => out.inner = Some((p, phase)),
+            RingPart::Corner => {}
+        }
+    } else {
+        let new = set.unwrap_or(hue + steps);
+        // Without a marker there is no color yet, so a set value applies even when it equals `hue`.
+        if new != hue || (set.is_some() && !marked) {
+            out.hue = Some((new.rem_euclid(360.0), Live::Released));
+        }
+    }
+    out
 }
 
 /// Hue sectors and saturation rings of the [`segmented_wheel`]: patches 15° of hue by 20%
@@ -627,4 +1014,56 @@ pub fn region_texture(
     let img = renderer.render_region(doc, region, scale, true);
     let color = crate::canvas::color_image(&img);
     ctx.load_texture(name, color, egui::TextureOptions::LINEAR)
+}
+
+#[cfg(test)]
+mod hex_paste_tests {
+    use super::{HexPaste, hex_paste, take_hex_pastes};
+
+    fn paste(text: &str) -> egui::Event {
+        egui::Event::Paste(text.into())
+    }
+
+    /// A paste with the caret before a `#` that stays never inserts bare digits ahead of it.
+    #[test]
+    fn bare_digits_are_not_inserted_before_a_hash_that_stays() {
+        assert_eq!(hex_paste("c", 3, false, false), HexPaste::Insert);
+        assert_eq!(hex_paste("c", 3, false, true), HexPaste::Ignore);
+        assert_eq!(hex_paste("fff", 3, false, false), HexPaste::Insert);
+        assert_eq!(hex_paste("fff", 3, false, true), HexPaste::Replace("fff".into()));
+    }
+
+    /// Field text, caret, selected characters, pastes, text after, and pastes left for the text box.
+    type Case = (&'static str, usize, usize, &'static [&'static str], &'static str, usize);
+
+    #[test]
+    fn pastes_at_the_start_of_a_hash_field_and_over_it() {
+        let cases: [Case; 5] = [
+            ("#ab", 0, 0, &["fff"], "fff", 0),
+            ("#ab", 0, 0, &["c"], "#ab", 0),
+            ("#ab", 0, 1, &["c"], "#ab", 1),
+            ("#ab", 0, 3, &["fff"], "fff", 0),
+            ("#ab", 1, 0, &["c"], "#ab", 1),
+        ];
+        for (text, start, selected, pastes, after, left) in cases {
+            let mut buf = text.to_string();
+            let mut events: Vec<egui::Event> = pastes.iter().map(|p| paste(p)).collect();
+            take_hex_pastes(&mut events, &mut buf, start, selected);
+            assert_eq!((buf.as_str(), events.len()), (after, left), "{text:?} caret {start} selected {selected} pasting {pastes:?}");
+        }
+    }
+
+    /// A replacing paste drops the digits kept from earlier pastes in the same frame.
+    #[test]
+    fn a_replacing_paste_drops_earlier_inserts_in_the_frame() {
+        let mut buf = "a".to_string();
+        let mut events = vec![paste("b"), egui::Event::Text("x".into()), paste("fff")];
+        assert!(take_hex_pastes(&mut events, &mut buf, 1, 0));
+        assert_eq!(buf, "fff");
+        assert_eq!(events.len(), 1, "only the typed text is left");
+        let mut buf = "ab".to_string();
+        let mut events = vec![paste("c"), paste("d")];
+        assert!(!take_hex_pastes(&mut events, &mut buf, 2, 0));
+        assert_eq!((buf.as_str(), events.len()), ("ab", 2), "inserts alone stay for the text box");
+    }
 }

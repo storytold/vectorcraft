@@ -5,17 +5,21 @@
 //! recursing program ends with [`PsError::Limit`] instead of hanging.
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use vectorcraft_geom::Affine;
 
 use super::data::Stream;
 use super::graphics::{GState, Out};
-use super::lex::{IMMEDIATE, Lexer};
+use super::lex::{IMMEDIATE, Lexer, number};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 
-/// Most operations one file may run.
+/// Most operations one file may run, whatever its length.
 const MAX_OPS: u64 = 50_000_000;
+/// More operations a file may run for each byte of its program: a large file that draws a lot
+/// runs proportionally more, and stays bounded by its length.
+const OPS_PER_BYTE: u64 = 64;
 /// Deepest procedure nesting.
 const MAX_DEPTH: u32 = 400;
 /// Most operands on the stack.
@@ -26,6 +30,8 @@ pub(crate) const MAX_ALLOC: usize = 1 << 22;
 const MAX_DICTS: usize = 1000;
 /// Most saved graphics states.
 pub(crate) const MAX_GSAVE: usize = 1000;
+/// Most read-only procedures remembered (see `Interp::readonly`); each keeps its procedure.
+const MAX_READONLY: usize = 1 << 16;
 /// Most memory (bytes) a program may ask for in all: strings, arrays, decoded data, images,
 /// saved paths.
 const MAX_MEMORY: usize = 1 << 30;
@@ -52,6 +58,8 @@ pub(crate) struct Interp<'a> {
     resources: DictRef,
     depth: u32,
     ops: u64,
+    /// Most operations this program may run: [`MAX_OPS`] and [`OPS_PER_BYTE`] for each byte.
+    max_ops: u64,
     /// Bytes asked for so far (see [`MAX_MEMORY`]).
     allocated: usize,
     seed: u32,
@@ -65,12 +73,36 @@ pub(crate) struct Interp<'a> {
     pub fault: Option<Fault>,
     /// The width a Type 3 glyph procedure gave (`setcachedevice`, `setcharwidth`).
     pub glyph_width: Option<[f64; 2]>,
+    /// The TrueType data of the Type 42 fonts drawn so far, by their `sfnts` array (see
+    /// `type42`; `None` when it can't be read), the most recently used last.
+    pub type42: Type42Cache,
+    /// The `sfnts` arrays whose TrueType data has been counted against [`MAX_MEMORY`]: a font
+    /// read again after it left `type42` doesn't count again.
+    pub type42_counted: HashSet<Shared<Obj>>,
+    /// The mappings of the CMaps shown with so far, by their range arrays (see `cid`), the most
+    /// recent last.
+    pub cmaps: super::cid::CMaps,
+    /// The Type 1 fonts read from the encrypted part of their programs, by the `CharStrings`
+    /// dictionary given to their font dictionaries (see `type1`).
+    pub type1: Vec<(DictRef, Rc<super::type1::Font>)>,
+    /// The CIDFonts a FontSet's Compact Font Format data defined, by their dictionaries: the
+    /// data and the font's index in it (see `cid`).
+    pub cff: Vec<(DictRef, Rc<super::cid::Cff>)>,
+    /// The decrypted subroutines of Type 0 CIDFonts (see `cid`).
+    pub cid_subrs: super::cid::CidSubrs,
+    /// The font number `usefont` gave the CMap mappings that follow.
+    pub cmap_font: i64,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
     /// The program is in the legacy Illustrator format: its group operators `u` … `U` (at the top
     /// level, whatever its prolog defines them as) are groups (see the module docs of `import`).
     pub illustrator: bool,
+    /// Procedures that are read-only: those `bind` went into inside another procedure, and those
+    /// given to `readonly`, `executeonly` or `noaccess`. `bind` leaves them alone (PLRM 3rd ed.,
+    /// `bind` in chapter 8), so a procedure bound when it was defined keeps the names it didn't
+    /// bind then, whatever operators they name by the time a later procedure that holds it is bound.
+    readonly: HashSet<Shared<Obj>>,
 }
 
 /// Where a PostScript error was raised: the operator that raised it (none for an unknown name)
@@ -80,6 +112,9 @@ pub(crate) struct Fault {
     pub op: Option<&'static str>,
     pub procs: Vec<Rc<str>>,
 }
+
+/// The TrueType data of Type 42 fonts by their `sfnts` array (see [`Interp::type42`]).
+pub(crate) type Type42Cache = Vec<(Shared<Obj>, Option<Rc<super::type42::Font>>)>;
 
 /// Most procedure names a [`Fault`] keeps.
 const FAULT_PROCS: usize = 3;
@@ -115,7 +150,7 @@ impl<'a> Interp<'a> {
         let encodings = new_dict();
         {
             let mut d = system.borrow_mut();
-            for (op, name) in Op::ALL {
+            for (op, name) in Op::ALL.iter().filter(|(op, _)| !Op::PROCSET.contains(op)) {
                 d.insert(Key::name(name), Obj::Op(*op));
             }
             for name in ["StandardEncoding", "ISOLatin1Encoding"] {
@@ -133,6 +168,21 @@ impl<'a> Interp<'a> {
         let resources = new_dict();
         resources.borrow_mut().insert(Key::name("Category"), Obj::dict(categories));
         resources.borrow_mut().insert(Key::name("Encoding"), Obj::Dict(encodings));
+        // The procedure sets that build CMaps and CIDFonts (CIDInit) and font sets (FontSetInit),
+        // and the predefined Identity CMaps.
+        let cid_init: Dict = Op::PROCSET.iter().map(|op| (Key::name(op.name()), Obj::Op(*op))).collect();
+        let font_set_init = Dict::from([(Key::name("StartData"), Obj::Op(Op::StartData))]);
+        resources.borrow_mut().insert(
+            Key::name("ProcSet"),
+            Obj::dict(Dict::from([(Key::name("CIDInit"), Obj::dict(cid_init)), (Key::name("FontSetInit"), Obj::dict(font_set_init))])),
+        );
+        resources.borrow_mut().insert(
+            Key::name("CMap"),
+            Obj::dict(Dict::from([
+                (Key::name("Identity-H"), super::cid::identity("Identity-H", false)),
+                (Key::name("Identity-V"), super::cid::identity("Identity-V", true)),
+            ])),
+        );
         let fonts = new_dict();
         system.borrow_mut().insert(Key::name("FontDirectory"), Obj::Dict(fonts.clone()));
         for name in ["GlobalFontDirectory", "SharedFontDirectory"] {
@@ -169,16 +219,25 @@ impl<'a> Interp<'a> {
             resources,
             depth: 0,
             ops: 0,
+            max_ops: MAX_OPS.saturating_add((src.len() as u64).saturating_mul(OPS_PER_BYTE)),
             allocated: 0,
             seed: 1,
             saves: vec![],
             journal: vec![],
             fault: None,
             glyph_width: None,
+            type42: vec![],
+            cmaps: vec![],
+            type1: vec![],
+            cff: vec![],
+            cid_subrs: vec![],
+            cmap_font: 0,
+            type42_counted: HashSet::new(),
             g,
             saved: vec![],
             out,
             illustrator: false,
+            readonly: HashSet::new(),
         }
     }
 
@@ -341,21 +400,32 @@ impl<'a> Interp<'a> {
         Ok(())
     }
 
+    /// Stop counting `bytes` the program no longer holds: buffers an operator made for itself and
+    /// freed before it returned. Never for what the program's own procedures allocated.
+    pub(crate) fn unalloc(&mut self, bytes: usize) {
+        self.allocated = self.allocated.saturating_sub(bytes);
+    }
+
     fn tick(&mut self) -> Res {
         self.spend(1)
     }
 
     /// Charge for work on `n` bytes or objects in one operator: one operation per 256, as `search`
     /// charges per 64 bytes, so a loop of big copies runs out of the budget.
-    fn spend_bytes(&mut self, n: usize) -> Res {
+    pub fn spend_bytes(&mut self, n: usize) -> Res {
         self.spend((n / 256) as u64)
     }
 
-    /// Count `ops` operations' worth of work against [`MAX_OPS`]: what an operator that costs
+    /// The operations left in the budget (`max_ops`).
+    pub fn ops_left(&self) -> u64 {
+        self.max_ops.saturating_sub(self.ops)
+    }
+
+    /// Count `ops` operations' worth of work against the budget (`max_ops`): what an operator that costs
     /// far more than one operation (laying out type) does in a loop has to end too.
     pub fn spend(&mut self, ops: u64) -> Res {
         self.ops = self.ops.saturating_add(ops);
-        if self.ops > MAX_OPS {
+        if self.ops > self.max_ops {
             return Err(PsError::Limit("the program runs too long"));
         }
         Ok(())
@@ -766,7 +836,7 @@ impl<'a> Interp<'a> {
             },
             Cvi => {
                 let v = match self.pop()? {
-                    Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).trim().parse::<f64>().map_err(|_| PsError::Ps("typecheck", String::new()))?,
+                    Obj::Str(s) => string_number(&s.borrow())?,
                     o => o.as_num().ok_or(PsError::Ps("typecheck", String::new()))?,
                 };
                 if !(v.is_finite() && v.abs() < 9e15) {
@@ -776,7 +846,7 @@ impl<'a> Interp<'a> {
             }
             Cvr => {
                 let v = match self.pop()? {
-                    Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).trim().parse::<f64>().map_err(|_| PsError::Ps("typecheck", String::new()))?,
+                    Obj::Str(s) => string_number(&s.borrow())?,
                     o => o.as_num().ok_or(PsError::Ps("typecheck", String::new()))?,
                 };
                 self.push_num(v)?;
@@ -816,7 +886,7 @@ impl<'a> Interp<'a> {
             },
             Bitshift => {
                 let (s, v) = (self.pop_int()?, self.pop_int()?);
-                let r = if s >= 0 { v.checked_shl(s.min(63) as u32) } else { v.checked_shr((-s).min(63) as u32) };
+                let r = if s >= 0 { v.checked_shl(s.min(63) as u32) } else { v.checked_shr(s.saturating_neg().min(63) as u32) };
                 self.push(Obj::Int(r.unwrap_or(0)))?;
             }
             True => self.push(Obj::Bool(true))?,
@@ -928,10 +998,9 @@ impl<'a> Interp<'a> {
                 }
                 self.push_interval(Obj::Str(s), 0, text.len())?;
             }
-            ReadOnly | ExecuteOnly | NoAccess | SetPacking | SetGlobal | SetObjectFormat => {
-                if matches!(op, SetPacking | SetGlobal | SetObjectFormat) {
-                    self.pop()?;
-                }
+            ReadOnly | ExecuteOnly | NoAccess => self.restrict_access(),
+            SetPacking | SetGlobal | SetObjectFormat => {
+                self.pop()?;
             }
             Rcheck | Wcheck => {
                 self.pop()?;
@@ -1327,7 +1396,7 @@ impl<'a> Interp<'a> {
     /// Replace the names in a procedure that stand for operators by the operators, down through
     /// nested procedures.
     fn bind(&mut self, items: &Shared<Obj>, depth: u32) -> Res {
-        if depth > 64 {
+        if depth > 64 || self.readonly.contains(items) {
             return Ok(());
         }
         for i in 0..items.len() {
@@ -1340,16 +1409,37 @@ impl<'a> Interp<'a> {
                         items.write(i, &[o]);
                     }
                 }
-                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => self.bind(&inner, depth + 1)?,
+                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => {
+                    self.bind(&inner, depth + 1)?;
+                    // `bind` makes each procedure it goes into read-only.
+                    self.mark_readonly(inner);
+                }
                 _ => {}
             }
         }
         Ok(())
     }
 
+    /// `readonly`, `executeonly`, `noaccess`: the object stays on the stack; a procedure is
+    /// recorded as read-only, the only access the reader keeps (for `bind`).
+    fn restrict_access(&mut self) {
+        if let Some(Obj::Array { items, exec: true }) = self.stack.last() {
+            let items = items.clone();
+            self.mark_readonly(items);
+        }
+    }
+
+    /// Record procedure `items` as read-only, for [`Self::bind`]. Past [`MAX_READONLY`] of them
+    /// the rest stay writable: a later `bind` may then bind their names, as it did before.
+    fn mark_readonly(&mut self, items: Shared<Obj>) {
+        if self.readonly.len() < MAX_READONLY {
+            self.readonly.insert(items);
+        }
+    }
+
     /// Put `v` under `k` in `d` (`None`: remove it), within [`MAX_ALLOC`] entries; while a `save`
     /// is open the old value is kept for `restore`.
-    fn insert(&mut self, d: &DictRef, k: Key, v: Option<Obj>) -> Res {
+    pub fn insert(&mut self, d: &DictRef, k: Key, v: Option<Obj>) -> Res {
         let old = {
             let mut dm = d.borrow_mut();
             if v.is_some() && dm.len() >= MAX_ALLOC && !dm.contains_key(&k) {
@@ -1377,6 +1467,21 @@ impl<'a> Interp<'a> {
             Obj::Dict(d) => Ok(d),
             _ => ps_err("typecheck", ""),
         })
+    }
+
+    /// Is `o` the standard encoding (`Some(false)`) or the ISO Latin-1 encoding (`Some(true)`)
+    /// of systemdict, whose names here are all `.notdef`?
+    pub fn standard_encoding(&self, o: &Obj) -> Option<bool> {
+        let items = o.items()?;
+        let s = self.system.borrow();
+        let is = |k: &str| s.get(&Key::name(k)).and_then(Obj::items).is_some_and(|e| e.same(items));
+        if is("StandardEncoding") {
+            Some(false)
+        } else if is("ISOLatin1Encoding") {
+            Some(true)
+        } else {
+            None
+        }
     }
 
     /// The instances of `category`: `FontDirectory` for fonts.
@@ -1442,6 +1547,17 @@ impl<'a> Interp<'a> {
 }
 
 /// An array or string index.
+/// The number a string holds by the PostScript syntax (`cvi`, `cvr`: PLRM 3rd ed., chapter 8),
+/// radix numbers such as `16#20` included.
+fn string_number(s: &[u8]) -> Res<f64> {
+    let text = String::from_utf8_lossy(s);
+    match number(text.trim_matches(|c: char| c.is_ascii_whitespace() || c == '\0')) {
+        Some(Obj::Int(i)) => Ok(i as f64),
+        Some(Obj::Real(r)) => Ok(r),
+        _ => ps_err("typecheck", ""),
+    }
+}
+
 fn index(k: &Obj) -> Res<usize> {
     match *k {
         Obj::Int(i) if i >= 0 => Ok(i as usize),

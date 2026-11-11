@@ -1348,10 +1348,15 @@ fn app_click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2, f: 
     }
 }
 
-/// `key` pressed and released in an app-like frame of `f`, then one more frame.
-fn app_key(ctx: &egui::Context, app: &mut VectorcraftApp, key: egui::Key, f: fn(&mut VectorcraftApp, &mut egui::Ui)) {
+/// `key` pressed and released in one app-like frame of `f`, with no idle frame after it.
+fn app_key_now(ctx: &egui::Context, app: &mut VectorcraftApp, key: egui::Key, f: fn(&mut VectorcraftApp, &mut egui::Ui)) {
     let ev = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
     app_frame(ctx, app, vec![ev(true), ev(false)], f);
+}
+
+/// `key` pressed and released in an app-like frame of `f`, then one more frame.
+fn app_key(ctx: &egui::Context, app: &mut VectorcraftApp, key: egui::Key, f: fn(&mut VectorcraftApp, &mut egui::Ui)) {
+    app_key_now(ctx, app, key, f);
     app_frame(ctx, app, vec![], f);
 }
 
@@ -1479,6 +1484,53 @@ fn after_a_row_click_delete_reaches_the_layers_panel_not_edit_clear() {
     let d = &app.session.active().unwrap().doc;
     assert_eq!(d.layers.len(), 1, "Layer 2 is deleted");
     assert!(d.node(rect).is_some(), "the rectangle on Layer 1 stays");
+}
+
+/// After Delete removed the last highlighted Layers row, the panel has nothing left to delete: the
+/// next Delete must go back to the app and clear the selected object, not be swallowed by the
+/// panel's row keys.
+#[test]
+fn delete_after_the_last_highlighted_layer_row_is_deleted_clears_the_selection() {
+    let ctx = drop_ctx();
+    let mut app = app_with_rect();
+    run(&mut app, "layer.new", json!({}));
+    let rect = first_selected(&app).unwrap().id;
+    let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+    let row = text_rect(&texts, "Layer 2").center();
+    app_click(&ctx, &mut app, row, boxed_layers);
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert_eq!(app.session.active().unwrap().doc.layers.len(), 1, "Layer 2 is deleted");
+    assert!(app.session.active().unwrap().selection.contains(rect), "the rectangle stays selected");
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert!(app.session.active().unwrap().doc.node(rect).is_none(), "Delete clears the selected object once the panel has no rows");
+}
+
+/// Clicking a row right after the last highlighted row was deleted restores the row keys: Delete
+/// then deletes that row, not the selected art.
+#[test]
+fn clicking_a_row_after_the_last_one_was_deleted_keeps_delete_with_the_layers_panel() {
+    let ctx = drop_ctx();
+    let mut app = app_with_rect();
+    run(&mut app, "layer.new", json!({}));
+    run(&mut app, "layer.new", json!({}));
+    let rect = first_selected(&app).unwrap().id;
+    let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+    let layer2 = text_rect(&texts, "Layer 2").center();
+    app_click(&ctx, &mut app, layer2, boxed_layers);
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert_eq!(app.session.active().unwrap().doc.layers.len(), 2, "Layer 2 is deleted");
+    // Click Layer 3 and press Delete in the very next frame: the click's highlight action runs at
+    // the end of its frame, so the panel must read the rows the click will leave.
+    let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+    let layer3 = text_rect(&texts, "Layer 3").center();
+    let button =
+        |pressed| egui::Event::PointerButton { pos: layer3, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    for e in [egui::Event::PointerMoved(layer3), button(true), button(false)] {
+        app_frame(&ctx, &mut app, vec![e], boxed_layers);
+    }
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert_eq!(app.session.active().unwrap().doc.layers.len(), 1, "Delete removes the clicked row");
+    assert!(app.session.active().unwrap().doc.node(rect).is_some(), "the rectangle on Layer 1 stays");
 }
 
 /// A tool that claims Delete and Backspace (the Artboard tool's active artboard) leaves them to a
@@ -1941,4 +1993,34 @@ fn the_drop_buttons_light_up_while_a_row_is_dragged() {
     drop_buttons_on(&ctx, &mut app, vec![button(held, false)]);
     assert_eq!(drop_buttons_on(&ctx, &mut app, vec![]), [false, false], "dark again once it is released");
     assert_eq!(stack_items(&app).len(), 2, "released elsewhere: nothing removed");
+}
+
+/// #6429: a dash length typed into the Stroke panel that the Appearance panel's "Stroke:" row or
+/// the Properties panel's Stroke link opens sticks when a click outside closes the popup, as it
+/// does when Enter ends the edit. The popup used to close without drawing again, so the field
+/// never saw itself lose the keyboard and the value went back.
+#[test]
+fn a_dash_typed_in_a_stroke_popup_sticks_when_a_click_outside_closes_it() {
+    type Panel = fn(&mut VectorcraftApp, &mut egui::Ui);
+    let hosts: [(&str, Panel); 2] = [("Stroke:", appearance::show), ("Stroke", super::properties::show)];
+    for (link, show) in hosts {
+        let mut app = app_with_rect();
+        run(&mut app, "stroke.set", json!({"dash": [10.0]}));
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, link).center(), show);
+        // The popup's first dash field: a click gives it the keyboard with its text selected.
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "10").center(), show);
+        frame_events(&ctx, &mut app, vec![egui::Event::Text("4".into())], show);
+        let dash = |app: &VectorcraftApp| current_stroke(app).and_then(|s| s.dash).map(|d| d.pattern);
+        assert_eq!(dash(&app), Some(vec![10.0]), "{link}: nothing set while typing");
+        click(&ctx, &mut app, egui::pos2(5.0, 3000.0), show);
+        let surrender = ctx.options(|o| o.input_options.surrender_focus_on);
+        assert_eq!(surrender, egui::SurrenderFocusOn::Clicks, "{link}: fields let go of the keyboard on a click again");
+        frame_events(&ctx, &mut app, vec![], show);
+        assert_eq!(dash(&app).and_then(|p| p.first().copied()), Some(4.0), "{link}: the typed dash stuck: {:?}", dash(&app));
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        assert!(!texts.iter().any(|(t, _)| t == "Dashed Line"), "{link}: the popup closed");
+    }
 }

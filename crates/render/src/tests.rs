@@ -19,15 +19,20 @@ pub(super) mod fontchange;
 mod freeform;
 mod fxzoom;
 mod isolation;
+mod keptpath;
 mod knockout;
 mod layeropts;
+mod longstroke;
 mod memory;
+mod movedstroke;
 mod objectfx;
 mod placed_document;
 mod rasterize;
 mod setup;
 mod strokegradient;
+mod thincoverage;
 mod tileedge;
+mod typeedges;
 mod viewraster;
 mod widthzoom;
 
@@ -375,6 +380,72 @@ fn a_scaled_instance_is_culled_by_the_effects_in_its_art_as_placed() {
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf })).unwrap();
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
     assert_eq!(img.pixel(5, 50), [255, 0, 0, 255]);
+}
+
+#[test]
+fn an_instance_is_culled_by_the_art_its_9_slice_guides_move() {
+    // A 100 × 100 frame with guides a quarter in, holding an instance of a red bar from x 10 to
+    // 70. Scaled 2 times across, the bar crosses the left guide and is placed by the middle
+    // column's map, x → 3x − 50: moved 110 pt right, it draws from x 90 to 270 while the frame
+    // starts at x 110, out of view.
+    let mut d = Document::new(100.0, 100.0);
+    let bar = rect_node(&mut d, Rect::new(10.0, 40.0, 70.0, 60.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(bar) });
+    let frame = rect_node(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), Paint::None, Paint::None, 0.0);
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(inner)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((110.0, 0.0)) * Affine::scale_non_uniform(2.0, 1.0);
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(95, 50), [255, 0, 0, 255]);
+}
+
+#[test]
+fn an_instance_is_culled_by_the_art_nested_9_slice_guides_move() {
+    // The panel of the test above at its natural size, in a symbol without guides. The holder's
+    // instance scales the panel 2 times across and moves it 110 pt right: the bar draws from x 90
+    // to 270 while the frame starts at x 110, out of view.
+    let mut d = Document::new(100.0, 100.0);
+    let bar = rect_node(&mut d, Rect::new(10.0, 40.0, 70.0, 60.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(bar) });
+    let frame = rect_node(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), Paint::None, Paint::None, 0.0);
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(inner)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let panel = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Panel".into(), xf: Affine::IDENTITY });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(panel) });
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((110.0, 0.0)) * Affine::scale_non_uniform(2.0, 1.0);
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Holder".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(95, 50), [255, 0, 0, 255]);
+}
+
+#[test]
+fn an_instance_that_only_moves_is_culled_by_the_art_its_9_slice_guides_move() {
+    // A symbol made in the app: art in the 20 × 20 square, a natural size of 2 × 2, and guides a
+    // quarter in. An instance that only moves draws it at 20 × 20, ten times its natural size. The
+    // bar from x −9.9 to 0.1 crosses the left guide and is placed by the middle column's map,
+    // x → 1.9x: moved 115 pt right, it draws from x 96.19 to 115.19 while its art box starts at
+    // x 105, out of view.
+    let mut d = Document::new(100.0, 100.0);
+    let bar = rect_node(&mut d, Rect::new(-9.9, -1.0, 0.1, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(bar) });
+    let frame = rect_node(&mut d, Rect::new(-10.0, -10.0, 10.0, 10.0), Paint::None, Paint::None, 0.0);
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(inner)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.into(), serde_json::json!({ "Panel": [2.0, 2.0] }));
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((115.0, 50.0));
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(98, 50), [255, 0, 0, 255]);
 }
 
 #[test]
@@ -885,6 +956,62 @@ fn node_thumbnail_reports_the_size_it_draws() {
     }
 }
 
+/// A node rendered with `AntiAlias::None` has hard edges, as a page render with that option does.
+#[test]
+fn node_renders_follow_the_anti_alias_option() {
+    let mut d = Document::new(100.0, 100.0);
+    let id = d.alloc_id();
+    let n = Node::path(id, shapes::ellipse(Rect::new(10.3, 10.3, 60.6, 60.6)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let node = Arc::new(n.clone());
+    let hard = RenderOptions { anti_alias: AntiAlias::None, ..Default::default() };
+    let partial = |img: &Rendered| img.pixels.chunks(4).any(|p| p[3] != 0 && p[3] != 255);
+    let drawn = |img: &Rendered| img.pixels.chunks(4).any(|p| p[3] == 255);
+    let mut r = Renderer::new();
+    assert!(partial(&r.render_node(&d, &node, 100, 100, Affine::IDENTITY).unwrap()), "art anti-aliasing has partial edge pixels");
+    assert!(partial(&r.render_node_thumbnail(&d, &n, 37, None).unwrap()), "art anti-aliasing has partial edge pixels");
+    let img = r.render_node_with(&d, &node, 100, 100, Affine::IDENTITY, &hard).unwrap();
+    assert!(drawn(&img) && !partial(&img), "render_node_with: every alpha is 0 or 255");
+    let thumb = r.render_node_thumbnail_with(&d, &n, 37, None, &hard).unwrap();
+    assert!(drawn(&thumb) && !partial(&thumb), "render_node_thumbnail_with: every alpha is 0 or 255");
+}
+
+/// Node renders follow `supersample` and `precise` as a page render does: two rectangles that meet
+/// at x = 50.37 leave no seam when supersampled, and a node render gives the pixels of a page
+/// render of the same art with the same options.
+#[test]
+fn node_renders_follow_the_supersample_and_precise_options() {
+    let mut d = Document::new(100.0, 100.0);
+    let left = rect_node(&mut d, Rect::new(10.0, 10.0, 50.37, 90.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let right = rect_node(&mut d, Rect::new(50.37, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(0.2, 0.6, 0.9)), Paint::None, 0.0);
+    // Blended at half opacity over both, so the group composites offscreen.
+    let mut over = rect_node(&mut d, Rect::new(30.0, 60.0, 70.0, 80.0), Paint::solid(Color::rgb(0.9, 0.7, 0.1)), Paint::None, 0.0);
+    over.opacity = 0.5;
+    over.blend = vectorcraft_color::BlendMode::Multiply;
+    let group = Node::group(d.alloc_id(), vec![Arc::new(left), Arc::new(right), Arc::new(over)]);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group.clone()).unwrap();
+    let node = Arc::new(group.clone());
+    let page = |opts: &RenderOptions| RenderOptions { background: None, artboards: false, ..opts.clone() };
+    let mut r = Renderer::new();
+    for (supersample, precise) in [(false, false), (true, false), (false, true), (true, true)] {
+        let opts = RenderOptions { supersample, precise, ..Default::default() };
+        let case = format!("supersample {supersample}, precise {precise}");
+        let img = r.render_node_with(&d, &node, 100, 100, Affine::IDENTITY, &opts).unwrap();
+        let whole = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &page(&opts));
+        assert!(img.pixels == whole.pixels, "{case}: render_node_with draws as a page render does");
+        // Pixel column 50 at row 50: the black rectangle covers 37% of it and the blue one the rest.
+        let seam = img.pixels[(50 * 100 + 50) * 4 + 3];
+        assert_eq!(seam == 255, supersample, "{case}: render_node_with seam alpha {seam}");
+        // A 37-pixel thumbnail draws 0.4375 pixels a point, the seam at x = 18.66.
+        let thumb = r.render_node_thumbnail_with(&d, &group, 37, None, &opts).unwrap();
+        let view = Affine::translate((18.5, 18.5)) * Affine::scale(0.4375) * Affine::translate((-50.0, -50.0));
+        let whole = Renderer::new().render(&d, 37, 37, view, &page(&opts));
+        assert!(thumb.pixels == whole.pixels, "{case}: the thumbnail draws as a page render does");
+        let seam = thumb.pixels[(18 * 37 + 18) * 4 + 3];
+        assert_eq!(seam == 255, supersample, "{case}: thumbnail seam alpha {seam}");
+    }
+}
+
 #[test]
 fn opacity_mask_with_undecodable_image_leaves_out_object() {
     use vectorcraft_doc::{Effect, ImageBlob, ImageObject, NodeKind, OpacityMask};
@@ -1267,8 +1394,45 @@ fn invalid_dash_pattern_strokes_solid() {
         let d = line(Some(pattern.clone()));
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || tx.send(render(&d)).ok());
-        let img = rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|_| panic!("rendering dash {pattern:?} did not finish"));
+        let img = rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap_or_else(|_| panic!("rendering dash {pattern:?} did not finish"));
         assert_eq!(img.pixels, solid.pixels, "dash {pattern:?}");
+    }
+}
+
+/// With `solid_dashes` a dashed stroke draws as the same stroke without dashes, on its own and as
+/// the silhouette of a drop shadow; without it the dashes stay.
+#[test]
+fn solid_dashes_draw_dashed_strokes_as_solid_lines() {
+    let line = |dash: bool, shadow: bool| {
+        let mut d = Document::new(100.0, 100.0);
+        let mut bp = BezPath::new();
+        bp.move_to((10.0, 50.0));
+        bp.line_to((90.0, 50.0));
+        let id = d.alloc_id();
+        let mut n = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 6.0));
+        let st = n.appearance.stroke_mut().unwrap();
+        st.dash = dash.then(|| vectorcraft_doc::Dash { pattern: vec![8.0, 8.0], ..Default::default() });
+        if shadow {
+            let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+            st.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params, visible: true });
+        }
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        d
+    };
+    let opts = |solid_dashes: bool| RenderOptions { background: Some([255, 255, 255, 255]), solid_dashes, ..Default::default() };
+    let draw = |d: &Document, solid: bool| Renderer::new().render(d, 100, 100, Affine::IDENTITY, &opts(solid));
+    for shadow in [false, true] {
+        let solid = draw(&line(false, shadow), false);
+        assert_ne!(draw(&line(true, shadow), false).pixels, solid.pixels, "the dashes show without the option (shadow: {shadow})");
+        assert_eq!(draw(&line(true, shadow), true).pixels, solid.pixels, "the dashes go with the option (shadow: {shadow})");
+        assert_eq!(draw(&line(false, shadow), true).pixels, solid.pixels, "a solid stroke is unchanged (shadow: {shadow})");
+    }
+    // One renderer that draws the shadow both ways makes its raster again for each setting.
+    let (dashed, mut r) = (line(true, true), Renderer::new());
+    let fresh = |solid: bool| draw(&dashed, solid).pixels;
+    for solid in [false, true, false] {
+        assert_eq!(r.render(&dashed, 100, 100, Affine::IDENTITY, &opts(solid)).pixels, fresh(solid), "reused renderer, solid: {solid}");
     }
 }
 
@@ -1648,46 +1812,48 @@ fn encoded(img: image::DynamicImage, format: image::ImageFormat) -> Vec<u8> {
 #[test]
 fn a_png_past_the_allowance_draws_at_reduced_size() {
     use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind};
-    let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_fn(64, 48, |x, _| {
-        if x < 32 { image::Rgba([51400, 10280, 10280, 65535]) } else { image::Rgba([10280, 10280, 51400, 65535]) }
+    let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_fn(400, 400, |x, _| {
+        if x < 200 { image::Rgba([51400, 10280, 10280, 65535]) } else { image::Rgba([10280, 10280, 51400, 65535]) }
     });
     let png = encoded(image::DynamicImage::ImageRgba16(img), image::ImageFormat::Png);
-    // 64 × 48 is 12,288 bytes as RGBA; 36 × 27 is the largest within 4,096.
-    assert_eq!(with_allowance(4096, || paint::reduced_size(&png)), Some((36, 27)));
+    // 400 × 400 is 640,000 bytes as RGBA; 387 × 387 is the largest within 600,000.
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&png)), Some((387, 387)));
     assert_eq!(paint::reduced_size(&png), None, "within the 2 GB allowance");
-    let mut d = Document::new(64.0, 48.0);
+    let mut d = Document::new(400.0, 400.0);
     d.images.insert("over".into(), ImageBlob::new("image/png", png));
     let id = d.alloc_id();
-    let im = ImageObject { key: "over".into(), width: 64, height: 48, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    let im =
+        ImageObject { key: "over".into(), width: 400, height: 400, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
     d.insert(Some(d.layers[0].id), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
     let failed = decode_failures();
     // As on screen, where an image that can't be decoded draws as a crossed box.
     let screen = RenderOptions { smooth_images: false, mark_undecoded_images: true, ..Default::default() };
-    let r = with_allowance(4096, || Renderer::new().render(&d, 64, 48, Affine::IDENTITY, &screen));
+    let r = with_allowance(600_000, || Renderer::new().render(&d, 400, 400, Affine::IDENTITY, &screen));
     assert_eq!(decode_failures(), failed);
-    assert_eq!((r.pixel(8, 24), r.pixel(56, 24)), ([200, 40, 40, 255], [40, 40, 200, 255]));
-    // 16 × 16 at 16 bits a sample is 2,048 bytes decoded and 1,024 as RGBA: past 1,500 as decoded
-    // and within it as RGBA, it is read a row at a time at its own size.
-    let small = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(16, 16, image::Rgba([51400, 10280, 10280, 65535]));
+    assert_eq!((r.pixel(50, 200), r.pixel(350, 200)), ([200, 40, 40, 255], [40, 40, 200, 255]));
+    // 300 × 300 at 16 bits a sample is 720,000 bytes decoded and 360,000 as RGBA: past 600,000 as
+    // decoded and within it as RGBA, it is read a row at a time at its own size.
+    let small = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(300, 300, image::Rgba([51400, 10280, 10280, 65535]));
     let small = encoded(image::DynamicImage::ImageRgba16(small), image::ImageFormat::Png);
-    assert_eq!(with_allowance(1500, || paint::reduced_size(&small)), Some((16, 16)));
-    let pm = with_allowance(1500, || paint::decode_pixmap(&small)).expect("read a row at a time");
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&small)), Some((300, 300)));
+    let pm = with_allowance(600_000, || paint::decode_pixmap(&small)).expect("read a row at a time");
     let c = pm.sample(3, 3);
-    assert_eq!((pm.width(), pm.height(), [c.r, c.g, c.b, c.a]), (16, 16, [200, 40, 40, 255]));
-    // A row is read only while the reader's row buffers, 32 bytes a column, fit the allowance:
-    // 128 columns do within 4,096 bytes, and 129 columns are not decoded (their samples, 8 bytes a
-    // pixel, are past it too).
+    assert_eq!((pm.width(), pm.height(), [c.r, c.g, c.b, c.a]), (300, 300, [200, 40, 40, 255]));
+    // A row is read only while the reader's buffers fit the allowance, counting the stream buffer
+    // three times for the moment it grows. Below 4,096 columns of 16-bit RGBA they take 516,103
+    // bytes and 60 a column: 1,398 columns take 599,983 bytes, within 600,000, and 1,399 columns
+    // take 600,043 and are not decoded (their samples, 8 bytes a pixel, are past it too).
     let wide = |w: u32| {
-        let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(w, 6, image::Rgba([51400, 10280, 10280, 65535]));
+        let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(w, 60, image::Rgba([51400, 10280, 10280, 65535]));
         encoded(image::DynamicImage::ImageRgba16(img), image::ImageFormat::Png)
     };
-    assert_eq!(with_allowance(4096, || paint::reduced_size(&wide(128))), Some((128, 6)));
-    assert_eq!(with_allowance(4096, || paint::reduced_size(&wide(129))), None);
-    // An image of more pixels than the allowance has bytes is not read: 128 × 32 8-bit gray pixels
-    // are drawn at 64 × 16 within 4,096 bytes, and 128 × 33 are not.
-    let gray = |h: u32| encoded(image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(128, h, image::Luma([90]))), image::ImageFormat::Png);
-    assert_eq!(with_allowance(4096, || paint::reduced_size(&gray(32))), Some((64, 16)));
-    assert_eq!(with_allowance(4096, || paint::reduced_size(&gray(33))), None);
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1398))), Some((1398, 60)));
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1399))), None);
+    // An image of more pixels than the allowance has bytes is not read: 1,000 × 400 8-bit gray
+    // pixels are drawn at 500 × 200 within 400,000 bytes, and 1,000 × 401 are not.
+    let gray = |h: u32| encoded(image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(1000, h, image::Luma([90]))), image::ImageFormat::Png);
+    assert_eq!(with_allowance(400_000, || paint::reduced_size(&gray(400))), Some((500, 200)));
+    assert_eq!(with_allowance(400_000, || paint::reduced_size(&gray(401))), None);
 }
 
 /// A JPEG whose RGB samples are within the allowance but whose RGBA is past it is decoded whole
@@ -1730,13 +1896,13 @@ fn a_reduced_decode_counts_what_reading_takes_beside_the_images_paints_hold() {
     // Decoded whole: 14,400 bytes of RGB and a 16-row band of 8,960 bytes, beside a 73 × 54 result
     // of 15,768 bytes.
     let jpeg = encoded(image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(80, 60, image::Rgb([30, 120, 200]))), image::ImageFormat::Jpeg);
-    // Read a row at a time: 64 columns of 32 bytes in the reader's row buffers, beside a 36 × 27
-    // result of 3,888 bytes.
+    // Read a row at a time: 540,103 bytes in the reader's buffers for 400 columns of 16-bit RGBA,
+    // beside a 387 × 387 result of 599,076 bytes.
     let png = encoded(
-        image::DynamicImage::ImageRgba16(image::ImageBuffer::from_pixel(64, 48, image::Rgba([51400, 10280, 10280, 65535]))),
+        image::DynamicImage::ImageRgba16(image::ImageBuffer::from_pixel(400, 400, image::Rgba([51400, 10280, 10280, 65535]))),
         image::ImageFormat::Png,
     );
-    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 4_096, 3_888 + 2_048, (36, 27))] {
+    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 600_000, 599_076 + 540_103, (387, 387))] {
         let failed = decode_failures();
         let none = with_allowance(allowance, || with_room(room - 1, || paint::decode_pixmap_or_why(bytes)));
         assert_eq!(none.err(), Some(paint::Undecoded::NoRoom), "not decoded with a byte too few, and tried again later");

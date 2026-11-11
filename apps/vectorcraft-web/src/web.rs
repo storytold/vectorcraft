@@ -9,6 +9,9 @@ use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::clipboard::{FILE_HEAD, Flavour, PASTE_ORDER, file_flavour, is_address};
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::cmd::recovery::{self, Hold, RecoveryStore};
+use vectorcraft_engine::cmd::scripts::RUN_EXTS;
+use vectorcraft_engine::script::MAX_SOURCE_BYTES;
+use vectorcraft_ui_egui::dialogs::script_run::ScriptInbox;
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
 use vectorcraft_ui_egui::i18n;
 use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
@@ -47,6 +50,7 @@ struct Host {
     runner: eframe::WebRunner,
     inbox: Inbox,
     place_inbox: PlaceInbox,
+    script_inbox: ScriptInbox,
     drag: DragPos,
     pasted: Rc<RefCell<Pasted>>,
     /// Pen and finger input read from the page's Pointer Events (`crate::pencil`).
@@ -75,6 +79,7 @@ pub fn start() {
             runner: eframe::WebRunner::new(),
             inbox: Arc::default(),
             place_inbox: Arc::default(),
+            script_inbox: Arc::default(),
             drag: DragPos::default(),
             pasted: Rc::default(),
             pointers: SharedPointers::default(),
@@ -120,7 +125,8 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 }
                 host.pasted.borrow_mut().ctx = Some(ctx.clone());
                 let stylus = host.pointers.borrow().stylus();
-                let services = services(host.inbox.clone(), host.place_inbox.clone(), ctx.clone(), host.locks.clone(), stylus);
+                let services =
+                    services(host.inbox.clone(), host.place_inbox.clone(), host.script_inbox.clone(), ctx.clone(), host.locks.clone(), stylus);
                 let app = match taken.borrow_mut().take() {
                     Some(mut app) => {
                         // The old services asked the old context for frames.
@@ -370,7 +376,6 @@ impl eframe::App for WebShell {
         }
         let Some(app) = &mut self.app else { return };
         app.tick(ctx);
-        crate::api::poll_replies();
         app.finish_ime_logic(ctx);
     }
 
@@ -378,6 +383,8 @@ impl eframe::App for WebShell {
     /// shared input hook before egui runs.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         raw.events.extend(self.host.pointers.borrow_mut().take());
+        // A Cmd+V comes as its key and as a Paste: one paste (#5555).
+        crate::keys::drop_paste_key_presses(&mut raw.events);
         if let Some(app) = &mut self.app {
             app.raw_input_hook(ctx, raw);
         }
@@ -421,16 +428,38 @@ impl eframe::App for WebShell {
             }
             app.ui(ui);
         }
-        crate::api::poll_replies();
     }
 }
 
-fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Option<WebLocks>, stylus: StylusFeed) -> Services {
+fn services(
+    inbox: Inbox,
+    place_inbox: PlaceInbox,
+    script_inbox: ScriptInbox,
+    ctx: egui::Context,
+    locks: Option<WebLocks>,
+    stylus: StylusFeed,
+) -> Services {
     let open_inbox = inbox.clone();
     let picked = place_inbox.clone();
     let place_ctx = ctx.clone();
     let screen_color = eye_dropper(ctx.clone());
+    let (script_picked, script_ctx) = (script_inbox.clone(), ctx.clone());
     Services {
+        // File › Scripts › Other Script…: the picked file goes to the warning before it runs.
+        script_async: Some(Box::new(move || {
+            let inbox = script_picked.clone();
+            let ctx = script_ctx.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let filter = vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", "Scripts");
+                let Some(file) = rfd::AsyncFileDialog::new().add_filter(filter, RUN_EXTS).pick_file().await else {
+                    return;
+                };
+                let bytes = if file.inner().size() > MAX_SOURCE_BYTES as f64 { None } else { Some(file.read().await) };
+                inbox.lock().unwrap_or_else(|e| e.into_inner()).push((file.file_name(), bytes));
+                ctx.request_repaint();
+            });
+        })),
+        script_inbox: Some(script_inbox),
         // File → Place…: the picked files go to the Place dialog.
         place_async: Some(Box::new(move || {
             let inbox = picked.clone();

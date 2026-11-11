@@ -263,6 +263,22 @@ fn record_again(s: &mut Session, again: Value) -> Result<()> {
     Ok(())
 }
 
+/// `d` with each of `ids` that is not in perspective attached to `fallback` as [`persp_edit`] attaches
+/// it; `d` itself when every one is in perspective already, there is no `fallback`, or one of them
+/// cannot attach.
+fn with_fallback<'a>(d: &'a Document, ids: &[NodeId], fallback: Option<Plane>) -> std::borrow::Cow<'a, Document> {
+    let mut g = grid_of(d);
+    let loose: Vec<NodeId> = ids.iter().copied().filter(|id| g.attachment_of(d, *id).is_none()).collect();
+    let Some(plane) = fallback.filter(|_| !loose.is_empty()) else { return std::borrow::Cow::Borrowed(d) };
+    let mut out = d.clone();
+    for id in loose {
+        if attach_in(&mut out, &mut g, id, plane, false, None).is_err() {
+            return std::borrow::Cow::Borrowed(d);
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
@@ -285,9 +301,11 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
     let constrain = switch_or(p, "constrain", false, C)?;
     // `snap_fix` uses Snap to Grid's setting for a `snap` that is not true or false.
     check_switches(p, &["snap"], C)?;
-    // Snap to Grid: a correction for the objects on the first one's plane and depth.
+    // Shift and Snap to Grid read the objects as they are once those not in perspective are attached.
+    let doc = if perp { std::borrow::Cow::Borrowed(&*s.doc()?.doc) } else { with_fallback(&s.doc()?.doc, &ids, fallback) };
+    // Shift: the constrained end point, read on the first object's plane and depth.
     let snap_to = if constrain && !perp {
-        let doc = &s.doc()?.doc;
+        let doc = &*doc;
         let g = grid_of(doc);
         g.plane_bounds(doc, &ids)
             .and_then(|(plane, depth, _)| {
@@ -300,11 +318,20 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         to
     };
-    let fix = if perp { None } else { crate::cmd::perspgrid::snap_fix(&s.doc()?.doc, &ids, p, (from, snap_to)) };
-    let snapped = move |pl: Plane, depth: f64, raw: vectorcraft_geom::Vec2| {
+    // With Snap to Grid, every object on the first one's plane, at any depth, moves by the first
+    // one's plane-space offset and its correction, so the objects keep their spacing on the plane.
+    let fix = if perp {
+        None
+    } else {
+        crate::cmd::perspgrid::snap_fix(&doc, &ids, p, (from, snap_to))
+            .and_then(|(plane, depth, correction)| Some((plane, grid_of(&doc).plane_delta(plane, depth, from, to)?, correction)))
+    };
+    drop(doc);
+    let snapped = move |pl: Plane, raw: vectorcraft_geom::Vec2| {
+        let raw = fix.filter(|f| f.0 == pl).map_or(raw, |f| f.1);
         let (direction, dv) =
             if constrain { vectorcraft_tools::distort::perspective::constrain_move_delta(raw) } else { (vectorcraft_geom::Vec2::ZERO, raw) };
-        dv + fix.filter(|f| f.0 == pl && f.1 == depth).map_or(vectorcraft_geom::Vec2::ZERO, |f| {
+        dv + fix.filter(|f| f.0 == pl).map_or(vectorcraft_geom::Vec2::ZERO, |f| {
             if !constrain {
                 return f.2;
             }
@@ -325,7 +352,7 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
             let to_depth = g.depth_at(pl, depth, from, to).ok_or_else(beyond_horizon)?;
             Ok((g.transform_map(pl, depth, Affine::IDENTITY, to_depth - depth).ok_or_else(beyond_horizon)?, to_depth))
         } else {
-            let dv = snapped(pl, depth, g.plane_delta(pl, depth, from, to).ok_or_else(beyond_horizon)?);
+            let dv = snapped(pl, g.plane_delta(pl, depth, from, to).ok_or_else(beyond_horizon)?);
             Ok((g.transform_map(pl, depth, Affine::translate(dv), 0.0).ok_or_else(beyond_horizon)?, depth))
         }
     };
@@ -336,7 +363,7 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
         if perp {
             g.depth_at(pl, depth, from, to).is_some_and(|d| (d - depth).abs() <= 1e-9)
         } else {
-            g.plane_delta(pl, depth, from, to).map(|dv| snapped(pl, depth, dv)).is_some_and(|dv| dv.x.abs() <= 1e-9 && dv.y.abs() <= 1e-9)
+            g.plane_delta(pl, depth, from, to).map(|dv| snapped(pl, dv)).is_some_and(|dv| dv.x.abs() <= 1e-9 && dv.y.abs() <= 1e-9)
         }
     };
     let first_still = if copy { None } else { unmoved(s, &ids, still)? };
@@ -350,9 +377,7 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
         let again = match perp {
             _ if first_still.is_some() => Some(json!({"matrix": matrix_json(Affine::IDENTITY), "copy": copy})),
             true => g.depth_at(pl, depth, from, to).map(|d| json!({"matrix": matrix_json(Affine::IDENTITY), "depth": d - depth, "copy": copy})),
-            false => {
-                g.plane_delta(pl, depth, from, to).map(|dv| json!({"matrix": matrix_json(Affine::translate(snapped(pl, depth, dv))), "copy": copy}))
-            }
+            false => g.plane_delta(pl, depth, from, to).map(|dv| json!({"matrix": matrix_json(Affine::translate(snapped(pl, dv))), "copy": copy})),
         };
         if let Some(a) = again {
             record_again(s, a)?;
@@ -628,6 +653,7 @@ pub(crate) fn finish_edit_text(st: &mut crate::DocState, id: NodeId) {
         }
     };
     st.change_unsaved(clear);
+    st.history.rewrites += 1;
     for e in st.history.undo.iter_mut().chain(st.history.redo.iter_mut()) {
         let saved = Arc::ptr_eq(&e.doc, &st.saved_doc);
         clear(&mut e.doc);

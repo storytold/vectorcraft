@@ -4,7 +4,8 @@ The other three 3D types of **Effect › 3D and Materials** next to [Revolve](re
 live effect: the source path stays editable, the effect draws shaded vector faces, and SVG/PDF export, native
 saves and **Object › Expand Appearance** use the same evaluator.
 
-Select a path or compound path, then choose **Effect › 3D and Materials › Extrude & Bevel…**, **Inflate…** or
+Select a path, compound path, type, clipping group, blend, symbol instance, or a group or layer of them, then choose
+**Effect › 3D and Materials › Extrude & Bevel…**, **Inflate…** or
 **Rotate…**. The options dialog opens beside the artboard with tabs:
 
 - **Object** (Extrude & Bevel and Inflate): the shape's own options, below.
@@ -14,7 +15,44 @@ Select a path or compound path, then choose **Effect › 3D and Materials › Ex
   artboard.
 
 Preview changes are temporary until OK; Cancel restores the document; OK is one undo step. An object takes one
-3D effect: edit its options in the Appearance panel, or remove it before applying another.
+3D effect: edit its options in the Appearance panel or the 3D and Materials panel, or remove it before applying
+another.
+
+Each solid follows its shape as it is filled. Separate and nested contours are built as drawn. Contours that cross,
+touch or run along each other or themselves, as type often draws a glyph, are first merged into one outline by
+[`vectorcraft-pathops`](../crates/pathops/README.md), keeping every contour but the numerical debris a boolean leaves.
+Whether contours meet is judged on the outline as it is followed (see the curve tolerance below), so curves that
+overlap by less than that are built as drawn. All three effects share pathops'
+[limits](../crates/pathops/README.md#limits): a shape it refuses is built from its contours as drawn, where it can be.
+An open subpath is closed by a straight line either way.
+
+## 3D and Materials panel
+
+**Window › 3D and Materials** opens a panel that edits the 3D effect of the selection without a dialog, as the
+public [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
+and [Create 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-vector-artwork.html)
+pages describe it.
+
+- The object types **Plane**, **Extrude**, **Revolve** and **Inflate** sit at the top. A type applies its effect
+  to each selected object that has no 3D effect (Plane is Rotate, Extrude is Extrude & Bevel), and changes the
+  3D effect of each other selected object in place (`effect.setParams` with `threeDType`): the settings both
+  effects take keep their values, and the rest start at the new effect's defaults. One click is one undo step,
+  and an object whose effect already has the type does not change.
+- Below them are the Object, Rotation and Lighting tabs of the effect's options dialog, with the same controls
+  and ranges, showing the 3D effect of the first selected object (its own effects first, then those of its fills
+  and strokes). A changed setting goes to the 3D effect of each selected object whose effect takes that setting;
+  other effects and objects without a 3D effect do not change. A setting the selected 3D effects hold with
+  different values shows its default with its reset dot filled; a checkbox shows a dash instead, and a mixed
+  Shading leaves the light settings available. Its reset dot, a choice from its menu or a click on its checkbox
+  (which turns a mixed one on) sets it on all of them; a typed or dragged number sets it when it differs from the
+  default shown. Other changes leave it as each effect has it.
+  The list of lights shows the first object's lights, and an edit to it (Add Light, Delete Light, or a setting
+  of one light in a list) reaches only the objects whose list of lights matches the first object's. Add Light is
+  unavailable while a setting of a single light differs between the selected effects.
+- Each change is one undo step. Dragging a value or a slider previews it on the artboard and records one step
+  when the pointer is released; a typed value is recorded when it is entered. Drawing the panel records nothing.
+- The Materials tab, shadows and ray-traced rendering are not built (see below). The rotation and light rings on
+  the artboard are part of the options dialog only.
 
 ## Extrude & Bevel
 
@@ -68,7 +106,60 @@ The rest is our reading:
 - The solids turn, twist and taper about the center of the bounds of all their shapes, Inflate's grid covers
   those bounds, and with Perspective one eye sees every solid. A stroke too narrow to hold a point of Inflate's
   grid stays flat.
-- A stroke whose outline takes more than 2,048 points is left out, and the fill's solid still draws.
+- A stroke whose outline takes more than 65,536 points, or whose solid takes more than 163,840 faces, is left out,
+  and the fill's solid still draws.
+
+## Groups
+
+Extrude & Bevel, Inflate and Rotate also apply to a group or layer. The public documentation says that applied to
+several objects one by one each turns about its own axis, while applied to a group or layer all its objects turn
+about a shared axis ([Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html),
+said there of Revolve). So the effect on a group builds a solid from every visible path, compound path and type in
+it, at any depth of its groups, each from its own fills and strokes as above ([Fills and strokes](#fills-and-strokes)),
+and they turn, twist and taper together about the center of their bounds together; with Perspective one eye sees
+them all. The members stay editable: moving or editing one reshapes the solids. Our reading:
+
+- Each member's own geometry effects shape it first, then those of each group inside the 3D group that holds it,
+  applied to that group's members together; the 3D group's geometry effects before the 3D effect reshape the
+  members, and those after it bend the result as a whole. The members' other effects, and the group's own fills and
+  strokes, are not drawn. A member's opacity applies to its solids; its blending mode does not. An opacity mask on
+  a member masks its solids, and one on a group inside the 3D group masks the solids of that group's members
+  together. The mask stays where it is on the page; it does not turn with the solids. A disabled mask is ignored.
+- When a member, or a group inside the 3D group, has an opacity mask, each solid is drawn on its own, the backmost
+  member's first, as when a solid is transparent.
+- When every solid is opaque, all members' faces are drawn in one back-to-front order; otherwise each solid is drawn
+  on its own, the backmost member's first.
+- Hidden members and guides are left out. A group holding a live object other than a blend (an envelope, a mesh, a
+  repeat) is refused with a message saying what to release or expand; so is one with more than 4,096 shapes.
+
+## Clipping groups, blends and symbol instances
+
+Every 3D effect (Extrude & Bevel, Extrude & Bevel (Classic), Inflate, Rotate and Revolve) also applies to a clipping
+group, a blend or a symbol instance, alone or inside a group or layer. The help page says that effects apply to
+objects, groups or layers ([Apply and modify effects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/apply-and-modify-effects.html)),
+that a clipping mask hides everything outside its shape ([Clipping masks](https://helpx.adobe.com/illustrator/using/clipping-masks.html)),
+and that a blend is treated as one object ([Blending objects](https://helpx.adobe.com/illustrator/using/blending-objects.html)).
+How the solid is built from each is VectorCraft's own rule: it is built from what the object shows, as a group's
+solids are ([Groups](#groups)), turned about one shared axis.
+
+- A clipping group (or a layer with a clipping mask) builds from its art inside the clipping path: each shape's fill
+  area cut to the clip, and each stroke's outline cut to the clip and filled in the stroke's paint. The clipping path
+  draws no solid. A clipping group inside another keeps what both clips show. A clip that shows none of the art
+  leaves nothing to build, and the effect is refused.
+- A blend builds from its key objects and its steps, each in its own paint, in their order.
+- A symbol instance builds from its symbol's art where the instance places it. Redefining the symbol reshapes the
+  solid. An instance of a symbol that is not in the document, a symbol that holds an instance of itself, or art
+  nested more than 64 levels deep is refused.
+- Inside a 3D group, the geometry effects of a clipping group, a blend or a symbol instance reshape the art it shows,
+  as a group's do. Inside a clipping group, a group's geometry effects reshape its members before the clip cuts them.
+- Art whose symbol instances, blends and clipping groups take more than 262,144 objects to go through (counting
+  hidden objects, and a symbol's art once for each instance that shows it) is refused.
+- The objects stay live: editing the clipping path, the blend's keys or the symbol reshapes the solid.
+- An image is refused, alone or in a group: trace it first with Object › Image Trace › Make. The help page routes
+  images to 3D through Image Trace ([Create 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-vector-artwork.html)).
+  A hidden image in a group is left out like any hidden member, and so is an image in a clipping group whose bounds
+  lie wholly outside the clipping path's bounds, when the image has no visible fills or strokes of its own and
+  neither the image nor a group holding it inside the clipping group has effects.
 
 ## Rotate
 
@@ -176,12 +267,36 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   drawn in pieces about as long as a wall slice is wide (fewer near the limit of 32,768 facets). The piece drawn
   on top can still lie a few points behind another nearby piece.
 - Extrude & Bevel and Rotate retain planar shading. Colored Inflate uses smooth vector lighting; white-light Inflate keeps its original polygon shading; bounded cell triangulation leaves a cell flat when it contains a complete hole or an unusually complex/degenerate contour. Its geometric silhouette is still a polygon approximation.
-- Paths and compound paths only: convert type, images and groups to outlines first. One 3D effect per object.
+- Paths, compound paths, type, clipping groups, blends, symbol instances and groups or layers of them (see
+  [Groups](#groups) and [Clipping groups, blends and symbol instances](#clipping-groups-blends-and-symbol-instances));
+  images have to be traced first, and other live objects expanded. Revolve on a group sweeps its members about one
+  axis ([revolve.md](revolve.md)). One 3D effect per object.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
-  and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points (a stroke's outline is
-  counted on its own), Rotate (which only turns the outline) 65,536.
-- **3D (Classic)** (the track cube, surface types, blend steps, map art), Turntable and 3D export are separate,
-  unbuilt items.
+  and a large one up to 32. Extrude & Bevel and Inflate take up to 65,536 outline points and 163,840 faces for each
+  solid (a stroke's outline is counted on its own), and Rotate (which only turns the outline) takes 65,536 points.
+  These limits are VectorCraft's own values. Before any point is sampled, Extrude & Bevel counts the faces its walls,
+  bevels and caps need, and Inflate counts the faces of its sides; when they do not fit, every curve of the shape
+  takes fewer pieces, down to 4 (a curve that needs fewer takes fewer). A shape that does not fit at 4 pieces a
+  curve is refused because the 3D surface is too complex. Inflate counts the faces of its front and back as it
+  builds them, against the same 163,840. The point limit is counted on the shape as drawn and, when its contours
+  meet, again on the merged outline, which can have more points (bars crossing in a grid trace every hole between
+  them); past it, the shape is too complex for the effect.
+- The faces drawn, exported and made by **Object › Expand Appearance** keep the shape's curves: the caps of
+  Extrude & Bevel, the flat face of Rotate, and the edges of the walls and bevels where they meet a cap are cubic
+  curves, with smooth anchors where the art's are smooth, while visibility and depth are worked out on the
+  sampled points. Without perspective and bevel each curve maps exactly. With perspective, a curve is split into
+  cubics until each lies within 0.001 pt of the projected outline. A face inset or outset by a bevel follows its
+  sampled outline within the sampling tolerance above, one curve for each sampled edge through its two sampled
+  points, so the cap and the walls next to it draw the edge they share as the same curves. The edges between two bevel steps or two wall slices, a
+  piece of curve that does not fit after 8 halvings, an edge of a twisted wall cut into pieces, and the curves
+  past 1,048,576 for one solid stay straight. The tolerances and limits are VectorCraft's own values. Inflate's
+  faces are polygons.
+- Inflate also limits the work of filling its grid, which grows with the outline's points times the grid cells its
+  outline crosses. An outline of tens of thousands of points that crosses nearly every cell (a comb of 4,000 teeth
+  across the shape) is refused because the 3D surface is too complex; a closed path of 65,536 points round a
+  circle builds.
+- **3D (Classic)**: Extrude & Bevel (Classic) is built, with its surface types and blend steps. Revolve (Classic),
+  Rotate (Classic), the track cube, map art, Turntable and 3D export are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 
@@ -189,5 +304,7 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-08 | Contours that cross, touch or overlap are merged by vectorcraft-pathops before Extrude & Bevel, Inflate and Rotate build a solid, sharing its limits; others are built as drawn. |
+| 2026-11-06 | Extrude & Bevel, Inflate and Rotate apply to groups and layers: every path, compound path and type in them turns about one shared axis (#4506). |
 | 2026-10-21 | Four original lighting presets, shared by all four 3D effects and commands, with effective-setting recognition and existing preview/history behavior. |
 | 2026-10-17 | Smooth colored Inflate lighting and surface batching; legacy white-light appearance and the 0.05 seam minimum preserved; shared light Color and multiple lights remain vector output. |

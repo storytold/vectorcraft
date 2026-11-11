@@ -36,6 +36,33 @@ fn shortcut_overrides_from_an_earlier_version_load() {
     assert!(km.problems().iter().any(|p| format!("{p:?}") == r#"UnknownCommand { key: "test.unknown" }"#), "reported");
 }
 
+/// The command line's files wait for the choice about a stopped plug-in, so they open with the
+/// plug-ins it loads; with no choice up they open at once.
+#[test]
+fn command_line_files_wait_for_the_choice_about_a_stopped_plug_in() {
+    let temp = tempfile::Builder::new().prefix("vectorcraft-held-files-").tempdir().unwrap();
+    let file = temp.path().join("a.svg");
+    std::fs::write(&file, r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>"#).unwrap();
+    let files = vec![file.to_string_lossy().into_owned()];
+    // The files the app reads to open them.
+    let read = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let reads = read.clone();
+    let services = vectorcraft_ui_egui::Services {
+        read: Some(Box::new(move |p: &str| {
+            reads.borrow_mut().push(p.to_owned());
+            std::fs::read(p).map_err(|e| e.to_string())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), services);
+    app.ui.stopped_plugin = Some(serde_json::json!({"id": "test.held", "name": "Held"}));
+    assert_eq!(open_or_hold(&mut app, files.clone()), files, "held while the choice is up");
+    assert!(read.borrow().is_empty(), "nothing opened before the choice");
+    app.ui.stopped_plugin = None;
+    assert!(open_or_hold(&mut app, files.clone()).is_empty());
+    assert_eq!(*read.borrow(), files, "opened with no choice up");
+}
+
 #[test]
 fn opening_files_unminimizes_and_focuses_the_window() {
     let ctx = egui::Context::default();
@@ -99,9 +126,8 @@ fn unreadable_saved_docking_keeps_preferences_and_every_workspace() {
 
 #[test]
 fn an_unreadable_ui_json_is_kept_beside_it() {
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-prefs-{}-{stamp}", std::process::id()));
-    std::fs::create_dir(&dir).unwrap();
+    let temp = tempfile::Builder::new().prefix("vectorcraft-ui-prefs-").tempdir().unwrap();
+    let dir = temp.path();
     let path = dir.join("ui.json");
     super::keep_prefs_copy(&path, b"{\"docking\": {\"root\": {\"FutureNode\": {}}}}", "ui.unreadable");
     super::keep_prefs_copy(&path, b"not json", "ui.unreadable");
@@ -109,7 +135,6 @@ fn an_unreadable_ui_json_is_kept_beside_it() {
     let first = std::fs::read(dir.join("ui.unreadable.json")).unwrap();
     let second = std::fs::read(dir.join("ui.unreadable-2.json")).unwrap();
     let before = std::fs::read(dir.join("ui.before-layout-migration.json")).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
     assert!(first.starts_with(b"{\"docking\""), "the first copy is not replaced");
     assert_eq!(second, b"not json");
     assert_eq!(before, b"{}");
@@ -164,6 +189,134 @@ fn the_system_title_bar_preference_keeps_the_window_decorations() {
 
     assert_eq!(super::native_options(false).viewport.decorations, Some(true));
     assert_eq!(super::native_options(true).viewport.decorations, Some(false));
+}
+
+/// Preferences › User Interface › VectorCraft Title Bar on Every Desktop gives the app frame where
+/// the probe chose the desktop's (KDE, X11, a window opened through XWayland); without it the probe
+/// decides, and `VECTORCRAFT_TITLEBAR` set to `app`, `system` or `desktop` takes precedence over
+/// both.
+#[test]
+fn the_app_title_bar_preference_gives_the_app_frame_on_desktop_frames() {
+    assert!(!super::opted_into_app_title_bar(None), "no preferences: the default");
+    let off = ui_state_with_prefs(serde_json::json!({"appTitleBar": false}));
+    assert!(!super::opted_into_app_title_bar(Some(&off)));
+    let on = ui_state_with_prefs(serde_json::json!({"appTitleBar": true}));
+    assert!(super::opted_into_app_title_bar(Some(&on)));
+
+    // (probed_app, overridden, forced_to_x11): without the preference, then with it.
+    let cases = [
+        ((false, None, false), false, true),        // KDE, Sway, X11: the desktop frame
+        ((true, None, false), true, true),          // GNOME on Wayland: the app frame either way
+        ((true, None, true), false, true),          // GNOME, the window opened through XWayland
+        ((false, Some(true), false), true, true),   // VECTORCRAFT_TITLEBAR=app
+        ((false, Some(true), true), true, true),    // VECTORCRAFT_TITLEBAR=app, the window opened through XWayland
+        ((true, Some(false), false), false, false), // VECTORCRAFT_TITLEBAR=desktop takes precedence over the preference
+        ((false, Some(false), true), false, false),
+    ];
+    for ((probed_app, overridden, forced_to_x11), without, with) in cases {
+        assert_eq!(super::app_draws_frame(probed_app, overridden, forced_to_x11, false), without, "{probed_app} {overridden:?} {forced_to_x11}");
+        assert_eq!(super::app_draws_frame(probed_app, overridden, forced_to_x11, true), with, "{probed_app} {overridden:?} {forced_to_x11}");
+    }
+}
+
+/// The frame a start uses: the preference turns the desktop frame the probe chose into the app frame
+/// with the default window buttons, a probed app frame keeps its own buttons, and the desktop frame
+/// stays where the app frame is not drawn. System Title Bar takes precedence over the preference.
+#[test]
+fn the_start_frame_applies_the_app_title_bar_preference() {
+    use craft_window::{Button, Frame, Layout};
+    let gnome = Layout { left: vec![Button::Close], right: vec![] };
+    let cases = [
+        // (probed, overridden, forced_to_x11, opted_into_app), expected
+        ((Frame::Desktop, None, false, false), Frame::Desktop),
+        ((Frame::Desktop, None, false, true), Frame::App(Layout::default())),
+        ((Frame::Desktop, None, true, true), Frame::App(Layout::default())),
+        ((Frame::App(gnome.clone()), None, false, false), Frame::App(gnome.clone())),
+        ((Frame::App(gnome.clone()), None, true, false), Frame::Desktop),
+        ((Frame::App(gnome.clone()), None, true, true), Frame::App(gnome.clone())),
+        ((Frame::Desktop, Some(false), false, true), Frame::Desktop),
+        ((Frame::App(gnome.clone()), Some(true), true, false), Frame::App(gnome.clone())),
+    ];
+    for ((probed, overridden, forced_to_x11, opted_into_app), expected) in cases {
+        let label = format!("{probed:?} {overridden:?} {forced_to_x11} {opted_into_app}");
+        assert_eq!(super::start_frame(probed, overridden, forced_to_x11, opted_into_app), expected, "{label}");
+    }
+    // With both preferences on, System Title Bar takes precedence: the desktop draws the frame.
+    let both = super::start_frame(Frame::Desktop, None, false, true);
+    assert!(!super::custom_titlebar_from(&both, true), "System Title Bar takes precedence over the app title bar preference");
+}
+
+/// `VECTORCRAFT_TITLEBAR` chooses the frame for the run it is set in, with System Title Bar off and
+/// on. The saved preference still decides while the variable is unset.
+#[test]
+fn the_titlebar_variable_takes_precedence_over_system_title_bar() {
+    use craft_window::Frame;
+    assert!(super::system_title_bar_applies(true, false));
+    assert!(!super::system_title_bar_applies(true, true));
+    assert!(!super::system_title_bar_applies(false, false));
+    assert!(!super::system_title_bar_applies(false, true));
+    // VECTORCRAFT_TITLEBAR=app with System Title Bar on: VectorCraft draws its own title bar.
+    let frame = super::start_frame(Frame::Desktop, Some(true), false, false);
+    assert_eq!(super::custom_titlebar_from(&frame, super::system_title_bar_applies(true, true)), !cfg!(target_os = "macos"));
+    // VECTORCRAFT_TITLEBAR=desktop with System Title Bar off keeps the desktop's frame.
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let frame = super::start_frame(Frame::App(craft_window::Layout::default()), Some(false), false, false);
+        assert!(!super::custom_titlebar_from(&frame, super::system_title_bar_applies(false, true)));
+    }
+}
+
+/// `VECTORCRAFT_TITLEBAR` read from the environment at startup, with System Title Bar off and on.
+/// The variable is process-wide and read once, so each value runs in a separate test process.
+#[test]
+fn the_titlebar_variable_decides_the_frame_before_the_window_opens() {
+    const CHILD: &str = "VECTORCRAFT_TEST_TITLEBAR_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        for value in ["app", "system", "desktop", "unknown"] {
+            // Linux and the BSDs: hold `spawning` while the child starts, so it does not keep a
+            // copy of a GPU start test's locked start file (see `CHILD_SPAWN`).
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            let spawning = super::spawning();
+            let child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "tests::the_titlebar_variable_decides_the_frame_before_the_window_opens", "--nocapture"])
+                .env(CHILD, "1")
+                .env("VECTORCRAFT_TITLEBAR", value)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn();
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            drop(spawning);
+            let output = child.unwrap().wait_with_output().unwrap();
+            assert!(
+                output.status.success(),
+                "VECTORCRAFT_TITLEBAR={value}\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        return;
+    }
+    let value = std::env::var("VECTORCRAFT_TITLEBAR").unwrap();
+    let not_read = cfg!(any(target_os = "macos", target_os = "windows"));
+    assert_eq!(super::titlebar_from_env(), !not_read && value != "unknown", "VECTORCRAFT_TITLEBAR={value}");
+    let off = ui_state_with_prefs(serde_json::json!({"systemTitleBar": false}));
+    let on = ui_state_with_prefs(serde_json::json!({"systemTitleBar": true}));
+    for (saved, opted_into_system) in [(None, false), (Some(&off), false), (Some(&on), true)] {
+        let custom = super::custom_titlebar(saved);
+        let expected = match value.as_str() {
+            _ if not_read => !cfg!(target_os = "macos") && !opted_into_system,
+            "app" => true,
+            "system" | "desktop" => false,
+            // Not a value the variable takes: System Title Bar decides when it is on. Otherwise the
+            // `craft-window` probe decides, the same with System Title Bar off as with no saved
+            // preferences.
+            _ if opted_into_system => false,
+            _ => super::custom_titlebar(None),
+        };
+        assert_eq!(custom, expected, "{value}, preference {opted_into_system}");
+        assert_eq!(super::native_options(custom).viewport.decorations, Some(!custom), "{value}, preference {opted_into_system}");
+    }
 }
 
 /// The file extensions the macOS bundle declares: its document types and its own exported type.

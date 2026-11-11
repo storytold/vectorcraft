@@ -16,7 +16,7 @@ use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, icons, widgets};
 
 pub(crate) const PITCH: f32 = 30.0;
-const WIDTH: f32 = 48.0;
+pub(crate) const WIDTH: f32 = 48.0;
 /// Seconds a press on a tool group's button is held before its flyout opens.
 const LONG_PRESS: f64 = 0.35;
 /// Width of the grab bar down a flyout's right side: dragging it tears the flyout off.
@@ -95,24 +95,73 @@ pub fn remember(app: &mut VectorcraftApp, id: &str) {
     crate::custom_toolbars::remember(&mut app.ui, id);
 }
 
+/// The docked Tools panel's rect as last laid out; removed while it floats.
+pub(crate) fn docked_rect_id() -> egui::Id {
+    egui::Id::unique("toolbar-docked-rect")
+}
+
+fn panel_width(ui: &crate::state::UiState) -> f32 {
+    if ui.toolbar_double { 80.0 } else { WIDTH }
+}
+
+/// Space reserved inside the protected canvas panel for a visible Tools panel docked beside the
+/// canvas (`UiState::tools_beside_canvas`) or on the canvas's right (`UiState::toolbar_right`);
+/// none while Tools docks at the window's left edge.
+pub(crate) fn docked_width(ui: &crate::state::UiState) -> f32 {
+    if (ui.tools_beside_canvas || ui.toolbar_right) && ui.toolbar && ui.screen_mode < 3 && ui.toolbar_pos.is_none() {
+        panel_width(ui) + 6.0
+    } else {
+        0.0
+    }
+}
+
+/// With `UiState::tools_beside_canvas` on, the canvas-edge redocking target, registered even
+/// while Tools floats, and the docked panel, which follows the canvas's left edge as dock columns
+/// resize, collapse or hide. With it off, `app.rs` draws Tools before the docking layout.
+///
+/// The canvas's right edge, left of the panels, is a redocking target too, and Tools docked there
+/// (`UiState::toolbar_right`) is drawn at it whichever way the setting is.
+pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if !app.ui.toolbar || app.ui.screen_mode >= 3 {
+        return;
+    }
+    let canvas = ui.available_rect_before_wrap();
+    crate::tools_float::set_right_dock_zone(ui.ctx(), canvas, WIDTH);
+    if app.ui.tools_beside_canvas {
+        crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
+    }
+    if app.ui.toolbar_pos.is_none() && (app.ui.tools_beside_canvas || app.ui.toolbar_right) {
+        show(app, ui);
+    }
+}
+
+/// Is the Tools panel docked on the right, between the canvas and the panels?
+pub(crate) fn docked_right(ui: &crate::state::UiState) -> bool {
+    ui.toolbar_right && ui.toolbar_pos.is_none()
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The user's choice alone: a window too short for the tools scrolls them.
     let cols = if app.ui.toolbar_double { 2 } else { 1 };
     // Two 36 pt buttons with 2 pt either side inside the border and separator line (at 76 they
     // overran the right border).
-    let w = if cols == 2 { 80.0 } else { WIDTH };
-    // Where the panel docks: along the window's left edge, under the bars.
-    let edge = ui.available_rect_before_wrap();
-    ui.ctx().data_mut(|d| d.insert_temp(crate::tools_float::tools_zone_id(), egui::Rect::from_min_size(edge.min, vec2(WIDTH, edge.height()))));
+    let w = panel_width(&app.ui);
     match app.ui.toolbar_pos {
         None => {
-            let margin = egui::Margin { left: 6, right: 0, top: 6, bottom: 6 };
-            egui::Panel::left("toolbar").resizable(false).exact_size(w + 6.0).frame(egui::Frame::NONE).show(ui, |ui| {
+            // The card's outer gap faces the edge it docks at.
+            let (panel, margin) = if app.ui.toolbar_right {
+                (egui::Panel::right("toolbar"), egui::Margin { left: 0, right: 6, top: 6, bottom: 6 })
+            } else {
+                (egui::Panel::left("toolbar"), egui::Margin { left: 6, right: 0, top: 6, bottom: 6 })
+            };
+            let docked = panel.resizable(false).exact_size(w + 6.0).frame(egui::Frame::NONE).show(ui, |ui| {
                 crate::theme::card(ui, &t, margin, |ui| body(app, ui, cols, None));
             });
+            ui.ctx().data_mut(|d| d.insert_temp(docked_rect_id(), docked.response.rect));
         }
         Some(pos) => {
+            ui.ctx().data_mut(|d| d.remove::<egui::Rect>(docked_rect_id()));
             // Floating, kept inside the window, its tools scrolling when they don't fit under it.
             let ctx = ui.ctx().clone();
             let id = egui::Id::unique("toolbar-floating");
@@ -185,7 +234,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
     {
         app.ui.status = e;
     }
-    let grip_tip = if floating.is_some() { tl!("Drag to the window's left edge to dock") } else { tl!("Drag to float the toolbar") };
+    let grip_tip = if floating.is_some() { tl!("Drag to the window's left or right edge to dock") } else { tl!("Drag to float the toolbar") };
     gresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), grip_tip));
     gresp.on_hover_cursor(egui::CursorIcon::Grab).on_hover_text(grip_tip);
     // The tools and the controls under them scroll in a window too short for them.
@@ -426,6 +475,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 /// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
 /// [`crate::panels::artboards::control_bar`].
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if crate::addons::shapes::control_bar(app, ui) {
+        return;
+    }
     if app.session.tool_id() == "dimension" {
         return crate::dialogs::dimension::controls(app, ui);
     }
@@ -821,6 +873,27 @@ fn press_travel(ctx: &egui::Context) -> Option<egui::Vec2> {
     ctx.input(|i| i.pointer.press_origin().zip(i.pointer.interact_pos()).map(|(a, b)| b - a))
 }
 
+/// Where the toolbar's flyouts and drawer may open: the window, or with the toolbar docked right
+/// the part left of it, so they open toward the canvas instead of over the panels.
+pub(crate) fn room(app: &VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
+    let mut r = ctx.content_rect();
+    if docked_right(&app.ui)
+        && let Some(x) = ctx.data(|d| d.get_temp::<egui::Rect>(docked_rect_id())).map(|bar| bar.right())
+    {
+        r.max.x = r.max.x.min(x);
+    }
+    r
+}
+
+/// The left edge of something `width` wide opened beside `anchor` (a tool, the toolbar), `gap`
+/// from it: on its right when it fits in `screen`, else on its left (a toolbar docked right),
+/// kept inside the screen either way.
+pub(crate) fn beside(anchor: egui::Rect, width: f32, gap: f32, screen: egui::Rect) -> f32 {
+    let right = anchor.right() + gap;
+    let x = if right + width <= screen.right() { right } else { anchor.left() - gap - width };
+    x.min(screen.right() - width).max(screen.left())
+}
+
 fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if app.ui.flyout.is_none() {
         return;
@@ -836,12 +909,13 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let active = app.session.tool_id();
     let toolbar = ctx.data(|d| d.get_temp::<Option<String>>(flyout_toolbar_id())).flatten();
     let mut input = FlyoutInput::default();
-    let resp = egui::Area::new(egui::Id::unique("tool-flyout")).order(egui::Order::Foreground).fixed_pos(anchor.right_top() + vec2(8.0, -1.0)).show(
-        ctx,
-        |ui| {
+    // Beside the tool, on the side with room for it: toward the canvas from a toolbar docked right.
+    let size = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).map_or(vec2(160.0, 0.0), |r| r.size());
+    let x = beside(anchor, size.x, 8.0, room(app, ctx));
+    let resp =
+        egui::Area::new(egui::Id::unique("tool-flyout")).order(egui::Order::Foreground).fixed_pos(pos2(x, anchor.top() - 1.0)).show(ctx, |ui| {
             flyout_frame(&t, false).show(ui, |ui| input = flyout_body(ui, &t, active, &tools, false, toolbar.as_deref()));
-        },
-    );
+        });
     // Dragging the bar tears the flyout off, and so does releasing a press over it (a click, or the
     // end of the long press that opened the flyout): it floats where the pointer is.
     let at = ctx.input(|i| i.pointer.interact_pos());
@@ -870,7 +944,30 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // long press) leaves it to that button.
         app.ui.flyout = None;
     }
+    if app.ui.flyout.is_some() {
+        mark_flyout_open(ctx);
+    }
     let _ = theme::semibold;
+}
+
+/// The pass in which a tool group's flyout or the All Tools drawer last stayed open.
+fn flyout_open_pass_id() -> egui::Id {
+    egui::Id::unique("flyout-open-pass")
+}
+
+/// Records that a tool group's flyout or the All Tools drawer drew in this pass and stays open.
+pub(crate) fn mark_flyout_open(ctx: &egui::Context) {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|d| d.insert_temp(flyout_open_pass_id(), pass));
+}
+
+/// Whether a tool group's flyout or the All Tools drawer is on screen in the main window this pass.
+/// One left set while its toolbar is hidden does not draw, so it does not count. The toolbars draw
+/// before the panels, which read this.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn flyout_open(ctx: &egui::Context) -> bool {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|d| d.get_temp::<u64>(flyout_open_pass_id())) == Some(pass)
 }
 
 /// The toolbar made with New Toolbar whose group the open flyout shows (none: the Tools panel's).

@@ -1,6 +1,29 @@
 use super::*;
 use crate::theme;
 
+#[test]
+fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(app.ui.help_bar);
+    assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(true));
+    assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(false));
+    assert!(app.ui.status_bar);
+    assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(false));
+    let saved = crate::workspaces::capture(&app.ui, "No help");
+    let saved: crate::workspaces::Workspace = serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+    app.ui.help_bar = true;
+    app.ui.status_bar = false;
+    crate::workspaces::apply(&mut app.ui, &saved);
+    assert!(!app.ui.help_bar && app.ui.status_bar);
+    assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(true));
+    let legacy: crate::workspaces::Workspace = serde_json::from_value(json!({"name":"Old workspace"})).unwrap();
+    assert!(legacy.help_bar);
+    let restored: crate::state::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+    assert!(restored.help_bar);
+    let (_, window) = menu_tree().into_iter().find(|(title, _)| *title == "Window").unwrap();
+    assert!(window.iter().any(|item| matches!(item, Item::Cmd("Help Bar", "window.helpBar", _))));
+}
+
 /// One headless frame of the in-window menu bar; returns its titles (left to right) as
 /// (rect, id of the title's popup).
 fn bar_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(egui::Rect, egui::Id)> {
@@ -105,6 +128,57 @@ fn hovering_another_title_switches_the_open_menu() {
     egui::Popup::open_id(&ctx, t[0].1);
     let t = frames(&mut app, vec![]);
     assert_eq!(open_titles(&ctx, &t), vec![0], "a still pointer leaves the open menu alone");
+}
+
+#[test]
+fn opening_the_file_menu_reads_the_scripts_folder_again() {
+    let dir = std::env::temp_dir().join(format!("vc-menu-bar-scripts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut session = vectorcraft_engine::Session::new();
+    session.attach_scripts_dir(dir.clone());
+    let mut app = VectorcraftApp::new(session, crate::Services::default());
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    // The scripts File › Scripts lists.
+    let listed = || {
+        let (_, file) = menu_tree().into_iter().find(|(title, _)| *title == "File").unwrap();
+        let scripts = file.iter().find_map(|item| match item {
+            Item::Sub("Scripts", items) => Some(items.clone()),
+            _ => None,
+        });
+        scripts
+            .unwrap()
+            .iter()
+            .filter_map(|item| if let Item::Cmd(label, crate::scripts_menu::COMMAND, _) = item { Some(*label) } else { None })
+            .collect::<Vec<_>>()
+    };
+    // One frame of the bar, then the listing a read it started gave.
+    let frame = |app: &mut VectorcraftApp| {
+        let titles = bar_frame(app, &ctx, vec![]);
+        crate::scripts_menu::wait();
+        titles
+    };
+    std::fs::write(dir.join("a.js"), "").unwrap();
+    frame(&mut app);
+    let titles = frame(&mut app);
+    assert!(listed().is_empty(), "the bar reads nothing while its menus are closed");
+    egui::Popup::open_id(&ctx, titles[0].1);
+    frame(&mut app);
+    assert_eq!(listed(), ["a"]);
+    // While File stays open the folder is not read again.
+    std::fs::write(dir.join("b.js"), "").unwrap();
+    frame(&mut app);
+    assert_eq!(listed(), ["a"]);
+    // Nor when another menu opens; the next time File opens it is.
+    egui::Popup::open_id(&ctx, titles[1].1);
+    let t = frame(&mut app);
+    assert_eq!((open_titles(&ctx, &t), listed()), (vec![1], vec!["a"]));
+    egui::Popup::open_id(&ctx, titles[0].1);
+    frame(&mut app);
+    assert_eq!(listed(), ["a", "b"]);
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -352,6 +426,22 @@ fn saved_views_store_and_restore_the_view() {
     assert_eq!((v.zoom, v.center.x, v.center.y), (3.0, 120.0, 80.0));
     // Unused slots stay out of the menu listing agents see.
     assert!(!menu_entries(&app).iter().any(|e| e.command.as_deref() == Some("view.goto2")));
+}
+
+/// Effect › 3D and Materials › 3D (Classic) › Extrude & Bevel (Classic)… opens its effect dialog,
+/// after Materials…, and nowhere else.
+#[test]
+fn classic_extrude_bevel_is_in_the_3d_classic_submenu() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let entries = menu_entries(&app);
+    let classic: Vec<_> = entries.iter().filter(|e| e.params.get("effect").and_then(Value::as_str) == Some("threeD.classicExtrude")).collect();
+    assert_eq!(classic.len(), 1, "listed once");
+    let e = classic[0];
+    assert_eq!(e.path, ["Effect", "3D and Materials", "3D (Classic)"]);
+    assert_eq!((e.label.as_str(), e.command.as_deref()), ("Extrude & Bevel (Classic)…", Some("effect.dialog")));
+    let at = |label: &str| entries.iter().position(|x| x.label == label && x.path.get(1).is_some_and(|p| p == "3D and Materials"));
+    assert!(at("Materials…").unwrap() < at("Extrude & Bevel (Classic)…").unwrap());
 }
 
 /// A document's 25 views are all listed at the bottom of the View menu, by name, and the last
@@ -912,15 +1002,17 @@ fn unlock_all_and_show_all_clicked_with_shift_alt_act_within_the_group() {
     }
 }
 
-/// #3724: Window › New Window is greyed out until VectorCraft can open a second window on a
-/// document, instead of being enabled and answering with an internal milestone note.
+/// #4116: Window › New Window is enabled with a document open and opens a second view of it; with
+/// no document open it is greyed out.
 #[test]
-fn new_window_is_disabled_until_it_opens_a_window() {
+fn new_window_opens_a_view_of_the_current_document() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(!enabled(&app, "window.newWindow"), "no document to open a window on");
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap_err(), "no document open");
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    assert!(!enabled(&app, "window.newWindow"), "New Window is enabled but opens no window");
-    let e = app.run("window.newWindow", json!({})).unwrap_err();
-    assert!(!e.contains("M11.5"), "a user-facing message, not a milestone: {e}");
+    assert!(enabled(&app, "window.newWindow"));
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap(), json!({"index": 0, "view": 2}));
+    assert_eq!(app.session.documents().len(), 1, "the same document, in a second window");
 }
 
 /// #4143: Window menu panels and panel submenus are listed in alphabetical order according to the

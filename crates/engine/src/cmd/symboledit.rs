@@ -20,7 +20,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection, SymbolEdit, S
 use vectorcraft_geom::{Affine, Point};
 
 use super::brushsym::{natural_size, place_xf};
-use super::{EngineError, Result, Session, bad, id_param, number_or, ok, str_param};
+use super::{EngineError, Result, Session, bad, number_or, object_param, ok, str_param};
 
 /// The name of the undo step that enters symbol editing mode.
 const ENTER: &str = "Edit Symbol";
@@ -65,7 +65,8 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     if st.doc.pattern_edit.is_some() {
         return Err(bad(C, "finish editing the pattern first"));
     }
-    let given = id_param(p, "id").map(|i| vec![i]).or_else(|| super::ids_param(p, "ids").filter(|v| !v.is_empty()));
+    let ids = super::ids_param(p, "ids", C)?;
+    let given = object_param(p, "id", C)?.map(|i| vec![i]).or_else(|| ids.filter(|v| !v.is_empty()));
     let (name, xf, instance) = match given {
         Some(ids) => {
             let symbols = ids.iter().map(|id| instance_of(&st.doc, *id)).collect::<Option<Vec<_>>>();
@@ -78,6 +79,10 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
             (name, xf, ids.first().copied())
         }
         None => {
+            // Refused while an object of a dynamic instance's art is selected, unless `name` is given.
+            if str_param(p, "name").is_none() && st.selection.symbol_part.is_some() {
+                return Err(super::brushsym::part_only());
+            }
             let picked = if str_param(p, "name").is_some() { vec![] } else { selected_instances(st) };
             let symbols: Vec<(String, Affine)> = picked.iter().filter_map(|id| instance_of(&st.doc, *id)).collect();
             match symbols.first() {
@@ -135,7 +140,7 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.end_text_edit();
     let st = s.doc()?;
-    let back = Return { redo: st.history.redo.clone(), before: Some(st.doc.clone()) };
+    let back = Return { redo: Arc::new(st.history.redo.clone()), before: Some(st.doc.clone()) };
     let (isolation, active_layer) = (st.isolation, st.active_layer);
     let layer = s.edit(ENTER, |d, sel| {
         let layer = begin(d, sel, &name, xf, instance)?;
@@ -224,7 +229,7 @@ pub(crate) fn leave(s: &mut Session, _: &Value) -> Result<Value> {
         }
         st.selection = Arc::unwrap_or_clone(entry.selection);
         st.selection.prune(&st.doc);
-        st.history.redo = redo;
+        st.history.redo = Arc::unwrap_or_clone(redo);
         st.revision += 1;
     } else {
         s.edit("Exit Symbol Editing Mode", |d, sel| {
@@ -252,9 +257,10 @@ pub(crate) fn finish(d: &mut Document, sel: &mut Selection) {
 
 /// The redo steps entering symbol editing mode cleared, which leaving without an edit gives back,
 /// and the document entering started from, which tells the entering step apart from any other.
+/// Copies of the document's state share the redo steps.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Return {
-    redo: Vec<crate::HistoryEntry>,
+    redo: Arc<Vec<crate::HistoryEntry>>,
     before: Option<Arc<Document>>,
 }
 

@@ -416,6 +416,137 @@ fn cancelling_ruler_origin_drag_keeps_the_tools_escape() {
     }
 }
 
+/// An Escape event: a press (a repeat when `repeat`) or a release.
+fn escape_event(pressed: bool, repeat: bool) -> Vec<egui::Event> {
+    vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat, modifiers: Default::default() }]
+}
+
+#[test]
+fn held_escape_that_cancels_tools_move_keeps_the_tool() {
+    for mode in [0, 1, 2] {
+        let ctx = egui::Context::default();
+        let mut app = in_screen_mode(&ctx, mode);
+        app.select_tool("intertwine");
+        let (original, to) = begin_tools_move(&mut app, &ctx);
+        frame(&mut app, &ctx, escape_event(true, false));
+        assert_eq!(app.ui.toolbar_pos, original, "move canceled in mode {mode}");
+        for _ in 0..3 {
+            frame(&mut app, &ctx, escape_event(true, true));
+        }
+        assert_eq!(app.session.tool_id(), "intertwine", "held Escape keeps the tool in mode {mode}");
+        release_drag(&mut app, &ctx, to);
+        frame(&mut app, &ctx, escape_event(true, true));
+        assert_eq!(app.session.tool_id(), "intertwine", "held Escape keeps the tool after the release in mode {mode}");
+        assert_eq!(app.ui.screen_mode, mode, "held Escape keeps the screen mode {mode}");
+        frame(&mut app, &ctx, [escape_event(true, true), escape_event(false, false)].concat());
+        assert_eq!(app.session.tool_id(), "intertwine", "a repeat with the release keeps the tool in mode {mode}");
+        frame(&mut app, &ctx, escape());
+        assert_eq!(app.session.tool_id(), "selection", "the next Escape reaches the tool in mode {mode}");
+    }
+}
+
+#[test]
+fn held_escape_that_cancels_ruler_origin_drag_keeps_the_tool() {
+    for mode in [0, 1, 2] {
+        let ctx = egui::Context::default();
+        let mut app = in_screen_mode(&ctx, mode);
+        app.select_tool("intertwine");
+        let to = begin_ruler_origin_drag(&mut app, &ctx);
+        frame(&mut app, &ctx, escape_event(true, false));
+        release_drag(&mut app, &ctx, to);
+        assert!(!crate::canvas::ruler_origin_dragging(&ctx));
+        for _ in 0..3 {
+            frame(&mut app, &ctx, escape_event(true, true));
+        }
+        assert_eq!(app.session.tool_id(), "intertwine", "held Escape keeps the tool in mode {mode}");
+        frame(&mut app, &ctx, escape_event(false, false));
+        frame(&mut app, &ctx, escape());
+        assert_eq!(app.session.tool_id(), "selection", "the next Escape reaches the tool in mode {mode}");
+    }
+}
+
+#[test]
+fn held_escape_that_cancels_a_move_skips_a_command_bound_to_escape() {
+    for ruler in [false, true] {
+        let ctx = egui::Context::default();
+        let mut app = in_screen_mode(&ctx, 0);
+        app.run("shortcuts.set", json!({"id": "select.none", "shortcut": "Escape", "force": true})).unwrap();
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        assert!(!selected.is_empty());
+        let to = if ruler { begin_ruler_origin_drag(&mut app, &ctx) } else { begin_tools_move(&mut app, &ctx).1 };
+        frame(&mut app, &ctx, escape_event(true, false));
+        assert_eq!(app.session.active().unwrap().selection.objects, selected, "the cancelling Escape runs no command (ruler: {ruler})");
+        for _ in 0..3 {
+            frame(&mut app, &ctx, escape_event(true, true));
+        }
+        release_drag(&mut app, &ctx, to);
+        frame(&mut app, &ctx, escape_event(true, true));
+        assert_eq!(app.session.active().unwrap().selection.objects, selected, "held Escape runs no command (ruler: {ruler})");
+        frame(&mut app, &ctx, escape_event(false, false));
+        frame(&mut app, &ctx, escape());
+        assert!(app.session.active().unwrap().selection.objects.is_empty(), "the next Escape runs the command (ruler: {ruler})");
+    }
+}
+
+/// Holding Escape cancels the open dialog and does nothing else: Edit Toolbar's drawer stays open
+/// and isolation mode stays on, until new presses close the drawer and then leave the mode.
+#[test]
+fn held_escape_that_cancels_a_dialog_stays_in_isolation_mode() {
+    let ctx = egui::Context::default();
+    let mut app = in_screen_mode(&ctx, 0);
+    let group = app.session.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("object.isolate", &json!({"id": group})).unwrap();
+    let isolated = |app: &VectorcraftApp| app.session.active().unwrap().isolation.is_some();
+    assert!(isolated(&app));
+    app.session.execute("select.all", &json!({})).unwrap();
+    app.select_tool("selection");
+    let _ = crate::toolbar::open_options(&mut app, "selection");
+    assert!(app.ui.dialog.is_some());
+    app.ui.tools_drawer = true;
+    frame(&mut app, &ctx, escape_event(true, false));
+    assert!(app.ui.dialog.is_none(), "Escape cancels Move");
+    for repeat in 0..4 {
+        frame(&mut app, &ctx, escape_event(true, true));
+        assert!(app.ui.tools_drawer, "repeat {repeat}: the drawer stays open");
+        assert!(isolated(&app), "repeat {repeat}: isolation mode stays on");
+    }
+    frame(&mut app, &ctx, escape_event(false, false));
+    frame(&mut app, &ctx, escape());
+    assert!(!app.ui.tools_drawer && isolated(&app), "a new press closes the drawer");
+    frame(&mut app, &ctx, escape());
+    assert!(!isolated(&app), "the next new press leaves isolation mode");
+}
+
+/// The repeats of the Escape that cancels a dialog or leaves Presentation Mode run no command bound
+/// to Escape. A new press does.
+#[test]
+fn held_escape_that_cancels_a_dialog_or_leaves_presentation_skips_a_command_bound_to_escape() {
+    for presentation in [false, true] {
+        let ctx = egui::Context::default();
+        let mut app = in_screen_mode(&ctx, 0);
+        app.run("shortcuts.set", json!({"id": "select.none", "shortcut": "Escape", "force": true})).unwrap();
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        assert!(!selected.is_empty());
+        if presentation {
+            app.run("view.presentation", json!({})).unwrap();
+            frame(&mut app, &ctx, vec![]);
+        } else {
+            app.select_tool("selection");
+            let _ = crate::toolbar::open_options(&mut app, "selection");
+            assert!(app.ui.dialog.is_some());
+        }
+        frame(&mut app, &ctx, escape_event(true, false));
+        assert!(app.ui.dialog.is_none() && app.ui.screen_mode != 3, "the press ends it (presentation: {presentation})");
+        for repeat in 0..4 {
+            frame(&mut app, &ctx, escape_event(true, true));
+            assert_eq!(app.session.active().unwrap().selection.objects, selected, "repeat {repeat} (presentation: {presentation})");
+        }
+        frame(&mut app, &ctx, escape_event(false, false));
+        frame(&mut app, &ctx, escape());
+        assert!(app.session.active().unwrap().selection.objects.is_empty(), "a new press runs the command (presentation: {presentation})");
+    }
+}
+
 #[test]
 fn a_popup_takes_escape_before_full_screen_exits() {
     let ctx = egui::Context::default();
@@ -546,7 +677,7 @@ fn a_tool_flyout_takes_escape_before_full_screen() {
 }
 
 #[test]
-fn a_rotation_pair_exits_full_screen_then_resets_with_selection_tool() {
+fn escape_exits_full_screen_then_resets_the_rotation_with_selection_tool() {
     for mode in [1, 2] {
         let ctx = egui::Context::default();
         let mut app = in_screen_mode(&ctx, mode);
@@ -555,7 +686,7 @@ fn a_rotation_pair_exits_full_screen_then_resets_with_selection_tool() {
         assert_eq!(app.ui.screen_mode, 0, "first Escape in mode {mode}");
         assert_eq!(app.view().unwrap().rotation, 30.0);
         frame(&mut app, &ctx, escape());
-        assert_eq!(app.view().unwrap().rotation, 0.0, "second Escape after mode {mode}");
+        assert_eq!(app.view().unwrap().rotation, 0.0, "the next Escape after mode {mode}");
     }
 }
 

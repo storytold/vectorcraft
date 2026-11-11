@@ -186,25 +186,97 @@ pub(super) fn drawn_ellipse(p: &usvg::tiny_skia_path::Path) -> Option<PathData> 
     Some(PathData::single(SubPath::new(anchors, true)))
 }
 
-/// The shapes of clip path `cp` on an element whose user space `ts` maps to the document.
-pub(super) fn clip_shapes(cp: &usvg::ClipPath, ts: Affine) -> Vec<(BezPath, FillRule)> {
-    fn collect(g: &usvg::Group, m: Affine, out: &mut Vec<(BezPath, FillRule)>) {
+const MAX_CLIP_DEPTH: usize = 16;
+
+/// Most clip paths read for one clip. They are shared, so children that each name the next one
+/// multiply the work at every level: without this, a few lines of SVG would never finish.
+const MAX_CLIP_READS: usize = 1024;
+
+/// The shapes a text placeholder path in a clip path stands for (the text's glyph outlines), given
+/// the path and the transform `m` that maps its user space to the document; `None` for any other
+/// path.
+pub(super) type ClipText<'a> = &'a dyn Fn(&usvg::Path, Affine) -> Option<Vec<(BezPath, FillRule)>>;
+
+/// The shapes of clip path `cp` on an element whose user space `ts` maps to the document, with the
+/// glyph outlines `text` gives for the text in it.
+pub(super) fn clip_shapes(cp: &usvg::ClipPath, ts: Affine, text: ClipText) -> Vec<(BezPath, FillRule)> {
+    let mut reads = MAX_CLIP_READS;
+    clip_shapes_depth(cp, ts, 0, &mut reads, text)
+}
+
+/// Recursively collect shapes for `cp` in document space up to `MAX_CLIP_DEPTH`, and while `reads`
+/// are left.
+fn clip_shapes_depth(cp: &usvg::ClipPath, ts: Affine, depth: usize, reads: &mut usize, text: ClipText) -> Vec<(BezPath, FillRule)> {
+    if depth > MAX_CLIP_DEPTH || *reads == 0 {
+        return Vec::new();
+    }
+    *reads -= 1;
+    fn collect(g: &usvg::Group, m: Affine, depth: usize, reads: &mut usize, text: ClipText, out: &mut Vec<(BezPath, FillRule)>) {
         for c in g.children() {
             match c {
-                usvg::Node::Group(g) => collect(g, m * aff(g.transform()), out),
-                usvg::Node::Path(p) => out.push((bezpath(p.data(), m), p.fill().map(|f| rule(f.rule())).unwrap_or_default())),
+                usvg::Node::Group(g) => {
+                    let m_child = m * aff(g.transform());
+                    if let Some(child_cp) = g.clip_path() {
+                        let mut child_shapes = Vec::new();
+                        collect(g, m_child, depth + 1, reads, text, &mut child_shapes);
+                        if !child_shapes.is_empty() {
+                            let clip_paths = clip_shapes_depth(child_cp, m_child, depth + 1, reads, text);
+                            intersect_shapes(&child_shapes, &clip_paths, out);
+                        }
+                    } else {
+                        collect(g, m_child, depth, reads, text, out);
+                    }
+                }
+                usvg::Node::Path(p) => match text(p, m) {
+                    Some(glyphs) => out.extend(glyphs),
+                    None => out.push((bezpath(p.data(), m), p.fill().map(|f| rule(f.rule())).unwrap_or_default())),
+                },
                 _ => {}
             }
         }
     }
     let mut shapes = Vec::new();
-    collect(cp.root(), ts * aff(cp.transform()), &mut shapes);
+    collect(cp.root(), ts * aff(cp.transform()), depth, reads, text, &mut shapes);
+    if !shapes.is_empty()
+        && depth > 0
+        && depth < MAX_CLIP_DEPTH
+        && *reads > 0
+        && let Some(parent_cp) = cp.clip_path()
+    {
+        let parent_shapes = clip_shapes_depth(parent_cp, ts, depth + 1, reads, text);
+        let mut intersected = Vec::new();
+        intersect_shapes(&shapes, &parent_shapes, &mut intersected);
+        shapes = intersected;
+    }
     shapes
+}
+
+/// Intersect `shapes` with `clips`: SVG 1.1 §14.3.5 specifies that a clip path clips to the union
+/// of its children, each child first clipped by its own clip-path if present.
+fn intersect_shapes(shapes: &[(BezPath, FillRule)], clips: &[(BezPath, FillRule)], out: &mut Vec<(BezPath, FillRule)>) {
+    if shapes.is_empty() || clips.is_empty() {
+        return;
+    }
+    let clip_data = match clips {
+        [(bp, rule)] => (PathData::from_bezpath(bp), *rule),
+        _ => {
+            let paths: Vec<(PathData, FillRule)> = clips.iter().map(|(bp, r)| (PathData::from_bezpath(bp), *r)).collect();
+            let refs: Vec<(&PathData, FillRule)> = paths.iter().map(|(p, r)| (p, *r)).collect();
+            (vectorcraft_pathops::unite_all(&refs), FillRule::NonZero)
+        }
+    };
+    for (bp, r) in shapes {
+        let child_data = PathData::from_bezpath(bp);
+        let inter = vectorcraft_pathops::boolean(&child_data, *r, &clip_data.0, clip_data.1, vectorcraft_pathops::BoolOp::Intersect);
+        if !inter.subpaths.is_empty() {
+            out.push((inter.to_bezpath(), FillRule::NonZero));
+        }
+    }
 }
 
 /// Does clip path `cp` (on an element whose user space `ts` maps to the document) leave `art`,
 /// placed by `xf`, whole? (Only its bounds are checked: the box must be inside a clip shape.)
-pub(super) fn uncut(cp: &usvg::ClipPath, ts: Affine, art: &Node, xf: Affine) -> bool {
+pub(super) fn uncut(cp: &usvg::ClipPath, ts: Affine, art: &Node, xf: Affine, text: ClipText) -> bool {
     let Some(b) = art.visual_bounds() else { return false };
     if cp.clip_path().is_some() {
         return false;
@@ -212,11 +284,12 @@ pub(super) fn uncut(cp: &usvg::ClipPath, ts: Affine, art: &Node, xf: Affine) -> 
     // Art touching the clip's edge isn't cut by it.
     let e = 1e-6 * (b.width() + b.height()).max(1e-9);
     let b = b.inflate(-e, -e);
-    let shapes = clip_shapes(cp, ts);
+    let shapes = clip_shapes(cp, ts, text);
     let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)];
     corners.iter().all(|c| shapes.iter().any(|(s, _)| kurbo::Shape::contains(s, xf * *c)))
 }
 
+/// Convert a usvg fill rule to the document model fill rule.
 pub(super) fn rule(r: usvg::FillRule) -> FillRule {
     match r {
         usvg::FillRule::NonZero => FillRule::NonZero,

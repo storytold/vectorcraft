@@ -109,6 +109,19 @@ fn text_keeps_its_z_order_between_shapes() {
 }
 
 #[test]
+fn a_css_transform_places_text() {
+    // A `transform` declaration in a rule or `style` beats the attribute, as on shapes.
+    for body in [
+        r#"<style>text { transform: translate(10px, 20px) }</style><text transform="translate(300 0)" y="20">Moved</text>"#,
+        r#"<text style="transform: translate(10px, 20px)" transform="translate(300 0)" y="20">Moved</text>"#,
+    ] {
+        let d = open(body);
+        let t = only_text(&d);
+        assert!(t.xf.translation().to_point().distance(Point::new(10.0, 40.0)) < 1e-9, "{body}: {:?}", t.xf);
+    }
+}
+
+#[test]
 fn text_keeps_its_parent_group_clip_and_mask() {
     let d = open(
         r##"<defs><clipPath id="c"><rect width="50" height="50"/></clipPath>
@@ -692,4 +705,41 @@ fn flowed_text_that_cannot_be_read_is_reported() {
     for id in ["none", "huge", "far"] {
         assert!(w.iter().any(|w| w.contains(id) && w.contains("flowRoot")), "{id}: {w:?}");
     }
+}
+
+/// Total advance of a single-line text.
+fn advance(t: &TextObject) -> f64 {
+    layout(FontDb::global(), t).glyphs.iter().map(|g| g.advance).sum()
+}
+
+/// SVG 1.1 §10.9.1: `textLength` fits the characters to that advance, by spacing them out
+/// (`lengthAdjust="spacing"`, the default) or by stretching them (`spacingAndGlyphs`).
+/// https://www.w3.org/TR/SVG11/text.html#TextElementTextLengthAttribute
+#[test]
+fn text_length_fits_the_advance() {
+    let natural = advance(only_text(&open(r#"<text x="20" y="100" font-size="20">Hello World</text>"#)));
+    for adjust in ["spacingAndGlyphs", "spacing"] {
+        for want in [50.0, 150.0, 300.0] {
+            let (d, w) = import_with_report(&svg(&format!(
+                r#"<text x="20" y="100" font-size="20" textLength="{want}" lengthAdjust="{adjust}">Hello World</text>"#
+            )))
+            .unwrap();
+            assert!(w.is_empty(), "{w:?}");
+            let t = only_text(&d);
+            assert_eq!(t.plain_text(), "Hello World");
+            let got = advance(t);
+            assert!(close(got, want, 0.05), "{adjust} {want}: {got} (natural {natural})");
+            let scaled = t.runs.iter().all(|r| close(r.style.h_scale, 100.0 * want / natural, 0.5));
+            assert_eq!(scaled, adjust == "spacingAndGlyphs", "{adjust} {want}: {:?}", t.runs);
+        }
+    }
+    // On a tspan, only its characters are fitted; units and percentages of the viewport resolve.
+    let t = open(r#"<text x="20" y="100" font-size="20">Hi <tspan textLength="25%">there</tspan>!</text>"#);
+    let t = only_text(&t);
+    let lay = layout(FontDb::global(), t);
+    let span: f64 = lay.glyphs.iter().filter(|g| (3..8).contains(&g.byte)).map(|g| g.advance).sum();
+    assert!(close(span, 100.0, 0.05), "{span}");
+    // A negative length is ignored.
+    let t = open(r#"<text x="20" y="100" font-size="20" textLength="-5">Hello World</text>"#);
+    assert!(close(advance(only_text(&t)), natural, 1e-6));
 }

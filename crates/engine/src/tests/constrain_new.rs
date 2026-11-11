@@ -113,6 +113,9 @@ fn constrain_angle_turns_the_base_orientation_of_polygons_and_stars() {
     let shift = Mods { shift: true, ..Mods::default() };
     let draw = |s: &mut Session, tool: &str, deg: f64| {
         set_angle(s, deg);
+        // Nothing selected: the press draws, rather than moving the shape drawn before it by the
+        // centre point it shows (#5477).
+        s.execute("select.none", &json!({})).unwrap();
         s.select_tool(tool, ViewInfo::default()).unwrap();
         gesture(s, shift, &[(Down, 100.0, 100.0), (Drag, 130.0, 140.0), (Drag, 130.0, 140.0), (Up, 130.0, 140.0)]);
         last_id(s)

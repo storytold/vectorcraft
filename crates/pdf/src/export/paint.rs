@@ -92,7 +92,8 @@ impl Exporter<'_> {
             .stops
             .iter()
             .map(|s| match s.swatch.as_deref() {
-                Some(n) if n == ink => Some(s.tint),
+                // A stop that also prints process plates needs a DeviceN space.
+                Some(n) if n == ink && s.plates.is_none() => Some(s.tint),
                 _ if self.paper_stop(s) => Some(0.0),
                 _ => None,
             })
@@ -119,7 +120,8 @@ impl Exporter<'_> {
     /// a DeviceN space of the process inks the stops use (in CMYK order) and the spot inks (in
     /// the order the stops name them), with midpoints as explicit stops (the tints and opacity
     /// there are halfway), or for a Perceptual gradient the stops on its curve
-    /// ([`vectorcraft_color::Gradient::ink_mixes`]). Paper white adds no ink. `None`, with a
+    /// ([`vectorcraft_color::Gradient::ink_mixes`]). Paper white adds no ink; a spot stop with
+    /// process plates ([`vectorcraft_color::GradientStop::plates`]) prints them too. `None`, with a
     /// warning, when a stop is written in RGB or Lab or the spot inks can't share a DeviceN space;
     /// the gradient is then written in the colors of its stops.
     fn device_n_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
@@ -145,6 +147,9 @@ impl Exporter<'_> {
                 Some(n) => {
                     let i = spots.iter().position(|(m, _)| *m == n)?;
                     v[4 + i] = s.tint;
+                    if let Some(p) = s.plates {
+                        v[..4].copy_from_slice(&p.map(|t| t.clamp(0.0, 1.0)));
+                    }
                 }
                 None if self.paper_stop(s) => {}
                 None => match self.page_color(&s.color) {
@@ -346,7 +351,7 @@ impl Exporter<'_> {
         let cell = Rect::new(0.0, 0.0, pw, ph);
         let tiles = def.instances_in(Affine::IDENTITY, cell);
         let mut sb = s.stream_builder();
-        let mut cs = sb.surface();
+        let mut cs = Surface::stream(sb.surface());
         let reaches_out = tiles.iter().any(|t| t.visual_bounds().is_some_and(|b| cell.intersect(b) != b));
         let clip = reaches_out.then(|| to_path(&cs, &cell.to_path(0.1))).flatten();
         if let Some(c) = &clip {
@@ -379,7 +384,7 @@ impl Exporter<'_> {
     fn one_spot_ink<'g>(&self, g: &'g vectorcraft_color::Gradient) -> Option<&'g str> {
         let spot = |s: &'g vectorcraft_color::GradientStop| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot));
         let ink = g.stops.iter().find_map(spot)?;
-        g.stops.iter().all(|s| spot(s) == Some(ink) || self.paper_stop(s)).then_some(ink)
+        g.stops.iter().all(|s| (spot(s) == Some(ink) && s.plates.is_none()) || self.paper_stop(s)).then_some(ink)
     }
 
     /// Can every stop of `g` be inks of a DeviceN space ([`Self::device_n_stops`]): is a stop
@@ -430,21 +435,29 @@ impl Exporter<'_> {
     /// Warn when gradient `g`, drawn as an image, has stops linked to a spot swatch: the image is
     /// in process colors, so the spot inks have no plate of their own.
     fn warn_spot_image(&mut self, g: &vectorcraft_color::GradientPaint) {
-        let doc = self.doc;
-        let from_stops = g.gradient.kind != GradientKind::Freeform || g.freeform.is_none();
-        if from_stops && g.gradient.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
+        let from_stops = g.gradient.kind != GradientKind::Freeform || !g.has_freeform_points();
+        if from_stops && self.has_spot_stop(&g.gradient) {
             self.warn(
                 "spot colors in gradients exported as images (freeform or dithered gradients, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",
             );
         }
     }
 
+    /// Is a stop of `g` linked to a spot swatch?
+    fn has_spot_stop(&self, g: &vectorcraft_color::Gradient) -> bool {
+        let doc = self.doc;
+        g.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot)))
+    }
+
     /// Draw gradient `g`, placed on `bounds`, as an image over `area`, sampled at the document's
     /// raster effects resolution where it is drawn (`area` as the current transform sizes it, so
     /// scaled type gets its pixels too): a freeform gradient's colour field (at most
     /// [`MAX_FIELD_PX`] a side), or a linear or radial gradient (at most [`MAX_GRADIENT_PX`] a side),
-    /// with dither's noise when it paints a fill (`fill`).
+    /// with dither's noise when it paints a fill (`fill`). A linear or radial gradient whose stops
+    /// are all CMYK and not linked to a spot swatch is a CMYK image, unless its Perceptual curve
+    /// has too many stops; any other is an RGB image.
     pub(super) fn field_image(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect, fill: bool) {
+        use vectorcraft_color::cms::Model;
         use vectorcraft_color::freeform::{painted_box, spread_scale};
         let Some(b) = painted_box(bounds) else { return };
         let area = area.abs();
@@ -461,18 +474,44 @@ impl Exporter<'_> {
         let k = (self.doc.raster_effects_ppi / 72.0).min(max / long);
         let along = |len: f64| (len * k).ceil().clamp(1.0, max) as u16;
         let (cols, rows) = (along(w), along(h));
-        let rgba: Vec<u8> = if freeform {
-            let field = g.freeform_on(b).field_with(spread_scale(b), &|c| c.to_rgb());
-            field.grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect()
-        } else {
+        let field = freeform.then(|| g.freeform_on(b).model_field(spread_scale(b)));
+        let cmyk_doc = self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
+        if !freeform {
             self.warn("linear and radial gradients drawn as pixels are exported as images");
-            g.pixels(b, area, cols, rows, fill, &|c| c.to_rgb()).flatten().collect()
+        }
+        let ramp_inks = if freeform || self.has_spot_stop(&g.gradient) { None } else { g.ink_pixels(b, area, cols, rows, fill) };
+        let ink_image = |inks, alpha| {
+            let convert = if self.convert { self.out.cmyk_pixels() } else { None };
+            crate::images::from_inks(inks, alpha, cols.into(), rows.into(), self.interpolate, convert)
         };
-        let pixels = if self.convert { self.out.pixels() } else { None };
-        let (Some(img), Some(size)) = (
-            crate::images::from_rgba_in(rgba, cols.into(), rows.into(), self.interpolate, pixels),
-            Size::from_wh(area.width() as f32, area.height() as f32),
-        ) else {
+        let img = match (&field, ramp_inks) {
+            (Some(field), _) if field.model() == Some(Model::Cmyk) || (cmyk_doc && field.model() == Some(Model::Gray)) => {
+                let (mut inks, mut alpha) = (Vec::new(), Vec::new());
+                for (color, a) in field.grid(area, cols, rows) {
+                    let [c, m, y, k] = color.to_cmyk();
+                    inks.extend([q(c), q(m), q(y), q(k)]);
+                    alpha.push(q(a));
+                }
+                ink_image(inks, alpha)
+            }
+            (_, Some(pixels)) => {
+                let (mut inks, mut alpha) = (Vec::new(), Vec::new());
+                for [c, m, y, k, a] in pixels {
+                    inks.extend([c, m, y, k]);
+                    alpha.push(a);
+                }
+                ink_image(inks, alpha)
+            }
+            _ => {
+                let rgba: Vec<u8> = match &field {
+                    Some(field) => field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect(),
+                    None => g.pixels(b, area, cols, rows, fill, &|c| c.to_rgb()).flatten().collect(),
+                };
+                let pixels = if self.convert { self.out.pixels() } else { None };
+                crate::images::from_rgba_in(rgba, cols.into(), rows.into(), self.interpolate, pixels)
+            }
+        };
+        let (Some(img), Some(size)) = (img, Size::from_wh(area.width() as f32, area.height() as f32)) else {
             return;
         };
         s.push_transform(&xf(Affine::translate(area.origin().to_vec2())));

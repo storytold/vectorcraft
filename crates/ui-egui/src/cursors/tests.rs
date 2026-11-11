@@ -349,6 +349,9 @@ fn the_canvas_hands_the_tool_cursor_to_the_os_and_idles_while_the_pointer_rests(
         assert_eq!(img, &app.canvas.cursors.get(Cursor::Arrow, 1.0).unwrap());
         // Where the OS can't show the bitmap, its system cursor.
         assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Default);
+    } else if cfg!(target_os = "macos") {
+        assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Default);
+        assert!(out.platform_output.cursor_image.is_none());
     } else {
         assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::None);
     }
@@ -387,8 +390,6 @@ fn a_wayland_window_paints_the_tool_cursor() {
 /// Without a cursor theme the canvas keeps the system pointer visible (#2450).
 #[test]
 fn no_cursor_theme_keeps_the_system_pointer() {
-    assert!(!hide_system_pointer(true));
-    assert!(hide_system_pointer(false));
     let mut app = VectorcraftApp::new(Session::new(), crate::Services { wayland: true, no_cursor_theme: true, ..Default::default() });
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     let ctx = egui::Context::default();
@@ -472,9 +473,10 @@ fn wayland_windows_paint_the_glyphs() {
 
 #[test]
 fn macos_windows_paint_the_glyphs_only_with_the_focus() {
-    assert!(paint_glyphs(true, true), "macOS with the focus");
-    assert!(!paint_glyphs(true, false), "macOS without the focus: the system pointer shows (#2020)");
-    assert!(paint_glyphs(false, true) && paint_glyphs(false, false), "Wayland, the web: painted with the focus or without");
+    assert!(paint_glyphs(true, true, false), "macOS with the focus");
+    assert!(!paint_glyphs(true, false, false), "macOS without the focus: the system pointer shows (#2020)");
+    assert!(paint_glyphs(false, true, false) && paint_glyphs(false, false, false), "Wayland, the web: painted with the focus or without");
+    assert!(!paint_glyphs(false, true, true), "without a cursor theme, use the system pointer alone");
 }
 
 #[test]

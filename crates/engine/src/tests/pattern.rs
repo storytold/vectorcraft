@@ -5,7 +5,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::pattern::{PATTERN_EDIT_LAYER, RepeatKind, TileType};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
-use vectorcraft_tools::{PointerEvent, PointerKind};
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use crate::tests_menucmds::place_undecodable_png;
 use crate::*;
@@ -131,6 +131,72 @@ fn empty_point_type_is_not_saved_into_the_pattern() {
         let labels = s.doc().unwrap().history.undo.iter().map(|e| e.label.as_str()).collect::<Vec<_>>();
         assert_eq!(labels.last(), Some(&"Done Editing Pattern"), "{cmd}");
         assert!(!labels.contains(&"Type"), "{cmd}: {labels:?}");
+    }
+}
+
+/// The same while a Cmd/Ctrl press has lent the Selection tool to the Type tool: Done or Exit
+/// Isolation Mode before the release gives the Type tool back first, so the empty point type is
+/// still discarded, and the release that follows leaves the tile as it is.
+#[test]
+fn empty_point_type_is_not_saved_into_the_pattern_during_a_cmd_press() {
+    for cmd in ["object.pattern.done", "object.exitIsolation"] {
+        let mut s = session();
+        s.prefs.placeholder_text = false;
+        let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+        sel(&mut s, &[r]);
+        s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("type", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 200.0, 200.0), v).unwrap();
+        }
+        let press = Mods { cmd: true, ..Mods::default() };
+        s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 300.0).with_mods(press), v).unwrap();
+        assert_eq!(s.tool_id(), "selection", "{cmd}: the press lends the Selection tool");
+        s.execute(cmd, &json!({})).unwrap();
+        assert_eq!(s.tool_id(), "type", "{cmd}: the Type tool is back");
+        assert!(!s.tool_wants_text(), "{cmd}");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0).with_mods(press), v).unwrap();
+        let art = &doc(&s).pattern("P").unwrap().art;
+        assert_eq!(art.len(), 1, "{cmd}: the tile keeps only the square");
+        assert!(!matches!(art[0].kind, NodeKind::Text(_)), "{cmd}");
+    }
+}
+
+/// Done during a drag of the lent Selection tool keeps the drag as its own step before the tile is
+/// saved, so no drag is left open for the release to end. With Real-time Drawing and Editing off,
+/// the drag's last position is applied first, as the release would apply it.
+#[test]
+fn done_during_a_lent_selection_drag_keeps_the_drag_as_its_own_step() {
+    for real_time in [true, false] {
+        let mut s = session();
+        s.prefs.placeholder_text = false;
+        s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+        sel(&mut s, &[r]);
+        s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+        let st = s.doc().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).expect("the tile art is selected");
+        let c = b.center();
+        let v = ViewInfo::default();
+        s.select_tool("type", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 200.0, 200.0), v).unwrap();
+        }
+        let press = Mods { cmd: true, ..Mods::default() };
+        s.pointer(&PointerEvent::new(PointerKind::Down, c.x, c.y).with_mods(press), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, c.x + 20.0, c.y).with_mods(press), v).unwrap();
+        assert!(s.in_interaction(), "{real_time}: the lent Selection tool drags the square");
+        s.execute("object.pattern.done", &json!({})).unwrap();
+        assert!(!s.in_interaction(), "{real_time}: the drag is kept before the tile is saved");
+        assert_eq!(s.tool_id(), "type", "{real_time}");
+        s.pointer(&PointerEvent::new(PointerKind::Up, c.x + 20.0, c.y).with_mods(press), v).unwrap();
+        let labels = s.doc().unwrap().history.undo.iter().map(|e| e.label.as_str()).collect::<Vec<_>>();
+        assert_eq!(labels.last(), Some(&"Done Editing Pattern"), "{real_time}: {labels:?}");
+        assert!(labels.contains(&"Move"), "{real_time}: {labels:?}");
+        let art = &doc(&s).pattern("P").unwrap().art;
+        assert_eq!(art.len(), 1, "{real_time}: the tile keeps only the square");
+        assert!(!matches!(art[0].kind, NodeKind::Text(_)), "{real_time}");
     }
 }
 
@@ -913,6 +979,32 @@ fn picking_another_pattern_swatch_keeps_the_pattern_transform() {
     assert_eq!(xf.as_coeffs(), [2.0, 0.0, 0.0, 2.0, 15.0, 10.0]);
 }
 
+/// A pattern swatch made from the current fill holds the pattern untransformed: a fill picked up
+/// from art whose tiles were moved does not carry that placement to the art the swatch is applied
+/// to, which keeps its own (#1970).
+#[test]
+fn a_pattern_swatch_made_from_a_transformed_fill_holds_the_pattern_untransformed() {
+    let mut s = session();
+    make_dots(&mut s);
+    let src = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [src.0], "swatch": "Dots"})).unwrap();
+    s.execute("pattern.transform", &json!({"ids": [src.0], "matrix": [2, 0, 0, 2, 15, 10]})).unwrap();
+    sel(&mut s, &[]);
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    let Paint::Pattern { xf, .. } = &s.paint.fill else { panic!("the picked-up pattern fill") };
+    assert_eq!(xf.as_coeffs(), [2.0, 0.0, 0.0, 2.0, 15.0, 10.0], "the current fill has the tiles' placement");
+    s.execute("swatch.new", &json!({"name": "Picked"})).unwrap();
+    let Paint::Pattern { pattern, xf } = doc(&s).swatch("Picked").unwrap().paint.clone() else { panic!("a pattern swatch") };
+    assert_eq!((pattern.as_str(), xf.as_coeffs()), ("Dots", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+    let dst = rect(&mut s, 300.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [dst.0], "color": "#00ff00"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [dst.0], "swatch": "Dots"})).unwrap();
+    s.execute("pattern.transform", &json!({"ids": [dst.0], "matrix": [3, 0, 0, 3, 0, 0]})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [dst.0], "swatch": "Picked"})).unwrap();
+    let Paint::Pattern { xf, .. } = node(&s, dst).appearance.fill_paint() else { panic!("a pattern fill") };
+    assert_eq!(xf.as_coeffs(), [3.0, 0.0, 0.0, 3.0, 0.0, 0.0], "the art keeps its own placement");
+}
+
 #[test]
 fn inner_glow_on_a_pattern_fill_stays_inside_the_object_on_the_threaded_renderer() {
     // #2426: the glow's pixmap was drawn with the pattern's paint transform, so it landed
@@ -1019,4 +1111,185 @@ fn mirror_axis_hidden_controls_and_other_repeat_kinds_do_not_capture_drags() {
         s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 80.0), v).unwrap();
         assert_eq!(node(&s, id), before);
     }
+}
+
+/// The document, its revision, the undo and redo stacks and the selection: what a refused call
+/// must leave as it was.
+fn untouched(s: &Session) -> (std::sync::Arc<vectorcraft_doc::Document>, u64, (usize, usize, bool), Vec<NodeId>) {
+    let st = s.doc().unwrap();
+    (st.doc.clone(), st.revision, crate::tests::history(s), st.selection.objects.to_vec())
+}
+
+/// Each call in `calls` is refused with the parameter error `want` and changes nothing.
+fn refused(s: &mut Session, calls: Vec<(&str, Value, String)>) {
+    let before = untouched(s);
+    for (cmd, p, want) in calls {
+        let r = s.execute(cmd, &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}, want {want:?}");
+        assert!(untouched(s) == before, "{cmd} {p}: nothing changes");
+    }
+}
+
+fn number(k: &str, v: Value) -> String {
+    format!("`{k}` must be a number, not {v}")
+}
+
+fn switch(k: &str) -> String {
+    format!("`{k}` must be true or false")
+}
+
+fn string(k: &str) -> String {
+    format!("`{k}` must be a string")
+}
+
+/// Radial, Grid, Mirror and Repeat Options refuse a param of the wrong type with an error naming
+/// it, and change nothing; a distance given as text with a unit is refused like any other string.
+/// Null counts as a param left out, which keeps its default.
+#[test]
+fn repeat_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let r = rect(&mut s, 100.0, 100.0, 60.0, 80.0);
+    sel(&mut s, &[r]);
+    refused(
+        &mut s,
+        vec![
+            ("object.repeat.radial", json!({"instances": "8"}), number("instances", json!("8"))),
+            ("object.repeat.radial", json!({"radius": true}), number("radius", json!(true))),
+            ("object.repeat.radial", json!({"radius": "5 mm"}), number("radius", json!("5 mm"))),
+            ("object.repeat.radial", json!({"radius": -5}), "`radius` must be a number not below 0".into()),
+            ("object.repeat.grid", json!({"hSpacing": "5 mm"}), number("hSpacing", json!("5 mm"))),
+            ("object.repeat.grid", json!({"vSpacing": [1]}), number("vSpacing", json!([1]))),
+            ("object.repeat.grid", json!({"rows": "3"}), number("rows", json!("3"))),
+            ("object.repeat.grid", json!({"cols": false}), number("cols", json!(false))),
+            ("object.repeat.mirror", json!({"angle": "45"}), number("angle", json!("45"))),
+            ("object.repeat.mirror", json!({"offset": {}}), number("offset", json!({}))),
+        ],
+    );
+    // Null params keep the defaults: each repeat matches the one made with `{}`.
+    for (cmd, nulls) in [
+        ("object.repeat.radial", json!({"instances": null, "radius": null})),
+        ("object.repeat.grid", json!({"hSpacing": null, "vSpacing": null, "rows": null, "cols": null})),
+        ("object.repeat.mirror", json!({"angle": null, "offset": null})),
+    ] {
+        let made = |p: &Value| {
+            let mut s = session();
+            let r = rect(&mut s, 100.0, 100.0, 60.0, 80.0);
+            sel(&mut s, &[r]);
+            let id = id_of(&s.execute(cmd, p).unwrap());
+            node(&s, id)
+        };
+        assert_eq!(made(&nulls), made(&json!({})), "{cmd}");
+    }
+    // A grid's rows and cols take any number, as Repeat Options does: 2.5 rows are 2.
+    let id = id_of(&s.execute("object.repeat.grid", &json!({"rows": 2.5, "cols": 4})).unwrap());
+    assert!(matches!(node(&s, id).kind, NodeKind::Repeat(ref r) if matches!(r.kind, RepeatKind::Grid { rows: 2, cols: 4, .. })));
+    // `brickOffset` alone sets the offset of a brick grid, and leaves a plain grid as it is.
+    let grid_type = |s: &Session| match node(s, id).kind {
+        NodeKind::Repeat(r) => match r.kind {
+            RepeatKind::Grid { grid_type, .. } => grid_type,
+            other => panic!("not a grid: {other:?}"),
+        },
+        other => panic!("not a repeat: {other:?}"),
+    };
+    s.execute("object.repeat.options", &json!({"brickOffset": 0.25})).unwrap();
+    assert_eq!(grid_type(&s), TileType::Grid);
+    s.execute("object.repeat.options", &json!({"gridType": "brickByRow"})).unwrap();
+    s.execute("object.repeat.options", &json!({"brickOffset": 0.25})).unwrap();
+    assert_eq!(grid_type(&s), TileType::BrickByRow { offset: 0.25 });
+
+    // Repeat Options checks every param, whichever kind the selected repeat is.
+    s.execute("object.repeat.radial", &json!({"instances": 4, "radius": 50})).unwrap();
+    let kind = |s: &Session| match node(s, id).kind {
+        NodeKind::Repeat(r) => r.kind,
+        other => panic!("not a repeat: {other:?}"),
+    };
+    let radial = kind(&s);
+    refused(
+        &mut s,
+        vec![
+            ("object.repeat.options", json!({"instances": "4"}), number("instances", json!("4"))),
+            ("object.repeat.options", json!({"radius": "50 pt"}), number("radius", json!("50 pt"))),
+            ("object.repeat.options", json!({"startAngle": true}), number("startAngle", json!(true))),
+            ("object.repeat.options", json!({"endAngle": "x"}), number("endAngle", json!("x"))),
+            ("object.repeat.options", json!({"hSpacing": "1"}), number("hSpacing", json!("1"))),
+            ("object.repeat.options", json!({"vSpacing": [1]}), number("vSpacing", json!([1]))),
+            ("object.repeat.options", json!({"rows": "2"}), number("rows", json!("2"))),
+            ("object.repeat.options", json!({"cols": [2]}), number("cols", json!([2]))),
+            ("object.repeat.options", json!({"brickOffset": "0.5"}), number("brickOffset", json!("0.5"))),
+            ("object.repeat.options", json!({"angle": "10"}), number("angle", json!("10"))),
+            ("object.repeat.options", json!({"reverseOverlap": "true"}), switch("reverseOverlap")),
+            ("object.repeat.options", json!({"flipRows": 1}), switch("flipRows")),
+            ("object.repeat.options", json!({"flipCols": "no"}), switch("flipCols")),
+            ("object.repeat.options", json!({"gridType": 3}), string("gridType")),
+            ("object.repeat.options", json!({"center": [1]}), "center must be [x, y] with finite coordinates".into()),
+            ("object.repeat.options", json!({"center": "0, 0"}), "center must be [x, y] with finite coordinates".into()),
+        ],
+    );
+    let all_null = json!({"instances": null, "radius": null, "startAngle": null, "endAngle": null, "reverseOverlap": null, "center": null});
+    s.execute("object.repeat.options", &all_null).unwrap();
+    assert_eq!(kind(&s), radial, "null params keep the options");
+    s.execute("object.repeat.options", &json!({"instances": 6, "reverseOverlap": true, "center": [10, 20]})).unwrap();
+    assert!(matches!(kind(&s), RepeatKind::Radial { instances: 6, reverse_overlap: true, .. }));
+}
+
+/// Make, Edit Pattern, Save a Copy, Pattern Options and Delete Pattern refuse a param of the wrong
+/// type (and Pattern Options an `overlap` side it doesn't know) with an error naming it, and change
+/// nothing. Null counts as a param left out, which keeps its default.
+#[test]
+fn pattern_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let r = make_dots(&mut s);
+    sel(&mut s, &[r]);
+    let options = |p: Value| {
+        let mut p = p;
+        p["name"] = json!("Dots");
+        p
+    };
+    refused(
+        &mut s,
+        vec![
+            ("object.pattern.make", json!({"name": 5}), string("name")),
+            ("object.pattern.make", json!({"tileType": 2}), string("tileType")),
+            ("object.pattern.make", json!({"brickOffset": "0.5"}), number("brickOffset", json!("0.5"))),
+            ("object.pattern.make", json!({"width": "20"}), number("width", json!("20"))),
+            ("object.pattern.make", json!({"height": true}), number("height", json!(true))),
+            ("object.pattern.make", json!({"edit": "false"}), switch("edit")),
+            ("object.pattern.edit", json!({"name": 5}), string("name")),
+            ("pattern.options", json!({"name": ["Dots"]}), string("name")),
+            ("pattern.options", options(json!({"newName": 5})), string("newName")),
+            ("pattern.options", options(json!({"tileType": []})), string("tileType")),
+            ("pattern.options", options(json!({"width": "20"})), number("width", json!("20"))),
+            ("pattern.options", options(json!({"hSpacing": "1"})), number("hSpacing", json!("1"))),
+            ("pattern.options", options(json!({"vSpacing": true})), number("vSpacing", json!(true))),
+            ("pattern.options", options(json!({"copies": "5"})), number("copies", json!("5"))),
+            ("pattern.options", options(json!({"dimCopies": "50"})), number("dimCopies", json!("50"))),
+            ("pattern.options", options(json!({"sizeTileToArt": "true"})), switch("sizeTileToArt")),
+            ("pattern.options", options(json!({"showTileEdge": 1})), switch("showTileEdge")),
+            ("pattern.options", options(json!({"showSwatchBounds": "no"})), switch("showSwatchBounds")),
+            ("pattern.options", options(json!({"overlap": "right"})), "`overlap` must be an object, not \"right\"".into()),
+            ("pattern.options", options(json!({"overlap": {"h": "center"}})), "`overlap.h` must be one of left, right".into()),
+            ("pattern.options", options(json!({"overlap": {"v": 1}})), "`overlap.v` must be one of top, bottom".into()),
+            ("pattern.delete", json!({"name": 5}), string("name")),
+        ],
+    );
+    // Null params keep the defaults: a new pattern named "New Pattern 1", a grid tile the size of
+    // the art, edited.
+    let made = s
+        .execute("object.pattern.make", &json!({"name": null, "tileType": null, "brickOffset": null, "width": null, "height": null, "edit": null}))
+        .unwrap();
+    assert_eq!(made["name"], "New Pattern 1");
+    let def = doc(&s).pattern("New Pattern 1").unwrap().clone();
+    assert_eq!(def.tile_type, TileType::Grid);
+    assert!((def.tile.width() - 10.0).abs() < 1e-6, "{:?}", def.tile);
+    assert_eq!(doc(&s).pattern_edit.as_ref().map(|e| e.pattern.as_str()), Some("New Pattern 1"));
+    // In editing mode: Save a Copy refuses a name that isn't a string, and Pattern Options with
+    // null params keeps the edited pattern's options.
+    refused(&mut s, vec![("object.pattern.saveCopy", json!({"name": 5}), string("name"))]);
+    s.execute("pattern.options", &json!({"name": null, "overlap": {"h": null, "v": null}, "copies": null, "sizeTileToArt": null})).unwrap();
+    assert!(doc(&s).pattern("New Pattern 1").unwrap() == &def);
+    s.execute("pattern.options", &json!({"overlap": {"h": "right"}})).unwrap();
+    assert!(doc(&s).pattern("New Pattern 1").unwrap().overlap.right_in_front);
+    assert_eq!(s.execute("object.pattern.saveCopy", &json!({"name": null})).unwrap()["name"], "New Pattern 1 copy");
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    assert!(s.execute("pattern.delete", &json!({"name": null})).is_err(), "no name given");
 }

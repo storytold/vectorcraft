@@ -270,6 +270,28 @@ pub(crate) fn showing(ui: &UiState, panel: &str) -> bool {
     (ui.open_panel.as_deref() == Some(panel) && iconic) || (!iconic && layout.panel_state(&panel.to_string()) == craft_ui::docking::PanelState::Front)
 }
 
+/// Can either panel that uses row thumbnails be seen, including in a floating window or flyout?
+/// An iconic group's open flyout is named for the icon that opened it; its active tab can differ.
+fn thumbnail_panel_showing(ui: &UiState, ctx: &egui::Context) -> bool {
+    if !ui.dock || ui.screen_mode >= 3 {
+        return false;
+    }
+    let layout = layout_of(ui);
+    let regular = ["layers", "links"]
+        .iter()
+        .any(|panel| !in_iconic_column(&layout, panel) && layout.panel_state(&(*panel).to_string()) == craft_ui::docking::PanelState::Front);
+    let flyout = craft_ui::docking::flyout::<String>(ctx, area_id());
+    let iconic = flyout.as_ref().and_then(|anchor| {
+        dock_columns(&layout)
+            .into_iter()
+            .filter(|column| column.iconic)
+            .flat_map(|column| &column.groups)
+            .find(|group| group.panels.contains(anchor))
+            .and_then(|group| group.active_panel())
+    });
+    regular || iconic.is_some_and(|panel| matches!(panel.as_str(), "layers" | "links"))
+}
+
 /// Where a panel with no other destination goes: a panel of the first expanded dock column,
 /// else of any column.
 fn first_dock_panel(layout: &Layout<String>, except: &str) -> Option<String> {
@@ -339,10 +361,11 @@ fn show_panel(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String>
     if !layout.contains(&panel.to_string()) && !app.ui.docking_hidden.contains_key(panel) && crate::panels::library_panel::parse(panel).is_some() {
         return crate::panels::library_panel::float(app, panel);
     }
-    if app.ui.docking_hidden.contains_key(panel) {
-        return restore_hidden_group(app, panel);
-    }
-    let value = shared_command(app, "window.panel.activate", &json!({"panel": panel}))?;
+    let value = if app.ui.docking_hidden.contains_key(panel) {
+        restore_hidden_group(app, panel)?
+    } else {
+        shared_command(app, "window.panel.activate", &json!({"panel": panel}))?
+    };
     let layout = layout_of(&app.ui);
     Ok(match floating_window(&layout, panel) {
         Some(window) => json!({"floating": window_panels(window)}),
@@ -926,6 +949,7 @@ impl Transaction {
         }
         if let Some(saved) = &location.group {
             apply(&mut candidate, Action::ResizeGroup { panel: panel.clone(), height: saved.height })?;
+            apply(&mut candidate, Action::ResizeFlyoutWidth { panel: panel.clone(), width: saved.flyout_width })?;
             apply(&mut candidate, Action::SetMinimized { panel: panel.clone(), minimized: saved.minimized })?;
         }
         self.workspace.layout = candidate;
@@ -1064,6 +1088,7 @@ fn known(action: &Action<String>) -> bool {
         | Action::SetIconic { panel, .. }
         | Action::ResizeColumn { panel, .. }
         | Action::ResizeGroup { panel, .. }
+        | Action::ResizeFlyoutWidth { panel, .. }
         | Action::ResizeIconic { panel, .. }
         | Action::SetNative { panel, .. }
         | Action::SetMonitor { panel, .. } => registered(panel),
@@ -1072,7 +1097,7 @@ fn known(action: &Action<String>) -> bool {
     }
 }
 
-/// Draw the canvas and the panels in the space left by the bars and the Tools panel, and apply
+/// Draw the canvas, its docked Tools panel and the other panels below the bars, and apply
 /// what the user did to them.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let area = area_id();
@@ -1112,6 +1137,11 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         }
     }
     let modal = modal_open(app, &ctx);
+    // Palette windows are OS windows of their own, held above the app's window while it is active,
+    // so a dialog, a menu, a tool flyout or the All Tools drawer drawn in the main window would be
+    // covered by them.
+    #[cfg(not(target_arch = "wasm32"))]
+    palette_window_levels(&ctx, &layout, modal, egui::Popup::is_any_open(&ctx) || crate::menus::menu_open(&ctx) || crate::toolbar::flyout_open(&ctx));
     let mut blocked = Vec::new();
     if modal || egui::Popup::is_any_open(&ctx) {
         blocked.push(ctx.content_rect());
@@ -1120,10 +1150,18 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let mut dock = craft_ui::docking::DockArea::new(area)
         .blocked_rects(&blocked)
         .input_blocked(modal)
+        .monitors(app.services.dock_monitors.clone())
         .auto_collapse_iconic(app.session.prefs.auto_collapse_icon_panels);
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(hook) = app.services.native_input_hook.clone() {
-        dock = dock.native_input_hook(move |_, raw| hook(raw));
+    {
+        crate::font_menu::ensure_native_wheel_layers(ui.ctx());
+        let hook = app.services.native_input_hook.clone();
+        dock = dock.native_input_hook(move |ctx, raw| {
+            if let Some(hook) = &hook {
+                hook(raw);
+            }
+            crate::font_menu::take_raw_wheel(ctx, raw);
+        });
     }
     // Tab and Shift+Tab (`window.dock`, `window.panels`) and the full screen modes hide the panels;
     // the canvas stays.
@@ -1133,7 +1171,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if let Some(panel) = app.dock_rt.raise.take() {
         dock = dock.raise_panel(panel);
     }
-    let mut output = dock.show_content(ui, &layout, &style, &mut PanelContent { app: &mut *app });
+    let mut output = dock.show_content(ui, &layout, &style, &mut PanelContent { app: &mut *app, layout: &layout });
     app.dock_rt.space = craft_ui::docking::float_space(&ctx, area);
     if let Some(panel) = output.focused.take() {
         app.dock_rt.focused = Some(panel);
@@ -1161,16 +1199,70 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.open_dropped_files(window.dropped, None, shift);
     }
     forward_keys(app, &ctx, output.forwarded_events, output.forwarded_modifiers);
+    if !thumbnail_panel_showing(&app.ui, &ctx) {
+        // No panel can ask for these rows again this pass. Keep the cache of open documents, but
+        // discard worker jobs queued behind the one already rendering.
+        crate::panels::layers::show_thumbs_of(None);
+    }
 }
 
-/// Whether a modal is open: a dialog, About, the command palette, a native file dialog, or a
-/// window behind the modal backdrop last frame (export progress, plug-in runs). Floating panels
+/// Whether a modal is open: a dialog, About, the command palette, a native file dialog, an update
+/// dialog, or a window behind the modal backdrop last frame (export progress, plug-in runs). Floating panels
 /// in OS windows of their own take no input meanwhile, as the main window behind it takes none.
+/// The window level and visibility a palette window takes: hidden under a modal dialog (a click
+/// must not bring it back over the dialog), at the normal level under a menu or another popup drawn
+/// in the main window (so the menu is seen), and otherwise its palette level, which craft-ui leaves
+/// a palette at when it creates one: topmost while the app is active, behind other applications'
+/// windows while it is not.
+#[cfg(not(target_arch = "wasm32"))]
+fn palette_window_state(modal: bool, popup: bool, active: bool) -> (egui::WindowLevel, bool) {
+    if modal {
+        return (egui::WindowLevel::Normal, false);
+    }
+    if popup {
+        // Hidden as under a dialog: a menu is drawn in the main window, and lowering a palette
+        // window is not always enough for it to go behind the window (the OS may keep it above
+        // while the app is activated through it).
+        return (egui::WindowLevel::Normal, false);
+    }
+    let level = if active {
+        egui::WindowLevel::AlwaysOnTop
+    } else if cfg!(target_os = "windows") {
+        egui::WindowLevel::AlwaysOnBottom
+    } else {
+        egui::WindowLevel::Normal
+    };
+    (level, true)
+}
+
+/// Sends the palette windows of `layout` the level and visibility [`palette_window_state`] gives
+/// when they change. craft-ui varies a palette's level through the viewport builder, which egui
+/// applies when the window opens and not to one already on screen, so the commands go explicitly to
+/// the windows there are.
+#[cfg(not(target_arch = "wasm32"))]
+fn palette_window_levels(ctx: &egui::Context, layout: &Layout<String>, modal: bool, popup: bool) {
+    let active = ctx.input(|i| i.focused || i.raw.viewports.values().any(|v| v.focused == Some(true)));
+    let key = area_id().with("palette-levels-state");
+    if ctx.data(|d| d.get_temp::<(bool, bool, bool)>(key)) == Some((modal, popup, active)) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(key, (modal, popup, active)));
+
+    let (level, visible) = palette_window_state(modal, popup, active);
+    for window in &layout.floating {
+        let viewport = craft_ui::docking::DockArea::<String>::window_viewport(area_id(), window.id);
+        ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::WindowLevel(level));
+        ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Visible(visible));
+    }
+}
+
+/// Does a modal dialog block the app's other windows ([`modal_open`] for the docking renderer)?
 pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
     app.ui.dialog.is_some()
         || app.ui.about
         || app.ui.palette_open
         || app.file_dialog_open()
+        || crate::updates_ui::blocks_input(app)
         || ctx.memory(|m| m.areas().is_visible(&crate::dialogs::modal::backdrop()))
 }
 
@@ -1253,11 +1345,14 @@ pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
 /// The panels' content, labels and icons.
 struct PanelContent<'a> {
     app: &'a mut VectorcraftApp,
+    layout: &'a Layout<String>,
 }
 
 impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
+    /// Draw a registered panel body, fitting untouched flyouts and pinning sized panels' footers.
     fn body(&mut self, ui: &mut egui::Ui, id: &String) {
         if id == CANVAS {
+            crate::toolbar::show_beside_canvas(self.app, ui);
             self.app.canvas_area(ui);
             return;
         }
@@ -1273,15 +1368,23 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         }
         let width = ui.available_width();
         let height = (ui.available_height() - 20.0).max(0.0);
-        if DockTab::from_id(id).is_some() {
-            crate::dock::panel_body(self.app, ui, id, width, height);
-        } else {
-            // Shrinking to the content's height lets craft-ui fit a float or flyout to it.
-            crate::widgets::panel_scroll(ui, egui::ScrollArea::vertical().id_salt(("shared-panel-body", id)).auto_shrink([false, true]), |ui| {
-                let width = ui.available_width();
-                crate::dock::panel_body(self.app, ui, id, width, height)
-            });
-        }
+        let fitted = in_iconic_column(self.layout, id)
+            && self.layout.location(id).ok().and_then(|location| location.group).is_none_or(|group| group.height.is_none());
+        // Properties embeds other panels as sections, so their local button rows
+        // must remain beside those sections rather than pinning to the outer panel.
+        let bottom = (!fitted && id != "properties").then_some(back.bottom() - 10.0);
+        let info = egui::UiStackInfo::default().with_tag_value(crate::widgets::PANEL_FOOTER, bottom);
+        ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| {
+            if DockTab::from_id(id).is_some() {
+                crate::dock::panel_body(self.app, ui, id, width, height);
+            } else {
+                // Shrinking to the content's height lets craft-ui fit a float or flyout to it.
+                crate::widgets::panel_scroll(ui, egui::ScrollArea::vertical().id_salt(("shared-panel-body", id)).auto_shrink([false, true]), |ui| {
+                    let width = ui.available_width();
+                    crate::dock::panel_body(self.app, ui, id, width, height)
+                });
+            }
+        });
         if field_had_keyboard {
             keep_field_ending_keys(ui);
         }
@@ -1301,7 +1404,8 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
 
     fn limits(&self, id: &String) -> craft_ui::docking::PanelLimits {
-        let min = if id == CANVAS { egui::vec2(200.0, 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
+        let min =
+            if id == CANVAS { egui::vec2(200.0 + crate::toolbar::docked_width(&self.app.ui), 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
         craft_ui::docking::PanelLimits { min, ..Default::default() }
     }
 
@@ -1327,13 +1431,53 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         crate::panels::panel_menu_items(self.app, ui, id);
     }
 
-    fn group_header_width(&self, _panels: &[String], _active: &String, _floating: bool, _strip_width: f32) -> f32 {
-        28.0
+    fn group_header_width(&self, panels: &[String], _active: &String, floating: bool, _strip_width: f32) -> f32 {
+        let flyout = self.app.ui.open_panel.as_ref().is_some_and(|panel| panels.contains(panel));
+        if floating || flyout { 52.0 } else { 28.0 }
     }
 
-    fn group_header(&mut self, ui: &mut egui::Ui, _panels: &[String], active: &String, _floating: bool) {
-        let rect = egui::Rect::from_center_size(ui.max_rect().center(), egui::vec2(16.0, 16.0));
-        crate::panels::panel_menu(self.app, ui, active, rect);
+    fn group_header(&mut self, ui: &mut egui::Ui, panels: &[String], active: &String, floating: bool) {
+        let header = ui.max_rect();
+        let flyout = self.app.ui.open_panel.clone().filter(|panel| panels.contains(panel));
+        let menu_cell = if floating || flyout.is_some() {
+            let split = (header.right() - 28.0).max(header.left());
+            let cell = egui::Rect::from_min_max(header.min, egui::pos2(split, header.bottom()));
+            if cell.is_positive() {
+                let rect = egui::Rect::from_center_size(cell.center(), egui::vec2(24.0_f32.min(cell.width()), 24.0_f32.min(cell.height())));
+                let tokens = crate::theme::Tokens::get(ui.ctx());
+                let response = ui.interact(rect, ui.scope_id().with(("collapse-to-icons", active)), egui::Sense::click());
+                response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Collapse to Icons")));
+                let color = if response.hovered() || response.has_focus() { tokens.text_strong } else { tokens.text_dim };
+                ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())).text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "»",
+                    egui::TextStyle::Button.resolve(ui.style()),
+                    color,
+                );
+                if response.on_hover_text(tl!("Collapse to Icons")).clicked() {
+                    let result = if let Some(panel) = flyout {
+                        // The opening icon can differ from the currently active tab.
+                        self.app.run("window.panel", json!({"panel": panel}))
+                    } else {
+                        self.app.run("window.panel.dock", json!({"panel": active, "icon": true, "group": true}))
+                    };
+                    match result {
+                        // Dock commands reveal their destination. This control leaves the group collapsed.
+                        Ok(_) => self.app.ui.open_panel = None,
+                        Err(error) => self.app.ui.status = error,
+                    }
+                }
+            }
+            egui::Rect::from_min_max(egui::pos2(split, header.top()), header.max)
+        } else {
+            header
+        };
+        if menu_cell.is_positive() {
+            let rect =
+                egui::Rect::from_center_size(menu_cell.center(), egui::vec2(16.0_f32.min(menu_cell.width()), 16.0_f32.min(menu_cell.height())));
+            crate::panels::panel_menu(self.app, ui, active, rect);
+        }
     }
 }
 

@@ -11,16 +11,25 @@ mod visibility;
 pub use solid::{Bevel, BevelShape, Extrude, Facet, Inflate, View, extrude, inflate, inflate_together, plane};
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;
-pub use shading::{LightGradient, RgbGradient, ShadeGradient};
+pub use shading::{ClassicShading, ClassicSurface, LightGradient, RgbGradient, ShadeGradient};
 mod lights;
 pub use lights::{Light, Lights, MAX_LIGHTS};
 mod caps;
+mod mesh;
+pub use mesh::{Mesh, extrude_mesh, inflate_meshes, plane_mesh, revolve_mesh};
 
-use vectorcraft_geom::{BezPath, ParamCurve, PathData, Point, Rect, Vec2, kurbo::ParamCurveDeriv};
+use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathData, Point, Rect, Shape, Vec2, kurbo::ParamCurveDeriv};
 
 /// Resource limits shared by desktop, CLI and browser evaluation.
-const MAX_PROFILE_POINTS: usize = 1024;
+const MAX_PROFILE_POINTS: usize = 16_384;
 const MAX_FACES: usize = 32768;
+/// Most faces Revolve builds for one object, its members together: about 460 MB of drawn art.
+const MAX_REVOLVE_FACES: usize = 163_840;
+/// Most faces Extrude & Bevel and Inflate build for one solid, as many as Revolve's.
+const MAX_SOLID_FACES: usize = MAX_REVOLVE_FACES;
+/// Samples a curved profile segment takes, and the fewest it takes on a surface over its budget.
+const CURVE_SAMPLES: usize = 16;
+const MIN_CURVE_SAMPLES: usize = 4;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct V3(f64, f64, f64);
@@ -84,6 +93,9 @@ pub struct Revolve {
     /// Close circular endpoint rings of open profiles. Partial sweeps get sectors;
     /// the angular cut sides are left open. Enabled by default.
     pub cap_ends: bool,
+    /// Samples for each curved profile segment, from [`revolve_curve_samples`] for the surfaces of
+    /// one object. `None` plans them from the profile alone.
+    pub curve_samples: Option<usize>,
 }
 
 /// The default light's Rotation and Height: the light of the earlier default direction (45° to the
@@ -112,6 +124,7 @@ impl Default for Revolve {
             shade: true,
             smooth_shading: true,
             cap_ends: true,
+            curve_samples: None,
         }
     }
 }
@@ -305,6 +318,11 @@ impl Revolve {
             ..self
         }
     }
+    /// How many steps a sanitized sweep takes.
+    fn steps(self) -> usize {
+        ((self.segments as f64 * self.angle / 360.0).ceil() as usize).max(1)
+    }
+
     fn rotate(self, v: V3) -> V3 {
         let (sx, cx) = self.rotation_x.to_radians().sin_cos();
         let (sy, cy) = self.rotation_y.to_radians().sin_cos();
@@ -447,7 +465,235 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
 /// Evaluate a profile in document space. All subpaths share one axis from `bounds`.
 /// Invalid or excessively complex inputs return an error, never a partial surface.
 pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Face>, String> {
+    revolve_faces(path, FillRule::NonZero, bounds, options, None)
+}
+
+const TOO_COMPLEX_PROFILE: &str = "Revolve profile is too complex";
+const TOO_COMPLEX_SURFACE: &str = "Revolve surface is too complex; reduce Segments or simplify the profile";
+
+/// The samples each curved segment takes when `paths`, the profiles of one object's surfaces, are
+/// revolved with `options`: [`CURVE_SAMPLES`] when every surface fits the limits together, else as
+/// many as fit, the same number for every curve. An error when [`MIN_CURVE_SAMPLES`] do not fit.
+/// The count is made before any face is built.
+pub fn revolve_curve_samples<'a>(paths: impl IntoIterator<Item = &'a PathData>, options: Revolve) -> Result<usize, String> {
     let o = options.sanitized();
+    let steps = o.steps();
+    let per_edge = if o.shade && o.smooth_shading { steps.saturating_mul(2) } else { steps };
+    let (mut anchors, mut contours, mut lines, mut curves, mut caps) = (0usize, 0usize, 0usize, 0usize, 0usize);
+    for sp in paths.into_iter().flat_map(|p| &p.subpaths) {
+        anchors = anchors.saturating_add(sp.anchors.len());
+        contours += 1;
+        if anchors > MAX_PROFILE_POINTS || contours > MAX_PROFILE_POINTS {
+            return Err(TOO_COMPLEX_PROFILE.into());
+        }
+        let segments = if sp.closed { sp.anchors.len() } else { sp.anchors.len().saturating_sub(1) };
+        for i in 0..segments {
+            if sp.segment_is_line(i) {
+                lines += 1;
+            } else {
+                curves += 1;
+            }
+        }
+        if o.cap_ends && !sp.closed && segments > 0 {
+            caps += 2;
+        }
+    }
+    let points = MAX_PROFILE_POINTS.saturating_sub(contours);
+    if lines.saturating_add(curves.saturating_mul(MIN_CURVE_SAMPLES)) > points {
+        return Err(TOO_COMPLEX_PROFILE.into());
+    }
+    let edges = (MAX_REVOLVE_FACES.saturating_sub(caps.saturating_mul(steps)) / per_edge).min(points);
+    if curves == 0 {
+        return if lines > edges { Err(TOO_COMPLEX_SURFACE.into()) } else { Ok(CURVE_SAMPLES) };
+    }
+    let samples = (edges.saturating_sub(lines) / curves).min(CURVE_SAMPLES);
+    if samples < MIN_CURVE_SAMPLES { Err(TOO_COMPLEX_SURFACE.into()) } else { Ok(samples) }
+}
+
+/// Most work the search for holes does: each winding test counts its contour's elements, and each
+/// contour placed in a cell of the grid or looked at as a candidate for a point counts one.
+const MAX_HOLE_WORK: usize = 16_000_000;
+
+/// Most cells along each side of the grid the search for holes sorts contours into.
+const MAX_HOLE_GRID: usize = 256;
+
+/// For each segment of each subpath of `path`, whether it walls a hole under `rule`: the fill is
+/// outside its closed contour at the segment's middle and not inside. An error past
+/// [`MAX_HOLE_WORK`].
+#[cfg(test)]
+fn hole_segments(path: &PathData, rule: FillRule) -> Result<Vec<Vec<bool>>, String> {
+    hole_segments_counted(path, rule).map(|(holes, _)| holes)
+}
+
+/// [`hole_segments`] and the work it did.
+#[cfg(test)]
+fn hole_segments_counted(path: &PathData, rule: FillRule) -> Result<(Vec<Vec<bool>>, usize), String> {
+    let mut search = HoleSearch::new(path, rule)?;
+    let mut holes = Vec::with_capacity(path.subpaths.len());
+    for (i, sp) in path.subpaths.iter().enumerate() {
+        let segments = if sp.closed { sp.anchors.len() } else { 0 };
+        holes.push((0..segments).map(|segment| search.is_hole(i, sp.segment(segment).eval(0.5))).collect::<Result<Vec<_>, _>>()?);
+    }
+    Ok((holes, search.work))
+}
+
+/// The closed contours of a profile sorted into a grid over the bounds of them all, each listed in
+/// the cells its bounds reach into, to find which parts of the profile's edges wall a hole under
+/// its fill rule. A point is tested only against the contours of its cell. Every test counts
+/// toward [`MAX_HOLE_WORK`].
+struct HoleSearch {
+    /// Each subpath's outline, its bounds, and for a closed one which way it winds.
+    contours: Vec<(BezPath, Rect, Option<i32>)>,
+    rule: FillRule,
+    area: Option<Rect>,
+    side: usize,
+    grid: Vec<Vec<usize>>,
+    work: usize,
+}
+
+impl HoleSearch {
+    fn new(path: &PathData, rule: FillRule) -> Result<Self, String> {
+        // Each contour takes a profile point, as in `revolve_curve_samples`.
+        if path.subpaths.len() > MAX_PROFILE_POINTS {
+            return Err(TOO_COMPLEX_PROFILE.into());
+        }
+        let contours: Vec<(BezPath, Rect, Option<i32>)> = path
+            .subpaths
+            .iter()
+            .map(|sp| {
+                let contour = PathData::new(vec![sp.clone()]).to_bezpath();
+                let bounds = contour.bounding_box();
+                let direction = sp.closed.then(|| if contour.area() < 0.0 { -1 } else { 1 });
+                (contour, bounds, direction)
+            })
+            .collect();
+        let closed = || contours.iter().enumerate().filter(|(_, (_, _, d))| d.is_some());
+        let area = closed().map(|(_, (_, b, _))| *b).reduce(|a, b| a.union(b));
+        let side = ((closed().count() as f64).sqrt().ceil() as usize).clamp(1, MAX_HOLE_GRID);
+        let mut search = HoleSearch { contours: vec![], rule, area, side, grid: vec![vec![]; side * side], work: 0 };
+        for (j, (_, b, _)) in closed() {
+            let cells = search.cells(*b);
+            search.spend(cells.len())?;
+            for c in cells {
+                if let Some(c) = search.grid.get_mut(c) {
+                    c.push(j);
+                }
+            }
+        }
+        search.contours = contours;
+        Ok(search)
+    }
+
+    fn spend(&mut self, n: usize) -> Result<(), String> {
+        self.work = self.work.saturating_add(n);
+        if self.work > MAX_HOLE_WORK { Err(TOO_COMPLEX_PROFILE.to_string()) } else { Ok(()) }
+    }
+
+    /// The grid cells `r` reaches into.
+    fn cells(&self, r: Rect) -> Vec<usize> {
+        let Some(a) = self.area else { return vec![] };
+        let side = self.side;
+        let at = |v: f64, lo: f64, hi: f64| {
+            let span = hi - lo;
+            if span > 0.0 { (((v - lo) / span * side as f64).floor().max(0.0) as usize).min(side - 1) } else { 0 }
+        };
+        let (x0, x1) = (at(r.x0, a.x0, a.x1), at(r.x1, a.x0, a.x1));
+        let (y0, y1) = (at(r.y0, a.y0, a.y1), at(r.y1, a.y0, a.y1));
+        (y0..=y1).flat_map(|y| (x0..=x1).map(move |x| y * side + x)).collect()
+    }
+
+    /// The closed contours other than `own` whose bounds may meet `r`, each once.
+    fn candidates(&mut self, own: usize, r: Rect) -> Result<Vec<usize>, String> {
+        let mut out = vec![];
+        for c in self.cells(r) {
+            let listed = self.grid.get(c).map_or(&[][..], Vec::as_slice);
+            out.extend(listed.iter().copied().filter(|j| *j != own));
+        }
+        self.spend(out.len())?;
+        out.sort_unstable();
+        out.dedup();
+        Ok(out)
+    }
+
+    /// Whether the edge of closed subpath `own` at `p` walls a hole: the fill is outside its
+    /// contour there and not inside.
+    fn is_hole(&mut self, own: usize, p: Point) -> Result<bool, String> {
+        let Some(direction) = self.contours.get(own).and_then(|c| c.2) else { return Ok(false) };
+        let mut others = 0i32;
+        for j in self.candidates(own, Rect::from_points(p, p))? {
+            let Some((contour, bounds, Some(_))) = self.contours.get(j) else { continue };
+            if !bounds.contains(p) {
+                continue;
+            }
+            let (elements, winding) = (contour.elements().len(), contour.winding(p));
+            self.spend(elements)?;
+            others += winding;
+        }
+        Ok(match self.rule {
+            FillRule::EvenOdd => others % 2 != 0,
+            FillRule::NonZero => others != 0 && others + direction == 0,
+        })
+    }
+
+    /// The line from `a` to `b` on subpath `own`, cut where it crosses another closed contour: each
+    /// part's end, the last one `b`, and whether that part walls a hole at its middle.
+    fn parts(&mut self, own: usize, a: Point, b: Point) -> Result<Vec<(Point, bool)>, String> {
+        let mut out = vec![];
+        let mut from = 0.0;
+        for t in self.crossings(own, a, b)?.into_iter().chain([1.0]) {
+            let hole = self.is_hole(own, a.lerp(b, (from + t) * 0.5))?;
+            out.push((if t < 1.0 { a.lerp(b, t) } else { b }, hole));
+            from = t;
+        }
+        Ok(out)
+    }
+
+    /// Where the line from `a` to `b` on closed subpath `own` crosses another closed contour, as
+    /// sorted fractions of the way from `a` to `b`, strictly between them.
+    fn crossings(&mut self, own: usize, a: Point, b: Point) -> Result<Vec<f64>, String> {
+        if self.contours.get(own).and_then(|c| c.2).is_none() {
+            return Ok(vec![]);
+        }
+        let line = vectorcraft_geom::kurbo::Line::new(a, b);
+        let reach = Rect::from_points(a, b);
+        let mut out = vec![];
+        for j in self.candidates(own, reach)? {
+            let Some((contour, bounds, Some(_))) = self.contours.get(j) else { continue };
+            if bounds.x0 > reach.x1 || bounds.x1 < reach.x0 || bounds.y0 > reach.y1 || bounds.y1 < reach.y0 {
+                continue;
+            }
+            let found: Vec<f64> = contour.segments().flat_map(|s| s.intersect_line(line)).map(|i| i.line_t).collect();
+            self.spend(contour.elements().len())?;
+            out.extend(found.into_iter().filter(|t| *t > 1e-9 && *t < 1.0 - 1e-9));
+        }
+        out.sort_by(f64::total_cmp);
+        out.dedup_by(|x, y| (*x - *y).abs() < 1e-9);
+        Ok(out)
+    }
+}
+
+/// [`revolve`], or with `mesh` the surface's faces before projection, kept there instead of drawn,
+/// each turned out of the region `rule` fills.
+fn revolve_faces(
+    path: &PathData,
+    rule: FillRule,
+    bounds: Rect,
+    options: Revolve,
+    mut mesh: Option<&mut Vec<solid::Face3>>,
+) -> Result<Vec<Face>, String> {
+    let o = options.sanitized();
+    let curve_samples = match o.curve_samples {
+        Some(samples) => samples.clamp(1, CURVE_SAMPLES),
+        None => revolve_curve_samples([path], o)?,
+    };
+    // For a mesh, each piece of a closed contour's edge is cut where it crosses another contour, so
+    // each part's normal turns toward a hole only where it walls one.
+    let mut search = if mesh.is_some() { Some(HoleSearch::new(path, rule)?) } else { None };
+    // A face kept for a mesh: its normal follows from its corners.
+    let keep = |mesh: &mut Vec<solid::Face3>, face: Vec<V3>, normal: V3| {
+        mesh.push((vec![face], normal));
+        if mesh.len() > MAX_REVOLVE_FACES { Err(TOO_COMPLEX_SURFACE.to_string()) } else { Ok(()) }
+    };
     if ![bounds.x0, bounds.y0, bounds.x1, bounds.y1].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
         return Err("Revolve requires finite profile coordinates within 100 million points".into());
     }
@@ -458,7 +704,7 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
     let center_y = (bounds.y0 + bounds.y1) * 0.5;
     let radius = (bounds.x0 - axis).abs().max((bounds.x1 - axis).abs());
     let eye = eye_distance(o.perspective, radius.max(bounds.height().abs()).max(1.0));
-    let steps = ((o.segments as f64 * o.angle / 360.0).ceil() as usize).max(1);
+    let steps = o.steps();
     let sweep = o.angle.to_radians();
     let smooth = o.shade && o.smooth_shading;
     let [lx, ly, lz] = o.light_direction();
@@ -477,32 +723,33 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
         if let Some(face) = face {
             faces.push(face);
             mesh_cost += cost;
-            if mesh_cost > MAX_FACES {
-                return Err("Revolve surface is too complex; reduce Segments or simplify the profile".into());
+            if mesh_cost > MAX_REVOLVE_FACES {
+                return Err(TOO_COMPLEX_SURFACE.into());
             }
         }
         Ok(())
     };
     let mut count = 0;
     let mut curve_budget = 0;
-    for sp in &path.subpaths {
+    for (contour, sp) in path.subpaths.iter().enumerate() {
         let mut profile = Vec::new();
         let mut tangents = Vec::new();
+        let mut hole_edges = Vec::new();
         if let Some(first) = sp.anchors.first() {
             profile.push(first.p);
             count += 1;
             if count > MAX_PROFILE_POINTS {
-                return Err("Revolve profile is too complex".into());
+                return Err(TOO_COMPLEX_PROFILE.into());
             }
         }
         let segments = if sp.closed { sp.anchors.len() } else { sp.anchors.len().saturating_sub(1) };
-        // Bound work before sampling any data. Curves get sixteen samples, straight edges one.
+        // Bound work before sampling any data. Straight edges get one sample.
         if segments > MAX_PROFILE_POINTS {
-            return Err("Revolve profile is too complex".into());
+            return Err(TOO_COMPLEX_PROFILE.into());
         }
         for i in 0..segments {
             let curve = sp.segment(i);
-            let samples = if sp.segment_is_line(i) { 1 } else { 16 };
+            let samples = if sp.segment_is_line(i) { 1 } else { curve_samples };
             for k in 1..=samples {
                 let t0 = (k - 1) as f64 / samples as f64;
                 let t1 = k as f64 / samples as f64;
@@ -524,11 +771,19 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
                     let v = d.eval(t.clamp(1e-7, 1.0 - 1e-7)).to_vec2();
                     if v.hypot2() > 1e-20 { v } else { b - a }
                 };
-                tangents.push([tangent(t0), tangent(t1)]);
-                profile.push(b);
-                count += 1;
-                if count > MAX_PROFILE_POINTS {
-                    return Err("Revolve profile is too complex".into());
+                let a = profile.last().copied().unwrap_or(b);
+                let parts = match search.as_mut() {
+                    Some(search) => search.parts(contour, a, b)?,
+                    None => vec![(b, false)],
+                };
+                for (end, hole) in parts {
+                    tangents.push([tangent(t0), tangent(t1)]);
+                    hole_edges.push(hole);
+                    profile.push(end);
+                    count += 1;
+                    if count > MAX_PROFILE_POINTS {
+                        return Err(TOO_COMPLEX_PROFILE.into());
+                    }
                 }
             }
         }
@@ -543,13 +798,32 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
                 }
             }
         }
-        for (i, (pair, [ta, tb])) in profile.windows(2).zip(tangents).enumerate() {
+        // For a mesh: which way the profile runs round the region it sweeps (closed against the
+        // axis at its ends when it is open), so the faces' normals point out of the solid.
+        let turn = {
+            let mut ring: Vec<(f64, f64)> = profile.iter().map(|p| (p.x - axis, p.y)).collect();
+            if let (false, Some(first), Some(last)) = (sp.closed, profile.first(), profile.last()) {
+                ring.extend([(0.0, last.y), (0.0, first.y)]);
+            }
+            let area: f64 = ring.iter().zip(ring.iter().cycle().skip(1)).take(ring.len()).map(|(p, q)| p.0 * q.1 - q.0 * p.1).sum();
+            if area < 0.0 { -1.0 } else { 1.0 }
+        };
+        for (i, ((pair, [ta, tb]), hole)) in profile.windows(2).zip(tangents).zip(hole_edges).enumerate() {
             let [a, b] = pair else { continue };
+            let turn = if hole { -turn } else { turn };
             if ![a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
                 return Err("Revolve profile contains invalid coordinates".into());
             }
             for j in 0..steps {
                 let [v0, v1, v2, v3] = [vertex(*a, j), vertex(*b, j), vertex(*b, j + 1), vertex(*a, j + 1)];
+                if let Some(mesh) = mesh.as_deref_mut() {
+                    // The edge's outward normal in the profile's plane (distance from the axis,
+                    // height), swept to the middle of the step.
+                    let (dr, dy) = ((b.x - a.x) * turn, (b.y - a.y) * turn);
+                    let (s, c) = (sweep * (j as f64 + 0.5) / steps as f64).sin_cos();
+                    keep(mesh, vec![v0, v1, v2, v3], o.rotate(V3(dy * c, -dr, dy * s)))?;
+                    continue;
+                }
                 let first = (i == 0).then(|| rings.first().and_then(Option::as_ref).and_then(|r| r.arcs.get(j))).flatten();
                 let last = (i + 2 == profile.len()).then(|| rings.last().and_then(Option::as_ref).and_then(|r| r.arcs.get(j))).flatten();
                 let projected = |vertices: &[V3], normals: Option<&[V3]>, edges: &[(usize, &caps::RingArc, bool)]| {
@@ -581,6 +855,17 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
                 } else {
                     1.0
                 };
+                if let Some(mesh) = mesh.as_deref_mut() {
+                    // The disk, or for a partial sweep the sector with its centre on the axis.
+                    let mut cap: Vec<V3> = (0..=steps).map(|j| vertex(*end, j)).collect();
+                    if o.angle >= 360.0 {
+                        cap.pop();
+                    } else {
+                        cap.insert(0, o.rotate(V3(0.0, end.y - center_y, 0.0)));
+                    }
+                    keep(mesh, cap, o.rotate(V3(0.0, outward, 0.0)))?;
+                    continue;
+                }
                 // Keep the original tessellation work budget, even though each cap
                 // now produces only one curved vector face.
                 emit(ring.face(bounds, o, light, outward)?, steps)?;

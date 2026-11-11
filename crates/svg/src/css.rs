@@ -160,10 +160,13 @@ pub(crate) fn font_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
 /// written by `len`.
 pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
     let mut p = Props::new();
-    // Tracking and manual kerning both add space after every character.
+    // Tracking and manual kerning both add space after every character, in thousandths of the em
+    // of the font size written (the vertical scale, see `font_props`). The canvas spaces them by
+    // the horizontal scale: a uniform scale is the same, and `textLength` stretches type scaled
+    // horizontally alone, glyphs and spacing together, from the one to the other.
     let spacing = st.tracking + st.kerning.unwrap_or(0.0);
     if spacing != 0.0 {
-        p.push(("letter-spacing", len(spacing / 1000.0 * st.size)));
+        p.push(("letter-spacing", len(spacing / 1000.0 * st.size * st.v_scale / 100.0)));
     }
     if st.kerning.is_some() {
         // Manual kerning replaces the font's pair kerning.
@@ -668,7 +671,7 @@ impl Rules<'_> {
                 RasterFx::InnerGlow { opacity, blur, color, center: false, .. } if !text => {
                     shadows.push(format!("inset 0 0 {} {}", self.len(blur), color_css(&color, opacity)))
                 }
-                RasterFx::GaussianBlur { radius } => filter = Some(format!("blur({})", self.len(radius / 2.0))),
+                RasterFx::GaussianBlur { radius, .. } => filter = Some(format!("blur({})", self.len(radius / 2.0))),
                 RasterFx::InnerGlow { .. } | RasterFx::Feather { .. } => art.unsupported("inner glows or feathering"),
                 RasterFx::Pixel(_) | RasterFx::Rasterize(_) => art.unsupported("pixel effects"),
             }

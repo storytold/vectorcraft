@@ -343,6 +343,20 @@ impl NineSliceMap {
         self.cell_xf(self.x.cell(q.x), self.y.cell(q.y))
     }
 
+    /// A box that holds everything [`Self::place`] draws of art whose geometric box in symbol space
+    /// is `art`, before strokes and effects: `art` placed by each of the nine cells' maps. An object
+    /// that crosses a guide and draws symbol art is placed by the map of the cell its center is in,
+    /// so it can draw outside the box the corner cells place `art` in.
+    pub fn placement_bounds(&self, art: Rect) -> Rect {
+        let mut b = self.cell_xf(0, 0).transform_rect_bbox(art);
+        for j in 0..3 {
+            for i in 0..3 {
+                b = b.union(self.cell_xf(i, j).transform_rect_bbox(art));
+            }
+        }
+        b
+    }
+
     /// The guides in symbol space: the two x values and the two y values.
     fn cuts(&self) -> ([f64; 2], [f64; 2]) {
         let inv = self.natural.inverse();
@@ -435,6 +449,18 @@ impl NineSliceMap {
     pub fn most_placed(&self, art: &Node, doc: &Document) -> u64 {
         let boxes = doc.symbol_boxes().quick();
         self.most_at(art, &boxes, 0)
+    }
+
+    /// The affine map that [`Self::place`] and [`Self::place_unclipped`] move object `n` by as one
+    /// piece, with everything in it: the map of the cell its box lies in, or of the cell at the
+    /// origin when it has no box. `None` when its box crosses a guide.
+    pub fn one_cell(&self, n: &Node, doc: &Document) -> Option<Affine> {
+        let boxes = doc.symbol_boxes().quick();
+        let Some(b) = n.geometric(Some(&boxes)).map(|b| self.natural.transform_rect_bbox(b)).filter(|b| finite(*b)) else {
+            return Some(self.cell_at(Point::ZERO));
+        };
+        let (cols, rows) = (self.x.cells(b.x0, b.x1), self.y.cells(b.y0, b.y1));
+        (cols[0] == cols[1] && rows[0] == rows[1]).then(|| self.cell_xf(cols[0], rows[0]))
     }
 
     /// [`Self::most_placed`] for [`Self::place_unclipped`]: the most objects it makes of `art`.
@@ -702,6 +728,12 @@ impl Document {
         let sym = self.symbols.iter().find(|s| s.name == name)?;
         let art = self.symbol_boxes().quick().art_bounds(name).or_else(|| sym.art.geometric_bounds())?;
         NineSliceMap::new(guides, art, self.symbol_natural_xf(name), xf)
+    }
+
+    /// [`Self::symbol_slice_map`] with the guides cutting `art`, the symbol's art box already
+    /// measured.
+    pub(crate) fn symbol_slice_map_of(&self, name: &str, art: Rect, xf: Affine) -> Option<NineSliceMap> {
+        NineSliceMap::new(self.symbol_nine_slice(name)?, art, self.symbol_natural_xf(name), xf)
     }
 
     /// Art `art` of symbol `name` (stained as the caller draws it) placed by an instance's

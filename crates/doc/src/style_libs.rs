@@ -98,6 +98,10 @@ impl GraphicStyle {
 /// The extension (and `format` header) of graphic style library files.
 pub const STYLES_EXT: &str = "vcstyles";
 
+/// The version of the `.vcstyles` files [`write`] writes. Version 2: a positive Twist angle turns
+/// clockwise ([`crate::twist`]).
+const STYLES_VERSION: u32 = crate::twist::TWIST_CLOCKWISE_SINCE;
+
 /// The file: a header around the library.
 #[derive(Serialize, Deserialize)]
 struct NativeFile {
@@ -109,17 +113,21 @@ struct NativeFile {
 
 /// `lib` as a `.vcstyles` file.
 pub fn write(lib: &StyleLibrary) -> String {
-    let file = NativeFile { format: STYLES_EXT.into(), version: 1, library: lib.clone() };
+    let file = NativeFile { format: STYLES_EXT.into(), version: STYLES_VERSION, library: lib.clone() };
     serde_json::to_string_pretty(&file).unwrap_or_default()
 }
 
-/// Read a `.vcstyles` file; an unnamed library is called `name`.
+/// Read a `.vcstyles` file; an unnamed library is called `name`. A version 1 file was written by
+/// an app that turned Twist counterclockwise: its Twist angles are negated.
 pub fn read(text: &str, name: &str) -> Result<StyleLibrary, String> {
     let f: NativeFile = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| format!("not a graphic style library: {e}"))?;
     if f.format != STYLES_EXT {
         return Err(format!("not a graphic style library (format `{}`)", f.format));
     }
     let mut lib = f.library;
+    if f.version < STYLES_VERSION {
+        crate::twist::negate_library(&mut lib);
+    }
     if lib.name.trim().is_empty() {
         lib.name = name.into();
     }
@@ -150,6 +158,8 @@ pub const STYLE_LIBRARIES: &[BuiltinStyleLibrary] = &[
     BuiltinStyleLibrary { id: "gradient-finishes", name: "Gradient Finishes", make: gradient_finishes },
     BuiltinStyleLibrary { id: "shape-effects", name: "Shape Effects", make: shape_effects },
     BuiltinStyleLibrary { id: "blends-transparency", name: "Blends and Transparency", make: blends_transparency },
+    BuiltinStyleLibrary { id: "game-hud", name: "Game HUD", make: game_hud },
+    BuiltinStyleLibrary { id: "status-effects", name: "Status Effects", make: status_effects },
 ];
 
 /// Built-in library `id`, made once.
@@ -445,6 +455,71 @@ fn blends_transparency() -> Vec<GraphicStyle> {
     ]
 }
 
+/// Game HUD: fills and glows for health, mana, damage and quest chrome (original arcade/HUD look).
+fn game_hud() -> Vec<GraphicStyle> {
+    vec![
+        style("Health Fill", vec![F(fill("#e74c3c")), S(stroke("#5c1a1a", 1.25))], vec![]),
+        style(
+            "Mana Glow",
+            vec![F(fill("#3498db"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 85.0, "blur": 7.0, "color": "#5dade2"}))],
+        ),
+        style(
+            "Damage Flash",
+            vec![F(fill("#ff6b35"))],
+            vec![fx("stylize.innerGlow", json!({"mode": "screen", "opacity": 80.0, "blur": 8.0, "color": "#ffe66d", "source": "edge"}))],
+        ),
+        style("Quest Outline", vec![F(fill("#f7f3e8")), S(round("#2c3e50", 3.0))], vec![]),
+        style(
+            "Coin Shine",
+            vec![F(fill("#f1c40f")), S(stroke("#b7950b", 1.5))],
+            vec![fx("stylize.dropShadow", json!({"mode": "multiply", "opacity": 40.0, "x": 2.0, "y": 3.0, "blur": 4.0, "color": "#1d1b2a"}))],
+        ),
+        style(
+            "Boss Alert",
+            vec![F(fill("#1a1a2e")), S(round("#e94560", 2.5))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 75.0, "blur": 6.0, "color": "#e94560"}))],
+        ),
+    ]
+}
+
+/// Status Effects: buffs and debuffs for RPG/gamedev art (original, catalogue stylize effects only).
+fn status_effects() -> Vec<GraphicStyle> {
+    let stealth = GraphicStyle {
+        opacity: 0.45,
+        blend: BlendMode::Normal,
+        ..style("Stealth Fade", vec![F(fill("#7f8c8d")), S(stroke("#2c3e50", 1.0))], vec![])
+    };
+    vec![
+        style(
+            "Poison Tint",
+            vec![F(fill("#2ecc71"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 80.0, "blur": 6.0, "color": "#58d68d"}))],
+        ),
+        style(
+            "Freeze Edge",
+            vec![F(fill("#aed6f1")), S(stroke("#5dade2", 2.0))],
+            vec![fx("stylize.innerGlow", json!({"mode": "screen", "opacity": 70.0, "blur": 5.0, "color": "#d6eaf8", "source": "edge"}))],
+        ),
+        style(
+            "Burn Aura",
+            vec![F(fill("#e67e22"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 85.0, "blur": 8.0, "color": "#f39c12"}))],
+        ),
+        style(
+            "Stun Pulse",
+            vec![F(fill("#f4d03f"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 75.0, "blur": 7.0, "color": "#f7dc6f"}))],
+        ),
+        stealth,
+        style(
+            "Shield Buff",
+            vec![F(fill("#85c1e9")), S(round("#2874a6", 2.0))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 70.0, "blur": 5.0, "color": "#5dade2"}))],
+        ),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -467,6 +542,14 @@ mod tests {
         }
         assert!(Arc::ptr_eq(&builtin_style_library("hand-drawn").unwrap(), &builtin_style_library("hand-drawn").unwrap()), "made once");
         assert!(builtin_style_library("nope").is_none());
+        let game = builtin_style_library("game-hud").unwrap();
+        assert_eq!(game.name, "Game HUD");
+        let names: Vec<&str> = game.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Health Fill", "Mana Glow", "Damage Flash", "Quest Outline", "Coin Shine", "Boss Alert"]);
+        let status = builtin_style_library("status-effects").unwrap();
+        assert_eq!(status.name, "Status Effects");
+        let status_names: Vec<&str> = status.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(status_names, ["Poison Tint", "Freeze Edge", "Burn Aura", "Stun Pulse", "Stealth Fade", "Shield Buff"]);
     }
 
     #[test]

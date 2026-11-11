@@ -98,6 +98,9 @@ pub(super) const MAX_AXES: usize = 64;
 
 pub(super) const MAX_INSTANCES: usize = 512;
 
+/// The most shaping plans a face keeps ([`FontFace::shape_plan`]); past it the oldest is dropped.
+const MAX_PLANS: usize = 32;
+
 /// One axis of a variable font's design space, as its `fvar` table lists it: the tag (`wght`), its
 /// name in the font's name table (`Weight`; the tag when it has none) and its range and default,
 /// in the axis's own units.
@@ -184,10 +187,14 @@ pub struct FontFace {
     pub(super) location: Location,
     /// [`Self::variations`] for the shaper (advances, kerning, feature variations).
     pub(crate) instance: Option<harfrust::ShaperInstance>,
+    /// The shaping plans made for this face, newest last ([`Self::shape_plan`]).
+    pub(super) plans: std::sync::Mutex<Vec<Arc<harfrust::ShapePlan>>>,
     /// [`Self::ideographic_centre`], read once: layout asks for it per glyph.
     pub(super) ideographic_centre: std::sync::OnceLock<f64>,
     /// [`Self::icf_margins`], read once.
     pub(super) icf_margins: std::sync::OnceLock<IcfMargins>,
+    /// [`Self::path_align_heights`], read once.
+    pub(super) path_align: std::sync::OnceLock<PathAlignHeights>,
     /// Has `sbix` or `CBDT` strikes: colour bitmap glyphs ([`FontDb::glyph_image`]).
     pub(super) colour_bitmaps: bool,
     /// Has `COLR` colour glyphs ([`FontDb::glyph_colour`]).
@@ -207,6 +214,26 @@ pub struct IcfMargins {
     pub left: f64,
 }
 
+/// The heights above the baseline, in ems, that Type on a Path's Align to Path runs along the
+/// path ([`FontFace::path_align_heights`]). These are VectorCraft's own values.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct PathAlignHeights {
+    /// Ascender: the top of the face's em box ([`FontFace::em_box_top`]).
+    pub(crate) top: f64,
+    /// Descender (negative): the bottom of the font's bounding box (`head`), else the face's
+    /// descent.
+    pub(crate) bottom: f64,
+    /// Center: half the height of the top of the H above the baseline in whole thousandths of an
+    /// em, else half the OS/2 cap height, else the middle of the em box.
+    pub(crate) center: f64,
+}
+
+/// The characters whose ink an ideographic face's em box is centered on, the first the face has.
+const EM_BOX_IDEOGRAPHS: [char; 4] = ['永', '鬱', '곬', '・'];
+
+/// A box-drawing character whose ink, in an ideographic face, is one em tall: the em box.
+const EM_BOX_CROSS: char = '┼';
+
 impl std::fmt::Debug for FontFace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "FontFace({} {})", self.family, self.style)
@@ -225,6 +252,45 @@ impl FontFace {
     }
     pub(crate) fn hb(&self) -> Option<harfrust::FontRef<'_>> {
         harfrust::FontRef::from_index(self.data(), self.index).ok()
+    }
+    /// The shaping plan for a buffer of `direction`, `script` and `language` shaped with
+    /// `features` by `shaper` (made from this face at [`Self::instance`]): the plan made earlier for
+    /// the same properties, else a new one, which the face keeps for later (at most [`MAX_PLANS`]).
+    /// A plan depends on these properties alone, so text shaped with it comes out as with a plan
+    /// made for it.
+    pub(crate) fn shape_plan(
+        &self,
+        shaper: &harfrust::Shaper<'_>,
+        direction: harfrust::Direction,
+        script: Option<harfrust::Script>,
+        language: Option<&harfrust::Language>,
+        features: &[harfrust::Feature],
+    ) -> Arc<harfrust::ShapePlan> {
+        #[cfg(any(test, feature = "test-fonts"))]
+        if !crate::test_fonts::keeps_shape_plans() {
+            return Arc::new(harfrust::ShapePlan::new(shaper, direction, script, language, features));
+        }
+        let key = harfrust::ShapePlanKey::new(script, direction).language(language).instance(self.instance.as_ref()).features(features);
+        let kept = |plans: &[Arc<harfrust::ShapePlan>]| plans.iter().rev().find(|p| key.matches(p)).cloned();
+        if let Some(plan) = kept(&self.plans.lock().unwrap_or_else(|e| e.into_inner())) {
+            return plan;
+        }
+        // Made without the lock held: other threads keep shaping with this face meanwhile.
+        let plan = Arc::new(harfrust::ShapePlan::new(shaper, direction, script, language, features));
+        let mut plans = self.plans.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(made) = kept(&plans) {
+            return made;
+        }
+        if plans.len() >= MAX_PLANS {
+            plans.remove(0);
+        }
+        plans.push(plan.clone());
+        plan
+    }
+    /// Tests: how many shaping plans the face holds.
+    #[cfg(test)]
+    pub(crate) fn plans_kept(&self) -> usize {
+        self.plans.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
     /// The face's index in its font file (collections hold several).
     pub(crate) fn index(&self) -> u32 {
@@ -416,6 +482,111 @@ impl FontFace {
     /// <https://learn.microsoft.com/en-us/typography/opentype/spec/baselinetags>
     pub fn icf_margins(&self) -> IcfMargins {
         *self.icf_margins.get_or_init(|| self.icf_from_base().or_else(|| self.icf_from_glyphs()).unwrap_or_default())
+    }
+
+    /// The lines Type on a Path's Align to Path runs along the path, in ems above the baseline
+    /// ([`PathAlignHeights`]): the top of the em box ([`Self::em_box_top`], else 0.88 em), the
+    /// bottom of the font's bounding box, and half the height of the top of the H.
+    pub(crate) fn path_align_heights(&self) -> PathAlignHeights {
+        *self.path_align.get_or_init(|| {
+            use skrifa::raw::TableProvider;
+            let em = self.upem;
+            let top = self.em_box_top().unwrap_or(0.88);
+            let bottom =
+                self.skrifa().and_then(|f| f.head().ok()).map(|h| f64::from(h.y_min()) / em).filter(|b| b.is_finite() && *b <= 0.0 && *b > -4.0);
+            // Measured from the baseline to the top of the H, as a cap height is, wherever its ink starts.
+            let cap = self.glyph_ink('H').map(|(_, top)| top / em).or_else(|| self.os2_cap_height()).filter(|c| c.is_finite() && *c < 2.0);
+            PathAlignHeights {
+                top,
+                bottom: bottom.unwrap_or(-self.descent / em),
+                center: cap.map_or(top - 0.5, |cap| (cap * 1000.0).round() / 2000.0),
+            }
+        })
+    }
+
+    /// The top of the face's em box, in ems above the baseline. A `BASE` table with an `ideo`
+    /// baseline gives it: its `idtp`, else one em above `ideo`. In a face whose OS/2 code pages
+    /// include Chinese, Japanese or Korean, it is the typographic ascender of the typographic box
+    /// (else, in a TrueType face, of the `hhea` box) when that box holds the ink of the first of 永,
+    /// 鬱, 곬 and ・ the face has, and is one em tall or leaves equal margins above and below the
+    /// ink; a face with none of them needs the box to be one em tall. Else it is the top of a ┼
+    /// one em tall, else the top of an em box centered on the ink. In any other face the em box is
+    /// centered on the cap height: the OS/2 value, else the lower of the tops of H and O in whole
+    /// thousandths of an em. `None` when none of these applies.
+    pub(crate) fn em_box_top(&self) -> Option<f64> {
+        use skrifa::raw::TableProvider;
+        let f = self.skrifa()?;
+        let em = self.upem;
+        let sane = |v: f64| (v.is_finite() && v.abs() < 4.0).then_some(v);
+        // A roman baseline below the ideographic one is a damaged table: the baselines are ignored.
+        if let Some(h) = f.base().ok().and_then(|b| b.horiz_axis()).and_then(Result::ok).and_then(base_values)
+            && let Some(&ideo) = h.get(b"ideo")
+            && h.get(b"romn").is_none_or(|&romn| romn >= ideo)
+        {
+            return sane(h.get(b"idtp").copied().unwrap_or(ideo + em) / em);
+        }
+        // ulCodePageRange1 bits 17 to 21: JIS/Japan, Chinese Simplified, Korean Wansung, Chinese
+        // Traditional and Korean Johab.
+        let cjk = f.os2().ok().and_then(|o| o.ul_code_page_range_1()).is_some_and(|r| r & (0b1_1111 << 17) != 0);
+        if !cjk {
+            let lower_top = || {
+                let ((_, h), (_, o)) = (self.glyph_ink('H')?, self.glyph_ink('O')?);
+                Some((h.min(o) / em * 1000.0).round() / 1000.0)
+            };
+            let cap = self.os2_cap_height().or_else(lower_top).filter(|c| c.is_finite() && *c > 0.0 && *c < 2.0)?;
+            return Some((cap + 1.0) * 0.5);
+        }
+        // Heights in 65,536ths of an em, as the em box is kept.
+        let units = |v: f64| (v / em * 65536.0).round();
+        let ink = EM_BOX_IDEOGRAPHS.into_iter().find_map(|c| self.glyph_ink(c));
+        // A variable font's MVAR table moves the OS/2 typographic ascender (`hasc`) and descender
+        // (`hdsc`); it has no tags for the `hhea` ascender and descender, which do not vary:
+        // https://learn.microsoft.com/en-us/typography/opentype/spec/mvar
+        let varied = |tag: &[u8; 4]| {
+            f.mvar().ok().and_then(|m| m.metric_delta(skrifa::Tag::new(tag), self.location().coords()).ok()).map_or(0.0, |d| d.to_f64())
+        };
+        let typo = f
+            .os2()
+            .ok()
+            .map(|o| (f64::from(o.s_typo_ascender()) + varied(b"hasc"), f64::from(o.s_typo_descender()) + varied(b"hdsc")))
+            .filter(|(ascent, descent)| ascent > descent)
+            .or_else(|| {
+                let truetype = f.table_data(skrifa::Tag::new(b"glyf")).is_some();
+                f.hhea().ok().filter(|_| truetype).map(|h| (f64::from(h.ascender().to_i16()), f64::from(h.descender().to_i16())))
+            })
+            .filter(|(ascent, descent)| ascent > descent);
+        if let Some((ascent, descent)) = typo {
+            let one_em = units(ascent - descent) == 65536.0;
+            let holds = match ink {
+                None => one_em,
+                Some((lo, hi)) => hi <= ascent && lo >= descent && (one_em || units((ascent - hi) - (lo - descent)).abs() <= 197.0),
+            };
+            if holds {
+                return sane(ascent / em);
+            }
+        }
+        if let Some((lo, hi)) = self.glyph_ink(EM_BOX_CROSS)
+            && (65535.0..=65537.0).contains(&units(hi - lo))
+        {
+            return sane(hi / em);
+        }
+        ink.and_then(|(lo, hi)| sane((lo + hi) / em * 0.5 + 0.5))
+    }
+
+    /// The bottom and top of the ink of `c`'s glyph, in font units; `None` when the face has no
+    /// glyph for it, or the glyph has no ink.
+    fn glyph_ink(&self, c: char) -> Option<(f64, f64)> {
+        let g = self.glyph_for(c);
+        if g == 0 {
+            return None;
+        }
+        let b = self.skrifa()?.glyph_metrics(Size::unscaled(), self.location()).bounds(GlyphId::new(g))?;
+        Some((f64::from(b.y_min), f64::from(b.y_max))).filter(|(lo, hi)| hi > lo)
+    }
+
+    /// The cap height of the OS/2 table, in ems; `None` without one.
+    fn os2_cap_height(&self) -> Option<f64> {
+        self.skrifa()?.metrics(Size::unscaled(), self.location()).cap_height.map(|c| f64::from(c) / self.upem).filter(|c| *c > 0.0)
     }
 
     /// The height of the face that a font size measures with `reference`, in ems: 1 for the em

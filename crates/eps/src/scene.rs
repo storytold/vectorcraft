@@ -751,7 +751,8 @@ impl<'a> Scene<'a> {
     /// The stops of a gradient with a spot ink as tints of its inks: a Separation space when every
     /// stop is a tint of one spot ink or paper white, else (at Level 3) a DeviceN space of the
     /// process inks the stops use, in CMYK order, and the spot inks, in the order the stops name
-    /// them. Paper white adds no ink and a gray stop is black ink. An off-center midpoint is a stop
+    /// them. Paper white adds no ink, a gray stop is black ink, and a spot stop's process plates
+    /// print with its ink. An off-center midpoint is a stop
     /// with the inks halfway between its two stops. `None` for a gradient without a spot ink, and,
     /// with a warning, for one whose inks can't be kept or that is mixed by the Perceptual method;
     /// it is then written in process colors.
@@ -798,6 +799,10 @@ impl<'a> Scene<'a> {
                 Some(n) => {
                     if let Some(i) = names.iter().position(|m| *m == n) {
                         v[4 + i] = unit(s.tint);
+                    }
+                    // Process plates printed with the spot ink (a DeviceN mix from a file).
+                    if let Some(p) = s.plates {
+                        v[..4].copy_from_slice(&p.map(unit));
                     }
                 }
                 None if paper(&s.color) => {}
@@ -1093,6 +1098,7 @@ impl<'a> Scene<'a> {
     /// Paint all of `area` with an image of freeform gradient `g` placed on `bounds`, sampled at
     /// the document's raster effects resolution (at most [`MAX_FIELD_PX`] a side).
     fn field_image(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
+        use vectorcraft_color::cms::Model;
         use vectorcraft_color::freeform::{painted_box, spread_scale};
         let Some(b) = painted_box(bounds) else { return };
         let area = area.abs();
@@ -1103,11 +1109,24 @@ impl<'a> Scene<'a> {
         let k = (self.doc.raster_effects_ppi / 72.0).min(MAX_FIELD_PX / long);
         let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_FIELD_PX) as u16;
         let (cols, rows) = (along(area.width()), along(area.height()));
-        let field = g.freeform_on(b).field_with(spread_scale(b), &|c| c.to_rgb());
+        let field = g.freeform_on(b).model_field(spread_scale(b));
         let q = |v: f32| (unit(v) * 255.0).round() as u8;
-        let rgba: Vec<u8> = field.grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
+        let (w, h) = (u32::from(cols), u32::from(rows));
+        let image = if field.model() == Some(Model::Cmyk) || (self.cmyk && field.model() == Some(Model::Gray)) {
+            let inks: Vec<u8> = field
+                .grid(area, cols, rows)
+                .flat_map(|(color, a)| {
+                    let [c, m, y, k] = color.to_cmyk();
+                    [q(c), q(m), q(y), q(k), q(a)]
+                })
+                .collect();
+            self.encode_inks(&inks, w, h)
+        } else {
+            let rgba: Vec<u8> = field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
+            self.encode_image(&rgba, w, h)
+        };
         let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
-        if let Some(image) = self.encode_image(&rgba, u32::from(cols), u32::from(rows)) {
+        if let Some(image) = image {
             self.place_image(&image, place);
         }
     }
@@ -1308,41 +1327,65 @@ impl<'a> Scene<'a> {
     /// Level 3 (a key colour no opaque pixel has), white at Level 2; partly transparent ones over
     /// white. `None` for an empty image.
     fn encode_image(&mut self, rgba: &[u8], w: u32, h: u32) -> Option<String> {
+        let space = if self.cmyk { Space::Cmyk } else { Space::Rgb };
+        let mut cache: HashMap<[u8; 3], [u8; 4]> = HashMap::new();
+        let cms = self.cms.clone();
+        let intent = cms.settings().intent;
+        self.encode_samples(rgba.as_chunks::<4>().0, w, h, space, |p: &[u8; 4], al| {
+            let rgb = [0, 1, 2].map(|i| ((u32::from(p[i]) * al + 255 * (255 - al) + 127) / 255) as u8);
+            match space {
+                Space::Cmyk => *cache
+                    .entry(rgb)
+                    .or_insert_with(|| cms.srgb_to_cmyk(rgb.map(|x| f32::from(x) / 255.0), intent).map(|x| (unit(x) * 255.0).round() as u8)),
+                _ => [rgb[0], rgb[1], rgb[2], 0],
+            }
+        })
+    }
+
+    /// Straight CMYK pixels with opacity (five bytes a pixel, `w` × `h`, rows from the top), drawn
+    /// as [`Self::encode_image`] draws its pixels and keeping their ink amounts: partly
+    /// transparent pixels lay down that share of each ink.
+    fn encode_inks(&mut self, cmyka: &[u8], w: u32, h: u32) -> Option<String> {
+        self.encode_samples(cmyka.as_chunks::<5>().0, w, h, Space::Cmyk, |p: &[u8; 5], al| {
+            [0, 1, 2, 3].map(|i| ((u32::from(p[i]) * al + 127) / 255) as u8)
+        })
+    }
+
+    /// Pixels (`w` × `h`, rows from the top, each ending in its opacity) as the operators and data
+    /// that draw them in `space` on the unit square. `sample` gives the samples of a pixel that
+    /// isn't clear, from the pixel and its opacity.
+    fn encode_samples<const N: usize>(
+        &mut self,
+        px: &[[u8; N]],
+        w: u32,
+        h: u32,
+        space: Space,
+        mut sample: impl FnMut(&[u8; N], u32) -> [u8; 4],
+    ) -> Option<String> {
         if w == 0 || h == 0 {
             return None;
         }
-        let px = rgba.as_chunks::<4>().0;
-        let clear = px.iter().any(|p| p[3] == 0);
-        if px.iter().any(|p| p[3] > 0 && p[3] < 255) {
+        let opacity = |p: &[u8; N]| p[N - 1];
+        let clear = px.iter().any(|p| opacity(p) == 0);
+        if px.iter().any(|p| opacity(p) > 0 && opacity(p) < 255) {
             self.warn(IMAGE_PARTLY);
         }
         let keyed = clear && self.o.level == Level::Three;
         if clear && !keyed {
             self.warn(IMAGE_ALPHA_L2);
         }
-        let space = if self.cmyk { Space::Cmyk } else { Space::Rgb };
         let n = space.n();
         // The key colour, which opaque pixels that happen to have it are nudged off.
         let key: [u8; 4] = [255, 0, 255, 0];
         // White: no ink, or full light.
         let white: [u8; 4] = if space == Space::Cmyk { [0; 4] } else { [255; 4] };
-        let mut cache: HashMap<[u8; 3], [u8; 4]> = HashMap::new();
-        let cms = self.cms.clone();
-        let intent = cms.settings().intent;
         let mut data = Vec::with_capacity(px.len() * n);
         for p in px {
-            if p[3] == 0 {
+            if opacity(p) == 0 {
                 data.extend(if keyed { &key } else { &white }.iter().take(n));
                 continue;
             }
-            let al = u32::from(p[3]);
-            let rgb = [0, 1, 2].map(|i| ((u32::from(p[i]) * al + 255 * (255 - al) + 127) / 255) as u8);
-            let mut v = match space {
-                Space::Cmyk => *cache
-                    .entry(rgb)
-                    .or_insert_with(|| cms.srgb_to_cmyk(rgb.map(|x| f32::from(x) / 255.0), intent).map(|x| (unit(x) * 255.0).round() as u8)),
-                _ => [rgb[0], rgb[1], rgb[2], 0],
-            };
+            let mut v = sample(p, u32::from(opacity(p)));
             if keyed && v.iter().take(n).eq(key.iter().take(n)) {
                 v[1] = 1;
             }

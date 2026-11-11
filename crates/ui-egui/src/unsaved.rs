@@ -19,15 +19,23 @@ pub const KIND: &str = "saveChanges";
 
 /// Nothing closes while a file dialog's sheet is on the window (macOS): what asked for it runs
 /// again when it answers. (Elsewhere the dialog is a window of its own, and closing goes on.)
-fn refuse_while_picking(app: &VectorcraftApp) -> Result<(), String> {
+pub(crate) fn refuse_while_picking(app: &VectorcraftApp) -> Result<(), String> {
     if app.file_sheet_open() { Err(crate::picks::busy().into()) } else { Ok(()) }
+}
+
+/// Finishes the work that decides whether there is anything left to save: the saves running in
+/// the background, and an edit the active tool is computing on another thread (a Shape Builder
+/// merge), which is applied.
+pub fn finish_pending(app: &mut VectorcraftApp) {
+    crate::background::wait_all(app);
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
 }
 
 /// File → Close (or a tab's ×) for document `i`.
 pub fn close(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
     refuse_while_picking(app)?;
-    // A save still running decides whether there is anything left to save.
-    crate::background::wait_all(app);
+    finish_pending(app);
     let dirty = app.session.documents().get(i).ok_or("no such document")?.is_dirty();
     if dirty { ask(app, i, "close") } else { close_now(app, i) }
 }
@@ -36,7 +44,7 @@ pub fn close(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
 /// or finish once none is left.
 pub fn close_all(app: &mut VectorcraftApp, then: &str) -> Result<Value, String> {
     refuse_while_picking(app)?;
-    crate::background::wait_all(app);
+    finish_pending(app);
     if let Some(i) = app.session.documents().iter().position(|d| d.is_dirty()) {
         return ask(app, i, then);
     }
@@ -69,12 +77,9 @@ fn ask(app: &mut VectorcraftApp, i: usize, then: &str) -> Result<Value, String> 
     Ok(json!({ "pending": KIND }))
 }
 
-/// Close document `i` through the engine command, keeping `views` aligned with the documents.
+/// Close document `i` through the engine command; [`VectorcraftApp::sync_views`] drops its view.
 fn close_now(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
     let r = app.session.execute("file.close", &json!({ "index": i })).map_err(|e| e.to_string())?;
-    if i < app.views.len() {
-        app.views.remove(i);
-    }
     app.sync_views();
     if app.session.tool_id() == "artboard"
         && let Some(n) = app.session.active().map(|d| d.doc.artboards.len())

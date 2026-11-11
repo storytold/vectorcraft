@@ -9,10 +9,11 @@ use vectorcraft_engine::{Session, command_specs};
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::Fixture;
 use vectorcraft_testkit::invariants::{check_all, check_session, doc_json};
-use vectorcraft_testkit::strategies::{junk_params, junk_values, param_keys};
+use vectorcraft_testkit::strategies::{junk_params, junk_values, param_keys, safe_value};
 
 /// Commands that replace/close the active document or touch the filesystem are fine to call, but a
-/// few need their paths redirected into a temp dir (handled by `junk_params`).
+/// few need their file and folder params redirected into a temp dir (`safe_value`, which
+/// `junk_params` applies).
 fn safe_path() -> String {
     vectorcraft_testkit::temp_dir("sweep").join("out.bin").to_string_lossy().to_string()
 }
@@ -219,6 +220,92 @@ fn every_command_with_junk_params() {
     );
 }
 
+/// Each document's uid, revision and selected ids, the active document and the current paint.
+type ToolEditState = (Vec<(u64, u64, Vec<u64>)>, Option<usize>, vectorcraft_tools::PaintDefaults);
+
+/// What a command that runs while the active tool computes an edit on another thread must leave
+/// as it was: every document's revision and selection, which document is active, and the current
+/// paint.
+fn tool_edit_state(s: &Session) -> ToolEditState {
+    let docs = s.documents().iter().map(|d| (d.uid, d.revision, d.selection.objects.iter().map(|i| i.0).collect())).collect();
+    (docs, s.active_index(), s.paint.clone())
+}
+
+/// The params the tool-edit sweep sends `c`: junk params, then each documented key turned on and
+/// off, with a string under a file or folder key replaced by a location inside `path`'s folder.
+fn tool_edit_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value> {
+    let mut cases = junk_params(c.params, path);
+    if heavy(c.id) {
+        cases.truncate(12);
+    }
+    for k in param_keys(c.params) {
+        for v in [json!(true), json!(false), json!(1), json!("on")] {
+            cases.push(json!({ k.as_str(): safe_value(&k, &v, path) }));
+        }
+    }
+    // Find Objects selects only with a filter, which one key at a time does not give it.
+    if c.id == "document.find" {
+        cases.extend([json!({"kind": "Path", "select": true}), json!({"name": "no such name", "select": true})]);
+    }
+    cases
+}
+
+/// Every string the sweeps send under a key that names a file or folder to write is inside the
+/// sweep's temp folder, so no run writes into the working directory.
+#[test]
+fn sweep_cases_name_files_only_inside_the_temp_folder() {
+    let path = safe_path();
+    let dir = vectorcraft_testkit::temp_dir("sweep");
+    let keys = ["path", "diffPath", "folder", "destinationFolder"];
+    let mut seen = std::collections::BTreeSet::new();
+    let mut outside = std::collections::BTreeSet::new();
+    for c in command_specs() {
+        let mut cases = junk_params(c.params, &path);
+        cases.extend(tool_edit_cases(c, &path));
+        for p in &cases {
+            let Some(o) = p.as_object() else { continue };
+            for (k, v) in o.iter().filter(|(k, _)| keys.contains(&k.as_str())) {
+                seen.insert(k.clone());
+                if let Some(s) = v.as_str()
+                    && !std::path::Path::new(s).starts_with(&dir)
+                {
+                    outside.insert(format!("{} {{\"{k}\": {v}}}", c.id));
+                }
+            }
+        }
+    }
+    assert_eq!(seen.len(), keys.len(), "the sweeps send only {seen:?}");
+    let outside: Vec<String> = outside.into_iter().collect();
+    assert!(outside.is_empty(), "{} cases name a location outside {}:\n{}", outside.len(), dir.display(), outside.join("\n"));
+}
+
+/// Every command that runs at once while the active tool computes an edit on another thread (a
+/// Shape Builder merge), rather than applying the edit first (`waits_for_tool_edit`), leaves the
+/// documents' revisions and selections, the active document and the current paint as they were,
+/// with `{}`, junk params and params that turn its options on and off: the edit, computed for the
+/// document as it was, still applies after it.
+#[test]
+fn commands_that_do_not_wait_for_a_tool_edit_change_no_document() {
+    let path = safe_path();
+    let mut failures = vec![];
+    for fx in [Fixture::Single, Fixture::Multi] {
+        for c in command_specs().iter().filter(|c| !vectorcraft_engine::waits_for_tool_edit(c.id)) {
+            let cases = tool_edit_cases(c, &path);
+            for p in &cases {
+                let mut s = fx.session();
+                let before = tool_edit_state(&s);
+                let _ = catch_quiet(|| no_panic(s.execute(c.id, p)));
+                if tool_edit_state(&s) != before {
+                    failures.push(format!("{} {p} [{fx:?}]", c.id));
+                }
+            }
+        }
+    }
+    failures.sort();
+    failures.dedup_by(|a, b| a.split(' ').next() == b.split(' ').next());
+    assert!(failures.is_empty(), "{} commands change a document without waiting for a tool edit:\n{}", failures.len(), failures.join("\n"));
+}
+
 /// Junk inside the obvious structured params: ids arrays, anchors, matrices, colours, stops.
 #[test]
 fn structured_junk() {
@@ -230,12 +317,27 @@ fn structured_junk() {
         ("document.export", json!({"format": "bmp", "rect": {"x": 1}, "artboard": 3})),
         ("document.export", json!({"format": "svg", "rect": [0, 0, 10, 10]})),
         ("select.add", json!({"ids": [[1], {"a": 1}]})),
+        ("select.font", json!({"family": "Source Sans 3", "scope": {"artboards": [0, u64::MAX, -1, "x", null, 1.5]}})),
+        ("select.font", json!({"family": "Source Sans 3", "scope": {"layers": [0, u64::MAX, -1, [1], {"a": 1}]}})),
+        ("select.font", json!({"family": "Source Sans 3", "scope": {"artboards": [], "layers": [1]}})),
+        ("select.font", json!({"family": "Source Sans 3", "scope": 7})),
         ("select.anchors", json!({"id": 2, "anchors": [[99, 99], [-1, 0], ["a", "b"]], "mode": "set"})),
         ("select.anchorsMany", json!({"items": [{"id": 2, "anchors": [[0, 1000]]}, null, 5]})),
         ("select.anchorsMany", json!({"items": [{"id": 2, "anchors": [[0, 1000], [0, 0]]}, {"id": u64::MAX}], "mode": "toggle"})),
         ("select.anchorsMany", json!({"items": [{"id": 2, "anchors": [[0, 0]]}], "mode": "subtract"})),
         ("select.anchorsMany", json!({"items": [], "mode": 7})),
         ("select.toggle", json!({"ids": [2, u64::MAX, "x"]})),
+        ("addon.select.byArtboards", json!({"artboards": [0, u64::MAX, -1, "x", null, 1.5], "relation": "inside"})),
+        ("addon.select.byArtboards", json!({"artboards": [1e308], "relation": [1]})),
+        ("addon.select.byArtboards", json!({"artboards": {"a": 1}, "relation": "outside"})),
+        ("addon.select.byLinkStatus", json!({"status": ["linked", "missing", null, 7, {"a": 1}], "ids": [2, u64::MAX, -1, "x", 1.5]})),
+        ("addon.select.byLinkStatus", json!({"status": "embedded", "ids": {"a": 1}, "add": [1], "zoom": "yes"})),
+        ("addon.select.byLinkStatus", json!({"status": ["modified", "embedded"], "ids": [], "add": true, "zoom": true})),
+        ("addon.select.byLinkStatus", json!({"status": [[["linked"]]], "ids": null})),
+        ("links.relink", json!({"scope": "each", "paths": [{"ids": [2, u64::MAX, -1, "x"], "path": ""}, null, 7, {"path": [1]}]})),
+        ("links.relink", json!({"scope": ["all"], "path": "/no/such/file.png", "ids": {"a": 1}})),
+        ("links.relink", json!({"scope": "missingInFolder", "path": "", "folder": [], "paths": "x"})),
+        ("links.relink", json!({"scope": "all", "path": "/no/such/file.png", "ids": [2, u64::MAX, -1, 1.5]})),
         ("object.transform", json!({"matrix": [0, 0, 0, 0, 0, 0]})),
         ("object.transform", json!({"matrix": [1e308, 1e308, 1e308, 1e308, 1e308, 1e308]})),
         ("object.transform", json!({"matrix": [1, 2, 3]})),
@@ -421,6 +523,37 @@ fn structured_junk() {
         ("effect.apply", json!({"effect": "addon.color.halftone", "params": {"frequency": 300, "invert": true, "clip": false, "fromArt": true}})),
         ("effect.apply", json!({"effect": "addon.color.halftone", "params": {"frequency": -1e308, "mode": "cmyk", "color": "#123456", "target": 3}})),
         ("effect.apply", json!({"effect": "addon.color.duotone", "params": {"tones": "x", "skipSpot": "yes"}})),
+        // Effect › SVG Filters: hostile filters are refused or drawn within their bounds.
+        ("effect.apply", json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\"><feTurbulence numOctaves=\"1e308\"/></filter>"}})),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\"><feGaussianBlur stdDeviation=\"1e308\"/></filter>", "scale": 1e308}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\" filterUnits=\"userSpaceOnUse\" x=\"-1e308\" width=\"1e308\"><feFlood/></filter>"}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\"><feImage xlink:href=\"/etc/passwd\"/></filter>", "scale": -1}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<!DOCTYPE x [<!ENTITY a \"aaaa\">]><filter id=\"&a;\"><feOffset/></filter>"}}),
+        ),
+        ("effect.apply", json!({"effect": "svg.filter", "params": {"xml": ["x"], "name": 3}})),
+        ("svgFilter.define", json!({"xml": "<filter id=\"a\"><feConvolveMatrix order=\"4294967295\" kernelMatrix=\"1\"/></filter>"})),
+        ("svgFilter.define", json!({"xml": format!("<filter id=\"a\">{}</filter>", "<feOffset/>".repeat(100_000)), "replace": "a"})),
+        (
+            "svgFilter.import",
+            json!({"svg": format!(
+                "<!DOCTYPE svg [<!ENTITY a \"aaaaaaaaaa\"><!ENTITY b \"{}\"><!ENTITY c \"{}\">]><svg xmlns=\"http://www.w3.org/2000/svg\"><filter id=\"&c;\"><feOffset/></filter></svg>",
+                "&a;".repeat(10),
+                "&b;".repeat(10)
+            )}),
+        ),
+        ("svgFilter.apply", json!({"name": "\u{0}", "ids": [u64::MAX]})),
+        ("svgFilter.delete", json!({"name": ["a"]})),
         (
             "effect.apply",
             json!({"effect": "addon.color.duotone", "params": {"tones": [1, null, {"color": [1e308, -1e308, "x"], "curve": [[1e308, -1e308], ["a"]]}]}}),
@@ -523,6 +656,10 @@ fn structured_junk() {
         ("document.open", json!({"name": "x.pdf", "dataBase64": "JVBERi0xLjQK"})),
         ("document.open", json!({"name": "x.vectorcraft", "dataBase64": "e30="})),
         ("document.activate", json!({"index": 99})),
+        ("document.move", json!({"from": 99, "to": 0})),
+        ("document.move", json!({"from": 0, "to": u64::MAX})),
+        ("document.move", json!({"from": -1, "to": 1e308})),
+        ("document.move", json!({"from": "x", "to": null})),
         ("file.close", json!({"index": 99})),
         ("file.new", json!({"width": -1, "height": 0, "artboards": 1000000})),
         ("command.batch", json!({"commands": [{"command": 5}, {"params": 3}]})),
@@ -590,6 +727,12 @@ fn structured_junk() {
         ("addon.pathtools.cornerSet", json!({"items": [1, null, {"anchors": "x"}], "radius": 1})),
         ("addon.pathtools.cornerSet", json!({"ids": [2], "radius": 1e308, "kind": "spiky"})),
         ("addon.pathtools.cornerSet", json!({"items": "all", "radius": f64::NAN, "anchors": [-1, 1.5, "x"]})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2, 3], "radius": 5, "every": "odd"})),
+        ("addon.pathtools.cornerSet", json!({"items": [{"id": 2, "anchors": [1, u64::MAX]}], "radius": 5, "every": "even"})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2], "radius": 5, "every": [1, "x", null]})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2, 3], "radius": 5, "minAngle": 0, "maxAngle": 0})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2], "radius": 5, "minAngle": 180, "maxAngle": 180, "every": "odd"})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2], "radius": 5, "minAngle": f64::MAX, "maxAngle": -1e-300})),
         ("addon.pathtools.cornerRemove", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
         ("addon.pathtools.cornerRemove", json!({"items": [{"id": 2, "anchors": [u64::MAX]}]})),
         ("addon.pathtools.slideAnchor", json!({"id": 2, "anchor": 1, "t": 0.98})),
@@ -659,6 +802,11 @@ fn structured_junk() {
         ("addon.type.textTweaker", json!({"attribute": "rotation", "from": -360, "to": 360, "shape": "bow", "skipSpaces": false, "ids": [u64::MAX]})),
         ("addon.type.textTweaker", json!({"attribute": "hScale", "id": 2, "start": u64::MAX, "end": 0, "shape": "ease"})),
         ("addon.type.textTweaker", json!({"attribute": ["size"], "from": "x", "seed": 1e308, "skipSpaces": "no", "ids": "all"})),
+        ("addon.type.releasePath", json!({"mode": "both", "keepOriginal": true, "ids": [0, 1, 2, 3, 4, 5, 6, 7, 8]})),
+        ("addon.type.releasePath", json!({"mode": "path", "ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, u64::MAX]})),
+        ("addon.type.releasePath", json!({"mode": "text", "keepOriginal": false, "id": 2})),
+        ("addon.type.releasePath", json!({"mode": ["both"], "keepOriginal": "no", "ids": "all", "id": -1})),
+        ("addon.type.releasePath", json!({"mode": "nope", "keepOriginal": 1e308, "ids": [1.5, null, "x"]})),
         ("addon.cleanup.breakText", json!({"by": "glyphs", "ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, u64::MAX]})),
         ("addon.cleanup.breakText", json!({"by": ["lines"]})),
         ("addon.cleanup.breakText", json!({"by": "paragraphs"})),
@@ -889,7 +1037,15 @@ fn every_command_undoes_exactly() {
         let mut s = Fixture::Multi.session();
         let before = doc_json(&s.doc().unwrap().doc);
         let depth = s.doc().unwrap().history.undo.len();
+        let source = s.active_index().unwrap();
         let Ok(Ok(_)) = catch_quiet(|| s.execute(c.id, &json!({}))) else { continue };
+        // A command that makes a new document and makes it active leaves the source document as it is.
+        if s.active_index() != Some(source) {
+            if s.documents().get(source).map(|d| doc_json(&d.doc)).as_ref() != Some(&before) {
+                failures.push(format!("{}: changed the source document while making another active", c.id));
+            }
+            continue;
+        }
         if s.doc().unwrap().history.undo.len() > depth {
             let _ = no_panic(s.execute("edit.undo", &json!({})));
             let after = doc_json(&s.doc().unwrap().doc);

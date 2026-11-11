@@ -71,6 +71,7 @@ impl Document {
         }
         if changed {
             t.cached_bounds = None;
+            t.cached_ink = None;
         }
         changed
     }

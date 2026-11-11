@@ -57,6 +57,9 @@ pub struct Targets {
     pub(super) perpendicular: bool,
     /// How the guides these targets produce look.
     pub(super) style: GuideStyle,
+    /// Smart Guides › Snap to Last Location: a move goes back to where it began when it comes near
+    /// ([`Self::snap_back`]). Set only for moving the selection itself ([`Self::for_move`]).
+    pub(super) last_location: bool,
 }
 
 /// How many anchors, and how many segments, the targets gather at most.
@@ -139,6 +142,23 @@ pub(super) fn object_boxes(doc: &Document, moving: &[NodeId]) -> Vec<Rect> {
     out
 }
 
+/// The corners of glyph `g`'s bounding box in text space, clockwise from its top left as drawn:
+/// the box of its outline in its own frame (font units), through `g.xf`, so it turns, slants and
+/// scales with the glyph. `bb` is the outline's box in text space, used as it is for a glyph bent
+/// along a path or with a frame that can't be undone.
+fn glyph_box(g: &vectorcraft_text::PositionedGlyph, bb: &Rect) -> [Point; 4] {
+    let corners = |r: Rect| [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
+    let det = g.xf.determinant();
+    if g.bend.is_some() || !(det.is_finite() && det.abs() > 1e-12) {
+        return corners(*bb);
+    }
+    let local = (g.xf.inverse() * g.outline.clone()).bounding_box();
+    if !(local.is_finite() && local.width() > 0.0 && local.height() > 0.0) {
+        return corners(*bb);
+    }
+    corners(local).map(|p| g.xf * p)
+}
+
 impl Targets {
     pub fn collect(doc: &Document, exclude: &[NodeId], visible: Option<Rect>) -> Self {
         Self::collect_inner(doc, exclude, None, visible, Gather::Bounds)
@@ -146,19 +166,38 @@ impl Targets {
 
     /// Targets for moving the selection of `cx`: [`Self::collect`]'s but `exclude` (the selection,
     /// or nothing for a copy, which leaves it behind), styled as `cx` asks, and with Smart Guides ›
-    /// Spacing Guides the objects it spaces itself evenly with ([`Self::snap_rect`]).
+    /// Spacing Guides the objects it spaces itself evenly with ([`Self::snap_rect`]). With Smart
+    /// Guides › Snap to Last Location, a move (not a copy, which has nothing in `exclude`) goes back
+    /// to where it began when it comes near ([`Self::snap_back`]), unless Snap to Pixel is on.
     pub fn for_move(cx: &ToolContext, exclude: &[NodeId]) -> Self {
         let mut t = Self::collect(cx.doc, exclude, None).styled(cx);
         if cx.spacing_guides {
             t.boxes = object_boxes(cx.doc, &cx.selection.objects);
         }
+        t.last_location = cx.snap_to_last_location && !cx.snap_to_pixel && !exclude.is_empty();
         t
+    }
+
+    /// Smart Guides › Snap to Last Location: a move by `d` that is no farther than `tol` from
+    /// where it began goes back there. Returns the guides for it, a "last location" label at the
+    /// center of `from` (the moved bounds when the move began), or None when the move stays where
+    /// it is: the option is off, the targets are for a copy, or `d` is longer than `tol`.
+    pub fn snap_back(&self, from: Option<Rect>, d: Vec2, tol: f64) -> Option<Vec<Overlay>> {
+        (self.last_location && d.hypot() <= tol).then(|| from.and_then(|r| self.label(r.center(), "last location")).into_iter().collect())
+    }
+
+    /// Targets that hold nothing but Smart Guides › Snap to Last Location ([`Self::snap_back`]),
+    /// styled as `cx` asks: for a move of the selection whose other snaps come from other targets,
+    /// such as paths selected whole that Direct Selection moves held by an anchor. Snap to Pixel
+    /// turns it off, as it does every Smart Guides snap.
+    pub fn last_location(cx: &ToolContext) -> Self {
+        Self { last_location: cx.snap_to_last_location && !cx.snap_to_pixel, ..Self::default() }.styled(cx)
     }
 
     /// Targets for scaling the selection: the other art, styled as `cx` asks, and with Smart Guides ›
     /// Spacing Guides the neighbours whose gaps the moving edge should match ([`Self::snap_scale`]).
     pub fn for_scale(cx: &ToolContext) -> Self {
-        Self::for_move(cx, &cx.selection.objects)
+        Self { last_location: false, ..Self::for_move(cx, &cx.selection.objects) }
     }
 
     /// Targets for a drawn point: the art in `visible` (all of it for None) but `exclude`, its
@@ -170,6 +209,17 @@ impl Targets {
         t.push_paths(doc, exclude, true);
         if let Some(o) = glyphs {
             t.push_glyphs(doc, exclude, visible, o);
+        }
+        t.index()
+    }
+
+    /// Targets for the ends of a measurement: [`Self::collect`]'s, and with `glyphs` (Snap to Glyph
+    /// on) the guides those options ask for from the live text in `visible` (all of it for None),
+    /// without the outlines' anchor points, which Anchor Point gives the Pen and moved objects.
+    pub fn for_measure(doc: &Document, visible: Option<Rect>, glyphs: Option<GlyphSnap>) -> Self {
+        let mut t = Self::collect(doc, &[], None);
+        if let Some(o) = glyphs {
+            t.push_glyphs(doc, &[], visible, GlyphSnap { anchors: false, ..o });
         }
         t.index()
     }
@@ -337,10 +387,14 @@ impl Targets {
                     }
                 }
                 if o.bounds {
-                    let r = t.xf.transform_rect_bbox(bb);
-                    for p in [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)] {
-                        self.xs.push((p.x, p, kind));
-                        self.ys.push((p.y, p, kind));
+                    // The glyph's box in its own frame (font units), placed as the glyph is: its
+                    // corners are points to land on, even where the outline curves (the right of
+                    // `B`), and its edges guides, which turn with rotated or slanted type.
+                    let corners = glyph_box(g, &bb).map(to_doc);
+                    for (i, c) in corners.iter().enumerate() {
+                        self.points.push((*c, kind));
+                        let next = corners.get((i + 1) % 4).copied().unwrap_or(*c);
+                        self.push_glyph_line(*c, next - *c, o.angular);
                     }
                 }
             }
@@ -964,7 +1018,14 @@ impl Targets {
     /// ([`Self::for_move`]) is spaced evenly along an axis that lines up with nothing
     /// ([`Self::even_spacing`]). Returns the shift and the guides.
     pub fn snap_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>) {
+        let (d, ov, _) = self.snap_rects_axes(rects, tol);
+        (d, ov)
+    }
+
+    /// [`Self::snap_rects`], also saying which axes (x, y) lined up or were spaced evenly.
+    pub(crate) fn snap_rects_axes(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2]) {
         let (mut d, mut ov, aligned) = self.align_rects(rects, tol);
+        let mut taken = aligned;
         if let [r] = rects
             && !self.boxes.is_empty()
         {
@@ -973,6 +1034,7 @@ impl Targets {
             for (x, lined_up) in [true, false].into_iter().zip(aligned) {
                 if let Some((shift, _)) = self.even_spacing(moved, x, tol).filter(|_| !lined_up) {
                     *(if x { &mut d.x } else { &mut d.y }) += shift;
+                    taken[usize::from(!x)] = true;
                     spaced = true;
                 }
             }
@@ -985,7 +1047,7 @@ impl Targets {
                 }
             }
         }
-        (d, ov)
+        (d, ov, taken)
     }
 
     /// Spacing Guides along the x axis (`x`) or the y axis for the moved rectangle `r`, among the
@@ -1086,6 +1148,50 @@ impl Targets {
             ov.extend(self.line(Point::new(x0, y), Point::new(x1, y)));
         }
         (d, ov, [best_x.is_some(), best_y.is_some()])
+    }
+
+    /// Snap a selection grabbed at `p` and moved as a whole, its bounds now `r`, to the ruler
+    /// guides: the grabbed point goes into line with a guide running within `tol` of it
+    /// ([`Self::snap_point`]), and on an axis where none does and that is not `taken` (x, y)
+    /// already, the edge or centre of `r` nearest a guide running past it within `tol` goes onto it
+    /// (#5746). Returns the shift, the guides (none when nothing lines up) and whether a guide held
+    /// the grabbed point.
+    pub(crate) fn snap_moved_to_rulers(&self, p: Point, r: Option<Rect>, tol: f64, taken: [bool; 2]) -> (Vec2, Vec<Overlay>, bool) {
+        let near = |vertical: bool| {
+            let v = if vertical { p.x } else { p.y };
+            self.rulers.iter().any(|g| g.vertical == vertical && (g.pos - v).abs() <= tol && g.line_at(p, tol).is_some())
+        };
+        let held = [near(true), near(false)];
+        let (q, mut ov) = if held.contains(&true) { self.snap_point(p, tol) } else { (p, vec![]) };
+        let mut d = q - p;
+        let Some(r) = r.map(|r| r + d) else { return (d, ov, held.contains(&true)) };
+        // The guide upright (`vertical`) or level nearest one of `vs`, running past `r` across.
+        let nearest = |vertical: bool, vs: [f64; 3]| {
+            let (c, half) =
+                if vertical { (Point::new(0.0, r.center().y), r.height() / 2.0) } else { (Point::new(r.center().x, 0.0), r.width() / 2.0) };
+            self.rulers
+                .iter()
+                .filter(|g| g.vertical == vertical)
+                .filter_map(|g| g.line_at(c, tol + half))
+                .flat_map(|(t, from, _)| vs.into_iter().map(move |v| (t - v, t, from)))
+                .filter(|(s, ..)| s.abs() <= tol)
+                .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()))
+        };
+        let hx = if held[0] || taken[0] { None } else { nearest(true, [r.x0, r.center().x, r.x1]) };
+        let hy = if held[1] || taken[1] { None } else { nearest(false, [r.y0, r.center().y, r.y1]) };
+        let shift = Vec2::new(hx.map_or(0.0, |h| h.0), hy.map_or(0.0, |h| h.0));
+        let (r, lined) = (r + shift, hx.is_some() || hy.is_some());
+        d += shift;
+        if let Some((_, x, from)) = hx {
+            ov.extend(self.line(Point::new(x, from.y.min(r.y0)), Point::new(x, from.y.max(r.y1))));
+        }
+        if let Some((_, y, from)) = hy {
+            ov.extend(self.line(Point::new(from.x.min(r.x0), y), Point::new(from.x.max(r.x1), y)));
+        }
+        if lined && !held.contains(&true) {
+            ov.extend(self.label(p + d, "align"));
+        }
+        (d, ov, held.contains(&true))
     }
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for

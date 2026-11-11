@@ -11,19 +11,26 @@
 
 use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathData, Point, Rect, Vec2};
 
-use crate::{MAX_FACES, Revolve, V3, eye_distance, perspective_scale};
+use crate::{MAX_FACES, MAX_SOLID_FACES, Revolve, V3, eye_distance, perspective_scale};
 
 mod build;
 mod inflate;
 mod membrane;
+mod outline;
 mod rings;
 
 #[cfg(test)]
 use build::{Camera, cuts, edge_distance, newell, section};
+pub(crate) use build::{Face3, extrude_faces, plane_faces};
 pub use build::{extrude, plane};
+#[cfg(test)]
+use inflate::GRID_WORK;
+#[cfg(test)]
+pub(crate) use inflate::INFLATED;
+pub(crate) use inflate::inflate_faces;
 pub use inflate::{inflate, inflate_together};
 #[cfg(test)]
-use membrane::{Edges, Membrane, cell_triangles};
+use membrane::{Edges, GRID_BUDGET, MAX_EDGE_ENTRIES, MAX_GRID_WORK, Membrane, cell_triangles};
 use rings::signed_area;
 #[cfg(test)]
 use rings::{MAX_SOLID_POINTS, rings};
@@ -201,11 +208,14 @@ pub struct Extrude {
     /// Closed ends (a solid) or open ones (a hollow tube).
     pub cap: bool,
     pub bevel: Option<Bevel>,
+    /// Keep the faces of a closed solid that are turned away from the viewer (Draw Hidden Faces,
+    /// and the classic Wireframe surface), drawn behind the faces turned toward it.
+    pub hidden: bool,
 }
 
 impl Default for Extrude {
     fn default() -> Self {
-        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None }
+        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None, hidden: false }
     }
 }
 
@@ -239,8 +249,14 @@ pub struct Facet {
     pub depth: f64,
     pub brightness: f64,
     pub illumination: [f64; 3],
+    /// The face's unit normal in view space (x right, y down, z toward the viewer), turned to the
+    /// side the viewer sees.
+    pub normal: [f64; 3],
     /// Smooth lighting on an inflated triangle, before clipping individual RGB channels.
     pub rgb_gradient: Option<crate::RgbGradient>,
+    /// The facet's outline with the profile's curves kept as cubics, for [`Facet::path`]. The
+    /// contours stay the polygon that visibility and depth use.
+    pub outline: Option<PathData>,
     /// The contours in view space, before projection, for tests that measure depths.
     #[cfg(test)]
     view: Vec<Vec<V3>>,
@@ -256,7 +272,11 @@ impl Facet {
         if perimeter > 0.0 { 2.0 * area / perimeter } else { 0.0 }
     }
 
+    /// The facet's outline: its curved outline when it has one, else its contours.
     pub fn path(&self) -> PathData {
+        if let Some(path) = &self.outline {
+            return path.clone();
+        }
         let mut bp = BezPath::new();
         for c in &self.contours {
             let Some(first) = c.first() else { continue };
@@ -309,3 +329,6 @@ mod tests;
 
 #[cfg(test)]
 mod tests_inflate_shading;
+
+#[cfg(test)]
+mod tests_limits;

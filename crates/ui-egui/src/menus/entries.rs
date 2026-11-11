@@ -1,6 +1,7 @@
 use super::context::context_items;
 use super::invoke::click_target;
-use super::labels::{display_label, dynamic_label, effect_item_label, item_shortcut, unlock_item_label};
+use super::labels::{display_label, dynamic_label, effect_item_label, item_shortcut, spelling_item_label, unlock_item_label};
+use super::slots::{recent_readable, recent_slot};
 use super::state::{shortcut_of, shown_state};
 use super::tree::menu_tree_named;
 use super::{Entry, Item, Serialize, Value, VectorcraftApp};
@@ -33,6 +34,11 @@ pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
     Some(match it {
         Item::Sep => Entry::Sep,
         Item::Header(h) => Entry::Header(t(h)),
+        // A plug-in's submenu shows its name as it is, as its items do, and so does a subfolder of
+        // the Scripts folder.
+        Item::Sub(label, children) if super::labels::holds_plugin_commands(children) || crate::scripts_menu::is_folder(children) => {
+            Entry::Sub(label, children)
+        }
         Item::Sub(label, children) => Entry::Sub(t(label), children),
         Item::Todo(label, sc) => Entry::Item(Row {
             command: None,
@@ -49,6 +55,7 @@ pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
                 source: label,
                 label: effect_item_label(id, p)
                     .or_else(|| unlock_item_label(app, id, p, crate::i18n::current()))
+                    .or_else(|| spelling_item_label(id, p))
                     .unwrap_or_else(|| display_label(app, id, label))
                     .into(),
                 shortcut: item_shortcut(id, p),
@@ -124,10 +131,19 @@ fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Ve
     for it in items {
         match it {
             Item::Cmd(l, id, p) => {
+                if *id == crate::scripts_menu::COMMAND && !crate::scripts_menu::readable(p) {
+                    continue;
+                }
+                // The other rows keep their ids: `file.openRecent3` still opens the third file.
+                if id.starts_with("file.openRecent") && recent_slot(app, id).is_some_and(|path| !recent_readable(path)) {
+                    continue;
+                }
                 let Some((enabled, _)) = shown_state(app, id, p) else { continue };
                 out.push(MenuEntry {
                     path: path.clone(),
-                    label: unlock_item_label(app, id, p, crate::i18n::Lang::EN).unwrap_or_else(|| dynamic_label(app, id, l)),
+                    label: unlock_item_label(app, id, p, crate::i18n::Lang::EN)
+                        .or_else(|| spelling_item_label(id, p))
+                        .unwrap_or_else(|| dynamic_label(app, id, l)),
                     command: Some(id.to_string()),
                     params: p.clone(),
                     enabled,

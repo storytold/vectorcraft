@@ -17,7 +17,8 @@
 //!   printer's marks around it (the media box), drawn in Registration. [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
-//!   Editing the native document rides along as an embedded file ([`editing()`]). Each page can
+//!   Editing the native document rides along as an embedded file ([`editing()`]), and the first
+//!   page can carry a `.ai` file's editing copy of the art ([`PrivateData`]). Each page can
 //!   carry a thumbnail ([`Thumbnail`], drawn by the caller), and Fast Web View writes a linearised
 //!   file (still linearised when encrypted). A PDF 1.3 file ([`PdfSettings::pdf13`]) must be flat:
 //!   the app flattens the document first, and the writer refuses transparency that is left.
@@ -63,22 +64,32 @@ mod output;
 mod pages;
 mod patch;
 mod pdfx;
+mod piece_info;
 mod post;
 mod presets;
 mod print;
 mod settings;
 mod streams;
+mod surface;
 mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
-pub use export::{export, export_with_report, page_areas};
+pub use export::{check_page_sizes, export, export_with_report, page_areas};
 pub use file_info::{FileInfo, file_info};
+#[cfg(any(test, feature = "read-count"))]
+pub use import::imports_of;
 pub use import::{
     INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,
-    import, import_with_report, is_glyph_outlines, is_outlines_note,
+    import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
-pub use pages::{IllustratorData, PageInfo, PdfInfo, has_illustrator_data, illustrator_data, illustrator_data_without_pdf_part, info, is_postscript};
+#[cfg(any(test, feature = "read-count"))]
+pub use pages::reads_of;
+pub use pages::{
+    IllustratorData, Opened, PageInfo, PdfInfo, TrimPages, has_illustrator_data, illustrator_data, illustrator_data_without_pdf_part, info,
+    is_postscript, open_pdf,
+};
+pub use piece_info::{PRIVATE_CHUNK, PrivateData};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};
 pub use presets::*;
 pub use print::*;
@@ -102,6 +113,8 @@ pub struct PdfOptions {
     pub modified: Option<i64>,
     /// The native document (`.vectorcraft` bytes) Preserve Editing embeds.
     pub native: Option<Vec<u8>>,
+    /// The editing copy of the art for every page's `PieceInfo`, as a `.ai` file carries it.
+    pub private_data: Option<PrivateData>,
     /// The pages drawn small, in page order: what Embed Page Thumbnails embeds (the writer
     /// doesn't draw; [`page_areas`] says what each page shows).
     pub thumbnails: Vec<Thumbnail>,

@@ -1,8 +1,11 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
-use super::panel_chrome::chevron_cell;
+use super::panel_chrome::{
+    alt_down_in_field, chevron_cell, entry_to_focus, keep_enter_in_presets, open_presets_from_keys, presets_open, return_focus_from_presets,
+};
 use super::text::{
     after_shift_enter, focus_field, recessed_text, select_all, select_all_on_focus, shift_enter_keeps_focus, take_armed_focus, take_dialog_focus,
 };
+use super::{ArmedWheelField, WheelStream, WheelStreamOwner};
 use super::{CornerRadius, RangeInclusive, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Unit, id_with, pos2, scrub, vec2};
 
 /// Preferences › Units › Numbers Without Units Are Points (#394; on until set): the app sets it
@@ -20,10 +23,12 @@ pub(crate) fn typed_unit(ctx: &egui::Context, unit: Unit) -> Unit {
 }
 
 /// `text` typed in a numeric field, with a decimal comma read as a point: `0,1 mm` is `0.1 mm`
-/// (#3837). Text with a point keeps its commas, so `1,000.5` is still refused rather than read
-/// with two decimal separators, and so does a number that reads as thousands ([`thousands`]).
+/// (#3837), and each number of a sum reads its own separator, so `100.5 mm-0,5` (a comma typed
+/// after the value the field shows) is 100 mm (#5684). A number written with both separators has
+/// two points once read, so `1,000.5` and `1.234,5` are refused rather than guessed at; so is a
+/// number that reads as thousands ([`thousands`]).
 pub(super) fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains(',') && !text.contains('.') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
+    if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
 }
 
 /// Is `text` a number written with a thousands comma, as `1,000` or `12,500 mm`: one to three
@@ -59,20 +64,35 @@ pub fn num_field_within(
     bounds: RangeInclusive<f64>,
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false)
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false, "")
+}
+
+/// [`num_field_within`] whose empty value reads `empty` (Transform Each's Absolute scales read
+/// "Mixed" when the selected objects differ): typing replaces it, as it replaces the value shown.
+pub fn num_field_within_empty(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: Option<f64>,
+    empty: &str,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false, empty)
 }
 
 /// [`num_field`] for a row whose visible label is not an adjacent label widget (a grid cell with
 /// its label painted separately): screen readers name the field `name` (already translated).
 pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[], false)
+    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[], false, "")
 }
 
 /// The field returns valid typed distances immediately and preserves the text being edited.
 pub fn num_field_live(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, None, value, unit, width, false, ANY, &[], true)
+    unit_field(ui, id, label, None, value, unit, width, false, ANY, &[], true, "")
 }
 
 /// Any number: the bounds of a field that has none.
@@ -100,9 +120,31 @@ fn unit_field(
     bounds: RangeInclusive<f64>,
     stops: &[f64],
     live: bool,
+    empty: &str,
+) -> Option<f64> {
+    unit_field_from(ui, id, label, name, value, unit, width, share_of_value, bounds, stops, live, None, empty)
+}
+
+/// [`unit_field`] whose blank field (`value` is `None`) steps from `blank_from` (points) with
+/// ↑/↓ and the wheel instead of doing nothing.
+#[allow(clippy::too_many_arguments)]
+fn unit_field_from(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    label: Option<PreviousLabel>,
+    name: Option<&str>,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    share_of_value: bool,
+    bounds: RangeInclusive<f64>,
+    stops: &[f64],
+    live: bool,
+    blank_from: Option<f64>,
+    empty: &str,
 ) -> Option<f64> {
     let id = id_with(ui.scope_id(), id);
-    let shown = value.map(|v| unit.format(v)).unwrap_or_default();
+    let shown = value.map(|v| unit.format(v)).unwrap_or_else(|| empty.to_string());
     take_dialog_focus(ui, id, &shown);
     let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, label, name);
     select_all_on_focus(ui, &resp, &buf);
@@ -111,12 +153,17 @@ fn unit_field(
     let read = |b: &str| typed.parse(&decimal_point(b));
     let bounds_unit = unit.from_pt(*bounds.start())..=unit.from_pt(*bounds.end());
     let stops: Vec<f64> = stops.iter().map(|&s| unit.from_pt(s)).collect();
-    let stepped =
-        step_value(ui, &resp, &mut buf, &bounds_unit, (|b: &str| Some(unit.from_pt(read(b)?)), |v| unit.format(unit.to_pt(v))), None, &stops);
+    let blank_from = blank_from.filter(|_| value.is_none());
+    let read_unit = |b: &str| match read(b) {
+        Some(v) => Some(unit.from_pt(v)),
+        None if b.trim().is_empty() => blank_from.map(|v| unit.from_pt(v)),
+        None => None,
+    };
+    let stepped = step_value(ui, &resp, &mut buf, &bounds_unit, (read_unit, |v| unit.format(unit.to_pt(v))), None, &stops);
     let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds_unit);
     let commit = commit && buf != shown;
     if commit {
-        match read(&buf).or_else(|| if share_of_value { share_of(&decimal_point(&buf), value?) } else { None }) {
+        match read(&buf).or_else(|| if share_of_value { share_of(&buf, value?) } else { None }) {
             Some(v) => {
                 let clamped = within(v, &bounds);
                 let formatted = unit.format(clamped);
@@ -152,9 +199,11 @@ fn unit_field(
 }
 
 /// A percentage typed alone (`50%`, `150 %`, `100/3%`) as that share of `value`; `None` for any
-/// other text. `Unit::parse` reads a bare percentage as nothing, having no value to take it of.
+/// other text. `Unit::parse` reads a bare percentage as nothing, having no value to take it of. A
+/// decimal comma is read ([`decimal_point`]) after the `%` is dropped, so `12,5%` is 12.5% and
+/// `1,000%` is refused as thousands rather than read as 1%.
 pub(super) fn share_of(text: &str, value: f64) -> Option<f64> {
-    let percent = vectorcraft_doc::parse_number(text.trim().strip_suffix('%')?)?;
+    let percent = vectorcraft_doc::parse_number(&decimal_point(text.trim().strip_suffix('%')?))?;
     Some(value * percent / 100.0)
 }
 
@@ -170,7 +219,7 @@ pub(crate) fn round_to(v: f64, decimals: i32) -> f64 {
 /// One step of a numeric field with each modifier, most specific first (a plain pattern would also
 /// match Shift): ten with Shift, a tenth with Ctrl/Cmd, else one. A Ctrl/Cmd or plain step goes to
 /// the next multiple of its size ([`step_to_multiple`]); a Shift step adds or takes ten.
-const STEPS: [(egui::Modifiers, f64); 3] = [(egui::Modifiers::SHIFT, 10.0), (egui::Modifiers::COMMAND, 0.1), (egui::Modifiers::NONE, 1.0)];
+pub(super) const STEPS: [(egui::Modifiers, f64); 3] = [(egui::Modifiers::SHIFT, 10.0), (egui::Modifiers::COMMAND, 0.1), (egui::Modifiers::NONE, 1.0)];
 
 /// `v` moved `n` steps of `size` (down when `n` is negative): the first step goes to the next
 /// multiple of `size` in its direction and each further step adds or takes one `size`. By 1, 5.1
@@ -225,9 +274,10 @@ pub(super) fn shown_alike(show: impl Fn(f64) -> String) -> impl Fn(f64, f64) -> 
 /// a weight stops at 0, a miter limit at 1), and a plain step also stops at each of `stops`
 /// ([`step_through`]). The new value is applied at once, as in
 /// Illustrator's panels and dialogs, and the new text replaces `buf`, all selected so typing
-/// replaces it. Returns the new number when a step was taken. While the pointer is over the focused
-/// field the wheel is the field's (the panel under it doesn't scroll); an unfocused field leaves the
-/// wheel to the panel and the canvas.
+/// replaces it when focused. Returns the new number when a step was taken. An enabled field takes
+/// the wheel without taking keyboard focus, and the panel under it doesn't scroll, when the wheel
+/// stream began over the field and the pointer was moved onto it, or pressed on it, after the
+/// field last moved or was covered ([`number_wheel_turns`]). Arrow keys still require keyboard focus.
 fn step_value(
     ui: &Ui,
     resp: &Response,
@@ -239,11 +289,17 @@ fn step_value(
 ) -> Option<f64> {
     // Memory focus, as the field's highlight and its typing use: `Response::has_focus` also needs the
     // window to report keyboard focus.
-    if !ui.memory(|m| m.has_focus(resp.id)) {
+    if !resp.enabled() {
         return None;
     }
+    let focused = ui.memory(|m| m.has_focus(resp.id));
     use egui::{Event, Key, MouseWheelUnit};
-    let wheel = resp.contains_pointer();
+    let (taken, owns) = number_wheel_turns(ui, resp);
+    let wheel = !taken.is_empty();
+    let hold = wheel || owns && resp.contains_pointer();
+    if !focused && !hold {
+        return None;
+    }
     // Wheel turns in notches: a line each, or `line` points of a trackpad or a fine wheel; what is
     // left of a notch carries over to the next turn.
     let (line, notch_id) = (ui.ctx().options(|o| o.input_options.line_scroll_speed), resp.id.with("wheel"));
@@ -251,14 +307,18 @@ fn step_value(
     // Each press and each turn of whole notches in the order they came: its modifiers and size from
     // [`STEPS`], and how many steps up (down when negative).
     let mut steps: Vec<(egui::Modifiers, f64, f64)> = Vec::new();
+    let mut taken = taken;
     ui.input_mut(|i| {
         i.events.retain(|e| {
+            // Each taken event is matched once by its value, so wheel events that other code adds
+            // or removes before the field runs do not shift which events the field takes.
+            let mine = taken.iter().position(|t| t == e).map(|at| taken.swap_remove(at)).is_some();
             let (Event::Key { modifiers, .. } | Event::MouseWheel { modifiers, .. }) = e else { return true };
             let Some(&(mods, size)) = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)) else { return true };
             let n = match e {
-                Event::Key { key: Key::ArrowUp, pressed: true, .. } => 1.0,
-                Event::Key { key: Key::ArrowDown, pressed: true, .. } => -1.0,
-                Event::MouseWheel { unit, delta, .. } if wheel => {
+                Event::Key { key: Key::ArrowUp, pressed: true, .. } if focused => 1.0,
+                Event::Key { key: Key::ArrowDown, pressed: true, .. } if focused => -1.0,
+                Event::MouseWheel { unit, delta, .. } if mine => {
                     // Shift may turn the wheel sideways (the Mac does).
                     let d = if modifiers.shift { delta.x + delta.y } else { delta.y };
                     notches += match unit {
@@ -276,7 +336,7 @@ fn step_value(
             }
             false
         });
-        if wheel {
+        if hold {
             // The rest of a turn egui spreads over the next frames scrolls nothing either.
             i.smooth_scroll_delta = egui::Vec2::ZERO;
         }
@@ -303,8 +363,198 @@ fn step_value(
     let v = within(if stops.contains(&v) { v } else { round_to(v, STEP_DECIMALS) }, bounds);
     *buf = show(v);
     ui.data_mut(|d| d.insert_temp(resp.id, buf.clone()));
-    select_all(ui, resp.id, buf);
+    if focused {
+        select_all(ui, resp.id, buf);
+    }
     Some(v)
+}
+
+/// An enabled number field as the wheel finds it.
+#[derive(Clone, Copy)]
+struct WheelTarget {
+    id: egui::Id,
+    rect: Rect,
+    layer: egui::LayerId,
+}
+
+/// Where the pointer was, the field it was last moved onto, and the running wheel stream.
+#[derive(Clone, Copy, Default)]
+struct WheelWalk {
+    pointer: Option<egui::Pos2>,
+    armed: Option<ArmedWheelField>,
+    stream: WheelStream,
+}
+
+/// The number fields' wheel state in one viewport.
+#[derive(Clone, Default)]
+struct NumberWheel {
+    /// The pass whose events `walk` and `taken` cover.
+    pass: Option<u64>,
+    /// The enabled number fields drawn in the pass before `pass`.
+    before: Vec<WheelTarget>,
+    /// The enabled number fields drawn so far in `pass`.
+    drawn: Vec<WheelTarget>,
+    walk: WheelWalk,
+    /// Each wheel event of `pass` that a field takes, with the field.
+    taken: Vec<(egui::Id, egui::Event)>,
+}
+
+/// The wheel events of this pass that number field `resp` takes, and whether the field holds the
+/// wheel stream after them. The first field drawn in a pass reads the pass's events for every
+/// field, using where the fields were drawn in the pass before. A field takes a wheel stream only
+/// when the stream begins with the pointer over it and the pointer was moved onto it, or pressed
+/// on it, after the field last moved or was covered by a window or overlay. A stream that began
+/// anywhere else stays there until it ends ([`WheelStream`]) or the pointer is pressed on a field,
+/// and a stream that leaves its field does not return to it. Trackpad momentum never starts a
+/// stream on a field.
+fn number_wheel_turns(ui: &Ui, resp: &Response) -> (Vec<egui::Event>, bool) {
+    let ctx = ui.ctx();
+    let key = egui::Id::unique("number-field-wheel").with(ctx.viewport_id());
+    let pass = ctx.cumulative_pass_nr();
+    let font_key = super::taken_from_raw_id(ctx.viewport_id());
+    let fresh = ui.data_mut(|d| {
+        let state = d.get_temp_mut_or_default::<NumberWheel>(key);
+        if state.pass == Some(pass) {
+            return None;
+        }
+        let follows = state.pass.is_some_and(|last| last + 1 == pass);
+        state.before = if follows { std::mem::take(&mut state.drawn) } else { Vec::new() };
+        state.drawn.clear();
+        state.pass = Some(pass);
+        if !follows {
+            state.walk.pointer = None;
+            state.walk.armed = None;
+            state.walk.stream.release_any();
+        }
+        // Turns the font family field took from the raw input belong to its stream.
+        let font_took = d.remove_temp::<f64>(font_key);
+        let state = d.get_temp_mut_or_default::<NumberWheel>(key);
+        if let Some(at) = font_took {
+            state.walk.stream.note_taken_elsewhere(at);
+        }
+        // A field that missed a pass may have moved.
+        if let Some(armed) = state.walk.armed
+            && !state.before.iter().any(|t| t.id == armed.id)
+        {
+            state.walk.armed = None;
+            state.walk.stream.release(armed.id);
+        }
+        Some((state.walk, state.before.clone()))
+    });
+    let walked = fresh.map(|(walk, before)| {
+        let (events, now) = ui.input(|i| (i.events.clone(), i.time));
+        walk_wheel(ctx, walk, &events, &before, now, pass)
+    });
+    let target = WheelTarget { id: resp.id, rect: resp.interact_rect, layer: resp.layer_id };
+    let (armed_here, pointer) = ui.data_mut(|d| {
+        let state = d.get_temp_mut_or_default::<NumberWheel>(key);
+        if let Some((walk, taken)) = walked {
+            state.walk = walk;
+            state.taken = taken;
+        }
+        (state.walk.armed.is_some_and(|armed| armed.id == resp.id), state.walk.pointer)
+    });
+    // A window or overlay over the pointer covers the armed field even when no input arrives.
+    let covered = armed_here && pointer.is_some_and(|p| target.rect.contains(p) && ctx.layer_id_at(p) != Some(target.layer));
+    ui.data_mut(|d| {
+        let state = d.get_temp_mut_or_default::<NumberWheel>(key);
+        if let Some(armed) = &mut state.walk.armed
+            && armed.id == resp.id
+        {
+            if armed.rect == target.rect && !covered {
+                armed.pass = pass;
+            } else {
+                // The field moved or is covered, so the pass's turns stay with the panel.
+                state.walk.armed = None;
+                state.walk.stream.release(resp.id);
+                state.taken.retain(|&(id, _)| id != resp.id);
+            }
+        }
+        state.drawn.push(target);
+        let mut mine = Vec::new();
+        state.taken.retain(|(id, event)| {
+            if *id == resp.id {
+                mine.push(event.clone());
+            }
+            *id != resp.id
+        });
+        (mine, state.walk.stream.owner == Some(WheelStreamOwner::Field(resp.id)))
+    })
+}
+
+/// `walk` after `events`, with `fields` where the pointer finds them, at input time `now`; and the
+/// wheel events a field takes (see [`NumberWheel::taken`]).
+fn walk_wheel(
+    ctx: &egui::Context,
+    mut walk: WheelWalk,
+    events: &[egui::Event],
+    fields: &[WheelTarget],
+    now: f64,
+    pass: u64,
+) -> (WheelWalk, Vec<(egui::Id, egui::Event)>) {
+    let under = |p: Option<egui::Pos2>| {
+        let p = p?;
+        let layer = ctx.layer_id_at(p);
+        fields.iter().rev().find(|t| t.rect.contains(p) && layer == Some(t.layer)).copied()
+    };
+    let mut taken = Vec::new();
+    let mut left = false;
+    for event in events {
+        match event {
+            egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } => {
+                let pressed = matches!(event, egui::Event::PointerButton { pressed: true, .. });
+                if walk.pointer != Some(*p) || pressed {
+                    let field = under(Some(*p));
+                    walk.armed = field.map(|t| ArmedWheelField { id: t.id, rect: t.rect, pass });
+                    if let Some(WheelStreamOwner::Field(id)) = walk.stream.owner
+                        && field.is_none_or(|t| t.id != id)
+                    {
+                        walk.stream.release(id);
+                    }
+                    // A press on a field gives it the rest of a running stream.
+                    if pressed
+                        && let Some(t) = field
+                        && walk.stream.owner != Some(WheelStreamOwner::Field(t.id))
+                    {
+                        walk.stream.owner = None;
+                    }
+                }
+                walk.pointer = Some(*p);
+            }
+            egui::Event::PointerGone => {
+                walk.pointer = None;
+                walk.armed = None;
+                walk.stream.release_any();
+            }
+            egui::Event::MouseWheel { delta, source, .. } => {
+                walk.stream.note_input(now);
+                let field = under(walk.pointer);
+                if *delta != egui::Vec2::ZERO {
+                    let starts = field
+                        .filter(|t| walk.armed.is_some_and(|armed| armed.id == t.id) && *source != egui::MouseWheelSource::Momentum)
+                        .map_or(WheelStreamOwner::Elsewhere, |t| WheelStreamOwner::Field(t.id));
+                    let owner = *walk.stream.owner.get_or_insert(starts);
+                    if field.is_none_or(|t| owner != WheelStreamOwner::Field(t.id)) {
+                        walk.stream.owner = Some(WheelStreamOwner::Elsewhere);
+                    }
+                }
+                if let Some(t) = field
+                    && walk.stream.owner == Some(WheelStreamOwner::Field(t.id))
+                {
+                    taken.push((t.id, event.clone()));
+                } else {
+                    left |= *delta != egui::Vec2::ZERO;
+                }
+            }
+            _ => {}
+        }
+    }
+    // egui smooths a pass's wheel input as a whole before any field runs, so a field cannot take
+    // part of it: a pass whose wheel input also scrolls something else is left whole to the panel.
+    if left {
+        taken.clear();
+    }
+    (walk, taken)
 }
 
 /// A [`num_field`] for a width or height (Transform panel, Properties panel, Control bar): Ctrl/Cmd+Enter
@@ -330,7 +580,7 @@ pub fn size_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str
             }
         });
     }
-    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[], false)
+    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[], false, "")
 }
 
 /// [`plain_field`] for a number kept within `range` (the values of dialogs, preferences and panels
@@ -433,9 +683,8 @@ pub fn mixed_field_named(
     bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None, false, false)
 }
 
-/// [`mixed_field`] whose ↑/↓, wheel and scrub stop at `bounds`; ↑/↓ and the wheel take `step`'s steps
-/// when it is given (see [`SliderValue::step`]). Armed with id salt `id` ([`arm_field_focus`]), it
-/// takes the keyboard focus with its value selected.
+/// [`bounded_field_reading`] that reads one pair of parentheses around its text only while it shows
+/// its value in parentheses.
 #[allow(clippy::too_many_arguments)]
 fn bounded_field(
     ui: &mut Ui,
@@ -451,16 +700,33 @@ fn bounded_field(
     parentheses: bool,
     live: bool,
 ) -> Option<f64> {
+    bounded_field_reading(ui, id, label, name, value, suffix, decimals, width, bounds, step, parentheses, parentheses, live)
+}
+
+/// [`mixed_field`] whose ↑/↓, wheel and scrub stop at `bounds`; ↑/↓ and the wheel take `step`'s steps
+/// when it is given (see [`SliderValue::step`]). Armed with id salt `id` ([`arm_field_focus`]), it
+/// takes the keyboard focus with its value selected. With `parentheses` it shows its value as
+/// `(12)`; with `read_parentheses` it reads typed text as [`field_number`] does with its Kerning flag.
+#[allow(clippy::too_many_arguments)]
+fn bounded_field_reading(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    label: Option<PreviousLabel>,
+    name: Option<&str>,
+    value: Option<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+    bounds: &RangeInclusive<f64>,
+    step: Option<fn(f64, f64) -> f64>,
+    parentheses: bool,
+    read_parentheses: bool,
+    live: bool,
+) -> Option<f64> {
     let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
     let show = |value: f64| field_text(value, suffix, decimals);
-    // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
-    let read = |buf: &str| {
-        let suffix = suffix.trim();
-        let buf = decimal_point(buf);
-        let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
-        vectorcraft_doc::parse_number(&bare.replace(['%', '°', '(', ')'], ""))
-    };
+    let read = |buf: &str| field_number(buf, suffix, read_parentheses);
     let shown = value.map(|v| if parentheses { format!("({})", show(v)) } else { show(v) }).unwrap_or_default();
     take_dialog_focus(ui, id, &shown);
     if armed {
@@ -489,6 +755,21 @@ fn bounded_field(
     } else {
         None
     }
+}
+
+/// The number text typed into a [`bounded_field`] with `suffix` reads as. The suffix, `%` and `°`
+/// may follow any operand: `45*2°`, `50% / 2`. With `parentheses` (Kerning, which shows its
+/// automatic value as `(12)`), one pair of parentheses around the whole text is dropped first, so
+/// `(12)` reads as 12. Any other parentheses are refused: `(10+5)*2` reads as nothing, not as
+/// `10+5*2`. A decimal comma is read ([`decimal_point`]) after the suffix, `%`, `°` and that pair
+/// are dropped, so `(1,000)` and `1,000%` are refused as thousands rather than read as 1.
+pub(super) fn field_number(buf: &str, suffix: &str, parentheses: bool) -> Option<f64> {
+    let suffix = suffix.trim();
+    let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
+    let bare = bare.replace(['%', '°'], "");
+    let bare = bare.trim();
+    let bare = if parentheses { bare.strip_prefix('(').and_then(|b| b.strip_suffix(')')).unwrap_or(bare) } else { bare };
+    vectorcraft_doc::parse_number(&decimal_point(bare))
 }
 
 /// The text [`plain_field`] shows for `value`: at most `decimals` places, without trailing zeros,
@@ -566,10 +847,69 @@ pub fn spin_field_stops_named(
     presets: &[f64],
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, None, None, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, false)
+    let blank_from = BLANK_WEIGHT_STEPS_FROM;
+    // A blank field steps in points from `blank_from`, whatever the unit's preset ladder (#5349).
+    let stops = if value.is_none() { &BLANK_WEIGHT_STOPS[..] } else { presets };
+    let fmt = |v: f64| unit.format(v);
+    spin_generic(ui, label, value, Some(blank_from), None, None, None, width, step, min, presets, stops, &fmt, &mut |ui, fw, label| {
+        unit_field_from(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, stops, false, Some(blank_from), "")
     })
     .and_then(SpinPick::value)
+}
+
+/// Where a blank Stroke Weight (the selected objects differ) steps from, in points: up goes to
+/// 0.5 pt and down to 0 pt. This is the behaviour #5349 asks for.
+const BLANK_WEIGHT_STEPS_FROM: f64 = 0.25;
+
+/// The stops a blank Stroke Weight steps through, in points, so that up gives 0.5 pt in every
+/// Units > Stroke, not the first preset of the unit's own ladder above 0.25 pt.
+const BLANK_WEIGHT_STOPS: [f64; 2] = [BLANK_WEIGHT_STEPS_FROM, 0.5];
+
+/// A distance field with spinner arrows kept within `bounds` (points), as the Drop Shadow and
+/// Outer Glow dialogs show their offsets and blur: the spinner steps one `unit` at a time
+/// (Shift ×10, Ctrl/Cmd ÷10), and it, ↑/↓, the wheel, a scrub and a typed value stop at both
+/// ends. Returns the committed or stepped value in points.
+pub fn spin_length_within(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    let step = Some(unit.to_pt(1.0)).filter(|s| s.is_finite() && *s > 0.0).unwrap_or(1.0);
+    let field = bounds.clone();
+    spin_generic(ui, label, value, None, None, None, None, width, step, *bounds.start(), &[], &[], &|v| unit.format(v), &mut |ui, fw, label| {
+        unit_field(ui, id, label, None, value, unit, fw, false, field.clone(), &[], false, "")
+    })
+    .and_then(SpinPick::value)
+    .map(|v| within(v, &bounds))
+}
+
+/// [`range_field`] with spinner arrows (Opacity and Darkness in the Drop Shadow and Outer Glow
+/// dialogs): the spinner steps by `step` (Shift ×10, Ctrl/Cmd ÷10) and, like ↑/↓, the wheel, a
+/// scrub and a typed value, stops at the ends of `range`.
+#[allow(clippy::too_many_arguments)]
+pub fn spin_range(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    value: Option<f64>,
+    range: RangeInclusive<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+    step: f64,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    let places = decimals.min(6) as i32;
+    let value = value.map(|v| within(v, &range));
+    let fmt = |v: f64| format!("{v}{suffix}");
+    spin_generic(ui, label, value, None, None, None, None, width, step, *range.start(), &[], &[], &fmt, &mut |ui, fw, label| {
+        bounded_field(ui, id, label, None, value, suffix, decimals, fw, &range, None, false, false)
+    })
+    .and_then(SpinPick::value)
+    .map(|v| within(round_to(v, places), &range))
 }
 
 /// What a [`spin_field_auto`] returns: a value (points), or its Auto entry.
@@ -623,8 +963,8 @@ pub fn spin_field_auto_named(
     presets: &[f64],
 ) -> Option<SpinPick> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], false)
+    spin_generic(ui, label, value, None, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], false, "")
     })
 }
 
@@ -662,13 +1002,15 @@ pub fn spin_plain_named(
     let label = take_previous_label(ui);
     let value = value.into();
     let fmt = |v: f64| format!("{v}{suffix}");
-    spin_generic(ui, label, value, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
+    spin_generic(ui, label, value, None, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
         bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None, false, false)
     })
     .and_then(SpinPick::value)
 }
 
-/// Kerning's numeric field and automatic method choices.
+/// Kerning's numeric field and automatic method choices. With `parentheses` the field shows its
+/// value as `(12)`; typed text such as `(10+5)` reads with one pair of parentheses around it either
+/// way.
 #[allow(clippy::too_many_arguments)]
 pub fn spin_kerning(
     ui: &mut Ui,
@@ -686,6 +1028,7 @@ pub fn spin_kerning(
         ui,
         label,
         value,
+        None,
         automatic,
         optical,
         Some(optical_label),
@@ -695,7 +1038,7 @@ pub fn spin_kerning(
         presets,
         &[],
         &|v| format!("{v}"),
-        &mut |ui, fw, label| bounded_field(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, parentheses, false),
+        &mut |ui, fw, label| bounded_field_reading(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, parentheses, true, false),
     )
 }
 
@@ -706,6 +1049,7 @@ fn spin_generic(
     ui: &mut Ui,
     label: Option<PreviousLabel>,
     value: Option<f64>,
+    blank_from: Option<f64>,
     auto: Option<bool>,
     optical: Option<bool>,
     optical_label: Option<&str>,
@@ -722,9 +1066,10 @@ fn spin_generic(
     let h = 26.0;
     let enabled = ui.is_enabled();
     ui.scope(|ui| {
-        // The spinner, the field and the chevron share their borders: one box in three parts.
+        // The spinner, the field and the chevron share their borders: one box in three parts. The
+        // spinner is not a Tab stop (↑/↓ in the field step it), so Tab goes from field to field.
         ui.spacing_mut().item_spacing.x = -1.0;
-        let (sr, sresp) = ui.allocate_exact_size(vec2(16.0, h), Sense::click());
+        let (sr, sresp) = ui.allocate_exact_size(vec2(16.0, h), Sense::CLICK);
         ui.painter().rect_filled(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, t.input);
         ui.painter().rect_stroke(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
         let up = Rect::from_min_max(sr.min, pos2(sr.right(), sr.center().y));
@@ -744,41 +1089,53 @@ fn spin_generic(
             ui.painter().line_segment([m + vec2(0.0, d), m + vec2(3.0, -d)], Stroke::new(1.2, c));
         }
         sresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, tl!("Step up or down")));
-        // A blank field (values that differ) has nothing to step from. A click steps once; an
+        // A blank field (values that differ) steps from `blank_from`, if any. A click steps once; an
         // arrow held down steps again and again after a pause, as a spin button does (#4267).
-        let repeat = held_repeat(ui, &sresp);
-        if (repeat == Some(true) || (sresp.clicked() && repeat.is_none()))
-            && let Some(p) = sresp.interact_pointer_pos()
-            && let Some(v) = value
-        {
+        let is_up = match held_repeat(ui, &sresp) {
+            Some(true) => Some(ui.rect_contains_pointer(up)),
+            None if sresp.clicked() => sresp.interact_pointer_pos().map(|p| up.contains(p)),
+            _ => None,
+        };
+        if let (Some(is_up), Some(v)) = (is_up, value.or(blank_from)) {
             let modifiers = ui.input(|i| i.modifiers);
-            out = Some(SpinPick::Value(spinner_step(v, step, min, up.contains(p), modifiers, stops, fmt)));
+            out = Some(SpinPick::Value(spinner_step(v, step, min, is_up, modifiers, stops, fmt)));
         }
         let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };
+        let keyed = if presets.is_empty() { None } else { alt_down_in_field(ui, Rect::from_x_y_ranges(sr.right()..=sr.right() + fw, sr.y_range())) };
         if let Some(v) = field(ui, fw, label) {
             out = Some(SpinPick::Value(v.max(min)));
         }
         if !presets.is_empty() {
             let dresp = chevron_cell(ui, h);
+            let keyed = open_presets_from_keys(ui, &dresp, keyed);
+            let was_open = presets_open(ui, &dresp);
             egui::Popup::menu(&dresp).show(|ui| {
                 ui.set_min_width(width - 10.0);
-                if let Some(on) = auto
-                    && ui.selectable_label(on, tl!("Auto")).clicked()
-                {
-                    out = Some(SpinPick::Auto);
-                }
-                if let Some(on) = optical
-                    && ui.selectable_label(on, optical_label.unwrap_or_default()).clicked()
-                {
-                    out = Some(SpinPick::Optical);
-                }
                 let current = value.filter(|_| auto != Some(true));
-                for p in presets {
-                    if ui.selectable_label(current.is_some_and(|v| (v - p).abs() < 1e-6), fmt(*p)).clicked() {
-                        out = Some(SpinPick::Value(*p));
+                let mut entries: Vec<(bool, String, SpinPick)> = Vec::new();
+                if let Some(on) = auto {
+                    entries.push((on, tl!("Auto").to_string(), SpinPick::Auto));
+                }
+                if let Some(on) = optical {
+                    entries.push((on, optical_label.unwrap_or_default().to_string(), SpinPick::Optical));
+                }
+                entries.extend(presets.iter().map(|p| (current.is_some_and(|v| (v - p).abs() < 1e-6), fmt(*p), SpinPick::Value(*p))));
+                let focus = entry_to_focus(keyed, entries.iter().map(|e| e.0));
+                for (i, (on, text, pick)) in entries.into_iter().enumerate() {
+                    let r = ui.selectable_label(on, text);
+                    if focus == Some(i) {
+                        r.request_focus();
+                    }
+                    if r.clicked() {
+                        out = Some(pick);
+                        // Enter or Space on the focused entry is a click too, which the menu
+                        // does not close on by itself.
+                        ui.close();
                     }
                 }
             });
+            keep_enter_in_presets(ui, was_open);
+            return_focus_from_presets(ui, &dresp);
         }
     });
     out
@@ -794,9 +1151,15 @@ const REPEAT_EVERY: f64 = 0.06;
 /// must not step once more.
 fn held_repeat(ui: &Ui, resp: &egui::Response) -> Option<bool> {
     let id = resp.id.with("repeat");
-    let now = ui.input(|i| i.time);
+    let click_dist = ui.ctx().options(|o| o.input_options.max_click_dist);
+    let (now, primary_held) = ui.input(|i| {
+        let stayed = i.pointer.total_drag_delta().is_some_and(|d| d.length_sq() <= click_dist * click_dist);
+        (i.time, i.focused && i.pointer.primary_down() && stayed)
+    });
     let state: Option<(f64, f64, bool)> = ui.data(|d| d.get_temp(id));
-    if !resp.is_pointer_button_down_on() {
+    // Start from an egui press, but keep tracking it past the click timeout without taking drags from a scroll area (#6307).
+    let down_here = primary_held && resp.contains_pointer() && !resp.long_touched();
+    if !resp.enabled() || !down_here || (state.is_none() && !resp.is_pointer_button_down_on()) {
         ui.data_mut(|d| d.remove::<(f64, f64, bool)>(id));
         return state.filter(|(_, _, repeated)| *repeated).map(|_| false);
     }

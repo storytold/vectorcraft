@@ -286,6 +286,21 @@ fn spacing_and_scaling_keep_each_glyph_where_the_file_put_it() {
     }
 }
 
+/// Character spacing in horizontally scaled type: a PDF scales `Tc` by its horizontal scaling
+/// (ISO 32000-1 §9.4.4), as layout scales tracking by the Horizontal Scale
+/// (`vectorcraft_text::spacing_scale`), so the type's tracking is the file's `Tc` in thousandths of
+/// its size: 1.5 pt at 16 pt is 93.75, set 80% wide.
+#[test]
+fn character_spacing_in_horizontally_scaled_type_is_the_files_tc() {
+    let bytes = page("BT /F1 16 Tf 1.5 Tc 80 Tz 20 50 Td (Spaced and narrow) Tj ET", "");
+    let t = texts(&open_as(&bytes, TextAs::Text));
+    assert_eq!(t.len(), 1);
+    assert!(t[0].runs.iter().all(|r| (r.style.h_scale - 80.0).abs() < 1e-6), "{:?}", t[0].runs);
+    let tracking: Vec<f64> = t[0].runs.iter().map(|r| r.style.tracking).collect();
+    assert!(tracking.iter().all(|v| (v - 93.75).abs() < 0.5), "{tracking:?}");
+    assert!(displacement(&bytes) < 0.02);
+}
+
 /// Word spacing stays on the spaces, as tracking of their own; evenly spaced letters keep one
 /// tracking value for the line, and a file that didn't kern opens with kerning off.
 #[test]

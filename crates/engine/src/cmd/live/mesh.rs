@@ -4,7 +4,7 @@ use super::common::{fix_ids, ids_json, is_mesh, replace_with, roots_param, selec
 use super::envelope::{outline_of, rows_cols};
 use super::{
     Color, Document, EngineError, EnvelopeKind, GradientMesh, MeshAppearance, Node, NodeId, NodeKind, Paint, Point, Result, Session, Value, bad,
-    check_numbers, color_value, f64_or, f64_req, finite_numbers, gradient_sampler, id_param, json, live, ok, str_param,
+    check_numbers, color_param, f64_or, f64_req, finite_numbers, gradient_sampler, id_param, json, live, ok, str_param,
 };
 
 // ---------- Gradient mesh ----------
@@ -49,10 +49,7 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
                 match n.appearance.fill_paint() {
                     // The points take the colours the gradient paints there.
                     Paint::Gradient(g) => {
-                        path.bounds().and_then(|b| GradientMesh::for_path_with(&path, rows, cols, &*gradient_sampler(&g, b, model))).map(|mut m| {
-                            m.highlight(app, highlight);
-                            m
-                        })
+                        path.bounds().and_then(|b| GradientMesh::for_path_shaded(&path, rows, cols, &*gradient_sampler(&g, b, model), app, highlight))
                     }
                     p => GradientMesh::for_path(&path, rows, cols, p.color().unwrap_or(Color::WHITE), app, highlight),
                 }
@@ -232,7 +229,7 @@ pub(super) fn mesh_set_color(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["opacity"], C)?;
     crate::cmd::paint::check_keep_model(p, C)?;
     let items = point_items(p, C)?;
-    let color = p.get("color").and_then(color_value).map(|c| crate::cmd::paint::new_color(s, p, c));
+    let color = color_param(p, "color", C)?.map(|c| crate::cmd::paint::new_color(s, p, c));
     let opacity = p.get("opacity").and_then(Value::as_f64);
     if color.is_none() && opacity.is_none() {
         return Err(bad(C, "missing `color` or `opacity`"));
@@ -283,7 +280,7 @@ pub(super) fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
     crate::cmd::paint::check_keep_model(p, C)?;
     check_numbers(p, &["tolerance"], C)?;
     let tol = f64_or(p, "tolerance", 0.0).max(0.0);
-    let color = p.get("color").and_then(color_value).map(|c| crate::cmd::paint::new_color(s, p, c));
+    let color = color_param(p, "color", C)?.map(|c| crate::cmd::paint::new_color(s, p, c));
     let index = with_mesh(s, p, C, "Add Mesh Line", true, |m| {
         let i = m.add_lines_at(q, tol).ok_or_else(|| bad(C, "point is outside the mesh"))?;
         if let Some(c) = color {

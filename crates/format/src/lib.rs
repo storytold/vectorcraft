@@ -29,6 +29,13 @@
 //! `data`. Every version loads, and [`save_with`] writes any of them for older apps (under the
 //! format name `drawcraft`, which every version reads). Readers reject files whose `version` is
 //! newer than they support.
+//!
+//! The document has a version of its own (`document.version`, [`vectorcraft_doc::FORMAT_VERSION`]),
+//! which readers do not check. A version 2 document's Twist effects turn clockwise for a positive
+//! angle. A version 1 document's Twist angles are negated when it opens, unless the file is of
+//! [`VERSION`] and its `generator` is VectorCraft 0.21.0 or later, which turned them clockwise
+//! already; [`save_with`] writes a version 1 document with them negated back for an older file
+//! version ([`vectorcraft_doc::twist`]).
 #![forbid(unsafe_code)]
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -38,16 +45,18 @@ mod stream;
 mod unpack;
 
 use std::collections::{BTreeMap, HashSet};
+use std::fmt;
 use std::io::Write;
 use std::sync::Arc;
 
 use craft_vectorcraft_format::{Contents, Head, Image, ReadError, Tail};
-use serde::Serialize;
+use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
+use serde::{Deserializer, Serialize};
 use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use atomic::{sync_file, write_atomic, write_atomic_with, write_new_with};
-pub use craft_vectorcraft_format::base64::{decode as base64_decode, encode as base64_encode};
+pub use craft_vectorcraft_format::base64::{decode as base64_decode, decoded_len as base64_decoded_len, encode as base64_encode};
 pub use craft_vectorcraft_format::{
     BLOB_MAGIC, COMPRESSED_SINCE, EXTENSION, ICC_MIME, INLINE_MAX, LEGACY_EXTENSION, MIN_VERSION, PREVIEW_MAX, VERSION, is_compressed, json_part,
     sniff,
@@ -139,6 +148,9 @@ pub struct SaveOptions {
     pub profiles: BTreeMap<String, Vec<u8>>,
     /// Create PDF-Compatible File: a PDF of the document to carry.
     pub pdf: Option<Vec<u8>>,
+    /// The application's PDF save preference, retained even when there are no artboards to draw.
+    /// `None` omits this metadata, preserving the lower-level writer's existing output.
+    pub pdf_compatible: Option<bool>,
     /// Decimal places to round path anchors and handles to ([`Document::round_geometry`]), at
     /// most [`MAX_PRECISION`] (a larger value rounds to that many); `None` writes them exactly.
     pub precision: Option<u8>,
@@ -157,6 +169,7 @@ impl Default for SaveOptions {
             include_linked: false,
             profiles: BTreeMap::new(),
             pdf: None,
+            pdf_compatible: None,
             precision: None,
         }
     }
@@ -244,6 +257,13 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
     if version < 3 {
         d.store_legacy_color_profiles();
     }
+    // Apps before this one's version take Color Halftone's Max Radius in points (#3260), and
+    // predate 0.21.0, turning Twist the other way. The radii first: their conversion runs only on
+    // a document of version 3 or later, and the Twist one then marks it version 1.
+    if version < VERSION {
+        d.halftone_radii_to_points();
+        d.store_legacy_twist_angles();
+    }
     let v1 = if version == 1 {
         let mut v = serde_json::to_value(&d).map_err(encode_err)?;
         legacy::anchors_to_v1(&mut v);
@@ -313,6 +333,9 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     env.field(&mut out, "format", &if o.version < 3 { LEGACY_EXTENSION } else { EXTENSION })?;
     env.field(&mut out, "version", &o.version)?;
     env.field(&mut out, "generator", &format!("VectorCraft {}", env!("CARGO_PKG_VERSION")))?;
+    if let Some(compatible) = o.pdf_compatible {
+        env.field(&mut out, "pdfCompatible", &compatible)?;
+    }
     if let Some(png) = &o.preview {
         env.field(&mut out, "preview", &Image::inline("image/png", png))?;
     }
@@ -456,6 +479,9 @@ pub struct FileInfo {
     pub version: u32,
     /// Written under the project's former name (`"format": "drawcraft"`).
     pub legacy: bool,
+    /// The saved `pdfCompatible` preference, or the presence of a non-null `pdf` member in
+    /// files without a boolean preference. The PDF payload is not read or validated.
+    pub pdf_compatible: bool,
 }
 
 impl FileInfo {
@@ -484,20 +510,42 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     // at `MAX_READ_ANCHORS` anchors together, the document at `MAX_READ_NODES` objects, and the
     // fields read before an object's type at `MAX_BUFFERED_VALUES` values. The preview and the
     // PDF are skipped without being kept.
-    let read = || {
-        vectorcraft_doc::node::with_node_budget(max_nodes, || {
-            vectorcraft_doc::node::with_buffered_value_budget(max_values, || Contents::<Document>::read(file.json()))
+    fn within_budgets<T>(max_nodes: usize, max_values: usize, read: impl FnOnce() -> T) -> T {
+        #[cfg(test)]
+        DOCUMENT_READS.with(|n| n.set(n.get() + 1));
+        vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, || {
+            vectorcraft_doc::node::with_node_budget(max_nodes, || vectorcraft_doc::node::with_buffered_value_budget(max_values, read))
         })
-    };
-    let f = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| match e {
+    }
+    let read_error = |e| match e {
         ReadError::Json(e) => {
             let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
             FormatError::NotVectorcraft(why)
         }
         ReadError::Envelope(e) => e.into(),
         e => FormatError::NotVectorcraft(e.to_string()),
-    })?;
-    let info = FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION };
+    };
+    // The document and the saved PDF preference come from one pass over the JSON.
+    let (mut f, pdf_compatible) = match within_budgets(max_nodes, max_values, || Contents::<Document>::read_with_pdf_preference(file.json())) {
+        Ok(read) => read,
+        // That pass refuses a `pdfCompatible` that is not a boolean, and any other data error.
+        // When it stopped at the preference, the file is read again without it, and only then is
+        // its JSON scanned for the preference a second time, so such a file opens as before. Any
+        // other error, such as a document past a budget, is returned without a second read.
+        Err(ReadError::Json(e)) if e.is_data() && refused_preference_at(file.json(), &e) => {
+            let f = within_budgets(max_nodes, max_values, || Contents::<Document>::read(file.json())).map_err(read_error)?;
+            let pdf_compatible = pdf_member(file.json()).map_err(|e| FormatError::NotVectorcraft(e.to_string()))?;
+            (f, pdf_compatible)
+        }
+        Err(e) => return Err(read_error(e)),
+    };
+    let info = FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION, pdf_compatible };
+    // A version 1 document saved before VectorCraft 0.21.0, or for an app before it (an older file
+    // version): its Twist angles turned the other way. The app that wrote it is read from the JSON
+    // before the data after it is taken; the walk's depth is bounded by the JSON reader's nesting
+    // limit.
+    let current_file = f.version >= VERSION;
+    f.document.migrate_twist_angles(|| current_file && vectorcraft_doc::twist::written_clockwise(generator(file.json()).as_deref()));
     // The bytes after the JSON, read in one pass: the images' first, then the profiles'.
     let entries: Vec<[u64; 2]> = f.images.values().chain(f.profiles.values()).filter_map(|i| i.blob).collect();
     let tail = file.entries(&entries)?;
@@ -520,12 +568,18 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
         }
         doc.images.insert(k, blob);
     }
-    // Saved mid-edit by an older version: drop the opacity-mask editing layer.
+    // Saved mid-edit by an older version: drop the opacity-mask editing layer. Those versions
+    // removed it only as a top-level layer, so an id naming anything else is ignored.
+    if doc.mask_edit.is_some_and(|me| !doc.layers.iter().any(|l| l.id == me.layer)) {
+        doc.mask_edit = None;
+    }
     doc.drop_edit_modes();
     // Saved before per-fill/stroke overprint: the Overprint Black list becomes overprint flags.
     doc.migrate_overprint_black();
     // Saved before v3: the assigned profiles move out of `unknown`.
     doc.migrate_color_profiles();
+    // A document before version 3: Color Halftone's Max Radius in points becomes pixels (#3260).
+    doc.migrate_halftone_radii();
     doc.fix_next_id();
     // Untrusted: the bleed and type proportions, within the ranges Document Setup takes.
     doc.setup.keep_in_range();
@@ -559,6 +613,8 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     // labels and the character styles, within the ranges `document.setup` takes (after the depth
     // limit: the walk recurses).
     doc.keep_scripts_in_range();
+    // The conversions above bring an older document to today's version.
+    doc.version = doc.version.max(vectorcraft_doc::FORMAT_VERSION);
     let profiles = f
         .profiles
         .into_iter()
@@ -572,6 +628,176 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
         })
         .collect::<Result<_, FormatError>>()?;
     Ok(NativeFile { doc, depth_notes, info, profiles })
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times a file's JSON was scanned again for its PDF preference on this thread.
+    static PDF_MEMBER_SCANS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    /// Tests: how many times a file's document was read on this thread.
+    static DOCUMENT_READS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether reading `json`'s `pdfCompatible` as a boolean or null fails with a data error at the
+/// line and column of `e`, that is, whether the read that gave `e` stopped at the preference. Only
+/// the bytes up to that position, and the one there, are read, and they are skipped without being
+/// kept.
+fn refused_preference_at(json: &[u8], e: &serde_json::Error) -> bool {
+    // serde_json gives a 1-based line and the bytes before the position on that line.
+    let Some(line_start) = (match e.line() {
+        0 => None,
+        1 => Some(0),
+        n => json.iter().enumerate().filter(|(_, b)| **b == b'\n').nth(n - 2).map(|(i, _)| i + 1),
+    }) else {
+        return false;
+    };
+    let end = line_start.saturating_add(e.column()).saturating_add(1).min(json.len());
+    struct StrictPreference;
+    impl<'de> Visitor<'de> for StrictPreference {
+        type Value = ();
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a native file envelope")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+            while let Some(key) = map.next_key::<String>()? {
+                if key == "pdfCompatible" {
+                    map.next_value::<Option<bool>>()?;
+                } else {
+                    map.next_value::<IgnoredAny>()?;
+                }
+            }
+            Ok(())
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
+            while seq.next_element::<IgnoredAny>()?.is_some() {}
+            Ok(())
+        }
+    }
+    serde_json::Deserializer::from_slice(&json[..end])
+        .deserialize_any(StrictPreference)
+        .is_err_and(|s| s.is_data() && s.line() == e.line() && s.column() == e.column())
+}
+
+/// The saved PDF preference, falling back to the presence of its payload without retaining or
+/// decoding it. The array form has neither member. Repeated members use their last value.
+fn pdf_member(json: &[u8]) -> Result<bool, serde_json::Error> {
+    #[cfg(test)]
+    PDF_MEMBER_SCANS.with(|n| n.set(n.get() + 1));
+    struct PdfMember;
+    impl<'de> Visitor<'de> for PdfMember {
+        type Value = bool;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a native file envelope")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<bool, A::Error> {
+            let mut present = false;
+            let mut preference = None;
+            while let Some(key) = map.next_key::<String>()? {
+                match key.as_str() {
+                    "pdfCompatible" => preference = map.next_value_seed(Preference)?,
+                    "pdf" => present = map.next_value::<Option<IgnoredAny>>()?.is_some(),
+                    _ => {
+                        map.next_value::<IgnoredAny>()?;
+                    }
+                }
+            }
+            Ok(preference.unwrap_or(present))
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<bool, A::Error> {
+            while seq.next_element::<IgnoredAny>()?.is_some() {}
+            Ok(false)
+        }
+    }
+    serde_json::Deserializer::from_slice(json).deserialize_any(PdfMember)
+}
+
+/// A `pdfCompatible` value: `Some` for a boolean, `None` for null or any other value, which is
+/// skipped without being kept, as an unknown member is.
+struct Preference;
+
+impl<'de> DeserializeSeed<'de> for Preference {
+    type Value = Option<bool>;
+
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Option<bool>, D::Error> {
+        d.deserialize_any(self)
+    }
+}
+
+impl<'de> Visitor<'de> for Preference {
+    type Value = Option<bool>;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("any value")
+    }
+
+    fn visit_bool<E>(self, v: bool) -> Result<Option<bool>, E> {
+        Ok(Some(v))
+    }
+
+    fn visit_i64<E>(self, _: i64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_u64<E>(self, _: u64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_f64<E>(self, _: f64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_str<E>(self, _: &str) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_unit<E>(self) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Option<bool>, A::Error> {
+        IgnoredAny.visit_seq(seq).map(|_| None)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Option<bool>, A::Error> {
+        IgnoredAny.visit_map(map).map(|_| None)
+    }
+}
+
+/// The file's first `generator` member, the app that wrote it (`None`: it has none, it is not a
+/// string, or the file is not an object of members). The other members, and any further
+/// `generator`, are skipped without being kept, as reading the file skips them.
+fn generator(json: &[u8]) -> Option<String> {
+    struct Generator(Option<String>);
+    struct Members;
+    impl<'de> serde::de::Visitor<'de> for Members {
+        type Value = Generator;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a file's members")
+        }
+        fn visit_map<A: serde::de::MapAccess<'de>>(self, mut m: A) -> Result<Generator, A::Error> {
+            let mut first: Option<serde_json::Value> = None;
+            while let Some(key) = m.next_key::<std::borrow::Cow<'de, str>>()? {
+                if key == "generator" && first.is_none() {
+                    first = Some(m.next_value()?);
+                } else {
+                    m.next_value::<serde::de::IgnoredAny>()?;
+                }
+            }
+            Ok(Generator(first.and_then(|v| v.as_str().map(str::to_owned))))
+        }
+    }
+    impl<'de> serde::Deserialize<'de> for Generator {
+        fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            d.deserialize_map(Members)
+        }
+    }
+    serde_json::from_slice::<Generator>(json).ok()?.0
 }
 
 /// The bytes of the member of the file's head `pick` picks (only that entry of the data after
@@ -613,16 +839,119 @@ mod tests {
     }
 
     #[test]
+    fn file_info_keeps_pdf_presence_without_reading_its_payload() {
+        let d = Document::new(10.0, 10.0);
+        for version in [3, 4] {
+            for compress in [false, true] {
+                for present in [false, true] {
+                    let options = SaveOptions { version, compress, pdf: present.then(|| vec![7; 128 * 1024]), ..SaveOptions::default() };
+                    let bytes = save_with(&d, &options).unwrap();
+                    assert_eq!(load_info(&bytes).unwrap().1.pdf_compatible, present);
+                }
+            }
+        }
+        let mut value: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        let array = serde_json::json!([EXTENSION, VERSION, value["document"], value["images"], {}]);
+        assert!(!load_info(&serde_json::to_vec(&array).unwrap()).unwrap().1.pdf_compatible);
+        value["pdf"] = serde_json::json!({"mime":"application/pdf", "data":"not base64"});
+        assert!(load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible);
+        value["pdf"] = serde_json::Value::Null;
+        value["unrecognized"] = serde_json::json!({"pdf":{"data":"nested"}});
+        assert!(!load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible);
+        // A preference that is not a boolean is skipped like an unknown member: the file opens,
+        // and the presence of the PDF decides.
+        for odd in [serde_json::json!(1), serde_json::json!("yes"), serde_json::json!([true]), serde_json::json!({"on": true})] {
+            for (pdf, present) in [(serde_json::Value::Null, false), (serde_json::json!({"mime":"application/pdf"}), true)] {
+                value["pdf"] = pdf;
+                value["pdfCompatible"] = odd.clone();
+                assert_eq!(load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible, present, "{odd}");
+            }
+        }
+    }
+
+    #[test]
+    fn only_a_preference_that_is_not_a_boolean_scans_the_json_again() {
+        let scans_for = |bytes: &[u8]| {
+            PDF_MEMBER_SCANS.with(|n| n.set(0));
+            let compatible = load_info(bytes).unwrap().1.pdf_compatible;
+            (compatible, PDF_MEMBER_SCANS.with(|n| n.get()))
+        };
+        let d = Document::new(10.0, 10.0);
+        assert_eq!(scans_for(&save(&d, false)), (false, 0));
+        assert_eq!(scans_for(&save(&d, true)), (false, 0));
+        for compatible in [false, true] {
+            let bytes = save_with(&d, &SaveOptions { pdf_compatible: Some(compatible), ..SaveOptions::default() }).unwrap();
+            assert_eq!(scans_for(&bytes), (compatible, 0));
+        }
+        let with_pdf = save_with(&d, &SaveOptions { pdf: Some(vec![7; 1024]), ..SaveOptions::default() }).unwrap();
+        assert_eq!(scans_for(&with_pdf), (true, 0));
+        let mut value: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        for odd in [serde_json::json!("yes"), serde_json::json!(1), serde_json::json!([true])] {
+            value["pdfCompatible"] = odd.clone();
+            assert_eq!(scans_for(&serde_json::to_vec(&value).unwrap()), (false, 1), "{odd}");
+        }
+        // A document that can't be read still fails. Read before the preference, it is not read
+        // a second time.
+        value["document"] = serde_json::json!("not a document");
+        DOCUMENT_READS.with(|n| n.set(0));
+        assert!(load_info(&serde_json::to_vec(&value).unwrap()).is_err());
+        assert_eq!(DOCUMENT_READS.with(|n| n.get()), 1);
+        // Read after a preference that is not a boolean, it fails on the second read, which is
+        // the first to reach it.
+        let mut first = serde_json::to_vec(&value).unwrap();
+        assert!(first.starts_with(br#"{"document""#));
+        first.splice(1..1, br#""pdfCompatible":"yes","#.iter().copied());
+        DOCUMENT_READS.with(|n| n.set(0));
+        assert!(load_info(&first).is_err());
+        assert_eq!(DOCUMENT_READS.with(|n| n.get()), 2);
+    }
+
+    /// A document past a read budget is refused after one read, also in a file whose preference
+    /// is not a boolean.
+    #[test]
+    fn a_document_past_a_budget_is_read_once() {
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        for i in 0..20 {
+            let id = d.alloc_id();
+            d.insert(Some(l), i, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        }
+        let n = d.node_count();
+        let mut value: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        for preference in [serde_json::Value::Null, serde_json::json!(true), serde_json::json!("yes")] {
+            value["pdfCompatible"] = preference.clone();
+            let bytes = serde_json::to_vec(&value).unwrap();
+            DOCUMENT_READS.with(|r| r.set(0));
+            let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bytes, n - 1, vectorcraft_doc::node::MAX_BUFFERED_VALUES) else {
+                panic!("one object past the budget must be refused")
+            };
+            assert!(why.contains(&format!("more than {} objects", n - 1)), "{why}");
+            assert_eq!(DOCUMENT_READS.with(|r| r.get()), 1, "{preference}");
+        }
+    }
+
+    #[test]
+    fn file_info_keeps_the_pdf_preference_without_artboards() {
+        let mut d = Document::new(10.0, 10.0);
+        d.artboards.clear();
+        for compatible in [false, true] {
+            let bytes = save_with(&d, &SaveOptions { pdf_compatible: Some(compatible), ..SaveOptions::default() }).unwrap();
+            assert_eq!(load_info(&bytes).unwrap().1.pdf_compatible, compatible);
+            assert!(pdf_content(&bytes).is_none());
+        }
+    }
+
+    #[test]
     fn file_info_tells_old_files() {
         let d = Document::new(10.0, 10.0);
         let current = save(&d, false);
-        assert_eq!(load_info(&current).unwrap().1, FileInfo { version: VERSION, legacy: false });
+        assert_eq!(load_info(&current).unwrap().1, FileInfo { version: VERSION, legacy: false, pdf_compatible: false });
         assert!(!load_info(&current).unwrap().1.is_old());
         let text = String::from_utf8(current).unwrap();
         let legacy = text.replacen("\"format\":\"vectorcraft\"", "\"format\":\"drawcraft\"", 1);
         assert!(load_info(legacy.as_bytes()).unwrap().1.is_old());
         let v1 = text.replacen(&format!("\"version\":{VERSION}"), "\"version\":1", 1);
-        assert_eq!(load_info(v1.as_bytes()).unwrap().1, FileInfo { version: 1, legacy: false });
+        assert_eq!(load_info(v1.as_bytes()).unwrap().1, FileInfo { version: 1, legacy: false, pdf_compatible: false });
         assert!(load_info(v1.as_bytes()).unwrap().1.is_old());
     }
 
@@ -785,6 +1114,49 @@ mod tests {
     use vectorcraft_doc::{Appearance, ImageObject, Node, NodeKind};
     use vectorcraft_geom::{Affine, Rect, shapes};
 
+    /// Color Halftone's Max Radius is in pixels of the raster effects resolution since document
+    /// version 3 (#3260): a file from before (version 1, or version 2 from 0.21.0 on) opens with
+    /// its radius in points converted, one saved since opens as it was. At 72 ppi a point is a
+    /// pixel, so the number stays.
+    #[test]
+    fn halftone_radii_of_older_documents_open_in_pixels() {
+        for ppi in [72.0, 300.0] {
+            let mut d = Document::new(100.0, 100.0);
+            d.raster_effects_ppi = ppi;
+            let (l, id) = (d.layers[0].id, d.alloc_id());
+            let mut look = Appearance::default_art();
+            look.effects.push(vectorcraft_doc::Effect {
+                id: "pixelate.colorHalftone".into(),
+                params: serde_json::json!({"maxRadius": 8.0}),
+                visible: true,
+            });
+            d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), look)).unwrap();
+            let radius = |d: &Document| d.node(id).unwrap().appearance.effects[0].params["maxRadius"].as_f64().unwrap();
+            assert_eq!(radius(&load(&save(&d, false)).unwrap()), 8.0, "{ppi} ppi: saved in pixels, opened in pixels");
+            // Version 2 (0.21.0's Twist) still held the radius in points.
+            d.version = 2;
+            let v2 = load(&save(&d, false)).unwrap();
+            assert!((radius(&v2) - 8.0 * ppi / 72.0).abs() < 1e-9, "version 2, 8 pt at {ppi} ppi: {}", radius(&v2));
+            d.version = 1;
+            let old = load(&save(&d, false)).unwrap();
+            assert_eq!(old.version, vectorcraft_doc::FORMAT_VERSION);
+            assert!((radius(&old) - 8.0 * ppi / 72.0).abs() < 1e-9, "8 pt at {ppi} ppi: {}", radius(&old));
+            // Saved for an older app, in every older version: the radius in points, which opens
+            // here in pixels again.
+            let px = radius(&old);
+            for version in MIN_VERSION..VERSION {
+                let bytes = save_with(&old, &SaveOptions { version, ..SaveOptions::default() }).unwrap();
+                let json = String::from_utf8(unpack::Unpacked::new(&bytes).unwrap().json().to_vec()).unwrap();
+                let at = json.find("\"maxRadius\":").unwrap() + "\"maxRadius\":".len();
+                let saved: f64 = json[at..].split([',', '}']).next().unwrap().trim().parse().unwrap();
+                assert!((saved - 8.0).abs() < 1e-9, "{ppi} ppi, version {version} holds 8 pt: {saved}");
+                let back = load(&bytes).unwrap();
+                assert!((radius(&back) - px).abs() < 1e-9, "{ppi} ppi, version {version}: {}", radius(&back));
+            }
+            assert_eq!(radius(&old), px, "{ppi} ppi: saving leaves the open document as it is");
+        }
+    }
+
     #[test]
     fn roundtrip() {
         let mut d = Document::new(100.0, 100.0);
@@ -851,6 +1223,71 @@ mod tests {
             panic!("past the budget must be refused")
         };
         assert!(why.contains("more than 100 values before its type"), "{why}");
+    }
+
+    /// A version 1 document written before VectorCraft 0.21.0 (or by an app the file does not
+    /// name) has its Twist angles negated when it opens; one written by 0.21.0 or later, and a
+    /// later document, keep them. Each opens as the current version. A save for an older file
+    /// version negates them back.
+    #[test]
+    fn twist_angles_follow_the_document_version_and_generator() {
+        use vectorcraft_doc::Effect;
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut a = Appearance::default_art();
+        a.effects.push(Effect { id: "distort.twist".into(), params: serde_json::json!({"angle": 30.0}), visible: true });
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), a)).unwrap();
+        let angle = |d: &Document| d.node(id).and_then(|n| n.appearance.effects[0].params["angle"].as_f64());
+        let now = vectorcraft_doc::FORMAT_VERSION;
+        let current = save(&d, false);
+        let back = load(&current).unwrap();
+        assert_eq!((back.version, angle(&back)), (now, Some(30.0)), "a current document is read as saved");
+        let mut v2: serde_json::Value = serde_json::from_slice(&current).unwrap();
+        v2["document"]["version"] = 2.into();
+        let back = load(&serde_json::to_vec(&v2).unwrap()).unwrap();
+        assert_eq!((back.version, angle(&back)), (now, Some(30.0)), "a version 2 document keeps its angles");
+        let opened = |generator: Option<&str>| {
+            let mut v: serde_json::Value = serde_json::from_slice(&current).unwrap();
+            v["document"]["version"] = 1.into();
+            match generator {
+                Some(g) => v["generator"] = g.into(),
+                None => {
+                    v.as_object_mut().unwrap().remove("generator");
+                }
+            }
+            let d = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+            (d.version, angle(&d))
+        };
+        for g in [Some("VectorCraft 0.20.0"), Some("VectorCraft 0.9.12"), Some("DrawCraft 0.1.0"), Some("VectorCraft"), None] {
+            assert_eq!(opened(g), (now, Some(-30.0)), "{g:?}");
+        }
+        for g in ["VectorCraft 0.21.0", "VectorCraft 0.21.3", "VectorCraft 1.0.0"] {
+            assert_eq!(opened(Some(g)), (now, Some(30.0)), "{g}");
+        }
+        // A file may repeat `generator`: the first one names the app.
+        let mut v: serde_json::Value = serde_json::from_slice(&current).unwrap();
+        v["document"]["version"] = 1.into();
+        v["generator"] = "VectorCraft 0.21.0".into();
+        let text = serde_json::to_string(&v).unwrap();
+        let first = r#""generator":"VectorCraft 0.21.0""#;
+        let twice = text.replacen(first, &format!(r#"{first},"generator":"DrawCraft 0.1.0""#), 1);
+        assert_ne!(twice, text);
+        assert_eq!(angle(&load(twice.as_bytes()).unwrap()), Some(30.0));
+        v["generator"] = "VectorCraft 0.20.0".into();
+        let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        let again = load(&save(&old, false)).unwrap();
+        assert_eq!((again.version, angle(&again)), (now, Some(-30.0)), "saved again, it is the current version");
+        // Saved for an older file version (apps before 0.21.0): version 1 with the angle negated
+        // back, whatever the generator, and it reopens as it was.
+        for version in MIN_VERSION..VERSION {
+            let bytes = save_with(&d, &SaveOptions { version, ..SaveOptions::default() }).unwrap();
+            let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(v["document"]["version"], 1, "file version {version}");
+            assert!(String::from_utf8_lossy(&bytes).contains(r#""angle":-30.0"#), "file version {version}");
+            let back = load(&bytes).unwrap();
+            assert_eq!((back.version, angle(&back)), (now, Some(30.0)), "file version {version}");
+        }
     }
 
     #[test]

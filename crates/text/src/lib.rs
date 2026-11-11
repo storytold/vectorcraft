@@ -19,9 +19,11 @@ pub mod embed;
 mod features;
 mod fontconfig;
 mod fontdb;
+mod harakat;
 pub mod hyphen;
 mod justify;
 mod kashida;
+mod kept;
 mod layout;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
@@ -35,16 +37,19 @@ pub use bitmap::GlyphImage;
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{
-    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, WantedFont, WantedFonts, app_font_dir,
-    is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight,
-    system_font_dirs, user_font_dirs,
+    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, IcfMargins, LentCompositeFonts,
+    PlatformFontFiles, StylisticSet, WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files,
+    set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
+pub use layout::{envelope_ink, register_envelope_ink};
 use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
+pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
-pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
+pub use layout::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
+pub use shape::spacing_scale;
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
@@ -167,7 +172,7 @@ pub struct PositionedGlyph {
     /// taken off, plus the manual kerning of right-to-left text, which moves the glyph right so that
     /// the space it adds lies on the glyph's left. 0 for a glyph standing upright or set across the
     /// column in vertical type, and for an inline graphic. An upright glyph in vertical type on a
-    /// path turns about its pen, and its cell starts one cell length before the cell's top: 0.12 em
+    /// path stands with its top toward the path's start, and its cell starts at its top: 0.12 em
     /// before the pen without the font's vertical metrics.
     pub width_start: f64,
 }
@@ -328,7 +333,8 @@ pub struct ListMarker {
     /// takes the text to the next tab stop.
     pub glyphs: std::ops::Range<usize>,
     /// The tab's glyph, which draws nothing: the last of [`Self::glyphs`], or the first in a
-    /// right-to-left paragraph.
+    /// right-to-left paragraph. A marker aligned right
+    /// ([`vectorcraft_doc::text::ListAlign::Right`]) has it the other way round.
     pub tab: usize,
     /// The marker's characters ("•").
     pub text: String,
@@ -436,6 +442,20 @@ impl TextLayout {
         // Ruby is covered by its line's ascent, but its ink can overhang sideways past the line.
         let ruby = self.ruby.iter().map(outlined);
         let inlines = self.inlines.iter().map(|i| Some(i.bounds));
+        glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
+    }
+    /// The box of [`Self::ink_bounds`]' ink with text space mapped by `m`: the glyph and ruby
+    /// outlines are mapped point by point, so a rotated or sheared `m` gives the outlines' own
+    /// bounds. Images, color glyphs and inline graphics count by their mapped boxes.
+    pub fn ink_bounds_in(&self, m: Affine) -> Option<Rect> {
+        let outlined = |g: &PositionedGlyph| (!g.outline.elements().is_empty()).then(|| (m * &g.outline).bounding_box());
+        let glyphs = self.glyphs.iter().flat_map(|g| {
+            let image = g.placed_image().map(|(image, xf)| (m * xf).transform_rect_bbox(image.rect()));
+            let colour = g.colour.as_ref().and_then(|c| c.geometric_bounds()).map(|b| (m * g.xf).transform_rect_bbox(b));
+            [outlined(g), image, colour]
+        });
+        let ruby = self.ruby.iter().map(outlined);
+        let inlines = self.inlines.iter().map(|i| Some(m.transform_rect_bbox(i.bounds)));
         glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
     }
     /// All glyph outlines combined (e.g. for Create Outlines).
@@ -813,6 +833,12 @@ pub fn paragraph_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirec
     layout::is_rtl(layout::para_bidi(text, direction).as_ref())
 }
 
+/// Is the character at byte `at` of paragraph `text` set right to left: its bidi level is odd, with
+/// the paragraph's `direction` (None: from its first strong character)?
+pub fn char_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirection>, at: usize) -> bool {
+    layout::para_bidi(text, direction).is_some_and(|info| info.levels.get(at).is_some_and(|level| level.is_rtl()))
+}
+
 /// Text stored in visual order (as PDF content draws it, each glyph where it is drawn), back in
 /// logical order: the order of its characters (indices into `visual.chars()`) and whether its
 /// paragraph runs right to left; laid out that way, it reads as drawn. `None` when nothing in it is
@@ -824,6 +850,16 @@ pub fn logical_order(visual: &str) -> Option<(Vec<usize>, bool)> {
     // of the visual text is its logical order.
     let levels = bidi.reordered_levels_per_char(para, para.range.clone());
     Some((unicode_bidi::BidiInfo::reorder_visual(&levels), para.level.is_rtl()))
+}
+
+/// Line metrics of the font at `index` of `data`, at its default axis settings, in font units:
+/// (units per em, ascent, descent (negative below the baseline), line gap). egui builds its text
+/// rows from these values. `None` if the font can't be read.
+pub fn line_metrics(data: &[u8], index: u32) -> Option<(f32, f32, f32, f32)> {
+    use skrifa::MetadataProvider;
+    let f = skrifa::FontRef::from_index(data, index).ok()?;
+    let m = f.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+    Some((f32::from(m.units_per_em.max(1)), m.ascent, m.descent, m.leading))
 }
 
 #[cfg(test)]

@@ -9,12 +9,11 @@ use craft_pdf::write::{self, Metadata};
 use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
 use krilla::color::{cmyk, luma, rgb};
 use krilla::configure::{Archival, PdfVersion};
-use krilla::geom::{Path, PathBuilder, Size, Transform};
+use krilla::geom::{Path, PathBuilder, Size};
 use krilla::image::Image;
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
 use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash};
-use krilla::surface::Surface;
 use krilla::text::{Glyph, GlyphId, KrillaGlyph};
 use kurbo::{PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
@@ -28,22 +27,26 @@ use crate::forms::Mark;
 use crate::lab_spot::{find, rfind};
 use crate::marks::PageBoxes;
 use crate::output::ColorOut;
+use crate::surface::Surface;
 use crate::{Compatibility, ExportReport, PdfError, PdfOptions, Standard};
 
 mod entry;
 mod exporter;
 mod images;
+mod links;
 mod nodes;
 mod paint;
 mod text;
 mod writer;
 
 pub(crate) use entry::{RgbInCmyk, leaving_out_undecodable};
-pub use entry::{export, export_with_report, page_areas};
+pub use entry::{check_page_sizes, export, export_with_report, page_areas};
 #[cfg(test)]
 use exporter::{MAX_COORD, writable, xf};
 #[cfg(test)]
 use images::{png_8_bit, png_16_bit};
+#[cfg(test)]
+pub(crate) use nodes::MEASURES;
 pub(crate) use writer::{Sheet, Writer};
 
 pub(crate) struct Exporter<'a> {
@@ -115,6 +118,9 @@ pub(crate) struct Exporter<'a> {
     /// Objects the symbol instances written held, together
     /// ([`vectorcraft_doc::MAX_SYMBOL_NODES`]).
     symbol_nodes: u64,
+    /// The most [`Self::symbol_nodes`] may reach: [`vectorcraft_doc::MAX_SYMBOL_NODES`], or less
+    /// while one of the copies on a sheet is drawn ([`Writer::page`]).
+    pub(crate) symbol_limit: u64,
 }
 
 #[cfg(test)]
@@ -125,7 +131,7 @@ mod tests {
     fn writable_bounds_values_the_transform_and_values_through_it() {
         let mut pdf = krilla::Document::new();
         let mut page = pdf.start_page_with(PageSettings::new(Size::from_wh(100.0, 100.0).unwrap()));
-        let mut s = page.surface();
+        let mut s = Surface::page(page.surface(), 100.0);
         let r = Rect::new(0.0, 0.0, 10.0, 10.0);
         assert!(writable(&s, Affine::IDENTITY, r));
         assert!(!writable(&s, Affine::IDENTITY, Rect::new(-2_147_483_649.0, 0.0, 10.0, 10.0)));

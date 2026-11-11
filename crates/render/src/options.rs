@@ -35,7 +35,7 @@ pub fn raster_size(region: Rect, scale: f64) -> Result<(u32, u32), String> {
 pub struct RenderOptions {
     /// Outline (wireframe) view: 1 px black paths, no paint.
     pub outline: bool,
-    /// Pasteboard colour behind everything (premultiplied RGBA8); `None` = transparent.
+    /// Pasteboard color behind everything (straight-alpha RGBA8); `None` = transparent.
     pub background: Option<[u8; 4]>,
     /// Draw artboards as white rectangles (screen view). Export sets this to false.
     pub artboards: bool,
@@ -134,6 +134,9 @@ pub struct RenderOptions {
     /// Appearance of Black's Rich Black: pure CMYK black (black ink alone at 100%) shows as RGB
     /// black. Off, it shows through the CMYK profile, a dark grey, as other colours do.
     pub rich_black: bool,
+    /// Dashed strokes draw as solid lines, without their dashes (the Navigator's Draw Dashed Lines
+    /// as Solid Lines). Off, they draw their dashes.
+    pub solid_dashes: bool,
 }
 
 /// The opacity of the art around an isolated group or layer.
@@ -219,6 +222,7 @@ impl Default for RenderOptions {
             interacting: false,
             dragging: false,
             rich_black: false,
+            solid_dashes: false,
         }
     }
 }

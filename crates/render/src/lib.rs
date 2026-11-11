@@ -15,7 +15,7 @@ mod freeform;
 mod fx;
 mod group;
 mod images;
-pub use images::{image_cached, keep_decoded_image};
+pub use images::{image_cached, keep_decoded_image, physical_memory};
 mod ink;
 mod live;
 mod lru;
@@ -24,10 +24,12 @@ pub use paint::{decode_failures, image_decodes, reduced_size};
 mod pattern;
 pub mod placed_document;
 pub mod proof;
+mod stroke;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject, TraceView};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
@@ -47,11 +49,22 @@ pub use pattern::render_pattern_swatch;
 pub use vectorcraft_effects as effects;
 pub use vello_cpu;
 
+/// Art made to measure an object ([`Renderer::measured`]): the object, its art, and the key of
+/// what the art read from outside the object (`None`: nothing).
+type MeasuredArt = (Arc<Node>, Arc<Node>, Option<u64>);
+
+/// A 3D effect's art ([`Renderer::three_d_bounds`]), held weakly, and its bounds once measured at a
+/// raster effects resolution (its bits) with a brush library (its key).
+type ThreeDArt = (std::sync::Weak<Node>, Option<((u64, u64), Option<Rect>)>);
+
 /// Reusable renderer (keeps the render context, geometry and glyph caches between frames; decoded
 /// images are shared by all renderers, see [`set_image_cache_budget`]).
 pub struct Renderer {
     /// Glyph geometry per text object, keyed by `Arc` identity like `geom` (see [`Self::text_geom_of`]).
     texts: FrameCache<usize, (Arc<Node>, Arc<TextGeom>)>,
+    /// The latest cached glyph geometry for each text object id. A move changes the node's Arc
+    /// but not its glyphs in text space, so the old geometry can still be used after comparison.
+    text_ids: PtrMap<NodeId, usize>,
     /// The [`vectorcraft_text::FontDb::generation`] `texts` was laid out with: type lays out
     /// again when fonts are added or rescanned.
     text_fonts: u64,
@@ -60,6 +73,9 @@ pub struct Renderer {
     /// Worker threads for the multithreaded rasterizer (0 = single-threaded).
     pub threads: u16,
     geom: PtrMap<usize, GeomEntry>,
+    /// The paths of long paths and compound paths, by object id (see [`Self::kept_path`]): after
+    /// an edit, `geom` makes the new object's path and bounds from the path kept for its id.
+    kept: PtrMap<NodeId, kept_paths::KeptPath>,
     /// The symbols (name and art) of the document last drawn, which `geom`'s bounds measured
     /// symbol instances by (see [`Self::check_symbols`]). The art is held weakly: the reference
     /// keeps the art's allocation, so no other art can get its address, and does not keep the
@@ -68,9 +84,23 @@ pub struct Renderer {
     /// The plug-in revision ([`effects::plugin_revision`]) that `geom`, `fx_geom` and `fx_arts` were
     /// last checked against (see [`Self::check_plugins`]).
     plugin_revision: u64,
+    /// The key of the brush library ([`brush_fx::BrushCache::library_key`]) when `geom`'s bounds of
+    /// 3D art were measured with it (see [`Self::check_symbols`]): set by the first such measure
+    /// and kept, whether or not those bounds still are, until the library changes. `None` until
+    /// then, and nothing is checked.
+    brush_library: Option<u64>,
+    /// Is a live-effect plug-in that paints its pieces installed (found when `plugin_revision`
+    /// changes)?
+    painting_plugins: bool,
+    /// The hash of the document's swatch and pattern names at the last check, kept while
+    /// `painting_plugins` holds (see [`Self::check_plugins`]).
+    paint_names: u64,
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<StrokeKey, StrokeEntry>,
+    /// The key in `strokes` of the latest outline of each stroke of an object, under its
+    /// [`frame::MovedKey`]: a moved copy of the object draws that outline moved ([`Self::moved_outline`]).
+    moved_strokes: PtrMap<frame::MovedKey, StrokeKey>,
     /// Expanded character stroke outlines, with the glyph geometry kept in `texts` they belong to,
     /// keyed by ([`Self::stroke_owner`] of that geometry, run, width bits, tolerance level): type
     /// that doesn't change draws them again instead of expanding its strokes in every frame. Within
@@ -114,6 +144,9 @@ pub struct Renderer {
     /// Objects' content run through Photoshop-style effects, per object and content slot (see
     /// `fx`): kept only while drawn.
     pixel_fx: PtrMap<(usize, usize, Ink), fx::PixelEntry>,
+    /// Type drawn with an anti-aliasing method other than Sharp, per object and ink (see
+    /// [`Self::draw_type_edges`]).
+    type_edges: FrameCache<(usize, Ink), TypeEdgeEntry>,
     /// What the contents of those rasters read from the document, and the color settings, as last
     /// found for a frame (`stamp`) and document (address) (see [`Self::doc_inputs`]).
     doc_inputs: Option<((u64, usize), Arc<fx::DocInputs>)>,
@@ -128,6 +161,33 @@ pub struct Renderer {
     shape_of: usize,
     /// The art drawn for objects with effects that apply through it (see `fx::has_object_fx`).
     fx_arts: FrameCache<usize, FxArtEntry>,
+    /// The art of objects with object effects made to measure them ([`Renderer::bounds_of`]) and
+    /// not drawn yet, by the object's address, with the object and the key of what it read from
+    /// outside the object when it was made (`None`: nothing): drawing one keeps it in `fx_arts`
+    /// while that is unchanged; the frame's end lets go of the rest.
+    measured: PtrMap<usize, MeasuredArt>,
+    /// The bytes of the art in `measured` ([`lru::node_bytes`]), within `measured_budget`
+    /// ([`lru::MEASURED_BUDGET`]).
+    measured_bytes: usize,
+    measured_budget: usize,
+    /// The export bounds of the objects measured without their hidden members
+    /// (`encode::drawn_bounds`), by the object they were made from: kept for a pass over artboards,
+    /// let go when a frame ends.
+    pub(crate) pass_bounds: PtrMap<usize, (Arc<Node>, Option<Rect>)>,
+    /// The 3D effects' art among the art `fx_art` made, by its address, with the art (weakly: what
+    /// keeps the art is `fx_arts` and `measured`) and its bounds once measured. An entry is added
+    /// for every 3D art made, measured or not. Entries whose art is gone are swept when a frame
+    /// ends (`let_go_of_measured`) and, for a renderer that only measures, when the map reaches
+    /// twice the size it kept at the last sweep (at least 1024): it holds at most max(twice the
+    /// entries kept at the last sweep, 1024). Until swept, an entry's weak pointer keeps the art's
+    /// allocation (not its contents) alive.
+    three_d_bounds: PtrMap<usize, ThreeDArt>,
+    /// How many entries `three_d_bounds` kept when it last let go of the art no longer held: it
+    /// does so again when it holds twice as many.
+    three_d_kept: usize,
+    /// How many times `three_d_bounds` was swept for art no longer held between frames.
+    #[cfg(test)]
+    three_d_sweeps: usize,
     /// Symbol art as instances and inline graphics draw it (see [`Self::placed_art`]).
     placed_arts: FrameCache<PlacedKey, PlacedEntry>,
     /// The bitmap clock of [`placed_document`] when this frame first drew a placed document from
@@ -162,7 +222,11 @@ pub struct Renderer {
     clip_paints: FrameCache<usize, ClipPaintEntry>,
     /// Gradients along or across strokes (see [`Self::fill_path_gradient`]), keyed by
     /// ([`Self::stroke_owner`], stroke layer address, tolerance level).
-    stroke_slices: PtrMap<(usize, usize, i32), SliceEntry>,
+    stroke_slices: PtrMap<frame::SliceKey, SliceEntry>,
+    /// The key in `stroke_slices` of the latest slices of each stroke of an object, under its
+    /// [`frame::MovedSliceKey`]: a moved copy of the object draws those slices moved
+    /// ([`Self::moved_slices`]).
+    moved_slices: PtrMap<frame::MovedSliceKey, frame::SliceKey>,
     /// What the image keys colour adjustments give their recoloured images name: the image
     /// recoloured and the adjustment, with its hash (see [`Self::adjusted_image`]).
     adjusts: HashMap<String, (String, u64, vectorcraft_effects::ColorMap)>,
@@ -203,24 +267,31 @@ mod bounds;
 mod clock;
 mod frame;
 mod geometry;
+mod kept_paths;
 mod node_checks;
 mod options;
 mod renderer;
 mod text_geom;
 mod threads;
 
-pub use bounds::{drawn_bounds, drawn_outline, effect_bounds, painted_bounds};
+pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds};
 pub use frame::FrameStats;
-use frame::{ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey};
+use frame::{
+    ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey,
+    TypeEdgeEntry,
+};
 #[cfg(test)]
 use frame::{OFFSCREEN_PIXELS, Slices};
 pub use geometry::region_pixels;
+pub use node_checks::draws_plugin_effects;
 use node_checks::holds_plugin_effect;
 #[cfg(test)]
 use node_checks::painted_items;
 pub use options::{AntiAlias, ISOLATION_DIM, MAX_RASTER_PIXELS, MAX_RASTER_SIDE, RenderOptions, Rendered, raster_size, supersample_factor};
 pub(crate) use paint::blend_mode;
 use paint::fill_rule;
+#[cfg(test)]
+use renderer::{edge_coverage, edge_grid, type_reach};
 use text_geom::TextGeom;
 #[cfg(test)]
 pub(crate) use text_geom::is_opentype_alternate;

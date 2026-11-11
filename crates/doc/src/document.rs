@@ -34,6 +34,7 @@ impl Document {
             graphic_styles,
             char_styles,
             para_styles,
+            composite_fonts,
             text_threads,
             symbols,
             graph_designs,
@@ -68,10 +69,13 @@ impl Document {
             print_setup,
             assets,
             svg_scripts,
+            svg_filters,
             puppet,
             new_art,
             dimensions,
             retired_artboard_id: _,
+            opened_artboard: _,
+            units_from_file: _,
             index: _,
         } = self;
         *version == other.version
@@ -88,6 +92,7 @@ impl Document {
             && *graphic_styles == other.graphic_styles
             && *char_styles == other.char_styles
             && *para_styles == other.para_styles
+            && *composite_fonts == other.composite_fonts
             && *text_threads == other.text_threads
             && symbols.len() == other.symbols.len()
             && symbols.iter().zip(&other.symbols).all(|(a, b)| a.name == b.name && Arc::ptr_eq(&a.art, &b.art))
@@ -134,6 +139,7 @@ impl Document {
             && *print_setup == other.print_setup
             && *assets == other.assets
             && *svg_scripts == other.svg_scripts
+            && *svg_filters == other.svg_filters
             && match (puppet, &other.puppet) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (a, b) => a.is_none() && b.is_none(),
@@ -203,6 +209,7 @@ impl Document {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             }],
             layers: vec![],
             swatches: swatches.into(),
@@ -210,6 +217,7 @@ impl Document {
             graphic_styles: default_graphic_styles().into(),
             char_styles: Default::default(),
             para_styles: Default::default(),
+            composite_fonts: Default::default(),
             text_threads: vec![],
             symbols: vec![],
             graph_designs: vec![],
@@ -244,10 +252,13 @@ impl Document {
             print_setup: None,
             assets: vec![],
             svg_scripts: vec![],
+            svg_filters: vec![],
             puppet: None,
             new_art: Default::default(),
             dimensions: false,
             retired_artboard_id: Default::default(),
+            opened_artboard: None,
+            units_from_file: false,
             index: Default::default(),
         };
         let id = d.alloc_id();
@@ -266,6 +277,11 @@ impl Document {
 
     pub fn peek_next_id(&self) -> u64 {
         self.next_id
+    }
+
+    /// Makes the next id at least `id`, so ids below it are not given out again.
+    pub fn raise_next_id(&mut self, id: u64) {
+        self.next_id = self.next_id.max(id);
     }
 
     /// Ensure `next_id` is above every id in the tree (after deserializing foreign data).
@@ -350,6 +366,7 @@ impl Document {
             }
             false
         }
+        crate::id_index::note_tree_walk();
         let mut p = vec![];
         find(&self.layers, id, &mut p).then_some(p)
     }
@@ -391,6 +408,7 @@ impl Document {
             });
         }
         if !want.is_empty() {
+            crate::id_index::note_tree_walk();
             let mut rest = HashMap::with_capacity(want.len());
             walk(&self.layers, &want, &mut Vec::new(), &mut rest);
             out.extend(rest);

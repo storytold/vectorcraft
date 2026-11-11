@@ -4,6 +4,7 @@ use egui::{Event, PointerButton, Pos2};
 use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
+use vectorcraft_tools::{PointerEvent, PointerKind};
 
 use crate::{VectorcraftApp, canvas, chrome};
 
@@ -140,6 +141,57 @@ fn drag_fixture_modifiers(modifiers: egui::Modifiers) -> (VectorcraftApp, egui::
     );
     frame(&mut app, &ctx, 0.1, vec![Event::PointerMoved(grab + egui::vec2(20.0, 10.0))]);
     (app, ctx, grab, tabs)
+}
+
+/// A Cmd-press held while a Shape Builder merge is computed reaches the lent Selection tool once
+/// the merge is applied, and its drag carries the artwork over another tab.
+#[test]
+fn a_cmd_drag_held_during_a_merge_activates_another_tab() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":800,"height":200,"name":"Source"})).unwrap();
+    for k in 0..40 {
+        app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+    }
+    app.run("select.all", json!({})).unwrap();
+    app.run("file.new", json!({"width":800,"height":200,"name":"Target"})).unwrap();
+    app.session.set_active(0);
+    app.select_tool("shapeBuilder");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.ui_ctx = Some(ctx.clone());
+    frame(&mut app, &ctx, 0.0, vec![]);
+    let tabs = frame(&mut app, &ctx, 0.01, vec![]);
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Move, 15.0, 10.0), view).unwrap();
+    app.session.tool_poll(view, true).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 15.0, 10.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 15.0, 10.0), view).unwrap();
+    assert!(app.session.tool_editing(), "the click starts a merge on another thread");
+    let grab = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(355.0, 10.0));
+    let modifiers = egui::Modifiers::COMMAND;
+    frame(
+        &mut app,
+        &ctx,
+        0.05,
+        vec![
+            Event::ModifiersChanged(modifiers),
+            Event::PointerMoved(grab),
+            Event::PointerButton { pos: grab, button: PointerButton::Primary, pressed: true, modifiers },
+        ],
+    );
+    assert_eq!(app.session.tool_id(), "shapeBuilder", "the press waits for the merge");
+    let r = app.session.tool_poll(view, true);
+    canvas::apply_requests(&mut app, r);
+    frame(&mut app, &ctx, 0.08, vec![]);
+    assert_eq!(app.session.tool_id(), "selection", "the held press borrowed the Selection tool");
+    frame(&mut app, &ctx, 0.1, vec![Event::PointerMoved(grab + egui::vec2(20.0, 10.0))]);
+    let tab = tabs[1].center();
+    frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(tab)]);
+    frame(&mut app, &ctx, 0.25, vec![]);
+    frame(&mut app, &ctx, 0.8, vec![]);
+    assert_eq!(app.session.active_index(), Some(1), "holding the artwork over the tab activates it");
 }
 
 /// Verify that leaving a tab restarts its dwell timer and hovering its close button never activates it.
@@ -360,4 +412,39 @@ fn scrolling_tabs_under_a_stationary_drag_does_not_cascade_to_other_documents() 
     frame(&mut app, &ctx, 2.2, vec![Event::PointerMoved(drop)]);
     frame(&mut app, &ctx, 2.3, vec![button(drop, false)]);
     assert_eq!(app.session.active().unwrap().selection.objects.len(), 1);
+}
+
+/// Artwork held over the tab of another view of its own document (Window › New Window) switches to
+/// that view, and a drop there moves it.
+#[test]
+fn dragging_artwork_over_another_views_tab_switches_to_that_view() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300, "name": "Logo"})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("window.newWindow", json!({})).unwrap();
+    crate::doc_windows::show_window(&mut app, (0, 1));
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, 0.0, vec![]);
+    let tabs = frame(&mut app, &ctx, 0.01, vec![]);
+    assert_eq!(tabs.len(), 2);
+    let grab = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(100.0, 100.0));
+    frame(&mut app, &ctx, 0.05, vec![Event::PointerMoved(grab), button(grab, true)]);
+    frame(&mut app, &ctx, 0.1, vec![Event::PointerMoved(grab + egui::vec2(20.0, 10.0))]);
+    assert!(app.session.in_interaction());
+    frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(tabs[1].center())]);
+    frame(&mut app, &ctx, 0.25, vec![]);
+    frame(&mut app, &ctx, 0.8, vec![]);
+    assert_eq!(crate::doc_windows::current(&app), Some((0, 2)), "holding the artwork over the other view's tab shows that view");
+    assert!(!app.session.tool_busy(), "the switch resets the Selection tool before the drop");
+    let drop = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(200.0, 150.0));
+    frame(&mut app, &ctx, 0.9, vec![Event::PointerMoved(drop)]);
+    frame(&mut app, &ctx, 1.0, vec![button(drop, false)]);
+    let st = app.session.active().unwrap();
+    let moved = st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+    assert!((moved.center().x - 200.0).abs() < 0.01 && (moved.center().y - 150.0).abs() < 0.01, "{moved:?}");
+    assert!(!app.session.tool_busy(), "the move leaves the Selection tool idle");
 }

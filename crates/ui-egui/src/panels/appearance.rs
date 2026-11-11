@@ -13,7 +13,8 @@
 //! (dropped on its row) or onto the object; Alt copies instead. Dropped on Duplicate Selected Item
 //! or Delete Selected Item, a fill/stroke row (with the other selected rows, when it is one of
 //! them) or an effect row is copied or removed. Cmd-click and Shift-click select several
-//! fills/strokes for Duplicate and Delete.
+//! fills/strokes for Duplicate and Delete. Delete on a selected Opacity row sets it back to
+//! Default (100%, Normal).
 
 use std::sync::OnceLock;
 
@@ -59,10 +60,15 @@ impl Sel {
             Sel::None | Sel::Effect(_) | Sel::Contents | Sel::Opacity => None,
         }
     }
-    /// Is a fill/stroke or effect row selected (what Duplicate and Delete act on)? An Opacity row
-    /// is not an item: it can't be copied or removed.
+    /// Is a fill/stroke or effect row selected (what Duplicate acts on)? An Opacity row is not an
+    /// item: it can't be copied.
     fn editable(self) -> bool {
         matches!(self, Sel::Item(_) | Sel::Effect(_) | Sel::ItemEffect(..))
+    }
+    /// Does Delete act on the selected row? A fill/stroke or effect row is removed; deleting an
+    /// Opacity row sets it back to Default (100%, Normal) (#5742).
+    fn deletable(self) -> bool {
+        self.editable() || matches!(self, Sel::Opacity | Sel::ItemOpacity(_))
     }
 }
 
@@ -245,6 +251,21 @@ pub(crate) fn shown_effect_label(id: &str) -> String {
     }
 }
 
+/// An effect row's name: [`shown_effect_label`], followed by "(Safe Mode)" for a plug-in effect
+/// Safe Mode skips (the object keeps it and draws without it).
+pub fn effect_row_label(id: &str) -> String {
+    let label = shown_effect_label(id);
+    if vectorcraft_plugins::effect::skipped(id) { format!("{label} ({})", tl!("Safe Mode")) } else { label }
+}
+
+/// The tooltip of an effect row Safe Mode skips: why it draws nothing, and its plug-in's id;
+/// `None` for an effect that draws.
+pub fn skipped_effect_tip(id: &str) -> Option<String> {
+    let plugin = vectorcraft_plugins::effect::plugin_id(id).filter(|_| vectorcraft_plugins::effect::skipped(id))?;
+    let why = crate::i18n::msg(&vectorcraft_plugins::Error::SafeMode.to_string());
+    Some(format!("{why}\n{}", vectorcraft_plugins::safe_mode::display_name(plugin)))
+}
+
 /// "Opacity: Default" or "Opacity: 50% Multiply".
 pub fn opacity_text(opacity: f32, blend: BlendMode) -> String {
     if (opacity - 1.0).abs() < 1e-4 && blend == BlendMode::Normal {
@@ -364,10 +385,22 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
     let area_id = egui::Id::unique("ap-row-popup");
     let shown = ctx.memory(|m| m.area_rect(area_id));
     // A press outside it (not one that closes a dropdown the popup opened) or Escape puts it away.
+    // With a field in it that has the keyboard, a press draws it once more first, so the field lets
+    // go of the keyboard to that press and commits what was typed, as in a panel (#6429). Escape
+    // drops what was typed.
     let pressed_outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| shown.is_some_and(|r| !r.contains(p))));
-    if pressed_outside && !egui::Popup::is_any_open(ctx) || ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+    let mut last = false;
+    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
         return close(app);
+    } else if pressed_outside && !egui::Popup::is_any_open(ctx) {
+        if !widgets::field_focused_in(ctx, egui::LayerId::new(egui::Order::Foreground, area_id)) {
+            return close(app);
+        }
+        last = true;
     }
+    // Fields let go of the keyboard on a click, which this press isn't yet. The app-wide option
+    // goes back however this function ends, a panic in the panel included.
+    let _surrender = last.then(|| SurrenderOnPress::set(ctx));
     let screen = ctx.content_rect();
     let left = panel.left() - POPUP_GAP - POPUP_W;
     let x = if left >= screen.left() + POPUP_GAP { left } else { (panel.right() + POPUP_GAP).min(screen.right() - POPUP_W - POPUP_GAP) };
@@ -394,6 +427,28 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
             }
         });
     });
+    if last {
+        close(app);
+    }
+}
+
+/// While it lives, a press anywhere makes a field let go of the keyboard, as a click does
+/// otherwise; dropped, egui's previous `surrender_focus_on` is back ([`row_popup`]'s last frame).
+struct SurrenderOnPress(egui::Context, egui::SurrenderFocusOn);
+
+impl SurrenderOnPress {
+    fn set(ctx: &egui::Context) -> Self {
+        let before = ctx.options(|o| o.input_options.surrender_focus_on);
+        ctx.options_mut(|o| o.input_options.surrender_focus_on = egui::SurrenderFocusOn::Presses);
+        Self(ctx.clone(), before)
+    }
+}
+
+impl Drop for SurrenderOnPress {
+    fn drop(&mut self) {
+        let before = self.1;
+        self.0.options_mut(|o| o.input_options.surrender_focus_on = before);
+    }
 }
 
 /// A row's name that edits the row when clicked ([`link`]), with the tooltip "Click to edit".
@@ -490,7 +545,7 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
     let node = first_subject(app);
     let sel = current_sel(app, &ctx, node.as_ref());
     if keys
-        && sel.editable()
+        && sel.deletable()
         && ctx.memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
@@ -576,7 +631,7 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
     let fx = |ui: &mut Ui, e: &Effect, id: (Option<usize>, usize)| {
         let (r, _) = row(ui, false);
         eye(ui, r, ("ap-def-fx", id), e.visible, false);
-        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &shown_effect_label(&e.id), false);
+        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &effect_row_label(&e.id), false);
         icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     };
     for (i, it) in ap.items.iter().enumerate().rev() {
@@ -850,7 +905,7 @@ fn drag_ghost(app: &VectorcraftApp, ui: &Ui, n: &Node, what: Dragged, order: &[u
             Dragged::Effect(item, k) => {
                 let Some(e) = n.appearance.effects_at(item).and_then(|fx| fx.get(k)) else { return };
                 let indent = if item.is_some() { 12.0 } else { 0.0 };
-                text(ui, pos2(r.left() + indent + EYE_W + 24.0, y), &shown_effect_label(&e.id), false);
+                text(ui, pos2(r.left() + indent + EYE_W + 24.0, y), &effect_row_label(&e.id), false);
             }
             Dragged::Contents => {
                 if let Some(label) = n.contents_label() {
@@ -1029,7 +1084,7 @@ fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, se
     if characters {
         for (k, stroke) in [false, true].into_iter().enumerate() {
             let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 100.0 + 24.0 * k as f32, r.center().y - 9.0), vec2(18.0, 18.0));
-            chip(ui, cr, n.proxy_paint(stroke, None).map_or(&Paint::None, |(p, ..)| p), false);
+            chip(ui, cr, n.proxy_paint_only(stroke, None).unwrap_or(&Paint::None), false);
         }
     }
     // An image's row has no members to target.
@@ -1088,7 +1143,8 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opaci
     let link = name_link(ui, pos2(lx, r.center().y), ("ap-op-link", item), tl!("Opacity:")).clicked();
     if link || resp.clicked() {
         select_row(app, ui.ctx(), this);
-        // The panel has the keyboard (Delete then removes nothing, rather than the object).
+        // The panel has the keyboard (Delete then sets the row back to Default, rather than
+        // deleting the object).
         super::set_row_keys(ui.ctx(), ROW_KEYS, true);
     }
     if link {
@@ -1121,7 +1177,11 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
     // The name edits the effect on a click; the empty space takes the click rules (in `stack`)
     // and edits it on a double-click: its settings dialog, or the inline editor of an effect
     // without settings.
-    let name = name_link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &shown_effect_label(&e.id));
+    let name = name_link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &effect_row_label(&e.id));
+    let name = match skipped_effect_tip(&e.id) {
+        Some(tip) => name.on_hover_text(tip),
+        None => name,
+    };
     let resp = edit_tip(resp, &name);
     let edit = name.clicked() || resp.double_clicked();
     if edit {
@@ -1213,6 +1273,13 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                         }
                         return;
                     }
+                    // A plug-in's color is the color button its dialog shows.
+                    if manifest.and_then(|m| m.param(key)).is_some_and(|p| matches!(p.spec, vectorcraft_plugins::manifest::ParamSpec::Color { .. })) {
+                        if let Some(c) = crate::dialogs::plugin_color_button(ui, ("fx-color", item, k, key.as_str()), v) {
+                            change = Some((key.clone(), c));
+                        }
+                        return;
+                    }
                     // Only our own effects show a `mode` parameter as the blend mode dropdown; a plug-in's `mode` stays a plain field.
                     if built_in && let Some(cur) = widgets::blend_param(key, v) {
                         if let Some(m) = widgets::blend_param_dropdown(ui, ("fx-blend", item, k, key.as_str()), cur) {
@@ -1231,6 +1298,8 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                             let suffix = ui_keys.and_then(|u| u.unit.as_deref()).map(crate::dialogs::unit_suffix).unwrap_or_default();
                             let nx = if vectorcraft_effects::is_length(&e.id, key, relative) {
                                 widgets::num_field(ui, id, Some(x), unit, 70.0)
+                            } else if let Some(range) = vectorcraft_effects::raster_px_range(&e.id, key) {
+                                widgets::range_field_named(ui, id, None, x, range, &crate::dialogs::unit_suffix("px"), 2, 70.0)
                             } else {
                                 widgets::plain_field(ui, id, x, &suffix, 2, 70.0)
                             };
@@ -1316,7 +1385,7 @@ fn swatch_button(app: &mut VectorcraftApp, ui: &mut Ui, r: Rect, paint: &Paint, 
         open_popup(app, ui.ctx(), "color");
     }
     egui::Popup::menu(&resp).open_memory((resp.clicked() && !mixer).then_some(egui::SetOpenCommand::Toggle)).show(|ui| {
-        swatch_picker(app, ui, target);
+        widgets::menu_scroll(ui, |ui| swatch_picker(app, ui, target));
     });
 }
 
@@ -1406,7 +1475,8 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, node: Option<&Node>, sel: Sel) 
         if duplicate.clicked() {
             duplicate_selected(app, ui, node, sel);
         }
-        let delete = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Selected Item"), false, can, 24.0);
+        let can_delete = can || (has && sel.deletable());
+        let delete = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Selected Item"), false, can_delete, 24.0);
         if delete.clicked() {
             delete_selected(app, ui, node, sel);
         }
@@ -1549,8 +1619,20 @@ fn highlight_copies(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel
     set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows, order, anchor, active });
 }
 
-/// Remove the highlighted fills/strokes or effects; a removed item effect leaves its fill/stroke selected.
+/// Remove the highlighted fills/strokes or effects; a removed item effect leaves its fill/stroke
+/// selected. A selected Opacity row is set back to Default (100%, Normal) and stays selected.
 fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: Sel) {
+    match sel {
+        Sel::Opacity => {
+            app.run("transparency.set", json!({"item": null, "opacity": 100, "blend": "Normal"})).ok();
+            return;
+        }
+        Sel::ItemOpacity(i) => {
+            app.run("transparency.set", aligned(app, json!({"item": i, "opacity": 100, "blend": "Normal"}))).ok();
+            return;
+        }
+        _ => {}
+    }
     let ok = match selected_effects(ui.ctx(), node, sel) {
         Some((item, ks)) => app.run("effect.remove", aligned(app, json!({"item": item, "indices": ks}))).is_ok(),
         None if matches!(sel, Sel::Item(_)) => {
@@ -1579,18 +1661,20 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => groups.push((g, vec![(id.clone(), label.to_string())])),
         }
     }
-    for (g, items) in groups {
-        ui.menu_button(tl!(&g), |ui| {
-            crate::widgets::menu_scroll(ui, |ui| {
-                for (id, label) in items {
-                    if ui.button(format!("{label}…")).clicked() {
-                        app.run("effect.dialog", json!({"effect": id})).ok();
-                        ui.close();
+    crate::widgets::menu_scroll(ui, |ui| {
+        for (g, items) in groups {
+            ui.menu_button(tl!(&g), |ui| {
+                crate::widgets::menu_scroll(ui, |ui| {
+                    for (id, label) in items {
+                        if ui.button(format!("{label}…")).clicked() {
+                            app.run("effect.dialog", json!({"effect": id})).ok();
+                            ui.close();
+                        }
                     }
-                }
+                });
             });
-        });
-    }
+        }
+    });
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -1607,7 +1691,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Duplicate Item"), has && sel.editable(), false) {
         duplicate_selected(app, ui, node.as_ref(), sel);
     }
-    if menu_item(ui, tl!("Remove Item"), has && sel.editable(), false) {
+    if menu_item(ui, tl!("Remove Item"), has && sel.deletable(), false) {
         delete_selected(app, ui, node.as_ref(), sel);
     }
     if menu_item(ui, tl!("Clear Appearance"), has, false) {

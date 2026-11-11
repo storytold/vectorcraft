@@ -345,6 +345,23 @@ fn a_cancelled_export_through_the_real_engine_writes_nothing_and_leaves_the_sess
 }
 
 #[test]
+fn a_change_while_a_script_runs_is_refused_as_busy() {
+    let mut backend = crate::Headless::with_document();
+    backend.session.script_frames = true;
+    backend.session.execute("script.run", &json!({"source": "while (true) {}"})).unwrap();
+    let mut s = Server::new(Box::new(backend));
+    let call = |id: &str, params: Value| json!({"name": "command_run", "arguments": {"id": id, "params": params}});
+    let reply = super::rpc(&mut s, 1, "tools/call", call("shape.rectangle", json!({"x": 0, "y": 0, "width": 1, "height": 1})));
+    assert_eq!(reply["error"]["code"], -32003, "{reply}");
+    assert!(reply["error"]["message"].as_str().unwrap().contains("a script is running"), "{reply}");
+    let reply = super::rpc(&mut s, 2, "tools/call", json!({"name": "doc_inspect", "arguments": {}}));
+    assert_eq!(reply["result"]["isError"], false, "reading the document is not refused: {reply}");
+    let reply = super::rpc(&mut s, 3, "tools/call", call("no.such", json!({})));
+    assert_eq!(reply["result"]["isError"], true, "any other failure stays a tool error: {reply}");
+    assert!(reply.get("error").is_none(), "{reply}");
+}
+
+#[test]
 fn a_remote_call_stops_waiting_for_the_app_when_cancelled() {
     use std::io::BufRead;
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

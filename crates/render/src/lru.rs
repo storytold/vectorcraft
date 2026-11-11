@@ -33,6 +33,10 @@ pub(crate) const CHAR_STROKE_BUDGET: usize = 128 << 20;
 pub(crate) const CLIP_BUDGET: usize = 32 << 20;
 /// The art drawn for objects with effects that apply through it (`Renderer::fx_art`).
 pub(crate) const FX_ART_BUDGET: usize = 64 << 20;
+/// Art made to measure objects and held until the frame ends, for the objects drawn to keep
+/// (`Renderer::measured`): as much as the art kept for the objects drawn (`FX_ART_BUDGET`), which
+/// a frame measures before it draws them. Past it, an object is made again to draw it.
+pub(crate) const MEASURED_BUDGET: usize = FX_ART_BUDGET;
 /// Symbol art placed for instances and inline graphics (`Renderer::placed_art`).
 pub(crate) const PLACED_ART_BUDGET: usize = 64 << 20;
 /// Brush art per brushed stroke (`Renderer::draw_brush`).
@@ -51,6 +55,8 @@ pub(crate) const FREEFORM_BUDGET: usize = 32 << 20;
 /// Dithered gradient grids, per thread (`dither::set_dithered_paint`): a grid is at most 4096²
 /// pixels, 64 MiB.
 pub(crate) const DITHER_BUDGET: usize = 64 << 20;
+/// Type drawn with an anti-aliasing method other than Sharp, as pixels (`Renderer::draw_type_edges`).
+pub(crate) const TYPE_EDGE_BUDGET: usize = 128 << 20;
 
 /// Frames an entry may go unused before [`FrameCache::sweep`] drops it.
 const AGE: u64 = 3;
@@ -99,6 +105,33 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher + Default> FrameCache<K, V, S> {
         let s = self.map.get_mut(k)?;
         (s.stamp, s.used) = (stamp, self.clock);
         Some(&s.value)
+    }
+
+    /// Read an entry only when it matches `accept`; rejected entries keep their previous age so
+    /// another document's object with the same id cannot prevent their eviction.
+    pub(crate) fn get_if<Q>(&mut self, k: &Q, stamp: u64, accept: impl FnOnce(&V) -> bool) -> Option<&V>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        let s = self.map.get_mut(k)?;
+        if !accept(&s.value) {
+            return None;
+        }
+        self.clock += 1;
+        (s.stamp, s.used) = (stamp, self.clock);
+        Some(&s.value)
+    }
+
+    /// Drop the entry for `k`.
+    pub(crate) fn remove<Q>(&mut self, k: &Q)
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        if let Some(s) = self.map.remove(k) {
+            self.bytes -= s.bytes;
+        }
     }
 
     /// Keep `value` (about `bytes` bytes) as `k`, used in frame `stamp`, replacing any entry for
@@ -196,7 +229,6 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher + Default> FrameCache<K, V, S> {
         self.bytes
     }
 
-    #[cfg(test)]
     pub(crate) fn contains_key<Q>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,

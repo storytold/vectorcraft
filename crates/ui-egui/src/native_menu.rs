@@ -590,7 +590,8 @@ pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// What the menus' rows depend on, cheaply (no allocation): commands run, the active document,
 /// its revision (edits, selection and view changes), history and clipboard, the language,
-/// shortcuts, plug-ins and an open file dialog. `input` forces a change on frames with a click or
+/// shortcuts, plug-ins, the Scripts folder's listing, an open file dialog and the fonts (Type › Font lists the loaded fonts
+/// until the installed ones are scanned, then all of them, #5483). `input` forces a change on frames with a click or
 /// a key press, which covers what the hash doesn't list (panels shown, a tool picked). While an
 /// interaction is open (for example a move, scale or shape drag, a dialog's or the font menu's
 /// preview, or a typing session), the revision, which each of its previews changes, is left out:
@@ -607,7 +608,9 @@ fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     }
     (app.system_paste, app.last_effect.is_some(), app.ui.recent_files.len(), app.ui.recent_files.first(), app.recent_fonts().len()).hash(&mut h);
     app.file_dialog_open().hash(&mut h);
-    (crate::i18n::current().code(), menus::plugin_revision()).hash(&mut h);
+    (crate::i18n::current().code(), menus::plugin_revision(), crate::scripts_menu::revision()).hash(&mut h);
     crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed).hash(&mut h);
+    let fonts = vectorcraft_text::FontDb::global();
+    (fonts.generation(), fonts.installed_fonts_ready()).hash(&mut h);
     h.finish()
 }

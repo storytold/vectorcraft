@@ -198,3 +198,30 @@ display_name = "Jonathan Cardoso"
 real_name = "Valentin Klein"
 display_name = "vangel76"
 sync_github_name = false
+
+[people.FrancoJacquet]
+real_name = "Franco Jacquet"
+
+[people.FractalEncrypt]
+sync_github_name = true
+
+[people.sadkotheguest]
+real_name = "Alexander Buraga"
+display_name = "Alexander Buraga"
+sync_github_name = false
+
+[people.adikshan11]
+real_name = "Adithya Shankaran"
+sync_github_name = true
+
+[people.slafebre]
+real_name = "Sven Lafebre"
+
+[people.kylekanouse]
+real_name = "Kyle Kanouse"
+sync_github_name = true
+
+[people.Hassan1305]
+real_name = "Hassan Nawaz Khan"
+display_name = "Hassan Nawaz Khan"
+sync_github_name = false

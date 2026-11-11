@@ -68,7 +68,7 @@ fn make_and_expand_each_shape_mode() {
         assert_eq!(members, vec![back, front], "the members, in their stacking order");
         assert!(shape.children().unwrap().iter().all(|m| m.extras().shape_mode.name() == mode));
         assert_eq!(shape.appearance.fill_paint().color(), Some(fill), "{mode}");
-        let drawn = effects::compound_shape_area(&shape, None).unwrap();
+        let drawn = effects::compound_shape_area(None, &shape, None).unwrap();
         assert!((area(&drawn) - want).abs() < 0.5, "{mode}: {}", area(&drawn));
         // Expand: the path, or compound path, of the area, painted as the compound shape.
         let made = run(&mut s, "object.compoundShape.expand", json!({}));
@@ -118,7 +118,7 @@ fn a_selected_member_takes_a_shape_mode() {
     assert_eq!(cmd::selected_member_modes(&s), vec![ShapeMode::Add]);
     run(&mut s, "object.compoundShape.setMode", json!({"mode": "intersect"}));
     assert_eq!(cmd::selected_member_modes(&s), vec![ShapeMode::Intersect]);
-    assert!((area(&effects::compound_shape_area(&node(&s, id), None).unwrap()) - 5_000.0).abs() < 0.5);
+    assert!((area(&effects::compound_shape_area(None, &node(&s, id), None).unwrap()) - 5_000.0).abs() < 0.5);
     // The same mode again is no edit.
     let undo = s.doc().unwrap().history.undo.len();
     run(&mut s, "object.compoundShape.setMode", json!({"mode": "intersect"}));
@@ -208,7 +208,7 @@ fn make(s: &mut Session, mode: &str) -> NodeId {
 fn drawn(s: &Session, id: NodeId) -> f64 {
     let d = &s.doc().unwrap().doc;
     let hook = |c: &Node| effects::outline_object(Some(d), c);
-    area(&effects::compound_shape_area(&node(s, id), Some(&hook)).unwrap())
+    area(&effects::compound_shape_area(None, &node(s, id), Some(&hook)).unwrap())
 }
 
 /// A bar (0–100 across, 10–30 down) behind a blend of two 20 pt squares at 0 and 80 (0–20 down)
@@ -243,7 +243,7 @@ fn a_blend_is_a_member_as_its_steps() {
         let doc = s.doc().unwrap().doc.clone();
         let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
         assert_eq!(back.node(id), doc.node(id));
-        assert!((area(&effects::compound_shape_area(back.node(id).unwrap(), None).unwrap()) - more).abs() < 0.5);
+        assert!((area(&effects::compound_shape_area(None, back.node(id).unwrap(), None).unwrap()) - more).abs() < 0.5);
         run(&mut s, "select.set", json!({"ids": [id.0]}));
         let made = run(&mut s, "object.compoundShape.expand", json!({}));
         assert!((node_area(&node(&s, NodeId(made["ids"][0].as_u64().unwrap()))) - more).abs() < 0.5, "{mode}");
@@ -472,8 +472,8 @@ fn branching_symbol_art_stops_at_its_budget() {
     }
     let d = &s.doc().unwrap().doc;
     let hook = |c: &Node| effects::outline_object(Some(d), c);
-    assert!(effects::compound_shape_area(&node(&s, id), Some(&hook)).is_none(), "past the budget");
-    let leaves = effects::member_leaves(&node(&s, group), Some(&hook));
+    assert!(effects::compound_shape_area(None, &node(&s, id), Some(&hook)).is_none(), "past the budget");
+    let leaves = effects::member_leaves(None, &node(&s, group), Some(&hook));
     assert!(!leaves.is_empty() && leaves.len() as u64 <= effects::SYMBOL_ART_MAX_NODES, "{} shapes", leaves.len());
 }
 
@@ -563,7 +563,7 @@ fn a_warped_symbol_instance_is_a_member_as_it_draws() {
     assert!((warped - 400.0).abs() > 10.0, "the warp changes the area: {warped}");
     assert!((drawn(&s, id) - (warped + 100.0)).abs() < 1.0, "{} vs {}", drawn(&s, id), warped + 100.0);
     let hook = |c: &Node| effects::outline_object(Some(d), c);
-    let alone: f64 = effects::member_leaves(&node(&s, a), Some(&hook)).iter().map(node_area).sum();
+    let alone: f64 = effects::member_leaves(None, &node(&s, a), Some(&hook)).iter().map(node_area).sum();
     assert!((alone - warped).abs() < 1.0, "the instance alone: {alone} vs {warped}");
 }
 
@@ -616,7 +616,7 @@ fn type_in_symbol_art_counts_as_its_outlines() {
     let unwarped = {
         let d = &s.doc().unwrap().doc;
         let hook = |c: &Node| effects::outline_object(Some(d), c);
-        effects::member_leaves(&node(&s, a), Some(&hook)).iter().map(node_area).sum::<f64>()
+        effects::member_leaves(None, &node(&s, a), Some(&hook)).iter().map(node_area).sum::<f64>()
     };
     assert!(unwarped > 200.0, "the glyphs: {unwarped}");
     run(&mut s, "select.set", json!({"ids": [a.0]}));
@@ -663,4 +663,36 @@ fn expanded(s: &mut Session, id: NodeId) -> f64 {
     run(s, "select.set", json!({"ids": [id.0]}));
     let made = run(s, "object.compoundShape.expand", json!({}));
     node_area(&node(s, NodeId(made["ids"][0].as_u64().unwrap())))
+}
+
+/// Locking (or hiding) the layer of an isolated compound shape locks its members too: a click or
+/// a marquee with the Selection tool selects none of them, as outside isolation mode (#5309).
+#[test]
+fn a_locked_or_hidden_layer_keeps_the_isolated_compound_shape_from_clicks() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    for (prop, value) in [("locked", true), ("visible", false)] {
+        let (mut s, back, _front) = two_squares();
+        let id = NodeId(run(&mut s, "object.compoundShape.make", json!({}))["id"].as_u64().unwrap());
+        run(&mut s, "object.isolate", json!({"id": id.0}));
+        let layer = s.doc().unwrap().doc.parent_of(id).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        let click = |s: &mut Session, x: f64, y: f64| {
+            for k in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+            }
+        };
+        click(&mut s, 25.0, 50.0);
+        assert_eq!(selected(&s), vec![back], "isolated, a click selects a member");
+        run(&mut s, "select.none", json!({}));
+        run(&mut s, "layer.setProps", json!({"id": layer.0, prop: value}));
+        click(&mut s, 25.0, 50.0);
+        assert!(selected(&s).is_empty(), "{prop}: the layer's art isn't selected by a click");
+        for (k, x, y) in
+            [(PointerKind::Down, -10.0, -10.0), (PointerKind::Drag, 60.0, 60.0), (PointerKind::Drag, 120.0, 120.0), (PointerKind::Up, 120.0, 120.0)]
+        {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        assert!(selected(&s).is_empty(), "{prop}: nor by a marquee");
+    }
 }
