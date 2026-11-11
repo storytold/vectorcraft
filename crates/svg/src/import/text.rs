@@ -903,6 +903,12 @@ fn justify_of(anchor: f64) -> Justify {
     }
 }
 
+/// How far a line's leading may differ from its spacing and still count as it: 0.01 absolute, but
+/// never more than a thousandth of the spacing itself (tiny type has tiny gaps).
+fn leading_tolerance(spacing: f64) -> f64 {
+    0.01_f64.min(spacing.abs() * 1e-3)
+}
+
 /// Point type: line breaks, baseline shifts and kerning from the positioning lists. Returns the
 /// justification, the x of the first line's left (or anchor) edge and, when no character is
 /// placed on its own, each line's first character and anchor x.
@@ -950,8 +956,7 @@ fn lines(
     // A line's characters take its spacing as leading unless it is their auto leading.
     for (k, b) in breaks.iter().enumerate() {
         let end = breaks.get(k + 1).map_or(n, |nb| nb.at);
-        // 0.01 absolute, but never more than a thousandth of the spacing itself (tiny type has tiny gaps).
-        let tolerance = 0.01_f64.min(b.leading.abs() * 1e-3);
+        let tolerance = leading_tolerance(b.leading);
         if cells[b.at..end].iter().any(|c| (c.style.effective_leading() - b.leading).abs() > tolerance) {
             for c in &mut cells[b.at..end] {
                 c.style.leading = Some(b.leading);
@@ -1076,7 +1081,7 @@ fn assemble(cells: &[Cell], breaks: &[Break]) -> (Runs, Vec<usize>) {
             let key = (prev.fill, prev.stroke);
             push(&mut out, '\n', prev.final_style(), key);
             let mut blank = prev.final_style();
-            if (blank.effective_leading() - b.leading).abs() > 0.01 {
+            if (blank.effective_leading() - b.leading).abs() > leading_tolerance(b.leading) {
                 blank.leading = Some(b.leading);
             }
             for _ in 1..b.count {
