@@ -754,6 +754,33 @@ mod tests {
         assert_eq!(super::pane_order("en"), [Presets, Details]);
         assert_eq!(super::pane_order("fr"), [Presets, Details]);
         assert_eq!(super::pane_order("he"), [Details, Presets]);
+
+        // Exercise the same egui::Ui::horizontal_top positioning as the real dialog,
+        // rather than testing only an array that could be ignored by the renderer.
+        let centers = |language: &str| {
+            let ctx = egui::Context::default();
+            let mut x = [f32::NAN; 2];
+            let raw =
+                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() };
+            let mut output = ctx.run_ui(raw, |ui| {
+                ui.horizontal_top(|ui| {
+                    for pane in super::pane_order(language) {
+                        let (index, width) = match pane {
+                            Presets => (0, 640.0),
+                            Details => (1, 292.0),
+                        };
+                        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 80.0), egui::Sense::hover());
+                        x[index] = rect.center().x;
+                    }
+                });
+            });
+            output.textures_delta.clear();
+            x
+        };
+        let ltr = centers("en");
+        let rtl = centers("he");
+        assert!(ltr[0] < ltr[1], "LTR presets should precede details: {ltr:?}");
+        assert!(rtl[1] < rtl[0], "Hebrew details should precede presets: {rtl:?}");
     }
 
     /// Cards translate the built-in presets' names only: Recent and Saved show the user's names.
