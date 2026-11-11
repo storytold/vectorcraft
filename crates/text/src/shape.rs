@@ -538,6 +538,23 @@ fn space_before(text: &str, byte: usize, st: &CharStyle, spacing_em: f64) -> f64
     Some(st.kerning_before / 1000.0 * spacing_em).filter(|s| s.is_finite()).unwrap_or(0.0)
 }
 
+/// The space before the character at `byte` of `text` in style `st`, in points, as the layout sets
+/// it ([`CharStyle::kerning_before`]): its thousandths of the em the character is set in, when it
+/// starts a line by itself, else 0. For writers that place a line's first character themselves.
+pub fn line_start_space(text: &str, byte: usize, st: &CharStyle, vertical: bool) -> f64 {
+    let small = st.small_caps.is_some() && !st.all_caps && text.get(byte..).and_then(|s| s.chars().next()).is_some_and(char::is_lowercase);
+    space_before(text, byte, st, glyph_size(st, small) * spacing_scale(st, vertical))
+}
+
+/// The size characters in style `st` are shaped at: Superscript, Subscript and synthesized Small
+/// Caps (`small`: a lowercase letter in them) shrink the glyphs; line metrics keep the full size.
+fn glyph_size(st: &CharStyle, small: bool) -> f64 {
+    let full = st.size.max(0.0);
+    let (pos_scale, _) = st.position.scale_shift(full);
+    let small_scale = if small { st.small_caps.unwrap_or(100.0) / 100.0 } else { 1.0 };
+    full * pos_scale * small_scale
+}
+
 /// Line segments of a glyph outline in font units, cached for the current shaping pass.
 type Profile = Vec<(f64, f64, f64, f64)>;
 type CachedProfile = (Profile, (f64, f64));
@@ -833,8 +850,11 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 
 /// Can one glyph draw characters in styles `a` and `b`? Only when the styles are equal, except that
 /// horizontal type (`vertical` false) does not read Standard Vertical Roman Alignment or the
-/// tate-chu-yoko offsets, so styles that differ only in those are drawn alike there.
+/// tate-chu-yoko offsets, so styles that differ only in those are drawn alike there. The space
+/// before a line's first character ([`space_before`]) is never read inside a cluster, which takes it
+/// from its first character, so it doesn't split a ligature either.
 fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
+    let b = &CharStyle { kerning_before: a.kerning_before, ..b.clone() };
     if a == b {
         return true;
     }
@@ -1099,9 +1119,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let cursive = text_seg.chars().map(|c| c.script()).find(|s| !matches!(s, Script::Common | Script::Inherited)).is_some_and(joins);
     let full = st.size.max(0.0);
     // Superscript/subscript and small capitals shrink the glyphs; line metrics keep the full size.
-    let (pos_scale, pos_shift) = st.position.scale_shift(full);
-    let small_scale = if small { st.small_caps.unwrap_or(100.0) / 100.0 } else { 1.0 };
-    let size = full * pos_scale * small_scale;
+    let (_, pos_shift) = st.position.scale_shift(full);
+    let size = glyph_size(st, small);
     let k = size / face.upem;
     let km = full / face.upem;
     let hs = st.h_scale / 100.0;

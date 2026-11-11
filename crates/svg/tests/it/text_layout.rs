@@ -131,6 +131,36 @@ fn the_space_before_a_lines_first_character_moves_its_tspan() {
     let svg = export(&area_doc(vec![run("H", before.clone()), run("OH", style(12.0))], 200.0, Justify::Center), &ExportOptions::default());
     let x = tspans(&svg).iter().find_map(|t| attr(t, "x")).unwrap();
     assert!((x - 101.5).abs() < 0.01, "{svg}");
+    // A justified line, which a reader's own advances place word by word, starts there too.
+    let words = vec![run("H", before.clone()), run("OH OH OH OH OH OH OH OH OH OH", style(12.0))];
+    let svg = export(&area_doc(words, 90.0, Justify::JustifyLeft), &ExportOptions::default());
+    assert_eq!(attr(tspans(&svg)[0], "x"), Some(3.0), "{svg}");
+}
+
+/// On a path, the space before the first character is its `dx` along the path. One before a
+/// character after a line break, which the `<textPath>` can't write, is kept as outlines.
+#[test]
+fn the_space_before_the_first_character_on_a_path_is_its_dx() {
+    let doc = |runs: Vec<TextRun>| {
+        let mut t = TextObject::point(Point::ZERO, "", style(12.0));
+        t.runs = runs;
+        let mut line = BezPath::new();
+        line.move_to((20.0, 100.0));
+        line.line_to((280.0, 100.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        vectorcraft_svg::export_full(&d, &ExportOptions::default(), None)
+    };
+    let before = CharStyle { kerning_before: 250.0, ..style(12.0) };
+    let out = doc(vec![run("HO", before.clone()), run("H", style(12.0))]);
+    let tags = tspans(&out.svg);
+    assert!(out.svg.contains("<textPath"), "{}", out.svg);
+    assert_eq!((attr(tags[0], "dx"), attr(tags[1], "dx")), (Some(3.0), None), "{}", out.svg);
+    let out = doc(vec![run("HO\n", style(12.0)), run("H", before)]);
+    assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("line break")), "{:?}", out.warnings);
 }
 
 /// Proportional Metrics (#966) is written as the `palt` feature, beside the character's own.

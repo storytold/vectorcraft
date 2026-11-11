@@ -119,3 +119,18 @@ fn in_vertical_type_the_first_character_moves_down_its_column() {
         }
     }
 }
+
+#[test]
+fn a_space_before_the_first_letter_of_a_ligature_keeps_it_whole() {
+    // Set on the "f" alone, as the caret before it sets it: Source Serif 4's "fi" ligature stays one
+    // glyph, and moves.
+    let serif = CharStyle { font_family: "Source Serif 4".into(), ..style(100.0) };
+    let plain = TextObject::point(Point::ZERO, "fit", serif);
+    let glyphs = |t: &TextObject| layout(db(), t).glyphs.len();
+    assert_eq!(glyphs(&plain), 2, "the font joins fi");
+    let kerned = spaced(&plain, 0, 250.0);
+    assert_eq!(glyphs(&kerned), 2, "still joined");
+    let moved = moves(&plain, &kerned, &[0, 2]);
+    assert!(near(&moved, &[25.0, 25.0]), "{moved:?}");
+    assert!((line_start_space("fit", 0, &kerned.runs[0].style, false) - 25.0).abs() < 1e-9);
+}
