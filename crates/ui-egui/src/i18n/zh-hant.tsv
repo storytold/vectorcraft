@@ -2397,6 +2397,7 @@ file-filter	Templates	範本
 	Stop Script	停止指令碼
 	Show External Script Warning	顯示外部指令碼警告
 	A Script Is Running	指令碼正在執行
+	Script Alert	指令碼提示
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	指令碼可以變更開啟的文件，並可透過其執行的命令寫入檔案。請只執行您信任的指令碼。
 	Do not show this warning again	不再顯示此警告
 	Stop the script and undo what it did? Then quit again.	要停止指令碼並還原其變更嗎？然後請再次結束。
@@ -4134,6 +4135,13 @@ digits	Malayalam	馬來亞拉姆數字
 	Quest Outline	任務
 	Coin Shine	金幣
 	Boss Alert	首領
+	Status Effects	狀態效果
+	Poison Tint	中毒
+	Freeze Edge	冰凍
+	Burn Aura	灼燒
+	Stun Pulse	暈眩
+	Stealth Fade	隱身
+	Shield Buff	護盾
 	Shape	形狀
 	Shape Builder	形狀建立
 	Shape Builder Regions	形狀建立區域
@@ -6423,6 +6431,18 @@ breakText	Glyphs	字符
 	Ended at a limit	在限制處結束
 	Stopped	已停止
 	Ended by an internal fault	因內部錯誤結束
-	{ms} ms, {calls} host calls	{ms} 毫秒，主機呼叫 {calls} 次
-	{dropped} earlier lines dropped, {cut} lines cut	已捨棄 {dropped} 行較早內容，已截斷 {cut} 行
+	time unavailable	時間無法取得
+	{ms} ms	{ms} 毫秒
+	{time}, {calls}	{time}，{calls}
+	slowest: {commands}	最慢的命令：{commands}
+	{dropped}, {cut}	{dropped}，{cut}
+@plural	{n} host call|{n} host calls	主機呼叫 {n} 次
+@plural	{n} earlier line dropped|{n} earlier lines dropped	已捨棄 {n} 行較早內容
+@plural	{n} line cut|{n} lines cut	已截斷 {n} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	重新整理延後的效果
+	Deferred Effects	延後的效果
+@msg	no plug-in effect is deferred	沒有延後的增效模組效果
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	開啟時延後了 {n} 個增效模組效果。效果 › 重新整理延後的效果可執行它們。

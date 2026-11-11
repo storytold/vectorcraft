@@ -8,7 +8,7 @@ use vectorcraft_doc::{AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAl
 use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
-use super::pathops::{len_param, length_given, number_given, shape_node};
+use super::pathops::{length_given, number_given, shape_node};
 use super::{
     CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, id_param, index, number_or, ok,
     str_param, switch_or, targets, text_param,
@@ -596,6 +596,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         if texts.is_empty() {
             return Err(EngineError::Other("Create Outlines: select text objects".into()));
         }
+        let before = (!super::dimension::reached(d, &roots).is_empty()).then(|| d.clone());
         let ended = super::dimension::end_links(d, &roots);
         let mut new_sel: Vec<NodeId> = roots.iter().copied().filter(|r| !texts.contains(r)).collect();
         let mut out = vec![];
@@ -691,7 +692,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 new_sel.push(gid);
             }
         }
-        super::dimension::restore_unchanged(d, ended);
+        if let Some(before) = &before {
+            super::dimension::restore_unchanged(before, d, ended);
+        }
         // Outlined frames of threaded text leave their threads with the text they show.
         super::threads::leave_threads(d, &threaded);
         sel.set(new_sel);
@@ -821,7 +824,9 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     let leading = match p.get("leading") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
-        Some(_) => Some(Some(len_param(p, "leading").ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0))),
+        Some(_) => {
+            Some(Some(length_given(p, "leading", C).ok().flatten().ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0)))
+        }
     };
     let tracking = number_given(p, "tracking", C)?;
     let justify = match text_param(p, "justify", C)? {

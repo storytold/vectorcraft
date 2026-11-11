@@ -174,6 +174,14 @@ impl Realm {
         self.unbroken_fuel = fuel;
     }
 
+    /// With `on`, the scripts run next (and the code they define and evaluate) throw a
+    /// `TypeError` when they assign to a read-only or getter-only property or add a property to
+    /// an object that is not extensible, as strict mode code does, without the rest of strict
+    /// mode. Off by default.
+    pub fn set_strict_writes(&mut self, on: bool) {
+        self.interp.strict_writes = on;
+    }
+
     pub fn limits(&self) -> &Limits {
         &self.interp.limits
     }
@@ -221,8 +229,13 @@ impl Realm {
         interp.source_units = 0;
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;
+        interp.last_error = Value::Null;
         interp.host_abort = None;
+        interp.waiting = false;
         interp.error_tag = UNKNOWN_SOURCE;
+        interp.thrown_mark = None;
+        interp.finally_marks.clear();
+        interp.error_mark = None;
         let strict = interp.options.strict;
         interp.source_tag = 0;
         let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
@@ -243,10 +256,14 @@ impl Realm {
         let site = interp.throw_site.take();
         interp.error_tag = site.as_ref().map_or(UNKNOWN_SOURCE, |(code, _)| code.source.tag);
         let (line, column) = site.map_or((0, 0), |(code, pc)| code.line_column(pc));
+        interp.error_mark = interp.thrown_mark.take().filter(|_| matches!(result, Err(Abrupt::Throw(_) | Abrupt::Limit(LimitKind::Host))));
+        interp.finally_marks.clear();
         interp.stack.clear();
         interp.frames.clear();
         interp.temp_roots.clear();
         interp.join_stack.clear();
+        interp.waiting = false;
+        interp.passing = Value::Undefined;
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {
@@ -276,16 +293,22 @@ impl Realm {
     /// instruction), and pauses where it can resume: between two instructions of the script's own
     /// code. A getter, a built-in's callback or another nested run has native frames under it, so
     /// it runs on to its end, for at most [`Realm::set_unbroken_fuel`] more. Once this has returned
-    /// [`Progress::Done`] or an error, the run is over.
+    /// [`Progress::Done`] or an error, the run is over. While a host function's call waits for its
+    /// result ([`Realm::waits`]), the run does not advance: this gives an internal error.
     pub fn advance(&mut self, slice: u64) -> Result<Progress, RunError> {
         let interp = &mut self.interp;
         if interp.frames.is_empty() {
             return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0 });
         }
+        if interp.waiting {
+            return Err(RunError { kind: RunErrorKind::Internal, message: "the run waits for a host function's result".into(), line: 0, column: 0 });
+        }
         let total = interp.fuel;
         let cap = slice.saturating_add(self.unbroken_fuel).min(total);
         interp.fuel = cap;
+        interp.in_slice = true;
         let r = interp.execute_slice(cap - slice.min(cap));
+        interp.in_slice = false;
         let used = cap - interp.fuel;
         interp.fuel = total - used;
         match r {
@@ -307,6 +330,38 @@ impl Realm {
         self.interp.pause.clone()
     }
 
+    /// The flag that is set while a host function runs where it may return
+    /// [`crate::HostError::Wait`]: called by the script's own code in a run [`Realm::advance`]
+    /// carries on, and not from a getter, a conversion or a built-in's callback.
+    pub fn wait_flag(&self) -> std::rc::Rc<std::cell::Cell<bool>> {
+        self.interp.can_wait.clone()
+    }
+
+    /// Does a host function's call wait for the result [`Realm::answer`] gives it?
+    pub fn waits(&self) -> bool {
+        self.interp.waiting
+    }
+
+    /// Gives the call that waits ([`crate::HostError::Wait`]) its result `d`; the next
+    /// [`Realm::advance`] goes on from there. A result past the heap limit ends the run with that
+    /// limit, and with no call waiting this gives an internal error.
+    pub fn answer(&mut self, d: crate::Data) -> Result<(), RunError> {
+        let interp = &mut self.interp;
+        if !interp.waiting {
+            return Err(RunError { kind: RunErrorKind::Internal, message: "no host function waits for a result".into(), line: 0, column: 0 });
+        }
+        interp.waiting = false;
+        // The value on top of the stack stood in for the result.
+        let r = interp.write_data(d, 0, false).and_then(|v| {
+            interp.stack.pop();
+            interp.push(v)
+        });
+        match r {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Has this realm stop when `interrupt` is set, in place of its own flag.
     pub fn share_interrupt(&mut self, interrupt: &Interrupt) {
         self.interp.interrupt = interrupt.0.clone();
@@ -317,6 +372,12 @@ impl Realm {
     /// [`crate::HostItem::Evaluator`] gave in this realm, and [`UNKNOWN_SOURCE`] otherwise.
     pub fn error_source(&self) -> u32 {
         self.interp.error_tag
+    }
+
+    /// The mark of the host error ([`crate::HostError::Marked`]) the last run ended with, when no
+    /// `catch` clause took that error's exception on its way out; `None` otherwise.
+    pub fn error_mark(&self) -> Option<u32> {
+        self.interp.error_mark
     }
 
     /// Fuel the run has left.
@@ -337,6 +398,32 @@ impl Realm {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }
+    }
+
+    /// Adds the script extensions: the global `localize(object, ...values)`, which gives a
+    /// localization object's text for the locale of [`Realm::localization`], the global
+    /// `toSource(value)` and `Object.prototype.toSource()`, which write plain data as source text,
+    /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
+    pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
+        match crate::builtins::extensions::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Defines the global function `name`, whose arguments arrive converted as `args` says
+    /// ([`crate::HostItem::Converted`]). Unlike a host object, a script may replace or delete it, as
+    /// it may a built-in function.
+    pub fn define_host_function(&mut self, name: &str, args: Vec<crate::Arg>, f: crate::HostFunction) -> Result<(), RunError> {
+        match self.interp.install_host_function(name, args, f) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// The locale `localize` reads, which the host's functions may change during a run.
+    pub fn localization(&self) -> std::rc::Rc<crate::Localization> {
+        self.interp.localization.clone()
     }
 
     /// Defines the global variable `name` holding the exception the last run did not catch

@@ -270,7 +270,9 @@ fn flattened(src: &Document, at: usize, id: NodeId) -> Result<Option<Flat>> {
     let pt = im.xf.determinant().abs().sqrt();
     let ppi = if pt.is_finite() && pt > 0.0 { (72.0 / pt).clamp(MIN_PPI, MAX_PPI) } else { MIN_PPI };
     let area = (bounds.width() * bounds.height()).max(1.0);
-    let scale = (ppi / 72.0).min((super::super::menucmds::MAX_PIXELS / area).sqrt());
+    // No side longer than the renderer draws (rounded up to whole pixels below).
+    let longest = (f64::from(vectorcraft_render::MAX_RASTER_SIDE) - 2.0) / bounds.width().max(bounds.height()).max(1.0);
+    let scale = (ppi / 72.0).min((super::super::menucmds::MAX_PIXELS / area).sqrt()).min(longest);
     if !(scale.is_finite() && scale > 0.0) {
         return Ok(None);
     }

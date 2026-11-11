@@ -135,7 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Stroke",
             ["Object", "Path"],
             None,
-            "{} replace stroked paths with filled outlines; a dimension whose lines are outlined, or selected with the art it measures when that art is outlined, becomes a plain group of its art → {ids}",
+            "{} replace stroked paths with filled outlines; a dimension whose lines are outlined becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines stay as they are, and if the outlined art no longer fits its link it stays where it was, no longer linked → {ids}",
             has_selection,
             outline_stroke
         ),
@@ -719,7 +719,7 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
 /// Pathfinder panel › Trap ([`vectorcraft_render::effects::trap`]): the traps between the selected
 /// objects' leaf shapes, as one group of overprinting paths above the topmost selected object.
 fn trap(s: &mut Session, p: &Value) -> Result<Value> {
-    use vectorcraft_render::effects::trap::{TRAP_LABEL, TrapOptions, TrapSource, trap_appearance, traps};
+    use vectorcraft_render::effects::trap::{TRAP_LABEL, TrapOptions, TrapSource, trap_appearance, try_traps};
     const ID: &str = "object.pathfinder.trap";
     let mut q = p.clone();
     if let Some(t) = length_given(p, "thickness", ID)? {
@@ -758,7 +758,12 @@ fn trap(s: &mut Session, p: &Value) -> Result<Value> {
         if sources.iter().filter(|s| s.fill.color().is_some()).count() < 2 {
             return Err(EngineError::Other("Trap: select two or more objects filled with solid colours".into()));
         }
-        let made = traps(&sources, &options);
+        let Some(made) = try_traps(&sources, &options) else {
+            return Err(EngineError::Other(format!(
+                "Trap: more than {} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time",
+                vectorcraft_render::effects::trap::MAX_NEAR_PAIRS
+            )));
+        };
         if made.is_empty() {
             return Err(EngineError::Other("Trap: no edges of different colours meet among the selected objects".into()));
         }
@@ -1074,7 +1079,11 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Outline Stroke", |d, sel| {
         let before = d.clone();
-        let mut ended = super::dimension::end_links(d, &roots);
+        // A dimension selected with the art it measures keeps its own lines: it is out of the
+        // document while the art is outlined.
+        let lifted = super::dimension::lift(d, &roots);
+        let kept = !lifted.is_empty();
+        let ended = super::dimension::end_links(d, &roots);
         let brushes = vectorcraft_brush::library(d);
         let mut new_sel = vec![];
         let mut changed = 0;
@@ -1083,10 +1092,10 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
             new_sel.push(id);
             changed += n;
         }
-        // A dimension whose source was outlined stays plain: its link no longer fits that art.
-        ended.retain(|e| e.source_kept(&before, d));
-        super::dimension::restore_unchanged(d, ended);
-        if changed == 0 {
+        super::dimension::put_back(d, lifted);
+        // A dimension whose source was outlined stays where it was, no longer linked.
+        super::dimension::restore_unchanged(&before, d, ended);
+        if changed == 0 || (kept && d.layers == before.layers) {
             return Err(EngineError::Other("Outline Stroke: no stroked paths selected".into()));
         }
         sel.set(new_sel.iter().copied());

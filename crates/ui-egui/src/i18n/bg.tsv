@@ -3071,6 +3071,13 @@ digits	Malayalam	Малаялам
 	Quest Outline	Квест
 	Coin Shine	Монета
 	Boss Alert	Бос
+	Status Effects	Статус ефекти
+	Poison Tint	Отрова
+	Freeze Edge	Замразяване
+	Burn Aura	Изгаряне
+	Stun Pulse	Зашеметяване
+	Stealth Fade	Скритост
+	Shield Buff	Щит
 	Shape	Фигура
 	Shape Builder	Създател на фигури
 	Shape Builder Regions	Области на създателя на фигури
@@ -3980,6 +3987,7 @@ axis	Both	И двете
 	Stop Script	Спри скрипта
 	Show External Script Warning	Показвай предупреждение за външни скриптове
 	A Script Is Running	Изпълнява се скрипт
+	Script Alert	Известие от скрипт
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скриптът може да променя отворените документи и да записва файлове чрез командите, които изпълнява. Изпълнявайте само скриптове, на които имате доверие.
 	Do not show this warning again	Не показвай повече това предупреждение
 	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
@@ -6513,5 +6521,15 @@ breakText	Glyphs	Глифи
 	Ended at a limit	Прекратен при лимит
 	Stopped	Спрян
 	Ended by an internal fault	Прекратен поради вътрешна грешка
-	{ms} ms, {calls} host calls	{ms} ms, {calls} извиквания към хоста
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} по-ранни реда премахнати, {cut} реда съкратени
+	time unavailable	времето не е налично
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	най-бавни: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} извикване към хоста|{n} извиквания към хоста
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} по-ранен ред премахнат|{n} по-ранни реда премахнати
+@plural	{n} line cut|{n} lines cut	{n} ред съкратен|{n} реда съкратени
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Обновяване на отложените ефекти
+	Deferred Effects	Отложени ефекти

@@ -3193,6 +3193,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Missione
 	Coin Shine	Moneta
 	Boss Alert	Boss
+	Status Effects	Effetti di stato
+	Poison Tint	Veleno
+	Freeze Edge	Gelo
+	Burn Aura	Bruciatura
+	Stun Pulse	Stordimento
+	Stealth Fade	Furtività
+	Shield Buff	Scudo
 	Shape	Forma
 	Shape Builder	Generatore forme
 	Shape Builder Regions	Aree del Generatore forme
@@ -4134,6 +4141,7 @@ axis	Both	Entrambi
 	Stop Script	Interrompi script
 	Show External Script Warning	Mostra avviso per gli script esterni
 	A Script Is Running	È in esecuzione uno script
+	Script Alert	Avviso dello script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Uno script può modificare i documenti aperti e scrivere file tramite i comandi che esegue. Esegui solo script di cui ti fidi.
 	Do not show this warning again	Non mostrare più questo avviso
 	Stop the script and undo what it did? Then quit again.	Interrompere lo script e annullare ciò che ha fatto? Poi esci di nuovo.
@@ -6408,6 +6416,18 @@ breakText	Glyphs	Glifi
 	Ended at a limit	Terminato a un limite
 	Stopped	Interrotto
 	Ended by an internal fault	Terminato per un errore interno
-	{ms} ms, {calls} host calls	{ms} ms, {calls} chiamate all'host
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} righe precedenti scartate, {cut} righe tagliate
+	time unavailable	tempo non disponibile
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	più lenti: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} chiamata all'host|{n} chiamate all'host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} riga precedente scartata|{n} righe precedenti scartate
+@plural	{n} line cut|{n} lines cut	{n} riga tagliata|{n} righe tagliate
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Aggiorna effetti rimandati
+	Deferred Effects	Effetti rimandati
+@msg	no plug-in effect is deferred	nessun effetto plug-in è rimandato
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aperto con {n} effetto plug-in rimandato. Effetto › Aggiorna effetti rimandati lo esegue.|Aperto con {n} effetti plug-in rimandati. Effetto › Aggiorna effetti rimandati li esegue.

@@ -3080,6 +3080,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Uppdrag
 	Coin Shine	Mynt
 	Boss Alert	Boss
+	Status Effects	Statuseffekter
+	Poison Tint	Gift
+	Freeze Edge	Frost
+	Burn Aura	Bränna
+	Stun Pulse	Bedövning
+	Stealth Fade	Smyga
+	Shield Buff	Sköld
 	Shape	Form
 	Shape Builder	Formbyggare
 	Shape Builder Regions	Formbyggarområden
@@ -4001,6 +4008,7 @@ axis	Both	Båda
 	Stop Script	Stoppa skript
 	Show External Script Warning	Visa varning för externa skript
 	A Script Is Running	Ett skript körs
+	Script Alert	Skriptmeddelande
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
 	Do not show this warning again	Visa inte den här varningen igen
 	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
@@ -8272,6 +8280,18 @@ digits	Hindi	Hindi
 	Ended at a limit	Avslutades vid en gräns
 	Stopped	Stoppad
 	Ended by an internal fault	Avslutades av ett internt fel
-	{ms} ms, {calls} host calls	{ms} ms, {calls} värdanrop
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidigare rader borttagna, {cut} rader avkortade
+	time unavailable	tid ej tillgänglig
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	långsammast: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} värdanrop|{n} värdanrop
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} tidigare rad borttagen|{n} tidigare rader borttagna
+@plural	{n} line cut|{n} lines cut	{n} rad avkortad|{n} rader avkortade
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uppdatera uppskjutna effekter
+	Deferred Effects	Uppskjutna effekter
+@msg	no plug-in effect is deferred	ingen plugineffekt är uppskjuten
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Öppnades med {n} uppskjuten plugineffekt. Effekt › Uppdatera uppskjutna effekter kör den.|Öppnades med {n} uppskjutna plugineffekter. Effekt › Uppdatera uppskjutna effekter kör dem.

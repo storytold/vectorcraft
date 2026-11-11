@@ -722,6 +722,13 @@
 	Quest Outline	Quest
 	Coin Shine	Mønt
 	Boss Alert	Boss
+	Status Effects	Statuseffekter
+	Poison Tint	Gift
+	Freeze Edge	Frost
+	Burn Aura	Brænd
+	Stun Pulse	Bedøvelse
+	Stealth Fade	Snige
+	Shield Buff	Skjold
 	Outlines and Rules	Konturer og linjer
 	Hand-Drawn	Håndtegnet
 	Gradient Finishes	Gradientfinish
@@ -4099,6 +4106,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Stop script
 	Show External Script Warning	Vis advarsel om eksterne scripts
 	A Script Is Running	Et script kører
+	Script Alert	Scriptadvarsel
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
 	Do not show this warning again	Vis ikke denne advarsel igen
 	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
@@ -6527,5 +6535,15 @@ breakText	Glyphs	Glyffer
 	Ended at a limit	Afsluttet ved en grænse
 	Stopped	Stoppet
 	Ended by an internal fault	Afsluttet af en intern fejl
-	{ms} ms, {calls} host calls	{ms} ms, {calls} værtskald
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidligere linjer fjernet, {cut} linjer afkortet
+	time unavailable	tid ikke tilgængelig
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	langsomste: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} værtskald|{n} værtskald
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} tidligere linje fjernet|{n} tidligere linjer fjernet
+@plural	{n} line cut|{n} lines cut	{n} linje afkortet|{n} linjer afkortet
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Opdatér udskudte effekter
+	Deferred Effects	Udskudte effekter

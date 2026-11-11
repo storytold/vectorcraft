@@ -692,6 +692,61 @@ fn a_strict_realm_runs_scripts_as_strict_mode_code() {
 }
 
 #[test]
+fn strict_writes_are_separate_from_es5_strict() {
+    let setup = "var ro = {}; Object.defineProperty(ro, 'x', {value: 1}); \
+        var getter = {get g() { return 1; }}; var shut = Object.preventExtensions({a: 1}); var open = {};";
+    let mut realm = Realm::new();
+    realm.set_strict_writes(true);
+    realm.run(setup).unwrap();
+    for (src, why) in [
+        ("ro.x = 2", "cannot assign to property 'x': it is read-only"),
+        ("ro['x'] += 1", "cannot assign to property 'x': it is read-only"),
+        ("ro.x++", "cannot assign to property 'x': it is read-only"),
+        ("getter.g = 2", "cannot assign to property 'g': it has only a getter"),
+        ("shut.b = 2", "cannot assign to property 'b': the object is not extensible"),
+        ("Object.create(ro).x = 2", "cannot assign to property 'x': it is read-only"),
+        ("NaN = 1", "cannot assign to property 'NaN': it is read-only"),
+        ("(function () { ro.x = 2; })()", "cannot assign to property 'x': it is read-only"),
+        ("eval('ro.x = 2')", "cannot assign to property 'x': it is read-only"),
+        ("(0, eval)('ro.x = 2')", "cannot assign to property 'x': it is read-only"),
+        ("Function('ro.x = 2')()", "cannot assign to property 'x': it is read-only"),
+    ] {
+        let e = realm.run(src).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Thrown, "{src}");
+        assert!(e.message.contains("TypeError") && e.message.contains(why), "{src}: {}", e.message);
+    }
+    // Writes that can be made, and the rest of strict mode, are as before.
+    assert_eq!(realm.run("open.n = 1; shut.a = 5; open.n + shut.a"), Ok(JsValue::Number(6.0)));
+    assert_eq!(realm.run("with ({w: 2}) { w } "), Ok(JsValue::Number(2.0)));
+    assert_eq!(realm.run("(function (a, a) { return a; })(1, 2)"), Ok(JsValue::Number(2.0)));
+    assert_eq!(realm.run("010"), Ok(JsValue::Number(8.0)));
+    assert_eq!(realm.run("undeclared = 3; undeclared"), Ok(JsValue::Number(3.0)));
+    assert_eq!(realm.run("(function () { return typeof this; })()"), Ok(JsValue::String("object".into())));
+    assert_eq!(realm.run("delete Object.prototype"), Ok(JsValue::Bool(false)));
+    assert_eq!(realm.run("'abc'.length = 1; 'abc'.extra = 1; 1"), Ok(JsValue::Number(1.0)), "a primitive's properties as in sloppy mode");
+    // 'use strict' keeps all of ES5 strict mode.
+    assert_eq!(realm.run("'use strict'; with ({}) {}").map_err(|e| e.kind), Err(RunErrorKind::Syntax));
+    assert_eq!(realm.run("'use strict'; delete Object.prototype").map_err(|e| e.kind), Err(RunErrorKind::Thrown));
+    // Off, the same writes are ignored, as in sloppy mode code.
+    realm.set_strict_writes(false);
+    assert_eq!(realm.run("ro.x = 2; getter.g = 2; shut.b = 2; NaN = 1; ro.x + getter.g + String(shut.b)"), Ok(JsValue::String("2undefined".into())));
+    // A function compiled with the writes on keeps them when called from code without.
+    let mut realm = Realm::new();
+    realm.set_strict_writes(true);
+    realm.run(&format!("{setup} function w() {{ ro.x = 2; }}")).unwrap();
+    realm.set_strict_writes(false);
+    assert!(realm.run("w()").unwrap_err().message.contains("it is read-only"));
+    assert_eq!(realm.run("ro.x = 3; ro.x"), Ok(JsValue::Number(1.0)));
+    // An undeclared name added to a global object that is not extensible.
+    let mut realm = Realm::new();
+    realm.set_strict_writes(true);
+    let e = realm.run("Object.preventExtensions(this); newName = 1").unwrap_err();
+    assert!(e.message.contains("cannot assign to property 'newName': the object is not extensible"), "{}", e.message);
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("Object.preventExtensions(this); newName = 1; typeof newName"), Ok(JsValue::String("undefined".into())));
+}
+
+#[test]
 fn an_apply_that_throws_while_reading_its_arguments_keeps_nothing_alive() {
     // Each call reads a fresh array at index 0 before index 1 throws; the arrays must not stay
     // reachable after the call ends.
@@ -774,7 +829,7 @@ fn deep_nesting_compiles_on_a_small_stack() {
 // ---- the verifier ----
 
 fn code(ops: Vec<Op>) -> Code {
-    let source = Rc::new(Source { lines: crate::LineTable::new(&[]), text: Rc::from(Vec::<u16>::new()), tag: 0 });
+    let source = Rc::new(Source { lines: crate::LineTable::new(&[]), text: Rc::from(Vec::<u16>::new()), tag: 0, strict_writes: false });
     Code {
         positions: vec![0; ops.len()],
         ops,
@@ -788,6 +843,7 @@ fn code(ops: Vec<Op>) -> Code {
         max_stack: 0,
         strict: false,
         self_name: None,
+        decl_name: None,
         params: Vec::new(),
         vars: Vec::new(),
         fun_decls: Vec::new(),

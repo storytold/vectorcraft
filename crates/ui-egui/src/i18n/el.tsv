@@ -2247,6 +2247,7 @@ axis	Both	Και τα δύο
 	Stop Script	Διακοπή σεναρίου
 	Show External Script Warning	Εμφάνιση προειδοποίησης για εξωτερικά σενάρια
 	A Script Is Running	Εκτελείται ένα σενάριο
+	Script Alert	Ειδοποίηση σεναρίου
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
 	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
 	Stop the script and undo what it did? Then quit again.	Διακοπή του σεναρίου και αναίρεση όσων έκανε; Έπειτα κάντε ξανά έξοδο.
@@ -3624,6 +3625,13 @@ digits	Malayalam	Μαλαγιάλαμ
 	Quest Outline	Αποστολή
 	Coin Shine	Νόμισμα
 	Boss Alert	Αρχηγός
+	Status Effects	Εφέ κατάστασης
+	Poison Tint	Δηλητήριο
+	Freeze Edge	Πάγωμα
+	Burn Aura	Κάψιμο
+	Stun Pulse	Ζάλη
+	Stealth Fade	Αορασία
+	Shield Buff	Ασπίδα
 	Shape Builder Regions	Περιοχές δημιουργίας σχημάτων
 	Shape Effects	Εφέ σχημάτων
 	Shape Mode	Λειτουργία σχήματος
@@ -6739,6 +6747,18 @@ breakText	Glyphs	Γλύφοι
 	Ended at a limit	Τερματίστηκε σε όριο
 	Stopped	Διακόπηκε
 	Ended by an internal fault	Τερματίστηκε λόγω εσωτερικού σφάλματος
-	{ms} ms, {calls} host calls	{ms} ms, {calls} κλήσεις προς το κεντρικό σύστημα
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} παλαιότερες γραμμές απορρίφθηκαν, {cut} γραμμές περικόπηκαν
+	time unavailable	ο χρόνος δεν είναι διαθέσιμος
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	πιο αργές: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} κλήση προς το κεντρικό σύστημα|{n} κλήσεις προς το κεντρικό σύστημα
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} παλαιότερη γραμμή απορρίφθηκε|{n} παλαιότερες γραμμές απορρίφθηκαν
+@plural	{n} line cut|{n} lines cut	{n} γραμμή περικόπηκε|{n} γραμμές περικόπηκαν
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	Τα `first` και `last` πρέπει να είναι αριθμοί γραμμών που κρατά η κονσόλα, το `first` πριν από το `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή
+	Deferred Effects	Εφέ σε αναμονή
+@msg	no plug-in effect is deferred	κανένα εφέ προσθέτου δεν είναι σε αναμονή
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Άνοιξε με {n} εφέ προσθέτου σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή το εκτελεί.|Άνοιξε με {n} εφέ προσθέτων σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή τα εκτελεί.

@@ -112,6 +112,9 @@ the suite) keep the agent to the folders you give it:
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
   library and preset saves to a path, the copies `links.relink {copy}` makes.
 - `file.list {path}` (through `run_command`) lists a folder's files and folders, held to the read roots like any read, so an agent can see what it was given (#1163).
+- `file.recentFiles` and the control channel's `ui.menu.list` leave out the recent files outside the read roots. The
+  other File › Open Recent Files rows keep their ids (`file.openRecent3` still opens the third file), and
+  `file.openRecentN` for a file outside the roots ends with `no such recent file`, as an empty slot does.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
@@ -588,12 +591,18 @@ the stored fill, or the stored stroke when no fill is stored and that stroke has
 outline, so these commands do not store a stroke paint or weight for a series that draws a band. Except for
 `paint.swap`, they still store a stroke opacity and blend mode set on a band, and the band's outline takes them. Graph
 designs keep their own paint. A row that had no
-paint before the command and has none after it does not change what the graph stores. `paint.setFill`,
+paint before the command and has none after it does not change the paint the graph stores. `paint.setFill`,
 `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
 even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
 not store a series' paint. An `appearance.*` command or `graphicStyle.apply` given a series group's id, and
 `graphicStyle.redefine` on a series group linked to the style, edit the group's own rows, and the graph does not store
 them.
+
+`text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
+it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
+kind takes them when the graph is drawn again. The graph saves the paragraph attributes as `valuesPara`,
+`categoriesPara` and `legendPara` in its label styles, and still sets each label's alignment for its place. The legend
+leaves room for a legend label's stored indents, spacing and leading.
 
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
@@ -1569,6 +1578,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   missing file and a refused path throw errors the script can catch.
 - `$.fileName` is the file being run, which is the file `$.evalFile` is running while it runs, and is empty for a
   script given as `source`. `$.includePath` is the current `#includepath` list, separated by `;`.
+- `alert(message[, title, errorIcon])`, `confirm(message[, noAsDflt, title])` and `prompt(message, preset[, title])`
+  open a dialog, described below. `vc.api.has("dialogs")` is true.
 - `vc.args` is the `args` object.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
@@ -1587,15 +1598,74 @@ VectorCraft reads them by these rules of its own:
   folder of the file that includes. A later `#includepath` replaces the list.
 - `#script "name"` names the run in the report and the Script Console, unless `name` is given. A `#script` line in an
   included file does not rename the run.
-- `#target` takes any value and does not change how the script runs. `#strict off` is taken.
-- `#strict on`, `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name`
-  with an unknown-directive error. A `//@` line with another name is a comment.
+- `#target` takes any value and does not change how the script runs.
+- `#strict on` turns on the checks the dollar-object help page gives for `$.strict`: an assignment to a read-only
+  property throws a `TypeError`, and so does adding a property to an object that takes no new ones. By VectorCraft's
+  own rules, an assignment to a property with only a getter is checked as a read-only one, and the objects that take
+  no new properties are those that are not extensible: objects passed to `Object.preventExtensions`, `Object.seal` or
+  `Object.freeze`, and the frozen `vc` and `$` objects. Other objects take new properties as before. The rest of ES5
+  strict mode (`with`, undeclared variables, `this` in a plain call) is unchanged; a script asks for it with
+  `'use strict'`. `#strict off` turns the checks off, and they are off in a script without either line.
+- The last `#strict` line of the script and the files it includes sets the checks for the whole run. Code that `eval`
+  and `Function` compile takes the checks of the code that compiles it. A file `$.evalFile` runs takes the checks of
+  its own last `#strict` line, for its code and the functions it defines, or the caller's when it has none; the
+  caller's code keeps its own. Any value other than `on` or `off` ends the run with `#strict takes on or off`.
+- `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name` with an
+  unknown-directive error. A `//@` line with another name is a comment.
 - A script run from a file reads its included files and the files `$.evalFile` runs only in that file's folder and
   the folders below it. A path with a `..` name, a path that leads out of the folder through a link or a junction, a
   Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
   `source`. A `JSINCLUDE` folder outside the script's folder is passed over.
 - A missing or refused included file ends the run before any of it runs. An error in an included file or a file `$.evalFile`
-  ran is reported at that file's line and column, and the report's `file` names the file.
+  ran is reported at that file's line and column, and the report's `file` names the file. So is an error `$.evalFile`
+  throws for a file it cannot run, such as a syntax error, when no `catch` takes it. When a `catch` takes that error
+  and a later `throw` raises it again, the error is reported where that `throw` is, as any other thrown error is.
+
+`$` also has the other members the Dollar object page lists, besides `$.evalFile`, `$.fileName` and `$.includePath`
+above. Each run
+starts with its own `$`: what a script changes there lasts until the run ends. The values and rules below are
+VectorCraft's own, and `vc.api.has("dollar")` is true where they are available:
+
+| Member | In VectorCraft |
+|--------|----------------|
+| `about()` | `"VectorCraft script engine <version>"`; no window opens |
+| `appEncoding` | `"UTF-8"`; setting `"UTF-8"` is accepted, any other encoding throws a `RangeError` |
+| `bp()`, `colorPicker()` | throw an `Error`: scripts have no debugger and cannot show a dialog |
+| `build`, `version` | VectorCraft's version |
+| `buildDate` | `null` |
+| `decimalPoint` | `","` for a locale whose language writes a decimal comma (such as `de`, `fr`, `ru`), otherwise `"."` |
+| `engineName` | `"VectorCraft"` |
+| `error` | the last `Error` object the run threw, caught or not, or `null` before one |
+| `flags` | `0`, or `512` while localization is on; only `0` and `512` can be set, and setting `512` turns `$.localize` on |
+| `gc()` | does nothing; the interpreter collects its own garbage |
+| `getenv(name)`, `setenv(name, value)` | only `LANG`, `LC_MESSAGES`, `LC_ALL` and `OS`; `getenv` of any other name returns `null`, and `setenv` of one throws. `setenv` changes the value for the rest of the run only, never the app's environment. A value has at most 64 letters, digits and `_ . - @` |
+| `global` | the global object |
+| `hiresTimer` | the microseconds since the run last read it, or since the run started; `0` on the web |
+| `level`, `memCache` | `0`; setting `memCache` throws |
+| `line`, `stack` | the line of the code that reads it; the running code, outermost first, one a line as `name:line` (`[global]` for the script's own code, `[anonymous]` for a function without a name), at most 64 lines |
+| `locale` | the interface's language as a locale such as `de` or `pt_BR` (`en` when the interface follows the system); a script can set `ll` or `ll_RR`, and `null` or `""` sets the interface's again |
+| `localize` | `false`; while `true`, `String(object)` of a localization object gives its text for `$.locale` |
+| `os` | `Windows`, `macOS`, `Linux`, `FreeBSD`, `Unix` or `Web`, without a version |
+| `screens` | an empty array |
+| `sleep(ms)` | waits from 0 to 1,000 milliseconds between two frames of the app, without stopping it from drawing; `script.stop` ends the wait; it does not wait on the web; called with more than 0 inside a getter, a conversion, a callback of a built-in function or a file `$.evalFile` runs, it throws an `Error` instead of waiting |
+| `strict` | `false` |
+
+Members that are values (`build`, `level`, `os` and the like) cannot be changed. A wrong value for a member that can
+be set throws a `TypeError` or `RangeError`.
+
+`localize(object, ...values)` gives the text of a localization object, an object whose property names are locales
+(https://extendscript.docsforadobe.dev/extendscript-tools-features/localizing-extendscript-strings/). It looks up the
+locale with the platform's suffix (`_Win`, `_Mac` or `_Unix`; none on the web), the locale, its language with the
+suffix, its language, and then `en`, and returns the object itself when none of them is a string property of it. No
+getter runs. `%1` is replaced by the first value, `%2` by the second and so on, each once; a number with no value stays
+as it is. A string as the first argument is used as the text.
+
+`toSource(value)` and `value.toSource()` write `undefined`, `null`, booleans, numbers, strings, arrays and plain
+objects as the text of an expression that makes the same value, such as `({"a":[1, "x"]})`. A function, a getter, a
+date, a regular expression, an error, a host object such as `vc`, an array with properties besides its elements, an
+object whose prototype is not `Object.prototype`, a property that is not enumerable, or an object that contains
+itself throws a `TypeError`. A value deeper than 64 levels, with more than 1,048,576 entries or with text longer than 16,777,216
+characters throws a `RangeError`.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records
@@ -1634,16 +1704,18 @@ VectorCraft sets these limits itself:
 | `args` as JSON | 1 MiB |
 | Log | 10,000 entries and 4 MiB |
 | Script Console | 2,048 lines and 1 MiB of text; 4,096 bytes a line; 256 bytes of a script's name |
+| A dialog's message, title and prompt preset | 16 KiB, 256 bytes and 16 KiB |
+| `answers` | 10,000 answers and 1 MiB as JSON |
+| `dialogs` in the report | 10,000 dialogs and 1 MiB as JSON |
 | Growth before a person is asked | 100,000 objects and 512 MiB of new document data |
 
 In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
 `ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
-runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console}`. In the app the reply is `{running: true,
-name}`, and the report appears later as `scriptReport` in `ui.inspect`. The report of a failed run has the same
-fields after `kind`, `message`, `line`, `column`, `file` (when the error is in another file than the script) and
-`fuelLeft`. `answers` takes only an empty object, since scripts
-have no prompts yet.
+runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`. In
+the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`. The
+report of a failed run has the same fields after `kind`, `message`, `line`, `column`, `file` (when the error is in
+another file than the script) and `fuelLeft`.
 
 - `runTimeMs` is the time the script ran, its commands included. Waits between frames and for a person's answer are
   left out. `timingAvailable` is false on the web, where `runTimeMs` is 0.
@@ -1651,6 +1723,11 @@ have no prompts yet.
 - `slowestCommands` lists at most 5 commands as `{id, calls, totalMs, maxMs}`, the longest in all first, then by id.
 - `console` is `{lines, droppedLines, truncatedLines}`: the run's own output, `vc.log` lines and uncaught error, as
   text.
+- `dialogs` lists the run's dialogs in the order they opened, as `{kind, message, title, errorIcon, answer}` for
+  `alert`, `{kind, message, title, noAsDefault, answer}` for `confirm` and `{kind, message, title, preset, answer}`
+  for `prompt`. `answer` is `"ok"`, `true`, `false`, the prompt's text, `null` for Cancel, `"stop"` for a dialog the
+  run ended at, or `"missing"` for a dialog `answers` had no answer for. `dialogCount` counts every dialog, and
+  `dialogsTruncated` is true when the list stopped at its limit.
 
 ```json
 {"name":"run_command","arguments":{"command":"script.run","params":{"source":"vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10});"}}}
@@ -1658,6 +1735,47 @@ have no prompts yet.
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"path": "Tidy Layers.js", "args": {"margin": 12}}'
+```
+
+The help page https://extendscript.docsforadobe.dev/extendscript-tools-features/user-notification-dialogs/
+describes the three dialog functions. A script calls them as globals:
+
+- `alert(message[, title, errorIcon])` shows the message with OK, and an error icon when `errorIcon` is true. It
+  returns `undefined`.
+- `confirm(message[, noAsDflt, title])` shows the message with Yes and No. Yes is the default button, and No is the
+  default when `noAsDflt` is true. It returns `true` for Yes and `false` for No.
+- `prompt(message, preset[, title])` shows the message and a text field that starts with `preset`, with OK and
+  Cancel. It returns the field's text for OK, an empty string included, and `null` for Cancel.
+
+The message, the preset and a given title are read as `String(value)` gives them, and `errorIcon` and `noAsDflt` as
+`Boolean(value)` gives them. A title that is left out or `undefined` is Script Alert. A call without a message, or a
+`prompt` without a preset, throws a `TypeError`. A message or a prompt's preset longer than 16 KiB, or a title longer than
+256 bytes, throws a `RangeError` and opens no dialog. The dialog shows line feeds, carriage returns and the two
+together as line breaks, and other control characters as their Unicode Control Pictures. The title stays on one
+line, with line breaks shown as Control Pictures too.
+
+In the app, the run waits at the call until the person answers, and spends no instructions while it waits. Enter
+gives the default button's answer. Escape gives Cancel for a prompt, No for a confirm and Stop for an alert. Every
+dialog also has Stop, which ends the run as `script.stop` does and puts back every document. A dialog can open only
+from the script's own code: called inside a callback of a built-in function such as `Array.prototype.forEach`, a
+getter, a `toString` conversion or a file `$.evalFile` runs, it throws an `Error`. The code of an `#include` file
+is part of the script's own code, and its dialogs open as the script's do. Quitting while a dialog waits asks whether to stop the
+script, and Cancel shows the dialog again with the text typed so far. In the app, `ui.dialog.confirm` answers the
+open dialog (kind `scriptDialog`) with its `answer` field (`ok`, `yes`, `no`, `cancel` or `stop`), or with the
+default button's answer when `answer` is left out. A prompt's `value` longer than 16 KiB is an error, and the
+dialog stays open.
+
+A run with nobody to ask takes its answers from `answers`, a list of `{kind: "alert", value: "ok"}`, `{kind:
+"confirm", value: true}` or `{kind: "confirm", value: false}`, and `{kind: "prompt", value: text}` or `{kind:
+"prompt", value: null}` for Cancel. Each dialog takes the next answer in order, callbacks of built-in functions
+included. The run ends with an error that the script cannot catch, and every document goes back, when no answer is
+left, when the next answer is for another kind of dialog, or when the script ends with answers it did not use.
+`script.run` refuses a list that is malformed, longer than 10,000 answers or larger than 1 MiB before the run starts,
+and refuses any answers for a run in the app, where the person answers. An omitted `answers`, an empty list and an
+empty object are the same.
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"source": "if (confirm(\"Add a frame?\")) vc.log(prompt(\"Name\", \"Frame\"));", "answers": [{"kind": "confirm", "value": true}, {"kind": "prompt", "value": "Border"}]}'
 ```
 
 Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
@@ -1672,7 +1790,12 @@ at the bottom of the panel and in its menu. Output goes on while the panel is cl
 
 - `script.console {}` returns `{lines: [{run, name, kind, text}], droppedLines, truncatedLines}`. `run` is the
   run's number in the session, and `kind` is `start`, `output`, `log`, `error`, `end` or `report`. An end line's text
-  is `ended:`, a space, and then `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`.
+  is `ended:`, a space, and then `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`. A report
+  line's text is the run's time (`12 ms`, or `time unavailable` on a platform without a clock), a comma and its host
+  calls (`1 host call`, `2 host calls`), then `; slowest:` and the slowest commands when any were timed. The panel
+  shows the same text in the interface language. Every run that starts gets an end line. When a run is no longer
+  available, its end line is `stopped` if the run was abandoned and `internal` if the next slice found it missing, and
+  no report line follows.
 - `script.console.clear {}` empties the console, sets its counts to zero and returns `{cleared}`. A running script
   goes on writing, and `scriptReport` keeps the last run's console.
 - `ui.copyScriptConsole {first?, last?}` copies lines `first` to `last` to the clipboard as the panel shows them, or
@@ -2967,7 +3090,7 @@ as a value left out.
 ## Graphic style libraries
 
 Graphic style libraries are read-only sets of graphic styles generated in code (Shadows and Glows, Outlines and
-Rules, Hand-Drawn, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD). `graphicStyle.libraries` lists them
+Rules, Hand-Drawn, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD, Status Effects). `graphicStyle.libraries` lists them
 (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and `graphicStyle.library {library}` returns one's
 styles in the `graphicStyle.list` shape (`library` is an id or a name). `graphicStyle.addFromLibrary {library, name? |
 names?}` copies styles into the document's Graphic Styles as one undo step (no names: the whole library); styles the
@@ -3207,7 +3330,9 @@ the group holds only the art inside the clipping layer, drawn over the fill and 
 layer as its own layers draw it (over nothing with `preserveAlpha`), and the art outside is flattened on its own.
 `preset` is `high`, `medium` (the default) or `low`; option keys (`balance` 0–100, `lineArtPpi`, `gradientPpi`,
 `textToOutlines`, `strokesToOutlines`, `clipComplexRegions`, `antiAlias`, `preserveAlpha`, `preserveOverprints`)
-override it, at the top level or in `options`. `balance: 0` rasterizes everything; lower balances rasterize groups
+override it, at the top level or in `options`. An image that would be larger than 64 million pixels or longer than
+32,768 pixels a side at `lineArtPpi` or `gradientPpi` is made at the highest resolution that fits, so a long area is
+rasterized whole. `balance: 0` rasterizes everything; lower balances rasterize groups
 that split into many regions. The result reports `{ids, vector, rasterized, options}`. When an image in the art
 can't be decoded, the image that replaces the art does not show it, and the result also carries `warning`: "an image
 couldn't be decoded and is missing from the picture", the note raster exports give.
@@ -3602,7 +3727,10 @@ holds symbol instances that `object` expands, whether only their art holds it, w
 `object` on), and `object.mesh.create` on a gradient-filled object colours the
 mesh points as the gradient paints them, with the colors Object › Expand gives them.
 `object.expand`, `effect.expandAppearance`, `type.createOutlines` and `object.path.outlineStroke` turn a dimension whose
-art they change into a plain group of that art, in the same undo step (see [dimensions.md](dimensions.md)).
+art they change into a plain group of that art, in the same undo step. `object.expand`, `effect.expandAppearance` and
+`object.path.outlineStroke` leave a dimension selected with art it measures, directly or in groups without fills,
+strokes or effects of their own, as it is and change only the other art; if the new art no longer fits the dimension's
+link, the dimension stays where it was, no longer linked (see [dimensions.md](dimensions.md)).
 `object.expand` rejects a param of the wrong type, such as `"fill": "yes"`, `"gradient": 3` or `"steps": "16"`, and
 changes nothing. Omitting a param or giving null keeps its default.
 
@@ -3680,7 +3808,9 @@ step. `svgFilter.apply {name, ids?|id?, item?}` applies one as the live effect `
 in one undo step. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
 what every object that uses it draws, in the edit's one undo step, and an application after an edit takes the edited
 filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
-empty) until a filter of that name is defined or imported again. Opened from such an effect, Apply SVG Filter shows the
+empty) until a filter of that name is defined or imported again. A pasted effect that names one of the document's
+filters but draws another definition keeps its own filter under a free name (`Soft 2`); pasted back into the document
+it was copied from, it takes the document's filter. Opened from such an effect, Apply SVG Filter shows the
 name above the list, not selectable. `effect.apply {effect: "svg.filter", params: {xml}}` takes a filter
 directly and names it by its `id`; an `xml` that isn't one such filter is an error. `ui.svgFilterDialog {}` opens Apply
 SVG Filter (New, Edit, Delete, Import…), and from the Appearance panel it edits which filter an applied effect runs;
@@ -5179,7 +5309,8 @@ fills or strokes carry effects is written as one piece per fill and stroke, so o
 When an image in the art can't be decoded, `object.rasterize` and `object.cropImage` (without `trim`) make their image
 without it, and their results carry the `warning` that Flatten Transparency gives. `object.rasterize` takes each frame
 of threaded text that it rasterizes out of its thread with the text it shows, as `type.createOutlines` does (see
-Threading text from the in and out ports), and the other frames keep the text they hold.
+Threading text from the in and out ports), and the other frames keep the text they hold. `object.rasterize`
+refuses an image larger than 64 million pixels or longer than 32,768 pixels a side, and the art stays as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}
@@ -6132,7 +6263,9 @@ as Overprint Preview shows them (darkened); either way the file has no overprint
 overprints. `flattenerPreset` (High Resolution, Medium Resolution, Low Resolution or a saved preset,
 `flattener.presets.list`) flattens transparency before printing, as Object → Flatten Transparency does; empty, a
 PDF keeps it live (PostScript, which has none, uses `file.print`'s `flattenerPreset`, else this one, else medium).
-`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution.
+`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution,
+or at the highest resolution that fits when the image would be larger than 64 million pixels or longer than 32,768
+pixels a side.
 `color.profile` names an RGB or CMYK profile: composite PDF colours are converted to it with `color.intent` (CMYK
 colours keep their numbers with `preserveNumbers`), so a CMYK profile writes device CMYK; separations separate with a
 CMYK one. Settings saved before these options load with their defaults.
@@ -6869,6 +7002,9 @@ With Preferences › General › Anti-aliased Artwork off, the canvas draws all 
 so does an export whose own Anti-aliasing option is None. SVG, PDF and EPS export draw the type unchanged. The native
 document such a file carries (an EPS VectorCraft wrote, or an SVG or PDF saved with Preserve Editing) keeps each frame's
 method, and opening the file restores it.
+A graph label given a method keeps it for every label of its kind (value axis numbers, category labels or legend
+labels) when the graph is drawn again; the graph saves it as `valuesAntiAlias`, `categoriesAntiAlias` or
+`legendAntiAlias` in its label styles.
 Reset Panel sets Sharp. Saved as `antiAlias` only when not `sharp`. One undo step.
 
 ```json
@@ -7245,7 +7381,26 @@ id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearanc
 `effect.list` lists it. One whose manifest declares `paintOutput` (at plug-in API level 2; `plugin.list` gives `api`
 and `paintOutput: true`) draws the pieces it returns with paints of their own, and `effect.expandAppearance` writes them
 as ordinary paths with those paints; a result it refuses is drawn as if the effect weren't there, and `plugin.info`'s
-`lastError` names the plug-in and the refused field. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
+`lastError` names the plug-in and the refused field. While the app draws a document on screen, the live-effect plug-ins
+of its first view share a 2,000 ms budget (VectorCraft's own value), and each run also keeps to its own 5,000 ms limit:
+once the budget is spent no run starts, and a result that comes back after it is not used. A stage left out for want
+of time, or one that times out, fails or has no plug-in, draws its input art unchanged and is deferred; the status bar
+then says how many (`Opened with 3 plug-in effects deferred. Effect › Refresh Deferred Effects runs them.`). Later
+drawings leave a deferred stage as it is until its input or parameters change, which runs it under the per-call limit.
+`effect.deferredStatus {}` returns `{budgetMs: 2000, effects: [{objectId, effectIndex, item?, pluginId, reason}]}` for
+the active document (`reason`: `budget`, `timeout`, `missing`, `failed` or `safeMode`; `item` is the fill or stroke
+whose effect it is; `objectId` can be an object in the art of a symbol, pattern, brush or opacity mask; an empty list
+when none is deferred). A stage whose object is deleted, or whose plug-in effect is
+removed, moved from its place in the list or hidden (or whose fill or stroke is hidden), is no longer listed. `effect.refreshDeferred {ids?}` (Effect › Refresh
+Deferred Effects, enabled while a stage is deferred) runs the deferred stages of those objects (default: all of them)
+again with a fresh 2,000 ms budget and returns `{refreshed, stillDeferred, failed}`: `stillDeferred` counts stages left
+out for want of time again, the stages of an object that is hidden or in a hidden group or layer, which is not drawn,
+and the stages with a part of their input too small for the drawing the refresh makes, and `failed` those that
+timed out, failed or have no plug-in. `id` names one object in place of
+`ids`, and an entry that is not an object id of the document is an error. Each document has its own budget and its own deferred stages. Exports, Expand
+Appearance and commands run every stage under the per-call limit, so an export never leaves out a stage that was only
+deferred for time, and the canvas then draws the result. The web build measures the budget and the per-call
+limit with the page's `performance.now()`. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
 `document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
 that no built-in format has. An importer adds a read-only file format `plugin.<id>` (listed by `document.formats`
 with `read: true`, and `openExtensions` holds the extensions File › Open opens with it, without those a built-in format reads or that File › Open installs, imports or loads as something else, such as `.wasm` or `.ase`): `document.open {path | name, dataBase64, importer?:

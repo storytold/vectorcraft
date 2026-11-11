@@ -137,7 +137,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{folder?} Type › Find Font's Find in Folder…: asks for a folder (or takes folder), then opens Missing Fonts looking there for the files of the fonts the active document misses (text.findFontFiles). Disabled where there is no folder picker (the web)",
     ),
-    ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
+    ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first; under an automation read root, only the files inside it"),
     (
         "file.export.svg",
         "Export As SVG…",
