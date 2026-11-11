@@ -4249,6 +4249,8 @@ mark-style	Japanese	Japán
 	Tilt	Dőlés
 	Copies per Sheet (as many as fit, in a grid)	Példány laponként (ahány elfér, rácsban)
 	Tint	Tónus
+	Fill Tint	Kitöltés tónusa
+	Stroke Tint	Körvonal tónusa
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok
 	Tips	Tippek
@@ -4899,6 +4901,9 @@ imageTrace	Outline	Körvonal
 @msg	the script is too large to run	a parancsfájl túl nagy a futtatáshoz
 @msg	a drag or an undo group is open; finish it before running a script	húzás vagy visszavonási csoport van folyamatban; fejezze be a parancsfájl futtatása előtt
 @msg	the script left a document that cannot be kept	a parancsfájl olyan dokumentumot hagyott hátra, amely nem tartható meg
+@msg	the script is no longer in the Scripts folder	a parancsfájl már nincs a Scripts mappában
+	Some scripts were not listed	Néhány szkript nem szerepel a listában
+	The Scripts folder cannot be read	A Scripts mappa nem olvasható
 @msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
 @msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
@@ -5719,6 +5724,7 @@ imageTrace	Outline	Körvonal
 @msg	Invalid drawing scale	Érvénytelen rajzlépték
 @msg	Invalid real scale	Érvénytelen valós lépték
 @msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
+@msg	Invalid measured point	Érvénytelen mért pont
 @msg	Measured segment no longer exists	A mért szakasz már nem létezik
 @msg	Non-finite dimension	Nem véges méret
 @msg	Only linear dimensions are horizontal or vertical	Csak a lineáris méretek lehetnek vízszintesek vagy függőlegesek

@@ -3605,6 +3605,8 @@ effect	Points	Точки
 	Copies per Sheet (as many as fit, in a grid)	Копій на аркуш (скільки поміститься, сіткою)
 	Gutter:	Проміжок:
 	Tint	Відтінок
+	Fill Tint	Відтінок заливки
+	Stroke Tint	Відтінок обведення
 	Tip extends past the end point	Кінчик виходить за кінцеву точку
 	Tip on the end point	Кінчик на кінцевій точці
 	Title Case	Як у заголовку
@@ -4129,6 +4131,9 @@ axis	Both	Обидві
 @msg	the script is too large to run	скрипт завеликий для виконання
 @msg	a drag or an undo group is open; finish it before running a script	відкрито перетягування або групу скасування; завершіть їх перед запуском скрипта
 @msg	the script left a document that cannot be kept	скрипт залишив документ, який не можна зберегти
+@msg	the script is no longer in the Scripts folder	скрипт більше не міститься в папці Scripts
+	Some scripts were not listed	Деякі сценарії не показано
+	The Scripts folder cannot be read	Не вдалося прочитати папку Scripts
 @msg	the script's run is no longer available	виконання скрипта більше не доступне
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	невдала команда змінила кроки скасування, які не вдалося відновити, тому скрипт зупинено
 @msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
@@ -5329,6 +5334,7 @@ lighting	Light	Світло
 @msg	Invalid drawing scale	Неприпустимий масштаб креслення
 @msg	Invalid real scale	Неприпустимий реальний масштаб
 @msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
+@msg	Invalid measured point	Недійсна виміряна точка
 @msg	Measured segment no longer exists	Виміряний сегмент більше не існує
 @msg	Non-finite dimension	Розмір не є скінченним числом
 @msg	Only linear dimensions are horizontal or vertical	Лише лінійні розміри бувають горизонтальними або вертикальними

@@ -1555,7 +1555,7 @@ describes that menu item. Pass exactly one of `path` and `source`. A `path` must
 case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
 not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and
 `ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. The script reaches the
-app through the global object `vc`, and writes to the Script Console through `$`:
+app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
   catch. The documents and the session state the command changed, preferences included, go back, and any file it
@@ -1567,8 +1567,40 @@ app through the global object `vc`, and writes to the Script Console through `$`
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
+- `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
+  environment, so its functions and variables stay defined, and returns its last value (`undefined` for an empty
+  file). Its preprocessor lines are read as the script's are. `timeout` is a number of milliseconds from 0; the file
+  is read at once and `timeout` is not waited on. The run's fuel and limits apply to the file. An empty path, a
+  missing file and a refused path throw errors the script can catch.
+- `$.fileName` is the file being run, which is the file `$.evalFile` is running while it runs, and is empty for a
+  script given as `source`. `$.includePath` is the current `#includepath` list, separated by `;`.
 - `vc.args` is the `args` object.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+Before any of the script runs, its preprocessor lines are read. The help page
+https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and
+https://extendscript.docsforadobe.dev/extendscript-tools-features/dollar-object/ describes `$.evalFile`, `$.fileName`
+and `$.includePath`. A line counts when it starts with `#` or `//@`, after blanks only, outside strings and comments.
+VectorCraft reads them by these rules of its own:
+
+- `#include "file"` and `//@include "file"` put the text of that file in place of the line. A value with spaces or
+  punctuation goes in single or double quotes. The file is looked for beside the file that includes it, then in each
+  `#includepath` folder in turn, then in each folder of the `JSINCLUDE` environment variable (absolute folders
+  separated by `;`). The included file must be a whole script on its own. A file may be included again after its
+  earlier inclusion has ended, and a file that includes itself, directly or through others, is an error.
+- `#includepath "a;b"` sets the folders `#include` looks in, separated by `;`. A relative folder is relative to the
+  folder of the file that includes. A later `#includepath` replaces the list.
+- `#script "name"` names the run in the report and the Script Console, unless `name` is given. A `#script` line in an
+  included file does not rename the run.
+- `#target` takes any value and does not change how the script runs. `#strict off` is taken.
+- `#strict on`, `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name`
+  with an unknown-directive error. A `//@` line with another name is a comment.
+- A script run from a file reads its included files and the files `$.evalFile` runs only in that file's folder and
+  the folders below it. A path with a `..` name, a path that leads out of the folder through a link or a junction, a
+  Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
+  `source`. A `JSINCLUDE` folder outside the script's folder is passed over.
+- A missing or refused included file ends the run before any of it runs. An error in an included file or a file `$.evalFile`
+  ran is reported at that file's line and column, and the report's `file` names the file.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records
@@ -1596,7 +1628,8 @@ VectorCraft sets these limits itself:
 
 | Limit | Value |
 |-------|-------|
-| Source text | 8 MiB |
+| Source text | 8 MiB a file, 32 MiB in all |
+| Included and evaluated files | 64 in all, 16 levels deep, 1,024 paths looked up |
 | Heap | 256 MiB (128 MiB on the web) |
 | Host calls | 2,000,000 |
 | `maxFuel`, instructions in all | 1 to 100,000,000,000; 1,000,000,000 by default |
@@ -1613,7 +1646,8 @@ In the app, a script past the growth limit stops at a question to continue or to
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
 runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console}`. In the app the reply is `{running: true,
 name}`, and the report appears later as `scriptReport` in `ui.inspect`. The report of a failed run has the same
-fields after `kind`, `message`, `line`, `column` and `fuelLeft`. `answers` takes only an empty object, since scripts
+fields after `kind`, `message`, `line`, `column`, `file` (when the error is in another file than the script) and
+`fuelLeft`. `answers` takes only an empty object, since scripts
 have no prompts yet.
 
 - `runTimeMs` is the time the script ran, its commands included. Waits between frames and for a person's answer are
@@ -1632,7 +1666,8 @@ vectorcraft-cli run --cmd script.run --params '{"path": "Tidy Layers.js", "args"
 ```
 
 Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
-`$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message`, its end, and a report of
+`$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message` (or `name: file:line:column: message` when the error is in another
+file), its end, and a report of
 its time, host calls and slowest commands. Each line shows the run's number and the script's name. Line feeds,
 carriage returns and the two together break lines, and other control characters show as their Unicode Control
 Pictures. The console keeps at most 2,048 lines and 1 MiB of text and drops the oldest lines past that. A line longer
@@ -1651,6 +1686,55 @@ at the bottom of the panel and in its menu. Output goes on while the panel is cl
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "$.writeln(\"layers: \", 3);"}'
+```
+
+File › Scripts lists the scripts of the `Scripts` folder next to the preferences: `~/Library/Application
+Support/VectorCraft/Scripts` on macOS, `%APPDATA%\VectorCraft\Scripts` on Windows, and
+`$XDG_CONFIG_HOME/vectorcraft/Scripts` or `~/.config/vectorcraft/Scripts` on Linux and BSD. VectorCraft does not make
+the folder: create it, and put `.js` or `.jsx` files in it. Each file is a menu item named after the file without its
+extension, and each subfolder is a submenu that holds the scripts in it. The help page
+https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html and
+the page https://ai-scripting.docsforadobe.dev/introduction/executingScripts/ describe a Scripts folder listed this
+way. The listed scripts come first in the menu, above Check Script… and Other Script…. Choosing one runs the file as
+`script.run` runs a file, without the warning that Other Script… shows.
+
+The rest of this section is VectorCraft's own rules:
+
+- The folder is read when the app starts, each time its window becomes the active one, and, where the menus are in
+  the window (Windows, Linux and BSD), each time the File menu opens. A script added while VectorCraft runs is listed
+  after the next of these. A read takes names only, never a script's text, and runs off the UI thread, one read at a
+  time.
+- Each level is sorted by label without regard to case, with scripts and subfolders mixed. A script whose label
+  another row of its folder has (`Tidy.js` beside `Tidy.jsx`, or beside a subfolder `Tidy`) shows its whole file name.
+- A symbolic link or a Windows junction is never followed: a linked file or subfolder is left out, and a `Scripts`
+  folder that is itself a link is not read. Names that start with a dot, files and folders Windows marks hidden or
+  system, names that are not Unicode, names longer than 255 bytes and subfolders without a script are left out too,
+  and a listed script that is marked hidden or system, or lies in a folder marked so, by the time it is chosen does
+  not run.
+- One read looks at 2,048 folder entries at most, lists 512 scripts and reads 128 subfolders, 4 levels deep, for at
+  most 250 ms. A label longer than 128 characters is cut, and control and bidirectional formatting characters in a
+  name are shown as `\u{…}` escapes. When a read stops at a limit or cannot read a subfolder, the menu keeps what it
+  found and shows `Some scripts were not listed`. The menu also shows that note, and leaves the rows out, when a
+  read finds new names after the menus have shown 16,384 different script and folder names since VectorCraft started.
+  When the folder is there and cannot be read, the menu shows
+  `The Scripts folder cannot be read`.
+- A listed file is checked again when it is chosen. A file that is gone, is no longer a `.js` or `.jsx` file under
+  the folder, or is or lies behind a link ends with `the script is no longer in the Scripts folder`, and nothing runs.
+- The web build has no Scripts folder, and neither has a run with `VECTORCRAFT_NO_PREFS` set.
+
+`script.listInstalled {}` returns the same listing: `{folder, scripts: [{path, label, folders}], truncated,
+unreadable}`, with the scripts in menu order and `folders` the labels of the subfolders a script is in. `folder` is
+`null` without a Scripts folder. `ui.runInstalledScript {path}` runs one of them by the `path` the listing gave, as
+its menu item does. Under `--automation-read-root`, `script.listInstalled` lists the folder only when the folder lies
+inside a read root, `ui.runInstalledScript` runs a script only when the script lies inside one, and `ui.menu.list`
+leaves out the listed scripts outside the read roots.
+
+```json
+{"name":"run_command","arguments":{"command":"script.listInstalled","params":{}}}
+```
+
+```sh
+vectorcraft-cli run --cmd script.listInstalled --params '{}'
 ```
 
 ## Transparency and opacity masks
@@ -6444,8 +6528,9 @@ with binding punctuation (`Tg`) on, which opens as `forced`. `none` isn't saved.
 `text.setFormat` and `text.setRangeStyle {tcyUpDown?, tcyLeftRight?}` set the Character panel menu's Tate-chu-yoko
 Settings of the characters, in points from -1296 to 1296 (document points, as `baselineShift`). In vertical type a
 block of tate-chu-yoko characters (`tateChuYoko`) moves up by a positive Up/Down and down by a negative one, and right
-by a positive Left/Right and left by a negative one. The block moves as one piece with the values of its first
-character, and keeps its one em down the column, its caret positions and its hit region. Two or three digits set
+by a positive Left/Right and left by a negative one. On a vertical path, a positive Up/Down moves the block toward the
+path's start and a positive Left/Right moves it to the path's left, with every path effect. The block moves as one piece
+with the values of its first character, and keeps its one em down the column, its caret positions and its hit region. Two or three digits set
 across the column without the mark do not move, and horizontal type keeps the values without moving the characters.
 Neither value turns `tateChuYoko` on. Both are 0 by default and saved only when not 0, and character styles carry
 them. A value that is not a number is refused with `` `tcyUpDown` must be a number ``, and one outside the range with

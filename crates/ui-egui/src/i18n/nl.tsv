@@ -55,6 +55,8 @@
 	Scripts	Scripts
 	Check Script…	Script controleren…
 	Check Script	Script controleren
+	Some scripts were not listed	Sommige scripts zijn niet weergegeven
+	The Scripts folder cannot be read	De map Scripts kan niet worden gelezen
 	Other Script…	Ander script…
 	Document Setup…	Documentinstellingen…
 	Switch Units	Eenheden wisselen
@@ -2103,6 +2105,8 @@ digits	Malayalam	Malayalam
 	Green	Groen
 	Shifts the tints of global and spot colors; other colors stay.	Verschuift de tinten van globale kleuren en spotkleuren; andere kleuren blijven ongewijzigd.
 	Tint	Tint
+	Fill Tint	Vultint
+	Stroke Tint	Contourtint
 	Color Guide Options	Opties voor kleurengids
 	Less	Minder
 	Steps:	Stappen:
@@ -5339,6 +5343,7 @@ mark-style	Japanese	Japans
 @msg	Invalid drawing scale	Ongeldige tekeningsschaal
 @msg	Invalid real scale	Ongeldige werkelijke schaal
 @msg	Measured anchor no longer exists	Gemeten ankerpunt bestaat niet meer
+@msg	Invalid measured point	Ongeldig gemeten punt
 @msg	Measured segment no longer exists	Gemeten segment bestaat niet meer
 @msg	Non-finite dimension	Niet-eindige maatlijn
 @msg	Only linear dimensions are horizontal or vertical	Alleen lineaire maatlijnen zijn horizontaal of verticaal

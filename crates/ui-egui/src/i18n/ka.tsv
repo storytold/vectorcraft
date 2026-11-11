@@ -1995,6 +1995,8 @@ digits	Malayalam	მალაიალამური
 	Green	მწვანე
 	Shifts the tints of global and spot colors; other colors stay.	ცვლის გლობალური და სპოტ-ფერების ტონირებებს; სხვა ფერები უცვლელი რჩება.
 	Tint	ტონირება
+	Fill Tint	შევსების ტონირება
+	Stroke Tint	კონტურის ტონირება
 	Color Guide Options	ფერის გზამკვლევის პარამეტრები
 	Less	ნაკლები
 	Steps:	ბიჯები:
@@ -5190,6 +5192,9 @@ imageTrace	Outline	კონტური
 @msg	the script is too large to run	სკრიპტი გასაშვებად ძალიან დიდია
 @msg	a drag or an undo group is open; finish it before running a script	ღიაა გადათრევა ან გაუქმების ჯგუფი; დაასრულეთ სკრიპტის გაშვებამდე
 @msg	the script left a document that cannot be kept	სკრიპტმა დატოვა დოკუმენტი, რომლის შენახვა შეუძლებელია
+@msg	the script is no longer in the Scripts folder	სკრიპტი აღარ არის Scripts საქაღალდეში
+	Some scripts were not listed	ზოგიერთი სკრიპტი არ არის ჩამოთვლილი
+	The Scripts folder cannot be read	Scripts საქაღალდის წაკითხვა შეუძლებელია
 @msg	the script's run is no longer available	სკრიპტის გაშვება აღარ არის ხელმისაწვდომი
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	წარუმატებელმა ბრძანებამ შეცვალა გაუქმების ნაბიჯები, რომელთა აღდგენა ვერ მოხერხდა, ამიტომ სკრიპტი შეჩერდა
 @msg	a recovery copy could not be written, so the script was not run	აღდგენის ასლის ჩაწერა ვერ მოხერხდა, ამიტომ სკრიპტი არ გაეშვა
@@ -5343,6 +5348,7 @@ imageTrace	Outline	კონტური
 @msg	Invalid drawing scale	ნახაზის არასწორი მასშტაბი
 @msg	Invalid real scale	რეალური ზომის არასწორი მასშტაბი
 @msg	Measured anchor no longer exists	გაზომილი საყრდენი წერტილი აღარ არსებობს
+@msg	Invalid measured point	გაზომილი წერტილი არასწორია
 @msg	Measured segment no longer exists	გაზომილი სეგმენტი აღარ არსებობს
 @msg	Non-finite dimension	ზომა სასრული რიცხვი არ არის
 @msg	Only linear dimensions are horizontal or vertical	მხოლოდ ხაზოვანი ზომებია ჰორიზონტალური ან ვერტიკალური

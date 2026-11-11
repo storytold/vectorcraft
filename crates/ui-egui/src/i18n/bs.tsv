@@ -62,6 +62,8 @@
 	Scripts	Skripte
 	Check Script…	Provjeri skriptu…
 	Check Script	Provjeri skriptu
+	Some scripts were not listed	Neke skripte nisu navedene
+	The Scripts folder cannot be read	Folder Scripts se ne može pročitati
 	Other Script…	Druga skripta…
 	Document Setup…	Postavke dokumenta…
 	Switch Units	Promijeni jedinice
@@ -2256,6 +2258,8 @@ digits	Malayalam	Malajalam
 	Green	Zelena
 	Shifts the tints of global and spot colors; other colors stay.	Pomjera nijanse globalnih i spot boja; ostale boje ostaju.
 	Tint	Preliv
+	Fill Tint	Preliv ispune
+	Stroke Tint	Preliv poteza
 	Color Guide Options	Opcije vodiča za boje
 	Less	Manje
 	Steps:	Koraci:
@@ -5605,6 +5609,7 @@ mark-style	Japanese	Japanski
 @msg	Invalid drawing scale	Nevažeća skala crteža
 @msg	Invalid real scale	Nevažeća stvarna skala
 @msg	Measured anchor no longer exists	Izmjereno sidro više ne postoji
+@msg	Invalid measured point	Neispravna izmjerena tačka
 @msg	Measured segment no longer exists	Izmjereni segment više ne postoji
 @msg	Non-finite dimension	Nekonačna kota
 @msg	Only linear dimensions are horizontal or vertical	Samo linearne kote su horizontalne ili vertikalne

@@ -2410,6 +2410,9 @@ file-filter	Templates	範本
 @msg	the script is too large to run	指令碼過大，無法執行
 @msg	a drag or an undo group is open; finish it before running a script	拖曳或還原群組尚未結束；請在執行指令碼前完成
 @msg	the script left a document that cannot be kept	指令碼留下了無法保留的文件
+@msg	the script is no longer in the Scripts folder	指令碼已不在 Scripts 資料夾中
+	Some scripts were not listed	部分指令碼未列出
+	The Scripts folder cannot be read	無法讀取 Scripts 資料夾
 @msg	the script's run is no longer available	指令碼執行已無法使用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗的命令變更了無法還原的復原步驟，因此指令碼已停止
 @msg	a recovery copy could not be written, so the script was not run	無法寫入復原副本，因此未執行指令碼
@@ -2606,6 +2609,7 @@ file-filter	Templates	範本
 @msg	Invalid drawing scale	圖紙比例無效
 @msg	Invalid real scale	實際比例無效
 @msg	Measured anchor no longer exists	測量的錨點已不存在
+@msg	Invalid measured point	測量點無效
 @msg	Measured segment no longer exists	測量的線段已不存在
 @msg	Non-finite dimension	尺寸標註不是有限值
 @msg	Only linear dimensions are horizontal or vertical	只有線性尺寸可以是水平或垂直的
@@ -4549,6 +4553,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Copies per Sheet (as many as fit, in a grid)	每張紙印多份 (盡量排滿，以格點排列)
 	Gutter:	間距：
 	Tint	色調
+	Fill Tint	填色色調
+	Stroke Tint	筆畫色調
 	Tip extends past the end point	尖端延伸超過終點
 	Tip on the end point	尖端位於終點
 	Title Case	標題式大小寫

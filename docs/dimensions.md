@@ -6,7 +6,13 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
 - **Linear:** hover a path segment and drag outwards: releasing places the dimension. Or click two
   points (anchors snap, Shift constrains to 45°), then click to place. A click within 8 pixels of
   an anchor of any path, in groups and compound paths too, takes that anchor, and the dimension
-  stays linked to it. A press on an anchor picks it when the pointer moves less than 8 pixels
+  stays linked to it. A point on a segment stays at its place along the segment, also when the
+  segment's anchors or handles are edited. Any other point is linked to the path under it, or,
+  with no path under it, to the path at the other end, and moves, scales, turns and reflects with
+  that path. Beside a path whose anchors and handles all lie on one line, such as a straight line,
+  the point keeps its distance along and across the path: a reflection moves it as a half turn
+  does, and a scale that is not uniform changes its distance across the path in proportion to the
+  path's length. A press on an anchor picks it when the pointer moves less than 8 pixels
   before the release; a longer drag drags out the dimension of the segment under the pointer. A
   curved segment is measured from end to end. With Smart Guides on, both points also snap into line with other objects'
   anchors and centres, and the second onto the construction guides through the first; the guides
@@ -52,10 +58,15 @@ position and alignment; changing one changes that dimension. **Apply to All** gi
 dimension in the document its style; **Set as Default** makes it the style of new dimensions.
 
 Measurements follow the art they measure through moves, scaling and anchor and handle edits,
-undo and redo included. Deleting the art, or changing its number of anchors or whether it is
-closed, removes its dimensions in the same undo step rather than attaching them to a different
-edge. A linked dimension moved on its own stays where it was dropped (its distance from the art
-changes); moved together with its art, it keeps its distance.
+undo and redo included. When the art is reflected, the line of a linked linear dimension goes to
+the reflected side, as far past the outermost point as before. This does not happen for art whose
+anchors and handles all lie on one line, such as a straight line, which a half turn puts in the
+same place as a reflection. Deleting the art, changing its number of anchors or whether it is
+closed, turning an angle's arm into a curve, or making a measured circle or arc no longer circular
+leaves its dimensions where they were, no longer linked, in the same undo step, rather than
+attaching them to a different edge. Undo links them again. A linked dimension moved on its own
+stays where it was dropped (its distance from the art changes); moved together with its art, it
+keeps its distance.
 
 Native `.vectorcraft` files keep the recipes and links. SVG, PDF and bitmap output contain
 ordinary paths and text, so exported dimensions look the same. Ungrouping a dimension leaves its
