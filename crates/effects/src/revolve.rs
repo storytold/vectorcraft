@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{PathData, PathEl, Point, Rect, Vec2};
 use vectorcraft_three_d::{Edge, Revolve};
 
-use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, solid_paints, union_bounds};
+use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, resolve_for, solid_paints, union_bounds};
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
@@ -25,17 +25,33 @@ const MAX_OVERLAP_TESTS: usize = 1 << 22;
 /// The width of the stroke around each face that covers the seams between faces.
 const SEAM_WIDTH: f64 = 0.75;
 
-/// About the bytes one copy of `paint` takes.
+/// About the bytes one copy of `paint` takes, with the strings it owns (swatch and pattern names).
 fn paint_bytes(paint: &Paint) -> usize {
     use std::mem::size_of;
     use vectorcraft_doc::color::{FreeformPoint, GradientStop};
     let own = size_of::<Paint>();
-    let Paint::Gradient(g) = paint else { return own };
-    let freeform = g
-        .freeform
-        .as_ref()
-        .map_or(0, |f| f.points.len() * size_of::<FreeformPoint>() + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>());
-    own + size_of::<vectorcraft_doc::color::GradientPaint>() + g.gradient.stops.len() * size_of::<GradientStop>() + freeform
+    let name = |s: &Option<String>| s.as_ref().map_or(0, String::len);
+    let g = match paint {
+        Paint::Solid { swatch, .. } => return own + name(swatch),
+        Paint::Pattern { pattern, .. } => return own + pattern.len(),
+        Paint::Gradient(g) => g,
+        _ => return own,
+    };
+    let freeform = g.freeform.as_ref().map_or(0, |f| {
+        // Each line is a Vec: its header too, not only its indices.
+        f.points.len() * size_of::<FreeformPoint>()
+            + f.lines.len() * size_of::<Vec<usize>>()
+            + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>()
+    });
+    let stops: usize = g.gradient.stops.iter().map(|s| size_of::<GradientStop>() + name(&s.swatch)).sum();
+    own + size_of::<vectorcraft_doc::color::GradientPaint>() + name(&g.swatch) + stops + freeform
+}
+
+/// Add `copies` copies of `paint` to the running byte total `used`; whether it still fits within
+/// [`MAX_PAINT_COPIES`] (for the solid surfaces, whose items' copies count together).
+pub(crate) fn paint_copies_add(used: &mut usize, copies: usize, paint: &Paint) -> bool {
+    *used = used.saturating_add(copies.saturating_mul(paint_bytes(paint)));
+    *used <= MAX_PAINT_COPIES
 }
 
 fn visible(fx: &[Effect]) -> bool {
@@ -75,7 +91,14 @@ pub fn revolve_options(p: &Value) -> Revolve {
 /// Validate before a command mutates the document. Loading external files is still bounded
 /// by the evaluator; unsupported source kinds remain unchanged when rendered.
 pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
+    validate_revolve_in(None, n, p)
+}
+
+/// [`validate_revolve`] with the symbols of `doc`: a symbol instance, a blend and a clipping group
+/// revolve the art they show ([`resolve_for`]), cut for Revolve whatever 3D effect `n` carries now.
+pub fn validate_revolve_in(doc: Option<&Document>, n: &Node, p: &Value) -> Result<(), String> {
     validate_revolve_params(p)?;
+    let n = &*resolve_for(doc, n, "Revolve", false)?;
     let effects = &n.appearance.effects;
     // The profile is measured before the object's one Revolve, hidden or shown.
     let before = effects.iter().position(|e| e.id == REVOLVE).and_then(|i| effects.get(..i)).unwrap_or(effects);
@@ -318,12 +341,26 @@ fn paint_of(item: &AppearanceItem) -> (Paint, f32, vectorcraft_doc::color::Blend
 /// Evaluated art keeps the source's identity and transparency. Each item's opacity belongs
 /// to its entire surface, not to each face, so overlapping faces don't accumulate alpha.
 pub fn revolve_art(n: &Node) -> Option<Node> {
-    art(n, false)
+    revolve_art_in(None, n)
 }
 
-/// Revolve's own Expand Appearance path. The shared command and UI remain unchanged.
+/// [`revolve_art`] with the symbols of `doc`: a symbol instance, a blend and a clipping group, alone
+/// or in a group, revolve the art they show ([`resolve_for`]). `None` too when that art can't be
+/// resolved.
+pub fn revolve_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    art(doc, n, false)
+}
+
+/// [`expand_revolve_art_in`] without a document.
+#[cfg(test)]
 pub(crate) fn expand_revolve_art(n: &Node) -> Option<Node> {
-    art(n, true)
+    expand_revolve_art_in(None, n)
+}
+
+/// Revolve's own Expand Appearance path, with the symbols of `doc` ([`revolve_art_in`]). The shared
+/// command and UI remain unchanged.
+pub(crate) fn expand_revolve_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    art(doc, n, true)
 }
 
 /// The surfaces [`revolve_art`] draws, as meshes ([`crate::three_d_meshes`]): with the effect on
@@ -388,10 +425,11 @@ fn group_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::
     Ok(out)
 }
 
-fn art(n: &Node, expand: bool) -> Option<Node> {
+fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     if !has_revolve(n) {
         return None;
     }
+    let n = &*resolve_for(doc, n, "Revolve", false).ok()?;
     if is_container(n) {
         return group_art(n, expand);
     }
@@ -441,22 +479,19 @@ fn art(n: &Node, expand: bool) -> Option<Node> {
 
 /// The members' `surfaces`, or runs of their faces, in order, from the [`Scope`] at `level` of each
 /// one's `Profile::scopes` inward: consecutive surfaces that share a scope go in one group with its
-/// opacity and blending mode, so each applies once, to the faces it holds together.
-fn scoped(id: NodeId, surfaces: Vec<(&[Scope], Arc<Node>)>, level: usize) -> Vec<Arc<Node>> {
-    fn close(id: NodeId, run: &mut Vec<(&[Scope], Arc<Node>)>, scope: Option<Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
+/// opacity, blending mode and opacity mask, so each applies once, to the faces it holds together.
+pub(crate) fn scoped<'a>(id: NodeId, surfaces: Vec<(&'a [Scope], Arc<Node>)>, level: usize) -> Vec<Arc<Node>> {
+    fn close(id: NodeId, run: &mut Vec<(&[Scope], Arc<Node>)>, scope: Option<&Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
         if let Some(scope) = scope {
-            let mut group = Node::group(id, scoped(id, std::mem::take(run), level + 1));
-            group.opacity = scope.opacity;
-            group.blend = scope.blend;
-            out.push(Arc::new(group));
+            out.push(Arc::new(scope.group(id, scoped(id, std::mem::take(run), level + 1))));
         }
     }
     let mut out = vec![];
     let mut run = vec![];
-    let mut scope = None;
+    let mut scope: Option<&'a Scope> = None;
     for (scopes, s) in surfaces {
-        let at = scopes.get(level).copied();
-        if at.map(|a| a.key) != scope.map(|s: Scope| s.key) {
+        let at = scopes.get(level);
+        if at.map(|a| a.key) != scope.map(|s| s.key) {
             close(id, &mut run, scope, level, &mut out);
             scope = at;
         }
@@ -1141,6 +1176,38 @@ mod tests {
         assert_eq!(revolve_art(&two), None, "past the budget the source draws");
         let object = painted(3, 0.0, stops * 2);
         assert!(validate_revolve(&object, &json!({})).is_err(), "one object past the budget");
+    }
+
+    #[test]
+    fn the_art_of_symbol_instances_and_blends_shares_the_budget_of_paint_copies() {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        use vectorcraft_doc::{BlendSpacing, BlendSpec, Symbol};
+        let plain = member(1, 0.0);
+        let NodeKind::Path { path: profile, .. } = &plain.kind else { panic!("a path") };
+        let faces = vectorcraft_three_d::revolve(profile, profile.bounds().unwrap(), revolve_options(&json!({}))).unwrap().len();
+        let stops = MAX_PAINT_COPIES * 6 / 10 / (faces * 4) / std::mem::size_of::<GradientStop>();
+        let painted = |id: u64, x: f64| {
+            let stops = (0..stops).map(|i| GradientStop::new(i as f32 / stops as f32, Color::BLACK)).collect();
+            let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+            let mut node = (*member(id, x)).clone();
+            node.appearance = Appearance::basic(paint, Paint::None, 0.0).into();
+            Arc::new(node)
+        };
+        let mut d = Document::new(500.0, 500.0);
+        d.symbols.push(Symbol { dynamic: false, name: "P".into(), art: painted(0, 0.0) });
+        let instance = |id: u64| Arc::new(Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: "P".into(), xf: Affine::IDENTITY }));
+        // One instance's art fits; two in the same place, each of whose surfaces fits alone, pass
+        // the budget together, as two paths would.
+        assert_eq!(validate_revolve_in(Some(&d), &group_with(json!({}), vec![instance(1)]), &json!({})), Ok(()));
+        let two = group_with(json!({}), vec![instance(1), instance(2)]);
+        let refused = validate_revolve_in(Some(&d), &two, &json!({})).unwrap_err();
+        assert!(refused.contains("simplify the gradient"), "{refused}");
+        assert_eq!(revolve_art_in(Some(&d), &two), None, "past the budget the source draws");
+        // A blend's keys and step count together too.
+        let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(1), ..Default::default() });
+        let blend = Arc::new(Node::new(NodeId(3), NodeKind::Blend { children: vec![painted(4, 0.0), painted(5, 0.0)], spec }));
+        let refused = validate_revolve_in(Some(&d), &group_with(json!({}), vec![blend]), &json!({})).unwrap_err();
+        assert!(refused.contains("simplify the gradient"), "{refused}");
     }
 
     #[test]

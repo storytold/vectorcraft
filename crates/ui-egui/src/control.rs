@@ -17,8 +17,9 @@
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
 //! - `ui.dialog.set {field, value}` or `{fields: [{field, value}…]}` (all or none; setting a field
-//!   the dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`]) /
-//!   `ui.dialog.confirm` / `ui.dialog.cancel`
+//!   the dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`];
+//!   `action: confirm | cancel` then confirms or cancels that dialog in the same request and replies
+//!   `{dialog, result}`) / `ui.dialog.confirm` / `ui.dialog.cancel`
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
 //!   comes back as `pngBase64` as well)
 //! - `ui.render {path?, scale?, artboard?, data?, traceViews?}`: render an artboard headlessly
@@ -85,6 +86,22 @@ fn dialog_fields(p: &Value) -> Result<Vec<(String, Value)>, String> {
             Ok((f.to_string(), item.get("value").cloned().unwrap_or(Value::Null)))
         })
         .collect()
+}
+
+/// What `ui.dialog.set {action}` does with the dialog once its fields are set.
+enum DialogAnswer {
+    Confirm,
+    Cancel,
+}
+
+/// The `action` of a `ui.dialog.set`: none, `confirm` or `cancel`. It is checked before any field is set.
+fn dialog_action(p: &Value) -> Result<Option<DialogAnswer>, String> {
+    match p.get("action") {
+        None => Ok(None),
+        Some(v) if v == "confirm" => Ok(Some(DialogAnswer::Confirm)),
+        Some(v) if v == "cancel" => Ok(Some(DialogAnswer::Cancel)),
+        Some(_) => Err("`action` must be confirm or cancel".into()),
+    }
 }
 
 fn reserve_synthetic(app: &mut VectorcraftApp, additional: usize) -> Result<(), String> {
@@ -232,8 +249,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     // the layout.
     if let Some(fields) = ui.as_object_mut() {
         fields.remove("floating_panels");
+        leave_out_unreadable_paths(fields);
     }
-    json!({
+    let mut inspected = json!({
         "scriptRunning": app.session.script_running(),
         "scriptReport": app.session.script_report(),
         "tool": app.session.tool_id(),
@@ -277,8 +295,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "nativeMenuBar": app.services.native_menu.is_some(),
         // Saves and exports still being written in the background (Background Save / Export).
         "background": app.background.jobs.iter().filter(|j| !j.label.is_empty()).map(|j| j.label.as_str()).collect::<Vec<_>>(),
-        // Documents still being read off the UI thread (File › Open, Open Recent): their paths.
-        "opening": app.opening.pending.iter().map(|p| p.path.as_str()).collect::<Vec<_>>(),
+        // Documents still being read off the UI thread (File › Open, Open Recent): their paths, without
+        // the ones outside the read root.
+        "opening": app.opening.pending.iter().map(|p| p.path.as_str()).filter(|p| readable(p)).collect::<Vec<_>>(),
         // Files still being read off the UI thread for Place (the Place dialog's OK, drops): their
         // names, in the order they are placed.
         "placing": app.placing.pending.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
@@ -288,7 +307,173 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // A native file dialog open off the UI thread (`open`, `place`, `save`, `folder`), waiting
         // for the person at the computer: what asked for it runs again when it answers.
         "fileDialog": app.picks.waiting_kind(),
-    })
+    });
+    let ids = unreadable_library_ids(app);
+    hide_library_ids(&mut inspected, &ids);
+    inspected
+}
+
+/// The fields of the UI state, by their keys in `ui.inspect`'s `ui`, that hold panel ids: the panel
+/// popped out of the collapsed column, the docking layout, closed panels' places and groups, the panels
+/// shown as icons or collapsed, and the older floating panels' record.
+const PANEL_FIELDS: [&str; 7] =
+    ["open_panel", "docking", "docking_hidden", "docking_hidden_groups", "docking_icons", "docking_collapsed", "floating_panels"];
+
+/// The ids of the loaded libraries (`loaded/<path>`) that the UI state refers to and whose file the
+/// request may not read, each with the id a reply shows instead: `loaded/<file name>`, as a library
+/// loaded without a path is named. The UI state refers to a library by its bare id in a library panel
+/// and the Color Guide's limit, and by a panel id (`library:<kind>:loaded/<path>`) in the fields of
+/// [`PANEL_FIELDS`] and the workspaces' layouts. Text the person types (a command palette query, a
+/// workspace's name) is not read. When another of those ids already shows that name, the next free one
+/// of `loaded/<file name> (2)`, `(3)` and so on is shown, in the sorted order of the full ids, so that
+/// two libraries stay two and `ui.inspect` and `ui.docking` show a library under the same id.
+fn unreadable_library_ids(app: &VectorcraftApp) -> Vec<(String, String)> {
+    let mut ids = std::collections::BTreeSet::new();
+    let ui = serde_json::to_value(&app.ui).unwrap_or_default();
+    for field in PANEL_FIELDS {
+        collect_library_panel_ids(&ui[field], &mut ids);
+    }
+    for workspace in ["custom_workspaces", "workspace_changes"].iter().filter_map(|k| ui[k].as_array()).flatten() {
+        for (_, layout) in workspace.as_object().into_iter().flatten().filter(|(k, _)| k.as_str() != "name") {
+            collect_library_panel_ids(layout, &mut ids);
+        }
+    }
+    collect_library_panel_ids(&json!(app.ui.transient_panel), &mut ids);
+    for id in app.ui.library_panels.iter().map(|p| p.id.as_str()).chain([app.ui.color_guide_limit.as_str()]) {
+        add_library_id(id, &mut ids);
+    }
+    let mut hidden = Vec::new();
+    let mut taken = std::collections::BTreeSet::new();
+    for id in ids {
+        let path = &id["loaded/".len()..];
+        let name = vectorcraft_engine::cmd::fileio::file_name(path);
+        if name != path && !readable(path) {
+            hidden.push((id, name));
+        } else {
+            taken.insert(id);
+        }
+    }
+    let mut hidden = hidden
+        .into_iter()
+        .map(|(id, name)| {
+            let mut shown = format!("loaded/{name}");
+            let mut n = 2;
+            while taken.contains(&shown) {
+                shown = format!("loaded/{name} ({n})");
+                n += 1;
+            }
+            taken.insert(shown.clone());
+            (id, shown)
+        })
+        .collect::<Vec<_>>();
+    // The longest first, so that an id that begins another one does not replace part of it.
+    hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
+    hidden
+}
+
+/// Adds `id` to `ids` when it is a loaded library's id (`loaded/<path>`).
+fn add_library_id(id: &str, ids: &mut std::collections::BTreeSet<String>) {
+    if id.len() > "loaded/".len() && id.starts_with("loaded/") {
+        ids.insert(id.to_string());
+    }
+}
+
+/// Adds to `ids` the loaded library id of every library panel id (`library:<kind>:loaded/<path>`)
+/// that `v` holds as a string or a key.
+fn collect_library_panel_ids(v: &Value, ids: &mut std::collections::BTreeSet<String>) {
+    let add = |s: &str, ids: &mut std::collections::BTreeSet<String>| {
+        if let Some((_, id)) = s.strip_prefix(crate::panels::library_panel::PREFIX).and_then(|rest| rest.split_once(':')) {
+            add_library_id(id, ids);
+        }
+    };
+    match v {
+        Value::String(s) => add(s, ids),
+        Value::Array(items) => items.iter().for_each(|item| collect_library_panel_ids(item, ids)),
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                add(key, ids);
+                collect_library_panel_ids(item, ids);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Writes each id of `ids` as the id the reply shows instead, wherever `v` holds it: in a library's
+/// id, in its panel's id (`library:swatches:loaded/<path>`) and in keys.
+fn hide_library_ids(v: &mut Value, ids: &[(String, String)]) {
+    if ids.is_empty() {
+        return;
+    }
+    let hide = |s: &mut String| {
+        for (id, shown) in ids {
+            if s.contains(id.as_str()) {
+                *s = s.replace(id.as_str(), shown);
+            }
+        }
+    };
+    match v {
+        Value::String(s) => hide(s),
+        Value::Array(items) => items.iter_mut().for_each(|item| hide_library_ids(item, ids)),
+        Value::Object(fields) => {
+            for (mut key, mut item) in std::mem::take(fields) {
+                hide(&mut key);
+                hide_library_ids(&mut item, ids);
+                fields.insert(key, item);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The preferences that hold a folder, by their keys in `ui.engine_prefs` and the Preferences dialog.
+const PREF_FOLDERS: [&str; 6] = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
+
+/// The scratch disk choices that are not paths.
+const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
+
+/// May the request being served read `path`? Under an automation read root (a control client's
+/// request), `ui.inspect` leaves out a path outside the root, as `ui.menu.list` leaves out a recent
+/// file or a listed script outside it.
+fn readable(path: &str) -> bool {
+    vectorcraft_engine::file_access::check_read(path).is_ok()
+}
+
+/// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
+/// a library panel's file and folder preferences (saved, and in an open Preferences dialog) outside
+/// the read root. The UI state itself is not changed.
+fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
+    if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
+        files.retain(|f| f.as_str().is_some_and(readable));
+    }
+    if let Some(Value::Array(panels)) = ui.get_mut("library_panels") {
+        for panel in panels.iter_mut().filter_map(Value::as_object_mut) {
+            if panel.get("path").and_then(Value::as_str).is_some_and(|p| !readable(p)) {
+                panel.remove("path");
+            }
+        }
+    }
+    if let Some(Value::Object(prefs)) = ui.get_mut("engine_prefs") {
+        leave_out_unreadable_folders(prefs);
+    }
+    if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
+        && dialog.get("kind").and_then(Value::as_str) == Some("preferences")
+        && let Some(Value::Object(fields)) = dialog.get_mut("fields")
+    {
+        leave_out_unreadable_folders(fields);
+    }
+}
+
+/// Takes out of `prefs` the folder preferences ([`PREF_FOLDERS`]) the request may not read. An
+/// empty value (no folder) and a scratch disk choice ([`SCRATCH_CHOICES`]) stay.
+fn leave_out_unreadable_folders(prefs: &mut serde_json::Map<String, Value>) {
+    for key in PREF_FOLDERS {
+        let Some(path) = prefs.get(key).and_then(Value::as_str).map(str::trim) else { continue };
+        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || readable(path) {
+            continue;
+        }
+        prefs.remove(key);
+    }
 }
 
 fn key_from(name: &str) -> Option<egui::Key> {
@@ -331,7 +516,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "engine.commands" => ok(all_commands(app)),
         "document.inspect" => wrap(app.run("document.inspect", p.clone())),
         "ui.inspect" => ok(inspect(app, ctx)),
-        "ui.docking" => ok(crate::panel_docking::inspect(app, ctx)),
+        "ui.docking" => {
+            let mut docking = crate::panel_docking::inspect(app, ctx);
+            let ids = unreadable_library_ids(app);
+            hide_library_ids(&mut docking, &ids);
+            ok(docking)
+        }
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),
         "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),
@@ -401,6 +591,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                     Ok(fields) => fields,
                     Err(e) => return err(e),
                 };
+                let action = match dialog_action(p) {
+                    Ok(action) => action,
+                    Err(e) => return err(e),
+                };
                 // Every field is checked before any is set, so a request sets all of them or none.
                 if let Some((f, _)) = fields.iter().find(|(f, _)| !crate::dialogs::accepts_field(d, f)) {
                     let names = crate::dialogs::field_names(d).join(", ");
@@ -419,7 +613,19 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                         return err(e);
                     }
                 }
-                ok(app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default())
+                let dialog = app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default();
+                // `action` answers the dialog the fields were just set in, within this request.
+                match action {
+                    None => ok(dialog),
+                    Some(DialogAnswer::Confirm) => match crate::dialogs::confirm(app) {
+                        Ok(result) => ok(json!({"dialog": dialog, "result": result})),
+                        Err(e) => err(e),
+                    },
+                    Some(DialogAnswer::Cancel) => {
+                        crate::dialogs::cancel(app);
+                        ok(json!({"dialog": dialog, "result": null}))
+                    }
+                }
             }
             None => err("no dialog open"),
         },

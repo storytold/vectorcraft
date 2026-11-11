@@ -23,6 +23,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         ctx.data_mut(|d| d.insert_temp::<Field>(field_key, field));
     }
     let mut clicked: Option<(String, Value)> = None;
+    let mut file_open = false;
     let tree = menu_tree_named(app.session.prefs.font_names_in_english);
     // No application menu in the window (as in Illustrator): the bar starts at File on every
     // platform. The VectorCraft menu stays in the tree: the native Mac bar takes it from there.
@@ -37,11 +38,21 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
                 let text = egui::RichText::new(tl!(title)).size(13.0).color(t.text);
                 let resp = ui.add(egui::Button::new(text));
                 egui::Popup::menu(&resp).show(|ui| menu_body(app, ui, items, &mut clicked));
+                if *title == "File" {
+                    file_open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&resp));
+                }
                 titles.push(resp);
             }
             (ui.cursor().min.x, switch_on_hover(ui.ctx(), &titles))
         })
         .inner;
+    // The File menu opening reads the Scripts folder again, for File › Scripts.
+    let file_key = egui::Id::unique("menu-bar-file-open");
+    let file_was_open = ctx.data(|d| d.get_temp::<bool>(file_key)).unwrap_or(false);
+    ctx.data_mut(|d| d.insert_temp(file_key, file_open));
+    if file_open && !file_was_open {
+        crate::scripts_menu::refresh(app, Some(&ctx));
+    }
     // Whether a top-level menu is open: the docking renderer lowers the floating panels' OS windows
     // while one is, or the menu would open under them.
     ctx.data_mut(|d| d.insert_temp(menu_open_id(), open));

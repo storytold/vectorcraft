@@ -166,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses (a compound-path member selected on its own, whole or in part, with Direct or Group Selection, is copied as an ordinary path with the compound's paint, transparency, opacity mask and fill rule, a gradient keeping the compound's fit; the compound is copied when it is selected, or when every member is selected whole outside isolation mode), and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
+            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses (a compound-path member selected on its own, whole or in part, with Direct or Group Selection, is copied as an ordinary path with the compound's paint, transparency, opacity mask, fill rule and graphic style link (while it has that style's look), a gradient keeping the compound's fit; the compound is copied when it is selected, or when every member is selected whole outside isolation mode), and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -991,8 +991,8 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
         .selection
         .guides
         .iter()
-        .filter_map(|i| st.doc.guides.get(*i))
-        .map(|g| vectorcraft_doc::Guide { layer: None, artboard: None, ..g.clone() })
+        .filter_map(|i| st.doc.ruler_guide(*i))
+        .map(|g| vectorcraft_doc::Guide { layer: None, artboard: None, id: None, ..g })
         .collect();
     let roots = if st.selection.is_empty() && !guides.is_empty() { vec![] } else { targets };
     let mut clip = Clipboard::copy(st, &roots, direct);
@@ -1004,7 +1004,7 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
     // Guides alone: the artboard the first one belongs to, or crosses, is where in-place pastes
     // measure from, as the objects' artboard is.
     if clip.nodes.is_empty()
-        && let Some(g) = st.selection.guides.first().and_then(|i| st.doc.guides.get(*i))
+        && let Some(g) = st.selection.guides.first().and_then(|i| st.doc.ruler_guide(*i))
     {
         let board = g.artboard.and_then(|id| st.doc.artboards.iter().find(|a| a.id == id)).or_else(|| {
             st.doc
@@ -1053,7 +1053,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
     s.edit("Cut", |d, selection| {
         // The selected ruler guides were copied too (#3226): they go in the same undo step.
         let gone = selection.guides.clone();
-        d.retain_guides(selection, |i, _| !gone.contains(&i));
+        d.retain_guides(selection, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         let mut survivors = vec![];
         let mut pieces = super::pathops::Beside::replacing(d, roots);
         for id in roots {
@@ -1153,7 +1153,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if with_guides {
             let gone = sel.guides.clone();
-            d.retain_guides(sel, |i, _| !gone.contains(&i));
+            d.retain_guides(sel, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         }
         if is_explicit {
             for id in &ids {
@@ -1332,7 +1332,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         vec![Affine::IDENTITY]
     };
     let (ids, imported, artboards, into) = s.edit(mode.label(), |d, sel| {
-        let imported = clip.import_into(d, choices, same_doc);
+        let imported = clip.import_into(d, choices, same_doc)?;
         // Draw Inside: the clip group of the object drawn into, made on the first paste.
         let into = inside.map(|t| super::create::draw_inside_group(d, t)).transpose()?;
         let artboards: Vec<usize> = boards
@@ -1438,8 +1438,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             for g in &clip.guides {
                 let pos = g.pos + if g.vertical { dv.x } else { dv.y };
                 if pos.is_finite() {
-                    sel.guides.push(d.guides.len());
-                    d.guides.push(vectorcraft_doc::Guide { pos, layer: guide_layer, ..g.clone() });
+                    sel.guides.push(d.add_ruler_guide(&vectorcraft_doc::Guide { pos, layer: guide_layer, ..g.clone() }));
                 }
             }
         }

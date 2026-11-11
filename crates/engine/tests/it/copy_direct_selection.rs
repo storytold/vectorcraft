@@ -604,6 +604,66 @@ fn a_copied_member_with_its_own_appearance_takes_the_compounds() {
     assert_eq!(s.clipboard.nodes[0].appearance, compound_look);
 }
 
+/// A member copied or cut on its own, whole or in part, takes the compound's graphic style link
+/// with its look, or no link when the compound has none or the member no longer has the style's
+/// look (a gradient pinned to the compound's bounds); the style the member had before Make Compound
+/// Path does not go with it.
+#[test]
+fn a_copied_member_takes_the_compounds_graphic_style() {
+    let style_of = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().extras().graphic_style;
+    let clipboard_styles = |s: &Session| s.clipboard.graphic_styles.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    for (compound_styled, gradient) in [(false, false), (true, false), (true, true)] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+        let m0 = rect(&mut s, 10.0, 10.0, 40.0, 40.0);
+        run(&mut s, "paint.setFill", json!({"ids": [m0.0], "color": "#00ff00"}));
+        run(&mut s, "select.set", json!({"ids": [m0.0]}));
+        run(&mut s, "graphicStyle.new", json!({"name": "Member"}));
+        let member_style = style_of(&s, m0);
+        assert!(member_style.is_some(), "the path is linked to the style made from it");
+        let m1 = rect(&mut s, 60.0, 10.0, 40.0, 40.0);
+        run(&mut s, "select.set", json!({"ids": [m0.0, m1.0]}));
+        let compound = NodeId(run(&mut s, "object.compoundPath.make", json!({}))["id"].as_u64().unwrap());
+        let fill =
+            if gradient { json!({"ids": [compound.0], "gradient": {"kind": "linear"}}) } else { json!({"ids": [compound.0], "color": "#ff0000"}) };
+        run(&mut s, "paint.setFill", fill);
+        assert_eq!(style_of(&s, m0), member_style, "the member keeps its old link inside the compound");
+        let compound_style = if compound_styled {
+            run(&mut s, "select.set", json!({"ids": [compound.0]}));
+            run(&mut s, "graphicStyle.new", json!({"name": "Compound"}));
+            style_of(&s, compound)
+        } else {
+            None
+        };
+        assert_eq!(compound_style.is_some(), compound_styled);
+        // A gradient fitted to the compound is pinned to its bounds on the copy, which is no longer
+        // the style's look.
+        let link = compound_style.filter(|_| !gradient);
+        let expected: Vec<String> = if link.is_some() { vec!["Compound".into()] } else { vec![] };
+        let case = format!("compound styled: {compound_styled}, gradient: {gradient}");
+
+        s.select_tool("groupSelection", vectorcraft_engine::ViewInfo::default()).unwrap();
+        run(&mut s, "select.set", json!({"ids": [m0.0]}));
+        run(&mut s, "edit.copy", json!({}));
+        assert_eq!(s.clipboard.nodes[0].id, m0);
+        assert_eq!(s.clipboard.nodes[0].extras().graphic_style, link, "whole member, {case}");
+        assert_eq!(clipboard_styles(&s), expected, "whole member, {case}");
+
+        run(&mut s, "select.segments", json!({"id": m0.0, "segments": [[0, 0]]}));
+        run(&mut s, "edit.copy", json!({}));
+        assert_eq!(s.clipboard.nodes.len(), 1);
+        assert_eq!(s.clipboard.nodes[0].extras().graphic_style, link, "one segment, {case}");
+        assert_eq!(clipboard_styles(&s), expected, "one segment, {case}");
+
+        run(&mut s, "select.set", json!({"ids": [m0.0]}));
+        run(&mut s, "edit.cut", json!({}));
+        assert_eq!(members_of(&s, compound), Some(vec![m1]));
+        let pasted = NodeId(run(&mut s, "edit.pasteInPlace", json!({}))["ids"][0].as_u64().unwrap());
+        assert_eq!(style_of(&s, pasted), link, "Cut and Paste in Place, {case}");
+        check_session(&s).unwrap();
+    }
+}
+
 #[test]
 fn every_segment_of_every_member_picked_copies_and_cuts_the_compound() {
     let mut s = Session::new();

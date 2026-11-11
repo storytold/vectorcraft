@@ -7,7 +7,7 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::swatch::{REGISTRATION, Swatch};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LAYER_COLORS, LayerColor, Node, NodeId, NodeKind, OpacityMask, StrokeLayer};
+use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LayerColor, Node, NodeId, NodeKind, OpacityMask, StrokeLayer};
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, FillRule, PathData, Shape, SubPath};
 use vectorcraft_pathops::BoolOp;
@@ -64,6 +64,7 @@ pub(super) const SWATCHES: &str = "freeform gradient swatches, gradient swatches
 pub(super) const SYMBOL_LIMIT: &str = "symbol instances past 16,000,000 objects of symbol art in all are left out of the editing data for other apps";
 pub(super) const OBJECT_LIMIT: &str = "art past 4,000,000 objects in all is left out of the editing data for other apps";
 const TEMPLATES: &str = "template layers are written as dimmed layers that don't print in the editing data for other apps";
+pub(super) const DYNAMIC_TEXT: &str = "Dynamic Text is written as the sizes the type is drawn at in the editing data for other apps";
 
 /// The transparency `mode opacity isolate knockout shape Xy` sets: the blending mode ([`blend_code`]),
 /// the opacity, Isolate Blending, Knockout Group (0 off, 1 on, 2 neutral) and Opacity & Mask Define
@@ -449,14 +450,7 @@ impl<'a> Writer<'a> {
     /// (`Xy`, `0 0 Xd`, `7 () XW`) when it has any, `LB`, `%AI5_EndLayer--`.
     fn write_layer(&mut self, n: &Node, after: &[Arc<Node>]) {
         let NodeKind::Layer { color, template, printable, children, clip, preview, dim_images } = &n.kind else { return };
-        let [r, g, b] = match color {
-            LayerColor::Preset(i) => LAYER_COLORS.get(usize::from(*i)).map_or([79, 128, 255], |c| c.1),
-            LayerColor::Custom(rgb) => *rgb,
-        };
-        let index = match color {
-            LayerColor::Preset(i) if usize::from(*i) < LAYER_COLORS.len() => i64::from(*i),
-            _ => -1,
-        };
+        let (index, [r, g, b]) = ai_ops::layer_color(*color);
         if *template {
             self.warn(TEMPLATES);
         }
@@ -467,6 +461,9 @@ impl<'a> Writer<'a> {
         let flag = |b: bool| u8::from(b);
         let dim = dim_images.unwrap_or(50);
         let name = n.name.as_deref().unwrap_or("Layer");
+        // Ruler guides are kept in the document's native copy only.
+        let children: Vec<Arc<Node>> = children.iter().filter(|c| !c.is_ruler_guide()).cloned().collect();
+        let children = &children;
         // The last flag makes the layer a clipping layer: its top object clips the rest. Only a
         // clipping path or compound path, outside any art cut to a clipping object, is written as
         // one ([`Self::clip_group`] writes the others).
@@ -590,6 +587,10 @@ impl<'a> Writer<'a> {
         if let NodeKind::Layer { .. } = n.kind {
             return self.write_layer(n, &[]);
         }
+        // Ruler guides are kept in the document's native copy only: no object, state or style.
+        if n.is_ruler_guide() {
+            return;
+        }
         if self.in_symbol {
             self.wrote_fixed |= symbols::redrawn(n);
         }
@@ -704,6 +705,8 @@ impl<'a> Writer<'a> {
                 }
                 self.end_group("U", xy);
             }
+            // Ruler guides are kept in the document's native copy only.
+            NodeKind::RulerGuide { .. } => {}
         }
         if self.body.len() > start {
             // A group's dictionary goes between its end and its state block.
@@ -1201,6 +1204,9 @@ impl<'a> Writer<'a> {
     /// names the story of its thread, which its first frame holds.
     fn text(&mut self, n: &Node, xy: Xy) {
         let NodeKind::Text(t) = &n.kind else { return };
+        // Dynamic Text is written as the sizes its layout draws the type at.
+        let fitted = t.dynamic_text.then(|| vectorcraft_text::drawn(t));
+        let t = fitted.as_deref().unwrap_or(&**t);
         let doc = self.doc;
         let thread = doc.text_threads.iter().find(|th| th.contains(&n.id));
         // Type that can't be a stub is written as its outlines, which count their own objects.
@@ -1228,6 +1234,9 @@ impl<'a> Writer<'a> {
         self.typed = true;
         if lost {
             self.warn(texts::TYPE_ATTRIBUTES);
+        }
+        if fitted.is_some() {
+            self.warn(DYNAMIC_TEXT);
         }
         // The stub takes the transparency set before it, as a path does. Its isolation and knockout
         // are read only from a state block after it, as a group's are.

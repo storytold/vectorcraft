@@ -426,6 +426,29 @@ fn an_instance_is_culled_by_the_art_nested_9_slice_guides_move() {
 }
 
 #[test]
+fn an_instance_that_only_moves_is_culled_by_the_art_its_9_slice_guides_move() {
+    // A symbol made in the app: art in the 20 × 20 square, a natural size of 2 × 2, and guides a
+    // quarter in. An instance that only moves draws it at 20 × 20, ten times its natural size. The
+    // bar from x −9.9 to 0.1 crosses the left guide and is placed by the middle column's map,
+    // x → 1.9x: moved 115 pt right, it draws from x 96.19 to 115.19 while its art box starts at
+    // x 105, out of view.
+    let mut d = Document::new(100.0, 100.0);
+    let bar = rect_node(&mut d, Rect::new(-9.9, -1.0, 0.1, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(bar) });
+    let frame = rect_node(&mut d, Rect::new(-10.0, -10.0, 10.0, 10.0), Paint::None, Paint::None, 0.0);
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(inner)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.into(), serde_json::json!({ "Panel": [2.0, 2.0] }));
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((115.0, 50.0));
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(98, 50), [255, 0, 0, 255]);
+}
+
+#[test]
 fn an_instance_with_a_geometry_effect_is_culled_by_its_reshaped_art() {
     // The art, (0, 0) to (20, 20), drawn from (-100, 10) is out of view, and the Transform effect
     // moves it 150 pt right, into view.
@@ -950,6 +973,43 @@ fn node_renders_follow_the_anti_alias_option() {
     assert!(drawn(&img) && !partial(&img), "render_node_with: every alpha is 0 or 255");
     let thumb = r.render_node_thumbnail_with(&d, &n, 37, None, &hard).unwrap();
     assert!(drawn(&thumb) && !partial(&thumb), "render_node_thumbnail_with: every alpha is 0 or 255");
+}
+
+/// Node renders follow `supersample` and `precise` as a page render does: two rectangles that meet
+/// at x = 50.37 leave no seam when supersampled, and a node render gives the pixels of a page
+/// render of the same art with the same options.
+#[test]
+fn node_renders_follow_the_supersample_and_precise_options() {
+    let mut d = Document::new(100.0, 100.0);
+    let left = rect_node(&mut d, Rect::new(10.0, 10.0, 50.37, 90.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let right = rect_node(&mut d, Rect::new(50.37, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(0.2, 0.6, 0.9)), Paint::None, 0.0);
+    // Blended at half opacity over both, so the group composites offscreen.
+    let mut over = rect_node(&mut d, Rect::new(30.0, 60.0, 70.0, 80.0), Paint::solid(Color::rgb(0.9, 0.7, 0.1)), Paint::None, 0.0);
+    over.opacity = 0.5;
+    over.blend = vectorcraft_color::BlendMode::Multiply;
+    let group = Node::group(d.alloc_id(), vec![Arc::new(left), Arc::new(right), Arc::new(over)]);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group.clone()).unwrap();
+    let node = Arc::new(group.clone());
+    let page = |opts: &RenderOptions| RenderOptions { background: None, artboards: false, ..opts.clone() };
+    let mut r = Renderer::new();
+    for (supersample, precise) in [(false, false), (true, false), (false, true), (true, true)] {
+        let opts = RenderOptions { supersample, precise, ..Default::default() };
+        let case = format!("supersample {supersample}, precise {precise}");
+        let img = r.render_node_with(&d, &node, 100, 100, Affine::IDENTITY, &opts).unwrap();
+        let whole = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &page(&opts));
+        assert!(img.pixels == whole.pixels, "{case}: render_node_with draws as a page render does");
+        // Pixel column 50 at row 50: the black rectangle covers 37% of it and the blue one the rest.
+        let seam = img.pixels[(50 * 100 + 50) * 4 + 3];
+        assert_eq!(seam == 255, supersample, "{case}: render_node_with seam alpha {seam}");
+        // A 37-pixel thumbnail draws 0.4375 pixels a point, the seam at x = 18.66.
+        let thumb = r.render_node_thumbnail_with(&d, &group, 37, None, &opts).unwrap();
+        let view = Affine::translate((18.5, 18.5)) * Affine::scale(0.4375) * Affine::translate((-50.0, -50.0));
+        let whole = Renderer::new().render(&d, 37, 37, view, &page(&opts));
+        assert!(thumb.pixels == whole.pixels, "{case}: the thumbnail draws as a page render does");
+        let seam = thumb.pixels[(18 * 37 + 18) * 4 + 3];
+        assert_eq!(seam == 255, supersample, "{case}: thumbnail seam alpha {seam}");
+    }
 }
 
 #[test]

@@ -131,6 +131,7 @@ fn one_page_per_artboard_with_sizes() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     d.artboards.push(Artboard {
         id: 3,
@@ -142,6 +143,7 @@ fn one_page_per_artboard_with_sizes() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     let bytes = export(&d, &PdfOptions::default()).unwrap();
     let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
@@ -162,6 +164,7 @@ fn artboard_range_and_bad_index() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     let bytes = export(&d, &PdfOptions { artboards: Some(vec![1]), ..Default::default() }).unwrap();
     let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
@@ -893,6 +896,7 @@ fn import_max_pages_and_multi_page() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     add(&mut d, rect_node(Rect::new(10.0, 10.0, 50.0, 50.0), Color::BLACK));
     add(&mut d, rect_node(Rect::new(310.0, 10.0, 350.0, 50.0), Color::BLACK));

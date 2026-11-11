@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Color Settings…",
             ["Edit"],
             Some("Cmd+Shift+K"),
-            "{rgb?: profile, cmyk?: profile, intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool} set the working spaces → {rgb, cmyk, intent, bpc, profiles: [{name, kind, builtin}]}",
+            "{rgb?: profile, cmyk?: profile, intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool} set the working spaces → {rgb, cmyk, intent, bpc, profiles: [{name, kind, builtin}]}. The desktop app and vectorcraft-cli keep them in `Color Settings.json` next to the preferences and use them again at the next start (not with VECTORCRAFT_NO_PREFS); saved settings naming a profile that is gone leave the defaults",
             always,
             color_settings
         ),
@@ -192,6 +192,8 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
     st.bpc = switch_or(p, "bpc", st.bpc, C)?;
     if st != before {
         cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
+        // Saved for the next start when the app attached a settings file (#6335).
+        s.store_color_settings(&st);
         touch_all(s);
     }
     Ok(settings_json(&st))
@@ -580,7 +582,7 @@ fn map_more_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proo
         }
     }
     if let Some(ch) = n.children_mut() {
-        for c in ch.iter_mut() {
+        for c in ch.iter_mut().filter(|c| !c.is_ruler_guide()) {
             map_more_colors(Arc::make_mut(c), f);
         }
     }

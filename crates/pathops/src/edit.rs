@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use kurbo::{CubicBez, ParamCurve, PathSeg, Point, Rect, Vec2};
+use kurbo::{CubicBez, Line, ParamCurve, ParamCurveNearest, PathSeg, Point, Rect, Vec2};
 use vectorcraft_geom::path::measured_arclen;
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
@@ -84,11 +84,15 @@ pub fn simplify_with(path: &PathData, opts: &SimplifyOptions) -> PathData {
     PathData::new(out)
 }
 
-/// [`simplify_with`] for one subpath; `None` when the refit leaves nothing of it.
+/// [`simplify_with`] for one subpath; `None` when the refit leaves nothing of it. A closed subpath
+/// whose refit is one segment, or lines that enclose no area, is refitted in two parts, cut at the
+/// point farthest from its start, or in three when two still give that. When three parts still give
+/// no area, straight lines follow the subpath within the tolerance, and without straight lines it
+/// stays as it is, as does one of a single segment; one that is all in line keeps the refit.
 fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     let mut segs = subpath_segs(sp);
     let n = segs.len();
-    if n == 0 {
+    if n == 0 || sp.closed && n < 2 {
         return Some(sp.clone());
     }
     if sp.closed {
@@ -101,7 +105,63 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     // along its chord, and `no_worse` can return the original subpath, so the start can keep a kink.
     let across = if sp.closed && opts.smooth > 0.0 { unit(end_tangent(&segs[n - 1].c) + start_tangent(&segs[0].c)) } else { None };
     let across = across.filter(|_| (0..n).all(|i| turn_deg(&segs[(i + n - 1) % n], &segs[i]) <= opts.corner_angle_deg));
-    let result = simplify_run_within(&segs, opts, MAX_RUN_SAMPLES, across);
+    let mut result = simplify_run_within(&segs, opts, MAX_RUN_SAMPLES, across);
+    let in_line = |pts: &[Point]| {
+        let Some(&a) = pts.first() else { return true };
+        let far = pts.iter().map(|&p| p - a).max_by(|u, v| u.hypot2().total_cmp(&v.hypot2())).unwrap_or_default();
+        pts.iter().all(|&p| far.cross(p - a).abs() <= 1e-6 * far.hypot())
+    };
+    let flat = |r: &[Seg]| r.len() < 2 || r.iter().all(|s| s.line) && in_line(&r.iter().map(|s| s.c.p0).collect::<Vec<_>>());
+    if sp.closed && flat(&result) {
+        // Each segment in two, and the loop cut where they meet: first at the point farthest from its
+        // start, then also at the point farthest from the line between those two.
+        let halves: Vec<Seg> = segs
+            .iter()
+            .flat_map(|s| {
+                let (a, b) = s.c.subdivide();
+                [Seg { c: a, line: s.line }, Seg { c: b, line: s.line }]
+            })
+            .collect();
+        let m = halves.len();
+        let at = |i: usize| halves[i].c.p0;
+        let farthest = |from: &dyn Fn(Point) -> f64, skip: usize| (1..m).filter(|&i| i != skip).max_by(|&a, &b| from(at(a)).total_cmp(&from(at(b))));
+        let p0 = at(0);
+        let j = farthest(&|p| p.distance(p0), 0).unwrap_or(m / 2);
+        let chord = at(j) - p0;
+        let off_chord = |p: Point| if chord.hypot2() > 0.0 { chord.cross(p - p0).abs() } else { p.distance(p0) };
+        let k = farthest(&off_chord, j).unwrap_or(m / 2);
+        let refit = |cuts: &[usize]| -> Vec<Seg> {
+            cuts.windows(2).flat_map(|w| simplify_run_within(&halves[w[0]..w[1]], opts, MAX_RUN_SAMPLES / 3, None)).collect()
+        };
+        result = refit(&[0, j, m]);
+        if flat(&result) && k != j {
+            result = refit(&[0, j.min(k), j.max(k), m]);
+        }
+        let ctrl: Vec<Point> = segs.iter().flat_map(|s| [s.c.p0, s.c.p1, s.c.p2]).collect();
+        if flat(&result) && !in_line(&ctrl) {
+            // Each segment split in 2, 4, 8 and so on, up to 1,024 pieces and 65,536 in all, until every
+            // piece is within the tolerance of the line between its ends and those lines enclose an
+            // area: with straight lines they are the result, and without them the loop stays as it is.
+            // A loop whose points are all in line keeps the lines of the refit.
+            let near = |c: &CubicBez| [c.p1, c.p2].iter().all(|&p| Line::new(c.p0, c.p3).nearest(p, 1e-9).distance_sq.sqrt() <= opts.tolerance);
+            for k in 1..=10u32 {
+                let parts = 1u32 << k;
+                if segs.len().saturating_mul(parts as usize) > 1 << 16 {
+                    break;
+                }
+                let at = |i: u32| f64::from(i) / f64::from(parts);
+                let pieces: Vec<CubicBez> = segs.iter().flat_map(|s| (0..parts).map(move |i| s.c.subsegment(at(i)..at(i + 1)))).collect();
+                let lines: Vec<Seg> = pieces.iter().map(|c| Seg::line(c.p0, c.p3)).collect();
+                if pieces.iter().all(near) && !flat(&lines) {
+                    if !opts.straight_lines {
+                        return Some(sp.clone());
+                    }
+                    result = lines;
+                    break;
+                }
+            }
+        }
+    }
     let s = segs_to_subpath(&result, sp.closed)?;
     Some(if opts.straight_lines { s } else { no_worse(sp, s) })
 }

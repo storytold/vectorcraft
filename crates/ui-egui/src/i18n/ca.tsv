@@ -35,6 +35,7 @@
 	 on the canvas to create one	 al llenç per crear-ne un
 	 on the canvas to create one (	 al llenç per crear-ne un (
 	 out from a highlighted edge to place its dimension  |  	 des d’una vora ressaltada cap enfora per col·locar-ne la dimensió  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 dos punts, després moveu i feu clic per col·locar una dimensió alineada, horitzontal o vertical  |  
 	 over paths to roughen their outlines  |  	 sobre traçats per fer aspres els contorns  |  
 	 over paths, and hold still to keep going  |  	 sobre traçats i mantén el punter quiet per continuar  |  
 	 right or left to zoom in or out  |  	 a la dreta o a l’esquerra per ampliar o reduir  |  
@@ -367,6 +368,11 @@ antiAlias	Sharp	Nítid
 	Dash Trail	Estela discontínua
 	Speed Line	Línia de velocitat
 	Game Trails	Esteles de joc
+	Energy Beams	Feixos d'energia
+	Laser Bolt	Projectil làser
+	Plasma Arc	Arc de plasma
+	Charge Wave	Ona de càrrega
+	Spark Trail	Estela d'espurnes
 	Art using a deleted global swatch keeps its colour.	L’art que utilitza una mostra global suprimida conserva el seu color.
 	Artboard	Tauler
 	Artboard Options	Opcions del tauler
@@ -427,6 +433,7 @@ antiAlias	Sharp	Nítid
 	B5	B5
 	Back	Enrere
 	Background Color:	Color de fons:
+	Guide Label:	Etiqueta de les guies:
 	Background Contents	Contingut del fons
 	Background Level	Nivell de fons
 	Background:	Fons:
@@ -453,6 +460,18 @@ antiAlias	Sharp	Nítid
 	Flag	Bandera
 	Crosshair	Punt de mira
 	Checkpoint	Punt de control
+	Inventory Icons	Icones d’inventari
+	Skill Icons	Icones d'habilitat
+	Attack	Atac
+	Defend	Defensa
+	Heal	Curació
+	Buff	Potenciació
+	Ult	Ult
+	Sword	Espasa
+	Shield	Escut
+	Potion	Poció
+	Key	Clau
+	Gem	Gemm
 	Batch	Lot
 	Batch…	Lot…
 	Bearing	Orientació
@@ -2037,6 +2056,7 @@ digits	Malayalam	Malaiàlam
 	Include Linked Files	Inclou els fitxers enllaçats
 	Include Metadata	Inclou les metadades
 	Include non-printing layers	Inclou les capes no imprimibles
+	Write pages longer than 200 in at full size in points	Escriu les pàgines de més de 200 in a mida real, en punts
 	Include Objects On Canvas	Inclou els objectes del llenç
 	Include SVG Code	Inclou codi SVG
 	Include Swatches for Tints	Inclou mostres per als tons
@@ -2349,6 +2369,7 @@ digits	Malayalam	Malaiàlam
 	Lock Grid	Bloca la quadrícula
 	Lock Guides	Bloca les guies
 	Lock Guides by Default	Bloca les guies per defecte
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Guies del tauler amb Cmd/Ctrl + arrossegament des de la regla
 	Lock Others	Bloca la resta
 	Lock Selected	Bloca la selecció
 	Lock Slices	Bloca els talls
@@ -2863,6 +2884,8 @@ digits	Malayalam	Malaiàlam
 	Open…	Obre…
 	Optical	Òptic
 	Optical Margin Alignment	Alineació òptica de marges
+	Dynamic Text	Text dinàmic
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	el text sobre un traçat d’un text enllaçat no pot fer servir el text dinàmic: {frames}
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat
 	Options	Opcions
@@ -3474,6 +3497,12 @@ digits	Malayalam	Malaiàlam
 	Reset Painting	Restableix Pintura
 	Reset Panel	Restableix el panell
 	Reset Preferences	Restableix les preferències
+	Export Preferences…	Exporta les preferències…
+	Import Preferences…	Importa les preferències…
+	Save the applied preferences to a JSON file	Desa les preferències aplicades en un fitxer JSON
+	Apply the preferences in a file Export Preferences saved	Aplica les preferències d’un fitxer desat amb Exporta les preferències
+	Export Preferences	Exporta les preferències
+	Import Preferences	Importa les preferències
 	Search Preferences	Cerca a les preferències
 	No settings found	No s'ha trobat cap paràmetre
 	Reset Printing and Proofing	Restableix impressió i prova
@@ -3511,6 +3540,8 @@ digits	Malayalam	Malaiàlam
 	Responsive	Adaptatiu
 	Restore	Restaura
 	Restore every preference to its default (applied on OK)	Restaura cada preferència al seu valor predeterminat (s’aplica en prémer D’acord)
+	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
 	Restore Recovered Documents	Restaura els documents recuperats
 	Restored documents open unsaved: save them to keep them.	Els documents restaurats s’obren sense desar: desa’ls per conservar-los.
 	Restrict printing, editing and other tasks	Restringeix la impressió, l’edició i altres tasques
@@ -3938,6 +3969,13 @@ digits	Malayalam	Malaiàlam
 	Quest Outline	Missió
 	Coin Shine	Moneda
 	Boss Alert	Cap
+	Status Effects	Efectes d’estat
+	Poison Tint	Verí
+	Freeze Edge	Congelació
+	Burn Aura	Cremada
+	Stun Pulse	Atordiment
+	Stealth Fade	Sigil
+	Shield Buff	Escut
 	Shape	Forma
 	Shape Builder	Constructor de formes
 	Shape Builder Delete	Suprimeix del constructor de formes
@@ -4467,6 +4505,8 @@ digits	Malayalam	Malaiàlam
 	Tilt	Inclinació
 	Time (hhmmss)	Hora (hhmmss)
 	Tint	To
+	Fill Tint	To de farciment
+	Stroke Tint	To del traç
 	Tint Reduction	Reducció de to
 	Tints	Tons
 	Tints and Shades	Tons i ombres
@@ -5119,6 +5159,7 @@ digits	Malayalam	Malaiàlam
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis ha de ser "vertical", "horizontal" o un angle en graus, no `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	fons {other}: transparent, blanc, negre o un color com "#ff8800"
 @msg	bad color {v}	color incorrecte {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` és null, el nom d’un color de capa o #rrggbb
 @msg	bad colour `{hex}` (#rrggbb)	color incorrecte `{hex}` (#rrggbb)
 @msg	bad page tree	arbre de pàgines incorrecte
 @msg	bad shortcut	drecera incorrecta
@@ -5176,6 +5217,7 @@ digits	Malayalam	Malaiàlam
 	Stop Script	Atura l'script
 	Show External Script Warning	Mostra l'avís dels scripts externs
 	A Script Is Running	S'està executant un script
+	Script Alert	Avís de l'script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
 	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
@@ -5189,6 +5231,9 @@ digits	Malayalam	Malaiàlam
 @msg	the script is too large to run	l'script és massa gran per executar-lo
 @msg	a drag or an undo group is open; finish it before running a script	hi ha un arrossegament o un grup de desfer obert; acabeu-lo abans d'executar un script
 @msg	the script left a document that cannot be kept	l'script ha deixat un document que no es pot conservar
+@msg	the script is no longer in the Scripts folder	l'script ja no és a la carpeta Scripts
+	Some scripts were not listed	Alguns scripts no s'han llistat
+	The Scripts folder cannot be read	No es pot llegir la carpeta Scripts
 @msg	the script's run is no longer available	l'execució de l'script ja no està disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
 @msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat
@@ -5356,6 +5401,7 @@ digits	Malayalam	Malaiàlam
 @msg	Make Guides: select paths	Crea guies: seleccioneu traçats
 @msg	mask art ends outside a mask dictionary	l’art de la màscara acaba fora d’un diccionari de màscara
 @msg	Measured anchor no longer exists	El punt d’ancoratge mesurat ja no existeix
+@msg	Invalid measured point	El punt mesurat no és vàlid
 @msg	Measured segment no longer exists	El segment mesurat ja no existeix
 @msg	missing `folder`	falta `folder`
 @msg	missing `id` (see plugin.list)	falta `id` (vegeu plugin.list)
@@ -5486,6 +5532,8 @@ digits	Malayalam	Malaiàlam
 @msg	no such document	no existeix aquest document
 @msg	no such layer or object	no existeix aquesta capa o objecte
 @msg	no such object id {value}	no existeix l’id d’objecte {value}
+@msg	id {value} is a ruler guide, not an object	l’id {value} és una guia, no un objecte
+@msg	a ruler guide goes only directly in a layer or sublayer	una guia només pot anar directament en una capa o subcapa
 @msg	no such object {0}	no existeix l’objecte {0}
 @msg	no such perspective grid preset	no existeix aquest preajust de quadrícula de perspectiva
 @msg	no such recent file	no existeix aquest fitxer recent
@@ -5515,6 +5563,7 @@ digits	Malayalam	Malaiàlam
 @msg	node {_1} is not text	el node {_1} no és text
 @msg	node {_1} is on a locked artboard	el node {_1} és en un tauler bloquejat
 @msg	Non-finite dimension	Cota no finita
+@msg	Only linear dimensions are horizontal or vertical	Només les dimensions lineals són horitzontals o verticals
 @msg	not a blend	no és una fusió
 @msg	not a DXF drawing	no és un dibuix DXF
 @msg	not a file	no és un fitxer
@@ -5885,6 +5934,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	control desconegut `{name}`: fillStroke, coloring, drawMode o screenMode
 @msg	Unknown dimension mode	Mode de dimensió desconegut
 @msg	Unknown dimension option {k}	Opció de dimensió desconeguda {k}
+@msg	Unknown dimension orientation	Orientació de dimensió desconeguda
 @msg	Unknown dimension style	Estil de dimensió desconegut
 @msg	unknown effect `{id}`	efecte desconegut `{id}`
 @msg	unknown format	format desconegut
@@ -5904,6 +5954,20 @@ digits	Malayalam	Malaiàlam
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` ha de ser {expected}, no {got}
 @msg	unknown preference `{key}`	preferència desconeguda `{key}`
+@msg	Preferences imported.	S’han importat les preferències.
+@msg	not a preferences file: {e}	no és un fitxer de preferències: {e}
+@msg	not a preferences file: no JSON object	no és un fitxer de preferències: no hi ha cap objecte JSON
+@msg	not a preferences file (format `{format}`)	no és un fitxer de preferències (format `{format}`)
+@msg	not a preferences file: no `format`	no és un fitxer de preferències: no hi ha `format`
+@msg	not a preferences file: no `version`	no és un fitxer de preferències: no hi ha `version`
+@msg	not a preferences file: no `prefs`	no és un fitxer de preferències: no hi ha `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	el fitxer s’ha desat amb una versió més nova del VectorCraft (versió {v})
+@msg	the file holds no preferences	el fitxer no conté cap preferència
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` indica una carpeta, i els fitxers de preferències no inclouen carpetes
+@msg	the file is larger than 1 MB	el fitxer ocupa més d’1 MB
+@msg	give `path` or `data`	indiqueu `path` o `data`
+@msg	`{key}` must be an object	`{key}` ha de ser un objecte
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` s’executa sol, no com a pas d’un lot
 @msg	unknown preset (one of {_1})	preajust desconegut (un de {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preajust desconegut `{name}` (high, medium, low o un de desat: consulta flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preajust desconegut `{name}` (consulta flattener.presets.list)
@@ -5961,7 +6025,8 @@ digits	Malayalam	Malaiàlam
 @msg	{key} must be a finite coordinate	{key} ha de ser una coordenada finita
 @msg	{key} must be an array of non-negative integer object ids	{key} ha de ser una matriu d’identificadors d’objecte enters no negatius
 @msg	{key} must be Unix seconds (an integer) or null	{key} ha de ser segons Unix (un enter) o null
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} actualment requereix un traçat, un traçat compost, text o un grup. Converteix primer les imatges i altres objectes en traçats.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} actualment requereix un traçat, un traçat compost, text, un grup, una fusió o una instància de símbol. Expandeix primer els altres objectes.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} no pot crear un sòlid a partir d’una imatge: traça-la primer amb Objecte › Traçat d’imatge › Crea.
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} conserva 1 dels {n} taulers del document: el fitxer es reobre amb un. Activa Conserva les capacitats d’edició per conservar-los tots.
 @msg	{label} produced an empty result	{label} ha produït un resultat buit
 @msg	{label} requires a shape with at least two anchors	{label} requereix una forma amb com a mínim dos punts d’ancoratge
@@ -6065,6 +6130,7 @@ file-filter	Flattener presets	Preajustos de l’aplanador
 file-filter	PDF presets	Preajustos de PDF
 file-filter	PDF-compatible .ai	.ai compatible amb PDF
 file-filter	Print presets	Preajustos d’impressió
+file-filter	Preferences	Preferències
 file-filter	Export presets	Preajustos d’exportació
 file-filter	SVG Compressed	SVG comprimit
 file-filter	Swatch libraries	Biblioteques de mostres
@@ -6713,3 +6779,31 @@ breakText	Glyphs	Glifs
 	No Suggestions	No hi ha suggeriments
 	Edit Custom Dictionary	Edita el diccionari personalitzat
 	Entry:	Entrada:
+# Script Console
+	Script Console	Consola d’scripts
+	Clear Script Console	Esborra la consola d’scripts
+	Copy Script Console	Copia la consola d’scripts
+	Copy All	Copia-ho tot
+	Copy Selected	Copia la selecció
+	Finished	Acabat
+	Ended with an error	Acabat amb un error
+	Out of fuel	Límit d’instruccions esgotat
+	Ended at a host limit	Acabat en un límit de l’amfitrió
+	Ended at a limit	Acabat en un límit
+	Stopped	Aturat
+	Ended by an internal fault	Acabat per un error intern
+	time unavailable	temps no disponible
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	més lentes: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} crida a l’amfitrió|{n} crides a l’amfitrió
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} línia anterior descartada|{n} línies anteriors descartades
+@plural	{n} line cut|{n} lines cut	{n} línia tallada|{n} línies tallades
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Actualitza els efectes ajornats
+	Deferred Effects	Efectes ajornats
+@msg	no plug-in effect is deferred	no hi ha cap efecte de complement ajornat
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	S’ha obert amb {n} efecte de complement ajornat. Efecte › Actualitza els efectes ajornats l’executa.|S’ha obert amb {n} efectes de complement ajornats. Efecte › Actualitza els efectes ajornats els executa.

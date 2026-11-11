@@ -23,6 +23,9 @@
 //! A path is checked, then opened: a process that can change the folders in between (swapping in
 //! a link) can still win that race. The roots keep an agent to the files it was given; they don't
 //! guard against other programs on the computer.
+//!
+//! [`ScriptScope`] holds the folders a running script's own files (its includes and `$.evalFile`)
+//! are read from, inside the roots.
 
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -345,6 +348,215 @@ fn windows_name_refusal(path: &str) -> Option<&'static str> {
         Component::Normal(n) if n.to_string_lossy().contains(':') => Some("alternate data streams are not allowed"),
         _ => None,
     })
+}
+
+/// The folders a running script's own files are read from: the files its `#include` lines name and
+/// the files it passes to `$.evalFile` (`Scope::Script`'s reads). VectorCraft's own rules: a script
+/// run from a file may read inside that file's folder and the folders below it, and a script given as
+/// text may read none. A path is refused when it has a `..` component, a Windows device name or
+/// stream, or names a computer on the network, or when it leads (through its links, junctions
+/// included) out of every granted folder. The automation roots ([`check_read`]) apply as well.
+///
+/// The file opened is the path with its links followed, and after reading, the path is followed
+/// again and must still lead to the same place: a process that changes the folders twice in between
+/// can still win that race.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ScriptScope {
+    /// The granted folders, made absolute with their links followed.
+    roots: Vec<PathBuf>,
+}
+
+/// Why a script's file was not read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ScriptRead {
+    /// There is no such file.
+    Missing,
+    /// The scope does not let the script read it.
+    Refused,
+    /// The file has more than the bytes asked for.
+    TooLarge,
+    /// The file system gave this error.
+    Failed(String),
+}
+
+impl ScriptScope {
+    /// The scope of a script run from a file in folder `dir`: that folder.
+    pub(crate) fn of_folder(dir: &Path) -> Self {
+        Self { roots: std::fs::canonicalize(dir).ok().into_iter().collect() }
+    }
+
+    /// Is `path` refused by its name alone: a `..` component, a NUL, a Windows device name or
+    /// stream, or a computer on the network?
+    fn refused_by_name(path: &Path) -> bool {
+        let text = path.to_string_lossy();
+        text.contains('\0')
+            || path.components().any(|c| c == Component::ParentDir)
+            || (cfg!(windows) && (windows_name_refusal(&text).is_some() || network_path(&text)))
+    }
+
+    /// The real path of the file at `path` and its first `max` bytes, at most.
+    pub(crate) fn read(&self, path: &Path, max: usize) -> Result<(PathBuf, Vec<u8>), ScriptRead> {
+        use std::io::Read;
+        if self.roots.is_empty() || Self::refused_by_name(path) || check_read(&path.to_string_lossy()).is_err() {
+            return Err(ScriptRead::Refused);
+        }
+        let real = match std::fs::canonicalize(path) {
+            Ok(real) => real,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // A link whose target is missing is there all the same: it is not followed.
+                return Err(if std::fs::symlink_metadata(path).is_ok() { ScriptRead::Refused } else { ScriptRead::Missing });
+            }
+            Err(e) => return Err(ScriptRead::Failed(e.to_string())),
+        };
+        if !self.roots.iter().any(|r| inside(&real, r)) {
+            return Err(ScriptRead::Refused);
+        }
+        let file = std::fs::File::open(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        let meta = file.metadata().map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        if !meta.is_file() {
+            return Err(ScriptRead::Missing);
+        }
+        if meta.len() > max as u64 {
+            return Err(ScriptRead::TooLarge);
+        }
+        let mut bytes = Vec::new();
+        // One byte more than asked for shows a file that grew while it was read.
+        file.take(max as u64 + 1).read_to_end(&mut bytes).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        if bytes.len() > max {
+            return Err(ScriptRead::TooLarge);
+        }
+        if std::fs::canonicalize(path).ok().as_ref() != Some(&real) {
+            return Err(ScriptRead::Refused);
+        }
+        Ok((real, bytes))
+    }
+
+    /// The first granted folder, as people read it (`None` for a script given as text).
+    pub(crate) fn folder(&self) -> Option<PathBuf> {
+        self.roots.first().map(|r| crate::cmd::findfiles::plain(r.clone()))
+    }
+
+    /// Does the absolute path `path` name a granted folder or a place inside one, by its names
+    /// alone, without regard to case? A path that does not is refused before the file system is
+    /// asked anything about it.
+    fn names_inside(&self, path: &Path) -> bool {
+        let lower = |c: Component| c.as_os_str().to_string_lossy().to_lowercase();
+        path.is_absolute()
+            && self.roots.iter().any(|r| {
+                let root = crate::cmd::findfiles::plain(r.clone());
+                let mut names = path.components();
+                root.components().all(|c| names.next().is_some_and(|n| lower(n) == lower(c)))
+            })
+    }
+
+    /// The real path of the file or folder at `path`, which must be absolute: refused as
+    /// [`ScriptScope::read`] refuses a path, and also when its names alone place it outside every
+    /// granted folder, in which case the file system is not asked about it.
+    pub(crate) fn locate(&self, path: &Path) -> Result<PathBuf, ScriptRead> {
+        if self.roots.is_empty() || Self::refused_by_name(path) || !self.names_inside(path) {
+            return Err(ScriptRead::Refused);
+        }
+        probed();
+        if check_read(&path.to_string_lossy()).is_err() {
+            return Err(ScriptRead::Refused);
+        }
+        let real = match std::fs::canonicalize(path) {
+            Ok(real) => real,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(if std::fs::symlink_metadata(path).is_ok() { ScriptRead::Refused } else { ScriptRead::Missing });
+            }
+            Err(e) => return Err(ScriptRead::Failed(e.to_string())),
+        };
+        if !self.roots.iter().any(|r| inside(&real, r)) {
+            return Err(ScriptRead::Refused);
+        }
+        Ok(real)
+    }
+
+    /// What the file or folder at `path` is, located as [`ScriptScope::locate`] locates it.
+    pub(crate) fn stat(&self, path: &Path) -> Result<ScriptEntry, ScriptRead> {
+        let real = self.locate(path)?;
+        let meta = std::fs::metadata(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        let link = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+        #[cfg(windows)]
+        let hidden = std::os::windows::fs::MetadataExt::file_attributes(&meta) & 2 != 0;
+        #[cfg(not(windows))]
+        let hidden = real.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'));
+        Ok(ScriptEntry {
+            dir: meta.is_dir(),
+            file: meta.is_file(),
+            len: meta.len(),
+            created: meta.created().ok(),
+            modified: meta.modified().ok(),
+            hidden,
+            readonly: meta.permissions().readonly(),
+            link,
+        })
+    }
+
+    /// The names in the folder at `path` that `keep` keeps, with whether each is a folder, in the
+    /// order of their names. A name whose links lead out of every granted folder, or out of the
+    /// automation read roots in force, is left out. More
+    /// than `max` names kept, or more than [`MAX_LISTED`] names looked at, is
+    /// [`ScriptRead::TooLarge`].
+    pub(crate) fn list(&self, path: &Path, max: usize, keep: impl Fn(&str) -> bool) -> Result<Vec<(String, bool)>, ScriptRead> {
+        let real = self.locate(path)?;
+        let entries = std::fs::read_dir(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        let mut out = Vec::new();
+        for (n, entry) in entries.enumerate() {
+            if n >= MAX_LISTED {
+                return Err(ScriptRead::TooLarge);
+            }
+            let Ok(entry) = entry else { continue };
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !keep(&name) {
+                continue;
+            }
+            let Ok(target) = std::fs::canonicalize(entry.path()) else { continue };
+            if !self.roots.iter().any(|r| inside(&target, r)) || check_read(&entry.path().to_string_lossy()).is_err() {
+                continue;
+            }
+            if out.len() >= max {
+                return Err(ScriptRead::TooLarge);
+            }
+            out.push((name, target.is_dir()));
+        }
+        out.sort();
+        Ok(out)
+    }
+}
+
+/// The most names [`ScriptScope::list`] looks at in one folder.
+pub(crate) const MAX_LISTED: usize = 65_536;
+
+/// A file or folder as [`ScriptScope::stat`] gives it.
+#[derive(Clone, Debug)]
+pub(crate) struct ScriptEntry {
+    pub dir: bool,
+    /// A regular file.
+    pub file: bool,
+    pub len: u64,
+    pub created: Option<std::time::SystemTime>,
+    pub modified: Option<std::time::SystemTime>,
+    pub hidden: bool,
+    pub readonly: bool,
+    /// The path itself is a symbolic link.
+    pub link: bool,
+}
+
+thread_local! {
+    /// How many paths [`ScriptScope::locate`] has asked the file system about on this thread.
+    static PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn probed() {
+    PROBES.with(|p| p.set(p.get().saturating_add(1)));
+}
+
+/// How many paths [`ScriptScope::locate`] has asked the file system about on this thread.
+#[cfg(test)]
+pub(crate) fn script_probes() -> usize {
+    PROBES.with(std::cell::Cell::get)
 }
 
 #[cfg(test)]

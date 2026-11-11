@@ -138,6 +138,25 @@ fn a_failed_command_fails_the_run_with_its_reason() {
     assert_eq!(out, Err(Error::Failed("vc_call `select.all`: nothing is selected".into())));
 }
 
+/// After the run's first failed call, a plug-in that goes on calling gets [`CALL_NO_CONTEXT`] for
+/// each call and the host makes none of them; the run fails with the first call's reason.
+#[test]
+fn no_call_is_made_after_a_failed_one() {
+    let rest = [select_all(), select_all(), select_all()].map(|c| expect(&c, CALL_NO_CONTEXT)).concat();
+    let p = calling("test.call.after.failed", &format!("{}{rest}", expect(&select_all(), CALL_COMMAND_FAILED)));
+    let (out, seen) = run_with(&p, |_| Err(CallFailure { code: CALL_COMMAND_FAILED, why: "nothing is selected".into() }));
+    assert_eq!(out, Err(Error::Failed("vc_call `select.all`: nothing is selected".into())));
+    assert_eq!(seen.len(), 1);
+    // Also after a call the host refused without making it.
+    let p = calling(
+        "test.call.after.refused",
+        &format!("{}{}", expect(&call("0x2010", "13", "0", "0"), CALL_NOT_ALLOWED), expect(&select_all(), CALL_NO_CONTEXT)),
+    );
+    let (out, seen) = run_with(&p, |_| Ok(Value::Null));
+    assert!(out.unwrap_err().to_string().contains("vc_call `object.delete`: the manifest's `commandAllowlist` doesn't list it"));
+    assert!(seen.is_empty());
+}
+
 /// A result larger than [`MAX_CALL_DATA`] fails the run, and so do more than [`MAX_CALLS`] calls.
 #[test]
 fn results_and_calls_are_capped() {

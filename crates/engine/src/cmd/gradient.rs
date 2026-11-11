@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), method?: classic|perceptual (how the colours between the stops mix: in display RGB, or perceptually (OKLab) so the steps look even; SVG exports draw a Perceptual gradient as an image, and PDF exports do too unless it is linear or radial, has spot color stops, every other stop is paper white or written in CMYK or gray (an export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a CMYK document unless the export converts colors to an RGB destination profile), it is not a dithered fill and its curve does not have too many stops: then PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray inks as a DeviceN shading; freeform gradients mix their own way), stops?: [{offset 0..1, color? (needed without swatch; #rrggbbaa and #rgba are refused), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg, aspect?: %, reverse?: bool, dither?: bool (fills only: a linear or radial gradient fill is drawn with fine noise that hides banding, and as pixels in SVG and PDF exports), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), method?: classic|perceptual (how the colours between the stops mix: in display RGB, or perceptually (OKLab) so the steps look even; SVG exports draw a Perceptual gradient as an image, and PDF exports do too unless it is linear or radial, has spot color stops, every other stop is paper white or written in CMYK or gray (an export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a CMYK document unless the export converts colors to an RGB destination profile), it is not a dithered fill and its curve does not have too many stops: then PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray inks as a DeviceN shading; freeform gradients mix their own way), stops?: [{offset 0..1, color? (needed without swatch; #rrggbbaa and #rgba are refused), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg counter-clockwise (0: the gradient runs left to right), aspect?: %, reverse?: bool, dither?: bool (fills only: a linear or radial gradient fill is drawn with fine noise that hides banding, and as pixels in SVG and PDF exports), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -80,19 +80,28 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Whose gradient a selected stop belongs to: the active document, its first selected object
-/// (None: the default paint), the proxy in front and the Appearance panel's active item.
-/// Selecting other art, toggling the proxy or picking another item leaves no stop selected.
+/// (None: the default paint), whether a part of a symbol instance's art is picked, the proxy in
+/// front and the Appearance panel's active item. Selecting other art, picking a part of the
+/// instance, toggling the proxy or picking another item leaves no stop selected.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct StopOwner {
     doc: Option<usize>,
     object: Option<NodeId>,
+    part: bool,
     fill: bool,
     item: Option<usize>,
 }
 
 impl StopOwner {
     pub(crate) fn of(s: &Session) -> Self {
-        Self { doc: s.active, object: s.active().and_then(|d| d.selection.objects.first().copied()), fill: s.fill_active, item: s.appearance_item() }
+        let st = s.active();
+        Self {
+            doc: s.active,
+            object: st.and_then(|d| d.selection.objects.first().copied()),
+            part: st.is_some_and(|d| d.selection.symbol_part.is_some()),
+            fill: s.fill_active,
+            item: s.appearance_item(),
+        }
     }
 }
 

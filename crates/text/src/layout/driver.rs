@@ -209,24 +209,105 @@ const SHRINK_PASSES: usize = 11;
 pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
     #[cfg(any(test, feature = "test-fonts"))]
     crate::test_fonts::count_layout();
+    // The sizes the fits step and limit are the ones the Character panel shows (`shown`), whatever
+    // em size a font height reference sets them at.
+    let shown = t;
     let resolved = db.font_heights_resolved(t);
     let t = &*resolved;
     let first = layout_once(db, t, opts);
     match (opts.fit.min_scale(), &t.kind) {
-        (Some(min), TextKind::Area { .. }) if first.overflow => shrink_to_fit(db, t, opts, min).unwrap_or(first),
+        (Some(min), TextKind::Area { .. }) if first.overflow => shrink_to_fit(db, t, shown, opts, min).unwrap_or(first),
+        (_, TextKind::OnPath { .. }) if t.dynamic_text => fill_path(db, t, shown, opts, &first).unwrap_or(first),
         _ => first,
     }
+}
+
+/// The document size of the first character of `t` (its run's size; an empty run before it draws
+/// nothing), in tenths of a point. None when it is not a usable size.
+fn first_size_tenths(t: &TextObject) -> Option<f64> {
+    let points = t.style_scale()?.points;
+    let run = t.runs.iter().find(|r| !r.text.is_empty()).or(t.runs.first());
+    run.map(|r| r.style.size * points * 10.0).filter(|s| s.is_finite() && *s > 0.0)
+}
+
+/// Most layout passes Dynamic Text runs past the first (a guess, a search out from it, bisection).
+const DYNAMIC_PASSES: usize = 11;
+
+/// The sizes, in tenths of a document point, Dynamic Text keeps the first run's size within: 0.1
+/// to 1,296 pt, the Character panel's range.
+const DYNAMIC_TENTHS: (f64, f64) = (1.0, 12_960.0);
+
+/// Dynamic Text for type on a path: the largest scale at which the text does not run past its end
+/// bracket, so that it fills the span between its brackets. The first run's document size moves in
+/// steps of 0.1 pt within 0.1 to 1,296 pt; at either limit the text keeps that size, and at the
+/// smallest it may still overflow. Each guess is the size tried last times the span's length over
+/// the length the text took there, which is exact for a straight span with no Spacing; a guess
+/// outside the sizes still open gives way to a step out from the last one (doubling) or to
+/// bisection. At most [`DYNAMIC_PASSES`] passes. `t` is laid out; the sizes are those of `shown`,
+/// `t` before its font height references were resolved. None (keep `first`) when the text takes no
+/// length, the span has none, or the text has no usable size.
+fn fill_path(db: &FontDb, t: &TextObject, shown: &TextObject, opts: &LayoutOptions, first: &TextLayout) -> Option<TextLayout> {
+    let tenths = first_size_tenths(shown)?;
+    let (min, max) = DYNAMIC_TENTHS;
+    // The size in tenths that would fill the span, from a layout at `k` tenths.
+    let guess = |k: f64, l: &TextLayout| -> Option<f64> {
+        let (used, room) = l.path_fill?;
+        let g = (k * room / used).floor();
+        (used.is_finite() && used > 1e-9 && room.is_finite() && room > 1e-9 && g.is_finite()).then(|| g.clamp(min, max))
+    };
+    let mut next = guess(tenths, first)?;
+    let at = |k: f64| -> TextLayout {
+        #[cfg(test)]
+        FIT_PASSES.set(FIT_PASSES.get() + 1);
+        let f = k / tenths;
+        let mut l = layout_once(db, &scaled(t, f), opts);
+        l.fit_scale = f;
+        l
+    };
+    // The largest size tried that fits, and the smallest that overflows, each with its layout.
+    let mut fits: Option<(f64, TextLayout)> = None;
+    let mut over: Option<(f64, TextLayout)> = None;
+    let mut step = 1.0;
+    for _ in 0..DYNAMIC_PASSES {
+        let l = at(next);
+        let guessed = guess(next, &l);
+        if l.overflow {
+            if over.as_ref().is_none_or(|(o, _)| next < *o) {
+                over = Some((next, l));
+            }
+        } else if fits.as_ref().is_none_or(|(f, _)| next > *f) {
+            fits = Some((next, l));
+        }
+        // The sizes still open lie strictly between the largest that fits and the smallest that
+        // overflows, within the limits.
+        let lo = fits.as_ref().map_or(min - 1.0, |f| f.0);
+        let hi = over.as_ref().map_or(max + 1.0, |o| o.0);
+        if hi - lo <= 1.0 {
+            break;
+        }
+        next = match guessed.filter(|g| *g > lo && *g < hi) {
+            Some(g) => g,
+            None if fits.is_some() && over.is_some() => (lo + (hi - lo) * 0.5).floor(),
+            // Everything tried fits: try larger. Everything tried overflows: try smaller.
+            None if fits.is_some() => (lo + step).min(hi - 1.0),
+            None => (hi - step).max(lo + 1.0),
+        };
+        step *= 2.0;
+    }
+    // The largest that fits, or at the smallest size (or at the pass limit) the smallest tried.
+    fits.or(over).map(|(_, l)| l)
 }
 
 /// Shrink Text to Fit for text that overflows at full size: the largest scale in `min..1` at which
 /// it fits, searched by bisection over the first run's document size in steps of 0.1 pt (so its scaled size
 /// is a whole number of tenths of a point, the same every time). Down at `min` it lays out there,
-/// still overflowing. None (keep the full-size layout) when the text has no usable size.
-fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) -> Option<TextLayout> {
+/// still overflowing. `t` is laid out; the sizes are those of `shown`, `t` before its font height
+/// references were resolved. None (keep the full-size layout) when the text has no usable size.
+fn shrink_to_fit(db: &FontDb, t: &TextObject, shown: &TextObject, opts: &LayoutOptions, min: f64) -> Option<TextLayout> {
     // Exact size edits after object scaling may store a local size below 0.1. Fit in the
     // same document points as the Character controls, independent of that representation.
-    let points = t.style_scale()?.points;
-    let size = t.runs.first().map(|r| r.style.size * points).filter(|s| s.is_finite() && *s >= 0.1)?;
+    let points = shown.style_scale()?.points;
+    let size = shown.runs.first().map(|r| r.style.size * points).filter(|s| s.is_finite() && *s >= 0.1)?;
     if !(min.is_finite() && min < 1.0) {
         return None;
     }
@@ -290,6 +371,31 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
         }
     }
     s
+}
+
+/// `t` in the styles its layout draws it in: [`scaled`] by the layout's
+/// [`TextLayout::fit_scale`] when Shrink Text to Fit (area type) or Dynamic Text (type on a path)
+/// scales it, `t` itself otherwise. Text with neither setting is not laid out.
+pub fn drawn(t: &TextObject) -> std::borrow::Cow<'_, TextObject> {
+    let fits = match &t.kind {
+        TextKind::Area { .. } => t.area.fit.min_scale().is_some(),
+        TextKind::OnPath { .. } => t.dynamic_text,
+        TextKind::Point => false,
+    };
+    let f = if fits { layout(FontDb::global(), t).fit_scale } else { 1.0 };
+    if f != 1.0 { std::borrow::Cow::Owned(scaled(t, f)) } else { std::borrow::Cow::Borrowed(t) }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many layouts Dynamic Text ran past the first on this thread ([`fit_passes`]).
+    static FIT_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many layouts Dynamic Text ran past the first on this thread.
+#[cfg(test)]
+pub(crate) fn fit_passes() -> usize {
+    FIT_PASSES.get()
 }
 
 #[cfg(test)]
@@ -374,6 +480,7 @@ fn layout_runs(db: &FontDb, t: &TextObject, opts: &LayoutOptions, set: Option<&T
         system_layout: t.system_layout,
         fractional_widths: t.fractional_widths,
         upright_cluster: None,
+        tcy_block: None,
         out: TextLayout::default(),
     };
     // Vertical type: line space turned a quarter turn clockwise (lines become columns, each next

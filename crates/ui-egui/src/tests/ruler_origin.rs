@@ -80,7 +80,7 @@ fn ruler_origin_drag_uses_the_rotated_zoomed_view_and_commits_only_on_release() 
     assert!(st.doc.ruler_origin_for(0).distance(goal) < 1e-4, "{:?}", st.doc.ruler_origin_for(0));
     assert_eq!(st.history.undo.len(), undo + 1);
     assert_eq!(st.doc.art_bounds(), None, "the drawing tool never receives the corner drag");
-    assert!(st.doc.guides.is_empty());
+    assert!(st.doc.ruler_guides().is_empty());
     let origin = st.doc.ruler_origin_for(0);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(&*app.session.doc().unwrap().doc, &*before);

@@ -14,7 +14,7 @@ use crate::{Error, Kind, Result};
 pub const ABI_VERSION: i32 = 1;
 
 /// Fuel handed out per slice; between slices the host checks the deadline.
-const FUEL_SLICE: u64 = 20_000_000;
+pub const FUEL_SLICE: u64 = 20_000_000;
 
 /// wasmi's fuel costs, but compiling costs nothing. wasmi compiles a function when it is first
 /// called, and charges the run that calls it by the function's size. When the slice a run was in
@@ -24,12 +24,15 @@ const FUEL_SLICE: u64 = 20_000_000;
 /// the next. Copying keeps wasmi's default cost, a unit for every 64 bytes.
 const FUEL_COSTS: CustomFuelCosts = CustomFuelCosts { bytes_copied_per_fuel: 64, fuel_per_bytes_translated: 0, fuel_per_bytes_validated: 0 };
 
+/// Bytes a bulk memory instruction copies or fills for each unit of fuel.
+pub const BYTES_COPIED_PER_FUEL: u32 = FUEL_COSTS.bytes_copied_per_fuel;
+
 /// Instructions a heavy filter's run may use besides [`Limits::fuel_per_byte`] for each byte of
 /// input ([`crate::Budget::Heavy`]): 20 times a light one's. Its output's size can't add to it:
 /// the host learns that only once the run has ended.
 pub const HEAVY_FUEL: u64 = 1_000_000_000;
 
-/// Wall-clock budget of a heavy filter's run, in milliseconds (native builds).
+/// Wall-clock budget of a heavy filter's run, in milliseconds.
 pub const HEAVY_WALL_TIME_MS: u64 = 300_000;
 
 /// The limit a run reports when its input and parameters together are past half its memory.
@@ -56,8 +59,8 @@ pub struct Limits {
     pub fuel_per_byte: u64,
     /// Deepest call nesting.
     pub max_recursion_depth: usize,
-    /// Wall-clock budget for one run, in milliseconds. Native builds only: the web build has no
-    /// monotonic clock in `std`, so the fuel budget alone bounds it there.
+    /// Wall-clock budget for one run, in milliseconds. The web build measures it with the page's
+    /// `performance.now()`.
     pub wall_time_ms: u64,
     /// The most a heavy filter ([`crate::Budget::Heavy`]) is given instead of `fuel_base` and
     /// `wall_time_ms`: what the host allows, which the module's manifest can ask for but never

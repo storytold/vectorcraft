@@ -140,6 +140,8 @@ pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
         }
         // Its art is plain, so it warps at this depth.
         NodeKind::PlacedDocument(_) => return map_node(&expanded_group_hooks(n, w.hooks), w),
+        // A ruler guide has no shape to warp.
+        NodeKind::RulerGuide { .. } => {}
     }
     out
 }

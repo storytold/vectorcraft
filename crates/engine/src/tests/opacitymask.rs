@@ -151,6 +151,59 @@ fn mask_options_already_set_record_no_undo_step() {
     assert!(s.execute("transparency.setOpacityMask", &json!({"id": a.0})).is_err(), "no flag given");
 }
 
+/// Make Opacity Mask, Opacity Mask Options and the New Opacity Masks and page toggles refuse a
+/// param of the wrong type with an error naming it, and leave the document, the selection, the
+/// undo history and the defaults for new masks as they were. Null counts as a param left out,
+/// which keeps its default.
+#[test]
+fn mask_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let (a, m) = (rect(&mut s, 0.0, 100.0), rect(&mut s, 0.0, 50.0));
+    s.execute("select.set", &json!({"ids": [a.0, m.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let (b, c) = (rect(&mut s, 150.0, 100.0), rect(&mut s, 150.0, 50.0));
+    s.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.revision, history(s), st.selection.objects.clone(), s.new_mask_defaults())
+    };
+    let before = state(&s);
+    let switch = |k: &str| format!("`{k}` must be true or false");
+    for (cmd, p, want) in [
+        ("transparency.makeOpacityMask", json!({"clip": "false"}), switch("clip")),
+        ("transparency.makeOpacityMask", json!({"clip": 0}), switch("clip")),
+        ("transparency.makeOpacityMask", json!({"invert": "true"}), switch("invert")),
+        ("transparency.makeOpacityMask", json!({"invert": [true]}), switch("invert")),
+        ("transparency.setOpacityMask", json!({"id": a.0, "clip": "no"}), switch("clip")),
+        ("transparency.setOpacityMask", json!({"id": a.0, "clip": false, "invert": "yes"}), switch("invert")),
+        ("transparency.setOpacityMask", json!({"id": a.0, "disabled": 1}), switch("disabled")),
+        ("transparency.setOpacityMask", json!({"id": a.0, "linked": "false"}), switch("linked")),
+        ("transparency.toggleNewMasksClipping", json!({"value": "true"}), switch("value")),
+        ("transparency.toggleNewMasksInverted", json!({"value": 1}), switch("value")),
+        ("transparency.togglePageKnockoutGroup", json!({"value": "on"}), switch("value")),
+        ("transparency.togglePageIsolatedBlending", json!({"value": 0}), switch("value")),
+    ] {
+        let r = s.execute(cmd, &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+        assert!(state(&s) == before, "{cmd} {p}: nothing changes");
+    }
+    // Null params take their defaults: a new mask clips and is not inverted, a null flag stays as
+    // it is, and a null value toggles.
+    let id = s.execute("transparency.makeOpacityMask", &json!({"clip": null, "invert": null})).unwrap()["id"].as_u64().unwrap();
+    let made = mask(&s, NodeId(id)).unwrap();
+    assert!(made.clip && !made.invert);
+    s.execute("transparency.setOpacityMask", &json!({"id": a.0, "clip": null, "invert": true, "disabled": null, "linked": null})).unwrap();
+    let set = mask(&s, a).unwrap();
+    assert!(set.clip && set.invert && !set.disabled && set.linked);
+    assert!(s.execute("transparency.setOpacityMask", &json!({"id": a.0, "clip": null})).is_err(), "no flag given");
+    assert_eq!(s.execute("transparency.toggleNewMasksClipping", &json!({"value": null})).unwrap(), json!({"value": false}));
+    assert_eq!(s.execute("transparency.toggleNewMasksInverted", &json!({"value": null})).unwrap(), json!({"value": true}));
+    assert_eq!(s.new_mask_defaults(), (false, true));
+    assert_eq!(s.execute("transparency.togglePageKnockoutGroup", &json!({"value": null})).unwrap(), json!({"value": true}));
+    assert_eq!(s.execute("transparency.togglePageIsolatedBlending", &json!({"value": null})).unwrap(), json!({"value": true}));
+    assert!(doc(&s).page_knockout && doc(&s).page_isolate);
+}
+
 /// #4538: while a mask is edited the Layers panel lists only the mask, so New Layer and New
 /// Sublayer are refused instead of adding layers no row shows; they work again afterwards.
 #[test]

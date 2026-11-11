@@ -275,6 +275,7 @@ antiAlias	Sharp	Nítido
 	Average…	Média…
 	BLANK DOCUMENT PRESETS	PREDEFINIDOS DE DOCUMENTO EM BRANCO
 	Background Color:	Cor do Plano de Fundo:
+	Guide Label:	Rótulo das Guias:
 	Show Center Mark	Mostrar Marca Central
 	Show Cross Hairs	Mostrar Linhas Cruzadas
 	Show Video Safe Areas	Mostrar Áreas Seguras de Vídeo
@@ -1455,6 +1456,7 @@ antiAlias	Sharp	Nítido
 	Include SVG Code	Incluir Código SVG
 	Include Swatches for Tints	Incluir Amostras para Tons
 	Include non-printing layers	Incluir camadas de não impressão
+	Write pages longer than 200 in at full size in points	Gravar páginas com mais de 200 in em tamanho real, em pontos
 	Inflate…	Inflar…
 	Info	Informações
 	Ink	Tinta
@@ -1617,6 +1619,7 @@ antiAlias	Sharp	Nítido
 	Lock Grid	Bloquear Grade
 	Lock Guides	Bloquear Guias
 	Lock Guides by Default	Bloquear Guias por Padrão
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Guias de Prancheta com Cmd/Ctrl + Arrastar da Régua
 	Lock Slices	Bloquear Fatias
 	Lock Station Point	Bloquear Ponto de Estação
 	Lossless (lossy WebP isn't available yet)	Sem Perdas (WebP com perdas ainda não está disponível)
@@ -1928,6 +1931,8 @@ antiAlias	Sharp	Nítido
 	Open…	Abrir…
 	Optical	Óptico
 	Optical Margin Alignment	Alinhamento de Margem Óptica
+	Dynamic Text	Texto Dinâmico
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	o texto em um caminho de um texto encadeado não pode usar Texto Dinâmico: {frames}
 	Optimize for fast web view	Otimizar para visualização rápida na web
 	Optimized	Otimizado
 	Options	Opções
@@ -2356,6 +2361,12 @@ digits	Malayalam	Malaiala
 	Reset OpenType Features	Redefinir Recursos OpenType
 	Reset Panel	Redefinir Painel
 	Reset Preferences	Redefinir Preferências
+	Export Preferences…	Exportar Preferências…
+	Import Preferences…	Importar Preferências…
+	Save the applied preferences to a JSON file	Salvar as preferências aplicadas em um arquivo JSON
+	Apply the preferences in a file Export Preferences saved	Aplicar as preferências de um arquivo salvo com Exportar Preferências
+	Export Preferences	Exportar Preferências
+	Import Preferences	Importar Preferências
 	Search Preferences	Pesquisar nas Preferências
 	No settings found	Nenhuma configuração encontrada
 	Reset Profiles	Redefinir Perfis
@@ -2377,6 +2388,8 @@ digits	Malayalam	Malaiala
 	Restore	Restaurar
 	Restore Recovered Documents	Restaurar Documentos Recuperados
 	Restore every preference to its default (applied on OK)	Restaurar toda preferência ao padrão (aplicado em OK)
+	Reset all preferences to their defaults?	Redefinir todas as preferências para o padrão?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Os padrões são aplicados quando você clica em OK em Preferências. Cancelar ali mantém suas preferências atuais.
 	Restored documents open unsaved: save them to keep them.	Os documentos restaurados abrem sem salvar: salve-os para mantê-los.
 	Restrict printing, editing and other tasks	Restringir impressão, edição e outras tarefas
 	Reverse Front to Back	Inverter da Frente para Trás
@@ -2638,6 +2651,13 @@ digits	Malayalam	Malaiala
 	Quest Outline	Missão
 	Coin Shine	Moeda
 	Boss Alert	Chefe
+	Status Effects	Efeitos de status
+	Poison Tint	Veneno
+	Freeze Edge	Congelamento
+	Burn Aura	Queimadura
+	Stun Pulse	Atordoamento
+	Stealth Fade	Furtividade
+	Shield Buff	Escudo
 	Shape	Forma
 	Shape Builder	Construtor de Formas
 	Shape Builder Regions	Regiões do Construtor de Formas
@@ -3832,6 +3852,7 @@ axis	Both	Ambos
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	nesta escala o desenho tem {w} × {h} pt, mais do que a tela comporta: escolha uma escala menor ou ajuste-o à prancheta
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	plano de fundo {other}: transparent, white, black ou uma cor como "#ff8800"
 @msg	bad color {v}	cor inválida {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` é null, o nome de uma cor de camada ou #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio deve ser um número de 0,1 a 10
 @msg	bad colour `{hex}` (#rrggbb)	cor inválida `{hex}` (#rrggbb)
 @msg	bad page tree	árvore de páginas inválida
@@ -4229,6 +4250,20 @@ axis	Both	Ambos
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressões desconhecidas `{o}` (preserve, simulate ou discard)
 @msg	unknown panel `{raw}`	painel desconhecido `{raw}`
 @msg	unknown preference `{key}`	preferência desconhecida `{key}`
+@msg	Preferences imported.	Preferências importadas.
+@msg	not a preferences file: {e}	não é um arquivo de preferências: {e}
+@msg	not a preferences file: no JSON object	não é um arquivo de preferências: nenhum objeto JSON
+@msg	not a preferences file (format `{format}`)	não é um arquivo de preferências (formato `{format}`)
+@msg	not a preferences file: no `format`	não é um arquivo de preferências: falta `format`
+@msg	not a preferences file: no `version`	não é um arquivo de preferências: falta `version`
+@msg	not a preferences file: no `prefs`	não é um arquivo de preferências: falta `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	o arquivo foi salvo por uma versão mais recente do VectorCraft (versão {v})
+@msg	the file holds no preferences	o arquivo não contém preferências
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` indica uma pasta, e os arquivos de preferências não incluem pastas
+@msg	the file is larger than 1 MB	o arquivo tem mais de 1 MB
+@msg	give `path` or `data`	informe `path` ou `data`
+@msg	`{key}` must be an object	`{key}` deve ser um objeto
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` é executado sozinho, não como etapa de um lote
 @msg	unknown preset (one of {_1})	predefinição desconhecida (uma de {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	predefinição desconhecida `{name}` (high, medium, low ou uma salva: veja flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	predefinição desconhecida `{name}` (veja flattener.presets.list)
@@ -4401,6 +4436,8 @@ axis	Both	Ambos
 @msg	invalid object id {value}: expected a non-negative integer	id de objeto inválido {value}: era esperado um inteiro não negativo
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	a entrada {index} de `{key}` é {value}, não um id de objeto (inteiro não negativo)
 @msg	no such object id {value}	não existe objeto com o id {value}
+@msg	id {value} is a ruler guide, not an object	o id {value} é de uma guia, não de um objeto
+@msg	a ruler guide goes only directly in a layer or sublayer	uma guia só pode ficar diretamente em uma camada ou subcamada
 @msg	id {value} is a layer, not an object	o id {value} é uma camada, não um objeto
 @msg	id {value} is a layer, not an object; move layers with layer.move	o id {value} é uma camada, não um objeto; mova camadas com layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	o acesso da automação ao sistema de arquivos não foi concedido: falta autorização de leitura: {path}
@@ -4994,6 +5031,8 @@ axis	Both	Ambos
 	Text Wrap Options	Opções de Quebra de Texto
 	Tile Full Pages	Dividir em Páginas Inteiras
 	Tint	Tom
+	Fill Tint	Tom de Preenchimento
+	Stroke Tint	Tom do Traçado
 	Tip extends past the end point	A ponta se estende além do ponto final
 	Tip on the end point	Ponta no ponto final
 	Toolbar: Add Tool	Barra de Ferramentas: Adicionar Ferramenta
@@ -5041,6 +5080,7 @@ axis	Both	Ambos
 	Stop Script	Parar script
 	Show External Script Warning	Mostrar aviso de scripts externos
 	A Script Is Running	Um script está em execução
+	Script Alert	Alerta do script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Um script pode alterar os documentos abertos e gravar arquivos pelos comandos que executa. Execute apenas scripts em que você confia.
 	Do not show this warning again	Não mostrar este aviso novamente
 	Stop the script and undo what it did? Then quit again.	Parar o script e desfazer o que ele fez? Depois, saia novamente.
@@ -5054,6 +5094,9 @@ axis	Both	Ambos
 @msg	the script is too large to run	o script é grande demais para ser executado
 @msg	a drag or an undo group is open; finish it before running a script	há um arraste ou um grupo de desfazer aberto; conclua-o antes de executar um script
 @msg	the script left a document that cannot be kept	o script deixou um documento que não pode ser mantido
+@msg	the script is no longer in the Scripts folder	o script não está mais na pasta Scripts
+	Some scripts were not listed	Alguns scripts não foram listados
+	The Scripts folder cannot be read	Não é possível ler a pasta Scripts
 @msg	the script's run is no longer available	a execução do script não está mais disponível
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	um comando que falhou alterou etapas de desfazer que não puderam ser restauradas, então o script foi interrompido
 @msg	a recovery copy could not be written, so the script was not run	não foi possível gravar uma cópia de recuperação, portanto o script não foi executado
@@ -5436,6 +5479,7 @@ file-filter	Swatch libraries	Bibliotecas de amostras
 file-filter	Flattener presets	Predefinidos de achatamento
 file-filter	PDF presets	Predefinidos de PDF
 file-filter	Print presets	Predefinidos de impressão
+file-filter	Preferences	Preferências
 file-filter	Export presets	Predefinições de exportação
 file-filter	SVG Compressed	SVG Compactado
 file-filter	PDF-compatible .ai	.ai compatível com PDF
@@ -5566,7 +5610,8 @@ mark-style	Japanese	Japonesas
 	Bevel both sides	Chanfro nos Dois Lados
 	Presets	Predefinidos
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Um objeto aceita apenas um efeito 3D. Edite as opções do efeito existente ou remova-o primeiro.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} exige, por enquanto, um caminho, caminho composto, texto ou grupo. Converta antes imagens e outros objetos em caminhos.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} exige, por enquanto, um caminho, caminho composto, texto, grupo, mesclagem ou instância de símbolo. Expanda antes os outros objetos.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} não pode criar um sólido a partir de uma imagem: rastreie-a antes com Objeto › Rastreamento de Imagem › Criar.
 @msg	{label} requires a shape with at least two anchors	{label} exige uma forma com pelo menos dois pontos de ancoragem
 @msg	The shape is too complex for a 3D effect	A forma é complexa demais para um efeito 3D
 @msg	The 3D surface is too complex; simplify the shape	A superfície 3D é complexa demais; simplifique a forma
@@ -5641,14 +5686,17 @@ mark-style	Japanese	Japonesas
 @msg	Invalid drawing scale	Escala de desenho inválida
 @msg	Invalid real scale	Escala real inválida
 @msg	Measured anchor no longer exists	O ponto de ancoragem medido não existe mais
+@msg	Invalid measured point	Ponto medido inválido
 @msg	Measured segment no longer exists	O segmento medido não existe mais
 @msg	Non-finite dimension	Cota não finita
+@msg	Only linear dimensions are horizontal or vertical	Somente cotas lineares são horizontais ou verticais
 @msg	Scale Text Attributes: selected type has no scale to bake	Dimensionar Atributos de Texto: o texto selecionado não tem escala para aplicar
 @msg	Scale must be drawing:real, for example 1:10	A escala deve ser desenho:real, por exemplo 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	A proporção da escala deve estar entre 1:1000000 e 1000000:1
 @msg	Second measured segment no longer exists	O segundo segmento medido não existe mais
 @msg	Unknown dimension mode	Modo de cota desconhecido
 @msg	Unknown dimension option {k}	Opção de cota desconhecida {k}
+@msg	Unknown dimension orientation	Orientação de cota desconhecida
 @msg	the Color Picker is not open	o Seletor de Cores não está aberto
 @msg	the Simplify slider is not open	o controle deslizante Simplificar não está aberto
 @msg	the Smooth slider is not open	o controle deslizante Suavizar não está aberto
@@ -5668,6 +5716,7 @@ mark-style	Japanese	Japonesas
 	This system has no screen color sampler	Este sistema não tem coletor de cores da tela
 	 cancels  |  Double-click the tool for options	 cancela  |  Clique duas vezes na ferramenta para ver as opções
 	 out from a highlighted edge to place its dimension  |  	 para fora a partir de uma borda destacada para posicionar a cota  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 em dois pontos, depois mova e clique para posicionar uma cota alinhada, horizontal ou vertical  |  
 	Color Panel Options	Opções do Painel Cor
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve ser grayscale, rgb, hsb, cmyk ou websafe
 @msg	the image can't be read as a texture	a imagem não pode ser lida como textura
@@ -5998,6 +6047,18 @@ axis	Y Axis	Eixo Y
 	Flag	Bandeira
 	Crosshair	Mira
 	Checkpoint	Ponto de verificação
+	Inventory Icons	Ícones de inventário
+	Skill Icons	Ícones de habilidade
+	Attack	Ataque
+	Defend	Defesa
+	Heal	Cura
+	Buff	Buff
+	Ult	Ult
+	Sword	Espada
+	Shield	Escudo
+	Potion	Poção
+	Key	Chave
+	Gem	Gema
 	Open Symbol Library	Abrir Biblioteca de Símbolos
 	Save Symbol Library	Salvar Biblioteca de Símbolos
 	Save Symbol Library…	Salvar Biblioteca de Símbolos…
@@ -6057,6 +6118,11 @@ axis	Y Axis	Eixo Y
 	Dash Trail	Rastro tracejado
 	Speed Line	Linha de velocidade
 	Game Trails	Rastros de jogo
+	Energy Beams	Feixes de energia
+	Laser Bolt	Raio laser
+	Plasma Arc	Arco de plasma
+	Charge Wave	Onda de carga
+	Spark Trail	Rastro de faíscas
 	Calligraphic Nibs	Penas Caligráficas
 	Pattern Borders	Bordas de Padrão
 	Scatter Shapes	Formas de Dispersão
@@ -6805,3 +6871,31 @@ swatch	Yellow Green	Verde-amarelado
 	No Suggestions	Nenhuma Sugestão
 	Edit Custom Dictionary	Editar Dicionário Personalizado
 	Entry:	Entrada:
+# Script Console
+	Script Console	Console de scripts
+	Clear Script Console	Limpar console de scripts
+	Copy Script Console	Copiar console de scripts
+	Copy All	Copiar tudo
+	Copy Selected	Copiar seleção
+	Finished	Concluído
+	Ended with an error	Encerrado com um erro
+	Out of fuel	Limite de instruções esgotado
+	Ended at a host limit	Encerrado em um limite do host
+	Ended at a limit	Encerrado em um limite
+	Stopped	Interrompido
+	Ended by an internal fault	Encerrado por um erro interno
+	time unavailable	tempo indisponível
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	mais lentos: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} chamada ao host|{n} chamadas ao host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} linha anterior descartada|{n} linhas anteriores descartadas
+@plural	{n} line cut|{n} lines cut	{n} linha cortada|{n} linhas cortadas
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Atualizar Efeitos Adiados
+	Deferred Effects	Efeitos Adiados
+@msg	no plug-in effect is deferred	nenhum efeito de plug-in está adiado
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aberto com {n} efeito de plug-in adiado. Efeito › Atualizar Efeitos Adiados o executa.|Aberto com {n} efeitos de plug-in adiados. Efeito › Atualizar Efeitos Adiados os executa.

@@ -121,8 +121,9 @@ pub const CALL_COMMAND_FAILED: i32 = -8;
 pub const CALL_LIMIT: i32 = -9;
 /// What `vc_call_result` returns: no call has a result yet.
 pub const CALL_NO_RESULT: i32 = -10;
-/// What `vc_call` returns: nothing can be called now (while the module is being loaded, or in a
-/// run that isn't a filter's run on a document). In a run, this fails it too.
+/// What `vc_call` returns: nothing can be called now (while the module is being loaded, in a run
+/// that isn't a filter's run on a document, or after a call in the run failed). In a run, this
+/// fails it too.
 pub const CALL_NO_CONTEXT: i32 = -11;
 
 /// Most `vc_call` calls one run makes.
@@ -317,33 +318,27 @@ pub struct Report {
     pub truncated: bool,
 }
 
-/// When a run must stop (native: a wall-clock deadline).
+/// The limit a run past its wall-clock deadline exceeded ([`Error::Limit`]).
+pub(crate) const TIME_BUDGET: &str = "time budget";
+
+/// When a run must stop: a deadline on the monotonic clock (`web_time::Instant`, the page's
+/// `performance.now()` in the web build).
 #[derive(Clone, Copy)]
 pub(crate) struct Deadline {
-    #[cfg(not(target_arch = "wasm32"))]
-    at: std::time::Instant,
+    at: web_time::Instant,
 }
 
 impl Deadline {
     pub(crate) fn new(wall_time_ms: u64) -> Self {
-        #[cfg(target_arch = "wasm32")]
-        let _ = wall_time_ms;
-        Self {
-            #[cfg(not(target_arch = "wasm32"))]
-            at: std::time::Instant::now() + std::time::Duration::from_millis(wall_time_ms),
-        }
+        Self { at: web_time::Instant::now() + std::time::Duration::from_millis(wall_time_ms) }
     }
 
     pub(crate) fn passed(&self) -> bool {
-        #[cfg(not(target_arch = "wasm32"))]
-        if std::time::Instant::now() >= self.at {
-            return true;
-        }
-        false
+        web_time::Instant::now() >= self.at
     }
 
     pub(crate) fn check(&self) -> Result<()> {
-        if self.passed() { Err(Error::Limit("time budget".into())) } else { Ok(()) }
+        if self.passed() { Err(Error::Limit(TIME_BUDGET.into())) } else { Ok(()) }
     }
 }
 
@@ -429,9 +424,14 @@ impl Run {
 
     /// `vc_call`: checks the call to the command at `id` with the arguments at `args` in `memory`
     /// and leaves it in [`Run::pending`] for the host to make, or → the code for why it can't be
-    /// made, which fails the run. The size of the arguments is checked before they are read.
+    /// made, which fails the run. The size of the arguments is checked before they are read. After
+    /// the run's first failed call, every call returns [`CALL_NO_CONTEXT`] and none is made.
     fn call_request(&mut self, memory: &[u8], id: (usize, usize), args: (usize, usize)) -> std::result::Result<(), i32> {
         self.call_result = None;
+        // No call is made after the run's first failed call.
+        if self.call_failure.is_some() {
+            return Err(CALL_NO_CONTEXT);
+        }
         if self.allowed.is_none() {
             let why = "vc_call: no command can be called here (while the module loads, or in a run that can't make calls)";
             return Err(self.fail(CALL_NO_CONTEXT, Error::Abi(why.into())));
@@ -805,6 +805,15 @@ mod tests {
 
     fn run() -> Run {
         Run::new("test", true, false, Deadline::new(60_000))
+    }
+
+    /// A deadline reads the monotonic clock that the web build also reads: one of 0 ms has
+    /// passed, and one a day away has not.
+    #[test]
+    fn a_deadline_passes_on_the_monotonic_clock() {
+        assert!(Deadline::new(0).passed());
+        assert!(matches!(Deadline::new(0).check(), Err(Error::Limit(l)) if l == TIME_BUDGET));
+        assert!(!Deadline::new(86_400_000).passed());
     }
 
     /// Progress is clamped: negative counts are 0 and `done` never passes a known total.

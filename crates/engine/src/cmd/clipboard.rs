@@ -264,6 +264,8 @@ impl Clipboard {
                 .and_then(|p| *compound_bounds.entry(p.id).or_insert_with(|| p.geometric_bounds()));
             // A compound's member or piece copied on its own takes the compound's look (its paint,
             // transparency, opacity mask, pixel alignment and fill rule), so it pastes as it looked.
+            // It is linked to the compound's graphic style while it still has that style's look
+            // (a gradient pinned to the compound's bounds does not), else to none.
             let inherit_appearance = |mut piece: Node| {
                 if let Some(parent) = compound_parent
                     && let (NodeKind::Compound { rule: compound_rule, .. }, NodeKind::Path { rule, .. }) = (&parent.kind, &mut piece.kind)
@@ -276,11 +278,21 @@ impl Clipboard {
                     piece.opacity = parent.opacity;
                     piece.blend = parent.blend;
                     piece.isolate = parent.isolate;
+                    piece.knockout = parent.knockout;
                     piece.knockout_shape = parent.knockout_shape;
                     let (mask, pixel_aligned) = (parent.extras().mask.clone(), parent.extras().pixel_aligned);
-                    let mut extras = piece.extras_mut();
-                    extras.mask = mask;
-                    extras.pixel_aligned = pixel_aligned;
+                    {
+                        let mut extras = piece.extras_mut();
+                        extras.mask = mask;
+                        extras.pixel_aligned = pixel_aligned;
+                    }
+                    let link = parent
+                        .extras()
+                        .graphic_style
+                        .and_then(|g| d.graphic_style_by_id(g))
+                        .filter(|g| super::style::in_sync(&piece, g))
+                        .map(|g| g.id);
+                    piece.extras_mut().graphic_style = link;
                 }
                 piece
             };
@@ -310,7 +322,18 @@ impl Clipboard {
     /// Every object of `src` (each top-level layer's contents) with its resources, for Place and
     /// pasting outside SVG. Their layers don't count for Paste Remembers Layers.
     pub fn from_document(src: &Document) -> Self {
-        let nodes = src.layers.iter().flat_map(|l| l.children().into_iter().flatten()).map(|n| (**n).clone()).collect();
+        // Ruler guides are not objects: the ones of `src`'s layers and sublayers stay behind.
+        let nodes = src
+            .layers
+            .iter()
+            .flat_map(|l| l.children().into_iter().flatten())
+            .filter(|n| !n.is_ruler_guide())
+            .map(|n| {
+                let mut n = (**n).clone();
+                n.strip_ruler_guides();
+                n
+            })
+            .collect();
         Self::gather(src, nodes)
     }
 

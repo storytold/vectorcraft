@@ -283,6 +283,7 @@ font-technology	Variable	Варіативні
 	Average…	Усереднити…
 	Axis:	Вісь:
 	Background Color:	Колір тла:
+	Guide Label:	Мітка напрямних:
 	Show Center Mark	Показати центральну позначку
 	Show Cross Hairs	Показати перехрестя
 	Show Video Safe Areas	Показати безпечні зони відео
@@ -1272,6 +1273,7 @@ file-filter	Swatch libraries	Бібліотеки зразків
 file-filter	Flattener presets	Набори зведення
 file-filter	PDF presets	Набори PDF
 file-filter	Print presets	Набори друку
+file-filter	Preferences	Налаштування
 file-filter	Export presets	Набори параметрів експорту
 file-filter	SVG Compressed	Стиснутий SVG
 file-filter	PDF-compatible .ai	.ai, сумісний з PDF
@@ -1678,6 +1680,7 @@ file-filter	Templates	Шаблони
 	Include Linked Files	Включати пов’язані файли
 	Include Metadata	Включати метадані
 	Include non-printing layers	Включати недруковані шари
+	Write pages longer than 200 in at full size in points	Записувати сторінки, довші за 200 in, у повному розмірі, у пунктах
 	Include SVG Code	Вмикати код SVG
 	Include Swatches for Tints	Включати зразки для відтінків
 	Inflate…	Надування…
@@ -1919,6 +1922,7 @@ file-filter	Templates	Шаблони
 	Lock Grid	Заблокувати сітку
 	Lock Guides	Заблокувати напрямні
 	Lock Guides by Default	Блокувати напрямні за замовчуванням
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Напрямні монтажної області з Cmd/Ctrl + перетягуванням з лінійки
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння
@@ -2353,6 +2357,8 @@ file-filter	Templates	Шаблони
 	Open…	Відкрити…
 	Optical	Оптичний
 	Optical Margin Alignment	Оптичне вирівнювання полів
+	Dynamic Text	Динамічний текст
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст за контуром у пов’язаному тексті не може використовувати динамічний текст: {frames}
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано
 	Options	Параметри
@@ -2844,6 +2850,12 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Скинути функції OpenType
 	Reset Panel	Скинути панель
 	Reset Preferences	Скинути налаштування
+	Export Preferences…	Експортувати налаштування…
+	Import Preferences…	Імпортувати налаштування…
+	Save the applied preferences to a JSON file	Зберегти застосовані налаштування у файл JSON
+	Apply the preferences in a file Export Preferences saved	Застосувати налаштування з файлу, збереженого командою «Експортувати налаштування»
+	Export Preferences	Експортувати налаштування
+	Import Preferences	Імпортувати налаштування
 	Search Preferences	Пошук у налаштуваннях
 	No settings found	Налаштування не знайдено
 	Reset Profiles	Скинути профілі
@@ -2867,6 +2879,8 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивний
 	Restore	Відновити
 	Restore every preference to its default (applied on OK)	Відновити всі параметри за промовчанням (застосовується при натисканні ОК)
+	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
 	Restore Recovered Documents	Відновити відновлені документи
 	Restored documents open unsaved: save them to keep them.	Відновлені документи відкриваються незбереженими: збережіть їх, щоб залишити.
 	Restrict printing, editing and other tasks	Обмежити друк, редагування та інші завдання
@@ -3174,6 +3188,13 @@ digits	Malayalam	Малаялам
 	Quest Outline	Квест
 	Coin Shine	Монета
 	Boss Alert	Бос
+	Status Effects	Ефекти статусу
+	Poison Tint	Отрута
+	Freeze Edge	Заморозка
+	Burn Aura	Опік
+	Stun Pulse	Оглушення
+	Stealth Fade	Невидимість
+	Shield Buff	Щит
 	Shape	Фігура
 	Shape Builder	Створення фігур
 	Shape Builder Regions	Області створення фігур
@@ -3594,6 +3615,8 @@ effect	Points	Точки
 	Copies per Sheet (as many as fit, in a grid)	Копій на аркуш (скільки поміститься, сіткою)
 	Gutter:	Проміжок:
 	Tint	Відтінок
+	Fill Tint	Відтінок заливки
+	Stroke Tint	Відтінок обведення
 	Tip extends past the end point	Кінчик виходить за кінцеву точку
 	Tip on the end point	Кінчик на кінцевій точці
 	Title Case	Як у заголовку
@@ -4105,6 +4128,7 @@ axis	Both	Обидві
 	Stop Script	Зупинити скрипт
 	Show External Script Warning	Показувати попередження про зовнішні скрипти
 	A Script Is Running	Виконується скрипт
+	Script Alert	Повідомлення скрипту
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
 	Do not show this warning again	Більше не показувати це попередження
 	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
@@ -4118,6 +4142,9 @@ axis	Both	Обидві
 @msg	the script is too large to run	скрипт завеликий для виконання
 @msg	a drag or an undo group is open; finish it before running a script	відкрито перетягування або групу скасування; завершіть їх перед запуском скрипта
 @msg	the script left a document that cannot be kept	скрипт залишив документ, який не можна зберегти
+@msg	the script is no longer in the Scripts folder	скрипт більше не міститься в папці Scripts
+	Some scripts were not listed	Деякі сценарії не показано
+	The Scripts folder cannot be read	Не вдалося прочитати папку Scripts
 @msg	the script's run is no longer available	виконання скрипта більше не доступне
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	невдала команда змінила кроки скасування, які не вдалося відновити, тому скрипт зупинено
 @msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
@@ -4302,6 +4329,7 @@ axis	Both	Обидві
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` має бути null, назвою кольору шару або #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio має бути числом від 0,1 до 10
 @msg	the Color Picker is not open	палітра кольорів не відкрита
 @msg	the Simplify slider is not open	повзунок «Спростити» не відкрито
@@ -4707,6 +4735,20 @@ axis	Both	Обидві
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
 @msg	unknown panel `{raw}`	невідома панель `{raw}`
 @msg	unknown preference `{key}`	невідоме налаштування `{key}`
+@msg	Preferences imported.	Налаштування імпортовано.
+@msg	not a preferences file: {e}	не є файлом налаштувань: {e}
+@msg	not a preferences file: no JSON object	не є файлом налаштувань: немає об’єкта JSON
+@msg	not a preferences file (format `{format}`)	не є файлом налаштувань (формат `{format}`)
+@msg	not a preferences file: no `format`	не є файлом налаштувань: немає `format`
+@msg	not a preferences file: no `version`	не є файлом налаштувань: немає `version`
+@msg	not a preferences file: no `prefs`	не є файлом налаштувань: немає `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	файл збережено новішою версією VectorCraft (версія {v})
+@msg	the file holds no preferences	файл не містить налаштувань
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` вказує теку, а файли налаштувань не містять тек
+@msg	the file is larger than 1 MB	файл більший за 1 МБ
+@msg	give `path` or `data`	вкажіть `path` або `data`
+@msg	`{key}` must be an object	`{key}` має бути об’єктом
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` виконується окремо, а не як крок пакета
 @msg	unknown preset (one of {_1})	невідомий набір (один із: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	невідомий набір `{name}` (high, medium, low або збережений: див. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	невідомий набір `{name}` (див. flattener.presets.list)
@@ -4913,6 +4955,8 @@ axis	Both	Обидві
 @msg	invalid object id {value}: expected a non-negative integer	неприпустимий ідентифікатор об’єкта {value}: очікується невід’ємне ціле число
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} у `{key}` дорівнює {value}, а не ідентифікатору об’єкта (невід’ємному цілому числу)
 @msg	no such object id {value}	об’єкт з ідентифікатором {value} не існує
+@msg	id {value} is a ruler guide, not an object	ідентифікатор {value} належить напрямній, а не об’єкту
+@msg	a ruler guide goes only directly in a layer or sublayer	напрямна може бути лише безпосередньо в шарі або підшарі
 @msg	id {value} is a layer, not an object	ідентифікатор {value} належить шару, а не об’єкту
 @msg	id {value} is a layer, not an object; move layers with layer.move	ідентифікатор {value} належить шару, а не об’єкту; переміщуйте шари за допомогою layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	автоматизація не має доступу до файлової системи: немає права на читання: {path}
@@ -5210,7 +5254,8 @@ lighting	Light	Світло
 	Bevel both sides	Фаска з обох боків
 	Presets	Набори
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Об'єкт може мати лише один 3D-ефект. Змініть параметри наявного ефекту або спершу вилучіть його.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}: поки що потрібен контур, складений контур, текст або група. Спершу перетворіть зображення та інші об'єкти на контури.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label}: поки що потрібен контур, складений контур, текст, група, перехід або екземпляр символу. Спершу розберіть інші об'єкти.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}: із зображення не можна побудувати тіло. Спершу трасуйте його командою Об’єкт › Трасування зображення › Створити.
 @msg	{label} requires a shape with at least two anchors	{label}: потрібна фігура щонайменше з двома опорними точками
 @msg	The shape is too complex for a 3D effect	Фігура надто складна для 3D-ефекту
 @msg	The 3D surface is too complex; simplify the shape	3D-поверхня надто складна; спростіть фігуру
@@ -5269,6 +5314,7 @@ lighting	Light	Світло
 	Preview (1 inch on the page)	Попередній перегляд (1 дюйм на сторінці)
 	Set as Default	Встановити за замовчуванням
 	 out from a highlighted edge to place its dimension  |  	 назовні від підсвіченого краю, щоб розмістити його розмір  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 по двох точках, потім перемістіть і клацніть, щоб розмістити вирівняний, горизонтальний або вертикальний розмір  |  
 	 cancels  |  Double-click the tool for options	 скасовує  |  Подвійне клацання по інструменту відкриває параметри
 	Linear	Лінійний
 	Angular	Кутовий
@@ -5301,14 +5347,17 @@ lighting	Light	Світло
 @msg	Invalid drawing scale	Неприпустимий масштаб креслення
 @msg	Invalid real scale	Неприпустимий реальний масштаб
 @msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
+@msg	Invalid measured point	Недійсна виміряна точка
 @msg	Measured segment no longer exists	Виміряний сегмент більше не існує
 @msg	Non-finite dimension	Розмір не є скінченним числом
+@msg	Only linear dimensions are horizontal or vertical	Лише лінійні розміри бувають горизонтальними або вертикальними
 @msg	Scale Text Attributes: selected type has no scale to bake	Масштабувати атрибути тексту: у вибраного тексту немає масштабу для застосування
 @msg	Scale must be drawing:real, for example 1:10	Масштаб має бути у вигляді креслення:реальність, наприклад 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Співвідношення масштабу має бути від 1:1000000 до 1000000:1
 @msg	Second measured segment no longer exists	Другий виміряний сегмент більше не існує
 @msg	Unknown dimension mode	Невідомий режим розміру
 @msg	Unknown dimension option {k}	Невідомий параметр розміру {k}
+@msg	Unknown dimension orientation	Невідома орієнтація розміру
 @msg	Unknown dimension style	Невідомий стиль розміру
 @msg	Unknown unit	Невідома одиниця
 # Revolve cap description
@@ -5680,6 +5729,18 @@ axis	Y Axis	Вісь Y
 	Flag	Прапор
 	Crosshair	Приціл
 	Checkpoint	Контрольна точка
+	Inventory Icons	Піктограми інвентарю
+	Skill Icons	Іконки навичок
+	Attack	Атака
+	Defend	Захист
+	Heal	Лікування
+	Buff	Посилення
+	Ult	Ульт
+	Sword	Меч
+	Shield	Щит
+	Potion	Зілля
+	Key	Ключ
+	Gem	Самоцвіт
 	Open Symbol Library	Відкрити бібліотеку символів
 	Save Symbol Library	Зберегти бібліотеку символів
 	Save Symbol Library…	Зберегти бібліотеку символів…
@@ -5739,6 +5800,11 @@ axis	Y Axis	Вісь Y
 	Dash Trail	Пунктирний слід
 	Speed Line	Лінія швидкості
 	Game Trails	Ігрові сліди
+	Energy Beams	Енергетичні промені
+	Laser Bolt	Лазерний заряд
+	Plasma Arc	Плазмова дуга
+	Charge Wave	Хвиля заряду
+	Spark Trail	Слід іскор
 	Calligraphic Nibs	Каліграфічні пера
 	Pattern Borders	Візерункові облямівки
 	Scatter Shapes	Розсіяні фігури
@@ -6333,3 +6399,31 @@ breakText	Glyphs	Гліфи
 	No Suggestions	Немає варіантів
 	Edit Custom Dictionary	Редагувати словник користувача
 	Entry:	Запис:
+# Script Console
+	Script Console	Консоль скриптів
+	Clear Script Console	Очистити консоль скриптів
+	Copy Script Console	Копіювати консоль скриптів
+	Copy All	Копіювати все
+	Copy Selected	Копіювати виділене
+	Finished	Завершено
+	Ended with an error	Завершено з помилкою
+	Out of fuel	Вичерпано ліміт інструкцій
+	Ended at a host limit	Завершено на ліміті хоста
+	Ended at a limit	Завершено на ліміті
+	Stopped	Зупинено
+	Ended by an internal fault	Завершено через внутрішню помилку
+	time unavailable	час недоступний
+	{ms} ms	{ms} мс
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	найповільніші: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} виклик хоста|{n} виклики хоста|{n} викликів хоста
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} попередній рядок відкинуто|{n} попередні рядки відкинуто|{n} попередніх рядків відкинуто
+@plural	{n} line cut|{n} lines cut	{n} рядок обрізано|{n} рядки обрізано|{n} рядків обрізано
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` і `last` мають бути номерами рядків, які зберігає консоль, причому `first` не пізніше `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Оновити відкладені ефекти
+	Deferred Effects	Відкладені ефекти
+@msg	no plug-in effect is deferred	немає відкладених ефектів модулів
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Відкрито з {n} відкладеним ефектом модуля. Ефект › Оновити відкладені ефекти виконає його.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.

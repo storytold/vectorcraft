@@ -1,7 +1,7 @@
 //! Persistent dimension recipes. Children are ordinary paths and type for all renderers/exporters.
 use crate::{Document, NodeId, Unit};
 use serde::{Deserialize, Serialize};
-use vectorcraft_geom::{Affine, Point, Vec2};
+use vectorcraft_geom::{Affine, Anchor, PathData, Point, Vec2};
 
 /// What a dimension measures.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +23,17 @@ impl DimensionMode {
             Self::Diameter => "diameter",
         }
     }
+}
+
+/// The direction a linear dimension measures in: along the line through its two points, or only
+/// their horizontal or vertical distance.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Orientation {
+    #[default]
+    Aligned,
+    Horizontal,
+    Vertical,
 }
 
 /// The unit a length is labelled in.
@@ -295,6 +306,12 @@ pub enum DimensionSource {
         a: Option<PointRef>,
         b: Option<PointRef>,
         vertex: Option<PointRef>,
+        /// The first point when it is not an anchor, held against a path's anchors.
+        #[serde(default, rename = "freeA", skip_serializing_if = "Option::is_none")]
+        free_a: Option<FreePoint>,
+        /// The second point when it is not an anchor.
+        #[serde(default, rename = "freeB", skip_serializing_if = "Option::is_none")]
+        free_b: Option<FreePoint>,
     },
 }
 
@@ -304,7 +321,11 @@ impl DimensionSource {
             Self::Segment { edge } | Self::Arc { edge } => vec![edge.node],
             Self::Angle { first, second } => vec![first.node, second.node],
             Self::Circle { node } => vec![*node],
-            Self::Points { a, b, vertex } => [a, b, vertex].into_iter().filter_map(|p| p.as_ref().map(|r| r.node)).collect(),
+            Self::Points { a, b, vertex, free_a, free_b } => [a, b, vertex]
+                .into_iter()
+                .filter_map(|p| p.as_ref().map(|r| r.node))
+                .chain([free_a, free_b].into_iter().filter_map(|p| p.as_ref().map(FreePoint::node)))
+                .collect(),
         }
     }
     /// Anchor indexes cannot safely follow a topology replacement. Ordinary moves and handle
@@ -320,6 +341,34 @@ impl DimensionSource {
             let old = counts(before);
             old.is_some() && old != counts(after)
         })
+    }
+    /// The map that took the measured art from `before` to `after`, when every path it measures
+    /// went through one [`art_transform`] that reflects it (a negative determinant). None when a
+    /// measured path is unchanged, or when two of them went through different maps.
+    pub fn reflection(&self, before: &Document, after: &Document) -> Option<Affine> {
+        let mut first: Option<Affine> = None;
+        for id in self.nodes() {
+            let (old, new) = (before.node(id)?, after.node(id)?);
+            if std::ptr::eq(old, new) || old.path_data() == new.path_data() {
+                return None;
+            }
+            let xf = fitted(before, after, id, |xf| xf.determinant() < 0.0)?;
+            match first {
+                None => first = Some(xf),
+                Some(f) => {
+                    // The linear parts and the translations, each against its own size.
+                    let (a, b) = (f.as_coeffs(), xf.as_coeffs());
+                    let differ = |range: std::ops::Range<usize>, tolerance: f64| {
+                        let size = a[range.clone()].iter().map(|c| c.abs()).fold(1.0, f64::max);
+                        a[range.clone()].iter().zip(&b[range]).any(|(p, q)| (p - q).abs() > tolerance * size)
+                    };
+                    if differ(0..4, 1e-9) || differ(4..6, 1e-9) {
+                        return None;
+                    }
+                }
+            }
+        }
+        first
     }
 }
 
@@ -337,6 +386,235 @@ impl PointRef {
     }
 }
 
+/// The point of an anchor that an [`AnchorWeight`] names: the anchor, or one of its handles.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AnchorPart {
+    #[default]
+    Point,
+    In,
+    Out,
+}
+
+impl AnchorPart {
+    fn of(self, a: &Anchor) -> Point {
+        match self {
+            Self::Point => a.p,
+            Self::In => a.h_in,
+            Self::Out => a.h_out,
+        }
+    }
+}
+
+/// One anchor's share of a [`FreePoint`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnchorWeight {
+    pub subpath: usize,
+    pub anchor: usize,
+    /// The anchor itself, or its in or out handle.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub part: AnchorPart,
+    pub weight: f64,
+}
+
+/// A measured point that is not an anchor (a point on a segment, or a point a Smart Guide gave),
+/// linked to one path so that it moves with it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum FreePoint {
+    /// A point on a segment at curve parameter `t`, 0 at the segment's first anchor and 1 at its
+    /// last. It stays on the segment when the segment's anchors or handles are edited.
+    OnSegment { edge: SegmentRef, t: f64 },
+    /// A weighted sum of two or three anchors or handles of one path, the weights adding up to 1,
+    /// plus `across` times the vector from the first anchor to the second turned a quarter turn,
+    /// from (x, y) to (-y, x), so that a vector pointing right in the y-down document space
+    /// turns to point down (two anchors only). When the
+    /// path is moved, scaled, rotated, reflected or sheared, a point held by three moves with
+    /// it. A point held by two and `across`, beside a straight path, moves, turns and scales
+    /// uniformly with it, and a reflection or a non-uniform scale moves it as a half turn or a
+    /// uniform scale would.
+    Anchors {
+        node: NodeId,
+        anchors: Vec<AnchorWeight>,
+        #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+        across: f64,
+    },
+}
+
+/// A point of a path: (subpath, anchor, part, place).
+type PathPoint = (usize, usize, AnchorPart, Point);
+
+/// Every anchor of `path` in order, each followed by its in and out handles when `handles` is set.
+fn path_points(path: &PathData, handles: bool) -> impl Iterator<Item = PathPoint> + Clone + '_ {
+    let parts: &'static [AnchorPart] = if handles { &[AnchorPart::Point, AnchorPart::In, AnchorPart::Out] } else { &[AnchorPart::Point] };
+    path.subpaths
+        .iter()
+        .enumerate()
+        .flat_map(move |(si, sp)| sp.anchors.iter().enumerate().flat_map(move |(ai, a)| parts.iter().map(move |&part| (si, ai, part, part.of(a)))))
+}
+
+/// Three points that span `points`: the first, the one farthest from it, and the one farthest
+/// from the line through those two. None when every point is in one place.
+fn spanning(points: impl Iterator<Item = PathPoint> + Clone) -> Option<[PathPoint; 3]> {
+    let first = points.clone().next()?;
+    let o = first.3;
+    let second = points.clone().max_by(|x, y| x.3.distance(o).total_cmp(&y.3.distance(o)))?;
+    let u = second.3 - o;
+    let span = u.hypot();
+    if !span.is_finite() || span <= 1e-6 {
+        return None;
+    }
+    let third = points.max_by(|x, y| u.cross(x.3 - o).abs().total_cmp(&u.cross(y.3 - o).abs()))?;
+    Some([first, second, third])
+}
+
+/// The map that takes the anchors and handles of path `node` in `before` to where they are in
+/// `after`, when one affine map does that for every one of them: the path was moved, scaled,
+/// rotated, reflected or sheared as a whole. None when its anchors changed in number, moved in
+/// another way, or lie on one line with all their handles, as on a straight line: a reflection
+/// across a line through such a path puts its points where a turn can put them too.
+pub fn art_transform(before: &Document, after: &Document, node: NodeId) -> Option<Affine> {
+    fitted(before, after, node, |_| true)
+}
+
+/// [`art_transform`] when the map passes `wanted`. The map is found from three points, and
+/// `wanted` is asked before every other point is checked against it.
+fn fitted(before: &Document, after: &Document, node: NodeId, wanted: impl Fn(&Affine) -> bool) -> Option<Affine> {
+    let (old, new) = (before.node(node)?.path_data()?, after.node(node)?.path_data()?);
+    if old.subpaths.len() != new.subpaths.len() || old.subpaths.iter().zip(&new.subpaths).any(|(o, n)| o.anchors.len() != n.anchors.len()) {
+        return None;
+    }
+    let [o, f, g] = spanning(path_points(old, true))?;
+    let place = |q: PathPoint| new.subpaths.get(q.0).and_then(|sp| sp.anchors.get(q.1)).map(|a| q.2.of(a));
+    let (o2, f2, g2) = (place(o)?, place(f)?, place(g)?);
+    let (u, v) = (f.3 - o.3, g.3 - o.3);
+    let span = u.hypot();
+    if u.cross(v).abs() <= 1e-9 * span * span {
+        return None;
+    }
+    let basis = |u: Vec2, v: Vec2| Affine::new([u.x, u.y, v.x, v.y, 0.0, 0.0]);
+    let linear = basis(f2 - o2, g2 - o2) * basis(u, v).inverse();
+    let xf = Affine::translate(o2.to_vec2()) * linear * Affine::translate(-o.3.to_vec2());
+    if !xf.as_coeffs().iter().all(|c| c.is_finite()) || !wanted(&xf) {
+        return None;
+    }
+    let tolerance = 1e-6 * span.max(1.0);
+    path_points(old, true).zip(path_points(new, true)).all(|(o, n)| (xf * o.3).distance(n.3) <= tolerance).then_some(xf)
+}
+
+impl FreePoint {
+    /// Largest weight: a point far outside the anchors that hold it is not held.
+    const MAX_WEIGHT: f64 = 1e4;
+
+    /// The path it is linked to.
+    pub fn node(&self) -> NodeId {
+        match self {
+            Self::OnSegment { edge, .. } => edge.node,
+            Self::Anchors { node, .. } => *node,
+        }
+    }
+
+    /// `p` held against path `node`: three anchors that span the path; when all its anchors lie
+    /// on one line or in one place, as on an arch, three of its anchors and handles; when its
+    /// handles lie on that line too, or so nearly that the weights would be too large, two anchors
+    /// and `p`'s distance across that line. None when none of these holds `p`.
+    pub fn on(doc: &Document, node: NodeId, p: Point) -> Option<Self> {
+        let path = doc.node(node)?.path_data()?;
+        let weight = |(subpath, anchor, part, _): PathPoint, weight| AnchorWeight { subpath, anchor, part, weight };
+        for handles in [false, true] {
+            let Some([o, f, g]) = spanning(path_points(path, handles)) else { continue };
+            let (u, v) = (f.3 - o.3, g.3 - o.3);
+            let span = u.hypot();
+            let det = u.cross(v);
+            if det.abs() > 1e-9 * span * span {
+                let s = (p - o.3).cross(v) / det;
+                let t = u.cross(p - o.3) / det;
+                let anchors = vec![weight(o, 1.0 - s - t), weight(f, s), weight(g, t)];
+                // A nearly flat set of points gives weights too large to keep: the next fit is tried.
+                if let Some(held) = (Self::Anchors { node, anchors, across: 0.0 }).holding(doc, p, span) {
+                    return Some(held);
+                }
+            }
+        }
+        // Every anchor and handle on one line, or nearly: along it from the first anchor, and across it.
+        let [o, f, _] = spanning(path_points(path, false))?;
+        let u = f.3 - o.3;
+        let span = u.hypot();
+        let (t, across) = ((p - o.3).dot(u) / (span * span), u.cross(p - o.3) / (span * span));
+        Self::Anchors { node, anchors: vec![weight(o, 1.0 - t), weight(f, t)], across }.holding(doc, p, span)
+    }
+
+    /// `p` on the segment `edge`, at the curve parameter of the segment's point nearest to it.
+    /// None when the segment is gone or `p` is not on it.
+    pub fn on_segment(doc: &Document, edge: &SegmentRef, p: Point) -> Option<Self> {
+        use vectorcraft_geom::kurbo::ParamCurveNearest;
+        let sp = doc.node(edge.node)?.path_data()?.subpaths.get(edge.subpath)?;
+        if edge.segment >= sp.segment_count() {
+            return None;
+        }
+        let (a, b) = edge.endpoints(doc)?;
+        let t = sp.segment(edge.segment).nearest(p, 1e-12).t;
+        Self::OnSegment { edge: edge.clone(), t }.holding(doc, p, a.distance(b))
+    }
+
+    /// Itself when it is [`Self::valid`] and puts the point at `p`, within a tolerance that grows
+    /// with `span`, the size of the art that holds it.
+    fn holding(self, doc: &Document, p: Point, span: f64) -> Option<Self> {
+        let at = self.position(doc)?;
+        (at.distance(p) <= 1e-6 * span.max(1.0)).then_some(self)
+    }
+
+    /// Whether its numbers can be used: a finite `t` from 0 to 1 on a segment; or two or three
+    /// weights that add up to 1, with `across` set only for two, each finite and at most
+    /// [`Self::MAX_WEIGHT`] across.
+    pub fn valid(&self) -> bool {
+        match self {
+            Self::OnSegment { t, .. } => (0.0..=1.0).contains(t),
+            Self::Anchors { anchors, across, .. } => {
+                (2..=3).contains(&anchors.len())
+                    && anchors.iter().all(|w| w.weight.is_finite() && w.weight.abs() <= Self::MAX_WEIGHT)
+                    && (anchors.iter().map(|w| w.weight).sum::<f64>() - 1.0).abs() <= 1e-9
+                    && across.is_finite()
+                    && across.abs() <= Self::MAX_WEIGHT
+                    && (*across == 0.0 || anchors.len() == 2)
+            }
+        }
+    }
+
+    /// Where the point is now. None when its segment or an anchor is gone or the point is not
+    /// [`Self::valid`].
+    pub fn position(&self, doc: &Document) -> Option<Point> {
+        use vectorcraft_geom::kurbo::ParamCurve;
+        if !self.valid() {
+            return None;
+        }
+        let at = match self {
+            Self::OnSegment { edge, t } => {
+                let sp = doc.node(edge.node)?.path_data()?.subpaths.get(edge.subpath)?;
+                if edge.segment >= sp.segment_count() {
+                    return None;
+                }
+                sp.segment(edge.segment).eval(*t)
+            }
+            Self::Anchors { node, anchors, across } => {
+                let path = doc.node(*node)?.path_data()?;
+                let place = |w: &AnchorWeight| path.subpaths.get(w.subpath).and_then(|sp| sp.anchors.get(w.anchor)).map(|a| w.part.of(a).to_vec2());
+                let mut at = Vec2::ZERO;
+                for w in anchors {
+                    at += place(w)? * w.weight;
+                }
+                if *across != 0.0 {
+                    let u = place(anchors.get(1)?)? - place(anchors.first()?)?;
+                    at += Vec2::new(-u.y, u.x) * *across;
+                }
+                at.to_point()
+            }
+        };
+        (at.x.is_finite() && at.y.is_finite()).then_some(at)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Dimension {
@@ -349,6 +627,10 @@ pub struct Dimension {
     pub length: f64,
     pub options: DimensionOptions,
     pub source: Option<DimensionSource>,
+    /// What a linear dimension measures: the distance between its points (aligned), or only its
+    /// horizontal or vertical part. Other modes ignore it.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub orientation: Orientation,
     /// How far a linked dimension was moved on its own since the last refresh: the refresh turns
     /// it into a new placement unless the measured art moved too.
     #[serde(skip)]
@@ -359,16 +641,137 @@ impl Dimension {
     /// A point on the drawn dimension line (linear), arc (angular) or radius line.
     pub fn handle(&self) -> Point {
         match self.mode {
-            DimensionMode::Linear => self.a.midpoint(self.b) + self.normal() * self.offset,
+            DimensionMode::Linear => {
+                let (a, b) = self.line_ends();
+                a.midpoint(b)
+            }
             DimensionMode::Angular => self.vertex + self.bisector() * self.offset.abs().max(12.0),
             DimensionMode::Radius | DimensionMode::Diameter => self.b,
         }
     }
-    /// The left normal of a → b.
+    /// The unit direction a linear dimension measures along: a → b when aligned, else the x axis
+    /// (horizontal) or the y axis (vertical), whichever way the points lie.
+    pub fn direction(&self) -> Vec2 {
+        match self.orientation {
+            Orientation::Horizontal if self.mode == DimensionMode::Linear => Vec2::new(1.0, 0.0),
+            Orientation::Vertical if self.mode == DimensionMode::Linear => Vec2::new(0.0, 1.0),
+            _ => {
+                let u = self.b - self.a;
+                let len = u.hypot();
+                if len > 1e-9 { u / len } else { Vec2::new(1.0, 0.0) }
+            }
+        }
+    }
+    /// The left normal of [`Self::direction`].
     pub fn normal(&self) -> Vec2 {
-        let u = self.b - self.a;
-        let len = u.hypot();
-        if len > 1e-9 { Vec2::new(-u.y, u.x) / len } else { Vec2::new(0.0, 1.0) }
+        let u = self.direction();
+        Vec2::new(-u.y, u.x)
+    }
+    /// The length a linear dimension shows: the distance between its points along
+    /// [`Self::direction`].
+    pub fn measured(&self) -> f64 {
+        (self.b - self.a).dot(self.direction()).abs()
+    }
+    /// The two ends of a linear dimension's line: the measured points moved onto one line along
+    /// [`Self::direction`], `offset` from a along the normal.
+    pub fn line_ends(&self) -> (Point, Point) {
+        let (u, n) = (self.direction(), self.normal());
+        let a = self.a + n * self.offset;
+        (a, a + u * (self.b - self.a).dot(u))
+    }
+    /// A horizontal or vertical dimension whose points moved from `old`'s keeps its line as far
+    /// outside them as it was, on the same side: the gap is measured from the outermost point
+    /// on the line's side, so the line stays clear of art that turns. A line that lay between
+    /// the two points keeps its distance from the first point.
+    pub fn keep_gap(&mut self, old: &Dimension) {
+        if self.mode != DimensionMode::Linear
+            || self.orientation == Orientation::Aligned
+            || old.orientation != self.orientation
+            || (self.a, self.b) == (old.a, old.b)
+        {
+            return;
+        }
+        let n = self.normal();
+        let across = |p: Point| p.to_vec2().dot(n);
+        let line = across(old.a) + old.offset;
+        let (low, high) = (across(old.a).min(across(old.b)), across(old.a).max(across(old.b)));
+        let (new_low, new_high) = (across(self.a).min(across(self.b)), across(self.a).max(across(self.b)));
+        let at = if line >= high {
+            new_high + (line - high)
+        } else if line <= low {
+            new_low + (line - low)
+        } else {
+            return;
+        };
+        let offset = at - across(self.a);
+        if offset.is_finite() && offset.abs() <= 1e6 {
+            self.offset = offset;
+        }
+    }
+    /// A linear dimension whose art was reflected, its points now moved from `old`'s: its line goes
+    /// to the side of the points that `image` (where the reflection put `old`'s line) is on, as far
+    /// past the outermost point on that side as `old`'s line was. A line that lay between the two
+    /// points is left as it is.
+    pub fn mirror_line(&mut self, old: &Dimension, image: Point) {
+        if self.mode != DimensionMode::Linear || old.mode != DimensionMode::Linear {
+            return;
+        }
+        let gap = {
+            let n = old.normal();
+            let across = |p: Point| p.to_vec2().dot(n);
+            let line = across(old.a) + old.offset;
+            let (low, high) = (across(old.a).min(across(old.b)), across(old.a).max(across(old.b)));
+            if line >= high {
+                line - high
+            } else if line <= low {
+                low - line
+            } else {
+                return;
+            }
+        };
+        let n = self.normal();
+        let across = |p: Point| p.to_vec2().dot(n);
+        let (low, high) = (across(self.a).min(across(self.b)), across(self.a).max(across(self.b)));
+        let at = if 2.0 * across(image) >= low + high { high + gap } else { low - gap };
+        let offset = at - across(self.a);
+        if offset.is_finite() && offset.abs() <= 1e6 {
+            self.offset = offset;
+        }
+    }
+    /// Whether a linear dimension's line lies strictly between its two points along the normal.
+    fn line_between_points(&self) -> bool {
+        let n = self.normal();
+        let across = |p: Point| p.to_vec2().dot(n);
+        let line = across(self.a) + self.offset;
+        across(self.a).min(across(self.b)) < line && line < across(self.a).max(across(self.b))
+    }
+    /// Makes a linear dimension measure in `orientation`, with its line on the side of the points
+    /// it was on. The line goes through the middle of the old line when that point lies outside
+    /// the two points along the new normal; otherwise it lies as far past the outermost point on
+    /// that side as the old line lay from its points.
+    pub fn set_orientation(&mut self, orientation: Orientation) {
+        if self.mode != DimensionMode::Linear || self.orientation == orientation {
+            self.orientation = orientation;
+            return;
+        }
+        let (handle, gap) = (self.handle(), self.offset.abs());
+        self.orientation = orientation;
+        let n = self.normal();
+        let across = |p: Point| p.to_vec2().dot(n);
+        let (low, high) = (across(self.a).min(across(self.b)), across(self.a).max(across(self.b)));
+        let h = across(handle);
+        let at = if h >= high || h <= low {
+            h
+        } else if 2.0 * h >= low + high {
+            high + gap
+        } else {
+            low - gap
+        };
+        let offset = at - across(self.a);
+        if offset.is_finite() && offset.abs() <= 1e6 {
+            self.offset = offset;
+        }
+        self.length = self.measured();
     }
     fn bisector(&self) -> Vec2 {
         let start = (self.a - self.vertex).atan2();
@@ -397,28 +800,46 @@ impl Dimension {
             self.moved = Some((xf * at) - at + self.moved.unwrap_or_default());
             return;
         }
+        // A horizontal or vertical dimension keeps measuring along its axis, between the points
+        // where they now are, and its line goes through where the transform puts it. When that
+        // puts the line between the points (a quarter turn), the line keeps its gap from them.
+        let before = (self.mode == DimensionMode::Linear && self.orientation != Orientation::Aligned).then(|| (self.clone(), xf * self.handle()));
         self.a = xf * self.a;
         self.b = xf * self.b;
         self.vertex = xf * self.vertex;
+        if let Some((old, p)) = before {
+            let offset = (p - self.a).dot(self.normal());
+            if offset.is_finite() && offset.abs() <= 1e6 {
+                self.offset = offset;
+            }
+            if self.line_between_points() && !old.line_between_points() {
+                self.keep_gap(&old);
+            }
+        }
         if self.mode == DimensionMode::Linear {
-            self.length = self.a.distance(self.b);
+            self.length = self.measured();
         }
     }
     pub fn resolve(&mut self, doc: &Document) -> Result<(), String> {
         match &self.source {
-            Some(DimensionSource::Points { a, b, vertex }) => {
-                for (reference, point) in [(a, &mut self.a), (b, &mut self.b), (vertex, &mut self.vertex)] {
-                    if let Some(r) = reference {
-                        *point = r.position(doc).ok_or("Measured anchor no longer exists")?;
+            Some(DimensionSource::Points { a, b, vertex, free_a, free_b }) => {
+                for (reference, free, point) in [(a, free_a, &mut self.a), (b, free_b, &mut self.b), (vertex, &None, &mut self.vertex)] {
+                    match (reference, free) {
+                        // An end is an anchor or a free point, never both.
+                        (Some(_), Some(_)) => return Err("Invalid measured point".into()),
+                        (Some(r), None) => *point = r.position(doc).ok_or("Measured anchor no longer exists")?,
+                        (None, Some(f)) if !f.valid() => return Err("Invalid measured point".into()),
+                        (None, Some(f)) => *point = f.position(doc).ok_or("Measured anchor no longer exists")?,
+                        (None, None) => {}
                     }
                 }
-                self.length = self.a.distance(self.b);
+                self.length = if self.mode == DimensionMode::Linear { self.measured() } else { self.a.distance(self.b) };
             }
             Some(DimensionSource::Segment { edge }) => {
                 let (a, b) = edge.endpoints(doc).ok_or("Measured segment no longer exists")?;
                 self.a = a;
                 self.b = b;
-                self.length = a.distance(b);
+                self.length = self.measured();
             }
             Some(DimensionSource::Angle { first, second }) => {
                 for edge in [first, second] {
@@ -486,7 +907,7 @@ impl Dimension {
             DimensionMode::Angular => self.angle().abs().to_degrees(),
             DimensionMode::Radius => self.a.distance(self.b),
             DimensionMode::Diameter => self.a.distance(self.b) * 2.0,
-            DimensionMode::Linear => self.a.distance(self.b),
+            DimensionMode::Linear => self.measured(),
         };
         self.options.label(value, self.mode == DimensionMode::Angular)
     }

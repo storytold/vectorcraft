@@ -128,7 +128,7 @@ The host is [`wasmi`](https://github.com/wasmi-labs/wasmi), a pure-Rust WebAssem
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
 | Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte | `Limit("instruction budget")` |
-| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (desktop; checked every 20 M instructions) | `Limit("time budget")` |
+| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (checked every 20 M instructions; the web build reads the page's `performance.now()`) | `Limit("time budget")` |
 | Import input | 128 MiB of the file (`vectorcraft_plugins::import::MAX_INPUT_BYTES`) | the file doesn't open; a larger file named by `path` is not read past that |
 | Call depth | 1,024 frames | trap |
 | Module shape | wasmi's strict limits (≤ 10,000 functions, 1 memory, …) | rejected |
@@ -136,6 +136,19 @@ The host is [`wasmi`](https://github.com/wasmi-labs/wasmi), a pure-Rust WebAssem
 An export runs where the export runs: with Background Export on, on the export's worker, whose Cancel stops the
 plug-in between two of those 20 M-instruction slices; nothing is written then. An import stops the same way when the
 open it runs in is cancelled, and nothing opens then.
+
+### Live effects while a document opens
+
+While the app draws a document on screen, the live-effect runs of its first view share a 2,000 ms budget
+(`vectorcraft_plugins::deferred::OPENING_BUDGET_MS`, VectorCraft's own value), measured from the first run. Each run
+takes the lesser of its 5 s limit and what is left of the budget; once the budget is spent no run starts, and a result
+that comes back after it is not used. A stage left out this way, or one that times out, traps, returns output the host
+refuses or has no plug-in, draws its input art unchanged and is deferred. The status bar then says how many stages
+are deferred, and later drawings leave them as they are until their input or parameters change. Effect › Refresh
+Deferred Effects (`effect.refreshDeferred`) runs them again with a fresh budget, and `effect.deferredStatus` lists
+them with the reason (`budget`, `timeout`, `missing`, `failed`, `safeMode`). Each document has its own budget.
+Exports, Expand Appearance and commands run every stage under the 5 s limit. The web build has the same budget,
+measured with the page's `performance.now()`.
 
 ### Heavy filters
 
@@ -157,7 +170,7 @@ much there is only once the run has ended.
   Cancel (also Esc) and Continue in Background (`plugin.cancelRuns`, `plugin.hideRuns`). When it is done its result is
   applied as `plugin.run` with the same parameters and objects, as one undo step, unless the document or the plug-in
   changed meanwhile: then nothing changes, and the status bar says to run it again. On the web, which has no threads,
-  it runs at once; the instruction budget alone bounds it there.
+  it runs at once, under the same instruction budget and 300 s limit.
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
 
@@ -407,7 +420,7 @@ arguments as a JSON object, the params the command takes from any request:
 `-3` when the arguments are not a JSON object, `-4` when `commandAllowlist` doesn't list the id, `-5` when no command
 has the id, `-6` when a plug-in may not call the command, `-7` when the command can't run now (nothing is selected),
 `-8` when the command ran and failed, `-9` when a limit below is passed, and `-11` when nothing can be called (from
-the module's start function, or in a run that isn't a filter's run on a document).
+the module's start function, in a run that isn't a filter's run on a document, or after a call in the run failed).
 
 - Every code also fails the run, whatever the plug-in does next, and the error names the call and why it failed. The run's calls and its output are one undo step, named after the plug-in or its command. A run that fails,
   traps, runs out of budget or is canceled leaves every document, its selection and its history as they were.

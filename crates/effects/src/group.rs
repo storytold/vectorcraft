@@ -209,7 +209,7 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             Some(area) => Some(reshaped(&area, n, doc)),
             None => {
                 let mut m = crate::reshape::outlined_members_with(None, doc, n, outline, nodes);
-                let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
+                let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
                 // The group's own fills and strokes follow the effects as its members do.
                 if carry.moves(&m.appearance) {
                     carry.apply(&mut m.appearance);
@@ -225,7 +225,7 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             let art = h(n).filter(|art| nodes.charge(art))?;
             let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
             crate::reshape::outline_nested_text(doc, &mut art, false);
-            let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, doc);
+            let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, &n.appearance.effects, doc);
             // The art's own fills and strokes follow the effects as its members do.
             if carry.moves(&art.appearance) {
                 carry.apply(&mut art.appearance);
@@ -455,6 +455,17 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         return None;
     }
     let source: &[Arc<Node>] = group.children()?;
+    // A layer's ruler guides take no part in the operation: they stay above its result.
+    let art = Node::guide_run_start(source);
+    if art < source.len() {
+        let mut without = group.clone();
+        if let Some(ch) = without.children_mut() {
+            ch.truncate(art);
+        }
+        let mut out = pathfinder_children(doc, &without, hook)?;
+        out.extend(source.iter().skip(art).cloned());
+        return Some(out);
+    }
     let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
         // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
         match compound_shape_area(doc, group, hook) {
@@ -727,9 +738,11 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         return None;
     }
     let mut m = n.clone();
+    // A layer's ruler guides take no part: they go back above the evaluated art at the end.
+    let guides = m.children_mut().map(|ch| ch.split_off(Node::guide_run_start(ch))).unwrap_or_default();
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
-        let result = pathfinder_children(doc, n, Some(&hook)).unwrap_or_default();
+        let result = pathfinder_children(doc, &m, Some(&hook)).unwrap_or_default();
         if let Some(ch) = m.children_mut() {
             *ch = result;
         }
@@ -738,7 +751,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     if !fx.is_empty() {
         m = crate::reshape::outlined_members(doc, &m);
-        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
+        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
         // The group's own fills and strokes paint the members as a whole: their gradients follow
         // the effects as the members' do.
         if paint && carry.moves(&m.appearance) {
@@ -762,6 +775,9 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     m.appearance.items.clear();
     m.appearance.contents_index = None;
+    if let Some(ch) = m.children_mut() {
+        ch.extend(guides);
+    }
     Some(m)
 }
 

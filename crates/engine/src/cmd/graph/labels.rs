@@ -10,7 +10,7 @@ use super::{
 pub(super) struct Gen<'a> {
     pub(super) d: &'a mut Document,
     pub(super) out: Vec<Arc<Node>>,
-    /// The labels' kept character styles.
+    /// The labels' kept character styles and paragraph attributes.
     pub(super) styles: &'a vectorcraft_doc::LabelStyles,
     /// What the column designs may still add.
     pub(super) columns: Allowance,
@@ -45,6 +45,34 @@ pub(super) fn label_style(styles: &vectorcraft_doc::LabelStyles, role: Role) -> 
     st
 }
 
+/// The paragraph attributes labels of `role` are set with: the kept ones, else the defaults. The caller sets the
+/// alignment.
+pub(super) fn label_para(styles: &vectorcraft_doc::LabelStyles, role: Role) -> vectorcraft_doc::ParaStyle {
+    let mut para = kept_para(styles, role).cloned().unwrap_or_default();
+    // A file's attributes within the limits the Paragraph controls keep to (they are copied onto every label).
+    para.keep_spacing_in_range();
+    para
+}
+
+/// The paragraph attributes labels of `role` keep, if any.
+fn kept_para(styles: &vectorcraft_doc::LabelStyles, role: Role) -> Option<&vectorcraft_doc::ParaStyle> {
+    match role {
+        Role::Value => styles.values_para.as_ref(),
+        Role::Category => styles.categories_para.as_ref(),
+        Role::Legend => styles.legend_para.as_ref(),
+    }
+}
+
+/// The anti-aliasing method labels of `role` are drawn with: the kept one, else Sharp.
+pub(super) fn label_anti_alias(styles: &vectorcraft_doc::LabelStyles, role: Role) -> vectorcraft_doc::text::TypeAntiAlias {
+    let kept = match role {
+        Role::Value => styles.values_anti_alias,
+        Role::Category => styles.categories_anti_alias,
+        Role::Legend => styles.legend_anti_alias,
+    };
+    kept.unwrap_or_default()
+}
+
 /// How big labels of `role` are set: a kept style's size, else 9 pt. The labels' spacing follows it.
 pub(super) fn label_size(styles: &vectorcraft_doc::LabelStyles, role: Role) -> f64 {
     label_style(styles, role).size
@@ -61,19 +89,39 @@ impl Gen<'_> {
         self.path(PathData::from_bezpath(&bp), Paint::None, Paint::solid(Color::BLACK), 0.5)
     }
     pub(super) fn text(&mut self, role: Role, at: Point, s: &str, justify: Justify) -> Arc<Node> {
+        let t = self.text_object(role, at, s, justify);
+        Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
+    }
+    /// Label `s` of `role` set at `at` and laid out, not yet in the document.
+    fn text_object(&self, role: Role, at: Point, s: &str, justify: Justify) -> TextObject {
         let style = label_style(self.styles, role);
         let mut t = TextObject::point(at, s, style);
+        t.para = label_para(self.styles, role);
+        t.anti_alias = label_anti_alias(self.styles, role);
         t.para.justify = justify;
         t.system_layout = self.d.setup.system_layout;
         refresh_bounds(&mut t);
-        Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
+        t
     }
     /// A category or series label: a `|` in it starts a new line (Add graph labels). `middle`: the lines are centred
     /// on `at` (labels beside an axis or in a wedge) instead of running down from it.
     pub(super) fn label(&mut self, role: Role, at: Point, s: &str, justify: Justify, middle: bool) -> Arc<Node> {
         let lines = s.split('|').count();
-        let at = if middle { Point::new(at.x, at.y - (lines - 1) as f64 * label_size(self.styles, role) * 1.2 / 2.0) } else { at };
-        self.text(role, at, &s.replace('|', "\n"), justify)
+        // Default leading puts the first and last baselines this far above and below `at`.
+        let half = (lines - 1) as f64 * label_size(self.styles, role) * 1.2 / 2.0;
+        let start = if middle { Point::new(at.x, at.y - half) } else { at };
+        let mut t = self.text_object(role, start, &s.replace('|', "\n"), justify);
+        // Kept leading or paragraph spacing moves the lines: put the middle of the first and last baselines on `at`. An
+        // empty line has no baseline: an empty first or last line leaves the label where the default leading puts it.
+        if middle && kept_para(self.styles, role).is_some() {
+            let ys: Vec<f64> = t.baselines().map(|(a, _)| a.y).collect();
+            let ends_set = s.split('|').next().is_some_and(|l| !l.is_empty()) && s.split('|').next_back().is_some_and(|l| !l.is_empty());
+            let set = s.split('|').filter(|l| !l.is_empty()).count();
+            if let (Some(first), Some(last), true) = (ys.first(), ys.last(), ends_set && ys.len() == set) {
+                t.xf = Affine::translate((0.0, half - (first + last) / 2.0)) * t.xf;
+            }
+        }
+        Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
     }
     pub(super) fn group(&mut self, name: &str, children: Vec<Arc<Node>>) -> Arc<Node> {
         let mut g = Node::group(self.d.alloc_id(), children);
@@ -162,12 +210,47 @@ pub(super) fn shadow_of(d: &mut Document, n: &Node) -> Arc<Node> {
     Arc::new(d.reid(&c))
 }
 
-/// How wide label `s` is set (its widest line), without adding it to a document.
-pub(super) fn label_width(styles: &vectorcraft_doc::LabelStyles, s: &str) -> f64 {
+/// The bounds of legend label `s` set from the origin with paragraph attributes `para` and the document's System
+/// Layout setting `system_layout`, as [`Gen::text`] sets it, without adding it to a document.
+fn legend_label_bounds(styles: &vectorcraft_doc::LabelStyles, s: &str, para: vectorcraft_doc::ParaStyle, system_layout: bool) -> Option<Rect> {
     let style = label_style(styles, Role::Legend);
     let mut t = TextObject::point(Point::ZERO, &s.replace('|', "\n"), style);
+    t.para = para;
+    t.para.justify = Justify::Left;
+    t.system_layout = system_layout;
     refresh_bounds(&mut t);
-    Node::new(NodeId(0), NodeKind::Text(Box::new(t))).geometric_bounds().map_or(0.0, |b| b.width())
+    Node::new(NodeId(0), NodeKind::Text(Box::new(t))).geometric_bounds()
+}
+
+/// How far label `s` reaches right of where it starts (its widest line and any indent), after the legend moves it right
+/// by [`label_shift`], without adding it to a document.
+pub(super) fn label_width(styles: &vectorcraft_doc::LabelStyles, s: &str, system_layout: bool) -> f64 {
+    legend_label_bounds(styles, s, label_para(styles, Role::Legend), system_layout)
+        .map_or(0.0, |b| (b.x1 + label_shift(styles, s, system_layout).0).max(0.0))
+}
+
+/// The bounds of legend label `s` set with its kept paragraph attributes and with the defaults, when it has kept ones.
+fn kept_and_default_bounds(styles: &vectorcraft_doc::LabelStyles, s: &str, system_layout: bool) -> Option<(Rect, Rect)> {
+    styles.legend_para.as_ref()?;
+    Some((
+        legend_label_bounds(styles, s, label_para(styles, Role::Legend), system_layout)?,
+        legend_label_bounds(styles, s, vectorcraft_doc::ParaStyle::default(), system_layout)?,
+    ))
+}
+
+/// How much further left and further up legend label `s` reaches with its kept paragraph attributes than with the
+/// defaults (a negative indent or negative spacing), so the legend moves it right and down by that much and it stays
+/// clear of its swatch and of the entries before it.
+pub(super) fn label_shift(styles: &vectorcraft_doc::LabelStyles, s: &str, system_layout: bool) -> (f64, f64) {
+    kept_and_default_bounds(styles, s, system_layout)
+        .map_or((0.0, 0.0), |(kept, default)| ((default.x0 - kept.x0).max(0.0), (default.y0 - kept.y0).max(0.0)))
+}
+
+/// How much further down legend label `s` reaches with its kept paragraph attributes than with the defaults (more
+/// leading, or space before or after), after the legend moves it down by [`label_shift`], so the legend makes room
+/// for it.
+pub(super) fn label_extra_height(styles: &vectorcraft_doc::LabelStyles, s: &str, system_layout: bool) -> f64 {
+    kept_and_default_bounds(styles, s, system_layout).map_or(0.0, |(kept, default)| (kept.y1 + (default.y0 - kept.y0).max(0.0) - default.y1).max(0.0))
 }
 
 /// A label with nothing to show (empty, or only `|` line breaks).

@@ -77,6 +77,12 @@ pub struct TextObject {
     /// them up round the inside.
     #[serde(default, rename = "pathSpacing", skip_serializing_if = "crate::skip::is_default")]
     pub path_spacing: f64,
+    /// Type › Dynamic Text (type on a path only): the layout scales the text by one factor so it
+    /// fills the span between its start and end brackets, and fits it again after each edit. The
+    /// stored sizes keep their proportions; the layout's `fit_scale` is the factor drawn. Off for new
+    /// type and for documents from before it, and saved only when on.
+    #[serde(default, rename = "dynamicText", skip_serializing_if = "crate::skip::is_default")]
+    pub dynamic_text: bool,
     /// Wrap objects above this area type, resolved by the engine after each edit (text space).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wrap: Vec<WrapShape>,

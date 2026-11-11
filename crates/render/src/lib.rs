@@ -283,6 +283,7 @@ use frame::{
 #[cfg(test)]
 use frame::{OFFSCREEN_PIXELS, Slices};
 pub use geometry::region_pixels;
+pub use node_checks::draws_plugin_effects;
 use node_checks::holds_plugin_effect;
 #[cfg(test)]
 use node_checks::painted_items;

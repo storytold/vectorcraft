@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create",
             ["Type", "Threaded Text"],
             None,
-            "{} thread the selected area type and type on a path (and closed paths, which become area frames) in stacking order → {ids}",
+            "{} thread the selected area type and type on a path (and closed paths, which become area frames) in stacking order; a frame with Dynamic Text has it turned off and keeps the sizes it was drawn at → {ids, dynamicTextOff?: [id…] (the frames it was turned off on; left out when none)}",
             has_multi,
             create
         ),
@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Thread Text",
             [],
             None,
-            "{from, to?, rect?: [x, y, width, height], at?: [x, y], before?} thread area type or type on a path `from` (a click on its out port) into one more frame, put after it in its thread, or before it with `before: true` (a click on its in port: the story starts there and flows on into `from`): closed path, area type or type on a path `to`, a new rectangle `rect`, or a new frame of `from`'s kind, shape and size with its top-left at `at` (give one of the three) → {id}; the two frames are selected",
+            "{from, to?, rect?: [x, y, width, height], at?: [x, y], before?} thread area type or type on a path `from` (a click on its out port) into one more frame, put after it in its thread, or before it with `before: true` (a click on its in port: the story starts there and flows on into `from`): closed path, area type or type on a path `to`, a new rectangle `rect`, or a new frame of `from`'s kind, shape and size with its top-left at `at` (give one of the three); a frame with Dynamic Text has it turned off and keeps the sizes it was drawn at → {id, dynamicTextOff?: [id…] (the frames it was turned off on; left out when none)}; the two frames are selected",
             has_doc,
             add
         ),
@@ -126,6 +126,11 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
         }
         #[cfg(test)]
         COPIED.with(|c| c.set(c.get() + 1));
+        // Type on a path in a thread is not Dynamic Text: its frames keep the sizes it draws them
+        // at, before the story is taken from them.
+        if thread.iter().filter(|id| text_of(doc, **id).is_some()).count() >= 2 {
+            dynamic_text_off(doc, &thread);
+        }
         // The story: live frames' runs, plus the text of frames deleted by this edit.
         let mut story: Vec<TextRun> = vec![];
         let mut sources: Vec<TextObject> = vec![];
@@ -264,15 +269,28 @@ fn thread_setting<T: PartialEq>(before: &Document, doc: &Document, live: &[NodeI
     changed.or(live.first()).and_then(now)
 }
 
-/// Turn Auto Size off for the frames of each thread of two or more frames, as [`reflow`] does,
-/// without re-flowing the story: for a document restored from a file as it was saved, so a later
-/// change to a frame's settings keeps the frame's size.
+/// Turn Dynamic Text off on the frames among `ids` that have it on, each keeping the sizes it is
+/// drawn at ([`super::typemenu::bake_dynamic_text`]); the frames it turned off.
+pub(crate) fn dynamic_text_off(doc: &mut Document, ids: &[NodeId]) -> Vec<NodeId> {
+    let on: Vec<NodeId> = ids.iter().copied().filter(|id| text_of(doc, *id).is_some_and(|t| t.dynamic_text)).collect();
+    for id in &on {
+        if let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind) {
+            super::typemenu::bake_dynamic_text(t);
+        }
+    }
+    on
+}
+
+/// Turn Auto Size and Dynamic Text off for the frames of each thread of two or more frames, as
+/// [`reflow`] does, without re-flowing the story: for a document restored from a file as it was
+/// saved, so a later change to a frame's settings keeps the frame's size.
 pub(crate) fn keep_frame_sizes(doc: &mut Document) {
     for thread in doc.text_threads.clone() {
         let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
         if live.len() < 2 {
             continue;
         }
+        dynamic_text_off(doc, &live);
         for id in live {
             if text_of(doc, id).is_some_and(|t| t.area.fit == vectorcraft_doc::AreaFit::AutoHeight)
                 && let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind)
@@ -534,6 +552,8 @@ fn create(s: &mut Session, _: &Value) -> Result<Value> {
         return Err(bad(C, "select area type and closed paths (at least one area type object)"));
     }
     let out = ids.clone();
+    // The frames that lose Dynamic Text: those of the new thread and the threads it takes in.
+    let off: Vec<u64> = with_threads(d, &ids).into_iter().filter(|i| text_of(d, *i).is_some_and(|t| t.dynamic_text)).map(|i| i.0).collect();
     s.edit("Thread Text", |d, _| {
         for id in &ids {
             if text_of(d, *id).is_none() {
@@ -562,7 +582,11 @@ fn create(s: &mut Session, _: &Value) -> Result<Value> {
         touch(d, ids[0]);
         Ok(())
     })?;
-    Ok(json!({ "ids": out.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    let mut reply = json!({ "ids": out.iter().map(|i| i.0).collect::<Vec<_>>() });
+    if !off.is_empty() {
+        reply["dynamicTextOff"] = json!(off);
+    }
+    Ok(reply)
 }
 
 /// `text.thread.add`: the loaded text of a port, placed.
@@ -573,7 +597,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let before = switch_or(p, "before", false, C)?;
     let d = &s.doc()?.doc;
     let src = text_of(d, from).ok_or_else(|| bad(C, "`from` must be area type or type on a path"))?;
-    let style = src.first_style();
+    // A new frame takes the style `from` is drawn in: threading turns its Dynamic Text off.
+    let style = vectorcraft_text::drawn(src).first_style();
     // The frame to thread into: an existing object (`to`), or a new one beside `from`.
     let (to, new) = match (given("to"), given("rect"), given("at")) {
         (Some(v), None, None) => {
@@ -610,6 +635,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         _ => return Err(bad(C, "give one of `to`, `rect` or `at`")),
     };
     let appearance = d.node(from).map(|n| n.appearance.clone());
+    // The frames that lose Dynamic Text: those of `from`'s thread and `to`.
+    let off: Vec<u64> = with_threads(d, &[from, to]).into_iter().filter(|i| text_of(d, *i).is_some_and(|t| t.dynamic_text)).map(|i| i.0).collect();
     let id = s.edit("Thread Text", |d, sel| {
         let to = match new {
             Some(t) => {
@@ -645,7 +672,11 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([from, to]);
         Ok(to)
     })?;
-    Ok(json!({ "id": id.0 }))
+    let mut reply = json!({ "id": id.0 });
+    if !off.is_empty() {
+        reply["dynamicTextOff"] = json!(off);
+    }
+    Ok(reply)
 }
 
 /// An empty frame of `kind` (area type or type on a path) placed by `xf`, with the type options of
@@ -654,6 +685,7 @@ fn empty_frame(src: &TextObject, style: vectorcraft_doc::CharStyle, kind: TextKi
     let mut t = src.clone();
     t.runs = vec![TextRun { text: String::new(), style, inline: None }];
     t.set_all_paras(src.para_at(0).clone());
+    t.dynamic_text = false;
     t.kind = kind;
     t.xf = xf;
     refresh_bounds(&mut t);

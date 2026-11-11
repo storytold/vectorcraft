@@ -278,6 +278,7 @@ font-technology	Variable	Variabla
 	Average…	Medelvärde…
 	Axis:	Axel:
 	Background Color:	Bakgrundsfärg:
+	Guide Label:	Stödlinjeetikett:
 	Show Center Mark	Visa mittmarkering
 	Show Cross Hairs	Visa hårkors
 	Show Video Safe Areas	Visa videosäkra områden
@@ -1616,6 +1617,7 @@ font-technology	Variable	Variabla
 	Include Linked Files	Inkludera länkade filer
 	Include Metadata	Inkludera metadata
 	Include non-printing layers	Inkludera lager som inte skrivs ut
+	Write pages longer than 200 in at full size in points	Skriv sidor längre än 200 in i full storlek i punkter
 	Include SVG Code	Inkludera SVG-kod
 	Include Swatches for Tints	Inkludera färgrutor för nyanser
 	Inflate…	Blås upp…
@@ -1837,6 +1839,7 @@ font-technology	Variable	Variabla
 	Lock Grid	Lås rutnät
 	Lock Guides	Lås stödlinjer
 	Lock Guides by Default	Lås stödlinjer som standard
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Stödlinjer för rityta med Cmd/Ctrl + dra från linjal
 	Lock Others	Lås övriga
 	Lock Slices	Lås skivor
 	Lock Station Point	Lås betraktarpunkt
@@ -2271,6 +2274,8 @@ font-technology	Variable	Variabla
 	Open…	Öppna…
 	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
+	Dynamic Text	Dynamisk text
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	text på bana i länkad text kan inte använda dynamisk text: {frames}
 	Optimize for fast web view	Optimera för snabb webbvisning
 	Optimized	Optimerad
 	Options	Alternativ
@@ -2755,6 +2760,12 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Återställ OpenType-funktioner
 	Reset Panel	Återställ panel
 	Reset Preferences	Återställ inställningar
+	Export Preferences…	Exportera inställningar…
+	Import Preferences…	Importera inställningar…
+	Save the applied preferences to a JSON file	Spara de tillämpade inställningarna i en JSON-fil
+	Apply the preferences in a file Export Preferences saved	Tillämpa inställningarna i en fil som Exportera inställningar har sparat
+	Export Preferences	Exportera inställningar
+	Import Preferences	Importera inställningar
 	Search Preferences	Sök i inställningar
 	No settings found	Inga inställningar hittades
 	Reset Profiles	Återställ profiler
@@ -2777,6 +2788,8 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Återställ
 	Restore every preference to its default (applied on OK)	Återställ alla inställningar till standard (verkställs vid OK)
+	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument
 	Restored documents open unsaved: save them to keep them.	Återställda dokument öppnas osparade: spara dem för att behålla dem.
 	Restrict printing, editing and other tasks	Begränsa utskrift, redigering och andra åtgärder
@@ -3070,6 +3083,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Uppdrag
 	Coin Shine	Mynt
 	Boss Alert	Boss
+	Status Effects	Statuseffekter
+	Poison Tint	Gift
+	Freeze Edge	Frost
+	Burn Aura	Bränna
+	Stun Pulse	Bedövning
+	Stealth Fade	Smyga
+	Shield Buff	Sköld
 	Shape	Form
 	Shape Builder	Formbyggare
 	Shape Builder Regions	Formbyggarområden
@@ -3486,6 +3506,8 @@ digits	Malayalam	Malayalam
 	Tiles are numbered across, then down; leave the range empty for every tile.	Rutorna numreras från vänster till höger och sedan nedåt. Lämna omfånget tomt för att få med alla rutor.
 	Copies per Sheet (as many as fit, in a grid)	Kopior per ark (så många som får plats, i ett rutnät)
 	Tint	Färgton
+	Fill Tint	Fyllnadsfärgton
+	Stroke Tint	Konturfärgton
 	Tip extends past the end point	Spetsen sträcker sig förbi slutpunkten
 	Tip on the end point	Spetsen på slutpunkten
 	Title Case	Inledande versaler
@@ -3989,6 +4011,7 @@ axis	Both	Båda
 	Stop Script	Stoppa skript
 	Show External Script Warning	Visa varning för externa skript
 	A Script Is Running	Ett skript körs
+	Script Alert	Skriptmeddelande
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
 	Do not show this warning again	Visa inte den här varningen igen
 	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
@@ -4002,6 +4025,9 @@ axis	Both	Båda
 @msg	the script is too large to run	skriptet är för stort för att köras
 @msg	a drag or an undo group is open; finish it before running a script	en dragning eller ångragrupp är öppen; avsluta den innan du kör ett skript
 @msg	the script left a document that cannot be kept	skriptet lämnade ett dokument som inte kan behållas
+@msg	the script is no longer in the Scripts folder	skriptet finns inte längre i mappen Scripts
+	Some scripts were not listed	Vissa skript visas inte i listan
+	The Scripts folder cannot be read	Mappen Scripts kan inte läsas
 @msg	the script's run is no longer available	skriptets körning är inte längre tillgänglig
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	ett misslyckat kommando ändrade ångrasteg som inte kunde återställas, så skriptet stoppades
 @msg	a recovery copy could not be written, so the script was not run	en återställningskopia kunde inte skrivas, så skriptet kördes inte
@@ -4185,6 +4211,7 @@ axis	Both	Båda
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis måste vara "vertical", "horizontal" eller en vinkel i grader, inte `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black eller en färg som "#ff8800"
 @msg	bad color {v}	ogiltig färg {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` är null, namnet på en lagerfärg eller #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio måste vara ett tal från 0,1 till 10
 @msg	bad colour `{hex}` (#rrggbb)	ogiltig färg `{hex}` (#rrggbb)
 @msg	bad page tree	ogiltigt sidträd
@@ -4579,6 +4606,20 @@ axis	Both	Båda
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	okänd panel `{raw}`
 @msg	unknown preference `{key}`	okänd inställning `{key}`
+@msg	Preferences imported.	Inställningarna har importerats.
+@msg	not a preferences file: {e}	inte en inställningsfil: {e}
+@msg	not a preferences file: no JSON object	inte en inställningsfil: inget JSON-objekt
+@msg	not a preferences file (format `{format}`)	inte en inställningsfil (format `{format}`)
+@msg	not a preferences file: no `format`	inte en inställningsfil: inget `format`
+@msg	not a preferences file: no `version`	inte en inställningsfil: ingen `version`
+@msg	not a preferences file: no `prefs`	inte en inställningsfil: ingen `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	filen sparades av en nyare version av VectorCraft (version {v})
+@msg	the file holds no preferences	filen innehåller inga inställningar
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` anger en mapp, och inställningsfiler innehåller inga mappar
+@msg	the file is larger than 1 MB	filen är större än 1 MB
+@msg	give `path` or `data`	ange `path` eller `data`
+@msg	`{key}` must be an object	`{key}` måste vara ett objekt
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` körs för sig, inte som ett steg i en batch
 @msg	unknown preset (one of {_1})	okänd förinställning (en av {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	okänd förinställning `{name}` (high, medium, low eller en sparad: se flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	okänd förinställning `{name}` (se flattener.presets.list)
@@ -4803,6 +4844,8 @@ axis	Both	Båda
 @msg	invalid object id {value}: expected a non-negative integer	ogiltigt objekt-id {value}: ett icke-negativt heltal förväntades
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	post {index} i `{key}` är {value}, inte ett objekt-id (ett icke-negativt heltal)
 @msg	no such object id {value}	det finns inget objekt med id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} tillhör en stödlinje, inte ett objekt
+@msg	a ruler guide goes only directly in a layer or sublayer	en stödlinje kan bara ligga direkt i ett lager eller underlager
 @msg	id {value} is a layer, not an object	id {value} är ett lager, inte ett objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} är ett lager, inte ett objekt; flytta lager med layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automatiseringen har inte fått åtkomst till filsystemet: läsbehörighet saknas: {path}
@@ -5096,7 +5139,8 @@ lighting	Light	Ljus
 	Bevel both sides	Fasning på båda sidor
 	Presets	Förinställningar
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ett objekt kan bara ha en 3D-effekt. Redigera alternativen för den befintliga effekten eller ta bort den först.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} kräver för närvarande en bana, sammansatt bana, text eller grupp. Konvertera bilder och andra objekt till banor först.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} kräver för närvarande en bana, sammansatt bana, text, grupp, blandning eller symbolinstans. Expandera andra objekt först.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kan inte skapa en solid av en bild: kalkera den först med Objekt › Bildkalkering › Skapa.
 @msg	{label} requires a shape with at least two anchors	{label} kräver en form med minst två ankarpunkter
 @msg	The shape is too complex for a 3D effect	Formen är för komplex för en 3D-effekt
 @msg	The 3D surface is too complex; simplify the shape	3D-ytan är för komplex; förenkla formen
@@ -5526,6 +5570,7 @@ file-filter	Flattener presets	Förinställningar för plattning
 file-filter	PDF presets	PDF-förinställningar
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	Print presets	Utskriftsförinställningar
+file-filter	Preferences	Inställningar
 file-filter	Export presets	Exportförinställningar
 file-filter	SVG Compressed	SVG komprimerad
 file-filter	Swatch libraries	Färgrutebibliotek
@@ -5572,6 +5617,7 @@ theme	Appearance	Utseende
 3d	Light	Ljus
 	 cancels  |  Double-click the tool for options	 avbryter  |  Dubbelklicka på verktyget för alternativ
 	 out from a highlighted edge to place its dimension  |  	 utåt från en framhävd kant för att placera dess mått  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 på två punkter, flytta sedan och klicka för att placera ett justerat, vågrätt eller lodrätt mått  |  
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	En äldre .ai-fil rymmer en rityta: varje rityta du markerar sparas som en separat fil.
 	Arrange Intertwine Area	Ordna sammanflätningsområde
 	Batch…	Batch…
@@ -5668,14 +5714,17 @@ theme	Appearance	Utseende
 @msg	Invalid drawing scale	Ogiltig ritningsskala
 @msg	Invalid real scale	Ogiltig verklig skala
 @msg	Measured anchor no longer exists	Den mätta ankarpunkten finns inte längre
+@msg	Invalid measured point	Ogiltig mätt punkt
 @msg	Measured segment no longer exists	Det mätta segmentet finns inte längre
 @msg	Non-finite dimension	Måttet är inte ett ändligt tal
+@msg	Only linear dimensions are horizontal or vertical	Endast linjära mått är vågräta eller lodräta
 @msg	Scale Text Attributes: selected type has no scale to bake	Skala textattribut: det valda texten har ingen skalning att tillämpa
 @msg	Scale must be drawing:real, for example 1:10	Skalan måste anges som ritning:verklighet, till exempel 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Skalförhållandet måste ligga mellan 1:1000000 och 1000000:1
 @msg	Second measured segment no longer exists	Det andra mätta segmentet finns inte längre
 @msg	Unknown dimension mode	Okänt måttläge
 @msg	Unknown dimension option {k}	Okänt måttalternativ {k}
+@msg	Unknown dimension orientation	Okänd måttriktning
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` måste vara grayscale, rgb, hsb, cmyk eller websafe
 @msg	`{key}` must be an array of these names: {_1}	`{key}` måste vara en lista med dessa namn: {_1}
 @msg	choose a destination folder	välj en målmapp
@@ -6106,6 +6155,18 @@ axis	Y Axis	Y-axel
 	Flag	Flagga
 	Crosshair	Hårkors
 	Checkpoint	Kontrollpunkt
+	Inventory Icons	Inventarieikoner
+	Skill Icons	Färdighetsikoner
+	Attack	Attack
+	Defend	Försvar
+	Heal	Läkning
+	Buff	Buff
+	Ult	Ult
+	Sword	Svärd
+	Shield	Sköld
+	Potion	Dryck
+	Key	Nyckel
+	Gem	Ädelsten
 	Open Symbol Library	Öppna symbolbibliotek
 	Save Symbol Library	Spara symbolbibliotek
 	Save Symbol Library…	Spara symbolbibliotek…
@@ -6165,6 +6226,11 @@ axis	Y Axis	Y-axel
 	Dash Trail	Streckat spår
 	Speed Line	Hastighetslinje
 	Game Trails	Spår från spel
+	Energy Beams	Energistrålar
+	Laser Bolt	Laserbult
+	Plasma Arc	Plasmabåge
+	Charge Wave	Laddningsvåg
+	Spark Trail	Gnistsvår
 	Calligraphic Nibs	Kalligrafiska pennspetsar
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer
@@ -8217,3 +8283,31 @@ digits	Hindi	Hindi
 	No Suggestions	Inga förslag
 	Edit Custom Dictionary	Redigera egen ordlista
 	Entry:	Post:
+# Script Console
+	Script Console	Skriptkonsol
+	Clear Script Console	Rensa skriptkonsolen
+	Copy Script Console	Kopiera skriptkonsolen
+	Copy All	Kopiera allt
+	Copy Selected	Kopiera markerade
+	Finished	Klar
+	Ended with an error	Avslutades med ett fel
+	Out of fuel	Instruktionsgränsen nåddes
+	Ended at a host limit	Avslutades vid en värdgräns
+	Ended at a limit	Avslutades vid en gräns
+	Stopped	Stoppad
+	Ended by an internal fault	Avslutades av ett internt fel
+	time unavailable	tid ej tillgänglig
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	långsammast: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} värdanrop|{n} värdanrop
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} tidigare rad borttagen|{n} tidigare rader borttagna
+@plural	{n} line cut|{n} lines cut	{n} rad avkortad|{n} rader avkortade
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uppdatera uppskjutna effekter
+	Deferred Effects	Uppskjutna effekter
+@msg	no plug-in effect is deferred	ingen plugineffekt är uppskjuten
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Öppnades med {n} uppskjuten plugineffekt. Effekt › Uppdatera uppskjutna effekter kör den.|Öppnades med {n} uppskjutna plugineffekter. Effekt › Uppdatera uppskjutna effekter kör dem.
