@@ -112,6 +112,9 @@ the suite) keep the agent to the folders you give it:
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
   library and preset saves to a path, the copies `links.relink {copy}` makes.
 - `file.list {path}` (through `run_command`) lists a folder's files and folders, held to the read roots like any read, so an agent can see what it was given (#1163).
+- `file.recentFiles` and the control channel's `ui.menu.list` leave out the recent files outside the read roots. The
+  other File › Open Recent Files rows keep their ids (`file.openRecent3` still opens the third file), and
+  `file.openRecentN` for a file outside the roots ends with `no such recent file`, as an empty slot does.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
