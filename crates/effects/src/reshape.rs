@@ -974,7 +974,7 @@ fn effects_cost(leaf: &Node, path: &PathData) -> Budget {
 /// Remove the guides anywhere under `n`.
 fn without_guides(n: &mut Node) {
     let Some(children) = n.children_mut() else { return };
-    children.retain(|c| !matches!(c.kind, NodeKind::Path { guide: true, .. }));
+    children.retain(|c| !c.is_guide());
     children.iter_mut().for_each(|c| without_guides(Arc::make_mut(c)));
 }
 
@@ -984,7 +984,9 @@ fn without_guides(n: &mut Node) {
 /// [`crate::distort::MAX_COPY_OBJECTS`] nodes in all, the art of opacity masks counted. Returns what
 /// the art costs after.
 fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, budget: Budget) -> Budget {
-    let Some(members) = art.children().cloned() else { return art_cost(art) };
+    let Some(mut members) = art.children().cloned() else { return art_cost(art) };
+    // A layer's ruler guides are not copied: they stay above the copies, once.
+    let guides = members.split_off(Node::guide_run_start(&members));
     let original = Node::group(art.id, members);
     let mut made = copy_cost(&original);
     let mut drawn = original.clone();
@@ -1014,6 +1016,7 @@ fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::
     // The last copy is the lowest.
     placements.reverse();
     placements.push(Arc::new(original));
+    placements.extend(guides);
     if let Some(children) = art.children_mut() {
         *children = placements;
     }

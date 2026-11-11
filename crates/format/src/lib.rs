@@ -239,6 +239,9 @@ struct Body {
 fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
     let version = o.version;
     let mut d = doc.without_edit_modes().into_owned();
+    // Ruler guides are saved in the document's `guides` list, as before they were nodes, so every
+    // version reads them.
+    d.guides_to_saved();
     // Older apps don't know placed documents: they get the art the objects show, with its
     // resources. Otherwise resources only exporting adds are never saved.
     if version < VERSION && d.has_placed() {
@@ -602,6 +605,12 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
         )));
     }
     depth_notes.extend(beyond.note());
+    // Untrusted: ruler guide nodes only directly in layers, above their art (after the depth limit:
+    // the walk recurses).
+    doc.tidy_ruler_guides();
+    // The saved ruler guides become nodes on their layers (after the guides beyond the canvas are
+    // dropped, and after `fix_next_id`: new ids start above the file's).
+    doc.guides_into_nodes();
     // Untrusted: the type's sizes, leading, baseline shifts and scales, its indents and paragraph
     // spacing, and its tab stops, each within its range (after the depth limit: the walk recurses).
     doc.keep_type_values_in_range();
@@ -1201,6 +1210,66 @@ mod tests {
         };
         assert!(why.contains(&format!("more than {} objects", n - 1)), "{why}");
         assert_eq!(load(&bytes).unwrap().node_count(), n, "the real budget opens ordinary documents");
+    }
+
+    /// The saved ruler guides become objects when read, so each counts against the same budget.
+    #[test]
+    fn saved_ruler_guides_count_against_the_object_budget() {
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        let id = d.alloc_id();
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        for i in 0..50 {
+            d.add_ruler_guide(&vectorcraft_doc::Guide::new(i % 2 == 0, f64::from(i)));
+        }
+        let n = d.node_count() + d.ruler_guides().len();
+        let bytes = save_with(&d, &SaveOptions { compress: true, ..SaveOptions::default() }).unwrap();
+        let opened = load_file_within(&bytes, n, vectorcraft_doc::node::MAX_BUFFERED_VALUES).unwrap().doc;
+        assert_eq!(opened.ruler_guides().len(), 50, "a document of exactly the budget opens with its guides");
+        let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bytes, n - 1, vectorcraft_doc::node::MAX_BUFFERED_VALUES) else {
+            panic!("one guide past the budget must be refused")
+        };
+        assert!(why.contains(&format!("more than {} objects", n - 1)), "{why}");
+    }
+
+    /// Ruler guide nodes a file holds out of place are put right as it is read: one below a layer's
+    /// art moves up to the layer's guides, and one in a group, beside the layers or in a symbol is
+    /// removed. Saving again writes no ruler guide node, which builds from before ruler guides
+    /// were nodes could not read.
+    #[test]
+    fn ruler_guide_nodes_out_of_place_in_a_file_are_put_right() {
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        let (a, b, group) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let path = |id| Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+        d.insert(Some(l), 0, path(a)).unwrap();
+        d.insert(Some(l), usize::MAX, Node::group(group, vec![Arc::new(path(b))])).unwrap();
+        let li = d.layers.iter().position(|x| x.id == l).unwrap();
+        let mut v: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        let guide = |id: u64| serde_json::json!({"id": id, "kind": {"type": "rulerguide", "vertical": true, "pos": 5.0}});
+        let kids = &mut v["document"]["layers"][li]["kind"]["children"];
+        kids.as_array_mut().unwrap().insert(0, guide(50));
+        kids[2]["kind"]["children"].as_array_mut().unwrap().push(guide(51));
+        v["document"]["layers"].as_array_mut().unwrap().push(guide(52));
+        let opened = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        let listed: Vec<u64> = opened.ruler_guides().iter().filter_map(|g| g.id).map(|id| id.0).collect();
+        assert_eq!(listed, [50]);
+        let layer = opened.layers.iter().find(|x| x.id == l).unwrap();
+        assert_eq!(layer.children().unwrap().iter().map(|c| c.id.0).collect::<Vec<_>>(), [a.0, group.0, 50], "art first, then the guide");
+        assert_eq!(opened.node(group).unwrap().children().unwrap().len(), 1, "the group keeps only its path");
+        assert!(opened.layers.iter().all(|x| !x.is_ruler_guide()));
+        assert!(!String::from_utf8(save(&opened, false)).unwrap().contains("rulerguide"));
+
+        // A ruler guide in a symbol's art is removed too.
+        let mut d = Document::new(100.0, 100.0);
+        let sym = d.alloc_id();
+        let art = Node::group(sym, vec![Arc::new(path(d.alloc_id()))]);
+        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art), dynamic: false });
+        let mut v: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        v["document"]["symbols"][0]["art"]["kind"]["children"].as_array_mut().unwrap().push(guide(60));
+        let opened = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        assert_eq!(opened.symbols[0].art.children().unwrap().len(), 1);
+        assert!(!opened.symbols[0].art.children().unwrap().iter().any(|c| c.is_ruler_guide()));
     }
 
     /// #3587: a reordered file (its objects' fields before their `type`, as a JSON tool that

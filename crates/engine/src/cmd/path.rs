@@ -289,9 +289,7 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
         }
         if is_translation && (delta.x != 0.0 || delta.y != 0.0) {
             for &i in &sel.guides {
-                if let Some(g) = doc.guides.get_mut(i) {
-                    *g = g.moved(delta);
-                }
+                doc.edit_ruler_guide(i, |g| *g = g.moved(delta));
             }
         }
         Ok(())
@@ -1232,7 +1230,7 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Clear", |d, selection| {
         if with_guides {
             let gone = selection.guides.clone();
-            d.retain_guides(selection, |i, _| !gone.contains(&i));
+            d.retain_guides(selection, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         }
         let targets: BTreeSet<NodeId> = whole.into_iter().filter(|id| d.node(*id).is_some_and(|n| !n.is_layer())).collect();
         let whole_ids: Vec<NodeId> = targets

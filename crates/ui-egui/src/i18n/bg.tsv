@@ -4755,6 +4755,8 @@ axis	Both	И двете
 @msg	invalid object id {value}: expected a non-negative integer	невалиден идентификатор на обект {value}: очаква се неотрицателно цяло число
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} на `{key}` е {value}, а не идентификатор на обект (неотрицателно цяло число)
 @msg	no such object id {value}	няма обект с идентификатор {value}
+@msg	id {value} is a ruler guide, not an object	идентификатор {value} е на водач, а не на обект
+@msg	a ruler guide goes only directly in a layer or sublayer	водачът може да е само пряко в слой или подслой
 @msg	automation filesystem access is not granted: read authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за четене: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за запис: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	пътят за автоматизация е отхвърлен: извън корена за четене {root}: {path}

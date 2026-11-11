@@ -340,8 +340,9 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
 fn from_guides(s: &mut Session, _: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let region = d.slice_clip().ok_or_else(|| EngineError::Other("Create from Guides: the document has no artboard".into()))?;
+    let guides = d.ruler_guides();
     let cuts = |vertical: bool, lo: f64, hi: f64| -> Vec<f64> {
-        let mut v: Vec<f64> = d.guides.iter().filter(|g| g.vertical == vertical && g.pos > lo && g.pos < hi).map(|g| g.pos).collect();
+        let mut v: Vec<f64> = guides.iter().filter(|g| g.vertical == vertical && g.pos > lo && g.pos < hi).map(|g| g.pos).collect();
         v.extend([lo, hi]);
         v.sort_by(f64::total_cmp);
         v.dedup();

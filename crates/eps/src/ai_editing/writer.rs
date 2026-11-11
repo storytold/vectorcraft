@@ -460,6 +460,9 @@ impl<'a> Writer<'a> {
         let flag = |b: bool| u8::from(b);
         let dim = dim_images.unwrap_or(50);
         let name = n.name.as_deref().unwrap_or("Layer");
+        // Ruler guides are kept in the document's native copy only.
+        let children: Vec<Arc<Node>> = children.iter().filter(|c| !c.is_ruler_guide()).cloned().collect();
+        let children = &children;
         // The last flag makes the layer a clipping layer: its top object clips the rest. Only a
         // clipping path or compound path, outside any art cut to a clipping object, is written as
         // one ([`Self::clip_group`] writes the others).
@@ -583,6 +586,10 @@ impl<'a> Writer<'a> {
         if let NodeKind::Layer { .. } = n.kind {
             return self.write_layer(n, &[]);
         }
+        // Ruler guides are kept in the document's native copy only: no object, state or style.
+        if n.is_ruler_guide() {
+            return;
+        }
         if self.in_symbol {
             self.wrote_fixed |= symbols::redrawn(n);
         }
@@ -697,6 +704,8 @@ impl<'a> Writer<'a> {
                 }
                 self.end_group("U", xy);
             }
+            // Ruler guides are kept in the document's native copy only.
+            NodeKind::RulerGuide { .. } => {}
         }
         if self.body.len() > start {
             // A group's dictionary goes between its end and its state block.

@@ -56,9 +56,12 @@ impl Document {
         if self.saved_selections.is_empty() {
             return;
         }
+        // A saved selection names objects; ruler guides are not among them.
         let mut ids = std::collections::HashSet::new();
         self.walk(|n| {
-            ids.insert(n.id);
+            if !n.is_ruler_guide() {
+                ids.insert(n.id);
+            }
         });
         let mut kept: Vec<SavedSelection> = vec![];
         for s in std::mem::take(&mut self.saved_selections) {
@@ -101,12 +104,13 @@ impl Document {
     /// Leave opacity-mask editing and symbol editing: drop the temporary editing layer, a working
     /// copy of art the mask or the symbol already holds (the engine syncs it after every edit). The
     /// layer is removed wherever it is, also as a sublayer of another layer; an id that names
-    /// anything other than a layer is left alone.
+    /// anything other than a layer is left alone. Ruler guides on the layer stay in the document
+    /// ([`Self::remove_edit_layer`]).
     pub fn drop_edit_modes(&mut self) {
         let layers = [self.mask_edit.take().map(|me| me.layer), self.symbol_edit.take().map(|se| se.layer)];
         for id in layers.into_iter().flatten() {
             if self.node(id).is_some_and(Node::is_layer) {
-                let _ = self.remove(id);
+                let _ = self.remove_edit_layer(id);
             }
         }
     }

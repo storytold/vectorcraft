@@ -33,6 +33,7 @@ pub use live_shape::{LiveShape, Scaling};
 pub use opacity::{Knockout, OpacityMask, whiten};
 pub use ops::{flattens, keeps_gradient_fit};
 use wire::NodeWire;
+pub(crate) use wire::counted_list;
 pub use wire::{MAX_READ_NODES, with_node_budget};
 
 fn yes() -> bool {
