@@ -484,6 +484,21 @@ fn paint_of(item: &AppearanceItem, member: f32) -> (Paint, f32, BlendMode) {
     }
 }
 
+/// `item`'s paint, borrowed (for checks that must not copy it).
+fn paint_ref(item: &AppearanceItem) -> &Paint {
+    match item {
+        AppearanceItem::Fill(f) => &f.paint,
+        AppearanceItem::Stroke(s) => &s.paint,
+    }
+}
+
+/// Paint copies `surface` makes for `facets`: two per facet (fill and seam stroke), six when colored
+/// lights give each facet derived paints (`lighting::solid_surface`).
+fn facet_copies(facets: &[Facet], paint: &Paint, colored: bool) -> usize {
+    let derived = colored && paint.color().is_some() && facets.iter().any(|f| f.rgb_gradient.is_some());
+    facets.len().saturating_mul(if derived { 6 } else { 2 })
+}
+
 /// The area `item` paints on `path`, and the rule that fills it: the path itself for a fill, the
 /// stroke's outline (whose contours nest as its holes do) for a stroke.
 fn region(path: &PathData, rule: FillRule, item: &AppearanceItem) -> (PathData, FillRule) {
@@ -543,6 +558,8 @@ fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> 
     let classic = fx.id == CLASSIC_EXTRUDE;
     let colored = !classic && view_options(&p).has_colored_lights();
     let masks = has_masks(shapes);
+    // The paint copies of every solid together: past the allowance the source path is drawn.
+    let mut paint_bytes = 0usize;
     if fx.id == ROTATE {
         // Every part turns about the centre of the object's own bounds (a group's members about
         // the centre of theirs), so they stay together.
@@ -552,6 +569,9 @@ fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> 
                 let (paint, opacity, blend) = paint_of(item, s.opacity);
                 let (area, rule) = region(&s.path, s.rule, item);
                 let f = facets(ROTATE, &area, rule, b, &p).ok()?;
+                if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, &paint, colored), &paint) {
+                    return None;
+                }
                 out.push((s.scopes.as_slice(), Arc::new(surface(n, f, &paint, opacity, blend, colored))));
             }
         }
@@ -569,6 +589,7 @@ fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> 
     for ((item, opacity, _, _, scopes), f) in parts.iter().zip(built) {
         let item: &AppearanceItem = item;
         match f {
+            Ok(f) if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, paint_ref(item), colored), paint_ref(item)) => return None,
             Ok(f) => solids.push((item, *opacity, *scopes, f)),
             // A stroke's outline past the limits is left out; the fill's solid still draws.
             Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}
