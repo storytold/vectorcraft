@@ -6779,3 +6779,9 @@ breakText	Glyphs	Glifs
 	{ms} ms, {calls} host calls	{ms} ms, {calls} crides a l’amfitrió
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} línies anteriors descartades, {cut} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Actualitza els efectes ajornats
+	Deferred Effects	Efectes ajornats
+@msg	no plug-in effect is deferred	no hi ha cap efecte de complement ajornat
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	S’ha obert amb {n} efecte de complement ajornat. Efecte › Actualitza els efectes ajornats l’executa.|S’ha obert amb {n} efectes de complement ajornats. Efecte › Actualitza els efectes ajornats els executa.
