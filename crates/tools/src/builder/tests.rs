@@ -1058,9 +1058,10 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     let ov = t.overlays(&cx);
     assert!(matches!(&ov[0], Overlay::Path { color: HIGHLIGHT_RED, .. }));
     let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
-    let Action::Exec(id, v) = &acts[0] else { panic!() };
+    let [Action::Begin(_), Action::Preview(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!(id, "livePaint.fill");
     assert_eq!(v["group"], gid.0);
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0)), vec![Action::Commit]);
     let shift = Mods { shift: true, ..Default::default() };
     let acts = t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift));
     let Action::Exec(id, _) = &acts[0] else { panic!() };
@@ -1074,9 +1075,15 @@ fn bucket_options_choose_what_a_click_paints() {
     let p = paint();
     let cx = cx(&d, &s, &p);
     let shift = Mods { shift: true, ..Default::default() };
-    let fill = |x: f64| vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [x, 25.0] }))];
+    let fill = |x: f64| {
+        vec![Action::Begin("Live Paint Bucket".into()), Action::Preview("livePaint.fill".into(), json!({ "group": gid.0, "point": [x, 25.0] }))]
+    };
     let stroke = |x: f64| vec![Action::Exec("livePaint.strokeEdge".into(), json!({ "group": gid.0, "point": [x, 25.0], "tolerance": 4.0 }))];
-    let click = |t: &mut LivePaintBucketTool, x: f64, m: Mods| t.pointer(&cx, &ev(PointerKind::Down, x, 25.0).with_mods(m));
+    let click = |t: &mut LivePaintBucketTool, x: f64, m: Mods| {
+        let acts = t.pointer(&cx, &ev(PointerKind::Down, x, 25.0).with_mods(m));
+        t.pointer(&cx, &ev(PointerKind::Up, x, 25.0).with_mods(m));
+        acts
+    };
     let hovered = |t: &mut LivePaintBucketTool, x: f64, m: Mods| {
         t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(m));
         match t.overlays(&cx).as_slice() {
@@ -1162,7 +1169,9 @@ fn bucket_options_set_the_highlight() {
     // Highlight off: nothing is highlighted, and a click still paints.
     t.set_option("highlight", &json!(false));
     assert_eq!(highlight(&mut t), None);
-    assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0)).len(), 1);
+    let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
+    assert!(matches!(acts.as_slice(), [Action::Begin(_), Action::Preview(id, _)] if id == "livePaint.fill"));
+    t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
     t.set_option("highlight", &json!(true));
     assert!(highlight(&mut t).is_some());
 }
@@ -1326,7 +1335,7 @@ fn bucket_on_plain_selection_makes_live_paint() {
     let cx = cx(&d, &s, &p);
     let mut t = LivePaintBucketTool::default();
     let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
-    let Action::Exec(id, v) = &acts[0] else { panic!() };
+    let [Action::Begin(_), Action::Preview(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!(id, "livePaint.fill");
     assert_eq!(v["ids"], json!([a.0, b.0]));
 }
@@ -1344,7 +1353,13 @@ fn bucket_rebuilds_its_map_for_a_new_revision_at_the_same_address() {
     d = two_rects_at(300.0).0;
     let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
     let acts = t.pointer(&cx2, &ev(PointerKind::Down, 375.0, 50.0));
-    assert_eq!(acts, vec![Action::Exec("livePaint.fill".into(), json!({ "ids": [a.0, b.0], "point": [375.0, 50.0] }))]);
+    assert_eq!(
+        acts,
+        vec![
+            Action::Begin("Live Paint Bucket".into()),
+            Action::Preview("livePaint.fill".into(), json!({ "ids": [a.0, b.0], "point": [375.0, 50.0] }))
+        ]
+    );
 }
 
 #[test]
@@ -1357,7 +1372,8 @@ fn bucket_keeps_its_map_while_the_document_is_unchanged() {
     let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
     t.pointer(&cx1, &ev(PointerKind::Move, 75.0, 50.0));
     let acts = t.pointer(&cx1, &ev(PointerKind::Down, 75.0, 50.0));
-    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "livePaint.fill"), "{acts:?}");
+    assert!(matches!(acts.as_slice(), [Action::Begin(_), Action::Preview(id, _)] if id == "livePaint.fill"), "{acts:?}");
+    t.pointer(&cx1, &ev(PointerKind::Up, 75.0, 50.0));
     // The fill left the document as it was: the map still fits it.
     t.pointer(&cx1, &ev(PointerKind::Move, 25.0, 50.0));
     assert_eq!(t.cache.builds, 1, "a hover after a fill that changed nothing");
@@ -1745,8 +1761,9 @@ fn live_paint_tools_skip_hidden_faces() {
     let mut bucket = LivePaintBucketTool::default();
     bucket.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
     assert_eq!(part(&bucket.overlays(&cx)), Some(Rect::new(0.0, 0.0, 100.0, 100.0)));
-    let fill = Action::Exec("livePaint.fill".into(), json!({ "group": back.0, "point": [75.0, 50.0] }));
-    assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)), vec![fill]);
+    let fill = Action::Preview("livePaint.fill".into(), json!({ "group": back.0, "point": [75.0, 50.0] }));
+    assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)), vec![Action::Begin("Live Paint Bucket".into()), fill]);
+    bucket.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0));
     let mut sel = LivePaintSelectionTool::default();
     sel.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
     assert_eq!(part(&sel.overlays(&cx)), Some(Rect::new(0.0, 0.0, 100.0, 100.0)));

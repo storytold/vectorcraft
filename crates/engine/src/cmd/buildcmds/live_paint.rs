@@ -272,6 +272,18 @@ pub(super) fn lp_gap_options(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "livePaint.fill";
     let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
+    let points = if let Some(input) = p.get("points") {
+        if input.as_array().is_none_or(|points| points.is_empty() || points.len() > 4096) {
+            return Err(bad(C, "points must contain 1 to 4096 points"));
+        }
+        let points = super::points_param(p, "points").ok_or_else(|| bad(C, "points must be [[x,y]...]"))?;
+        if points.first() != Some(&pt) || !points.iter().all(|q| finite(*q)) {
+            return Err(bad(C, "points must start at point and contain 1 to 4096 finite canvas points"));
+        }
+        Some(points)
+    } else {
+        None
+    };
     crate::cmd::paint::check_keep_model(p, C)?;
     let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone());
     let group = id_param(p, "group");
@@ -302,7 +314,30 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
             .and_then(|n| b::visible_face_at(n, pt))
             .map(|f| f.id)
             .ok_or_else(|| EngineError::Other("no Live Paint face at that point".into()))?;
-        d.node_mut(fid).ok_or(EngineError::NoNode(fid))?.appearance.set_fill(paint.clone());
+        let mut targets = vec![fid];
+        if let Some(points) = &points {
+            let n = d.node(gid).ok_or(EngineError::NoNode(gid))?;
+            // Use the existing region-crossing probes, so even a face narrower than the distance
+            // between pointer events is filled. Reversing matches visible_face_at's front first.
+            let faces: Vec<_> = b::faces(n).into_iter().rev().filter(|f| f.visible).collect();
+            let mut face_ids = vec![];
+            let mut regions = vec![];
+            for f in faces {
+                if let Some(path) = f.path_data()
+                    && let Some(bounds) = path.bounds()
+                {
+                    face_ids.push(f.id);
+                    regions.push((po::Region { path: path.clone(), sources: vec![] }, path.to_bezpath(), bounds));
+                }
+            }
+            let map = b::BuilderMap { regions, ..Default::default() };
+            targets.extend(map.hits_along(points, None).regions.iter().filter_map(|i| face_ids.get(*i).copied()));
+            targets.sort();
+            targets.dedup();
+        }
+        for target in targets {
+            d.node_mut(target).ok_or(EngineError::NoNode(target))?.appearance.set_fill(paint.clone());
+        }
         Ok((gid, fid))
     })?;
     s.remember_paint(&paint);
