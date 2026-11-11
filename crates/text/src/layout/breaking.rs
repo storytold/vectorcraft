@@ -240,29 +240,47 @@ pub(super) fn leader_outline(db: &FontDb, g: &SGlyph, leader: &str, origin: f64,
     out
 }
 
-/// Width of the word starting at glyph `i`: its advances up to the first break opportunity (spaces
-/// left out, the hyphen of a soft hyphen in), the least room a line needs not to break inside it.
-/// A list marker at `i` (glyphs of length 0) counts whole, with the word after it.
-pub(super) fn word_width(g: &[SGlyph], i: usize) -> f64 {
+/// Width of the word starting at glyph `i`: its advances up to the first place a line may break
+/// (spaces left out, the hyphen of a soft hyphen in), the least room a line needs not to break
+/// inside it. As in [`break_line`], kinsoku keeps a character that may not end a line with the one
+/// after it, a No Break run (its spaces inside it included) is one word, and a cluster is never
+/// split. A list marker at `i` (glyphs of length 0) counts whole, with the word after it. A word
+/// that ends where a line may end is measured as the line is set: without the spaces at its end,
+/// and with its last glyph as narrow as `line_end` sets it; one that ends at a soft hyphen or past
+/// the measured glyphs is not.
+pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kinsoku) -> f64 {
     /// Glyphs measured at most: a word wrapped over many lines is measured again from each line's
     /// start, and one this long is broken inside whatever cell it meets.
     const MAX_GLYPHS: usize = 1024;
     let rest = g.get(i..).unwrap_or_default();
     let marker = rest.iter().take_while(|gl| gl.len == 0).count();
     let mut w: f64 = rest.iter().take(marker).map(|gl| gl.adv).sum();
-    for gl in rest.iter().skip(marker).take(MAX_GLYPHS) {
-        if gl.is_space() {
-            break;
+    let start = i + marker;
+    let mut end = start;
+    // The spaces at the end of what is measured so far (inside a No Break run), and the end of its
+    // last glyph that is not a space.
+    let (mut trailing, mut ink) = (0.0, start);
+    let set = |w: f64, trailing: f64, ink: usize| w - trailing - line_end_credit(g, line_end, ink);
+    while let Some(gl) = g.get(end).filter(|_| end - start < MAX_GLYPHS) {
+        if gl.is_space() && (end == start || !splits_no_break(g, end)) {
+            return set(w, trailing, ink);
         }
         if gl.is_soft_hyphen() {
             return w + hyphen_glyph(gl).adv;
         }
         w += gl.adv;
-        if gl.break_after() {
-            break;
+        end += 1;
+        if gl.is_space() {
+            trailing += gl.adv;
+        } else {
+            (trailing, ink) = (0.0, end);
+        }
+        let cluster_ends = g.get(end).is_none_or(|next| next.byte != gl.byte);
+        if gl.break_after() && cluster_ends && kinsoku_allows(g, end - 1, kinsoku) && !splits_no_break(g, end) {
+            return set(w, trailing, ink);
         }
     }
-    w
+    if end >= g.len() { set(w, trailing, ink) } else { w }
 }
 
 /// Greedy break: returns (end glyph index, hyphenated) for a line starting at `i` of `width`.

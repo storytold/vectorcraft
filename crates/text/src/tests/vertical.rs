@@ -1145,6 +1145,106 @@ fn mojikumi_line_end_half_width_counts_when_a_line_breaks() {
     }
 }
 
+/// Mojikumi: in a frame that is narrow at the top, and in a frame a wrap object narrows at the top,
+/// a line's first word is measured as the line sets it. A word ending with a closing bracket that
+/// fits the narrow lines only with the bracket half width, and an opening bracket that fits them
+/// only flush with the line's start, start on the first line, with both composers. An opening
+/// bracket that kinsoku keeps with the character after it, and a No Break run, are measured whole.
+#[test]
+fn mojikumi_narrows_a_lines_first_word_when_looking_for_room() {
+    use crate::test_fonts::{FULL_WIDTH_FAMILY, full_width_font};
+    use vectorcraft_doc::{Composer, Kinsoku, KinsokuShoriType, Mojikumi, TextWrap, WrapShape};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(full_width_font().expect("test font"));
+    // The top 40 pt of the frame are `top` wide, the rest 200: an L-shaped frame, or a rectangle
+    // with a wrap object over the top right.
+    let lay = |text: &str, styled: fn(&mut TextObject), composer: Composer, top: f64, wrapped: bool| {
+        let style = CharStyle { size: 20.0, font_family: FULL_WIDTH_FAMILY.into(), font_style: "Regular".into(), ..CharStyle::default() };
+        let mut t = TextObject::point(Point::ZERO, text, style);
+        t.xf = Affine::IDENTITY;
+        styled(&mut t);
+        t.para.mojikumi = Mojikumi::LineEndHalf;
+        t.para.composer = composer;
+        t.para.kinsoku = Kinsoku::Hard;
+        t.para.kinsoku_type = KinsokuShoriType::PushOutOnly;
+        let frame = if wrapped {
+            t.wrap = vec![WrapShape {
+                path: PathData::from_bezpath(&Rect::new(top, -10.0, 210.0, 40.0).to_path(0.1)),
+                wrap: TextWrap { offset: 0.0, invert: false },
+            }];
+            Rect::new(0.0, 0.0, 200.0, 200.0).to_path(0.1)
+        } else {
+            let mut p = kurbo::BezPath::new();
+            p.move_to((0.0, 0.0));
+            p.line_to((top, 0.0));
+            p.line_to((top, 40.0));
+            p.line_to((200.0, 40.0));
+            p.line_to((200.0, 200.0));
+            p.line_to((0.0, 200.0));
+            p.close_path();
+            p
+        };
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame) };
+        layout(&db, &t)
+    };
+    let plain: fn(&mut TextObject) = |_| {};
+    let wide_bracket: fn(&mut TextObject) = |t| edit::style_range(&mut t.runs, 0, '「'.len_utf8(), |s| s.h_scale = 250.0);
+    let no_break: fn(&mut TextObject) = |t| {
+        let n = t.plain_text().len();
+        edit::style_range(&mut t.runs, 0, n, |s| s.no_break = true);
+    };
+    let no_break_but_the_last_word: fn(&mut TextObject) = |t| {
+        let n = t.plain_text().rfind(' ').map_or(0, |k| k + 1);
+        edit::style_range(&mut t.runs, 0, n, |s| s.no_break = true);
+    };
+    // "ABCD」" is `full` wide inside a line; ending one, 」 is half width.
+    let closing = "ABCD」EFGH";
+    let open = lay(closing, plain, Composer::SingleLine, 200.0, false);
+    let full: f64 = open.glyphs[..5].iter().map(|g| g.advance).sum();
+    assert!((open.glyphs[4].advance - 20.0).abs() < 1e-9, "」 is one em inside a line");
+    for wrapped in [false, true] {
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let at = format!("wrapped {wrapped} {composer:?}");
+            let top = full - 5.0;
+            let l = lay(closing, plain, composer, top, wrapped);
+            let first = l.lines.first().expect("a line");
+            assert_eq!(&closing[first.start..first.end], "ABCD」", "{at}");
+            assert!(first.baseline < 40.0, "{at}: the word starts on the narrow lines: {}", first.baseline);
+            let set: f64 = l.glyphs[first.glyph_start..first.glyph_end].iter().map(|g| g.advance).sum();
+            assert!(set <= top + 1e-9, "{at}: {set} in {top}");
+            // 「 is 50 pt at 250%, 25 pt flush with the line's start: 「一 is 45 pt.
+            let opening = "「一二三四五六";
+            let l = lay(opening, wide_bracket, composer, 47.0, wrapped);
+            let first = l.lines.first().expect("a line");
+            assert_eq!(&opening[first.start..first.end], "「一", "{at}");
+            assert!(first.baseline < 40.0, "{at}: 「 starts on the narrow lines: {}", first.baseline);
+            let set: f64 = l.glyphs[first.glyph_start..first.glyph_end].iter().map(|g| g.advance).sum();
+            assert!(set <= 47.0 + 1e-9, "{at}: {set}");
+            // Kinsoku keeps 「 with 一: in 40 pt they don't fit, and the line starts below, whole.
+            let l = lay(opening, wide_bracket, composer, 40.0, wrapped);
+            let first = l.lines.first().expect("a line");
+            assert!(first.baseline > 40.0 && &opening[first.start..first.end] != "「", "{at}: kinsoku: {:?}", placed_lines(&l, opening));
+            // A No Break run is one word, its space included: it doesn't fit the narrow lines.
+            let run_text = "ABCD EFGH";
+            let run: f64 = lay(run_text, no_break, composer, 200.0, false).glyphs.iter().map(|g| g.advance).sum();
+            let l = lay(run_text, no_break, composer, run - 5.0, wrapped);
+            let first = l.lines.first().expect("a line");
+            assert!(first.baseline > 40.0 && &run_text[first.start..first.end] == run_text, "{at}: no break: {:?}", placed_lines(&l, run_text));
+            // …but the space ending a No Break run is not set at the line's end: the run fits a
+            // line 2 pt wider than it is without that space.
+            let ending = "ABCD EFGH IJ";
+            let l = lay(ending, no_break_but_the_last_word, composer, run + 2.0, wrapped);
+            let first = l.lines.first().expect("a line");
+            assert!(first.baseline < 40.0 && ending[first.start..first.end].trim_end() == run_text, "{at}: {:?}", placed_lines(&l, ending));
+        }
+    }
+}
+
+/// Each line's baseline and text.
+fn placed_lines(l: &TextLayout, text: &str) -> Vec<(f64, String)> {
+    l.lines.iter().map(|line| (line.baseline, text[line.start..line.end].to_string())).collect()
+}
+
 /// Burasagari: in a measure of exactly five ems, a comma that would be the sixth character goes to
 /// the next line with the character before it (None) or hangs outside the line (Standard, Forced);
 /// a full stop that is the fifth character stays inside (None, Standard) or hangs while the four
