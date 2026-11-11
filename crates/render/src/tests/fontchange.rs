@@ -179,6 +179,34 @@ fn a_documents_own_composite_font_draws_without_being_registered() {
     assert_eq!(thumbnail(&composite, id), thumbnail(&plain, plain_id), "thumbnail");
     let placed = |d: &Document| crate::placed_document::render_inside(&mut Renderer::new(), d, &d.layers[0], 300, 150, view).map(|r| r.pixels);
     assert_eq!(placed(&composite), placed(&plain), "a placed document's art");
+    // A page that places the document, drawn exactly (no bitmap of the placed art).
+    let page = |d: &Document, id: NodeId, key: &str| {
+        use vectorcraft_doc::{ImageBlob, LinkInfo, PlacedDocument};
+        let blob = ImageBlob::new("application/json", key.as_bytes().to_vec());
+        let p = PlacedDocument {
+            link: LinkInfo::new("/art/type.vectorcraft"),
+            key: key.into(),
+            bounding: false,
+            page_box: Default::default(),
+            width: 300.0,
+            height: 150.0,
+            xf: Affine::IDENTITY,
+            placement: Default::default(),
+        };
+        let art = d.node(id).unwrap().clone();
+        vectorcraft_doc::placed_document::prime(&p, blob.bytes.clone(), (d.clone(), art, Rect::new(0.0, 0.0, 300.0, 150.0)));
+        let mut page = Document::new(300.0, 150.0);
+        page.images.insert(key.into(), blob);
+        let n = Node::new(page.alloc_id(), NodeKind::PlacedDocument(Box::new(p)));
+        let l = page.layers[0].id;
+        page.insert(Some(l), 0, n).unwrap();
+        Renderer::new().render(&page, 300, 150, view, &opts).pixels
+    };
+    assert_eq!(
+        page(&composite, id, "fontchange-composite-placed"),
+        page(&plain, plain_id, "fontchange-plain-placed"),
+        "a placed document's art drawn exactly"
+    );
     assert!(db.composite_font(NAME).is_none(), "given back after each render");
 }
 
