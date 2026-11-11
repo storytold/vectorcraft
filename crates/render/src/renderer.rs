@@ -258,8 +258,7 @@ impl Renderer {
         };
         // `reset` keeps the threshold of the previous render: set it every time.
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
-        let render_mode = if opts.precise { vello_cpu::RenderMode::OptimizeQuality } else { vello_cpu::RenderMode::OptimizeSpeed };
-        self.raster = vello_cpu::RasterizerSettings { render_mode, ..Default::default() };
+        self.raster = raster_settings(opts);
         if opts.artboards && !opts.outline {
             // Paper: white on screen, no ink on the ink planes.
             ctx.set_transform(f.view);
@@ -358,20 +357,59 @@ impl Renderer {
     pub fn render_node_with(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
         self.check_plugins(doc);
         self.check_symbols(doc);
-        let inv = view.inverse();
-        let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let pixels = self.node_pixels(doc, n, (w, h), view, visible, opts, false, 1);
+        Some(Rendered { width: w as u32, height: h as u32, pixels })
+    }
+
+    /// Node `n` drawn into `w`×`h` transparent pixels through `view`, culled to `visible` (document
+    /// space); `forced` draws it whatever its visibility and bounds. With [`RenderOptions::supersample`]
+    /// and Art Optimized edges the art is drawn with hard edges at several times the size and
+    /// averaged down, and [`RenderOptions::precise`] picks the quality render mode, as in a page
+    /// render ([`Self::render_as`], [`Self::draw_frame`]). `cell` is as in [`Self::render_as`].
+    #[allow(clippy::too_many_arguments)]
+    fn node_pixels(
+        &mut self,
+        doc: &Document,
+        n: &Arc<Node>,
+        (w, h): (u16, u16),
+        view: Affine,
+        visible: Rect,
+        opts: &RenderOptions,
+        forced: bool,
+        cell: u32,
+    ) -> Vec<u8> {
+        if opts.supersample
+            && opts.anti_alias == AntiAlias::Art
+            && let Some(k) = supersample_factor(u32::from(w), u32::from(h))
+        {
+            let hard = RenderOptions { anti_alias: AntiAlias::None, supersample: false, ..opts.clone() };
+            // `supersample_factor` keeps each side within MAX_CONTEXT_SIDE, so it fits in a u16.
+            let (bw, bh) = (u32::from(w) * k, u32::from(h) * k);
+            let hairline = std::mem::replace(&mut self.hairline, f64::from(k));
+            let big = self.node_pixels(doc, n, (bw as u16, bh as u16), Affine::scale(f64::from(k)) * view, visible, &hard, forced, k);
+            self.hairline = hairline;
+            return downsample(&big, bw as usize, bh as usize, k as usize);
+        }
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let mut ctx = single_threaded_context(w, h);
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         let symbols = doc.symbol_boxes().quick();
-        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, output: view, plates: None };
+        let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
+        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, output, plates: None };
+        let raster = std::mem::replace(&mut self.raster, raster_settings(opts));
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
-        self.draw_arc(&mut ctx, &frame, n);
-        let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
+        if forced {
+            self.draw_forced_arc(&mut ctx, &frame, n);
+        } else {
+            self.draw_arc(&mut ctx, &frame, n);
+        }
+        let pm = self.finish(&mut ctx, self.raster);
         self.end_frame();
-        Some(Rendered { width: w as u32, height: h as u32, pixels: pm.data_as_u8_slice().to_vec() })
+        self.raster = raster;
+        pm.data_as_u8_slice().to_vec()
     }
 
     /// Render any node (also one outside the tree, e.g. opacity-mask art) fitted into
@@ -402,33 +440,18 @@ impl Renderer {
         // A 1-pixel margin on each side, unless the thumbnail is too small to keep one.
         let s = (w as f64 - 2.0).max(1.0) / b.width().max(b.height()).max(1e-6);
         let view = Affine::translate((w as f64 / 2.0, w as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
-        let mut ctx = single_threaded_context(w, w);
-        ctx.set_aliasing_threshold(opts.anti_alias.threshold());
-        let symbols = doc.symbol_boxes().quick();
-        let frame = Frame {
-            mt: false,
-            doc,
-            symbols: &symbols,
-            view,
-            visible: b.inflate(1.0, 1.0),
-            px: 1.0 / s,
-            opts,
-            ink: Ink::Display,
-            output: view,
-            plates: None,
-        };
-        self.begin_frame();
-        (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
-        self.clip_paths.clear();
-        self.draw_forced_arc(&mut ctx, &frame, &Arc::new(n.clone()));
-        let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
-        self.end_frame();
-        let mut pixels = pm.data_as_u8_slice().to_vec();
+        let mut pixels = self.node_pixels(doc, &Arc::new(n.clone()), (w, w), view, b.inflate(1.0, 1.0), opts, true, 1);
         if let Some(bg) = background {
             over_background(&mut pixels, bg);
         }
         Some(Rendered { width: w as u32, height: w as u32, pixels })
     }
+}
+
+/// The rasterizer settings for `opts`: the quality render mode when [`RenderOptions::precise`] is set.
+fn raster_settings(opts: &RenderOptions) -> vello_cpu::RasterizerSettings {
+    let render_mode = if opts.precise { vello_cpu::RenderMode::OptimizeQuality } else { vello_cpu::RenderMode::OptimizeSpeed };
+    vello_cpu::RasterizerSettings { render_mode, ..Default::default() }
 }
 
 /// Premultiplied RGBA `pixels` drawn over the solid color `background` (`[r, g, b, a]`, straight).
