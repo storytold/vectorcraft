@@ -156,6 +156,17 @@ fn script_file_link_escape_refused() {
     // A missing file behind the link is refused like an existing one, so nothing tells them apart.
     let log = logged(&base, "var n = new File('away/nope.txt'); vc.log([n.exists, n.open('r'), n.error]);");
     assert_eq!(log, json!([[false, false, DENIED]]));
+    // A folder link to an outside folder that does not exist is refused the same way, so a script
+    // cannot tell whether the folder it leads to exists.
+    link_folder(&base.join("gone"), &base.join("main").join("dangling"));
+    let log = logged(
+        &base,
+        "var d = new File('dangling/nope.txt'); var e = new File('dangling/a/b.txt');\n\
+         vc.log([d.exists, d.open('r'), d.error, e.open('r'), e.error]);",
+    );
+    assert_eq!(log, json!([[false, false, DENIED, false, DENIED]]));
+    let dangling = base.join("main").join("dangling");
+    std::fs::remove_dir(&dangling).or_else(|_| std::fs::remove_file(&dangling)).unwrap();
     #[cfg(unix)]
     let made = |target: &Path, link: &Path| std::os::unix::fs::symlink(target, link).is_ok();
     #[cfg(windows)]
