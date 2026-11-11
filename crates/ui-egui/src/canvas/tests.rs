@@ -3769,6 +3769,34 @@ fn snap_to_grid_and_pixel_preview_hide_the_hover_outline() {
     assert!(outlines(&mut app) > 0, "Pixel Preview off again");
 }
 
+/// View › Pixel Preview turns Smart Guides off in the tools: a square moved to 3 pt below another
+/// square's top lines up with it only while Pixel Preview is off.
+#[test]
+fn pixel_preview_stops_smart_guides_snapping_a_move() {
+    for pixel in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 400, "y": 300, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        if pixel {
+            app.run("view.pixelPreview", json!({})).unwrap();
+        }
+        assert!(app.ui.view.smart_guides);
+        assert_eq!(app.ui.view.pixel_preview, pixel);
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.select_tool("selection");
+        let view = app.view_info();
+        let mut at = |kind: PointerKind, y: f64| crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, 425.0, y), view);
+        at(PointerKind::Down, 325.0);
+        for y in [300.0, 250.0, 200.0, 150.0, 128.0] {
+            at(PointerKind::Drag, y);
+        }
+        at(PointerKind::Up, 128.0);
+        let top = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().y0;
+        assert_eq!(top, if pixel { 103.0 } else { 100.0 }, "Pixel Preview {pixel}");
+    }
+}
+
 /// #2452: while the view scrolls under a resting pointer, the art under it isn't hit-tested:
 /// no hover outline, and the tool's last cursor stays. Once the view has been still for
 /// [`HOVER_STILL_SECS`], the outline comes back without the pointer moving.
