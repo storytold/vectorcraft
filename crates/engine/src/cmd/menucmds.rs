@@ -670,9 +670,11 @@ fn render_pixels(
     opts: &vectorcraft_render::RenderOptions,
     color: RasterColorModel,
 ) -> Result<(vectorcraft_render::Rendered, Option<&'static str>)> {
-    // No side longer than the renderer draws: it would cut the image off there.
-    let side = f64::from(vectorcraft_render::MAX_RASTER_SIDE);
-    if region.width() * region.height() * scale * scale > MAX_PIXELS || region.width() * scale > side || region.height() * scale > side {
+    // No side longer than the renderer draws: it would cut the image off there. The sides are
+    // measured in the renderer's whole pixels.
+    let side = vectorcraft_render::MAX_RASTER_SIDE;
+    let (w, h) = vectorcraft_render::region_pixels(region, scale);
+    if region.width() * region.height() * scale * scale > MAX_PIXELS || w > side || h > side {
         return Err(EngineError::Other("image would be too large; lower the resolution".into()));
     }
     let mut r = vectorcraft_render::Renderer::new();
