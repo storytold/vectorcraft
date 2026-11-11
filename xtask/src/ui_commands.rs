@@ -377,10 +377,10 @@ fn reexport_targets<'a>(src: &'a str, const_name: &str) -> Vec<Vec<&'a str>> {
             if hit {
                 out.push(path.split("::").collect());
             }
-        } else if let Some((path, name)) = rest.rsplit_once("::") {
-            if name.trim() == const_name {
-                out.push(path.split("::").collect());
-            }
+        } else if let Some((path, name)) = rest.rsplit_once("::")
+            && name.trim() == const_name
+        {
+            out.push(path.split("::").collect());
         }
     }
     out
