@@ -88,7 +88,9 @@ pub fn simplify_with(path: &PathData, opts: &SimplifyOptions) -> PathData {
 /// whose refit is one segment, or lines that enclose no area, is refitted in two parts, cut at the
 /// point farthest from its start, or in three when two still give that. When three parts still give
 /// no area, straight lines follow the subpath within the tolerance, and without straight lines it
-/// stays as it is, as does one of a single segment; one that is all in line keeps the refit.
+/// stays as it is, as does one of a single segment. When no lines within the limits on pieces enclose
+/// an area, it stays as it is, or with straight lines follows the lines between samples of each
+/// curved segment; one that is all in line keeps the refit.
 fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     let mut segs = subpath_segs(sp);
     let n = segs.len();
@@ -139,27 +141,51 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
         }
         let ctrl: Vec<Point> = segs.iter().flat_map(|s| [s.c.p0, s.c.p1, s.c.p2]).collect();
         if flat(&result) && !in_line(&ctrl) {
-            // Each segment split in 2, 4, 8 and so on, up to 1,024 pieces and 65,536 in all, until every
-            // piece is within the tolerance of the line between its ends and those lines enclose an
-            // area: with straight lines they are the result, and without them the loop stays as it is.
-            // A loop whose points are all in line keeps the lines of the refit.
+            // Each curved segment split in 2, 4, 8 and so on, up to 1,024 pieces and 65,536 pieces in all
+            // with the line segments, until every piece is within the tolerance of the line between its
+            // ends and those lines enclose an area: with straight lines they are the result, and without
+            // them the loop stays as it is. When no split within those limits encloses an area, the loop
+            // stays as it is, or with straight lines each curved segment becomes the lines between its
+            // samples, up to `MAX_RUN_RESULT` lines in all. A loop whose points are all in line keeps the
+            // lines of the refit.
             let near = |c: &CubicBez| [c.p1, c.p2].iter().all(|&p| Line::new(c.p0, c.p3).nearest(p, 1e-9).distance_sq.sqrt() <= opts.tolerance);
+            let curved = segs.iter().filter(|s| !s.line).count();
             for k in 1..=10u32 {
                 let parts = 1u32 << k;
-                if segs.len().saturating_mul(parts as usize) > 1 << 16 {
+                if curved.saturating_mul(parts as usize).saturating_add(n - curved) > 1 << 16 {
                     break;
                 }
                 let at = |i: u32| f64::from(i) / f64::from(parts);
-                let pieces: Vec<CubicBez> = segs.iter().flat_map(|s| (0..parts).map(move |i| s.c.subsegment(at(i)..at(i + 1)))).collect();
+                let pieces: Vec<CubicBez> = segs
+                    .iter()
+                    .flat_map(|s| {
+                        let count = if s.line { 1 } else { parts };
+                        (0..count).map(move |i| if s.line { s.c } else { s.c.subsegment(at(i)..at(i + 1)) })
+                    })
+                    .collect();
                 let lines: Vec<Seg> = pieces.iter().map(|c| Seg::line(c.p0, c.p3)).collect();
                 if pieces.iter().all(near) && !flat(&lines) {
                     if !opts.straight_lines {
                         return Some(sp.clone());
                     }
-                    result = lines;
-                    break;
+                    return segs_to_subpath(&lines, true);
                 }
             }
+            if !opts.straight_lines {
+                return Some(sp.clone());
+            }
+            let room = (MAX_RUN_RESULT / curved.max(1)).min(MAX_SEGMENT_SAMPLES);
+            let mut lines: Vec<Seg> = Vec::new();
+            for s in &segs {
+                if s.line {
+                    lines.push(Seg::line(s.c.p0, s.c.p3));
+                    continue;
+                }
+                let mut pts = Vec::new();
+                sample(&s.c, sample_steps(&s.c, opts.tolerance.max(1e-6)).min(room).max(1), &mut pts, true);
+                lines.extend(pts.windows(2).map(|p| Seg::line(p[0], p[1])));
+            }
+            return segs_to_subpath(&lines, true);
         }
     }
     let s = segs_to_subpath(&result, sp.closed)?;
