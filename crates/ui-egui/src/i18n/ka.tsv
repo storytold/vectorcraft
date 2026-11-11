@@ -2572,6 +2572,7 @@ antiAlias	Sharp	მკვეთრი
 	General › Thumbnails	ზოგადი › ესკიზები
 	Grayscale images	ნაცრისფერი გამოსახულებები
 	Include non-printing layers	არაბეჭდვადი შრეების ჩართვა
+	Write pages longer than 200 in at full size in points	200 in-ზე გრძელი გვერდების სრული ზომით, პუნქტებში ჩაწერა
 	Left:	მარცხნივ:
 	Mark as trapped	ტრაპინგის მარკირება
 	Marks and Bleeds	ნიშნები და ჭრისპირა არეები

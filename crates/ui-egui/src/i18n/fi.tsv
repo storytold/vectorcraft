@@ -2852,6 +2852,7 @@ antiAlias	Sharp	Terävä
 	General › Thumbnails	Yleiset › Pikkukuvat
 	Grayscale images	Harmaasävykuvat
 	Include non-printing layers	Sisällytä tulostumattomat tasot
+	Write pages longer than 200 in at full size in points	Kirjoita yli 200 in pitkät sivut täysikokoisina pisteinä
 	Left:	Vasen:
 	Mark as trapped	Merkitse ylitäytetyksi
 	Marks and Bleeds	Merkit ja leikkuuvarat

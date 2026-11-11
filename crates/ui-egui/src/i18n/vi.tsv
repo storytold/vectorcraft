@@ -1950,6 +1950,7 @@ digits	Hindi	Hindi
 	Include Linked Files	Bao gồm tệp được liên kết
 	Include Metadata	Bao gồm siêu dữ liệu
 	Include non-printing layers	Bao gồm các lớp không in
+	Write pages longer than 200 in at full size in points	Ghi các trang dài hơn 200 in ở kích thước đầy đủ, theo điểm
 	Include SVG Code	Bao gồm mã SVG
 	Include Swatches for Tints	Bao gồm mẫu màu cho sắc pha
 	Increase Font Size	Tăng cỡ chữ

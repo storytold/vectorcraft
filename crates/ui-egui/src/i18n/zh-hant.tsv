@@ -1651,6 +1651,7 @@ file-filter	Templates	範本
 	Include Linked Files	包含連結檔案
 	Include Metadata	包含中繼資料
 	Include non-printing layers	包含不列印的圖層
+	Write pages longer than 200 in at full size in points	以實際尺寸（點）寫入長於 200 in 的頁面
 	Include SVG Code	包含 SVG 程式碼
 	Include Swatches for Tints	包含色調的色票
 	Inflate…	膨脹…
