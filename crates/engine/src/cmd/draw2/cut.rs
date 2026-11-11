@@ -327,7 +327,12 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
         if !lines.is_empty() {
             if let Some(rest) = erase_outline(&lines, short / 2.0, &under) {
                 changed = true;
-                pieces.extend(rest);
+                // Partitioning must not turn one compound outline into independently filled objects.
+                if single {
+                    pieces.extend(rest);
+                } else if !rest.is_empty() {
+                    pieces.push(PathData::new(rest.into_iter().flat_map(|path| path.subpaths).collect()));
+                }
             } else {
                 pieces.push(lines);
             }

@@ -284,3 +284,93 @@ fn eraser_cuts_the_outline_when_even_odd_cancels_an_open_paths_fill() {
     let length: f64 = paths(&s).iter().map(PathData::length).sum();
     assert!((length - 760.0).abs() < 0.1, "both laps lose their crossed stroke portions: {length}");
 }
+
+/// Hidden fills retain open outlines, while a lower visible fill beneath None still paints.
+#[test]
+fn eraser_hidden_fill_keeps_only_the_explicit_open_outline() {
+    let render = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default())
+    };
+    for lower_fill in [false, true] {
+        let mut s = session();
+        let id = NodeId(
+            s.execute(
+                "path.create",
+                &json!({"anchors": [
+                    {"x": 100, "y": 100}, {"x": 200, "y": 100}, {"x": 200, "y": 200}, {"x": 100, "y": 200}
+                ]}),
+            )
+            .unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#000000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#ff0000"})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [id.0], "weight": 2})).unwrap();
+        if lower_fill {
+            // The basic black Fill remains visible underneath this added top Fill set to None.
+            s.execute("appearance.addFill", &json!({"ids": [id.0]})).unwrap();
+            s.execute("appearance.setItem", &json!({"ids": [id.0], "index": 2, "none": true})).unwrap();
+        } else {
+            // Basic appearance order is Fill 0, Stroke 1; hiding Fill 0 leaves only open strokes.
+            s.execute("appearance.setItem", &json!({"ids": [id.0], "index": 0, "visible": false})).unwrap();
+        }
+        s.execute("select.none", &json!({})).unwrap();
+        let before = render(&s);
+        if lower_fill {
+            assert!(before.pixel(150, 125)[3] > 240, "the lower black fill remains visible under top None");
+        } else {
+            assert_eq!(before.pixel(150, 125)[3], 0, "hidden fill leaves the interior empty");
+            assert_eq!(before.pixel(100, 125)[3], 0, "the open path has no implicit left stroke");
+        }
+        assert!(before.pixel(200, 125)[0] > 200 && before.pixel(200, 125)[1] < 60, "the explicit right stroke is visible");
+
+        s.execute("path.eraseRegion", &json!({"points": [[50, 150], [250, 150]], "size": 10})).unwrap();
+        let after = render(&s);
+        if lower_fill {
+            assert!(after.pixel(150, 125)[3] > 240, "visible lower fill survives above the erased band");
+            assert!(after.pixel(150, 175)[3] > 240, "visible lower fill survives below the erased band");
+            assert_eq!(after.pixel(150, 150)[3], 0, "the Eraser band is empty");
+        } else {
+            let survivors = paths(&s);
+            assert!(survivors.iter().all(|path| !path.is_closed()), "unfilled survivors remain open");
+            let length: f64 = survivors.iter().map(PathData::length).sum();
+            assert!((length - 290.0).abs() < 0.1, "only the crossed explicit right edge loses 10 pt: {length}");
+            assert_eq!(after.pixel(150, 125)[3], 0, "hidden fill leaves the interior empty");
+            assert_eq!(after.pixel(100, 125)[3], 0, "the missing implicit left stroke remains absent");
+        }
+    }
+}
+
+/// The original compound's cancelled outline stays grouped beside its filled contour.
+#[test]
+fn eraser_even_odd_cancellation_survives_beside_a_filled_subpath() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute("path.create", &json!({"d": "M100 100H200V200H100V100H200V200H100V100 M230 100H280V200H230"})).unwrap()["id"].as_u64().unwrap(),
+    );
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#000000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [id.0], "weight": 2})).unwrap();
+    s.execute("path.setFillRule", &json!({"ids": [id.0], "rule": "evenOdd"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths.len(), 2, "one node holds both open subpaths");
+    assert!(path(&s, id).subpaths.iter().all(|subpath| !subpath.closed));
+    let render = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default())
+    };
+    let before = render(&s);
+    assert_eq!(before.pixel(150, 125)[3], 0, "the twice-traced open subpath cancels under Even-Odd");
+    assert_eq!(before.pixel(150, 175)[3], 0, "the cancelled lower run is empty before Eraser");
+    assert!(before.pixel(250, 125)[3] > 240, "the disjoint open rectangle fills");
+
+    s.execute("path.eraseRegion", &json!({"points": [[50, 150], [290, 150]], "size": 10})).unwrap();
+    let after = render(&s);
+    assert_eq!(after.pixel(150, 175)[3], 0, "the cancelled interior stays empty below the sweep");
+    assert!(after.pixel(250, 125)[3] > 240, "the disjoint filled subpath survives");
+    assert_eq!(after.pixel(250, 150)[3], 0, "the swept band through the filled subpath is empty");
+    for (x, y) in [(100, 125), (200, 125), (230, 125), (280, 125)] {
+        let pixel = after.pixel(x, y);
+        assert!(pixel[0] > 200 && pixel[1] < 60 && pixel[2] < 60 && pixel[3] > 200, "open outline survivor ({x},{y}): {pixel:?}");
+    }
+}

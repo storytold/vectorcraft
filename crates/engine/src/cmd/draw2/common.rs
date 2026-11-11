@@ -319,9 +319,9 @@ pub(super) fn target_paths(doc: &Document, sel: &Selection, area: Rect) -> Vec<N
     out
 }
 
-/// Any non-None fill in the appearance stack, including a fill below a topmost None.
+/// Any visible non-None fill in the appearance stack, including a fill below a topmost None.
 pub(super) fn has_fill(n: &Node) -> bool {
-    n.appearance.items.iter().any(|item| item.is_fill() && !item.paint().is_none())
+    n.appearance.items.iter().any(|item| item.is_fill() && item.visible() && !item.paint().is_none())
 }
 
 /// [`target_paths`] for tools that cut fills, with geometry and fill rule. Closed compound paths
