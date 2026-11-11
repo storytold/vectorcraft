@@ -5,7 +5,8 @@
 //!
 //! - **no host imports but those of API level 2** ([`host`]: progress, Cancel and log lines with
 //!   the `progress` permission, and settings and a cache of its own with the `settings` and `cache`
-//!   permissions, [`storage`]): no WASI, file system, network, clock or randomness. A module that
+//!   permissions, [`storage`], and the commands its `commandAllowlist` names with the `commands`
+//!   permission): no WASI, file system, network, clock or randomness. A module that
 //!   imports anything else is rejected;
 //! - an **instruction budget** (fuel) per call, metered in slices so a wall-clock deadline is
 //!   also enforced (native builds), so infinite loops end with an error. A filter may ask for a

@@ -26,8 +26,8 @@ use std::collections::BTreeMap;
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
-    CharStyle, HyphenationOptions, JustificationOptions, Justify, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign, PathEffect, TabAlign,
-    TabStop, TextKind, TextObject, TextRun,
+    CharStyle, HyphenationOptions, JustificationOptions, Justify, LineCap, LineJoin, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign,
+    PathEffect, TabAlign, TabStop, TextKind, TextObject, TextRun,
 };
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
@@ -462,6 +462,12 @@ struct Style {
     fill: Option<Color>,
     stroke: Option<Color>,
     stroke_width: f64,
+    /// Key 61, the stroke's cap: 0 butt, 1 round, 2 projecting (square).
+    stroke_cap: LineCap,
+    /// Key 62, the stroke's join: 0 miter, 1 round, 2 bevel.
+    stroke_join: LineJoin,
+    /// Key 64, the stroke's miter limit (a multiple of the stroke weight).
+    stroke_miter_limit: f64,
     /// Key 12, the case: 1 Small Caps, 2 All Caps.
     caps: u8,
     /// Key 35 at 3: Tate-chu-yoko, the characters set across the column as one block.
@@ -752,6 +758,21 @@ impl Texts {
             fill: if on("56") { Some(pick("53").and_then(paint).unwrap_or(Color::BLACK)) } else { None },
             stroke: if matches!(pick("57"), Some(Val::Bool(true))) { pick("54").and_then(paint) } else { None },
             stroke_width: num("63").filter(|v| *v >= 0.0 && *v < 1e4).unwrap_or(1.0),
+            // Numbered as PostScript's `setlinecap` and `setlinejoin` operators number them
+            // (PostScript Language Reference, 3rd ed.): in users' files the page strokes type with
+            // the cap and join these give, and with key 64 as its miter limit. No file had a bevel
+            // join (2). Any other value keeps the default.
+            stroke_cap: match num("61") {
+                Some(1.0) => LineCap::Round,
+                Some(2.0) => LineCap::Square,
+                _ => LineCap::Butt,
+            },
+            stroke_join: match num("62") {
+                Some(1.0) => LineJoin::Round,
+                Some(2.0) => LineJoin::Bevel,
+                _ => LineJoin::Miter,
+            },
+            stroke_miter_limit: num("64").filter(|v| v.is_finite() && *v >= 1.0).map_or(10.0, |v| v.min(500.0)),
             caps: num("12").filter(|v| *v == 1.0 || *v == 2.0).map_or(0, |v| v as u8),
             tate_chu_yoko: num("35") == Some(3.0),
             standard_vertical_roman: num("35") == Some(1.0),
@@ -1278,6 +1299,9 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
 fn char_style(s: &Style, scale: f64) -> CharStyle {
     let (family, style) = s.font.as_deref().map_or_else(|| (CharStyle::default().font_family, "Regular".to_string()), crate::family_style);
     let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
+    // Type without a stroke keeps the stroke's defaults, as its weight is 0.
+    let (stroke_cap, stroke_join, stroke_miter_limit) =
+        if s.stroke.is_some() { (s.stroke_cap, s.stroke_join, s.stroke_miter_limit) } else { (LineCap::Butt, LineJoin::Miter, 10.0) };
     CharStyle {
         font_family: family,
         font_style: style,
@@ -1293,6 +1317,9 @@ fn char_style(s: &Style, scale: f64) -> CharStyle {
         fill: s.fill.map_or(Paint::None, Paint::solid),
         stroke: s.stroke.map_or(Paint::None, Paint::solid),
         stroke_width: if s.stroke.is_some() { s.stroke_width * scale } else { 0.0 },
+        stroke_cap,
+        stroke_join,
+        stroke_miter_limit,
         all_caps: s.caps == 2,
         // At the default Small Caps size of Document Setup: the file's own isn't read.
         small_caps: (s.caps == 1).then(|| vectorcraft_doc::DocSetup::default().small_caps_size),
@@ -1573,6 +1600,44 @@ mod tests {
         assert!(texts(b"/35 3").style(None).tate_chu_yoko && !texts(b"/35 3").style(None).standard_vertical_roman);
     }
 
+    /// Keys 61, 62 and 64 of a character style are its stroke's cap (0 butt, 1 round, 2
+    /// projecting), join (0 miter, 1 round, 2 bevel) and miter limit, from the run, its character
+    /// style or the document's defaults. A value that isn't one of theirs keeps the default, a miter
+    /// limit past 500 is 500, and type without a stroke keeps the defaults.
+    #[test]
+    fn a_run_keeps_its_stroke_cap_join_and_miter_limit() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: read(b"/57 true /54 << /0 << /0 0 /1 [ 1.0 1.0 ] >> >> /64 4.0").unwrap(),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Rounded) /6 << /61 1 /62 1 >>").unwrap()],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let stroke = |run: &[u8]| {
+            let s = char_style(&texts.style(Some(&read(run).unwrap())), 1.0);
+            (s.stroke_cap, s.stroke_join, s.stroke_miter_limit)
+        };
+        assert_eq!(stroke(b"/6 << /61 2 /62 2 /64 2.5 >>"), (LineCap::Square, LineJoin::Bevel, 2.5), "the run's own");
+        assert_eq!(stroke(b"/5 1 /6 << >>"), (LineCap::Round, LineJoin::Round, 4.0), "its character style's and the defaults'");
+        assert_eq!(stroke(b"/5 1 /6 << /62 0 >>"), (LineCap::Round, LineJoin::Miter, 4.0), "the run's own wins over its style");
+        assert_eq!(stroke(b"/6 << >>"), (LineCap::Butt, LineJoin::Miter, 4.0), "the defaults'");
+        assert_eq!(stroke(b"/6 << /64 1 >>").2, 1.0);
+        assert_eq!(stroke(b"/6 << /64 1e9 >>").2, 500.0);
+        for bad in [
+            &b"/6 << /61 3 /62 3 /64 0.5 >>"[..],
+            b"/6 << /61 -1 /62 -1 /64 -4 >>",
+            b"/6 << /61 1.5 /62 0.5 /64 NaN >>",
+            b"/6 << /61 (1) /62 (1) /64 inf >>",
+            b"/6 << /61 true /62 [ 1 ] /64 (4) >>",
+            b"/6 << /61 1e308 /62 /Round /64 -inf >>",
+        ] {
+            assert_eq!(stroke(bad), (LineCap::Butt, LineJoin::Miter, 10.0), "{}", String::from_utf8_lossy(bad));
+        }
+        assert_eq!(stroke(b"/5 1 /6 << /57 false >>"), (LineCap::Butt, LineJoin::Miter, 10.0), "no stroke");
+    }
+
     /// A right-to-left paragraph is laid out right to left even when it has no right-to-left
     /// letters (a dimension's label " 120.5 mm " reads "mm 120.5"); a left-to-right one, or one
     /// that doesn't say, goes by its letters.
@@ -1840,6 +1905,9 @@ mod tests {
                     fill: Some(Color::BLACK),
                     stroke: None,
                     stroke_width: 1.0,
+                    stroke_cap: LineCap::Butt,
+                    stroke_join: LineJoin::Miter,
+                    stroke_miter_limit: 10.0,
                     caps: 0,
                     tate_chu_yoko: false,
                     standard_vertical_roman: false,

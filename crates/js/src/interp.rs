@@ -179,6 +179,12 @@ pub(crate) struct Interp {
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
     pub(crate) held: Rc<HeldCount>,
+    /// Set by the host to end the current slice of a resumable run at the next safe point.
+    pub(crate) pause: Rc<std::cell::Cell<bool>>,
+    /// The message of the uncatchable error a host function ended the run with.
+    pub(crate) host_abort: Option<String>,
+    /// How much a value passed to or from a host function may carry.
+    pub(crate) data_limits: crate::DataLimits,
 }
 
 /// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
@@ -367,6 +373,9 @@ impl Interp {
             install_error: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
+            pause: Rc::default(),
+            host_abort: None,
+            data_limits: crate::DataLimits::default(),
         };
         crate::builtins::install(&mut interp);
         interp.fuel = limits.fuel;
@@ -554,6 +563,28 @@ impl Interp {
                     self.abort_to_boundary();
                     return Err(other);
                 }
+            }
+        }
+    }
+
+    /// Runs the boundary frame on top until it returns (`Some` with its value) or the remaining
+    /// fuel falls to `pause_at`, or the host asks for a pause (`None`, with the frames left in
+    /// place for the next call). Only this outermost loop pauses: a nested run has native frames
+    /// under it and goes on until it returns.
+    pub(crate) fn execute_slice(&mut self, pause_at: u64) -> JsResult<Option<Value>> {
+        loop {
+            match self.step() {
+                Ok(Some(v)) => return Ok(Some(v)),
+                Ok(None) => {}
+                Err(Abrupt::Throw(v)) => self.unwind(v)?,
+                Err(other) => {
+                    self.note_site();
+                    self.abort_to_boundary();
+                    return Err(other);
+                }
+            }
+            if self.fuel <= pause_at || self.pause.replace(false) {
+                return Ok(None);
             }
         }
     }
@@ -966,11 +997,11 @@ impl Interp {
 
     // ---- properties ----
 
-    fn object(&self, id: ObjId) -> JsResult<&Object> {
+    pub(crate) fn object(&self, id: ObjId) -> JsResult<&Object> {
         self.heap.object(id).ok_or_else(|| Abrupt::Internal("object out of range".into()))
     }
 
-    fn object_mut(&mut self, id: ObjId) -> JsResult<&mut Object> {
+    pub(crate) fn object_mut(&mut self, id: ObjId) -> JsResult<&mut Object> {
         self.heap.object_mut(id).ok_or_else(|| Abrupt::Internal("object out of range".into()))
     }
 
@@ -1815,6 +1846,11 @@ impl Interp {
                     self.temp_roots.truncate(mark);
                     return Ok(Prepared::Done(r?));
                 }
+                Func::Data { f, name, text } => {
+                    // The arguments are read before the function runs, and a result being built
+                    // keeps itself reachable.
+                    return Ok(Prepared::Done(self.call_data(&f, &name, &args, text)?));
+                }
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
                     return match host(&js_args) {
@@ -2135,6 +2171,15 @@ impl Interp {
         if is_eval && self.reentry >= self.limits.reentry {
             return Err(Abrupt::Limit(LimitKind::Reentry));
         }
+        self.enter_global(code, is_eval)?;
+        self.reentry += nested;
+        let r = self.execute();
+        self.reentry -= nested;
+        r
+    }
+
+    /// Declares `code`'s variables and functions and pushes its boundary frame, ready to run.
+    pub(crate) fn enter_global(&mut self, code: Rc<Code>, is_eval: bool) -> JsResult<()> {
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let (env, global) = (self.global_env, self.global);
         let (env, var_env) = if code.strict && is_eval {
@@ -2144,11 +2189,7 @@ impl Interp {
             (env, env)
         };
         self.instantiate_global(&code, var_env, is_eval)?;
-        self.push_code_frame(code, env, var_env, Value::Object(global), true)?;
-        self.reentry += nested;
-        let r = self.execute();
-        self.reentry -= nested;
-        r
+        self.push_code_frame(code, env, var_env, Value::Object(global), true)
     }
 
     fn push_code_frame(&mut self, code: Rc<Code>, env: EnvId, var_env: EnvId, this: Value, boundary: bool) -> JsResult<()> {

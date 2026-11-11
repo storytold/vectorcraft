@@ -645,3 +645,26 @@ fn nested_svg_images_past_count_cap_are_left_out() {
     let (_d, warnings) = import_with(&svg, &ImportOptions::default()).unwrap();
     assert!(warnings.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images"))));
 }
+
+/// #3566: entity references in element content count toward the expansion limit, as in
+/// attributes. A 10 KB entity, a second entity that refers to it 250 times, and eight references
+/// to the second inside `<desc>` would expand to about 20 MB from a file of a few KB: the import
+/// refuses it before the XML reader expands anything. The namespace entities drawing apps write
+/// (`&ns_svg;`) still import.
+#[test]
+fn entities_repeated_in_element_content_are_refused_and_namespace_entities_import() {
+    let bomb = format!(
+        r#"<!DOCTYPE svg [<!ENTITY a "{}"><!ENTITY b "{}">]><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><desc>{}</desc><rect width="5" height="5"/></svg>"#,
+        "x".repeat(10_000),
+        "&a;".repeat(250),
+        "&b;".repeat(8)
+    );
+    assert!(bomb.len() < 20_000, "{} bytes", bomb.len());
+    match import_with(&bomb, &ImportOptions::default()) {
+        Err(SvgError::Parse(e)) => assert!(e.contains("entities"), "{e}"),
+        other => panic!("refused as a parse error, not {:?}", other.map(|(_, w)| w)),
+    }
+    let ns = r#"<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY ns_svg "http://www.w3.org/2000/svg">]><svg xmlns="&ns_svg;" width="10" height="10"><rect width="5" height="5"/></svg>"#;
+    let (d, _) = import_with(ns, &ImportOptions::default()).unwrap();
+    assert_eq!(art(&d).len(), 1, "the rectangle");
+}

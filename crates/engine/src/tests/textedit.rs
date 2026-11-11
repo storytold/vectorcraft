@@ -515,6 +515,84 @@ fn type_commands_refuse_a_number_or_boolean_given_as_text() {
     assert!(!t.ruby.is_empty() && t.ruby.iter().all(|r| !r.overhang && r.size_percent == 50.0), "{:?}", t.ruby);
 }
 
+/// The Character commands, Ruby and Move Type Path Handle refuse a param of the wrong type with an
+/// error naming the param, also when another param would change something, and leave the
+/// document, its revision, the selection and the undo history as they were. Null counts as a param
+/// left out, which keeps its default, and `size` and `leading` take a length with a unit.
+#[test]
+fn character_ruby_and_path_handle_refuse_a_param_of_the_wrong_type() {
+    use crate::tests::{history, not_a_number, select_with_a_step_to_redo};
+    let mut s = session();
+    let id = text(&mut s, "abc");
+    let path = s.execute("path.create", &json!({"anchors": [{"x": 100, "y": 300, "in": [50, 300], "out": [150, 300]}, {"x": 400, "y": 300}]}));
+    let on_path = s.execute("text.createInPath", &json!({"path": path.unwrap()["id"], "mode": "onPath", "text": "Along"})).unwrap()["id"].clone();
+    select_with_a_step_to_redo(&mut s, &[id]);
+    let string = |k: &str| format!("`{k}` must be a string");
+    let tags = "features must be a list of tags".to_string();
+    let which = "`which` must be one of in, out".to_string();
+    let handle = |which: Value| json!({"id": on_path, "anchor": 0, "which": which, "x": 100, "y": 250});
+    let mut calls = vec![
+        ("text.setStyle", json!({"font": 5}), string("font")),
+        ("text.setStyle", json!({"style": true}), string("style")),
+        ("text.setStyle", json!({"size": 30, "style": ["Bold"]}), string("style")),
+        ("text.setStyle", json!({"justify": 1}), string("justify")),
+        ("text.setStyle", json!({"size": 30, "justify": {"value": "center"}}), string("justify")),
+        ("text.setStyle", json!({"features": ["dlig", 5]}), tags.clone()),
+        ("text.setStyle", json!({"leading": true}), "leading must be a number or \"auto\"".to_string()),
+        ("text.setRangeStyle", json!({"id": id.0, "font": 5}), string("font")),
+        ("text.setRangeStyle", json!({"id": id.0, "size": 30, "style": false}), string("style")),
+        ("text.setRangeStyle", json!({"id": id.0, "features": [null]}), tags),
+        ("type.ruby", json!({"text": 5}), string("text")),
+        ("type.ruby", json!({"remove": true, "text": ["a"]}), string("text")),
+        ("type.ruby", json!({"text": "a", "position": 1}), string("position")),
+        ("type.ruby", json!({"text": "a", "align": true}), string("align")),
+        ("text.setPathHandle", handle(json!(1)), which.clone()),
+        ("text.setPathHandle", handle(json!("up")), which),
+    ];
+    calls.extend(
+        [
+            ("text.setStyle", json!({"size": true}), "size"),
+            ("text.setStyle", json!({"size": "big"}), "size"),
+            ("text.setStyle", json!({"size": "20abc"}), "size"),
+            ("text.setStyle", json!({"tracking": "20abc"}), "tracking"),
+            ("text.setStyle", json!({"font": "Inter", "size": [12]}), "size"),
+            ("text.setStyle", json!({"tracking": "wide"}), "tracking"),
+            ("text.setStyle", json!({"size": 30, "tracking": false}), "tracking"),
+        ]
+        .map(|(cmd, p, key)| {
+            let (_, p, msg) = not_a_number(cmd, p, key);
+            (cmd, p, msg)
+        }),
+    );
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.revision, st.selection.objects.clone(), history(s))
+    };
+    let before = state(&s);
+    let wrong: Vec<String> = calls
+        .iter()
+        .filter_map(|(cmd, p, want)| {
+            let r = s.execute(cmd, p);
+            let refused = matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want);
+            let unchanged = state(&s) == before;
+            (!refused || !unchanged).then(|| format!("{cmd} {p}: {r:?}, unchanged: {unchanged}"))
+        })
+        .collect();
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    // Null keeps each default; a size and a leading with a unit are lengths.
+    let r = json!({"font": null, "style": null, "justify": null, "tracking": null, "features": null, "leading": null, "size": "5 mm"});
+    s.execute("text.setStyle", &r).unwrap();
+    let st = obj(&s, id).runs[0].style.clone();
+    assert!((st.size - 5.0 * 72.0 / 25.4).abs() < 1e-6 && st.tracking == 0.0 && st.leading.is_none(), "{st:?}");
+    s.execute("text.setStyle", &json!({"size": "12 pt", "leading": "18 pt", "tracking": 50})).unwrap();
+    let st = obj(&s, id).runs[0].style.clone();
+    assert_eq!((st.size, st.leading, st.tracking), (12.0, Some(18.0), 50.0));
+    s.execute("type.ruby", &json!({"text": "a", "position": null, "align": null})).unwrap();
+    let ruby = obj(&s, id).ruby;
+    assert!(ruby.iter().all(|r| r.position == vectorcraft_doc::RubyPosition::Above && r.align == vectorcraft_doc::RubyAlign::Center), "{ruby:?}");
+    s.execute("text.setPathHandle", &handle(Value::Null)).unwrap();
+}
+
 /// Where each glyph of type object `id` is drawn from (its origin in font units), document space.
 fn glyph_pens(s: &Session, id: NodeId) -> Vec<(usize, Point)> {
     let t = obj(s, id);

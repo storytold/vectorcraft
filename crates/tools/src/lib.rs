@@ -162,6 +162,12 @@ pub trait Tool: Send {
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
         false
     }
+    /// Has the tool started something that Escape ends while no button is pressed (a path being
+    /// drawn, the Blend tool's first pick)? That Escape ends nothing else, such as isolation mode or
+    /// a rotated view.
+    fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
+        false
+    }
     /// Does the tool want typed text (Type tool editing)? Single-key shortcuts are suppressed.
     fn wants_text(&self) -> bool {
         false
@@ -536,6 +542,7 @@ pub(crate) mod testutil {
             freeform_point: None,
             raster_sample: 1,
             preview_bounds: false,
+            glyph_bounds: false,
             preview_memo: None,
             unit: Unit::Points,
             stroke_unit: Unit::Points,

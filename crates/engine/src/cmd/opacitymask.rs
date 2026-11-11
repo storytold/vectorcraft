@@ -14,7 +14,7 @@ use vectorcraft_doc::{Document, Knockout, Node, NodeId, NodeKind, OpacityMask, S
 
 use super::maskedit::{begin, finish, mask_group, mask_parts, show_editing};
 use super::pathops::{Beside, separate};
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, ids_param, ok, targets};
+use super::{CommandSpec, Result, Session, always, bad, cmd, has_doc, ids_param, ok, switch_or, targets};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -246,8 +246,8 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(bad(C, why));
     }
-    let clip = bool_or(p, "clip", !s.menu.new_masks_unclipped);
-    let invert = bool_or(p, "invert", s.menu.new_masks_inverted);
+    let clip = switch_or(p, "clip", !s.menu.new_masks_unclipped, C)?;
+    let invert = switch_or(p, "invert", s.menu.new_masks_inverted, C)?;
     // Several objects: the top one is the mask. One: an empty mask, drawn in mask editing.
     let (art, mask_id) = if below.is_empty() { (&ids[..], None) } else { (below, Some(top)) };
     // Several objects go into a new group, and a layer can't: the group takes a layer's art.
@@ -330,8 +330,13 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Set the mask flags given in `p` on the masked objects among `target`'s targets.
 fn set_flags(s: &mut Session, target: &Value, label: &str, p: &Value) -> Result<Value> {
-    let get = |k: &str| p.get(k).and_then(Value::as_bool);
-    let (clip, invert, disabled, linked) = (get("clip"), get("invert"), get("disabled"), get("linked"));
+    let get = |k: &str| -> Result<Option<bool>> {
+        match p.get(k) {
+            None | Some(Value::Null) => Ok(None),
+            Some(_) => switch_or(p, k, false, "transparency.setOpacityMask").map(Some),
+        }
+    };
+    let (clip, invert, disabled, linked) = (get("clip")?, get("invert")?, get("disabled")?, get("linked")?);
     if clip.is_none() && invert.is_none() && disabled.is_none() && linked.is_none() {
         return Err(bad("transparency.setOpacityMask", "give at least one of clip, invert, disabled, linked"));
     }
@@ -363,7 +368,7 @@ fn set_flags(s: &mut Session, target: &Value, label: &str, p: &Value) -> Result<
 }
 
 fn toggle_new_clip(s: &mut Session, p: &Value) -> Result<Value> {
-    let v = bool_or(p, "value", s.menu.new_masks_unclipped);
+    let v = switch_or(p, "value", s.menu.new_masks_unclipped, "transparency.toggleNewMasksClipping")?;
     s.menu.new_masks_unclipped = !v;
     Ok(json!({ "value": v }))
 }
@@ -376,7 +381,7 @@ fn toggle_page(s: &mut Session, p: &Value, knockout: bool) -> Result<Value> {
     }
     let d = &s.doc()?.doc;
     let cur = if knockout { d.page_knockout } else { d.page_isolate };
-    let v = bool_or(p, "value", !cur);
+    let v = switch_or(p, "value", !cur, if knockout { "transparency.togglePageKnockoutGroup" } else { "transparency.togglePageIsolatedBlending" })?;
     if v != cur {
         s.edit(if knockout { "Page Knockout Group" } else { "Page Isolated Blending" }, |d, _| {
             *flag(d, knockout) = v;
@@ -387,7 +392,7 @@ fn toggle_page(s: &mut Session, p: &Value, knockout: bool) -> Result<Value> {
 }
 
 fn toggle_new_invert(s: &mut Session, p: &Value) -> Result<Value> {
-    let v = bool_or(p, "value", !s.menu.new_masks_inverted);
+    let v = switch_or(p, "value", !s.menu.new_masks_inverted, "transparency.toggleNewMasksInverted")?;
     s.menu.new_masks_inverted = v;
     Ok(json!({ "value": v }))
 }

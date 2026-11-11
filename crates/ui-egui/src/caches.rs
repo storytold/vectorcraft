@@ -7,7 +7,7 @@ pub struct CanvasCache {
     pub key: Option<CacheKey>,
     /// The document the frame shown was rendered from, and the options it was rendered with, with
     /// [`Self::key`]: when only the document changes, the canvas renders again only where it
-    /// changed ([`vectorcraft_render::changed`]).
+    /// changed, measured by [`Self::renderer`], which drew it ([`vectorcraft_render::Renderer::changed`]).
     pub shown: Option<(std::sync::Arc<vectorcraft_doc::Document>, vectorcraft_render::RenderOptions)>,
     pub last_ms: f64,
     /// The frame shown drew raster effects from rasters made before their objects moved, or at a
@@ -45,15 +45,22 @@ pub struct CanvasCache {
     /// The marks Type → Show Hidden Characters drew on each text object in the last frame. A frame
     /// that does not draw them drops them ([`canvas::show`]).
     pub hidden_chars: canvas::HiddenChars,
+    /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
+    /// frame; dropped while it is off.
+    pub spelling: canvas::SpellingMarks,
     /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
     /// does not draw them drops them ([`canvas::show`]).
     pub selection_marks: canvas::SelectionMarks,
-    /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
-    pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
+    /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds and
+    /// Measure Type by Glyph Bounds).
+    pub selection_box: Option<((u64, u64, vectorcraft_effects::preview::Measure), Option<vectorcraft_doc::OrientedBox>)>,
     /// [`VectorcraftApp::selection_bounds`] for (document uid, revision).
     pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// [`VectorcraftApp::content_bounds`] for (document uid, revision).
     pub content_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
+    /// [`CacheKey::plugins`] by document uid, with the plug-in revision
+    /// ([`vectorcraft_render::effects::plugin_revision`]) it was last checked at.
+    pub plugin_keys: std::collections::HashMap<u64, (u64, u64)>,
     /// The tools' cursors as OS cursor bitmaps.
     pub cursors: cursors::Images,
     /// The view the canvas last drew and when it last changed (egui's input time): while it moves,
@@ -115,6 +122,11 @@ pub struct CacheKey {
     pub highlight_substituted_fonts: bool,
     /// [`vectorcraft_render::placed_document::generation`]: placed documents' bitmaps made since.
     pub placed: u64,
+    /// The plug-in revision ([`vectorcraft_render::effects::plugin_revision`]) of the last plug-in
+    /// install or removal after which the document drew a plug-in effect
+    /// ([`vectorcraft_render::draws_plugin_effects`]): a frame drawn before it draws those effects
+    /// as the plug-ins installed then did. 0 until then.
+    pub plugins: u64,
     /// View › Pixel Preview: the document pixels rendered (x0, y0, x1, y1), one per point, shown
     /// with hard edges. None: the art is rendered for the screen.
     pub pixel: Option<[i64; 4]>,

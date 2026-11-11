@@ -280,9 +280,14 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let item = item_target(s, p, C)?;
     if effects::is_three_d(id) {
-        for target in appearance_targets(s, p)? {
-            let n = s.doc()?.doc.node(target).ok_or(EngineError::NoNode(target))?;
-            effects::validate_three_d(n, id, &effect.params).map_err(|e| bad(C, e))?;
+        let targets = appearance_targets(s, p)?;
+        for (target, at) in targets.iter().copied().zip(item.per_target(s, &targets)) {
+            let d = &s.doc()?.doc;
+            let n = d.node(target).ok_or(EngineError::NoNode(target))?;
+            // A new effect goes after the item's others.
+            let on = at.and_then(|at| at.effects_item(&n.appearance, C).ok()).flatten();
+            let on = on.and_then(|i| Some((i, n.appearance.items.get(i)?.effects().len())));
+            effects::validate_three_d_at_in(Some(d), n, id, &effect.params, on).map_err(|e| bad(C, e))?;
             if id == effects::REVOLVE && effects::has_revolve(n) {
                 return Err(bad(C, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
             }
@@ -571,7 +576,8 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         params["name"] = json!(svg_filter_name(s, xml, C)?);
     }
     for &(id, target, index) in &targets {
-        let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
+        let d = &s.doc()?.doc;
+        let n = d.node(id).ok_or(EngineError::NoNode(id))?;
         let effect = n.appearance.effects_at(target).and_then(|fx| fx.get(index));
         if warp_id.is_some() && effect.is_some_and(|e| e.id.strip_prefix("warp.").and_then(effects::WarpStyle::from_id).is_none()) {
             return Err(bad(C, "warpStyle can only edit an applied Warp effect"));
@@ -589,7 +595,7 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
                 cur.extend(new);
             }
             if visible != Some(false) {
-                effects::validate_three_d(n, to, &prospective).map_err(|e| bad(C, e))?;
+                effects::validate_three_d_at_in(Some(d), n, to, &prospective, target.map(|item| (item, index))).map_err(|e| bad(C, e))?;
             } else {
                 // Hidden, the effect draws nothing, so its object need not fit. The values given are
                 // checked, and after a change of 3D type so is every value it keeps.
@@ -865,8 +871,8 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
         // keeps it as its only member).
         Some((image, false)) => Some(rasterfx::replace_with_image(v, image)),
         image => {
-            let m = if container && effects::has_solid(&v) {
-                // A group's or layer's 3D effect: the shaded faces of its members' solids.
+            let m = if (container || matches!(n.kind, NodeKind::Text(_))) && (effects::has_solid(&v) || effects::has_revolve(&v)) {
+                // A 3D effect on a group or layer, or on type: the shaded faces of its solids.
                 effects::expand_leaf(d, &v, &mut stroke_art)
             } else if container {
                 // A group's or layer's own fills and strokes become art among its members.
@@ -1001,6 +1007,9 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod lighting_presets_tests;
+
+#[cfg(test)]
+mod three_d_source_tests;
 
 #[cfg(test)]
 mod three_d_type_tests;

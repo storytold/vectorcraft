@@ -39,6 +39,8 @@ mod saveext;
 mod screenmode;
 mod screenshots;
 mod script_check;
+mod script_run;
+mod scripts_menu;
 mod scrub;
 mod selectall;
 mod selectescape;

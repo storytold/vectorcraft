@@ -25,7 +25,7 @@ use super::edit::selected_roots;
 use super::menucmds::{run_raw, squash};
 use super::object::as_clipping_path;
 use super::pathops::{assemble, node_path, outline_strokes, replace_leaves, styled_copy, with_transparency};
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, has_selection, str_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_selection, number_or, switch_or, text_param};
 
 const C: &str = "object.expand";
 /// Expand Gradient To → Specify … Objects: the default and the most.
@@ -101,11 +101,11 @@ enum GradientTo {
 
 impl GradientTo {
     fn parse(p: &Value) -> Result<Self> {
-        let steps = f64_or(p, "steps", DEFAULT_STEPS as f64).round();
+        let steps = number_or(p, "steps", DEFAULT_STEPS as f64, C)?.round();
         if !(1.0..=MAX_STEPS as f64).contains(&steps) {
             return Err(bad(C, format!("steps must be 1..{MAX_STEPS}")));
         }
-        match str_param(p, "gradient").unwrap_or("objects") {
+        match text_param(p, "gradient", C)?.unwrap_or("objects") {
             "objects" => Ok(Self::Objects(steps as u32)),
             "mesh" => Ok(Self::Mesh),
             _ => Err(bad(C, "gradient must be \"objects\" or \"mesh\"")),
@@ -236,9 +236,9 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
-    let object = bool_or(p, "object", true);
-    let fill = bool_or(p, "fill", true);
-    let stroke = bool_or(p, "stroke", true);
+    let object = switch_or(p, "object", true, C)?;
+    let fill = switch_or(p, "fill", true, C)?;
+    let stroke = switch_or(p, "stroke", true, C)?;
     let to = GradientTo::parse(p)?;
     let from = s.doc()?.history.undo.len();
     let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);

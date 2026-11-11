@@ -290,8 +290,16 @@ fn resources_are_json() {
     let list = rpc(&mut s, 2, "resources/list", json!({}));
     for r in list["result"]["resources"].as_array().unwrap() {
         let v = rpc(&mut s, 3, "resources/read", json!({"uri": r["uri"]}));
-        let text = v["result"]["contents"][0]["text"].as_str().unwrap();
-        serde_json::from_str::<Value>(text).unwrap();
+        let content = &v["result"]["contents"][0];
+        assert_eq!(content["mimeType"], r["mimeType"], "{}", r["uri"]);
+        assert_eq!(content["uri"], r["uri"]);
+        let text = content["text"].as_str().unwrap();
+        if r["mimeType"] == "application/json" {
+            serde_json::from_str::<Value>(text).unwrap();
+        } else {
+            assert_eq!(r["mimeType"], "text/markdown; charset=utf-8", "{}", r["uri"]);
+            assert!(text.starts_with("# ") && text.ends_with('\n'), "{}", r["uri"]);
+        }
     }
 }
 

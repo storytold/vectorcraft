@@ -1514,6 +1514,44 @@ fn crop_image_to_rect() {
     assert!(s.execute("object.cropImage", &json!({})).is_err());
 }
 
+/// 100 × 80 px of a busy pattern, opened as an image and scaled to 2 pt a pixel; returns the session, the image and its pixels.
+fn busy_image_at_two_points_a_pixel() -> (Session, NodeId, image::RgbaImage) {
+    let mut px = image::RgbaImage::new(100, 80);
+    for (x, y, p) in px.enumerate_pixels_mut() {
+        *p = image::Rgba([(x * 37 % 256) as u8, (y * 91 % 256) as u8, ((x ^ y) * 13 % 256) as u8, 255]);
+    }
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "art.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    (s, img, px)
+}
+
+#[test]
+fn crop_image_to_rect_copies_the_pixels_without_resampling() {
+    let (mut s, img, px) = busy_image_at_two_points_a_pixel();
+    // Pixels (10, 5) to (40, 25), as points: on the pixel grid, so the cut copies them as they are.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40]})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (30, 20), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 20.0) && close(b.y0, 10.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!(out, image::imageops::crop_imm(&px, 10, 5, 30, 20).to_image());
+}
+
+#[test]
+fn crop_image_to_a_rect_between_pixels_keeps_the_rect() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    // Pixels (10.5, 5.5) to (40.5, 25.5): off the pixel grid, so the cut is drawn and lands on the rect, not on whole pixels.
+    s.execute("object.cropImage", &json!({"rect": [21, 11, 60, 40]})).unwrap();
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+}
+
 /// Crop Image refuses a `rect` that is not an array, such as text, and the image stays as it was; a
 /// null `rect` crops to the artboard as a missing one does.
 #[test]
@@ -3687,6 +3725,40 @@ fn ruler_guides_and_lock() {
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
 }
 
+/// While guides are locked, a guide dragged out of a ruler and `guide.add` still make new guides,
+/// each in one undo step and not selected. The ruler guides and guide paths in the document, the
+/// new guides included, can't be selected, moved or deleted.
+#[test]
+fn new_guides_can_be_made_while_guides_are_locked() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let path = guide_path(&mut s, 300.0);
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    let n = undo_len(&s);
+    s.ruler_guide(true, &PointerEvent::new(PointerKind::Drag, 153.0, 30.0), true, v).unwrap();
+    s.ruler_guide(true, &PointerEvent::new(PointerKind::Up, 153.0, 30.0), true, v).unwrap();
+    assert_eq!(guides(&s), [(false, 50.0), (true, 153.0)]);
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "New Guide");
+    assert_eq!(s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap()["index"], 2);
+    assert_eq!(guides(&s).len(), 3);
+    assert_eq!(selected_guides(&s), Vec::<usize>::new());
+    for (id, params) in [
+        ("guide.select", json!({"indexes": [1]})),
+        ("guide.move", json!({"index": 1, "pos": 170})),
+        ("guide.remove", json!({"index": 1})),
+        ("guide.setLayer", json!({"index": 1, "layer": s.doc().unwrap().current_layer().unwrap().0})),
+    ] {
+        assert!(matches!(s.execute(id, &params), Err(EngineError::Disabled(..))), "{id}");
+    }
+    assert_eq!(guides(&s).len(), 3);
+    sel(&mut s, &[path]);
+    assert!(selected(&s).is_empty(), "a guide path can't be selected");
+}
+
 #[test]
 fn invalid_guide_lock_parameters_keep_guides_selected() {
     let mut s = session();
@@ -4220,6 +4292,77 @@ fn guides_dragged_out_of_a_ruler_snap_and_take_the_artboard_tool_s_artboard() {
         s.execute("guide.list", &json!({})).unwrap()[1],
         json!({"index": 1, "vertical": false, "pos": 50.0, "selected": false, "artboard": 1, "layer": layer, "shown": true, "editable": true})
     );
+}
+
+/// With Preferences › Guides & Grid › Artboard Guides with Cmd/Ctrl + Ruler Drag on, Cmd/Ctrl held
+/// when a guide is dragged out of a ruler makes a guide of the view's active artboard (one undo
+/// step), shown and made only where it lies within that artboard; with the Artboard tool it makes
+/// a canvas guide instead. The key counts on the drag's first event only. With the preference off,
+/// Cmd/Ctrl changes nothing.
+#[test]
+fn cmd_ruler_drags_make_guides_of_the_active_artboard_when_the_preference_is_on() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 900, "y": 0, "width": 400, "height": 300})).unwrap();
+    let v = ViewInfo { artboard: 1, ..ViewInfo::default() };
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let ev = |kind, x, y, mods| PointerEvent::new(kind, x, y).with_mods(mods);
+    let owners = |s: &mut Session| -> Vec<Value> {
+        let list = s.execute("guide.list", &json!({})).unwrap();
+        list.as_array().unwrap().iter().map(|g| g.get("artboard").cloned().unwrap_or(Value::Null)).collect()
+    };
+    let drag = |s: &mut Session, view: ViewInfo, vertical: bool, at: f64, first: Mods| {
+        let (x, y) = if vertical { (at, 30.0) } else { (1000.0, at) };
+        s.ruler_guide(vertical, &ev(PointerKind::Drag, x, y, first), true, view).unwrap();
+        // Letting go of the key during the drag keeps the kind of guide.
+        s.ruler_guide(vertical, &ev(PointerKind::Up, x, y, Mods::default()), true, view).unwrap();
+    };
+
+    // Off by default: a Cmd/Ctrl drag makes a canvas guide.
+    assert!(!s.prefs.cmd_ruler_drag_artboard_guides);
+    drag(&mut s, v, true, 1010.0, cmd);
+    assert_eq!(owners(&mut s), [Value::Null]);
+
+    s.execute("prefs.set", &json!({"key": "cmdRulerDragArtboardGuides", "value": true})).unwrap();
+    let n = undo_len(&s);
+    drag(&mut s, v, true, 1020.0, cmd);
+    drag(&mut s, v, false, 120.0, cmd);
+    assert_eq!(guides(&s)[1..], [(true, 1020.0), (false, 120.0)]);
+    assert_eq!(owners(&mut s)[1..], [json!(1), json!(1)]);
+    assert_eq!(undo_len(&s), n + 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(owners(&mut s)[1..], [json!(1), json!(1)], "redo keeps the artboard");
+
+    // Outside the active artboard (left of it, and below it): no preview, no guide, no undo step.
+    let n = undo_len(&s);
+    s.ruler_guide(true, &ev(PointerKind::Drag, 500.0, 30.0, cmd), true, v).unwrap();
+    assert_eq!(guides(&s).len(), 3, "no preview");
+    s.ruler_guide(true, &ev(PointerKind::Up, 500.0, 30.0, cmd), true, v).unwrap();
+    drag(&mut s, v, false, 450.0, cmd);
+    assert_eq!((guides(&s).len(), undo_len(&s)), (3, n));
+    // Dragged in and out again: the preview goes and nothing is made.
+    s.ruler_guide(true, &ev(PointerKind::Drag, 1100.0, 30.0, cmd), true, v).unwrap();
+    assert_eq!(guides(&s).len(), 4, "the preview within the artboard");
+    s.ruler_guide(true, &ev(PointerKind::Drag, 700.0, 30.0, Mods::default()), true, v).unwrap();
+    s.ruler_guide(true, &ev(PointerKind::Up, 700.0, 30.0, Mods::default()), true, v).unwrap();
+    assert_eq!((guides(&s).len(), undo_len(&s)), (3, n));
+
+    // An active artboard the document doesn't have: nothing is made.
+    drag(&mut s, ViewInfo { artboard: 7, ..v }, true, 1030.0, cmd);
+    assert_eq!((guides(&s).len(), undo_len(&s)), (3, n));
+
+    // Without the key: a canvas guide, as before.
+    drag(&mut s, v, true, 1040.0, Mods::default());
+    assert_eq!(owners(&mut s)[3], Value::Null);
+
+    // The Artboard tool: Cmd/Ctrl makes a canvas guide, and a plain drag an artboard guide.
+    s.select_tool("artboard", v).unwrap();
+    s.set_tool_option("active", &json!(1));
+    drag(&mut s, v, true, 400.0, cmd);
+    drag(&mut s, v, true, 1050.0, Mods::default());
+    assert_eq!(guides(&s)[4..], [(true, 400.0), (true, 1050.0)]);
+    assert_eq!(owners(&mut s)[4..], [Value::Null, json!(1)]);
 }
 
 /// Guides saved before guides had layers are put on a layer when the document opens.

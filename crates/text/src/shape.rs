@@ -796,6 +796,23 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
     source.get(i).filter(|(range, _)| range.contains(&byte)).map(|_| span.start + i)
 }
 
+/// Can one glyph draw characters in styles `a` and `b`? Only when the styles are equal, except that
+/// horizontal type (`vertical` false) does not read Standard Vertical Roman Alignment or the
+/// tate-chu-yoko offsets, so styles that differ only in those are drawn alike there.
+fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
+    if a == b {
+        return true;
+    }
+    !vertical
+        && *a
+            == CharStyle {
+                standard_vertical_roman: a.standard_vertical_roman,
+                tcy_up_down: a.tcy_up_down,
+                tcy_left_right: a.tcy_left_right,
+                ..b.clone()
+            }
+}
+
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
@@ -1316,9 +1333,10 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     cluster_starts.dedup();
     // A glyph is drawn in one style: where a cluster would take in characters of runs in different
     // styles, the runs are shaped apart, as runs that do not shape alike are.
-    // Except at harakat styled apart only in paint ([`crate::harakat`]).
+    // Except at harakat styled apart only in paint ([`crate::harakat`]), and, in horizontal type, where
+    // the runs differ only in settings that vertical type alone reads.
     let inside_clusters: Vec<usize> = boundaries()
-        .filter(|&b| cluster_starts.binary_search(&b).is_err() && run_at(b - 1).1 != run_at(b).1)
+        .filter(|&b| cluster_starts.binary_search(&b).is_err() && !drawn_alike(run_at(b - 1).1, run_at(b).1, feats.vertical))
         .filter(|b| mark_boundaries.binary_search(b).is_err())
         .collect();
     if !inside_clusters.is_empty() {
