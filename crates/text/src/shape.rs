@@ -357,6 +357,19 @@ pub(crate) fn cap_x_heights(face: Option<&FontFace>, st: &CharStyle) -> (f64, f6
     (face.cap_height * k, face.x_height * k)
 }
 
+/// The share of the em that tracking and manual kerning (thousandths of an em) of characters in
+/// style `st` are measured in. In horizontal type that is the Horizontal Scale: they are
+/// thousandths of the em as the scale draws it, so at 50% a tracking of 100 adds 0.05 em, half as
+/// much as at 100%, as the page of users' `.ai` files spaces such type (and as PDF scales its
+/// character and word spacing by its horizontal scaling, ISO 32000-1 §9.4.4). Baking a horizontal
+/// scale of the type's transform into the Horizontal Scale then keeps the spacing. In vertical
+/// type, whose advances down the column don't all take the Horizontal Scale, the em itself: 1. A
+/// scale that isn't a positive number counts as 100%.
+pub fn spacing_scale(st: &CharStyle, vertical: bool) -> f64 {
+    let hs = st.h_scale / 100.0;
+    if vertical || !(hs.is_finite() && hs > 0.0) { 1.0 } else { hs }
+}
+
 /// Shape `text[range]`, where `runs` gives each run's byte range in `text` and style, `inlines`
 /// (parallel to `runs`) the inline graphic of each run that is one, and `levels` each byte's bidi
 /// embedding level from `range.start` (empty: all left to right). Glyphs come out in logical
@@ -736,7 +749,8 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
         let right_y = right.dy - right.bshift;
         let Some(left_style) = runs.get(left.run).map(|(_, s)| *s) else { continue };
         let em = left.sx * left.face.upem / (left_style.h_scale / 100.0);
-        let tracking = left_style.tracking / 1000.0 * em;
+        // The tracking shaping added: thousandths of the em as its Horizontal Scale draws it.
+        let tracking = left_style.tracking / 1000.0 * em * spacing_scale(left_style, false);
         // A manual kerning value on the left glyph is part of its advance and, right to left, of
         // its offset too (it spaces the left glyph from its left neighbor): it is not taken off.
         let advance = glyphs[cluster_start..=cluster_end].iter().map(|g| g.adv).sum::<f64>() - tracking;
@@ -933,8 +947,10 @@ fn shaping_script(c: char) -> Script {
 /// vertical centre on the middle of the cap height raised by the inline's shift (see
 /// [`InlineArt`]). Its advance is the scaled art width plus tracking and its character's manual
 /// kerning, which right to left in horizontal type also moves the art right by the value, as it
-/// moves a letter's glyph. The glyph's ascent and descent grow to the art's extent so a tall
-/// graphic opens up its line. A missing symbol takes a square of the same height and draws nothing.
+/// moves a letter's glyph. The art doesn't take the run's Horizontal Scale; the tracking and the
+/// kerning do, as after a letter ([`spacing_scale`]). The glyph's ascent and descent grow to the
+/// art's extent so a tall graphic opens up its line. A missing symbol takes a square of the same
+/// height and draws nothing.
 #[allow(clippy::too_many_arguments)]
 fn inline_glyph(
     face: &Arc<FontFace>,
@@ -961,8 +977,9 @@ fn inline_glyph(
         }
         _ => (kurbo::Affine::IDENTITY, h, None),
     };
-    let tracking = st.tracking / 1000.0 * size;
-    let manual_kern = st.kerning.map(|v| v / 1000.0 * size).filter(|k| k.is_finite()).unwrap_or(0.0);
+    let spacing_em = size * spacing_scale(st, vertical);
+    let tracking = st.tracking / 1000.0 * spacing_em;
+    let manual_kern = st.kerning.map(|v| v / 1000.0 * spacing_em).filter(|k| k.is_finite()).unwrap_or(0.0);
     let adv = width + if tracking.is_finite() { tracking } else { 0.0 } + manual_kern;
     SGlyph {
         face: face.clone(),
@@ -1082,6 +1099,9 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let km = full / face.upem;
     let hs = st.h_scale / 100.0;
     let vs = st.v_scale / 100.0;
+    // The em the tracking and manual kerning are thousandths of: in horizontal type, as the
+    // Horizontal Scale draws it ([`spacing_scale`]; the runs shaped together share the scale).
+    let spacing_em = size * spacing_scale(st, feats.vertical);
     let ascent = face.ascent * km * vs;
     let descent = face.descent * km * vs;
     let cap = face.cap_height * km * vs;
@@ -1420,7 +1440,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         if ch == SOFT_HYPHEN || ch == '\u{2028}' {
             adv = 0.0;
         } else {
-            let manual_kern = gst.kerning.map(|v| v / 1000.0 * size).unwrap_or(0.0);
+            let manual_kern = gst.kerning.map(|v| v / 1000.0 * spacing_em).unwrap_or(0.0);
             // Manual kerning spaces a character from the next one in reading order. Right to left,
             // that one is drawn to its left: the cluster's glyphs move right along the baseline by
             // the value, so that the space its last glyph's advance gains is at the cluster's left.
@@ -1428,7 +1448,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 kern_shift = manual_kern;
             }
             if last_in_cluster {
-                let tracking = gst.tracking / 1000.0 * size;
+                let tracking = gst.tracking / 1000.0 * spacing_em;
                 adv += tracking + manual_kern;
             }
         }

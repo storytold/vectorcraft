@@ -3622,9 +3622,12 @@ fn reshape_refuses_a_focal_point_that_is_not_an_anchor() {
     }
     assert_eq!(reshape_anchors(&s, id), before);
     let steps = s.doc().unwrap().history.undo.len();
-    let e =
-        s.execute("path.reshape", &json!({"id": id.0, "x": 420.0, "y": 0.0, "dx": 0.0, "dy": 10.0, "focal": [[0, 2]], "radius": 50.0})).unwrap_err();
-    assert!(e.to_string().contains("`focal` and `radius` cannot be used together"), "{e}");
+    // An empty `focal` chooses the focal-point rule too, so it cannot go with `radius` either.
+    for focal in [json!([[0, 2]]), json!([])] {
+        let e =
+            s.execute("path.reshape", &json!({"id": id.0, "x": 420.0, "y": 0.0, "dx": 0.0, "dy": 10.0, "focal": focal, "radius": 50.0})).unwrap_err();
+        assert!(e.to_string().contains("`focal` and `radius` cannot be used together"), "{focal}: {e}");
+    }
     assert_eq!(reshape_anchors(&s, id), before);
     assert_eq!(s.doc().unwrap().history.undo.len(), steps);
 }

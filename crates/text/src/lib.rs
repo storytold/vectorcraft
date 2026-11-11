@@ -54,6 +54,7 @@ pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
+pub use shape::spacing_scale;
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};

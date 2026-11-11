@@ -226,6 +226,46 @@ fn tracking_and_scale() {
     assert!(b.y1 < -4.0, "shifted up: {b:?}");
 }
 
+/// In horizontally scaled type, tracking and manual kerning are thousandths of the em as the scale
+/// draws it (`spacing_scale`): at 50% they add half the space they add at 100%, after every
+/// character, as the page of users' `.ai` files spaces such type.
+#[test]
+fn tracking_and_manual_kerning_take_the_horizontal_scale() {
+    let laid =
+        |h_scale: f64, tracking: f64, kerning: Option<f64>| layout(db(), &point("Wave", CharStyle { h_scale, tracking, kerning, ..style(20.0) }));
+    let advances = |l: &TextLayout| l.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let line = |l: &TextLayout| l.lines[0].x1 - l.lines[0].x0;
+    // 200/1000 of a 20 pt em: 4 pt after each character at 100%, 2 pt at 50%.
+    for (h_scale, extra) in [(100.0, 4.0), (50.0, 2.0)] {
+        for (name, plain, spaced) in [
+            ("tracking", laid(h_scale, 0.0, None), laid(h_scale, 200.0, None)),
+            ("manual kerning", laid(h_scale, 0.0, Some(0.0)), laid(h_scale, 0.0, Some(200.0))),
+        ] {
+            let (a, b) = (advances(&plain), advances(&spaced));
+            assert_eq!(a.len(), 4, "{name}: {a:?}");
+            assert_eq!(a.len(), b.len(), "{name}");
+            for (p, s) in a.iter().zip(&b) {
+                assert!((s - p - extra).abs() < 1e-9, "{name} at {h_scale}%: {extra} pt more after each character: {a:?} {b:?}");
+            }
+            let longer = line(&spaced) - line(&plain);
+            assert!((longer - 4.0 * extra).abs() < 1e-9, "{name} at {h_scale}%: the line is {} pt longer, not {longer}", 4.0 * extra);
+        }
+    }
+}
+
+/// The factor tracking and manual kerning take from the Horizontal Scale: the scale in horizontal
+/// type, 1 in vertical type and for a scale that isn't a positive number.
+#[test]
+fn spacing_scale_is_the_horizontal_scale_of_horizontal_type() {
+    let at = |h_scale: f64, vertical: bool| spacing_scale(&CharStyle { h_scale, ..style(20.0) }, vertical);
+    assert_eq!(at(50.0, false), 0.5);
+    assert_eq!(at(250.0, false), 2.5);
+    assert_eq!(at(50.0, true), 1.0, "vertical type keeps the em");
+    for junk in [0.0, -50.0, f64::NAN, f64::INFINITY] {
+        assert_eq!(at(junk, false), 1.0, "{junk}");
+    }
+}
+
 #[test]
 fn underline_and_strikethrough_bars() {
     let mut t = point("ab", style(20.0));

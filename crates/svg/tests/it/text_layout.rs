@@ -567,6 +567,18 @@ fn ragged_lines_keep_their_character_spacing() {
     }
 }
 
+/// Tracking and manual kerning in type scaled uniformly, which no `textLength` stretches, take the
+/// scale in a viewer as they do on the canvas.
+#[test]
+fn spacing_in_uniformly_scaled_type_takes_the_scale() {
+    for st in [
+        CharStyle { h_scale: 200.0, v_scale: 200.0, tracking: 100.0, ..style(12.0) },
+        CharStyle { h_scale: 150.0, v_scale: 150.0, kerning: Some(80.0), ..style(12.0) },
+    ] {
+        assert_drawn_in_place(&area_doc(vec![run("tracked wide", st)], 280.0, Justify::Left));
+    }
+}
+
 /// Type scaled horizontally before a tab is stretched to its own width, not to the tab's gap.
 #[test]
 fn scaled_type_before_a_tab_keeps_its_width() {
