@@ -117,3 +117,37 @@
 	Preview Mode	מצב תצוגה מקדימה
 @id	file.close	סגירה
 @plural	{n} file|{n} files	{n} קובץ|{n} קבצים|{n} קבצים
+
+# Native Save As / Save a Copy / format options (dialogs/save_options.rs, tl! sources).
+	Save a Copy	שמירת עותק
+	Save as Template	שמירה כתבנית
+	Save As	שמירה בשם
+	Legacy .ai Options	אפשרויות לקובץ .ai מדור קודם
+	{format} Options	אפשרויות {format}
+	Save each artboard to a separate file	שמירת כל משטח יצירה בקובץ נפרד
+	Include Linked Files	הכללת קבצים מקושרים
+	Embed ICC Profiles	הטמעת פרופילי ICC
+	Create PDF-Compatible File	יצירת קובץ תואם PDF
+	Use Compression	שימוש בדחיסה
+	Include Editing Data for Other Apps	הכללת נתוני עריכה ליישומים אחרים
+	All	הכול
+	Range:	טווח:
+	File Name:	שם הקובץ:
+	Format:	סוג קובץ:
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	קובץ .ai מדור קודם מכיל משטח יצירה אחד בלבד: כל משטח יצירה מסומן יישמר בקובץ נפרד.
+	Select All	בחירת הכול
+	{count} of {total} artboards	{count} מתוך {total} משטחי יצירה
+	Check an artboard to save.	יש לסמן משטח יצירה לשמירה.
+	Version:	גרסה:
+	PDF-compatible	תואם PDF
+	Legacy (version 7)	דור קודם (גרסה 7)
+	Transparent Images:	תמונות שקופות:
+	Flatten	השטחה
+	Omit	השמטה
+	Hidden Objects:	אובייקטים מוסתרים:
+	Hidden Layer	שכבה מוסתרת
+	Make Visible	הצגה
+	Text:	טקסט:
+	Editable	ניתן לעריכה
+	Outlines	קווי מתאר
+	VectorCraft {release} and later (version {n})	VectorCraft {release} ומעלה (גרסה {n})

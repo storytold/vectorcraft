@@ -93,6 +93,60 @@ fn hebrew_new_document_dialog_controls_are_translated() {
 }
 
 #[test]
+fn hebrew_save_options_dialog_controls_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let source = include_str!("../dialogs/save_options.rs");
+    for english in [
+        "Save a Copy",
+        "Save as Template",
+        "Save As",
+        "Legacy .ai Options",
+        "{format} Options",
+        "Save each artboard to a separate file",
+        "Include Linked Files",
+        "Embed ICC Profiles",
+        "Create PDF-Compatible File",
+        "Use Compression",
+        "Include Editing Data for Other Apps",
+        "All",
+        "Range:",
+        "File Name:",
+        "Format:",
+        "A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.",
+        "Select All",
+        "Clear",
+        "{count} of {total} artboards",
+        "Check an artboard to save.",
+        "Version:",
+        "PDF-compatible",
+        "Legacy (version 7)",
+        "Transparent Images:",
+        "Flatten",
+        "Omit",
+        "Hidden Objects:",
+        "Hidden Layer",
+        "Make Visible",
+        "Text:",
+        "Editable",
+        "Outlines",
+        "VectorCraft {release} and later (version {n})",
+    ] {
+        assert!(source.contains(&format!(r#"tl!("{english}")"#)), "source key missing: {english}");
+        assert_ne!(tr(he, english), english, "save dialog label untranslated: {english}");
+    }
+    assert_eq!(tr(he, "Save As"), "שמירה בשם");
+    assert_eq!(tr(he, "File Name:"), "שם הקובץ:");
+    assert_eq!(tr(he, "Include Linked Files"), "הכללת קבצים מקושרים");
+    assert!(tr(he, "{format} Options").contains("{format}"));
+    let artboards = tr(he, "{count} of {total} artboards");
+    assert!(artboards.contains("{count}") && artboards.contains("{total}"));
+    let release = tr(he, "VectorCraft {release} and later (version {n})");
+    assert!(release.contains("{release}") && release.contains("{n}"));
+    let (_, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
 fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     let hi = Lang::from_code("hi").expect("hi registered");
     for tag in ["hi", "hi-IN", "hi_IN.UTF-8", "HI-in", "hi-Deva-IN"] {
