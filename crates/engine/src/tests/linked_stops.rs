@@ -350,6 +350,41 @@ fn perceptual_spot_gradients_with_rgb_stops_in_a_cmyk_document_export_as_device_
 }
 
 #[test]
+fn classic_spot_gradients_with_rgb_stops_in_a_cmyk_document_export_as_device_n_shadings() {
+    let (mut s, _) = setup();
+    run(&mut s, "paint.editGradient", json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": "#00ff00"}]}));
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(!pdf.contains("/DeviceN") && warnings.iter().any(|w| w.contains("spot")), "an RGB document drops the ink: {warnings:?}");
+    // A CMYK document, or a conversion to a CMYK destination, writes the RGB stop in CMYK: a
+    // DeviceN shading that keeps the ink.
+    let mut cmyk = doc(&s).clone();
+    cmyk.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let plain = vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() };
+    let mut converted = plain.clone();
+    converted.settings.output = vectorcraft_pdf::OutputSettings {
+        conversion: vectorcraft_pdf::ColorConversion::Destination,
+        destination: vectorcraft_pdf::DOCUMENT_CMYK.into(),
+        ..Default::default()
+    };
+    for (what, d, opts) in [("CMYK document", &cmyk, &plain), ("CMYK destination", doc(&s), &converted)] {
+        let r = vectorcraft_pdf::export_with_report(d, opts).unwrap();
+        let pdf = String::from_utf8_lossy(&r.bytes);
+        assert!(pdf.contains("/ShadingType 2") && pdf.contains("/Ink]/DeviceCMYK"), "{what}: a DeviceN shading with Ink");
+        assert!(!r.warnings.iter().any(|w| w.contains("spot")), "{what}: {:?}", r.warnings);
+    }
+    // A conversion to an RGB destination keeps the RGB stop in RGB, in a CMYK document too.
+    let mut to_rgb = plain.clone();
+    to_rgb.settings.output = vectorcraft_pdf::OutputSettings {
+        conversion: vectorcraft_pdf::ColorConversion::Destination,
+        destination: vectorcraft_color::cms::SRGB.into(),
+        ..Default::default()
+    };
+    let r = vectorcraft_pdf::export_with_report(&cmyk, &to_rgb).unwrap();
+    assert!(!String::from_utf8_lossy(&r.bytes).contains("/DeviceN"), "RGB destination: no DeviceN shading");
+    assert!(r.warnings.iter().any(|w| w.contains("spot")), "RGB destination: {:?}", r.warnings);
+}
+
+#[test]
 fn spot_gradients_drawn_as_images_warn() {
     let (mut s, _) = setup();
     let spot_warning = |w: &[String]| w.iter().any(|w| w.contains("spot colors in gradients exported as images"));
