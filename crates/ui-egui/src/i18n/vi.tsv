@@ -3952,6 +3952,8 @@ mark-style	Japanese	Kiểu Nhật
 	Copies per Sheet (as many as fit, in a grid)	Nhiều bản sao trên một tờ (xếp vừa bao nhiêu in bấy nhiêu, theo lưới)
 	Gutter:	Khoảng cách:
 	Tint	Tông màu
+	Fill Tint	Tông màu tô
+	Stroke Tint	Tông màu nét
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng
 	Tips	Mẹo
@@ -5334,6 +5336,7 @@ theme	Appearance	Giao diện
 @msg	Invalid drawing scale	Tỷ lệ bản vẽ không hợp lệ
 @msg	Invalid real scale	Tỷ lệ thực không hợp lệ
 @msg	Measured anchor no longer exists	Điểm neo được đo không còn tồn tại
+@msg	Invalid measured point	Điểm được đo không hợp lệ
 @msg	Measured segment no longer exists	Đoạn được đo không còn tồn tại
 @msg	Non-finite dimension	Kích thước không phải là số hữu hạn
 @msg	Only linear dimensions are horizontal or vertical	Chỉ kích thước tuyến tính mới nằm ngang hoặc thẳng đứng

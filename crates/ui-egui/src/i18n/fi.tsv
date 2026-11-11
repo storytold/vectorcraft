@@ -2244,6 +2244,8 @@ digits	Malayalam	Malajalam
 	Green	Vihreä
 	Shifts the tints of global and spot colors; other colors stay.	Siirtää globaalien värien ja spottivärien sävyjä; muut värit säilyvät.
 	Tint	Sävy
+	Fill Tint	Täytön sävy
+	Stroke Tint	Viivan sävy
 	Color Guide Options	Väriopasteen asetukset
 	Less	Vähemmän
 	Steps:	Vaiheet:
@@ -5708,6 +5710,7 @@ mark-style	Japanese	Japanilainen
 @msg	Invalid drawing scale	Virheellinen piirustuksen mittakaava
 @msg	Invalid real scale	Virheellinen todellinen mittakaava
 @msg	Measured anchor no longer exists	Mitattua ankkuripistettä ei ole enää
+@msg	Invalid measured point	Virheellinen mitattu piste
 @msg	Measured segment no longer exists	Mitattua segmenttiä ei ole enää
 @msg	Non-finite dimension	Mitta ei ole äärellinen luku
 @msg	Only linear dimensions are horizontal or vertical	Vain lineaariset mitat ovat vaaka- tai pystysuuntaisia

@@ -340,7 +340,7 @@ fn open(host: &Host, kind: DialogKind, args: &[Data]) -> Result<Data, HostError>
     if d.framed {
         if !d.can_wait.get() {
             return Err(HostError::Error(format!(
-                "{name}: a dialog cannot open inside a callback of a built-in function, a getter or a conversion; call it from the script's own code"
+                "{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code"
             )));
         }
         *d.waiting.borrow_mut() = Some(dialog);

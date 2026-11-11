@@ -2285,6 +2285,8 @@ digits	Malayalam	Malajálamské
 	Green	Zelená
 	Shifts the tints of global and spot colors; other colors stay.	Posune tóny globálních a přímých barev; ostatní barvy zůstanou.
 	Tint	Tón
+	Fill Tint	Tón výplně
+	Stroke Tint	Tón tahu
 	Color Guide Options	Možnosti průvodce barvami
 	Less	Méně
 	Steps:	Kroky:
@@ -5741,6 +5743,7 @@ mark-style	Japanese	Japonské
 @msg	Invalid drawing scale	Neplatné měřítko výkresu
 @msg	Invalid real scale	Neplatné skutečné měřítko
 @msg	Measured anchor no longer exists	Měřený kotevní bod už neexistuje
+@msg	Invalid measured point	Neplatný měřený bod
 @msg	Measured segment no longer exists	Měřený segment už neexistuje
 @msg	Non-finite dimension	Kóta není konečné číslo
 @msg	Only linear dimensions are horizontal or vertical	Vodorovné nebo svislé jsou jen lineární kóty
