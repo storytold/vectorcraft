@@ -219,14 +219,25 @@ fn visible(sources: &[TrapSource]) -> Vec<PathData> {
 /// `reach_x` of each other across x and `reach_y` across y. A sweep over the rects sorted by their
 /// left edge, so shapes spread over the page cost about one check each rather than one per pair.
 /// `None` when there are more than [`MAX_NEAR_PAIRS`] (many shapes all within reach of each other
-/// make the pair list grow with the square of their count).
+/// make the pair list grow with the square of their count) or the sweep examines more than
+/// `MAX_NEAR_SCAN` pairs (many shapes sharing an x range, far apart in y).
 fn near_pairs(rects: &[Option<Rect>], reach_x: f64, reach_y: f64) -> Option<Vec<(usize, usize)>> {
+    near_pairs_within(rects, reach_x, reach_y, MAX_NEAR_SCAN)
+}
+
+fn near_pairs_within(rects: &[Option<Rect>], reach_x: f64, reach_y: f64, max_scan: usize) -> Option<Vec<(usize, usize)>> {
     let mut order: Vec<(usize, Rect)> = rects.iter().enumerate().filter_map(|(i, r)| r.map(|r| (i, r))).collect();
     order.sort_unstable_by(|a, b| a.1.x0.total_cmp(&b.1.x0).then(a.0.cmp(&b.0)));
     let mut pairs = vec![];
+    let mut scanned = 0usize;
     for (k, &(i, a)) in order.iter().enumerate() {
         // Later rects start at or right of `a`, so only how far right they start can rule them out.
         for &(j, b) in order[k + 1..].iter().take_while(|(_, b)| b.x0 <= a.x1 + reach_x) {
+            // Rects sharing an x range but far apart in y are examined without being stored.
+            scanned += 1;
+            if scanned > max_scan {
+                return None;
+            }
             if b.y0 <= a.y1 + reach_y && a.y0 <= b.y1 + reach_y {
                 if pairs.len() >= MAX_NEAR_PAIRS {
                     return None;
@@ -239,6 +250,9 @@ fn near_pairs(rects: &[Option<Rect>], reach_x: f64, reach_y: f64) -> Option<Vec<
     Some(pairs)
 }
 
+/// Most pairs the sweep in `near_pairs` examines, stored or not (a plain bounds check each).
+const MAX_NEAR_SCAN: usize = 1 << 27;
+
 /// Most candidate pairs one trap evaluation keeps; past it no traps are made (the art draws as is).
 /// Each pair costs a boolean trap band, so real art stays far below this.
 pub const MAX_NEAR_PAIRS: usize = 1 << 20;
@@ -247,12 +261,14 @@ pub const MAX_NEAR_PAIRS: usize = 1 << 20;
 /// different solid colours whose visible parts meet, the strip of the darker one's visible part
 /// next to the lighter one's (the other way round with [`TrapOptions::reverse`]), painted per
 /// [`trap_paint`]. Empty when no visible edges of different colours meet, or when there are more
-/// than [`MAX_NEAR_PAIRS`] candidate pairs (see [`try_traps`] to tell those apart).
+/// than [`MAX_NEAR_PAIRS`] candidate pairs or the pair scan is too long (see [`try_traps`] to tell
+/// those apart).
 pub fn traps(sources: &[TrapSource], o: &TrapOptions) -> Vec<TrapPiece> {
     try_traps(sources, o).unwrap_or_default()
 }
 
-/// [`traps`], but `None` when there are more than [`MAX_NEAR_PAIRS`] candidate pairs, as opposed to
+/// [`traps`], but `None` when there are more than [`MAX_NEAR_PAIRS`] candidate pairs or the scan for
+/// them is too long (`MAX_NEAR_SCAN` pairs examined), as opposed to
 /// `Some` of an empty list when no edges meet.
 pub fn try_traps(sources: &[TrapSource], o: &TrapOptions) -> Option<Vec<TrapPiece>> {
     let colors: Vec<Option<Color>> = sources.iter().map(|s| trap_color(&s.fill)).collect();
@@ -394,6 +410,14 @@ mod tests {
         let b = t[0].path.bounds().unwrap();
         assert!(near(b.x0, 39.0) && near(b.x1, 61.0) && near(b.y0, 39.0) && near(b.y1, 61.0), "{b:?}");
         assert!(near(po::area(&t[0].path, FillRule::NonZero), 22.0 * 22.0 - 400.0));
+    }
+
+    #[test]
+    fn the_pair_scan_is_bounded_even_when_no_pair_is_near() {
+        // Eleven rects share an x range but lie far apart in y: 55 pairs are examined, none stored.
+        let rects: Vec<Option<Rect>> = (0..11).map(|k| Some(Rect::new(0.0, k as f64 * 1000.0, 10.0, k as f64 * 1000.0 + 10.0))).collect();
+        assert_eq!(near_pairs_within(&rects, 1.0, 1.0, 100), Some(vec![]));
+        assert_eq!(near_pairs_within(&rects, 1.0, 1.0, 54), None);
     }
 
     #[test]

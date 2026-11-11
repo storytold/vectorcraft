@@ -226,6 +226,13 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
     group
 }
 
+/// Paint copies `surface` makes for `facets`: two per facet (fill and seam stroke), six when colored
+/// lights give each facet derived paints (`lighting::solid_surface`).
+fn facet_copies(facets: &[Facet], paint: &Paint, colored: bool) -> usize {
+    let derived = colored && paint.color().is_some() && facets.iter().any(|f| f.rgb_gradient.is_some());
+    facets.len().saturating_mul(if derived { 6 } else { 2 })
+}
+
 fn paint_of(item: &AppearanceItem) -> (Paint, f32, BlendMode) {
     match item {
         AppearanceItem::Fill(f) => (f.paint.clone(), f.opacity, f.blend),
@@ -249,21 +256,20 @@ fn region(path: &PathData, rule: FillRule, item: &AppearanceItem) -> (PathData, 
 /// a surface one composite or masks it, their faces are drawn in one back-to-front order (where
 /// depths tie, as for the caps turned toward the viewer, in the order of the appearance);
 /// otherwise each solid is a surface of its own, in that order.
-fn art_for(n: &Node, fx: &Effect, path: &PathData, rule: FillRule, items: &[&AppearanceItem]) -> Option<Vec<Arc<Node>>> {
+fn art_for(n: &Node, fx: &Effect, path: &PathData, rule: FillRule, items: &[&AppearanceItem], paint_bytes: &mut usize) -> Option<Vec<Arc<Node>>> {
     let b = path.bounds()?;
     let p = crate::merged_params(&fx.id, &fx.params);
     let colored = view_options(&p).has_colored_lights();
     if fx.id == ROTATE {
         // Every part turns about the centre of the object's own bounds, so they stay together.
         let mut out = vec![];
-        let mut paint_bytes = 0usize;
         for item in items {
             let (paint, opacity, blend) = paint_of(item);
             let (area, rule) = region(path, rule, item);
             let f = facets(ROTATE, &area, rule, b, &p).ok()?;
             // Each facet and its seam stroke copy the paint; past the allowance (all items together)
             // the source path is drawn.
-            if !crate::revolve::paint_copies_add(&mut paint_bytes, f.len().saturating_mul(2), &paint) {
+            if !crate::revolve::paint_copies_add(paint_bytes, facet_copies(&f, &paint, colored), &paint) {
                 return None;
             }
             out.push(Arc::new(surface(n, f, &paint, opacity, blend, colored)));
@@ -291,11 +297,10 @@ fn art_for(n: &Node, fx: &Effect, path: &PathData, rule: FillRule, items: &[&App
         parts.iter().map(|(_, area, rule)| facets(&fx.id, area, *rule, bounds, &p)).collect()
     };
     let mut solids = vec![];
-    let mut paint_bytes = 0usize;
     for ((item, _, _), f) in parts.iter().zip(built) {
         let item: &AppearanceItem = item;
         match f {
-            Ok(f) if !crate::revolve::paint_copies_add(&mut paint_bytes, f.len().saturating_mul(2), &paint_of(item).0) => return None,
+            Ok(f) if !crate::revolve::paint_copies_add(paint_bytes, facet_copies(&f, &paint_of(item).0, colored), &paint_of(item).0) => return None,
             Ok(f) => solids.push((item, f)),
             // A stroke's outline past the limits is left out; the fill's solid still draws.
             Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}
@@ -354,11 +359,13 @@ pub fn solid_art(n: &Node) -> Option<Node> {
     let ctx = GeomContext::of(n);
     let paints = solid_paints(n);
     let painted: Vec<&AppearanceItem> = paints.iter().collect();
+    // One paint-copy allowance for every item's solid together.
+    let mut paint_bytes = 0usize;
     let mut children = vec![];
     let remaining: Vec<Effect>;
     if let Some((index, fx)) = solid(&n.appearance.effects) {
         let path = geometry(&path, n.appearance.effects.get(..index)?, &ctx);
-        children.extend(art_for(n, fx, &path, rule, &painted)?);
+        children.extend(art_for(n, fx, &path, rule, &painted, &mut paint_bytes)?);
         // Later geometry effects act on the projected art as a whole.
         remaining = n
             .appearance
@@ -374,7 +381,7 @@ pub fn solid_art(n: &Node) -> Option<Node> {
         for item in &painted {
             if let Some((index, fx)) = solid(item.effects()) {
                 let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
-                for mut art in art_for(n, fx, &p, rule, &[*item])? {
+                for mut art in art_for(n, fx, &p, rule, &[*item], &mut paint_bytes)? {
                     Arc::make_mut(&mut art).appearance.effects =
                         item.effects().iter().skip(index + 1).filter(|e| !is_three_d(&e.id)).cloned().collect();
                     children.push(art);

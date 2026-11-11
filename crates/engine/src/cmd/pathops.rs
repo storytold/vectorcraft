@@ -723,7 +723,7 @@ fn trap(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let Some(made) = try_traps(&sources, &options) else {
             return Err(EngineError::Other(format!(
-                "Trap: more than {} pairs of objects lie close enough to trap; trap fewer objects at a time",
+                "Trap: more than {} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time",
                 vectorcraft_render::effects::trap::MAX_NEAR_PAIRS
             )));
         };
