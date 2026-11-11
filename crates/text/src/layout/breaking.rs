@@ -274,6 +274,8 @@ pub(super) fn word_width(g: &[SGlyph], i: usize) -> f64 {
 /// keeps the line from breaking before the character that overflows, `kinsoku_type` decides
 /// whether the line pushes characters in ([`push_in`]) or out; `hanging` is true when Optical
 /// Margin Alignment or Roman Hanging Punctuation is on, and `vertical` in vertical type.
+/// `line_end[k]` is how much narrower a line ending with glyph `k` is set (Mojikumi); a cluster
+/// that fits only that narrower stays on the line when the line may end after it (empty: none).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -288,6 +290,7 @@ pub(super) fn break_line(
     kinsoku_type: KinsokuShoriType,
     hanging: bool,
     vertical: bool,
+    line_end: &[f64],
 ) -> (usize, bool) {
     if !width.is_finite() {
         if let Some(pos) = g[i..].iter().position(|gl| gl.ch == '\u{2028}') {
@@ -329,7 +332,11 @@ pub(super) fn break_line(
         if gl.ch == '\u{2028}' {
             return (cluster_end, false);
         }
-        if j > first && !gl.is_space() && x + cluster_width > width + EPS {
+        // Measured as the line is set when it ends with this cluster: only the cluster's last glyph
+        // is narrowed, and only where the line may end.
+        let end_credit =
+            Some(line_end_credit(g, line_end, cluster_end)).filter(|&c| c > 0.0 && may_end_after(g, cluster_end, kinsoku)).unwrap_or(0.0);
+        if j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS {
             // It ends the line with the spaces after it.
             if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1, kinsoku) {
                 let mut end = cluster_end;
@@ -338,8 +345,8 @@ pub(super) fn break_line(
                 }
                 return (end, false);
             }
-            if let Some(end) =
-                push_in(g, i, j, cluster_end, x + cluster_width, width, last_break.map(|b| b.0), kinsoku, kinsoku_type, hanging, vertical)
+            let pushed_out = last_break.map(|b| b.0);
+            if let Some(end) = push_in(g, i, j, cluster_end, x + cluster_width, width, pushed_out, kinsoku, kinsoku_type, hanging, vertical, line_end)
             {
                 return (end, false);
             }
@@ -482,6 +489,30 @@ pub(super) fn optical_hangs_rtl(line: &[(&SGlyph, f64)], share: fn(&SGlyph) -> f
     (left, right, left_glyphs, right_glyphs)
 }
 
+/// How much narrower a line whose last character is glyph `end - 1` is set: `line_end` of that
+/// glyph ([`break_line`]), at most its advance, and 0 when it is not finite.
+fn line_end_credit(g: &[SGlyph], line_end: &[f64], end: usize) -> f64 {
+    let Some(k) = end.checked_sub(1) else { return 0.0 };
+    match (line_end.get(k), g.get(k)) {
+        (Some(&credit), Some(gl)) if credit.is_finite() && credit > 0.0 => credit.min(gl.adv.max(0.0)),
+        _ => 0.0,
+    }
+}
+
+/// May [`break_line`] end a line after glyph `end - 1` (and the spaces after it)? At the paragraph's
+/// end or a forced line break, and where it records a break without a hyphen.
+fn may_end_after(g: &[SGlyph], end: usize, kinsoku: Kinsoku) -> bool {
+    let mut e = end;
+    while g.get(e).is_some_and(SGlyph::is_space) {
+        e += 1;
+    }
+    if e >= g.len() || g[e].ch == '\u{2028}' {
+        return true;
+    }
+    let Some(last) = e.checked_sub(1).and_then(|k| g.get(k)) else { return false };
+    last.break_after() && last.len > 0 && !last.is_soft_hyphen() && kinsoku_allows(g, e - 1, kinsoku) && !splits_no_break(g, e)
+}
+
 /// Would a line ending at glyph index `end` split a No Break run?
 fn splits_no_break(g: &[SGlyph], end: usize) -> bool {
     end > 0 && g.get(end - 1).is_some_and(|a| a.no_break) && g.get(end).is_some_and(|b| b.no_break)
@@ -526,7 +557,8 @@ const PUSH_IN_RUN: usize = 16;
 /// neither does a line holding a tab or right-to-left text, nor one where the characters taken in
 /// reach a space after a character that may not end a line. With `hanging` (Optical Margin
 /// Alignment or Roman Hanging Punctuation), the gaps that hanging punctuation keeps open are not
-/// counted. `vertical`: the line is a column of vertical type ([`squeeze_em`]).
+/// counted. `vertical`: the line is a column of vertical type ([`squeeze_em`]). Both lines are
+/// measured with their last character set as narrow as `line_end` sets it ([`break_line`]).
 #[allow(clippy::too_many_arguments)]
 fn push_in(
     g: &[SGlyph],
@@ -540,6 +572,7 @@ fn push_in(
     kinsoku_type: KinsokuShoriType,
     hanging: bool,
     vertical: bool,
+    line_end: &[f64],
 ) -> Option<usize> {
     if kinsoku == Kinsoku::None || kinsoku_type == KinsokuShoriType::PushOutOnly {
         return None;
@@ -591,7 +624,7 @@ fn push_in(
                 || (a + 3 == last && punct(last - 2) && quote(last - 1)))
     };
     let room: f64 = (i..end - 1).filter(|&a| closes(g, a) && !may_hang(a)).map(|a| PUSH_IN_SQUEEZE * squeeze_em(&g[a], vertical)).sum();
-    if x - width > room + EPS {
+    if x - line_end_credit(g, line_end, last) - width > room + EPS {
         return None;
     }
     if kinsoku_type == KinsokuShoriType::PushOutFirst {
@@ -599,7 +632,8 @@ fn push_in(
         while kept > i && g[kept - 1].is_space() {
             kept -= 1;
         }
-        let short = width - g[i..kept].iter().map(|h| h.adv).sum::<f64>();
+        let set = if kept > i { line_end_credit(g, line_end, kept) } else { 0.0 };
+        let short = width - (g[i..kept].iter().map(|h| h.adv).sum::<f64>() - set);
         if short <= squeeze_em(before, vertical) + EPS {
             return None;
         }

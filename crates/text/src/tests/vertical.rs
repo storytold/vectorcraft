@@ -1075,6 +1075,76 @@ fn mojikumi_sets_an_opening_bracket_flush_at_the_start_of_a_wrapped_line() {
     }
 }
 
+/// Mojikumi: with Line-end Punctuation Half Width, a line is measured as it is set. A closing
+/// bracket, comma or full stop that fits only at half width ends the line in a measure of three
+/// and a half ems, with both composers, horizontal and vertical; with Mojikumi None it goes to the
+/// next line with the character before it. A closing mark that already lost its half to the
+/// punctuation after it takes nothing more off, and the space between Japanese and Latin text
+/// counts only where the line ends. Uses a test font whose ideographs and punctuation are one em.
+#[test]
+fn mojikumi_line_end_half_width_counts_when_a_line_breaks() {
+    use crate::test_fonts::{FULL_WIDTH_FAMILY, full_width_font};
+    use vectorcraft_doc::{Burasagari, Composer, Kinsoku, KinsokuShoriType, Mojikumi};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(full_width_font().expect("test font"));
+    let lay = |text: &str, m: Mojikumi, composer: Composer, burasagari: Burasagari, vertical_type: bool, measure: f64| {
+        let style = CharStyle { size: 20.0, font_family: FULL_WIDTH_FAMILY.into(), font_style: "Regular".into(), ..CharStyle::default() };
+        let mut t = TextObject::point(Point::ZERO, text, style);
+        t.xf = Affine::IDENTITY;
+        t.vertical = vertical_type;
+        t.para.mojikumi = m;
+        t.para.composer = composer;
+        t.para.burasagari = burasagari;
+        t.para.kinsoku = Kinsoku::Hard;
+        // Push Out Only lets the every-line composer take the paragraph.
+        if composer == Composer::EveryLine {
+            t.para.kinsoku_type = KinsokuShoriType::PushOutOnly;
+        }
+        let frame = if vertical_type { Rect::new(0.0, 0.0, 200.0, measure) } else { Rect::new(0.0, 0.0, measure, 200.0) };
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame.to_path(0.1)) };
+        layout(&db, &t)
+    };
+    let ends = |l: &TextLayout, text: &str| l.lines.iter().map(|line| text[line.start..line.end].to_string()).collect::<Vec<_>>();
+    let widest = |l: &TextLayout| {
+        l.lines.iter().map(|line| l.glyphs[line.glyph_start..line.glyph_end].iter().map(|g| g.advance).sum::<f64>()).fold(0.0, f64::max)
+    };
+    assert!((lay("一", Mojikumi::None, Composer::SingleLine, Burasagari::None, false, 70.0).glyphs[0].advance - 20.0).abs() < 1e-9, "one em");
+    for vertical_type in [false, true] {
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let at = format!("vertical {vertical_type} {composer:?}");
+            let marks = [("一二三」四五六", "一二三」"), ("一二三。四五六", "一二三。"), ("一二三、四五六", "一二三、")];
+            for (text, first) in marks {
+                let l = lay(text, Mojikumi::LineEndHalf, composer, Burasagari::None, vertical_type, 70.0);
+                assert_eq!(ends(&l, text), [first, "四五六"], "{at}: {text}");
+                assert!((l.glyphs[3].advance - 10.0).abs() < 1e-9, "{at}: {text}: the mark ends the line half width");
+                assert!(widest(&l) <= 70.0 + 1e-9, "{at}: {text}: {}", widest(&l));
+                // Standard burasagari: the mark fits inside, so it doesn't hang.
+                let standard = lay(text, Mojikumi::LineEndHalf, composer, Burasagari::Standard, vertical_type, 70.0);
+                assert_eq!(ends(&standard, text), [first, "四五六"], "{at}: {text} standard");
+                assert!(widest(&standard) <= 70.0 + 1e-9, "{at}: {text} standard");
+                // Full width it doesn't fit: kinsoku takes 三 to the next line with it.
+                let solid = lay(text, Mojikumi::None, composer, Burasagari::None, vertical_type, 70.0);
+                assert_eq!(ends(&solid, text).first().map(String::as_str), Some("一二"), "{at}: {text} none");
+            }
+            // 」 lost its half to 。 after it: the line would be four ems, so 三」。 go on.
+            let text = "一二三」。四五";
+            let l = lay(text, Mojikumi::LineEndHalf, composer, Burasagari::None, vertical_type, 70.0);
+            assert_eq!(ends(&l, text).first().map(String::as_str), Some("一二"), "{at}: compressed");
+            assert!(widest(&l) <= 70.0 + 1e-9, "{at}: compressed");
+        }
+    }
+    // The quarter em between 三 and A goes where the line ends there: 一二三 fits three ems and a
+    // tenth, with or without the space at its end.
+    for composer in [Composer::SingleLine, Composer::EveryLine] {
+        let text = "一二三ABC";
+        let on = lay(text, Mojikumi::LineEndHalf, composer, Burasagari::None, false, 62.0);
+        assert_eq!(ends(&on, text).first().map(String::as_str), Some("一二三"), "{composer:?}");
+        assert!((on.glyphs[2].advance - 20.0).abs() < 1e-9, "{composer:?}: no space at the line's end");
+        let wide = lay(text, Mojikumi::LineEndHalf, composer, Burasagari::None, false, 200.0);
+        assert!((wide.glyphs[2].advance - 25.0).abs() < 1e-9, "{composer:?}: the space inside the line");
+    }
+}
+
 /// Burasagari: in a measure of exactly five ems, a comma that would be the sixth character goes to
 /// the next line with the character before it (None) or hangs outside the line (Standard, Forced);
 /// a full stop that is the fifth character stays inside (None, Standard) or hangs while the four
