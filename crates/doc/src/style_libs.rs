@@ -159,6 +159,7 @@ pub const STYLE_LIBRARIES: &[BuiltinStyleLibrary] = &[
     BuiltinStyleLibrary { id: "shape-effects", name: "Shape Effects", make: shape_effects },
     BuiltinStyleLibrary { id: "blends-transparency", name: "Blends and Transparency", make: blends_transparency },
     BuiltinStyleLibrary { id: "game-hud", name: "Game HUD", make: game_hud },
+    BuiltinStyleLibrary { id: "status-effects", name: "Status Effects", make: status_effects },
 ];
 
 /// Built-in library `id`, made once.
@@ -482,6 +483,43 @@ fn game_hud() -> Vec<GraphicStyle> {
     ]
 }
 
+/// Status Effects: buffs and debuffs for RPG/gamedev art (original, catalogue stylize effects only).
+fn status_effects() -> Vec<GraphicStyle> {
+    let stealth = GraphicStyle {
+        opacity: 0.45,
+        blend: BlendMode::Normal,
+        ..style("Stealth Fade", vec![F(fill("#7f8c8d")), S(stroke("#2c3e50", 1.0))], vec![])
+    };
+    vec![
+        style(
+            "Poison Tint",
+            vec![F(fill("#2ecc71"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 80.0, "blur": 6.0, "color": "#58d68d"}))],
+        ),
+        style(
+            "Freeze Edge",
+            vec![F(fill("#aed6f1")), S(stroke("#5dade2", 2.0))],
+            vec![fx("stylize.innerGlow", json!({"mode": "screen", "opacity": 70.0, "blur": 5.0, "color": "#d6eaf8", "source": "edge"}))],
+        ),
+        style(
+            "Burn Aura",
+            vec![F(fill("#e67e22"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 85.0, "blur": 8.0, "color": "#f39c12"}))],
+        ),
+        style(
+            "Stun Pulse",
+            vec![F(fill("#f4d03f"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 75.0, "blur": 7.0, "color": "#f7dc6f"}))],
+        ),
+        stealth,
+        style(
+            "Shield Buff",
+            vec![F(fill("#85c1e9")), S(round("#2874a6", 2.0))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 70.0, "blur": 5.0, "color": "#5dade2"}))],
+        ),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -508,6 +546,10 @@ mod tests {
         assert_eq!(game.name, "Game HUD");
         let names: Vec<&str> = game.styles.iter().map(|g| g.name.as_str()).collect();
         assert_eq!(names, ["Health Fill", "Mana Glow", "Damage Flash", "Quest Outline", "Coin Shine", "Boss Alert"]);
+        let status = builtin_style_library("status-effects").unwrap();
+        assert_eq!(status.name, "Status Effects");
+        let status_names: Vec<&str> = status.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(status_names, ["Poison Tint", "Freeze Edge", "Burn Aura", "Stun Pulse", "Stealth Fade", "Shield Buff"]);
     }
 
     #[test]
