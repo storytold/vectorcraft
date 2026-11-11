@@ -605,6 +605,17 @@ fn math_functions_follow_the_special_cases() {
     truth("var n = 0; Math.max({valueOf: function () { n++; return NaN; }}, {valueOf: function () { n++; return 1; }}); n === 2");
 }
 
+#[test]
+fn math_random_is_seeded_from_the_os_random_source() {
+    // On wasm32-unknown-unknown `RandomState`'s keys come from memory addresses, which are the
+    // same on every page load: the seed must come from the OS (the browser's crypto) instead.
+    let src = include_str!("interp.rs");
+    let Some(start) = src.find("fn random_seed()") else { panic!("interp.rs has no random_seed") };
+    let body = &src[start..];
+    let body = &body[..body.find("\n}").unwrap_or(body.len())];
+    assert!(body.contains("getrandom::u64()"), "Math.random isn't seeded from the OS random source");
+}
+
 // ---- JSON ----
 
 #[test]
