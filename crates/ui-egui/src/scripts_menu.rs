@@ -246,7 +246,8 @@ pub fn readable(p: &Value) -> bool {
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let path = p.get("path").and_then(Value::as_str).ok_or("missing `path`")?;
     let source = app.session.installed_script(path).map_err(|e| {
-        refresh(app, None);
+        let ctx = app.ui_ctx.clone();
+        refresh(app, ctx.as_ref());
         e.to_string()
     })?;
     app.run("script.run", json!({"source": source, "name": vectorcraft_engine::cmd::fileio::file_name(path)}))

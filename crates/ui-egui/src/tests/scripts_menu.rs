@@ -201,6 +201,28 @@ fn a_script_that_left_the_folder_is_not_run_and_the_folder_is_read_again() {
 }
 
 #[test]
+fn the_read_after_a_script_that_left_the_folder_asks_for_a_frame() {
+    let dir = folder("gone-frame");
+    let mut app = app(&dir);
+    let gone = write(&dir, "gone.js", DRAW);
+    read(&app);
+    std::fs::remove_file(&gone).unwrap();
+    let ctx = egui::Context::default();
+    let (tx, frames) = std::sync::mpsc::channel();
+    ctx.set_request_repaint_callback(move |_| {
+        let _ = tx.send(());
+    });
+    app.ui_ctx = Some(ctx);
+    assert!(menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": gone })).unwrap().is_err());
+    // With the app's copy of the context dropped, only the read's thread can still ask for a
+    // frame; the channel closes without one when that thread ends without asking.
+    app.ui_ctx = None;
+    assert_eq!(frames.recv(), Ok(()), "the finished read asks for a frame so an idle window takes it in");
+    scripts_menu::wait();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn the_menu_notes_a_listing_that_stopped_and_a_folder_it_cannot_read() {
     let dir = folder("notes");
     let app = app(&dir);
