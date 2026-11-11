@@ -2255,6 +2255,30 @@ fn the_preview_memo_measures_once_per_revision_selection_and_preview_bounds() {
     assert_eq!(selection_bounds(&c).map(|r| r.x1), Some(250.0));
 }
 
+/// With Measure Type by Glyph Bounds, the bounding box of selected point type is the ink of its
+/// glyphs; the memo measures again when only that setting changes.
+#[test]
+fn the_bounding_box_of_point_type_follows_measure_type_by_glyph_bounds() {
+    use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, TextObject};
+    let mut d = Document::new(500.0, 500.0);
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let text = TextObject::point(Point::new(100.0, 300.0), "Hg", CharStyle { size: 60.0, ..Default::default() });
+    let ink = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text).ink_bounds().unwrap();
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(text.clone())))).unwrap();
+    let (mut s, p, memo) = (Selection::default(), paint(), PreviewMemo::default());
+    s.set([id]);
+    let at = |glyph_bounds| {
+        let c = ToolContext { revision: (1, 1), glyph_bounds, preview_memo: Some(&memo), ..cx(&d, &s, &p) };
+        (selection_box(&c).map(|b| b.rect), object_bounds(&c, id))
+    };
+    let em = d.node(id).and_then(|n| n.geometric_bounds());
+    assert_eq!(at(false), (em, em));
+    let glyphs = Some(text.xf.transform_rect_bbox(ink));
+    assert_eq!(at(true), (glyphs, glyphs));
+    assert_ne!(glyphs, em);
+    assert_eq!(memo.measurements(), 4, "the same revision measured again for the setting");
+}
+
 /// A double-click on a symbol instance edits its symbol in symbol editing mode (`symbol.edit`), and
 /// one outside the symbol's art in that mode leaves it, as it leaves isolation mode. An instance
 /// inside the art of the symbol being edited is not entered.

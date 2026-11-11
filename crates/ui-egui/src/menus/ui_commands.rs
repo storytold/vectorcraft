@@ -162,6 +162,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("app.home", "Home", "", "{} shows the Home screen (new file presets, Open) over the open documents; choosing a document tab returns to it"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
     ("edit.keyboardShortcuts", "Keyboard Shortcuts…", "Cmd+Alt+Shift+K", "{}"),
+    (
+        "edit.autoSpellCheck",
+        "Auto Spell Check",
+        "",
+        "{} toggle a red underline under the words of the document's type its dictionaries don't know (text.spelling.check lists them), kept up to date as the type changes; type with effects isn't underlined → whether Auto Spell Check is on",
+    ),
     ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
     ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),
@@ -971,6 +977,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{highlight?: none|rasterizedRegions|transparentObjects|allAffected|expandedPatterns|outlinedStrokes|outlinedText|allRasterized, overprints?: preserve|simulate|discard, preset?: name (loads its options), options?: {option keys, over the preset's}, showOptions?} set the Flattener Preview panel (ui.inspect: ui.flattener_preview), show it and refresh its snapshot → what flattener.preview answers for it",
     ),
     (
+        "ui.copyScriptConsole",
+        "Copy Script Console",
+        "",
+        "{first?, last?: numbers of lines the Script Console holds, both or neither} copy those lines of the Script Console to the clipboard as the panel shows them, each with its run's number and script name; without them every line, after a line counting the lines it dropped and cut when it dropped or cut any, which n does not count (Script Console panel: Copy Selected, Copy All; script.console gives the lines) → {lines: n}",
+    ),
+    (
         "window.graphicStyleLibrary",
         "Graphic Style Library",
         "",
@@ -1513,6 +1525,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Continue in Background",
         "",
         "{} close the progress window of the Image Traces running in the background; they go on, shown in the status bar → {hidden: n}",
+    ),
+    (
+        "ui.runScript",
+        "Other Script…",
+        "Cmd+F12",
+        "{path? | source?, name?} run a .js or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `name`, `script`, `dontShow`); without a file pick one (the web opens the browser's file picker)",
+    ),
+    (
+        crate::scripts_menu::COMMAND,
+        "Run Script",
+        "",
+        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (script.run with the file's text, under the file's name), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
     ),
     (
         "ui.checkScript",

@@ -8,7 +8,6 @@ mod layers;
 mod profile;
 mod stroke_style;
 
-pub(crate) use layers::HEAD_REACH;
 pub use layers::{Effect, FillLayer, StrokeGradientMode, StrokeLayer, stroke_paint_bounds};
 pub use profile::{AngleProfile, PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
 pub use stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};

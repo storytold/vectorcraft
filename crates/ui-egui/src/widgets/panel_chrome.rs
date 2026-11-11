@@ -1,5 +1,41 @@
 use super::{Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, icons, pos2, theme, vec2};
 
+pub(crate) const PANEL_FOOTER: &str = "vectorcraft-panel-footer";
+const FOOTER_HEIGHT: f32 = 31.0;
+
+/// The finite body edge supplied by a sized dock, float or user-resized flyout.
+/// Untouched flyouts omit it so their content can still determine their height.
+pub(crate) fn panel_footer_bottom(ui: &Ui) -> Option<f32> {
+    ui.stack().iter().find_map(|stack| stack.tags().get_downcast::<Option<f32>>(PANEL_FOOTER)).copied().flatten()
+}
+
+/// Space left for a list above the footer and any intervening controls, or its unfitted fallback.
+pub(crate) fn panel_list_height(ui: &Ui, fallback: f32, after: f32) -> f32 {
+    panel_footer_bottom(ui).map_or(fallback, |bottom| (bottom - ui.next_widget_position().y - FOOTER_HEIGHT - after).max(0.0))
+}
+
+/// Pad short content so a footer of `height` ends at the panel's saved bottom edge.
+pub(crate) fn panel_footer_space(ui: &mut Ui, height: f32) {
+    if let Some(bottom) = panel_footer_bottom(ui) {
+        ui.add_space((bottom - ui.next_widget_position().y - height).max(0.0));
+    }
+}
+
+/// Pin a custom footer (for example the Variables panel's two rows).
+pub(crate) fn panel_footer(ui: &mut Ui, height: f32, add: impl FnOnce(&mut Ui)) {
+    let Some(bottom) = panel_footer_bottom(ui) else { return add(ui) };
+    let top = bottom - height;
+    if ui.next_widget_position().y > top {
+        ui.add_space(height);
+    }
+    let rect = Rect::from_min_size(pos2(ui.max_rect().left(), top), vec2(ui.available_width(), height));
+    ui.painter().rect_filled(rect, 0.0, Tokens::get(ui.ctx()).panel);
+    // Own the blank parts too, so a click cannot select a scrolled row behind the footer.
+    let _background = ui.interact(rect, ui.scope_id().with("panel-footer-background"), Sense::CLICK);
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), add);
+    ui.advance_cursor_after_rect(rect);
+}
+
 /// A bordered list box (Swatches tiles, Appearance rows, Artboards list).
 pub fn list_box<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Tokens::get(ui.ctx());
@@ -9,6 +45,25 @@ pub fn list_box<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// A bottom button bar separated from the content by a divider (panel footers).
 pub fn bottom_bar(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let t = Tokens::get(ui.ctx());
+    if let Some(bottom) = panel_footer_bottom(ui) {
+        // Reserve scrollable room after long content so its final row can move above
+        // the pinned footer instead of remaining hidden underneath its buttons.
+        let top = bottom - FOOTER_HEIGHT;
+        if ui.next_widget_position().y > top {
+            ui.add_space(FOOTER_HEIGHT);
+        }
+        let footer = Rect::from_min_size(pos2(ui.max_rect().left(), top), vec2(ui.available_width(), FOOTER_HEIGHT));
+        ui.painter().rect_filled(footer, 0.0, t.panel);
+        let _background = ui.interact(footer, ui.scope_id().with("panel-footer-background"), Sense::CLICK);
+        ui.painter().hline(footer.x_range(), top + 4.0, Stroke::new(1.0, t.divider));
+        let row = Rect::from_min_max(pos2(footer.left(), top + 7.0), footer.max);
+        ui.scope_builder(egui::UiBuilder::new().max_rect(row).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            add(ui);
+        });
+        ui.advance_cursor_after_rect(footer);
+        return;
+    }
     ui.add_space(4.0);
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
     ui.painter().rect_filled(r, 0.0, t.divider);
@@ -201,4 +256,41 @@ pub(super) fn chevron_cell(ui: &mut Ui, h: f32) -> Response {
     icons::paint(ui, "chevron-down", Rect::from_center_size(dr.center(), Vec2::splat(12.0)), c);
     dresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Presets")));
     dresp
+}
+
+#[cfg(test)]
+mod footer_tests {
+    use super::{PANEL_FOOTER, bottom_bar, panel_footer};
+
+    /// Blank footer space intercepts clicks instead of selecting list rows underneath it.
+    #[test]
+    fn blank_footer_space_does_not_click_a_row_scrolled_behind_it() {
+        use egui::{Event, PointerButton, Rect, Sense, UiBuilder, UiStackInfo, pos2};
+        for custom in [false, true] {
+            let ctx = egui::Context::default();
+            let mut clicked = false;
+            let at = pos2(150.0, 190.0);
+            let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            for events in [vec![], vec![], vec![Event::PointerMoved(at), button(true)], vec![button(false)]] {
+                let input =
+                    egui::RawInput { screen_rect: Some(Rect::from_min_max(pos2(0.0, 0.0), pos2(200.0, 200.0))), events, ..Default::default() };
+                let mut output = ctx.run_ui(input, |ui| {
+                    let info = UiStackInfo::default().with_tag_value(PANEL_FOOTER, Some(200.0_f32));
+                    ui.scope_builder(UiBuilder::new().ui_stack_info(info), |ui| {
+                        clicked |= ui.allocate_rect(Rect::from_min_max(pos2(0.0, 100.0), pos2(200.0, 200.0)), Sense::click()).clicked();
+                        let contents = |ui: &mut egui::Ui| {
+                            let _button = ui.button("Footer button");
+                        };
+                        if custom {
+                            panel_footer(ui, 31.0, contents);
+                        } else {
+                            bottom_bar(ui, contents);
+                        }
+                    });
+                });
+                output.textures_delta.clear();
+            }
+            assert!(!clicked, "custom={custom}: a hidden row received the footer click");
+        }
+    }
 }

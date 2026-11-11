@@ -6,6 +6,8 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
         "dimension" => &[
             ("Drag", true),
             (" out from a highlighted edge to place its dimension  |  ", false),
+            ("Click", true),
+            (" two points, then move and click to place an aligned, horizontal or vertical dimension  |  ", false),
             ("Esc", true),
             (" cancels  |  Double-click the tool for options", false),
         ],

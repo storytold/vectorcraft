@@ -48,9 +48,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert to Grayscale",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed, notChanged, warning?}",
+            "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert; an embedded image is stored with one gray channel) → {changed, notChanged, warning?}",
             has_selection,
-            |s, p| recolor(s, p, "edit.colors.toGrayscale", "Convert to Grayscale", &to_gray)
+            |s, p| recolor_gray(s, p, "edit.colors.toGrayscale", "Convert to Grayscale", &to_gray)
         ),
         cmd!(
             "edit.colors.toRGB",
@@ -187,6 +187,8 @@ pub(crate) struct Recolor<'a> {
     /// Maps solid colours and gradient stops with their link and tint in place of `f`.
     links: Option<&'a LinkMap<'a>>,
     scope: Scope,
+    /// Recolored images are stored with one gray channel ([`ImageBlob::map_gray`]).
+    gray_images: bool,
     /// Image key → the key of its recoloured copy (`None`: unchanged).
     images: HashMap<String, Option<String>>,
     /// Pattern name → the name of its recoloured copy (`None`: unchanged, or being recoloured).
@@ -198,7 +200,17 @@ pub(crate) struct Recolor<'a> {
 
 impl<'a> Recolor<'a> {
     pub(crate) fn new(scope: Scope, f: &'a dyn Fn(Color) -> Color) -> Self {
-        Self { f, links: None, scope, images: HashMap::new(), patterns: HashMap::new(), new_images: vec![], new_patterns: vec![], changed: 0 }
+        Self {
+            f,
+            links: None,
+            scope,
+            gray_images: false,
+            images: HashMap::new(),
+            patterns: HashMap::new(),
+            new_images: vec![],
+            new_patterns: vec![],
+            changed: 0,
+        }
     }
 
     /// A pass that maps only solid colours and gradient stops, with their swatch link and tint
@@ -215,7 +227,7 @@ impl<'a> Recolor<'a> {
 
     /// A pass that maps colors as this one does, with nothing recolored yet.
     fn again(&self) -> Self {
-        Self { links: self.links, ..Self::new(self.scope, self.f) }
+        Self { links: self.links, gray_images: self.gray_images, ..Self::new(self.scope, self.f) }
     }
 
     /// The entries of `objects` (ids, each with a flag) whose object this pass would change, other
@@ -313,10 +325,15 @@ impl<'a> Recolor<'a> {
             return done.clone();
         }
         let f = self.f;
-        let new = d.images.get(key)?.map_rgb(|[r, g, b]| {
-            let [r, g, b, _] = f(Color::rgb8(r, g, b)).to_rgba8(1.0);
-            [r, g, b]
-        });
+        let blob = d.images.get(key)?;
+        let new = if self.gray_images {
+            blob.map_gray(|[r, g, b]| f(Color::rgb8(r, g, b)).to_rgba8(1.0)[0])
+        } else {
+            blob.map_rgb(|[r, g, b]| {
+                let [r, g, b, _] = f(Color::rgb8(r, g, b)).to_rgba8(1.0);
+                [r, g, b]
+            })
+        };
         let new = new.map(|blob| {
             let k = blob.content_key();
             self.new_images.push((k.clone(), blob));
@@ -398,6 +415,11 @@ impl ColorVisitor for Visit<'_, '_> {
 
 pub(crate) fn recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
     run_pass(s, p, cmd, label, Recolor::new(Scope::of(p), f))
+}
+
+/// [`recolor`] where `f` gives gray colors, so embedded images are stored with one gray channel.
+fn recolor_gray(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
+    run_pass(s, p, cmd, label, Recolor { gray_images: true, ..Recolor::new(Scope::of(p), f) })
 }
 
 /// [`recolor`] with solid colours and gradient stops mapped through `links`, with their swatch
@@ -575,10 +597,11 @@ fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
         other => return Err(bad(C, format!("unknown mode `{other}` (rgb|cmyk|gray|global)"))),
     };
     let convert = bool_or(p, "convert", false);
-    recolor(s, p, C, "Adjust Colors", &move |c| {
+    let f = move |c| {
         let out = adjust(c);
         if convert { out } else { keep_model(c, out) }
-    })
+    };
+    if convert && mode == "gray" { recolor_gray(s, p, C, "Adjust Colors", &f) } else { recolor(s, p, C, "Adjust Colors", &f) }
 }
 
 enum BlendOrder {
