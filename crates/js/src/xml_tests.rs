@@ -962,6 +962,62 @@ fn a_limit_during_normalize_does_not_repeat_text() {
     assert!(fuel_stops(setup, "x.normalize()", check) > 0);
 }
 
+/// Runs `action` as [`heap_stops`] does, and asserts that every run completes or stops at the heap
+/// limit and that `check` is true after it. Returns how many runs stopped.
+fn heap_stops_only(setup: &str, action: &str, check: &str) -> usize {
+    let mut r = realm();
+    let interp = r.interp();
+    let global = interp.global;
+    assert!(crate::builtins::method(interp, global, "squeeze", squeeze, 1).is_ok());
+    let mut stops = 0;
+    for spare in 0..100_000i64 {
+        r.set_limits(Limits::default());
+        r.run(setup).unwrap();
+        let action = action.replace("SPARE", &format!("squeeze({})", spare - 512));
+        let got = r.run(&action);
+        r.set_limits(Limits::default());
+        assert_eq!(r.run(check), Ok(JsValue::Bool(true)), "{action}: {got:?}");
+        match got {
+            Ok(_) => return stops,
+            Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Heap) => stops += 1,
+            Err(e) => panic!("{action}: {e:?}"),
+        }
+    }
+    panic!("{action} never completed");
+}
+
+#[test]
+fn collections_while_a_list_is_copied_keep_every_copy() {
+    let setup = "var x = <r><a/><b/></r>; var v = <c/> + <d/>; var w = undefined;";
+    let set = tree_is("x", "<r><a/><b/></r>", "<r><c/><d/></r>");
+    for action in ["x.setChildren((SPARE, v))", "x.* = (SPARE, v)"] {
+        assert!(heap_stops_only(setup, action, &set) > 0, "{action}");
+    }
+    let copied = "w === undefined || (w.length() === 2 && w[0].name() == 'c' && w[1].name() == 'd' && w[0] !== v[0])";
+    assert!(heap_stops_only(setup, "w = (SPARE, v).copy()", copied) > 0);
+}
+
+#[test]
+fn a_limit_during_path_assignment_leaves_no_new_element() {
+    let setup = "var x = <r/>; var v = <v/>;";
+    for (target, value, after) in [
+        ("x.a.b.c", "v", "<r><a><b><v/></b></a></r>"),
+        ("x.a.b", "'text'", "<r><a><b>text</b></a></r>"),
+        ("x.a.@p", "'text'", "<r><ap=\"text\"/></r>"),
+        ("x.a.b[0]", "'text'", "<r><a><b>text</b></a></r>"),
+    ] {
+        let check = tree_is("x", "<r/>", after);
+        assert!(fuel_stops(setup, &format!("{target} = {value}"), &check) > 0, "{target}");
+        assert!(heap_stops_only(setup, &format!("{target} = (SPARE, {value})"), &check) > 0, "{target}");
+    }
+}
+
+#[test]
+fn comparing_xml_values_is_charged_to_the_heap() {
+    let setup = "var x = <a p='1' q='2'><b r='3'/>t</a>; var y = x.copy();";
+    assert!(heap_stops_only(setup, "(SPARE, x == y)", "x == y && y.@q == '2'") > 0);
+}
+
 #[test]
 fn an_interrupt_stops_serialization() {
     let mut r = realm();

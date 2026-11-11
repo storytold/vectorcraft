@@ -26,6 +26,11 @@ fn parser_units(s: &str) -> Vec<u16> {
 }
 
 pub(crate) const STAR: &[u16] = &[0x2A];
+/// The estimated bytes, for one attribute, of the copies of two attribute lists and the count of
+/// names and values that comparing two XML values builds.
+const ATTR_COUNT_BYTES: usize = 96;
+/// The estimated bytes of one frame of the work stack that comparing two XML values uses.
+const EQUALS_FRAME_BYTES: usize = 24;
 const XML_URI: &str = "http://www.w3.org/XML/1998/namespace";
 const XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
 pub(crate) const RESERVED_NS_BINDING: &str = "a namespace declaration uses a reserved prefix or URI";
@@ -460,8 +465,10 @@ impl Interp {
         Ok(self.heap.alloc_object(Object::new(Class::XmlList(Box::new(data)), Some(proto))))
     }
 
+    /// Adds `item` to the end of `list`. Both are held as roots across any collection the charge
+    /// starts.
     pub(crate) fn list_push(&mut self, list: ObjId, item: ObjId) -> JsResult<()> {
-        self.xml_charge(XML_REF_BYTES)?;
+        self.rooted(&[Value::Object(list), Value::Object(item)], |i| i.xml_charge(XML_REF_BYTES))?;
         self.xml_list_mut(list)?.items.push(item);
         Ok(())
     }
@@ -1297,8 +1304,34 @@ impl Interp {
         if n.attribute { self.put_attribute(x, n, &c) } else { self.put_element(x, n, &c) }
     }
 
-    /// [[ResolveValue]] (ECMA-357 section 9.2.1.10), walking the targets with a loop.
-    fn resolve_value(&mut self, x: ObjId) -> JsResult<Option<ObjId>> {
+    /// [[ResolveValue]] (ECMA-357 section 9.2.1.10), walking the targets with a loop. Also returns
+    /// the outermost element it added, if any. An error takes the added elements back out.
+    fn resolve_value(&mut self, x: ObjId) -> JsResult<Option<(ObjId, Option<ObjId>)>> {
+        let mut created = None;
+        let r = self.resolve_value_adding(x, &mut created);
+        match (r, created) {
+            (Ok(Some(base)), created) => Ok(Some((base, created))),
+            (Ok(None), _) => Ok(None),
+            (Err(e), Some(c)) => {
+                self.undo_created(c)?;
+                Err(e)
+            }
+            (Err(e), None) => Err(e),
+        }
+    }
+
+    /// Takes `created`, an element a path assignment added, back out of its parent. It takes no
+    /// fuel or heap.
+    fn undo_created(&mut self, created: ObjId) -> JsResult<()> {
+        if let Some(parent) = self.xml_node(created)?.parent {
+            self.xml_node_mut(parent)?.children.retain(|&c| c != created);
+            self.xml_node_mut(created)?.parent = None;
+        }
+        Ok(())
+    }
+
+    /// The steps of [`Self::resolve_value`], setting `created` to the first element they add.
+    fn resolve_value_adding(&mut self, x: ObjId, created: &mut Option<ObjId>) -> JsResult<Option<ObjId>> {
         let mut chain = Vec::new();
         let mut cur = x;
         let base = loop {
@@ -1328,7 +1361,22 @@ impl Interp {
                 {
                     return Ok(None);
                 }
+                let owner = match self.classify(&Value::Object(base)) {
+                    Xv::Node(b) => Some(b),
+                    Xv::List(b) => self.list_at(b, 0)?,
+                    Xv::Other => None,
+                };
+                let before = match owner {
+                    Some(o) => self.children_len(o)?,
+                    None => 0,
+                };
                 self.put_name(base, &n, &Value::str(""))?;
+                if created.is_none()
+                    && let Some(o) = owner
+                    && self.children_len(o)? > before
+                {
+                    *created = self.xml_node(o)?.children.last().copied();
+                }
                 target = self.xml_select(base, &n)?;
                 self.xml_keep(target);
             }
@@ -1342,14 +1390,15 @@ impl Interp {
             Xv::Node(x) => self.node_put(x, n, v),
             Xv::List(l) => {
                 if self.list_len(l)? == 0 {
-                    let Some(r) = self.resolve_value(l)? else { return Ok(()) };
-                    let single = match self.classify(&Value::Object(r)) {
-                        Xv::List(rl) if self.list_len(rl)? == 1 => self.list_at(rl, 0)?,
-                        Xv::Node(rn) => Some(rn),
-                        _ => None,
-                    };
-                    let Some(single) = single else { return Ok(()) };
-                    self.list_push(l, single)?;
+                    let Some((r, created)) = self.resolve_value(l)? else { return Ok(()) };
+                    let done = self.put_resolved(l, r, n, v);
+                    if done.is_err()
+                        && let Some(c) = created
+                    {
+                        self.undo_created(c)?;
+                        self.xml_list_mut(l)?.items.clear();
+                    }
+                    return done;
                 }
                 if self.list_len(l)? == 1
                     && let Some(item) = self.list_at(l, 0)?
@@ -1362,17 +1411,41 @@ impl Interp {
         }
     }
 
+    /// Assigns `v` to the name `n` of `r`, the value [`Self::resolve_value`] gave for the empty
+    /// list `l`, when `r` is one node, and makes that node the item of `l`.
+    fn put_resolved(&mut self, l: ObjId, r: ObjId, n: &NameRef, v: &Value) -> JsResult<()> {
+        let single = match self.classify(&Value::Object(r)) {
+            Xv::List(rl) if self.list_len(rl)? == 1 => self.list_at(rl, 0)?,
+            Xv::Node(rn) => Some(rn),
+            _ => None,
+        };
+        let Some(single) = single else { return Ok(()) };
+        self.list_push(l, single)?;
+        self.node_put(single, n, v)
+    }
+
     fn list_put_index(&mut self, x: ObjId, index: usize, v: &Value) -> JsResult<()> {
         let data = self.xml_list(x)?;
         let target = data.target;
         let target_name = data.target_name.clone();
-        let r = match target {
+        let (r, created) = match target {
             Some(t) => match self.resolve_value(t)? {
-                Some(r) => Some(r),
+                Some((r, created)) => (Some(r), created),
                 None => return Ok(()),
             },
-            None => None,
+            None => (None, None),
         };
+        let put = self.list_put_resolved(x, index, v, r, target_name.as_ref());
+        if put.is_err()
+            && let Some(c) = created
+        {
+            self.undo_created(c)?;
+        }
+        put
+    }
+
+    /// The steps of [`Self::list_put_index`] after the target `r` is resolved.
+    fn list_put_resolved(&mut self, x: ObjId, index: usize, v: &Value, r: Option<ObjId>, target_name: Option<&(XmlName, bool)>) -> JsResult<()> {
         if index >= self.list_len(x)? {
             let r = match r {
                 Some(r) => match self.classify(&Value::Object(r)) {
@@ -1391,7 +1464,7 @@ impl Interp {
             {
                 return Ok(());
             }
-            let (kind, name) = match &target_name {
+            let (kind, name) = match target_name {
                 Some((name, true)) => {
                     if let Some(r) = r {
                         let n = NameRef { uri: name.uri.clone(), local: name.local.clone(), attribute: true };
@@ -1672,8 +1745,12 @@ impl Interp {
         if x.attrs.is_empty() {
             return Ok(true);
         }
+        let count = x.attrs.len();
+        self.xml_take_fuel(count)?;
+        let mut held = HeldBytes::new(self);
+        held.add(self, ATTR_COUNT_BYTES.saturating_mul(count))?;
+        let (x, y) = (self.xml_node(a)?, self.xml_node(b)?);
         let (xa, ya) = (x.attrs.clone(), y.attrs.clone());
-        self.xml_take_fuel(xa.len())?;
         let mut counts: HashMap<(Option<Key>, Key, Key), usize> = HashMap::new();
         let attr_key = |i: &Self, id: ObjId| -> JsResult<(Option<Key>, Key, Key)> {
             let n = i.xml_node(id)?;
@@ -1692,27 +1769,35 @@ impl Interp {
         Ok(true)
     }
 
-    /// [[Equals]] of two XML values (ECMA-357 section 9.1.1.9).
+    /// [[Equals]] of two XML values (ECMA-357 section 9.1.1.9). The bytes it holds count against
+    /// the heap limit, and `a` and `b` are held as roots.
     pub(crate) fn node_equals(&mut self, a: ObjId, b: ObjId) -> JsResult<bool> {
-        if !self.same_shallow(a, b)? {
-            return Ok(false);
-        }
-        let mut stack = vec![(a, b, 0usize)];
-        while let Some(&(x, y, next)) = stack.last() {
-            self.use_fuel()?;
-            let (Some(cx), Some(cy)) = (self.child_at(x, next)?, self.child_at(y, next)?) else {
-                stack.pop();
-                continue;
-            };
-            if let Some(frame) = stack.last_mut() {
-                frame.2 += 1;
-            }
-            if !self.same_shallow(cx, cy)? {
+        self.rooted(&[Value::Object(a), Value::Object(b)], |i| {
+            if !i.same_shallow(a, b)? {
                 return Ok(false);
             }
-            stack.push((cx, cy, 0));
-        }
-        Ok(true)
+            let mut held = HeldBytes::new(i);
+            held.add(i, EQUALS_FRAME_BYTES)?;
+            let mut stack = vec![(a, b, 0usize)];
+            while let Some(&(x, y, next)) = stack.last() {
+                i.use_fuel()?;
+                let (Some(cx), Some(cy)) = (i.child_at(x, next)?, i.child_at(y, next)?) else {
+                    stack.pop();
+                    continue;
+                };
+                if let Some(frame) = stack.last_mut() {
+                    frame.2 += 1;
+                }
+                if !i.same_shallow(cx, cy)? {
+                    return Ok(false);
+                }
+                if stack.len() == stack.capacity() {
+                    held.add(i, EQUALS_FRAME_BYTES.saturating_mul(stack.len()))?;
+                }
+                stack.push((cx, cy, 0));
+            }
+            Ok(true)
+        })
     }
 
     fn list_equals(&mut self, l: ObjId, v: &Value) -> JsResult<bool> {
