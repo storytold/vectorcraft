@@ -207,6 +207,58 @@ fn deleting_a_filter_in_use_leaves_the_effect_drawing_nothing() {
     assert_eq!(drawn(&s, a), json!(SHIFT_MORE));
 }
 
+/// The `(name, xml)` of every `svg.filter` effect on the document's objects.
+fn filter_effects(s: &Session) -> Vec<(String, String)> {
+    let mut out = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        for e in n.appearance.effects.iter().filter(|e| e.id == vectorcraft_render::effects::SVG_FILTER) {
+            out.push((e.params["name"].as_str().unwrap().to_string(), e.params["xml"].as_str().unwrap().to_string()));
+        }
+    });
+    out
+}
+
+/// Pasted art whose filter has a name the document gives another filter keeps its own filter
+/// under a free name, so editing or deleting the document's filter leaves it alone. Pasted back
+/// into the document it came from, it takes the document's filter as it is now.
+#[test]
+fn pasted_art_keeps_a_filter_another_of_its_name_would_replace() {
+    let mut s = session();
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT_MORE}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].0, "Shift 2", "renamed: {pasted:?}");
+    assert!(pasted[0].1.contains("id=\"Shift 2\"") && pasted[0].1.contains("dx=\"9\""), "its own filter: {pasted:?}");
+    assert_eq!(names(&mut s), ["Shift"]);
+    run(&mut s, "svgFilter.delete", json!({"name": "Shift"}));
+    assert_eq!(filter_effects(&s), pasted, "the document's filter leaves it alone");
+    // The same filter as the document's keeps its name.
+    let mut t = session();
+    run(&mut t, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut t, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut t, "edit.pasteInPlace", json!({}));
+    assert_eq!(filter_effects(&t), [("Shift".to_string(), SHIFT.to_string())]);
+    // Copied, then the filter edited: pasted back, the copy draws the edited filter.
+    let mut u = session();
+    let a = rect(&mut u, 10.0);
+    run(&mut u, "svgFilter.define", json!({"xml": SHIFT}));
+    run(&mut u, "svgFilter.apply", json!({"name": "Shift", "ids": [a.0]}));
+    run(&mut u, "select.set", json!({"ids": [a.0]}));
+    run(&mut u, "edit.copy", json!({}));
+    run(&mut u, "svgFilter.define", json!({"xml": SHIFT_MORE, "replace": "Shift"}));
+    run(&mut u, "edit.pasteInPlace", json!({}));
+    let both = filter_effects(&u);
+    assert_eq!(both, [("Shift".to_string(), SHIFT_MORE.to_string()), ("Shift".to_string(), SHIFT_MORE.to_string())]);
+}
+
 /// Art in a symbol's definition that uses a filter follows its edits too.
 #[test]
 fn a_symbols_art_follows_a_filter_edit() {
