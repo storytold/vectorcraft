@@ -5535,6 +5535,7 @@ theme	Appearance	Външен вид
 @msg	Invalid drawing scale	Невалиден мащаб на чертежа
 @msg	Invalid real scale	Невалиден реален мащаб
 @msg	Measured anchor no longer exists	Измерената опорна точка вече не съществува
+@msg	Invalid measured point	Невалидна измерена точка
 @msg	Measured segment no longer exists	Измереният сегмент вече не съществува
 @msg	Non-finite dimension	Размерът не е крайно число
 @msg	Only linear dimensions are horizontal or vertical	Само линейните размери са хоризонтални или вертикални

@@ -5360,6 +5360,7 @@ digits	Malayalam	Malaiàlam
 @msg	Make Guides: select paths	Crea guies: seleccioneu traçats
 @msg	mask art ends outside a mask dictionary	l’art de la màscara acaba fora d’un diccionari de màscara
 @msg	Measured anchor no longer exists	El punt d’ancoratge mesurat ja no existeix
+@msg	Invalid measured point	El punt mesurat no és vàlid
 @msg	Measured segment no longer exists	El segment mesurat ja no existeix
 @msg	missing `folder`	falta `folder`
 @msg	missing `id` (see plugin.list)	falta `id` (vegeu plugin.list)

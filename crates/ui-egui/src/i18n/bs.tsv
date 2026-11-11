@@ -5583,6 +5583,7 @@ mark-style	Japanese	Japanski
 @msg	Invalid drawing scale	Nevažeća skala crteža
 @msg	Invalid real scale	Nevažeća stvarna skala
 @msg	Measured anchor no longer exists	Izmjereno sidro više ne postoji
+@msg	Invalid measured point	Neispravna izmjerena tačka
 @msg	Measured segment no longer exists	Izmjereni segment više ne postoji
 @msg	Non-finite dimension	Nekonačna kota
 @msg	Only linear dimensions are horizontal or vertical	Samo linearne kote su horizontalne ili vertikalne

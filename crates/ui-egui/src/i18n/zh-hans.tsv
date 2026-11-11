@@ -4757,6 +4757,7 @@ imageTrace	Outline	轮廓
 @msg	Invalid drawing scale	图纸比例无效
 @msg	Invalid real scale	实际比例无效
 @msg	Measured anchor no longer exists	测量锚点已不存在
+@msg	Invalid measured point	测量点无效
 @msg	Measured segment no longer exists	测量线段已不存在
 @msg	Non-finite dimension	尺寸标注不是有限值
 @msg	Only linear dimensions are horizontal or vertical	只有线性尺寸可以是水平或垂直的

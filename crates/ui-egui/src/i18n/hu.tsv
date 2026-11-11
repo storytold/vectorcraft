@@ -5696,6 +5696,7 @@ imageTrace	Outline	Körvonal
 @msg	Invalid drawing scale	Érvénytelen rajzlépték
 @msg	Invalid real scale	Érvénytelen valós lépték
 @msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
+@msg	Invalid measured point	Érvénytelen mért pont
 @msg	Measured segment no longer exists	A mért szakasz már nem létezik
 @msg	Non-finite dimension	Nem véges méret
 @msg	Only linear dimensions are horizontal or vertical	Csak a lineáris méretek lehetnek vízszintesek vagy függőlegesek

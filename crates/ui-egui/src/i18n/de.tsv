@@ -5291,6 +5291,7 @@ effect	Soft	Weich
 @msg	Invalid drawing scale	Ungültiger Zeichnungsmaßstab
 @msg	Invalid real scale	Ungültiger realer Maßstab
 @msg	Measured anchor no longer exists	Der gemessene Ankerpunkt existiert nicht mehr
+@msg	Invalid measured point	Ungültiger gemessener Punkt
 @msg	Measured segment no longer exists	Das gemessene Segment existiert nicht mehr
 @msg	Non-finite dimension	Die Bemaßung ist keine endliche Zahl
 @msg	Only linear dimensions are horizontal or vertical	Nur lineare Bemaßungen sind horizontal oder vertikal
