@@ -14,6 +14,18 @@ It has two backends:
 With no flag, the server tries `127.0.0.1:7979` and falls back to headless. Logs go to stderr; stdout carries
 only protocol messages.
 
+### Command catalogue (headless vs remote)
+
+`command_list` / `list_commands` / `vectorcraft://commands` return the live catalogue for the backend in use:
+
+- **Headless:** engine and plug-in commands, plus the desktop menu catalogue (`UI_COMMANDS`) marked `"ui": true` so agents can discover ids such as `view.fitArtboard`, `file.newDialog` and `window.*`. Running a UI-only command that the headless host does not implement returns an error that points at `--connect`.
+  The catalogue is mirrored in `crates/mcp/src/ui_catalog.rs` (mcp does not depend on ui-egui). Regenerate with `cargo xtask ui-commands`; `cargo xtask ci` runs `ui-commands --check` so the mirror cannot drift.
+- **Remote:** the same lists, with each UI entry's `enabled` taken from the live app. Run UI commands with `command_run` / `run_command` or `invoke_menu`.
+
+Effect ids from `effect.list` / `apply_effect` / `vectorcraft://effect/{id}` (for example `warp.arc`, `blur.gaussian`, `threeD.revolve`, `adjust.hueSaturation`, `addon.path.dashes`, `addon.color.halftone`) are not command ids. Apply one with `effect.apply` or the `apply_effect` tool; do not pass an effect id to `command_run`. Path Effects keep the `addon.path.*` effect ids; the Path Tools add-on's *commands* are `addon.pathtools.*`.
+
+A release `vectorcraft-cli` on `PATH` can lag the checkout. Prefer `cargo install --path apps/vectorcraft-cli --locked` and put `$CARGO_HOME/bin` first in the MCP client's environment, or set the client's `command` to that binary's absolute path (#6460).
+
 ## Install and register
 
 From the repository root, with Rust 1.95+ and the platform's source-build prerequisites installed:
@@ -115,6 +127,16 @@ the suite) keep the agent to the folders you give it:
 - `file.recentFiles` and the control channel's `ui.menu.list` leave out the recent files outside the read roots. The
   other File › Open Recent Files rows keep their ids (`file.openRecent3` still opens the third file), and
   `file.openRecentN` for a file outside the roots ends with `no such recent file`, as an empty slot does.
+- `ui_inspect` (the control channel's `ui.inspect`) leaves out the paths outside the read roots: in `opening`, the
+  documents still being read; in `ui.recent_files`, the recent files; a library panel's `path` in `ui.library_panels`;
+  and the folder preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
+  (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
+  empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
+  roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
+  Color Guide's `ui.color_guide_limit` and a closed panel's key in `ui.docking_hidden`, also when its panel is
+  closed. When another hidden library has the same file name, the libraries take `loaded/<file name>`,
+  `loaded/<file name> (2)`, `(3)` and so on in the order of their full ids, and each one keeps its id in both
+  replies. The other entries keep their order, and the app's own state is not changed.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
@@ -195,7 +217,7 @@ dropped; the call reports uncertainty like any reply that never arrived whole.
 
 ### Prompts
 
-`prompts/list` offers five workflows; `prompts/get` returns one templated user message with its
+`prompts/list` offers eight workflows; `prompts/get` returns one templated user message with its
 arguments filled in. A missing required argument is `-32602`.
 
 | Prompt | Arguments (required first) |
@@ -205,6 +227,9 @@ arguments filled in. A missing required argument is `-32602`.
 | `recolor` | `palette`, `method` |
 | `trace-and-style` | `path`, `preset`, `effect` |
 | `export-set` | `formats`, `directory`, `scale` |
+| `check-spelling` | `scope`, `action` |
+| `variables-bind` | `kind`, `source` |
+| `path-tools` | `task` |
 
 ```sh
 echo '{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"poster","arguments":{"brief":"a jazz festival"}}}' \
@@ -374,11 +399,9 @@ The older names below remain listed because existing workflows use them.
 
 | Tool | Arguments and result |
 |---|---|
-| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text, `schema` or `inputSchema`); returns the command array. A command with a parameter schema lists `schema` and `inputSchema` (see [Parameter schemas](#parameter-schemas)). `list_commands` lists the same commands; it takes `enabledOnly` and returns `{count, commands}` |
+| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text, `schema` or `inputSchema`); returns the command array for the backend in use (see [Command catalogue](#command-catalogue-headless-vs-remote)). A command with a parameter schema lists `schema` and `inputSchema` (see [Parameter schemas](#parameter-schemas)). `list_commands` lists the same commands; it takes `enabledOnly` and returns `{count, commands}` |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)). `run_command` runs a command the same way and takes its id as `command` |
 | `command_batch` | `steps: [{id, params?}]` (at most 256), optional `stop_on_error` (default true), `atomic` and `label`; returns `completed`, `failed`, `results: [{ok, result\|error}]` and `created` (the ids the `draw_path` / `draw_shape` steps made, in order). A step's `id` is a command id, or `draw_path` / `draw_shape` with that tool's arguments as `params` (checked as `tools/call` checks them; the step's result is the tool's, so `"$N.id"` is the new object). Each edit has its own undo step, or with `atomic: true` the batch's edits are one undo step named `label` (else after its first edit; `edit.undoGroup.begin`/`end` underneath), and the edits made in a document that a step opens or creates (`document.open`, `file.new`) are one undo step there, named the same, also when no document was open before the batch. In a document that was open before the batch and that a step switches to (`document.activate`), each edit stays its own undo step; failures set `isError`. A param string `"$N.path"` or `"$last.path"` takes a value from an earlier step's result (see `run` below). Kept step results total at most 8 MiB; past that the batch stops with the reason. This is the MCP tool, not the engine command `command.batch` (that one takes `commands: [{command, params}]` and is what the Actions panel plays); use `command_run` with `command.batch` when replaying a recorded action |
-| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text, `schema` or `inputSchema`); returns the command array |
-| `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)) |
 | `doc_inspect` | Optional `depth`, `childLimit`, `ids`, `kind`, `limit`, `offset`; same summary as `inspect_document` |
 | `render_preview` | Optional `max_side` (1–4096, default 1024), `artboard` (0-based, default 0) and `traceViews`; inline PNG of that artboard without editing it, drawn as `export` draws a PNG with `background: "white"` at the scale that fits `max_side` (at most 1). With `traceViews: true`, Image Trace objects draw in the view set with `imageTrace.setView` (outlines, the source image…), as in the app's window; by default they draw their tracing result. Artboards too large to render within the allocation bound return a tool error |
 | `ui_inspect`, `ui_screenshot` | Connected desktop state/window capture; tool errors in headless mode. `ui_inspect` is the same call as `inspect_ui`, and `ui_screenshot` is `screenshot` with `window: true`. `ui_screenshot` takes an optional `max_side` (1–4096), as `screenshot {window: true}` does: a capture whose longer side is larger is scaled down to `max_side` pixels on that side, and the reply's text gives the returned size as `width`/`height` and the capture's as `capturedWidth`/`capturedHeight`. Without `max_side` the full capture comes back |
@@ -464,7 +487,7 @@ opens the picker through `run_command` with the remote backend.
 | `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool (digits too: `5` while dragging with the Perspective Selection tool; `e` while dragging a Selection or Group Selection marquee; `c` and `f` while dragging out an arc; `f`, `v`, `x` and `c` while dragging out a rectangular or polar grid). |
 | `type_text` | `{text}` | Remote only. |
 | `answer_dialog` | `{set?: [{field, value?}], action?}` | Remote only. Sets fields of the app's open dialog in the order given with one `ui.dialog.set {fields, action?}` (a missing `value` is `null`). The app stores all of them or none, then answers that same dialog with `action` in the same request: `confirm` (OK) or `cancel`. Another connection cannot open a dialog between the two steps. When the app refuses the `ui.dialog.set`, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. `action` alone is sent as `ui.dialog.confirm` or `ui.dialog.cancel`. Give `set`, `action` or both; `set` holds at most 256 fields. `inspect_ui` shows the open dialog and its fields as `ui.dialog`. Returns `{dialog, result}`: the dialog after the fields were set (or `null`) and the reply to `confirm` or `cancel` (or `null`). After `invoke_menu` `app.quit`, `file.close` or `file.closeAll` replies `{"pending": "saveChanges"}`, `{action: "confirm"}` saves, `{set: [{field: "discard", value: true}], action: "confirm"}` closes without saving and `{action: "cancel"}` cancels the close or quit. |
-| `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. Includes UI commands such as `view.*` and `window.*` in remote mode. |
+| `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. UI commands such as `view.*` and `window.*` are in `command_list` with `ui: true`; running them needs the desktop app (`--connect`). |
 | `open_panel` | `{panel}` | Remote only. `panel` is a panel id (`layers`, `swatches`, `colorGuide`, …, as `window.panel` takes) or its display label (`"Color Guide"`), in any case. |
 | `screenshot` | `{path?, scale?, artboard?, window?, max_side?, traceViews?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard with the pixels of a PNG `export` with `background: "white"` at the same scale; `traceViews:true` draws Image Trace objects in the view set with `imageTrace.setView`, as in the app's window; `window:true` captures the app window (remote only), as `ui_screenshot` does, and `max_side` (1–4096, window captures only) scales the returned image down as described for `ui_screenshot`. With `path` the backend (the headless session or the app) writes the PNG there too; a window capture written there keeps its full size with `max_side`. |
 | `open_file` | `{path, importer?, params?}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`/`.epsf`, `.ps`, `.dxf`, `.emf`, `.wmf`, PNG (`.png`/`.pns`), JPEG, GIF, WebP, TIFF, BMP (`.bmp`/`.dib`/`.rle`), Targa (`.tga`/`.vda`/`.icb`/`.vst`), PCX, Pixar (`.pxr`), JPEG 2000 (`.jpf`/`.jpx`/`.jp2`/`.j2k`/`.j2c`/`.jpc`), HEIC/HEIF (`.heic`/`.heif`), JPEG XL (`.jxl`), PSD (`.psd`/`.pdd`)/PSB (an image opens as a document of its pixel size; a Photoshop file as its merged image; a JPEG XL file as its first frame). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). A file of an extension only an installed importer plug-in lists opens with that importer ([Plug-ins](#plug-ins)); `importer: "plugin.<id>"` opens the file with the importer it names, which must list the file's extension, also one a built-in format reads (in the app, as File › Open With does), and `params` gives that importer's parameters (their defaults when omitted). `run_command document.formats` lists the formats. |
@@ -1419,8 +1442,9 @@ vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd
 
 ### Parameter schemas
 
-Some commands have a machine-readable parameter schema: at present `view.capsLock`, `view.saved.new`,
-`view.saved.edit`, `view.saved.list`, `view.transparencyGrid`, `view.snapToGlyph.options` and `engine.apiReference`. The engine's
+Some commands have a machine-readable parameter schema: at present a small set including `view.capsLock`, `view.saved.new`,
+`view.saved.edit`, `view.saved.list`, `view.transparencyGrid`, `view.snapToGlyph.options` and `engine.apiReference`
+(most of the catalogue still documents params in prose only; schemas grow command by command). The engine's
 `engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
 (https://json-schema.org/draft/2020-12). Its root has `$schema` (the 2020-12 dialect), `description` when the
 command has a summary, and `deprecated: true` when the command is deprecated. The schema uses `type`, `properties`, `required` and
@@ -4570,7 +4594,7 @@ draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets
 every document they read except a native file and the native document that an SVG, PDF, `.ai` or EPS file carries
 (`restored: true`), which keep the grid they were saved with.
 
-`view.rotate {angle}` (desktop app) turns the view to `angle` degrees about the center of the canvas; a positive angle
+`view.rotate {angle}` (desktop app, `ui: true`) turns the view to `angle` degrees about the center of the canvas; a positive angle
 turns the art clockwise on screen. View › Rotate View and the status bar's angle menu run it. It returns `{angle}`, the
 angle it set, normalized to (-180, 180], and `view.rotateReset` turns the view back to 0, returning `null` on success.
 
@@ -4578,7 +4602,9 @@ Select the Rotate View Tool with `select_tool` and the tool id `rotateView`. Its
 drags turn the canvas about its center; Shift snaps to 15°. Document coordinates for a rotation
 gesture use the view at the initial down event, including when the gesture spans several calls.
 The control channel rejects malformed rotation packets without changing the angle and cancels
-the current press. Start a new down event after an error.
+the current press. Start a new down event after an error. Menu commands that only the desktop view
+implements (`view.rotate`, `view.rotateReset`, `view.rotateToSelection`) are listed with `ui: true`
+and need `--connect` when the headless host does not run them.
 Reset Rotate View is the command `view.rotateReset`:
 
 ```json
@@ -4908,7 +4934,10 @@ settings and the next untitled name, without opening the dialog, and returns wha
 open document in tab order the current one, as a click on its tab does, and return `{index}`. After the last document
 comes the first, and before the first document comes the last. From the Home screen they go to the first and the last
 document. With no document open they fail with "no document open". `document.activate {index}` makes a given document
-the current one.
+the current one. `document.move {from?, to}` reorders open documents the way dragging a document tab along the tab strip
+does: `from` defaults to the current document, `to` is the destination index, documents between them shift by one, the
+current document stays current, and each document keeps its own view (#5663). It is an engine command, so headless and
+remote `command_list` both list it.
 `window.arrange.tile` (Window › Arrange › Tile) shows every open document in its own pane, edge to edge in the document
 area, in a grid of as many columns as the square root of the number of documents, rounded up, and fits each document to
 its pane; with fewer than two documents open it leaves the view and `tiled` as they are. It returns `{tiled, panes}`.
@@ -8460,10 +8489,11 @@ plain path from then on.
 ### Path Effects (live)
 
 Effect › Path Effects holds the add-on's live geometry effects, applied with `effect.apply {effect, params}` like any
-other effect, with no shortcuts. Each draws, measures, exports and stacks as the other geometry effects do; the object's
-own path stays as it is until Expand Appearance (`effect.expandAppearance`) writes the result. `effect.list` documents
-every parameter. Out-of-range values are clamped, and an effect whose result would pass the geometry effects' budget
-(2 million anchors) leaves the path as it is.
+other effect, with no shortcuts. The ids below (`addon.path.*`) are **effect** ids, not command ids; the Path Tools
+add-on's commands are `addon.pathtools.*` (see above). Each effect draws, measures, exports and stacks as the other
+geometry effects do; the object's own path stays as it is until Expand Appearance (`effect.expandAppearance`) writes
+the result. `effect.list` documents every parameter. Out-of-range values are clamped, and an effect whose result would
+pass the geometry effects' budget (2 million anchors) leaves the path as it is.
 
 | Id | Menu item | Parameters |
 | --- | --- | --- |

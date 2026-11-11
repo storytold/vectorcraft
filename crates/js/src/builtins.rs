@@ -132,7 +132,11 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     crate::string_builtins::install(interp)?;
     crate::number_builtins::install(interp)?;
     crate::regexp_builtins::install(interp)?;
-    crate::date_builtins::install(interp)
+    crate::date_builtins::install(interp)?;
+    if interp.options.e4x {
+        crate::xml_builtins::install(interp)?;
+    }
+    Ok(())
 }
 
 // ---- helpers for the built-ins ----
@@ -219,7 +223,7 @@ const UNITS_PER_FUEL: usize = 16;
 /// against the longest string the heap limit allows, and has its bytes reserved before it is
 /// added. The buffer's bytes count toward the heap until `finish` or until the native call that
 /// made the builder returns. Everything the caller still needs must be reachable from the roots.
-struct Builder {
+pub(crate) struct Builder {
     units: Vec<u16>,
     /// Code units already reserved and charged to the heap.
     charged: usize,
@@ -228,7 +232,7 @@ struct Builder {
 }
 
 impl Builder {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Builder { units: Vec::new(), charged: 0, unpaid: 0 }
     }
 
@@ -260,7 +264,7 @@ impl Builder {
         Ok(())
     }
 
-    fn push_units(&mut self, interp: &mut Interp, units: &[u16]) -> JsResult<()> {
+    pub(crate) fn push_units(&mut self, interp: &mut Interp, units: &[u16]) -> JsResult<()> {
         self.make_room(interp, units.len())?;
         self.units.extend_from_slice(units);
         Ok(())
@@ -268,7 +272,7 @@ impl Builder {
 
     /// Appends `units` `count` times. Nothing is written for an empty `units`, however large
     /// `count` is.
-    fn push_repeated(&mut self, interp: &mut Interp, units: &[u16], count: u64) -> JsResult<()> {
+    pub(crate) fn push_repeated(&mut self, interp: &mut Interp, units: &[u16], count: u64) -> JsResult<()> {
         if units.is_empty() || count == 0 {
             return Ok(());
         }
@@ -280,14 +284,14 @@ impl Builder {
         Ok(())
     }
 
-    fn push_str(&mut self, interp: &mut Interp, s: &str) -> JsResult<()> {
+    pub(crate) fn push_str(&mut self, interp: &mut Interp, s: &str) -> JsResult<()> {
         let units: Vec<u16> = s.encode_utf16().collect();
         self.push_units(interp, &units)
     }
 
     /// The string built, whose bytes were charged as it grew. From here on the heap counts them
     /// as the string's.
-    fn finish(self, interp: &mut Interp) -> Value {
+    pub(crate) fn finish(self, interp: &mut Interp) -> Value {
         interp.held_bytes = interp.held_bytes.saturating_sub(2 * self.charged);
         Value::String(Str::from_units(self.units))
     }

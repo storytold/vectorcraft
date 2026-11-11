@@ -846,6 +846,15 @@ pub(crate) fn sync_prefs(s: &Session) {
     *last = Some((folder.to_string(), s.plugin_dir.clone(), load_folder(s, folder)));
 }
 
+/// The Additional Plug-ins Folder preference was cleared from `old`: when `old` is the folder last
+/// loaded, it is forgotten, so setting the preference to it again loads it again.
+pub(crate) fn forget_prefs_folder(old: &str) {
+    let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    if last.as_ref().is_some_and(|(f, _, _)| f == old.trim()) {
+        *last = None;
+    }
+}
+
 /// Turns Safe Mode on for `--safe-mode`, before the plug-in folder is attached: no plug-in loads or
 /// runs in this process from then on.
 pub fn start_in_safe_mode() {

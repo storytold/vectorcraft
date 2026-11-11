@@ -145,6 +145,35 @@ pub(crate) enum Op {
     /// Pushes the completion value, which a `finally` block in script and eval code keeps and
     /// sets back with `SetCompletion` when it ends normally.
     GetCompletion,
+    /// `[qualifier] name` → an E4X name object.
+    XmlMakeName {
+        attribute: bool,
+        qualified: bool,
+    },
+    /// `object name` → the descendants that match.
+    XmlDescendants,
+    /// `value` → the string an embedded expression puts in a literal (0 content, 1 attribute
+    /// value, 2 name, 3 run of attributes).
+    XmlEscape(u8),
+    /// The `parts` strings → the XML or XMLList they spell.
+    XmlLiteral {
+        parts: u32,
+        list: bool,
+    },
+    /// `name` → the value of the name on the nearest XML value in scope.
+    XmlScopeGet,
+    /// `object` → the filter's state.
+    XmlFilterStart,
+    /// `state` → `state item`, or jumps with `state` when the items are used up.
+    XmlFilterNext(u32),
+    /// `state value` → `state`, the current item kept when the value is truthy.
+    XmlFilterTest,
+    /// `state` → the XMLList of the items kept.
+    XmlFilterEnd,
+    /// `iterator name` → `iterator value`: the value under the name a `for each` got.
+    ForEachValue,
+    /// `value` → nothing: sets the default XML namespace of the running code.
+    SetDefaultNamespace,
 }
 
 /// What code is: a function body, a script, or eval code.
@@ -274,7 +303,13 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
             let table = finally_tables.get(t as usize).ok_or_else(|| format!("finally table {t} out of range"))?;
             Effect { pops: 2, next: Some(0), jumps: table.iter().map(|&target| (target, 1)).collect() }
         }
-        Op::ForInNext(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::ForInNext(t) | Op::XmlFilterNext(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::XmlMakeName { qualified, .. } => e(1 + u32::from(qualified), 1),
+        Op::XmlDescendants | Op::XmlFilterTest => e(2, 1),
+        Op::XmlEscape(_) | Op::XmlScopeGet | Op::XmlFilterStart | Op::XmlFilterEnd => e(1, 1),
+        Op::XmlLiteral { parts, .. } => e(parts, 1),
+        Op::ForEachValue => e(2, 2),
+        Op::SetDefaultNamespace => e(1, 0),
     })
 }
 
