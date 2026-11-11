@@ -228,6 +228,34 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PdfPageStep {
+    First,
+    Previous,
+    Next,
+    Last,
+}
+
+// Physical left-to-right button positions. Hebrew mirrors navigation, but page numbers
+// and the meaning of each action remain unchanged.
+fn page_steps(hebrew: bool) -> [PdfPageStep; 4] {
+    if hebrew {
+        [PdfPageStep::Last, PdfPageStep::Next, PdfPageStep::Previous, PdfPageStep::First]
+    } else {
+        [PdfPageStep::First, PdfPageStep::Previous, PdfPageStep::Next, PdfPageStep::Last]
+    }
+}
+
+fn page_step_button(ui: &mut egui::Ui, step: PdfPageStep, hebrew: bool, current: usize, count: usize) -> Option<usize> {
+    let (icon, tip, target, enabled) = match step {
+        PdfPageStep::First => (if hebrew { "chevrons-right" } else { "chevrons-left" }, tl!("First Page"), 1, current > 1),
+        PdfPageStep::Previous => (if hebrew { "chevron-right" } else { "chevron-left" }, tl!("Previous Page"), current.saturating_sub(1).max(1), current > 1),
+        PdfPageStep::Next => (if hebrew { "chevron-left" } else { "chevron-right" }, tl!("Next Page"), (current + 1).min(count), current < count),
+        PdfPageStep::Last => (if hebrew { "chevrons-left" } else { "chevrons-right" }, tl!("Last Page"), count, current < count),
+    };
+    widgets::icon_button_enabled(ui, icon, tip, false, enabled, 22.0).clicked().then_some(target)
+}
+
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     if d.bool("__locked") {
@@ -244,26 +272,28 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             show_preview(ui, preview(app, ui.ctx(), d, current).as_ref(), PREVIEW);
             ui.add_space(6.0);
-            // Page navigation: first, previous, the page number, next, last.
-            ui.horizontal(|ui| {
-                let nav = |ui: &mut egui::Ui, icon: &str, tip: &str, to: usize, enabled: bool| {
-                    widgets::icon_button_enabled(ui, icon, tip, false, enabled, 22.0).clicked().then_some(to)
-                };
-                let go = [
-                    nav(ui, "chevrons-left", tl!("First Page"), 1, current > 1),
-                    nav(ui, "chevron-left", tl!("Previous Page"), current.saturating_sub(1).max(1), current > 1),
-                ];
-                if let Some(v) = widgets::range_field(ui, "pdf-page", current as f64, 1.0..=count.max(1) as f64, "", 0, 40.0) {
-                    current = v as usize;
+            // Hebrew puts First/Previous on the physical right and Next/Last on the left,
+            // reversing arrows while preserving the logical page destination.
+            let hebrew = crate::i18n::current().code() == "he";
+            let steps = page_steps(hebrew);
+            let mut chosen = None;
+            for step in &steps[..2] {
+                if let Some(to) = page_step_button(ui, *step, hebrew, current, count) {
+                    chosen = Some(to);
                 }
-                ui.label(egui::RichText::new(crate::i18n::fmt(tl!("of {count}"), &[("count", &count.to_string())])).color(t.text_dim));
-                let go2 = [
-                    nav(ui, "chevron-right", tl!("Next Page"), (current + 1).min(count), current < count),
-                    nav(ui, "chevrons-right", tl!("Last Page"), count, current < count),
-                ];
-                if let Some(to) = go.into_iter().chain(go2).flatten().next() {
-                    current = to;
+            }
+            if let Some(v) = widgets::range_field(ui, "pdf-page", current as f64, 1.0..=count.max(1) as f64, "", 0, 40.0) {
+                current = v as usize;
+            }
+            ui.label(egui::RichText::new(crate::i18n::fmt(tl!("of {count}"), &[("count", &count.to_string())])).color(t.text_dim));
+            for step in &steps[2..] {
+                if let Some(to) = page_step_button(ui, *step, hebrew, current, count) {
+                    chosen = Some(to);
                 }
+            }
+            if let Some(to) = chosen {
+                current = to;
+            }
             });
         });
         ui.add_space(14.0);
@@ -321,4 +351,15 @@ fn preview(app: &mut VectorcraftApp, ctx: &egui::Context, d: &Dialog, page: usiz
     preview_texture(app, ctx, key, &format!("pdf-preview-{page}"), PREVIEW, || {
         fileio::page_document(&file.bytes, page - 1, &opts).ok().map(|(doc, _)| doc)
     })
+}
+
+#[cfg(test)]
+mod hebrew_pdf_navigation_tests {
+    use super::{page_steps, PdfPageStep};
+
+    #[test]
+    fn rtl_mirrors_visual_page_actions_but_keeps_each_destination_semantic() {
+        assert_eq!(page_steps(false), [PdfPageStep::First, PdfPageStep::Previous, PdfPageStep::Next, PdfPageStep::Last]);
+        assert_eq!(page_steps(true), [PdfPageStep::Last, PdfPageStep::Next, PdfPageStep::Previous, PdfPageStep::First]);
+    }
 }
