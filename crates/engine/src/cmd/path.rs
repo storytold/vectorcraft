@@ -1578,7 +1578,8 @@ fn reshape(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) if v.is_array() => super::select::checked_refs(Some(v), "path.reshape")?.into_iter().collect(),
         Some(_) => return Err(bad("path.reshape", "`focal` must be an array of [subpath, anchor] pairs")),
     };
-    if radius.is_some() && !focal.is_empty() {
+    // An empty `focal` chooses the focal-point rule too.
+    if radius.is_some() && !matches!(p.get("focal"), None | Some(Value::Null)) {
         return Err(bad("path.reshape", "`focal` and `radius` cannot be used together"));
     }
     // A step that names neither `focal` nor `radius` (as the Reshape tool recorded one before it
