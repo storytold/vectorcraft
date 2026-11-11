@@ -440,7 +440,8 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
 }
 
 /// A toolbar made with New Toolbar has an Add Tool… button (+, above the ••• button) that the
-/// keyboard reaches. Its menu lists the tools under the drawer's headings: a tool picked there is
+/// keyboard reaches and opens with Enter. Its menu lists the tools under the drawer's headings: a
+/// tool picked there with a click or with Enter is
 /// added at the end of this toolbar alone, without the drawer, and is dimmed in the menu from then
 /// on; picked under Remove Tool, it is taken out again.
 #[test]
@@ -480,11 +481,29 @@ fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
         at
     };
     let mine = |app: &VectorcraftApp| crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots.clone();
-    let shown = open(&mut app, 9.0);
+    // The keyboard: Enter on the focused + button opens the menu, and Enter on a tool adds it.
+    let focusable_at = |p: Pos2| {
+        let id = ctx.viewport(|vp| {
+            vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.contains(p) && w.sense.is_focusable()).last().map(|w| w.id)
+        });
+        id.unwrap_or_else(|| panic!("nothing focusable at {p:?}"))
+    };
+    let enter = |app: &mut VectorcraftApp, time: f64, at: Pos2| {
+        let id = focusable_at(at);
+        ctx.memory_mut(|m| m.request_focus(id));
+        frame(app, &ctx, time, vec![]);
+        for (k, pressed) in [true, false].into_iter().enumerate() {
+            let key = Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+            frame(app, &ctx, time + 0.1 * (k + 1) as f64, vec![key]);
+        }
+        frame(app, &ctx, time + 0.5, vec![]);
+        frame(app, &ctx, time + 0.6, vec![])
+    };
+    let shown = enter(&mut app, 9.0, plus().center());
     assert!(items(&shown, "Remove Tool:").is_empty(), "nothing to take out of a blank toolbar");
     let lasso = items(&shown, "Lasso Tool");
     assert_eq!(lasso.len(), 1, "listed once, under Select");
-    click(&mut app, &ctx, 10.0, lasso[0].0);
+    enter(&mut app, 10.0, lasso[0].0);
     assert_eq!(mine(&app), [["lasso"]]);
     assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
     assert!(!app.ui.tools_drawer, "no drawer opened");
