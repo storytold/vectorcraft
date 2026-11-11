@@ -836,7 +836,8 @@ page with hint tables saying where every other page's objects are), which stays 
 `compatibility: "1.3"` writes a PDF 1.3 file, which has no transparency: a copy of the document is flattened first
 with `flattenerPreset` (empty: High Resolution; `high`, `medium`, `low` or a saved preset, `flattener.presets.list`)
 and `flattener` options over it (as `object.flattenTransparency` takes them); images with see-through pixels count as
-transparency and rasterized areas are clipped to their regions. A file that would still have transparency fails the
+transparency and rasterized areas are clipped to their regions. Layers the file leaves out (non-printing ones, unless
+`includeNonPrinting` or `createLayers` is set) are left out of the flattening. A file that would still have transparency fails the
 export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too.
 A page with a side longer than 14,400 pt is written with a `UserUnit` (PDF 1.6): its longer side divided by 14,400,
 rounded up to the next thousandth, with the page's sizes and coordinates in those units, so that no side is longer than
@@ -3197,6 +3198,13 @@ one undo step. The targets split into groups of overlapping objects; groups with
 Each other group becomes one group of atomic regions: paths filled with the flat colour the art showed there (over
 white, which blend modes do not read; over nothing, keeping alpha, with `preserveAlpha: true`), plus one image where gradients, patterns, images,
 opacity masks or raster effects reach (clipped to those regions with `clipComplexRegions`, a rectangle without).
+The image leaves out the part of such art that the clipping path of a clip group or clipping layer hides, so art under
+the hidden part of a cropped picture stays as it is. Transparent art that such a clipping path hides entirely is
+removed. A group that holds art from inside and outside a clipping layer goes in the place of the topmost art outside
+it. When that layer prints, shows or is a template where the clipping layer differs, the clipping layer or a group
+around the art has opacity, a blend mode or isolation, or the clipping path has a fill,
+the group holds only the art inside the clipping layer, drawn over the fill and over the art below in the same kind of
+layer as its own layers draw it (over nothing with `preserveAlpha`), and the art outside is flattened on its own.
 `preset` is `high`, `medium` (the default) or `low`; option keys (`balance` 0–100, `lineArtPpi`, `gradientPpi`,
 `textToOutlines`, `strokesToOutlines`, `clipComplexRegions`, `antiAlias`, `preserveAlpha`, `preserveOverprints`)
 override it, at the top level or in `options`. `balance: 0` rasterizes everything; lower balances rasterize groups
