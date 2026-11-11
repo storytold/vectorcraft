@@ -6158,6 +6158,12 @@ axis	Y Axis	Y-akseli
 	Crosshair	Tähtäin
 	Checkpoint	Tarkastuskohta
 	Inventory Icons	Inventaarioikonit
+	Skill Icons	Taitoikonit
+	Attack	Hyökkäys
+	Defend	Puolustus
+	Heal	Parannus
+	Buff	Buffi
+	Ult	Ult
 	Sword	Miekka
 	Shield	Kilpi
 	Potion	Taikajuoma

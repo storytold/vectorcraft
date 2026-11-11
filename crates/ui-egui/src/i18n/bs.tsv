@@ -5944,6 +5944,12 @@ axis	Y Axis	Y osa
 	Crosshair	Nišan
 	Checkpoint	Kontrolna tačka
 	Inventory Icons	Ikone inventara
+	Skill Icons	Ikone vještina
+	Attack	Napad
+	Defend	Odbrana
+	Heal	Iscjeljenje
+	Buff	Pojačanje
+	Ult	Ult
 	Sword	Mač
 	Shield	Štit
 	Potion	Napitak

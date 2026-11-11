@@ -5725,6 +5725,12 @@ axis	Y Axis	Вісь Y
 	Crosshair	Приціл
 	Checkpoint	Контрольна точка
 	Inventory Icons	Піктограми інвентарю
+	Skill Icons	Іконки навичок
+	Attack	Атака
+	Defend	Захист
+	Heal	Лікування
+	Buff	Посилення
+	Ult	Ульт
 	Sword	Меч
 	Shield	Щит
 	Potion	Зілля

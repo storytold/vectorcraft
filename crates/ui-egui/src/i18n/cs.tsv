@@ -6128,6 +6128,12 @@ axis	Y Axis	osa Y
 	Crosshair	Zaměřovač
 	Checkpoint	Kontrolní bod
 	Inventory Icons	Ikony inventáře
+	Skill Icons	Ikony dovedností
+	Attack	Útok
+	Defend	Obrana
+	Heal	Léčení
+	Buff	Posílení
+	Ult	Ult
 	Sword	Meč
 	Shield	Štít
 	Potion	Lektvar
