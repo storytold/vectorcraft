@@ -870,10 +870,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             on_type_path(n, t, p, opt.tol).then_some(HitKind::Outline)
         }
         // An image is hit within its frame (on the frame's edge only with Selection by Path Only,
-        // #3291), and where its own fills and strokes paint ([`image_paint`]) except in outline
-        // mode.
+        // #3291, and in outline mode where the frame is all that is drawn, #6437), and where its
+        // own fills and strokes paint ([`image_paint`]) except in outline mode.
         NodeKind::Image(im) => {
-            if opt.path_only {
+            if opt.path_only || (opt.outline && !symbols.document().setup.outline_images) {
                 use vectorcraft_geom::kurbo::Shape;
                 let mut frame = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1);
                 frame.apply_affine(im.xf);
@@ -908,6 +908,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             let bp = m.outline().to_bezpath();
             if stroke_contains(&bp, 0.0, opt.tol, p) {
                 return Some(HitKind::Outline);
+            }
+            // Outline mode draws the mesh lines, not the colours between them (#6437).
+            if opt.outline {
+                return stroke_contains(&m.lines().to_bezpath(), 0.0, opt.tol, p).then_some(HitKind::Outline);
             }
             (!opt.path_only && fill_contains(&bp, vectorcraft_geom::FillRule::NonZero, p)).then_some(HitKind::Fill)
         }
