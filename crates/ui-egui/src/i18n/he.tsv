@@ -83,5 +83,37 @@
 	Needs a key	נדרש מקש
 	No equivalent	אין מקבילה
 	Report copied	הדוח הועתק
+# New document dialog: each key is used by dialogs/new_document.rs (tl!).
+	RECENT	אחרונים
+	SAVED	שמורים
+	BLANK DOCUMENT PRESETS	הגדרות קבועות למסמך ריק
+	Presets you save with the Save Preset button appear here.	הגדרות ששמרת באמצעות ״שמירת הגדרה קבועה״ יופיעו כאן.
+	Documents you create appear here.	מסמכים שיצרת יופיעו כאן.
+	PRESET DETAILS	פרטי ההגדרה הקבועה
+	Document Name	שם המסמך
+	Save Preset	שמירת הגדרה קבועה
+	Width	רוחב
+	Units	יחידות
+	Height	גובה
+	Orientation	כיוון
+	Artboards	משטחי יצירה
+	Bleed	גלישה
+	Background Contents	תוכן הרקע
+	Create	יצירה
+	Save Document Preset	שמירת הגדרה קבועה למסמך
+	Preset Name	שם ההגדרה הקבועה
+	Cancel	ביטול
+	More Settings	הגדרות נוספות
+	Number of Artboards:	מספר משטחי יצירה:
+	Change to Right-to-Left Layout	מעבר לפריסה מימין לשמאל
+	Spacing:	מרווח:
+	Columns:	עמודות:
+	Done	סיום
+	Portrait	לאורך
+	Landscape	לרוחב
+	Advanced Options	אפשרויות מתקדמות
+	Color Mode	מצב צבע
+	Raster Effects	אפקטים של רסטר
+	Preview Mode	מצב תצוגה מקדימה
 @id	file.close	סגירה
 @plural	{n} file|{n} files	{n} קובץ|{n} קבצים|{n} קבצים

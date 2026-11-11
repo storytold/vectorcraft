@@ -45,6 +45,54 @@ fn hebrew_locale_file_flow_and_plural_categories() {
 }
 
 #[test]
+fn hebrew_new_document_dialog_controls_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let source = include_str!("../dialogs/new_document.rs");
+    for english in [
+        "RECENT",
+        "SAVED",
+        "BLANK DOCUMENT PRESETS",
+        "Presets you save with the Save Preset button appear here.",
+        "Documents you create appear here.",
+        "PRESET DETAILS",
+        "Document Name",
+        "Save Preset",
+        "Width",
+        "Units",
+        "Height",
+        "Orientation",
+        "Artboards",
+        "Bleed",
+        "Background Contents",
+        "Create",
+        "Save Document Preset",
+        "Preset Name",
+        "Cancel",
+        "More Settings",
+        "Number of Artboards:",
+        "Change to Right-to-Left Layout",
+        "Spacing:",
+        "Columns:",
+        "Done",
+        "Portrait",
+        "Landscape",
+        "Advanced Options",
+        "Color Mode",
+        "Raster Effects",
+        "Preview Mode",
+    ] {
+        assert!(source.contains(&format!(r#"tl!("{english}")"#)), "source key missing: {english}");
+        assert_ne!(tr(he, english), english, "new document control untranslated: {english}");
+    }
+    assert_eq!(tr(he, "Save Preset"), "שמירת הגדרה קבועה");
+    assert_eq!(tr(he, "Number of Artboards:"), "מספר משטחי יצירה:");
+    assert_eq!(tr(he, "Change to Right-to-Left Layout"), "מעבר לפריסה מימין לשמאל");
+    assert_eq!(tr(he, "File"), "קובץ", "existing File menu translation preserved");
+    let (_, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
 fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     let hi = Lang::from_code("hi").expect("hi registered");
     for tag in ["hi", "hi-IN", "hi_IN.UTF-8", "HI-in", "hi-Deva-IN"] {
