@@ -3496,6 +3496,8 @@ digits	Malayalam	Malayalam
 	Tiles are numbered across, then down; leave the range empty for every tile.	Rutorna numreras från vänster till höger och sedan nedåt. Lämna omfånget tomt för att få med alla rutor.
 	Copies per Sheet (as many as fit, in a grid)	Kopior per ark (så många som får plats, i ett rutnät)
 	Tint	Färgton
+	Fill Tint	Fyllnadsfärgton
+	Stroke Tint	Konturfärgton
 	Tip extends past the end point	Spetsen sträcker sig förbi slutpunkten
 	Tip on the end point	Spetsen på slutpunkten
 	Title Case	Inledande versaler
@@ -5699,6 +5701,7 @@ theme	Appearance	Utseende
 @msg	Invalid drawing scale	Ogiltig ritningsskala
 @msg	Invalid real scale	Ogiltig verklig skala
 @msg	Measured anchor no longer exists	Den mätta ankarpunkten finns inte längre
+@msg	Invalid measured point	Ogiltig mätt punkt
 @msg	Measured segment no longer exists	Det mätta segmentet finns inte längre
 @msg	Non-finite dimension	Måttet är inte ett ändligt tal
 @msg	Only linear dimensions are horizontal or vertical	Endast linjära mått är vågräta eller lodräta
