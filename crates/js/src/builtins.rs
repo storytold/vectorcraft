@@ -472,7 +472,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
         Ok(p) => p,
         Err(e) => return Err(interp.throw(ErrorType::Syntax, &e.message)),
     };
-    let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: interp.source_tag });
+    let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: interp.source_tag, strict_writes: interp.writes_mode() });
     let code = match compile_constructed_function(&program, &source) {
         Ok(Some(code)) => code,
         Ok(None) => return Err(interp.throw(ErrorType::Syntax, "the parameters or body do not form one function")),

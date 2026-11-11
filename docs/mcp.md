@@ -588,12 +588,18 @@ the stored fill, or the stored stroke when no fill is stored and that stroke has
 outline, so these commands do not store a stroke paint or weight for a series that draws a band. Except for
 `paint.swap`, they still store a stroke opacity and blend mode set on a band, and the band's outline takes them. Graph
 designs keep their own paint. A row that had no
-paint before the command and has none after it does not change what the graph stores. `paint.setFill`,
+paint before the command and has none after it does not change the paint the graph stores. `paint.setFill`,
 `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
 even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
 not store a series' paint. An `appearance.*` command or `graphicStyle.apply` given a series group's id, and
 `graphicStyle.redefine` on a series group linked to the style, edit the group's own rows, and the graph does not store
 them.
+
+`text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
+it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
+kind takes them when the graph is drawn again. The graph saves the paragraph attributes as `valuesPara`,
+`categoriesPara` and `legendPara` in its label styles, and still sets each label's alignment for its place. The legend
+leaves room for a legend label's stored indents, spacing and leading.
 
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
@@ -1590,9 +1596,20 @@ VectorCraft reads them by these rules of its own:
   folder of the file that includes. A later `#includepath` replaces the list.
 - `#script "name"` names the run in the report and the Script Console, unless `name` is given. A `#script` line in an
   included file does not rename the run.
-- `#target` takes any value and does not change how the script runs. `#strict off` is taken.
-- `#strict on`, `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name`
-  with an unknown-directive error. A `//@` line with another name is a comment.
+- `#target` takes any value and does not change how the script runs.
+- `#strict on` turns on the checks the dollar-object help page gives for `$.strict`: an assignment to a read-only
+  property throws a `TypeError`, and so does adding a property to an object that takes no new ones. By VectorCraft's
+  own rules, an assignment to a property with only a getter is checked as a read-only one, and the objects that take
+  no new properties are those that are not extensible: objects passed to `Object.preventExtensions`, `Object.seal` or
+  `Object.freeze`, and the frozen `vc` and `$` objects. Other objects take new properties as before. The rest of ES5
+  strict mode (`with`, undeclared variables, `this` in a plain call) is unchanged; a script asks for it with
+  `'use strict'`. `#strict off` turns the checks off, and they are off in a script without either line.
+- The last `#strict` line of the script and the files it includes sets the checks for the whole run. Code that `eval`
+  and `Function` compile takes the checks of the code that compiles it. A file `$.evalFile` runs takes the checks of
+  its own last `#strict` line, for its code and the functions it defines, or the caller's when it has none; the
+  caller's code keeps its own. Any value other than `on` or `off` ends the run with `#strict takes on or off`.
+- `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name` with an
+  unknown-directive error. A `//@` line with another name is a comment.
 - A script run from a file reads its included files and the files `$.evalFile` runs only in that file's folder and
   the folders below it. A path with a `..` name, a path that leads out of the folder through a link or a junction, a
   Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
@@ -3258,7 +3275,9 @@ the group holds only the art inside the clipping layer, drawn over the fill and 
 layer as its own layers draw it (over nothing with `preserveAlpha`), and the art outside is flattened on its own.
 `preset` is `high`, `medium` (the default) or `low`; option keys (`balance` 0–100, `lineArtPpi`, `gradientPpi`,
 `textToOutlines`, `strokesToOutlines`, `clipComplexRegions`, `antiAlias`, `preserveAlpha`, `preserveOverprints`)
-override it, at the top level or in `options`. `balance: 0` rasterizes everything; lower balances rasterize groups
+override it, at the top level or in `options`. An image that would be larger than 64 million pixels or longer than
+32,768 pixels a side at `lineArtPpi` or `gradientPpi` is made at the highest resolution that fits, so a long area is
+rasterized whole. `balance: 0` rasterizes everything; lower balances rasterize groups
 that split into many regions. The result reports `{ids, vector, rasterized, options}`. When an image in the art
 can't be decoded, the image that replaces the art does not show it, and the result also carries `warning`: "an image
 couldn't be decoded and is missing from the picture", the note raster exports give.
@@ -3734,7 +3753,9 @@ step. `svgFilter.apply {name, ids?|id?, item?}` applies one as the live effect `
 in one undo step. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
 what every object that uses it draws, in the edit's one undo step, and an application after an edit takes the edited
 filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
-empty) until a filter of that name is defined or imported again. Opened from such an effect, Apply SVG Filter shows the
+empty) until a filter of that name is defined or imported again. A pasted effect that names one of the document's
+filters but draws another definition keeps its own filter under a free name (`Soft 2`); pasted back into the document
+it was copied from, it takes the document's filter. Opened from such an effect, Apply SVG Filter shows the
 name above the list, not selectable. `effect.apply {effect: "svg.filter", params: {xml}}` takes a filter
 directly and names it by its `id`; an `xml` that isn't one such filter is an error. `ui.svgFilterDialog {}` opens Apply
 SVG Filter (New, Edit, Delete, Import…), and from the Appearance panel it edits which filter an applied effect runs;
@@ -5223,7 +5244,8 @@ fills or strokes carry effects is written as one piece per fill and stroke, so o
 When an image in the art can't be decoded, `object.rasterize` and `object.cropImage` (without `trim`) make their image
 without it, and their results carry the `warning` that Flatten Transparency gives. `object.rasterize` takes each frame
 of threaded text that it rasterizes out of its thread with the text it shows, as `type.createOutlines` does (see
-Threading text from the in and out ports), and the other frames keep the text they hold.
+Threading text from the in and out ports), and the other frames keep the text they hold. `object.rasterize`
+refuses an image larger than 64 million pixels or longer than 32,768 pixels a side, and the art stays as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}
@@ -6176,7 +6198,9 @@ as Overprint Preview shows them (darkened); either way the file has no overprint
 overprints. `flattenerPreset` (High Resolution, Medium Resolution, Low Resolution or a saved preset,
 `flattener.presets.list`) flattens transparency before printing, as Object → Flatten Transparency does; empty, a
 PDF keeps it live (PostScript, which has none, uses `file.print`'s `flattenerPreset`, else this one, else medium).
-`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution.
+`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution,
+or at the highest resolution that fits when the image would be larger than 64 million pixels or longer than 32,768
+pixels a side.
 `color.profile` names an RGB or CMYK profile: composite PDF colours are converted to it with `color.intent` (CMYK
 colours keep their numbers with `preserveNumbers`), so a CMYK profile writes device CMYK; separations separate with a
 CMYK one. Settings saved before these options load with their defaults.
@@ -6913,6 +6937,9 @@ With Preferences › General › Anti-aliased Artwork off, the canvas draws all 
 so does an export whose own Anti-aliasing option is None. SVG, PDF and EPS export draw the type unchanged. The native
 document such a file carries (an EPS VectorCraft wrote, or an SVG or PDF saved with Preserve Editing) keeps each frame's
 method, and opening the file restores it.
+A graph label given a method keeps it for every label of its kind (value axis numbers, category labels or legend
+labels) when the graph is drawn again; the graph saves it as `valuesAntiAlias`, `categoriesAntiAlias` or
+`legendAntiAlias` in its label styles.
 Reset Panel sets Sharp. Saved as `antiAlias` only when not `sharp`. One undo step.
 
 ```json
@@ -7289,7 +7316,26 @@ id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearanc
 `effect.list` lists it. One whose manifest declares `paintOutput` (at plug-in API level 2; `plugin.list` gives `api`
 and `paintOutput: true`) draws the pieces it returns with paints of their own, and `effect.expandAppearance` writes them
 as ordinary paths with those paints; a result it refuses is drawn as if the effect weren't there, and `plugin.info`'s
-`lastError` names the plug-in and the refused field. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
+`lastError` names the plug-in and the refused field. While the app draws a document on screen, the live-effect plug-ins
+of its first view share a 2,000 ms budget (VectorCraft's own value), and each run also keeps to its own 5,000 ms limit:
+once the budget is spent no run starts, and a result that comes back after it is not used. A stage left out for want
+of time, or one that times out, fails or has no plug-in, draws its input art unchanged and is deferred; the status bar
+then says how many (`Opened with 3 plug-in effects deferred. Effect › Refresh Deferred Effects runs them.`). Later
+drawings leave a deferred stage as it is until its input or parameters change, which runs it under the per-call limit.
+`effect.deferredStatus {}` returns `{budgetMs: 2000, effects: [{objectId, effectIndex, item?, pluginId, reason}]}` for
+the active document (`reason`: `budget`, `timeout`, `missing`, `failed` or `safeMode`; `item` is the fill or stroke
+whose effect it is; `objectId` can be an object in the art of a symbol, pattern, brush or opacity mask; an empty list
+when none is deferred). A stage whose object is deleted, or whose plug-in effect is
+removed, moved from its place in the list or hidden (or whose fill or stroke is hidden), is no longer listed. `effect.refreshDeferred {ids?}` (Effect › Refresh
+Deferred Effects, enabled while a stage is deferred) runs the deferred stages of those objects (default: all of them)
+again with a fresh 2,000 ms budget and returns `{refreshed, stillDeferred, failed}`: `stillDeferred` counts stages left
+out for want of time again, the stages of an object that is hidden or in a hidden group or layer, which is not drawn,
+and the stages with a part of their input too small for the drawing the refresh makes, and `failed` those that
+timed out, failed or have no plug-in. `id` names one object in place of
+`ids`, and an entry that is not an object id of the document is an error. Each document has its own budget and its own deferred stages. Exports, Expand
+Appearance and commands run every stage under the per-call limit, so an export never leaves out a stage that was only
+deferred for time, and the canvas then draws the result. The web build has no clock for the budget: there the first
+view runs no plug-in effect, and Refresh Deferred Effects runs them. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
 `document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
 that no built-in format has. An importer adds a read-only file format `plugin.<id>` (listed by `document.formats`
 with `read: true`, and `openExtensions` holds the extensions File › Open opens with it, without those a built-in format reads or that File › Open installs, imports or loads as something else, such as `.wasm` or `.ase`): `document.open {path | name, dataBase64, importer?:

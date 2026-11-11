@@ -1321,6 +1321,16 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     if held == choice && (choice.is_none() || alone) {
+        // The text is left as it is, so the glyph is the one the unchanged text draws. The probe
+        // splits a run that holds an earlier character's choice, and the split can break a ligature
+        // that takes in this character.
+        let drawn = match &choice {
+            None if probe.runs != t.runs => {
+                let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+                drawn_glyph(&plain, &lay, ch, &bytes, &face).or_else(|| shaped_alone(&t, ch, &bytes, &face).1).unwrap_or(default)
+            }
+            _ => drawn,
+        };
         return Ok(json!({"id": id.0, "start": bytes.start, "end": bytes.end, "gid": drawn}));
     }
     s.edit("Glyphs", |d, _| {

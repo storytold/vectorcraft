@@ -174,6 +174,14 @@ impl Realm {
         self.unbroken_fuel = fuel;
     }
 
+    /// With `on`, the scripts run next (and the code they define and evaluate) throw a
+    /// `TypeError` when they assign to a read-only or getter-only property or add a property to
+    /// an object that is not extensible, as strict mode code does, without the rest of strict
+    /// mode. Off by default.
+    pub fn set_strict_writes(&mut self, on: bool) {
+        self.interp.strict_writes = on;
+    }
+
     pub fn limits(&self) -> &Limits {
         &self.interp.limits
     }

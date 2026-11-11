@@ -34,6 +34,7 @@
 //! runs through `vc_run` with the command's id in `_context`.
 #![forbid(unsafe_code)]
 
+pub mod deferred;
 pub mod dialog;
 pub mod effect;
 pub mod export;

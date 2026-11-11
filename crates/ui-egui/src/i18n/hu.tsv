@@ -6782,3 +6782,9 @@ breakText	Glyphs	Glifák
 	{ms} ms, {calls} host calls	{ms} ms, {calls} gazdahívás
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} korábbi sor elvetve, {cut} sor levágva
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Elhalasztott effektusok frissítése
+	Deferred Effects	Elhalasztott effektusok
+@msg	no plug-in effect is deferred	nincs elhalasztott bővítményeffektus
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.

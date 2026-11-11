@@ -6400,3 +6400,9 @@ breakText	Glyphs	Glyph
 	{ms} ms, {calls} host calls	{ms} ms, {calls} lệnh gọi máy chủ
 	{dropped} earlier lines dropped, {cut} lines cut	Đã bỏ {dropped} dòng cũ, đã cắt {cut} dòng
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` và `last` phải là số thứ tự của các dòng mà bảng điều khiển đang giữ, `first` đứng trước `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn
+	Deferred Effects	Hiệu ứng bị hoãn
+@msg	no plug-in effect is deferred	không có hiệu ứng plug-in nào bị hoãn
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Đã mở với {n} hiệu ứng plug-in bị hoãn. Hiệu ứng › Làm mới hiệu ứng bị hoãn sẽ chạy chúng.
