@@ -343,6 +343,8 @@ mod win {
     allow(dead_code)
 )]
 mod loads {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
@@ -353,11 +355,15 @@ mod loads {
 
     /// Requests of type `R` answered with `A` on a worker thread.
     pub(super) struct Loads<R, A> {
-        requests: mpsc::Sender<R>,
-        answers: mpsc::Receiver<A>,
-        /// When a read that timed out and hasn't answered yet was sent: until it answers, reads
-        /// don't queue behind it.
-        pending: Option<Instant>,
+        /// Each request goes with the channel its answer is sent on.
+        requests: mpsc::Sender<(R, mpsc::Sender<A>)>,
+        /// Requests sent and not answered yet, counted down by the worker: while one is open,
+        /// reads don't queue behind it.
+        open: Arc<AtomicUsize>,
+        /// When the last request was sent.
+        sent: Option<Instant>,
+        /// Disconnected once the worker has let go of what its `load` holds.
+        done: mpsc::Receiver<()>,
         /// How long after it was sent dropping `Loads` waits for an unanswered read to end.
         finish: Duration,
     }
@@ -374,42 +380,55 @@ mod loads {
         /// waits up to `finish` after an unanswered read was sent for that read to end. None when the
         /// worker can't start.
         pub(super) fn spawn(name: &str, finish: Duration, mut load: impl FnMut(R) -> A + Send + 'static) -> Option<Self> {
-            let (requests, asked) = mpsc::channel::<R>();
-            let (answer, answers) = mpsc::channel();
+            let (requests, asked) = mpsc::channel::<(R, mpsc::Sender<A>)>();
+            let (alive, done) = mpsc::channel::<()>();
+            let open = Arc::new(AtomicUsize::new(0));
+            let answered = open.clone();
             let work = move || {
-                while let Ok(request) = asked.recv() {
-                    if answer.send(load(request)).is_err() {
-                        break;
-                    }
+                while let Ok((request, reply)) = asked.recv() {
+                    let answer = load(request);
+                    // Counted down before the answer goes, so its reader can ask again at once.
+                    answered.fetch_sub(1, Ordering::SeqCst);
+                    // A read that timed out no longer waits: its late answer is dropped.
+                    let _ = reply.send(answer);
                 }
-                // `load` and the clipboard it holds go first: dropping `Loads` waits for `answer`.
+                // `load` and the clipboard it holds go first: dropping `Loads` waits for `alive`.
                 drop(load);
-                drop(answer);
+                drop(alive);
             };
             std::thread::Builder::new().name(name.into()).spawn(work).ok()?;
-            Some(Self { requests, answers, pending: None, finish })
+            Some(Self { requests, open, sent: None, done, finish })
+        }
+
+        /// `request` sent to the worker; its answer comes on the channel returned, for
+        /// [`wait_for_answer`] here or on another thread. Err when an earlier request is still
+        /// unanswered or the worker has stopped.
+        pub(super) fn ask(&mut self, request: R) -> Result<mpsc::Receiver<A>, String> {
+            if self.open.load(Ordering::SeqCst) > 0 {
+                return Err("the clipboard's owner hasn't answered an earlier read".into());
+            }
+            let (reply, answer) = mpsc::channel();
+            self.open.fetch_add(1, Ordering::SeqCst);
+            self.sent = Some(Instant::now());
+            if self.requests.send((request, reply)).is_err() {
+                self.open.fetch_sub(1, Ordering::SeqCst);
+                return Err(GONE.into());
+            }
+            Ok(answer)
         }
 
         /// The answer to `request`, or why there is none, after `wait` at most.
         pub(super) fn get(&mut self, request: R, wait: Duration) -> Result<A, String> {
-            if self.pending.is_some() {
-                match self.answers.try_recv() {
-                    // The late answer of the read that timed out: stale by now.
-                    Ok(_) => self.pending = None,
-                    Err(mpsc::TryRecvError::Empty) => return Err("the clipboard's owner hasn't answered an earlier read".into()),
-                    Err(mpsc::TryRecvError::Disconnected) => return Err(GONE.into()),
-                }
-            }
-            let sent = Instant::now();
-            self.requests.send(request).map_err(|_| GONE.to_string())?;
-            match self.answers.recv_timeout(wait) {
-                Ok(answer) => Ok(answer),
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    self.pending = Some(sent);
-                    Err(format!("the clipboard's owner didn't send its data within {wait:?}"))
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => Err(GONE.into()),
-            }
+            wait_for_answer(&self.ask(request)?, wait)
+        }
+    }
+
+    /// The answer that comes on `answer` ([`Loads::ask`]), or why there is none, after `wait` at most.
+    pub(super) fn wait_for_answer<A>(answer: &mpsc::Receiver<A>, wait: Duration) -> Result<A, String> {
+        match answer.recv_timeout(wait) {
+            Ok(answer) => Ok(answer),
+            Err(mpsc::RecvTimeoutError::Timeout) => Err(format!("the clipboard's owner didn't send its data within {wait:?}")),
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(GONE.into()),
         }
     }
 
@@ -420,8 +439,10 @@ mod loads {
         fn drop(&mut self) {
             let (stop, _) = mpsc::channel();
             drop(std::mem::replace(&mut self.requests, stop));
-            let end = stop_by(self.pending, Instant::now(), self.finish);
-            while self.answers.recv_timeout(end.saturating_duration_since(Instant::now())).is_ok() {}
+            let pending = self.sent.filter(|_| self.open.load(Ordering::SeqCst) > 0);
+            let end = stop_by(pending, Instant::now(), self.finish);
+            // Nothing is sent on `done`: this ends when the worker drops `alive`, or at `end`.
+            let _ = self.done.recv_timeout(end.saturating_duration_since(Instant::now()));
         }
     }
 
@@ -473,10 +494,30 @@ mod loads {
         #[test]
         fn a_read_after_the_worker_stops_says_so() {
             let mut loads = Loads::spawn("test", Duration::ZERO, |()| String::new()).unwrap();
-            // The worker ends when its answers can't be sent: drop them by hand.
-            let (_, dead) = mpsc::channel();
-            drop(std::mem::replace(&mut loads.answers, dead));
+            // The worker ends when its requests stop: cut them off by hand.
+            let (dead, _) = mpsc::channel();
+            drop(std::mem::replace(&mut loads.requests, dead));
             assert_eq!(loads.get((), Duration::from_millis(50)), Err(GONE.to_string()));
+        }
+
+        #[test]
+        fn an_answer_waited_for_on_another_thread_holds_back_the_next_read() {
+            let (release, gate) = mpsc::channel::<()>();
+            let mut loads = Loads::spawn("test", Duration::ZERO, move |n: u32| {
+                if n == 1 {
+                    let _ = gate.recv();
+                }
+                n
+            })
+            .unwrap();
+            let answer = loads.ask(1).unwrap();
+            // The caller doesn't wait: the answer is waited for wherever the channel goes.
+            let waiter = std::thread::spawn(move || wait_for_answer(&answer, Duration::from_secs(600)));
+            // Until it comes, a read fails at once instead of queuing behind it.
+            assert!(loads.get(2, Duration::from_secs(600)).is_err());
+            release.send(()).unwrap();
+            assert_eq!(waiter.join().ok(), Some(Ok(1)));
+            assert_eq!(loads.get(3, Duration::from_secs(600)), Ok(3));
         }
 
         #[test]
@@ -590,9 +631,9 @@ mod portable {
         reads.get(request, wait).unwrap_or_else(|why| Answer::failed(request, why))
     }
 
-    /// The longest a bitmap read of arboard's waits for the app that copied: the bitmap's transfer
-    /// and its PNG decoding happen within the read. Text and file lists wait
-    /// [`LOAD_WAIT`](super::loads::LOAD_WAIT).
+    /// The longest a paste's bitmap read of arboard's waits for the app that copied, off the UI
+    /// thread: the bitmap's transfer and its PNG decoding happen within the read. Text, file lists
+    /// and the UI thread's bitmap check wait [`LOAD_WAIT`](super::loads::LOAD_WAIT).
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
     const IMAGE_WAIT: Duration = Duration::from_secs(10);
 
@@ -628,7 +669,7 @@ mod portable {
 
     /// arboard's clipboard, with `C` for writes (arboard's handle; a stand-in in tests). On Linux
     /// and the BSDs its reads run on a worker with a handle of its own and wait
-    /// [`LOAD_WAIT`](super::loads::LOAD_WAIT) at most, a bitmap 10 s: arboard's Wayland
+    /// [`LOAD_WAIT`](super::loads::LOAD_WAIT) at most, a paste's bitmap 10 s off the UI thread: arboard's Wayland
     /// data-control read waits for the app that copied to send its data with no limit, and its X11
     /// read waits up to 4 s for each format it tries.
     struct Arboard<C = arboard::Clipboard> {
@@ -667,7 +708,23 @@ mod portable {
         fn read(&mut self, request: Request) -> Answer {
             read_within(&mut self.reads, request, wait_for(request))
         }
+
+        /// A bitmap read on the worker that waits [`LOAD_WAIT`](super::loads::LOAD_WAIT) at most, for
+        /// a check on the UI thread.
+        fn image_now(&mut self) -> Result<arboard::ImageData<'static>, String> {
+            read_within(&mut self.reads, Request::Image, super::loads::LOAD_WAIT).image()
+        }
+
+        /// A bitmap read sent to the worker now; the work returned waits [`IMAGE_WAIT`] at most for
+        /// it, so the caller can wait off the UI thread. Err when the read can't be sent.
+        fn image_later(&mut self) -> Result<ImageWork, String> {
+            let answer = self.reads.ask(Request::Image)?;
+            Ok(Box::new(move || super::loads::wait_for_answer(&answer, IMAGE_WAIT).and_then(Answer::image)))
+        }
     }
+
+    /// A bitmap read whose answer is waited for when it runs.
+    type ImageWork = Box<dyn FnOnce() -> Result<arboard::ImageData<'static>, String> + Send>;
 
     /// An open clipboard connection.
     enum Backend {
@@ -726,9 +783,30 @@ mod portable {
             }
         }
 
-        fn get_image(&mut self) -> Result<arboard::ImageData<'static>, String> {
+        /// The bitmap, for a check on the UI thread: on Linux and the BSDs it waits
+        /// [`LOAD_WAIT`](super::loads::LOAD_WAIT) at most, as text does.
+        fn image_now(&mut self) -> Result<arboard::ImageData<'static>, String> {
             match self {
+                #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+                Self::Arboard(cb) => cb.image_now(),
+                #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")))]
                 Self::Arboard(cb) => cb.read(Request::Image).image(),
+                #[cfg(target_os = "linux")]
+                Self::Wayland(_) => Err(TEXT_ONLY.into()),
+            }
+        }
+
+        /// The bitmap as work for another thread: on Linux and the BSDs the wait for the app
+        /// that copied happens when the work runs, elsewhere the bitmap is read here.
+        fn image_later(&mut self) -> Result<ImageWork, String> {
+            match self {
+                #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+                Self::Arboard(cb) => cb.image_later(),
+                #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")))]
+                Self::Arboard(cb) => {
+                    let image = cb.read(Request::Image).image()?;
+                    Ok(Box::new(move || Ok(image)))
+                }
                 #[cfg(target_os = "linux")]
                 Self::Wayland(_) => Err(TEXT_ONLY.into()),
             }
@@ -913,7 +991,7 @@ mod portable {
             let Some(cb) = self.cb.opened() else { return false };
             match &self.ours {
                 Some(Ours::Text(t)) => cb.get_text().is_ok_and(|now| now == *t),
-                Some(Ours::Image(w, h)) => cb.get_image().is_ok_and(|now| (now.width, now.height) == (*w, *h)),
+                Some(Ours::Image(w, h)) => cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h)),
                 None => false,
             }
         }
@@ -936,10 +1014,12 @@ mod portable {
                 match *m {
                     TEXT => cb.get_text().ok().filter(|t| !t.is_empty()).map(|t| ClipboardRead::Now(Flavour { mime: TEXT, data: t.into_bytes() })),
                     BITMAP => {
-                        let img = cb.get_image().ok()?;
-                        let (width, height) = (u32::try_from(img.width).ok()?, u32::try_from(img.height).ok()?);
-                        let bytes = img.bytes.into_owned();
-                        Some(ClipboardRead::Later(Box::new(move || png_flavour(&image::RgbaImage::from_raw(width, height, bytes)?))))
+                        let read = cb.image_later().ok()?;
+                        Some(ClipboardRead::Later(Box::new(move || {
+                            let img = read().ok()?;
+                            let (width, height) = (u32::try_from(img.width).ok()?, u32::try_from(img.height).ok()?);
+                            png_flavour(&image::RgbaImage::from_raw(width, height, img.bytes.into_owned())?)
+                        })))
                     }
                     _ => None,
                 }
@@ -1135,6 +1215,29 @@ mod portable {
             // X11 waits for an unanswered read when the clipboard closes; data-control doesn't.
             assert_eq!(finish(false), X11_READ_LIMIT);
             assert_eq!(finish(true), Duration::ZERO);
+        }
+
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        #[test]
+        fn a_bitmap_paste_waits_for_the_owner_off_the_ui_thread() {
+            let (release, gate) = std::sync::mpsc::channel::<()>();
+            // The app that copied sends its bitmap only when released.
+            let reads = Loads::spawn("test", Duration::ZERO, move |request| match request {
+                Request::Image => {
+                    let _ = gate.recv();
+                    Answer::Image(Ok(arboard::ImageData { width: 2, height: 1, bytes: Cow::Owned(vec![0; 8]) }))
+                }
+                _ => Answer::failed(request, "not asked".into()),
+            })
+            .unwrap();
+            let mut cb = Arboard { reads, cb: () };
+            // The read is sent and the UI thread goes on without its answer.
+            let work = cb.image_later().unwrap();
+            // A check on the UI thread meanwhile fails at once instead of waiting behind it.
+            assert!(cb.read(Request::Text).text().is_err());
+            let paste = std::thread::spawn(work);
+            release.send(()).unwrap();
+            assert_eq!(paste.join().ok().and_then(Result::ok).map(|i| (i.width, i.height)), Some((2, 1)));
         }
 
         #[test]
