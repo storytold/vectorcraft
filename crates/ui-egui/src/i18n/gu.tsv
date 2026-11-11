@@ -4247,3 +4247,24 @@ antiAlias	Sharp	શાર્પ
 @plural	Result: {n}|Results: {n}	પરિણામ: {n}|પરિણામો: {n}
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	દસ્તાવેજ એવી બ્લીડ સેટ કરે છે જે આ PDF/X ફાઇલ છોડી દે છે: "દસ્તાવેજની બ્લીડ સેટિંગ્સ વાપરો" ચાલુ કરો
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} સાચવ્યું, {n} નોંધ સાથે: {first}|{path} સાચવ્યું, {n} નોંધો સાથે: {first}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{folder} માં {n} ફાઇલ ({note}) પેકેજ થઈ|{folder} માં {n} ફાઇલો ({note}) પેકેજ થઈ
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} ફાઇલ પેકેજ થઈ {note}|{n} ફાઇલો પેકેજ થઈ {note}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder} માં {n} ફાઇલ પેકેજ થઈ|{folder} માં {n} ફાઇલો પેકેજ થઈ
+@msgplural	Packaged {n} file|Packaged {n} files	{n} ફાઇલ પેકેજ થઈ|{n} ફાઇલો પેકેજ થઈ
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{folder} માં {n} ફાઇલ {note} પેકેજ થઈ|{folder} માં {n} ફાઇલો {note} પેકેજ થઈ
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} ફાઇલ પેકેજ થઈ {note}|{n} ફાઇલો પેકેજ થઈ {note}
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder} માં {n} ફાઇલ પેકેજ થઈ|{folder} માં {n} ફાઇલો પેકેજ થઈ
+@plural	Packaged {n} file|Packaged {n} files	{n} ફાઇલ પેકેજ થઈ|{n} ફાઇલો પેકેજ થઈ
+@msg	(fonts not copied: {fonts})	(ફૉન્ટ્સ કૉપિ થયા નથી: {fonts})
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} લિંક કરેલી ફાઇલ મળી નથી)|({n} લિંક કરેલી ફાઇલો મળી નથી)
+@msgplural	{n} linked file not found|{n} linked files not found	{n} લિંક કરેલી ફાઇલ મળી નથી|{n} લિંક કરેલી ફાઇલો મળી નથી
+@plural	{n} linked file not found|{n} linked files not found	{n} લિંક કરેલી ફાઇલ મળી નથી|{n} લિંક કરેલી ફાઇલો મળી નથી
+@msg	variables that aren't text were left out: {kinds}	ટેક્સ્ટ ન હોય તેવા વેરિએબલ છોડી દેવાયા: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	નવો દસ્તાવેજ આ વેરિએબલ્સને તેમના પ્રકાર સાથે પાછા વાંચશે નહીં: {names}
+@msg	a new document refuses this file because of these variables: {names}	આ વેરિએબલ્સને કારણે નવો દસ્તાવેજ આ ફાઇલ સ્વીકારશે નહીં: {names}
+@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` માટેનું હેડર `{cell}` વેરિએબલ `{other}` તરીકે વંચાશે: બેમાંથી એકનું નામ બદલો
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` માટેનું હેડર `{header}` વેરિએબલ `{other}` તરીકે વંચાશે: બેમાંથી એકનું નામ બદલો
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note} ({more})
+@msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` માટે અમાન્ય પેરામીટર: {msg}
+@msg	fonts not copied: {fonts}	ફૉન્ટ્સ કૉપિ થયા નથી: {fonts}
