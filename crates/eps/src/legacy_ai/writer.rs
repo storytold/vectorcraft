@@ -5,9 +5,9 @@ use super::encoding::{
 use super::{
     Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule, Gradient,
     GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
-    LAYER_COLORS, LAYER_NAME, LIVE, LayerColor, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection,
-    ParaStyle, PathData, ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE,
-    TYPE_ATTRIBUTES, TextKind, TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
+    LAYER_NAME, LIVE, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection, ParaStyle, PathData,
+    ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
+    TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
 
 pub(super) struct Writer<'a> {
@@ -135,14 +135,7 @@ impl<'a> Writer<'a> {
     /// A top-level layer. False when it isn't a layer.
     pub(super) fn layer(&mut self, n: &Node) -> bool {
         let NodeKind::Layer { color, template, printable, children, clip, preview, dim_images } = &n.kind else { return false };
-        let [r, g, b] = match color {
-            LayerColor::Preset(i) => LAYER_COLORS.get(usize::from(*i)).map_or([79, 128, 255], |c| c.1),
-            LayerColor::Custom(rgb) => *rgb,
-        };
-        let index = match color {
-            LayerColor::Preset(i) if usize::from(*i) < LAYER_COLORS.len() => i64::from(*i),
-            _ => -1,
-        };
+        let (index, [r, g, b]) = ai_ops::layer_color(*color);
         let flag = |b: bool| u8::from(b);
         let name = self.layer_name(n.name.as_deref().unwrap_or("Layer"));
         // A template layer doesn't print and shows dimmed.
@@ -173,14 +166,7 @@ impl<'a> Writer<'a> {
         }
         let art = std::mem::take(&mut self.hidden_art);
         let NodeKind::Layer { color, template, printable, .. } = &n.kind else { return false };
-        let [r, g, b] = match color {
-            LayerColor::Preset(i) => LAYER_COLORS.get(usize::from(*i)).map_or([79, 128, 255], |c| c.1),
-            LayerColor::Custom(rgb) => *rgb,
-        };
-        let index = match color {
-            LayerColor::Preset(i) if usize::from(*i) < LAYER_COLORS.len() => i64::from(*i),
-            _ => -1,
-        };
+        let (index, [r, g, b]) = ai_ops::layer_color(*color);
         let name = format!("{} (hidden)", n.name.as_deref().unwrap_or("Layer"));
         let name = self.layer_name(&name);
         let _ = writeln!(

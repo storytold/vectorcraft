@@ -46,7 +46,7 @@ fn file_scripts_holds_check_script_above_other_script() {
     let (_, file) = tree.iter().find(|(t, _)| *t == "File").unwrap();
     let scripts = file.iter().find_map(|i| if let menus::Item::Sub("Scripts", items) = i { Some(items) } else { None }).unwrap();
     assert!(
-        matches!(scripts.as_slice(), [menus::Item::Cmd("Check Script…", "ui.checkScript", _), menus::Item::Todo("Other Script…", _)]),
+        matches!(scripts.as_slice(), [menus::Item::Cmd("Check Script…", "ui.checkScript", _), menus::Item::Cmd("Other Script…", "ui.runScript", _)]),
         "{scripts:?}"
     );
 }

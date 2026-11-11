@@ -766,10 +766,13 @@ pub fn skip_reason(s: &Session, st: &DocState) -> Option<&'static str> {
         return Some("unchanged since its last recovery copy");
     }
     if s.prefs.recovery_off_for_complex && object_count(&st.doc) > COMPLEX_OBJECTS {
-        return Some("complex document (Data Recovery is off for complex documents)");
+        return Some(COMPLEX_SKIP);
     }
     None
 }
+
+/// Why a complex document with unsaved changes gets no copy.
+const COMPLEX_SKIP: &str = "complex document (Data Recovery is off for complex documents)";
 
 /// A file name part from a title: letters, digits, `-`, `_` and spaces (others as `-`).
 fn safe_stem(title: &str) -> String {
@@ -866,8 +869,35 @@ fn remove_copy(s: &Session, file: &str) {
     }
 }
 
-/// Document `uid` was saved, reverted or closed: its recovery copy goes.
+/// Closed document `st`'s recovery copy goes.
+pub(crate) fn forget_closed(s: &Session, st: &crate::DocState) {
+    if let Some(copy) = &st.recovery {
+        remove_copy(s, &copy.file);
+    }
+}
+
+/// Writes a copy of every document that needs one now. An error when a document with unsaved
+/// changes would be left without a current copy.
+pub(crate) fn save_copies(s: &mut Session) -> Result<()> {
+    let store = need_store(s, "script.run")?;
+    let (jobs, _) = jobs(s, &store)?;
+    let uncopied = s.documents().iter().any(|st| skip_reason(s, st) == Some(COMPLEX_SKIP));
+    if uncopied {
+        return Err(EngineError::Other("a document with unsaved changes has no recovery copy".into()));
+    }
+    for j in jobs {
+        j.write(store.as_ref()).map_err(EngineError::Other)?;
+        j.finish(s);
+    }
+    Ok(())
+}
+
+/// Document `uid` was saved, reverted or closed: its recovery copy goes. While a script runs the
+/// run's commit settles that.
 pub fn forget(s: &mut Session, uid: u64) {
+    if s.script_in_run {
+        return;
+    }
     let Some(copy) = s.document_mut(uid).and_then(|st| st.recovery.take()) else { return };
     remove_copy(s, &copy.file);
 }

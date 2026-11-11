@@ -200,9 +200,16 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
             _ => return Err(EngineError::Other("no such segment".into())),
         };
         let mut pieces = sp.cut_at(&std::collections::BTreeSet::from([k]));
+        // The cut leaves one of its two coincident end points selected, as `path.cutAtAnchors`
+        // does, so a Direct Selection drag pulls the path apart there.
+        let pick = |sel: &mut vectorcraft_doc::Selection, id: NodeId, si: usize| {
+            sel.clear();
+            sel.add(id);
+            sel.anchors.entry(id).or_default().insert((si, 0));
+        };
         if sp.closed {
             path.subpaths[si] = pieces.pop().ok_or_else(|| EngineError::Other("no such anchor".into()))?;
-            sel.set([id]);
+            pick(sel, id, si);
             return Ok(vec![id]);
         }
         let [left, right] = <[SubPath; 2]>::try_from(pieces).map_err(|_| EngineError::Other("cannot split an open path at its end point".into()))?;
@@ -211,12 +218,12 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
             let node = sibling_with(d, id, PathData::single(right))?;
             let (parent, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
             let nid = d.insert(parent, idx + 1, node)?;
-            sel.set([id, nid]);
+            pick(sel, nid, 0);
             Ok(vec![id, nid])
         } else {
             path.subpaths[si] = left;
             path.subpaths.insert(si + 1, right);
-            sel.set([id]);
+            pick(sel, id, si + 1);
             Ok(vec![id])
         }
     })?;

@@ -980,6 +980,174 @@ fn painted_pieces_keep_to_the_effects_budget() {
     assert!((350..=100_000).contains(&paths), "{paths} paths");
 }
 
+/// A clock for a document's deferrals that reads `step` milliseconds later each time it is read;
+/// the test changes the step as it goes.
+fn stepping_clock(step: &std::sync::Arc<std::sync::atomic::AtomicU64>) -> vectorcraft_plugins::deferred::Clock {
+    let (now, step) = (std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)), step.clone());
+    std::sync::Arc::new(move || Some(now.fetch_add(step.load(std::sync::atomic::Ordering::Relaxed), std::sync::atomic::Ordering::Relaxed)))
+}
+
+/// While a document is drawn on screen, the plug-in effects of its first view share a time budget.
+/// A stage left out draws its input art, is listed by `effect.deferredStatus`, and stays left out
+/// on later drawings; Effect › Refresh Deferred Effects runs it again with a fresh budget, and an
+/// export draws every stage. Another document has a budget of its own.
+#[test]
+fn the_first_view_defers_plug_in_effects_past_its_budget() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let b = rect(&mut s, 30.0, "#ff0000");
+    for (id, x) in [("test.engine.deferred.a", 100.0), ("test.engine.deferred.b", 140.0)] {
+        let out = json!({"objects": [{"path": square_at(x)}]}).to_string();
+        install_wat(&mut s, &tpl::returning(&tpl::manifest(id, "effect", "{}"), &out));
+    }
+    run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": "plugin.test.engine.deferred.a"}));
+    run(&mut s, "effect.apply", json!({"ids": [b.0], "effect": "plugin.test.engine.deferred.b"}));
+    // Each reading is 3 s later: the first run's result comes back after the budget, and the
+    // second run doesn't start.
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    let img = fx.view(|| drawn(&s));
+    fx.first_view_done();
+    assert_eq!((img.pixel(15, 15), img.pixel(35, 15), img.pixel(110, 50), img.pixel(150, 50)), (RED, RED, WHITE, WHITE), "the input art");
+    assert_eq!(fx.take_report(), Some(2));
+    let status = run(&mut s, "effect.deferredStatus", json!({}));
+    let listed = |id: NodeId, plugin: &str| json!({"objectId": id.0, "effectIndex": 0, "pluginId": plugin, "reason": "budget"});
+    assert_eq!(status, json!({"budgetMs": 2000, "effects": [listed(a, "test.engine.deferred.a"), listed(b, "test.engine.deferred.b")]}));
+    assert_eq!(fx.view(|| drawn(&s)).pixel(110, 50), WHITE, "a later drawing leaves it deferred");
+
+    // Refreshed with a fresh budget, in which the clock stands still.
+    assert!(s.execute("effect.refreshDeferred", &json!({"ids": ["a"]})).is_err());
+    assert!(s.execute("effect.refreshDeferred", &json!({"ids": [999_999]})).is_err(), "not an object of the document");
+    step.store(0, std::sync::atomic::Ordering::Relaxed);
+    let refreshed = run(&mut s, "effect.refreshDeferred", json!({"ids": [a.0]}));
+    assert_eq!(refreshed, json!({"refreshed": 1, "stillDeferred": 0, "failed": 0}));
+    let img = fx.view(|| drawn(&s));
+    assert_eq!((img.pixel(110, 50), img.pixel(150, 50)), (RED, WHITE));
+    assert_eq!(run(&mut s, "effect.deferredStatus", json!({}))["effects"], json!([listed(b, "test.engine.deferred.b")]));
+
+    // An export draws every stage; the view then uses the result.
+    let svg = s.execute("document.export", &json!({"format": "svg"})).unwrap();
+    let svg = String::from_utf8(vectorcraft_format::base64_decode(svg["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    assert!(svg.contains(r#"<rect x="140" y="40" width="20" height="20""#), "the square at 140: {svg}");
+    assert_eq!(fx.view(|| drawn(&s)).pixel(150, 50), RED);
+    assert_eq!(run(&mut s, "effect.deferredStatus", json!({}))["effects"], json!([]));
+    assert!(s.execute("effect.refreshDeferred", &json!({})).is_err(), "nothing is deferred");
+
+    // Another document: its first view has a budget of its own.
+    let mut other = session();
+    let c = rect(&mut other, 50.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(170.0)}]}).to_string();
+    install_wat(&mut other, &tpl::returning(&tpl::manifest("test.engine.deferred.c", "effect", "{}"), &out));
+    run(&mut other, "effect.apply", json!({"ids": [c.0], "effect": "plugin.test.engine.deferred.c"}));
+    let still = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let fx_c = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&still));
+    other.doc_mut().unwrap().plugin_effects = fx_c.clone();
+    assert_eq!(fx_c.view(|| drawn(&other)).pixel(180, 50), RED);
+    fx_c.first_view_done();
+    assert_eq!(fx_c.take_report(), Some(0));
+}
+
+/// Deferred stages are listed where their effects are: after an effect that changes no geometry,
+/// and on a fill after a Transform effect that reaches its appearance, each of two instances of
+/// one plug-in at its own place.
+#[test]
+fn deferred_stages_are_listed_at_their_effects_places() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let b = rect(&mut s, 60.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(110.0)}]}).to_string();
+    // An effect that paints its pieces: the object is drawn from its reshaped art.
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.deferred.at", true), &out));
+    const FX: &str = "plugin.test.engine.deferred.at";
+    run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": "stylize.dropShadow"}));
+    for _ in 0..2 {
+        run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": FX}));
+    }
+    run(&mut s, "effect.apply", json!({"ids": [b.0], "effect": "distort.transform", "params": {"strokes": true}, "item": 0}));
+    for _ in 0..2 {
+        run(&mut s, "effect.apply", json!({"ids": [b.0], "effect": FX, "item": 0}));
+    }
+    // No run has time to give a result.
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    fx.view(|| drawn(&s));
+    let places = run(&mut s, "effect.deferredStatus", json!({}))["effects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| (e["objectId"].as_u64().unwrap(), e["item"].as_u64(), e["effectIndex"].as_u64().unwrap()))
+        .collect::<Vec<_>>();
+    assert_eq!(places, [(a.0, None, 1), (a.0, None, 2), (b.0, Some(0), 1), (b.0, Some(0), 2)]);
+}
+
+/// A refresh that does not draw a stage (its object, or a group holding it, is hidden) leaves it
+/// deferred, and a stage whose effect has been removed or hidden, or whose object has been removed,
+/// is no longer listed and does not enable Effect › Refresh Deferred Effects.
+#[test]
+fn refresh_keeps_stages_it_did_not_draw_and_drops_removed_ones() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let b = rect(&mut s, 30.0, "#ff0000");
+    let c = rect(&mut s, 50.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(110.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&tpl::manifest("test.engine.deferred.kept", "effect", "{}"), &out));
+    run(&mut s, "effect.apply", json!({"ids": [a.0, b.0, c.0], "effect": "plugin.test.engine.deferred.kept"}));
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    fx.view(|| drawn(&s));
+    fx.first_view_done();
+    let listed = |s: &mut Session| {
+        run(s, "effect.deferredStatus", json!({}))["effects"].as_array().unwrap().iter().map(|e| e["objectId"].as_u64().unwrap()).collect::<Vec<_>>()
+    };
+    assert_eq!(listed(&mut s), [a.0, b.0, c.0]);
+
+    s.execute("object.hide", &json!({"ids": [a.0, g.0]})).unwrap();
+    step.store(0, std::sync::atomic::Ordering::Relaxed);
+    let refreshed = run(&mut s, "effect.refreshDeferred", json!({"ids": [a.0, c.0]}));
+    assert_eq!(refreshed, json!({"refreshed": 0, "stillDeferred": 2, "failed": 0}), "a hidden object is not drawn");
+    assert_eq!(listed(&mut s), [a.0, b.0, c.0]);
+
+    run(&mut s, "effect.remove", json!({"ids": [a.0], "index": 0}));
+    assert_eq!(listed(&mut s), [b.0, c.0], "its effect was removed");
+    run(&mut s, "effect.setParams", json!({"ids": [b.0], "index": 0, "visible": false}));
+    assert_eq!(listed(&mut s), [c.0], "its effect was hidden");
+    s.execute("edit.clear", &json!({"ids": [b.0, g.0]})).unwrap();
+    assert_eq!(listed(&mut s), Vec::<u64>::new(), "its object was deleted");
+    assert!(s.execute("effect.refreshDeferred", &json!({})).is_err(), "nothing is deferred");
+}
+
+/// A deferred stage in a symbol's art is listed by the object in that art, and a refresh runs it
+/// where the symbol is placed.
+#[test]
+fn deferred_stages_in_symbol_art_are_listed_and_refreshed() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(110.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&tpl::manifest("test.engine.deferred.symbol", "effect", "{}"), &out));
+    run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": "plugin.test.engine.deferred.symbol"}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let instance = run(&mut s, "symbol.new", json!({"name": "Deferred"}))["id"].as_u64().unwrap();
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    fx.view(|| drawn(&s));
+    fx.first_view_done();
+    assert_eq!(fx.take_report(), Some(1));
+    let effects = run(&mut s, "effect.deferredStatus", json!({}))["effects"].clone();
+    let object = effects[0]["objectId"].as_u64().unwrap();
+    assert_eq!(effects.as_array().map(Vec::len), Some(1), "{effects}");
+    assert!(object != instance && s.doc().unwrap().doc.node(NodeId(object)).is_none(), "an object of the symbol's art: {effects}");
+
+    step.store(0, std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(run(&mut s, "effect.refreshDeferred", json!({})), json!({"refreshed": 1, "stillDeferred": 0, "failed": 0}));
+    assert_eq!(run(&mut s, "effect.deferredStatus", json!({}))["effects"], json!([]));
+}
+
 /// `CRAFT_PLUGIN_PAINTS_WASM=<folder>` saves a test live effect to try in the app
 /// (`stroke-width-test-effect.wasm`): it draws a triangle over the area 100,80–300,230 while its
 /// object's stroke is 5 pt wide, and hands the geometry back otherwise.
@@ -1145,6 +1313,25 @@ fn plugin_management_commands() {
     assert_eq!(r["failed"].as_array().unwrap().len(), 1);
     assert_eq!(run(&mut s, "plugin.list", json!({}))["folder"]["loaded"], json!(["test.engine.folder"]));
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Clearing the Additional Plug-ins Folder forgets the folder: setting the same folder again
+/// installs what is in it, as setting any other folder does.
+#[test]
+fn plugins_folder_set_again_after_clearing_installs_its_plugins() {
+    let dir = crate::tests_links::Folder::new("plugin-folder-cleared");
+    let id = "test.engine.foldercleared";
+    let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+    std::fs::write(dir.0.join("cleared.wasm"), wat::parse_str(src).unwrap()).unwrap();
+    let mut s = session();
+    let folder = json!({"key": "pluginsFolder", "value": dir.0.display().to_string()});
+    run(&mut s, "prefs.set", folder.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed from the folder");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    run(&mut s, "prefs.set", json!({"key": "pluginsFolder", "value": ""}));
+    run(&mut s, "prefs.set", folder);
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again when the folder is set again");
+    run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
@@ -3405,5 +3592,31 @@ fn another_module_under_an_id_with_settings_needs_replace() {
     // Once removed, with its settings and cache, it installs as a first install does.
     assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": reads}))["needsReplace"], json!(false));
     install(&mut s, json!({})).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A filter that calls commands runs on the document with the edit in progress kept first: a move
+/// still being previewed is its own undo step, and the filter is given the moved rectangle, which
+/// its empty output then removes.
+#[test]
+fn a_filter_that_calls_commands_is_given_the_edit_in_progress() {
+    let id = "test.engine.callsettle";
+    let mut s = session();
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["select.all"]}}"#);
+    let wasm = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}));
+    let paths = |s: &Session| s.doc().unwrap().doc.layers.first().and_then(|l| l.children()).map_or(0, |c| c.len());
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}));
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+    run(&mut s, "plugin.run", json!({"id": id}));
+    assert!(!s.in_interaction());
+    assert_eq!(paths(&s), 0, "the filter was given the moved rectangle and removed it");
+    let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, [format!("Test {id}").as_str(), "Move"]);
+    run(&mut s, "edit.undo", json!({}));
+    let x = run(&mut s, "document.inspect", json!({}))["layers"][0]["children"][0]["bounds"]["x"].clone();
+    assert_eq!(x, json!(17.0), "undoing the filter brings back the moved rectangle");
     run(&mut s, "plugin.remove", json!({"id": id}));
 }

@@ -158,6 +158,9 @@ pub(crate) type NativeFn = fn(&mut crate::interp::Interp, Value, &[Value], bool)
 /// A function the embedding defines.
 pub(crate) type HostFn = dyn Fn(&[crate::JsValue]) -> Result<crate::JsValue, String>;
 
+/// A function the embedding defines that takes and gives structured values.
+pub(crate) type DataFn = crate::host::HostFunction;
+
 /// The built-ins the interpreter treats specially when it calls them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeKind {
@@ -172,11 +175,16 @@ pub(crate) enum NativeKind {
 
 /// What a function object runs. `Bound` is a function made by `Function.prototype.bind` (section
 /// 15.3.4.5): calling it calls `target` with `this` and `args` before the arguments it is given.
+/// `Data` is a host function given [`crate::Data`], its arguments read as `read` says. `Eval` is a
+/// host function that gives source to run as global code ([`crate::HostItem::Evaluator`]); `end`
+/// is called when that code ends.
 #[derive(Clone)]
 pub(crate) enum Func {
     Closure { code: Rc<Code>, env: EnvId },
     Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
+    Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
+    Eval { f: DataFn, end: Rc<dyn Fn()>, strict_writes: Rc<dyn Fn() -> Option<bool>>, name: Rc<str> },
     Bound { target: ObjId, this: Value, args: Rc<[Value]> },
 }
 
@@ -220,12 +228,84 @@ pub(crate) enum Class {
     Math,
     /// The `JSON` object (section 15.12).
     Json,
+    /// An XML value (ECMA-357 section 9.1).
+    Xml(Box<XmlNode>),
+    /// An XMLList value (ECMA-357 section 9.2).
+    XmlList(Box<XmlListData>),
+    Namespace(Box<XmlNs>),
+    /// A QName; `attribute` marks an attribute name (ECMA-357 sections 13.3 and 9.3), and
+    /// `reference` a name made by E4X syntax, which only an XML value can be accessed with.
+    QName {
+        name: Box<XmlName>,
+        attribute: bool,
+        reference: bool,
+    },
+    /// A `.( )` filter in progress.
+    XmlFilter(Box<XmlFilterState>),
+}
+
+/// What an XML value is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum XmlKind {
+    Element,
+    Attribute,
+    Text,
+    Comment,
+    Pi,
+}
+
+/// A qualified name. `uri` is `None` for a name that matches any namespace.
+#[derive(Clone, Debug)]
+pub(crate) struct XmlName {
+    pub(crate) uri: Option<Key>,
+    pub(crate) local: Key,
+    pub(crate) prefix: Option<Key>,
+}
+
+/// A namespace. `prefix` is `None` when it is undefined.
+#[derive(Clone, Debug)]
+pub(crate) struct XmlNs {
+    pub(crate) prefix: Option<Key>,
+    pub(crate) uri: Key,
+}
+
+/// An XML value: a node of a tree, linked by object index.
+#[derive(Clone)]
+pub(crate) struct XmlNode {
+    pub(crate) kind: XmlKind,
+    pub(crate) name: Option<XmlName>,
+    pub(crate) parent: Option<ObjId>,
+    pub(crate) value: Str,
+    pub(crate) attrs: Vec<ObjId>,
+    pub(crate) children: Vec<ObjId>,
+    pub(crate) ns: Vec<XmlNs>,
+}
+
+/// An XMLList value: its items, and the object and name a write to an empty list targets.
+#[derive(Clone)]
+pub(crate) struct XmlListData {
+    pub(crate) items: Vec<ObjId>,
+    pub(crate) target: Option<ObjId>,
+    pub(crate) target_name: Option<(XmlName, bool)>,
+}
+
+/// The state of a `.( )` filter: the items to test, the next one's position and those kept.
+#[derive(Clone)]
+pub(crate) struct XmlFilterState {
+    pub(crate) input: Vec<ObjId>,
+    pub(crate) pos: usize,
+    pub(crate) kept: Vec<ObjId>,
 }
 
 impl Class {
     /// The `[[Class]]` name `Object.prototype.toString` reports.
     pub(crate) fn name(&self) -> &'static str {
         match self {
+            Class::Xml(_) => "XML",
+            Class::XmlList(_) => "XMLList",
+            Class::Namespace(_) => "Namespace",
+            Class::QName { .. } => "QName",
+            Class::XmlFilter(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
             Class::Ordinary | Class::ForIn(_) => "Object",
@@ -303,6 +383,14 @@ pub(crate) const ENV_BYTES: usize = 64;
 pub(crate) const ROPE_BYTES: usize = 48;
 /// The estimated bytes of each argument a bound function holds.
 pub(crate) const BOUND_ARG_BYTES: usize = 24;
+/// The estimated bytes of an XML node without its names and text.
+pub(crate) const XML_NODE_BYTES: usize = 160;
+/// The estimated bytes of an XML list without its items.
+pub(crate) const XML_LIST_BYTES: usize = 96;
+/// The estimated bytes of a reference from an XML node or list to another.
+pub(crate) const XML_REF_BYTES: usize = 8;
+/// The estimated bytes of a namespace an XML node holds.
+pub(crate) const XML_NS_BYTES: usize = 48;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
 const CODE_BYTES: usize = 384;
 
@@ -521,7 +609,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(flags);
         }
         let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
-        for k in keys.chain(&code.self_name) {
+        for k in keys.chain(&code.self_name).chain(&code.decl_name) {
             strings.add_key(k);
         }
         stack.extend(code.functions.iter().map(|f| &**f));
@@ -564,9 +652,43 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(state.object.iter().map(|o| o.0));
             strings.bytes += state.keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
         }
+        Class::Xml(node) => {
+            work.extend(node.parent.iter().chain(&node.attrs).chain(&node.children).map(|o| o.0));
+            strings.add(&node.value);
+            if let Some(name) = &node.name {
+                add_name(name, strings);
+            }
+            for ns in &node.ns {
+                add_ns(ns, strings);
+            }
+            extra = XML_NODE_BYTES + XML_REF_BYTES * (node.attrs.len() + node.children.len()) + XML_NS_BYTES * node.ns.len();
+        }
+        Class::XmlList(list) => {
+            work.extend(list.target.iter().chain(&list.items).map(|o| o.0));
+            if let Some((name, _)) = &list.target_name {
+                add_name(name, strings);
+            }
+            extra = XML_LIST_BYTES + XML_REF_BYTES * list.items.len();
+        }
+        Class::Namespace(ns) => add_ns(ns, strings),
+        Class::QName { name, .. } => add_name(name, strings),
+        Class::XmlFilter(state) => {
+            work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
+            extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
+        }
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * o.props.len() + extra
+}
+
+fn add_name(name: &XmlName, strings: &mut StringSizes) {
+    strings.add_key(&name.local);
+    name.uri.iter().chain(&name.prefix).for_each(|k| strings.add_key(k));
+}
+
+fn add_ns(ns: &XmlNs, strings: &mut StringSizes) {
+    strings.add_key(&ns.uri);
+    ns.prefix.iter().for_each(|k| strings.add_key(k));
 }
 
 fn trace_env(e: &Env, work: &mut Vec<u32>, strings: &mut StringSizes) -> usize {

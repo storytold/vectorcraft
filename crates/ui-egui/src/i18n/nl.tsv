@@ -55,6 +55,8 @@
 	Scripts	Scripts
 	Check Script…	Script controleren…
 	Check Script	Script controleren
+	Some scripts were not listed	Sommige scripts zijn niet weergegeven
+	The Scripts folder cannot be read	De map Scripts kan niet worden gelezen
 	Other Script…	Ander script…
 	Document Setup…	Documentinstellingen…
 	Switch Units	Eenheden wisselen
@@ -573,6 +575,8 @@
 	Hide Guides	Hulplijnen verbergen
 	Show Guides	Hulplijnen tonen
 	Lock Guides	Hulplijnen vergrendelen
+	Lock Guides by Default	Hulplijnen standaard vergrendelen
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Tekenbordhulplijnen met Cmd/Ctrl + slepen vanuit liniaal
 	Unlock Guides	Hulplijnen ontgrendelen
 	Make Guides	Hulplijnen maken
 	Release Guides	Hulplijnen vrijgeven
@@ -725,6 +729,20 @@
 	Other Library…	Andere bibliotheek…
 	Graphic Style Libraries	Bibliotheken met grafische stijlen
 	Shadows and Glows	Schaduwen en gloed
+	Game HUD	Game-HUD
+	Health Fill	Leven
+	Mana Glow	Mana
+	Damage Flash	Schade
+	Quest Outline	Quest
+	Coin Shine	Munt
+	Boss Alert	Baas
+	Status Effects	Statuseffecten
+	Poison Tint	Gif
+	Freeze Edge	Bevriezing
+	Burn Aura	Brand
+	Stun Pulse	Verdoving
+	Stealth Fade	Sluipen
+	Shield Buff	Schild
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
 	Gradient Finishes	Verloopafwerkingen
@@ -919,6 +937,7 @@ lighting	Light	Licht
 	Color Picker…	Kleurkiezer…
 	Coming soon — tracked in the parity plan	Binnenkort beschikbaar — opgenomen in het pariteitsplan
 	Command Dialog	Opdrachtdialoogvenster
+	Command API Reference	API-naslag voor opdrachten
 	Copy Selected Style	Geselecteerde stijl kopiëren
 	Corners…	Hoeken…
 	Define Perspective Grid…	Perspectiefraster definiëren…
@@ -2093,6 +2112,8 @@ digits	Malayalam	Malayalam
 	Green	Groen
 	Shifts the tints of global and spot colors; other colors stay.	Verschuift de tinten van globale kleuren en spotkleuren; andere kleuren blijven ongewijzigd.
 	Tint	Tint
+	Fill Tint	Vultint
+	Stroke Tint	Contourtint
 	Color Guide Options	Opties voor kleurengids
 	Less	Minder
 	Steps:	Stappen:
@@ -2364,15 +2385,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Geselecteerde stalen
 	Advanced Options	Geavanceerde opties
 	Background Contents	Achtergrondinhoud
-	Background Contents:	Achtergrondinhoud:
 	BLANK DOCUMENT PRESETS	LEGE DOCUMENTVOORINSTELLINGEN
 	Bleed	Afrulling
 	Change to Right-to-Left Layout	Omschakelen naar lay-out van rechts naar links
 	Columns:	Kolommen:
-	Create Document	Document maken
 	Documents you create appear here.	Documenten die je maakt, verschijnen hier.
 	More Settings	Meer instellingen
-	New from Template	Nieuw uit sjabloon
 	Number of Artboards:	Aantal tekenborden:
 	Orientation:	Oriëntatie:
 	PRESET DETAILS	VOORINSTELLINGSDETAILS
@@ -2383,7 +2401,6 @@ digits	Malayalam	Malayalam
 	RECENT	RECENT
 	RECENT (1)	RECENT (1)
 	SAVED	OPGESLAGEN
-	Templates…	Sjablonen…
 	Transparent (Default)	Transparant (standaard)
 	Save for Office Documents	Opslaan voor Office-documenten
 	Transparent Background	Transparante achtergrond
@@ -2450,6 +2467,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Bestandsafmetingen
 	Transforms	Transformaties
 	Background Color:	Achtergrondkleur:
+	Guide Label:	Hulplijnlabel:
 	Show Center Mark	Middenmarkering tonen
 	Show Cross Hairs	Dradenkruis tonen
 	Show Video Safe Areas	Veilige videogebieden tonen
@@ -3287,6 +3305,7 @@ theme	Appearance	Vormgeving
 	Arrange by Row	Ordenen op rij
 	Arrange by Column	Ordenen op kolom
 	Save Preset	Voorinstelling opslaan
+	Save Document Preset	Documentvoorinstelling opslaan
 	Screen (72 ppi)	Scherm (72 ppi)
 	Social Square Post 1080×1080	Vierkante socialmediapost 1080×1080
 	Distribute	Verdelen
@@ -3495,6 +3514,12 @@ theme	Appearance	Vormgeving
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
 	Render Threads (-1 = Automatic)	Renderthreads (-1 = automatisch)
 	Reset Preferences	Voorkeuren herstellen
+	Export Preferences…	Voorkeuren exporteren…
+	Import Preferences…	Voorkeuren importeren…
+	Save the applied preferences to a JSON file	De toegepaste voorkeuren in een JSON-bestand opslaan
+	Apply the preferences in a file Export Preferences saved	De voorkeuren toepassen uit een bestand dat Voorkeuren exporteren heeft opgeslagen
+	Export Preferences	Voorkeuren exporteren
+	Import Preferences	Voorkeuren importeren
 	Search Preferences	Voorkeuren doorzoeken
 	No settings found	Geen instellingen gevonden
 	Scale Corners	Hoeken schalen
@@ -3865,6 +3890,8 @@ font-technology	Variable	Variabel
 	Preferences	Voorkeuren
 	Previous	Vorige
 	Restore every preference to its default (applied on OK)	Elke voorkeur terugzetten naar de standaard (toegepast bij OK)
+	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	De standaardwaarden worden toegepast wanneer u in Voorkeuren op OK klikt. Annuleren daar behoudt uw huidige voorkeuren.
 	Smaller ↔ Larger	Kleiner ↔ Groter
 	Smart Guides (View → Smart Guides)	Slimme hulplijnen (Beeld → Slimme hulplijnen)
 	Couldn't save recovery data: {e}	Kon herstelgegevens niet opslaan: {e}
@@ -4088,6 +4115,16 @@ imageTrace	Outline	Contour
 @msg	Combine Slices: the slices have no bounds	Slices combineren: de slices hebben geen grenzen
 @msg	Convert to Artboards: selection has no area	Converteren naar tekengebieden: de selectie heeft geen oppervlakte
 @msg	Convert to Shape: no rectangles or ellipses selected	Converteren naar vorm: geen rechthoeken of ellipsen geselecteerd
+	Run	Uitvoeren
+	Run Script	Script uitvoeren
+	Stop Script	Script stoppen
+	Show External Script Warning	Waarschuwing voor externe scripts tonen
+	A Script Is Running	Er wordt een script uitgevoerd
+	Script Alert	Scriptmelding
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
+	Do not show this warning again	Deze waarschuwing niet meer tonen
+	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Dit script heeft heel veel objecten toegevoegd. Doorgaan, of het stoppen en de wijzigingen ervan ongedaan maken?
 @msg	Copied the script report	Scriptrapport gekopieerd
 @msg	Corners edits the corners of a path	Hoeken bewerkt de hoeken van een pad
 @msg	Couldn't copy to the system clipboard: {e}	Kon niet naar het systeemklembord kopiëren: {e}
@@ -4599,6 +4636,20 @@ imageTrace	Outline	Contour
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (behouden, simuleren of verwerpen)
 @msg	unknown panel `{raw}`	onbekend paneel `{raw}`
 @msg	unknown preference `{key}`	onbekende voorkeur `{key}`
+@msg	Preferences imported.	Voorkeuren geïmporteerd.
+@msg	not a preferences file: {e}	geen voorkeurenbestand: {e}
+@msg	not a preferences file: no JSON object	geen voorkeurenbestand: geen JSON-object
+@msg	not a preferences file (format `{format}`)	geen voorkeurenbestand (indeling `{format}`)
+@msg	not a preferences file: no `format`	geen voorkeurenbestand: geen `format`
+@msg	not a preferences file: no `version`	geen voorkeurenbestand: geen `version`
+@msg	not a preferences file: no `prefs`	geen voorkeurenbestand: geen `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	het bestand is opgeslagen met een nieuwere versie van VectorCraft (versie {v})
+@msg	the file holds no preferences	het bestand bevat geen voorkeuren
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` geeft een map aan, en voorkeurenbestanden bevatten geen mappen
+@msg	the file is larger than 1 MB	het bestand is groter dan 1 MB
+@msg	give `path` or `data`	geef `path` of `data` op
+@msg	`{key}` must be an object	`{key}` moet een object zijn
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` wordt los uitgevoerd, niet als stap van een batch
 @msg	unknown preset (one of {_1})	onbekende voorinstelling (één van {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	onbekende voorinstelling `{name}` (hoog, middel, laag of een opgeslagen voorinstelling: zie flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	onbekende voorinstelling `{name}` (zie flattener.presets.list)
@@ -5095,6 +5146,7 @@ file-filter	Swatch libraries	Stalenbibliotheken
 file-filter	Flattener presets	Afvlakvoorinstellingen
 file-filter	PDF presets	PDF-voorinstellingen
 file-filter	Print presets	Afdrukvoorinstellingen
+file-filter	Preferences	Voorkeuren
 file-filter	Export presets	Exportvoorinstellingen
 file-filter	SVG Compressed	Gecomprimeerde SVG
 file-filter	PDF-compatible .ai	PDF-compatibel .ai
@@ -5154,7 +5206,8 @@ mark-style	Japanese	Japans
 	Bevel both sides	Afschuining aan beide zijden
 	Presets	Voorinstellingen
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Een object kan maar één 3D-effect hebben. Pas de opties van het bestaande effect aan of verwijder het eerst.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} vereist momenteel een pad of samengesteld pad. Zet tekst, afbeeldingen en groepen eerst om naar paden.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} vereist momenteel een pad, samengesteld pad, tekst, groep, vermenging of symboolinstantie. Breid andere objecten eerst uit.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kan geen massief object maken van een afbeelding: traceer deze eerst met Object › Afbeelding traceren › Maken.
 @msg	{label} requires a shape with at least two anchors	{label} vereist een vorm met minstens twee ankerpunten
 @msg	The shape is too complex for a 3D effect	De vorm is te complex voor een 3D-effect
 @msg	The 3D surface is too complex; simplify the shape	Het 3D-oppervlak is te complex; vereenvoudig de vorm
@@ -5268,6 +5321,7 @@ mark-style	Japanese	Japans
 	Preview (1 inch on the page)	Voorbeeld (1 inch op de pagina)
 	Set as Default	Als standaard instellen
 	 out from a highlighted edge to place its dimension  |  	 uit een gemarkeerde rand om de bijbehorende maatlijn te plaatsen  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 op twee punten, verplaats daarna en klik om een uitgelijnde, horizontale of verticale maatlijn te plaatsen  |  
 	 cancels  |  Double-click the tool for options	 annuleert  |  Dubbelklik op het gereedschap voor opties
 	Angular	Hoek
 	Away from the Line	Van de lijn af
@@ -5297,14 +5351,17 @@ mark-style	Japanese	Japans
 @msg	Invalid drawing scale	Ongeldige tekeningsschaal
 @msg	Invalid real scale	Ongeldige werkelijke schaal
 @msg	Measured anchor no longer exists	Gemeten ankerpunt bestaat niet meer
+@msg	Invalid measured point	Ongeldig gemeten punt
 @msg	Measured segment no longer exists	Gemeten segment bestaat niet meer
 @msg	Non-finite dimension	Niet-eindige maatlijn
+@msg	Only linear dimensions are horizontal or vertical	Alleen lineaire maatlijnen zijn horizontaal of verticaal
 @msg	Scale Text Attributes: selected type has no scale to bake	Tekstkenmerken schalen: de geselecteerde tekst heeft geen schaling om toe te passen
 @msg	Scale must be drawing:real, for example 1:10	Schaal moet tekening:werkelijk zijn, bijvoorbeeld 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Schaalverhouding moet tussen 1:1000000 en 1000000:1 liggen
 @msg	Second measured segment no longer exists	Tweede gemeten segment bestaat niet meer
 @msg	Unknown dimension mode	Onbekende maatlijnmodus
 @msg	Unknown dimension option {k}	Onbekende maatlijnoptie {k}
+@msg	Unknown dimension orientation	Onbekende maatlijnrichting
 @msg	Unknown dimension style	Onbekende maatlijnstijl
 @msg	Unknown unit	Onbekende eenheid
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sluit de ronde uiteinden van open profielen. Gedeeltelijke omwentelingen houden hun afgesneden zijden open.
@@ -5853,6 +5910,7 @@ axis	Y Axis	Y-as
 	Show its progress, see Cancel and write log lines	De voortgang tonen, een annulering zien en logregels schrijven
 	Keep settings of its own	Eigen instellingen bewaren
 	Keep a cache of its own, which you can clear	Een eigen cache bewaren, die u kunt legen
+	Run these commands on the document: {ids}	Deze opdrachten op het document uitvoeren: {ids}
 	Clear Plug-in Cache	Plug-incache legen
 # Actions panel: action sets (#3712).
 	New Set…	Nieuwe set…
@@ -5899,6 +5957,26 @@ axis	Y Axis	Y-as
 @plural	Result: {n}|Results: {n}	Resultaat: {n}|Resultaten: {n}
 	Add to Symbols	Aan symbolen toevoegen
 	Basic Shapes	Basisvormen
+	Button	Knop
+	Panel	Paneel
+	UI Frames	UI-kaders
+	Map Markers	Kaartmarkeringen
+	Pin	Speld
+	Flag	Vlag
+	Crosshair	Vizier
+	Checkpoint	Controlepunt
+	Inventory Icons	Inventarisiconen
+	Skill Icons	Vaardigheidsiconen
+	Attack	Aanval
+	Defend	Verdediging
+	Heal	Genezen
+	Buff	Buff
+	Ult	Ult
+	Sword	Zwaard
+	Shield	Schild
+	Potion	Drank
+	Key	Sleutel
+	Gem	Edelsteen
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…
@@ -5947,6 +6025,11 @@ axis	Y Axis	Y-as
 	User Brush Library 9	Penseelbibliotheek van gebruiker 9
 	User Brush Library 10	Penseelbibliotheek van gebruiker 10
 	Art Ribbons	Illustratielinten
+	Zigzag	Zigzag
+	Burst Ray	Inslagstraal
+	Dash Trail	Streepspoor
+	Speed Line	Snelheidslijn
+	Game Trails	Spelsporen
 	Calligraphic Nibs	Kalligrafische penpunten
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen
@@ -5959,6 +6042,8 @@ axis	Y Axis	Y-as
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punttekst
 	Area Text	Vlaktekst
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Tekst meten op glyphbegrenzing
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Opties voor uitlijnen op glyph tonen
 	Hide Snap to Glyph Options	Opties voor uitlijnen op glyph verbergen
@@ -6356,7 +6441,7 @@ breakText	Glyphs	Glyphs
 	Reset Symbol Instance	Symboolinstantie opnieuw instellen
 @msg	type must be static or dynamic, not {v}	type moet static of dynamic zijn, niet {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` is een statisch symbool: stel eerst het symbooltype in op Dynamisch
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Van een pad, samengesteld pad of tekst die in een symboolinstantie is geselecteerd, kan alleen de effen kleur van vulling en lijn veranderen
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Van een pad, samengesteld pad of tekst geselecteerd in een symboolinstantie kunnen alleen de vulling, lijn, dekking en overvloeimodus worden gewijzigd
 @msg	path must be a list of child indices	path moet een lijst met onderliggende indexen zijn
 @msg	no object at path {shown} in the symbol's art	geen object op pad {shown} in de illustratie van het symbool
 @msg	give fill, stroke, opacity and/or blend	geef fill, stroke, opacity en/of blend op
@@ -6492,3 +6577,30 @@ breakText	Glyphs	Glyphs
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
+	Edit Custom Dictionary	Aangepast woordenboek bewerken
+	Entry:	Item:
+# Script Console
+	Script Console	Scriptconsole
+	Clear Script Console	Scriptconsole wissen
+	Copy Script Console	Scriptconsole kopiëren
+	Copy All	Alles kopiëren
+	Copy Selected	Selectie kopiëren
+	Finished	Voltooid
+	Ended with an error	Beëindigd met een fout
+	Out of fuel	Instructielimiet bereikt
+	Ended at a host limit	Beëindigd bij een hostlimiet
+	Ended at a limit	Beëindigd bij een limiet
+	Stopped	Gestopt
+	Ended by an internal fault	Beëindigd door een interne fout
+	time unavailable	tijd niet beschikbaar
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	traagste: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} host-aanroep|{n} host-aanroepen
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eerdere regel verwijderd|{n} eerdere regels verwijderd
+@plural	{n} line cut|{n} lines cut	{n} regel ingekort|{n} regels ingekort
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
+	Deferred Effects	Uitgestelde effecten

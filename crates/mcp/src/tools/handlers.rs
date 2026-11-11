@@ -334,9 +334,10 @@ pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> 
 /// Most fields one `answer_dialog` call may set.
 pub(super) const MAX_DIALOG_FIELDS: usize = 256;
 
-/// Sets the open dialog's fields in order with one `ui.dialog.set {fields}`, which stores all of
-/// them or none, then confirms or cancels it. Every argument is checked before anything is sent to
-/// the app.
+/// Sets the open dialog's fields in order with one `ui.dialog.set {fields, action?}`, which stores
+/// all of them or none and then confirms or cancels that same dialog, so a dialog another
+/// connection opens in between is not answered in its place. Every argument is checked before
+/// anything is sent to the app.
 pub(super) fn answer_dialog(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let set = match a.get("set") {
         None => &[][..],
@@ -355,21 +356,37 @@ pub(super) fn answer_dialog(b: &mut dyn Backend, a: &Args) -> Result<Value, Stri
         let field = item.get("field").and_then(Value::as_str).ok_or_else(|| format!("set {i}: missing string `field`"))?;
         fields.push(json!({"field": field, "value": item.get("value").cloned().unwrap_or(Value::Null)}));
     }
-    let then = match a.get("action") {
-        None => None,
-        Some(v) if v == "confirm" => Some("ui.dialog.confirm"),
-        Some(v) if v == "cancel" => Some("ui.dialog.cancel"),
+    let (action, then) = match a.get("action") {
+        None => (None, None),
+        Some(v) if v == "confirm" => (Some("confirm"), Some("ui.dialog.confirm")),
+        Some(v) if v == "cancel" => (Some("cancel"), Some("ui.dialog.cancel")),
         Some(_) => return Err("`action` must be confirm or cancel".into()),
     };
     if fields.is_empty() && then.is_none() {
         return Err("give `set` and/or `action`".into());
     }
-    let dialog = if fields.is_empty() { Value::Null } else { b.call("ui.dialog.set", json!({"fields": fields}))? };
-    let result = match then {
-        Some(method) => b.call(method, json!({}))?,
-        None => Value::Null,
-    };
-    Ok(json!({"dialog": dialog, "result": result}))
+    if fields.is_empty() {
+        let result = match then {
+            Some(method) => b.call(method, json!({}))?,
+            None => Value::Null,
+        };
+        return Ok(json!({"dialog": Value::Null, "result": result}));
+    }
+    let mut params = json!({"fields": fields});
+    if let Some(action) = action {
+        params["action"] = json!(action);
+    }
+    let reply = b.call("ui.dialog.set", params)?;
+    match then {
+        None => Ok(json!({"dialog": reply, "result": Value::Null})),
+        // The app answered the dialog in the same request.
+        Some(_) if reply.get("dialog").is_some() => Ok(reply),
+        // An app that predates `action` replied with the dialog alone and did not answer it.
+        Some(method) => {
+            let result = b.call(method, json!({}))?;
+            Ok(json!({"dialog": reply, "result": result}))
+        }
+    }
 }
 
 pub(super) fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {

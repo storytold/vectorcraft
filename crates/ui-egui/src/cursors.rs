@@ -5,6 +5,10 @@
 //! The desktop app shows them as OS cursors ([`Images`]): the system moves those itself, at once,
 //! while a cursor painted into the window follows the pointer a few frames late (#444).
 
+/// Platform-neutral bitmap requests for the interim macOS host adapter.
+#[cfg(any(target_os = "macos", test))]
+pub mod native_request;
+
 use egui::epaint::{Mesh, TessellationOptions, Tessellator, Vertex};
 use egui::{Color32, CustomCursorImage, Painter, Pos2, Shape, Stroke, Vec2, pos2, vec2};
 use vectorcraft_tools::Cursor;
@@ -691,7 +695,8 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2, scale: f32) -> bool {
 
 /// Does the window show the glyphs as OS cursors ([`Images`])? Not on macOS, which sizes a cursor
 /// bitmap in points (a Retina one would show twice as big, or blurred), nor on the web (eframe has no
-/// bitmap cursors there): those paint them into the window ([`paint`]).
+/// bitmap cursors there): the web paints them into the window ([`paint`]); the macOS desktop host
+/// uses its native request adapter instead.
 pub const OS_CURSORS: bool = !cfg!(any(target_os = "macos", target_arch = "wasm32"));
 
 /// Does this window show the glyphs as OS cursors, on a build that can ([`OS_CURSORS`])? Not on

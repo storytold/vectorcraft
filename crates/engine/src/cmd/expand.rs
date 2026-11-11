@@ -5,7 +5,8 @@
 //! gradient mesh, or solid strips / concentric ellipses, inside a clip group shaped like the object; a freeform
 //! gradient becomes a mesh shaped like the object. A pattern fill becomes the tiles it paints inside a clip
 //! group shaped like the object. Create Gradient Mesh shares the sampling. A dimension whose art
-//! Expand changes becomes a plain group of that art.
+//! Expand changes becomes a plain group of that art, except one selected with art it measures,
+//! which Expand leaves as it is.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -25,7 +26,7 @@ use super::edit::selected_roots;
 use super::menucmds::{run_raw, squash};
 use super::object::as_clipping_path;
 use super::pathops::{assemble, node_path, outline_strokes, replace_leaves, styled_copy, with_transparency};
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, has_selection, str_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_selection, number_or, switch_or, text_param};
 
 const C: &str = "object.expand";
 /// Expand Gradient To → Specify … Objects: the default and the most.
@@ -43,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes, or one selected with the art it measures when that art is replaced, becomes a plain group of its art → {ids}",
+            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked → {ids}",
             has_selection,
             expand
         ),
@@ -55,7 +56,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance, symbolArt?: {fill, stroke, gradient}} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus; symbolArt, when the selection holds symbol instances that Object expands: true when only their art holds it, which Fill and Stroke reach only with Object on)",
             has_selection,
             |s, _| {
-                let e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+                let roots = selected_roots(s)?;
+                let e = Expandable::of(&super::dimension::without_kept(&s.doc()?.doc, &roots), &roots);
                 let mut info =
                     json!({"object": e.object(), "fill": e.fill, "stroke": e.stroke, "gradient": e.gradient, "appearance": has_appearance(s)});
                 if e.symbols {
@@ -74,7 +76,9 @@ pub fn specs() -> Vec<CommandSpec> {
 /// (#3089); `object.expand` itself still bakes them.
 pub fn has_appearance(s: &Session) -> bool {
     let (Ok(st), Ok(roots)) = (s.doc(), selected_roots(s)) else { return false };
-    roots.iter().filter_map(|r| st.doc.node(*r)).any(super::effectcmd::expandable)
+    // A dimension selected with the art it measures is left as it is.
+    let kept = super::dimension::with_their_art(&st.doc, &roots);
+    roots.iter().filter_map(|r| st.doc.node(*r)).any(|n| super::effectcmd::expandable_except(n, &kept))
 }
 
 /// Every placed document in `roots` of `d` (at any depth) replaced by an editable copy of the art it
@@ -101,11 +105,11 @@ enum GradientTo {
 
 impl GradientTo {
     fn parse(p: &Value) -> Result<Self> {
-        let steps = f64_or(p, "steps", DEFAULT_STEPS as f64).round();
+        let steps = number_or(p, "steps", DEFAULT_STEPS as f64, C)?.round();
         if !(1.0..=MAX_STEPS as f64).contains(&steps) {
             return Err(bad(C, format!("steps must be 1..{MAX_STEPS}")));
         }
-        match str_param(p, "gradient").unwrap_or("objects") {
+        match text_param(p, "gradient", C)?.unwrap_or("objects") {
             "objects" => Ok(Self::Objects(steps as u32)),
             "mesh" => Ok(Self::Mesh),
             _ => Err(bad(C, "gradient must be \"objects\" or \"mesh\"")),
@@ -236,14 +240,23 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
-    let object = bool_or(p, "object", true);
-    let fill = bool_or(p, "fill", true);
-    let stroke = bool_or(p, "stroke", true);
+    let object = switch_or(p, "object", true, C)?;
+    let fill = switch_or(p, "fill", true, C)?;
+    let stroke = switch_or(p, "stroke", true, C)?;
     let to = GradientTo::parse(p)?;
     let from = s.doc()?.history.undo.len();
-    let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
-    // Before anything expands: outlining the art a dimension measures would remove the dimension.
+    // Before anything expands: outlining the art a dimension measures would leave the dimension unlinked.
     let before = s.doc()?.doc.clone();
+    let selected = s.doc()?.selection.objects.clone();
+    // A dimension selected with the art it measures keeps its own lines and label: it is out of the
+    // document while the art expands, so no step below reaches it.
+    let roots = selected_roots(s)?;
+    let mut lifted = vec![];
+    if !super::dimension::with_their_art(&before, &roots).is_empty() {
+        lifted = s.edit("Expand", |d, _| Ok(super::dimension::lift(d, &roots)))?;
+    }
+    let kept: Vec<NodeId> = lifted.iter().map(super::dimension::Lifted::id).collect();
+    let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
     let mut ended = vec![];
     end_dimension_links(s, &mut ended)?;
     let rev0 = s.doc()?.revision;
@@ -339,14 +352,25 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.revision == rev0 {
         return Err(EngineError::Other("Expand: nothing to expand".into()));
     }
-    if !ended.is_empty() {
-        // A dimension whose source Expand replaced stays plain: its link no longer fits that art.
-        let after = s.doc()?.doc.clone();
-        ended.retain(|e| e.source_kept(&before, &after));
-        s.edit("Expand", |d, _| {
-            super::dimension::restore_unchanged(d, std::mem::take(&mut ended));
+    if !ended.is_empty() || !lifted.is_empty() {
+        s.edit("Expand", |d, sel| {
+            if !lifted.is_empty() {
+                super::dimension::put_back(d, lifted);
+                // The dimensions put back follow what Expand made of the art they measure: a
+                // dimension whose art no longer fits its link stays where it was, no longer linked.
+                super::dimension::refresh(&before, d)?;
+                let mut ids = sel.objects.clone();
+                let again: Vec<NodeId> = kept.iter().copied().filter(|id| selected.contains(id) && !ids.contains(id)).collect();
+                ids.extend(again);
+                sel.set(ids);
+            }
+            // A dimension whose source Expand replaced stays where it was, no longer linked.
+            super::dimension::restore_unchanged(&before, d, ended);
             Ok(())
         })?;
+        if !kept.is_empty() && s.doc()?.doc.layers == before.layers {
+            return Err(EngineError::Other("Expand: nothing to expand".into()));
+        }
     }
     squash(s, from, "Expand");
     Ok(json!({ "ids": s.doc()?.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))

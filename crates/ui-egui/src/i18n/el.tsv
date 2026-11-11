@@ -267,6 +267,7 @@ font-technology	Variable	Μεταβλητές
 	Average…	Μέσος όρος…
 	Axis:	Άξονας:
 	Background Color:	Χρώμα φόντου:
+	Guide Label:	Ετικέτα οδηγών:
 	Show Center Mark	Εμφάνιση σημαδιού κέντρου
 	Show Cross Hairs	Εμφάνιση σταυρονήματος
 	Show Video Safe Areas	Εμφάνιση ασφαλών περιοχών βίντεο
@@ -275,7 +276,6 @@ font-technology	Variable	Μεταβλητές
 	Update While Dragging	Ενημέρωση κατά τη μεταφορά
 	Hide Video Rulers	Απόκρυψη χαράκων βίντεο
 	Background Contents	Περιεχόμενα φόντου
-	Background Contents:	Περιεχόμενο φόντου:
 	Background:	Φόντο:
 	Backspace	Backspace
 	Bar Graph Tool	Ραβδόγραμμα (Bar Graph Tool)
@@ -543,6 +543,7 @@ font-technology	Variable	Μεταβλητές
 	Coming soon — tracked in the parity plan	Προσεχώς — περιλαμβάνεται στο σχέδιο αντιστοιχίας λειτουργιών
 	Command Click to Select Objects Behind	Command-κλικ για επιλογή αντικειμένων από πίσω
 	Command Dialog	Παράθυρο εντολών
+	Command API Reference	Αναφορά API εντολών
 	Community	Κοινότητα
 	Compatibility:	Συμβατότητα:
 	Compatible Gradient and Gradient Mesh Printing	Συμβατή εκτύπωση ντεγκραντέ και πλέγματος ντεγκραντέ
@@ -628,7 +629,6 @@ font-technology	Variable	Μεταβλητές
 	Couldn't {} {name}: {e}	Δεν ήταν δυνατή η {} του {name}: {e}
 	Create	Δημιουργία
 	Create Clipping Mask	Δημιουργία μάσκας αποκοπής
-	Create Document	Δημιουργία εγγράφου
 	Create from Guides	Δημιουργία από οδηγούς
 	Create from Selection	Δημιουργία από επιλογή
 	Create From:	Δημιουργία από:
@@ -1725,6 +1725,8 @@ font-technology	Variable	Μεταβλητές
 	Location:	Θέση:
 	Lock	Κλείδωμα
 	Lock Guides	Κλείδωμα οδηγών
+	Lock Guides by Default	Κλείδωμα οδηγών από προεπιλογή
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Οδηγοί πίνακα σχεδίασης με Cmd/Ctrl + σύρσιμο από χάρακα
 	Lock Slices	Κλείδωμα τομών
 	Low	Χαμηλή
 	Luminosity	Φωτεινότητα
@@ -1919,6 +1921,12 @@ font-technology	Variable	Μεταβλητές
 	Reselect	Επαναφορά προηγούμενης επιλογής
 	Reset	Επαναφορά
 	Reset Preferences	Επαναφορά προτιμήσεων
+	Export Preferences…	Εξαγωγή προτιμήσεων…
+	Import Preferences…	Εισαγωγή προτιμήσεων…
+	Save the applied preferences to a JSON file	Αποθήκευση των εφαρμοσμένων προτιμήσεων σε αρχείο JSON
+	Apply the preferences in a file Export Preferences saved	Εφαρμογή των προτιμήσεων από αρχείο που αποθήκευσε η Εξαγωγή προτιμήσεων
+	Export Preferences	Εξαγωγή προτιμήσεων
+	Import Preferences	Εισαγωγή προτιμήσεων
 	Search Preferences	Αναζήτηση στις προτιμήσεις
 	No settings found	Δεν βρέθηκαν ρυθμίσεις
 	Reset to Default	Επαναφορά προεπιλογής
@@ -2074,10 +2082,11 @@ font-technology	Variable	Μεταβλητές
 	Temperature	Θερμοκρασία
 	Template	Πρότυπο
 	Templates	Πρότυπα
-	Templates…	Πρότυπα…
 	Threshold	Κατώφλι
 	Tile	Παράθεση
 	Tint	Χρωματική απόχρωση
+	Fill Tint	Χρωματική απόχρωση γεμίσματος
+	Stroke Tint	Χρωματική απόχρωση περιγράμματος
 	Tolerance	Ανοχή
 	Tolerance:	Ανοχή:
 	Tool Options…	Επιλογές εργαλείου…
@@ -2233,6 +2242,32 @@ axis	Both	Και τα δύο
 @msg	Combine Slices: the slices have no bounds	Συνδυασμός τομών: οι τομές δεν έχουν όρια
 @msg	Convert to Artboards: selection has no area	Μετατροπή σε πίνακες σχεδίασης: η επιλογή δεν έχει επιφάνεια
 @msg	Convert to Shape: no rectangles or ellipses selected	Μετατροπή σε σχήμα: δεν έχουν επιλεγεί ορθογώνια ή ελλείψεις
+	Run	Εκτέλεση
+	Run Script	Εκτέλεση σεναρίου
+	Stop Script	Διακοπή σεναρίου
+	Show External Script Warning	Εμφάνιση προειδοποίησης για εξωτερικά σενάρια
+	A Script Is Running	Εκτελείται ένα σενάριο
+	Script Alert	Ειδοποίηση σεναρίου
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
+	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
+	Stop the script and undo what it did? Then quit again.	Διακοπή του σεναρίου και αναίρεση όσων έκανε; Έπειτα κάντε ξανά έξοδο.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Αυτό το σενάριο πρόσθεσε πάρα πολλά αντικείμενα. Συνέχεια, ή διακοπή και αναίρεση όσων έκανε;
+@msg	Choose a .js or .jsx script	Επιλέξτε ένα σενάριο .js ή .jsx
+@msg	Ran {name}	Εκτελέστηκε: {name}
+@msg	The script was stopped and its changes were undone	Το σενάριο διακόπηκε και οι αλλαγές του αναιρέθηκαν
+@msg	a script is running: stop it or wait for it to finish	εκτελείται ένα σενάριο: διακόψτε το ή περιμένετε να τελειώσει
+@msg	this is a compiled script, which cannot be run; use its source text	αυτό είναι μεταγλωττισμένο σενάριο που δεν μπορεί να εκτελεστεί· χρησιμοποιήστε το πηγαίο κείμενό του
+@msg	the script is not UTF-8 text	το σενάριο δεν είναι κείμενο UTF-8
+@msg	the script is too large to run	το σενάριο είναι πολύ μεγάλο για εκτέλεση
+@msg	a drag or an undo group is open; finish it before running a script	είναι ανοιχτή μια μεταφορά ή ομάδα αναίρεσης· ολοκληρώστε την πριν εκτελέσετε σενάριο
+@msg	the script left a document that cannot be kept	το σενάριο άφησε ένα έγγραφο που δεν μπορεί να διατηρηθεί
+@msg	the script is no longer in the Scripts folder	το σενάριο δεν βρίσκεται πλέον στον φάκελο Scripts
+	Some scripts were not listed	Ορισμένα σενάρια δεν εμφανίζονται στη λίστα
+	The Scripts folder cannot be read	Δεν είναι δυνατή η ανάγνωση του φακέλου Scripts
+@msg	the script's run is no longer available	η εκτέλεση του σεναρίου δεν είναι πλέον διαθέσιμη
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	μια εντολή που απέτυχε άλλαξε βήματα αναίρεσης που δεν ήταν δυνατό να επαναφερθούν, οπότε το σενάριο σταμάτησε
+@msg	a recovery copy could not be written, so the script was not run	δεν ήταν δυνατή η εγγραφή αντιγράφου ανάκτησης, οπότε το σενάριο δεν εκτελέστηκε
+@msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Corners edits the corners of a path	Η εντολή Γωνίες επεξεργάζεται τις γωνίες μιας διαδρομής
 @msg	Couldn't copy to the system clipboard: {e}	Δεν ήταν δυνατή η αντιγραφή στο πρόχειρο συστήματος: {e}
@@ -2595,6 +2630,7 @@ file-filter	Flattener presets	Προεπιλογές ισοπέδωσης
 file-filter	PDF presets	Προεπιλογές PDF
 file-filter	PDF-compatible .ai	.ai συμβατό με PDF
 file-filter	Print presets	Προεπιλογές εκτύπωσης
+file-filter	Preferences	Προτιμήσεις
 file-filter	Export presets	Προκαθορισμένα εξαγωγής
 file-filter	SVG Compressed	Συμπιεσμένο SVG
 file-filter	Swatch libraries	Βιβλιοθήκες δειγμάτων χρωμάτων
@@ -2902,7 +2938,6 @@ theme	Appearance	Εμφάνιση
 	New Color Group…	Νέα ομάδα χρωμάτων…
 	New Document Presets	Νέες προεπιλογές εγγράφου
 	New file	Νέο αρχείο
-	New from Template	Νέο από πρότυπο
 	New from Template…	Νέο από πρότυπο…
 	New Graphic Style	Νέο στυλ γραφικών
 	New Graphic Style (Alt-click to name it)	Νέο στυλ γραφικών (Alt-κλικ για ονομασία)
@@ -3401,6 +3436,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reshape Type Area	Αναδιαμόρφωση περιοχής κειμένου
 	Responsive	Αποκρινόμενο
 	Restore every preference to its default (applied on OK)	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους (εφαρμογή με το Εντάξει)
+	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Οι προεπιλογές εφαρμόζονται όταν κάνετε κλικ στο Εντάξει στις Προτιμήσεις. Το Ακύρωση εκεί διατηρεί τις τρέχουσες προτιμήσεις σας.
 	Restore Recovered Documents	Επαναφορά ανακτημένων εγγράφων
 	Restored documents open unsaved: save them to keep them.	Τα ανακτημένα έγγραφα ανοίγουν χωρίς να είναι αποθηκευμένα: αποθηκεύστε τα για να τα διατηρήσετε.
 	Restrict printing, editing and other tasks	Περιορισμός εκτύπωσης, επεξεργασίας και άλλων ενεργειών
@@ -3466,6 +3503,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Save PDF Preset	Αποθήκευση προεπιλογής PDF
 	Save Perspective Grid Preset	Αποθήκευση προεπιλογής πλέγματος προοπτικής
 	Save Preset	Αποθήκευση προεπιλογής
+	Save Document Preset	Αποθήκευση προεπιλογής εγγράφου
 	Save Print Preset	Αποθήκευση προεπιλογής εκτύπωσης
 	Save Recovery Data	Αποθήκευση δεδομένων ανάκτησης
 	Save Save for Web Preset	Αποθήκευση προεπιλογής για ιστό
@@ -3580,6 +3618,20 @@ digits	Malayalam	Μαλαγιάλαμ
 	Set Zoom	Ορισμός ζουμ
 	Setup…	Ρύθμιση…
 	Shadows and Glows	Σκιές και λάμψεις
+	Game HUD	HUD παιχνιδιού
+	Health Fill	Υγεία
+	Mana Glow	Μάνα
+	Damage Flash	Ζημιά
+	Quest Outline	Αποστολή
+	Coin Shine	Νόμισμα
+	Boss Alert	Αρχηγός
+	Status Effects	Εφέ κατάστασης
+	Poison Tint	Δηλητήριο
+	Freeze Edge	Πάγωμα
+	Burn Aura	Κάψιμο
+	Stun Pulse	Ζάλη
+	Stealth Fade	Αορασία
+	Shield Buff	Ασπίδα
 	Shape Builder Regions	Περιοχές δημιουργίας σχημάτων
 	Shape Effects	Εφέ σχημάτων
 	Shape Mode	Λειτουργία σχήματος
@@ -4207,6 +4259,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	το axis πρέπει να είναι "vertical", "horizontal" ή γωνία σε μοίρες, όχι `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	φόντο {other}: transparent, white, black ή χρώμα όπως "#ff8800"
 @msg	bad color {v}	μη έγκυρο χρώμα {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	το `guideLabel` είναι null, όνομα χρώματος επιπέδου ή #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	Το videoRulerPixelAspectRatio πρέπει να είναι αριθμός από 0,1 έως 10
 @msg	bad colour `{hex}` (#rrggbb)	μη έγκυρο χρώμα `{hex}` (#rrggbb)
 @msg	bad page tree	μη έγκυρο δέντρο σελίδων
@@ -4265,6 +4318,11 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	εσωτερικό σφάλμα στην εντολή `{cmd}`: {msg} (το έγγραφο έμεινε αμετάβλητο· αναφέρετε το σφάλμα)
 @msg	internal error: {msg} (please report this bug)	εσωτερικό σφάλμα: {msg} (αναφέρετε το σφάλμα)
 @msg	invalid PDF setting: {0}	μη έγκυρη ρύθμιση PDF: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): γράφεται με UserUnit {unit}, οπότε οι εφαρμογές που αγνοούν το UserUnit την εμφανίζουν τόσες φορές μικρότερη
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): οι σελίδες {label} γράφονται χωρίς UserUnit, σε στιγμές, και οι εφαρμογές που τηρούν το όριο κόβουν τη σελίδα στις 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	το PDF 1.5 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να κρατήσει το μέγεθός της: το αρχείο γράφεται ως PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, πολύ μακριά και στενή για τις πλευρές σελίδας PDF από 3 έως 14.400 μονάδες: γράφεται με UserUnit {unit}, που κρατά τη μικρή πλευρά στις 3 μονάδες ή περισσότερο, και οι εφαρμογές που τηρούν το όριο κόβουν τη μεγάλη πλευρά στις 14.400 μονάδες
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	τα αρχεία {label} δέχονται πραγματικούς αριθμούς έως {max}, και η σελίδα του πίνακα σχεδίασης {n}, μήκους {side} pt, χρειάζεται μεγαλύτερους: επιλέξτε PDF 1.6 ή νεότερο χωρίς πρότυπο PDF/X, ή μικρότερο πίνακα σχεδίασης
 @msg	invalid image data for `{0}`	μη έγκυρα δεδομένα εικόνας για `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	μη έγκυρες παράμετροι για `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	δεν είναι μορφή εικόνας που μπορεί να διαβάσει το VectorCraft
@@ -4369,6 +4427,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Φορτώθηκε το «{name}»: παραλείφθηκε {n} βήμα|Φορτώθηκε το «{name}»: παραλείφθηκαν {n} βήματα
 @msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
 @msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: η αναφορά θα ήταν μεγαλύτερη από {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	το αρχείο συνόλου ενεργειών περιέχει περισσότερες από 1.000 ενέργειες
 @msg	the action set file needs a later version of VectorCraft	το αρχείο συνόλου ενεργειών απαιτεί νεότερη έκδοση του VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	μια ενέργεια στο αρχείο συνόλου ενεργειών έχει περισσότερα από 10.000 βήματα
@@ -4595,6 +4654,20 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	άγνωστη επιλογή υπερεκτύπωσης `{o}` (preserve, simulate ή discard)
 @msg	unknown panel `{raw}`	άγνωστος πίνακας `{raw}`
 @msg	unknown preference `{key}`	άγνωστη προτίμηση `{key}`
+@msg	Preferences imported.	Οι προτιμήσεις εισήχθησαν.
+@msg	not a preferences file: {e}	δεν είναι αρχείο προτιμήσεων: {e}
+@msg	not a preferences file: no JSON object	δεν είναι αρχείο προτιμήσεων: δεν υπάρχει αντικείμενο JSON
+@msg	not a preferences file (format `{format}`)	δεν είναι αρχείο προτιμήσεων (μορφή `{format}`)
+@msg	not a preferences file: no `format`	δεν είναι αρχείο προτιμήσεων: δεν υπάρχει `format`
+@msg	not a preferences file: no `version`	δεν είναι αρχείο προτιμήσεων: δεν υπάρχει `version`
+@msg	not a preferences file: no `prefs`	δεν είναι αρχείο προτιμήσεων: δεν υπάρχει `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	το αρχείο αποθηκεύτηκε από νεότερη έκδοση του VectorCraft (έκδοση {v})
+@msg	the file holds no preferences	το αρχείο δεν περιέχει προτιμήσεις
+@msg	`{key}` names a folder, which preferences files leave out	το `{key}` ορίζει φάκελο, και τα αρχεία προτιμήσεων δεν περιέχουν φακέλους
+@msg	the file is larger than 1 MB	το αρχείο είναι μεγαλύτερο από 1 MB
+@msg	give `path` or `data`	δώστε `path` ή `data`
+@msg	`{key}` must be an object	το `{key}` πρέπει να είναι αντικείμενο
+@msg	`prefs.import` runs on its own, not as a batch step	το `prefs.import` εκτελείται μόνο του, όχι ως βήμα δέσμης
 @msg	unknown preset (one of {_1})	άγνωστη προεπιλογή (μία από τις {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	άγνωστη προεπιλογή `{name}` (high, medium, low ή αποθηκευμένη: δείτε flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	άγνωστη προεπιλογή `{name}` (δείτε flattener.presets.list)
@@ -4948,7 +5021,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Bevel Inside	Εσωτερική λοξότμηση
 	Bevel both sides	Λοξότμηση και των δύο πλευρών
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ένα αντικείμενο δέχεται ένα εφέ 3D. Επεξεργαστείτε τις επιλογές του υπάρχοντος εφέ ή αφαιρέστε το πρώτα.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	Το {label} απαιτεί προς το παρόν διαδρομή ή σύνθετη διαδρομή. Μετατρέψτε πρώτα το κείμενο, τις εικόνες και τις ομάδες σε διαδρομές.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	Το {label} απαιτεί προς το παρόν διαδρομή, σύνθετη διαδρομή, κείμενο, ομάδα, ανάμειξη ή στιγμιότυπο συμβόλου. Επεκτείνετε πρώτα τα άλλα αντικείμενα.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	Το {label} δεν μπορεί να δημιουργήσει στερεό από εικόνα: ανιχνεύστε την πρώτα με Αντικείμενο › Ανίχνευση περιγραμμάτων εικόνας › Κατασκευαστής.
 @msg	{label} requires a shape with at least two anchors	το {label} απαιτεί σχήμα με τουλάχιστον δύο σημεία αγκύρωσης
 @msg	The shape is too complex for a 3D effect	Το σχήμα είναι πολύ σύνθετο για εφέ 3D
 @msg	The 3D surface is too complex; simplify the shape	Η επιφάνεια 3D είναι πολύ σύνθετη· απλοποιήστε το σχήμα
@@ -4956,6 +5030,11 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown parameter `{key}`; did you mean `{near}`?	άγνωστη παράμετρος `{key}`· μήπως εννοείτε `{near}`;
 @msg	unknown parameter `{key}`; the command takes no parameters	άγνωστη παράμετρος `{key}`· η εντολή δεν δέχεται παραμέτρους
 @msg	unknown parameter `{key}`; the command takes: {keys}	άγνωστη παράμετρος `{key}`· η εντολή δέχεται: {keys}
+@msg	the params must be an object, not {got}	οι παράμετροι πρέπει να είναι αντικείμενο, όχι {got}
+@msg	unknown parameter `{path}`; the object takes no keys	άγνωστη παράμετρος `{path}`· το αντικείμενο δεν δέχεται κλειδιά
+@msg	unknown parameter `{path}`; it takes: {keys}	άγνωστη παράμετρος `{path}`· δέχεται: {keys}
+@msg	missing `{path}`	λείπει το `{path}`
+@msg	`{path}` must be {expected}, not {got}	Το `{path}` πρέπει να είναι {expected}, όχι {got}
 	1 Layer	1 επίπεδο
 	1 bit	1 bit
 	16 Colors	16 χρώματα
@@ -5529,6 +5608,7 @@ effect	Points	Σημεία
 # Strings added upstream after this catalog was written (machine-drafted; review welcome).
 	 cancels  |  Double-click the tool for options	 για ακύρωση  |  Διπλό κλικ στο εργαλείο για επιλογές
 	 out from a highlighted edge to place its dimension  |  	 προς τα έξω από μια επισημασμένη ακμή για τοποθέτηση της διάστασής της  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 σε δύο σημεία, μετά μετακινήστε και κάντε κλικ για τοποθέτηση ευθυγραμμισμένης, οριζόντιας ή κατακόρυφης διάστασης  |  
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Ένα αρχείο .ai παλαιού τύπου περιέχει έναν πίνακα σχεδίασης: κάθε πίνακας σχεδίασης που επιλέγετε αποθηκεύεται ως ξεχωριστό αρχείο.
 	Arrange Intertwine Area	Διάταξη περιοχής διαπλοκής
 	Batch…	Μαζική επεξεργασία…
@@ -5625,14 +5705,17 @@ effect	Points	Σημεία
 @msg	Invalid drawing scale	Μη έγκυρη κλίμακα σχεδίου
 @msg	Invalid real scale	Μη έγκυρη πραγματική κλίμακα
 @msg	Measured anchor no longer exists	Το μετρημένο σημείο αγκύρωσης δεν υπάρχει πλέον
+@msg	Invalid measured point	Μη έγκυρο μετρημένο σημείο
 @msg	Measured segment no longer exists	Το μετρημένο τμήμα δεν υπάρχει πλέον
 @msg	Non-finite dimension	Η διάσταση δεν είναι πεπερασμένος αριθμός
+@msg	Only linear dimensions are horizontal or vertical	Μόνο οι γραμμικές διαστάσεις είναι οριζόντιες ή κατακόρυφες
 @msg	Scale Text Attributes: selected type has no scale to bake	Κλιμάκωση ιδιοτήτων κειμένου: το επιλεγμένο κείμενο δεν έχει κλίμακα προς εφαρμογή
 @msg	Scale must be drawing:real, for example 1:10	Η κλίμακα πρέπει να είναι σχέδιο:πραγματικό, για παράδειγμα 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Ο λόγος κλίμακας πρέπει να είναι μεταξύ 1:1000000 και 1000000:1
 @msg	Second measured segment no longer exists	Το δεύτερο μετρημένο τμήμα δεν υπάρχει πλέον
 @msg	Unknown dimension mode	Άγνωστη λειτουργία διάστασης
 @msg	Unknown dimension option {k}	Άγνωστη επιλογή διάστασης {k}
+@msg	Unknown dimension orientation	Άγνωστος προσανατολισμός διάστασης
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	το `mode` πρέπει να είναι grayscale, rgb, hsb, cmyk ή websafe
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
@@ -5887,6 +5970,20 @@ axis	Y Axis	Άξονας Y
 	Show its progress, see Cancel and write log lines	Εμφάνιση της προόδου, αναγνώριση της ακύρωσης και εγγραφή γραμμών καταγραφής
 	Keep settings of its own	Διατήρηση δικών του ρυθμίσεων
 	Keep a cache of its own, which you can clear	Διατήρηση δικής του κρυφής μνήμης, την οποία μπορείτε να εκκαθαρίσετε
+	Run these commands on the document: {ids}	Εκτέλεση αυτών των εντολών στο έγγραφο: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	το «{name}» αναφέρει το `{id}` στο `commandAllowlist`, το οποίο ένα πρόσθετο δεν επιτρέπεται να καλέσει
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: το `commandAllowlist` του μανιφέστου δεν την αναφέρει
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: το αναγνωριστικό ή τα ορίσματα βρίσκονται εκτός της μνήμης της λειτουργικής μονάδας
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: το αναγνωριστικό ή τα ορίσματα δεν είναι UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: τα ορίσματα δεν είναι αντικείμενο JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	μόνο ένα φίλτρο με τον συνήθη προϋπολογισμό δηλώνει `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	κλήσεις εντολών ({MAX_CALLS} κλήσεις και {MAX_CALL_BYTES} byte ανά εκτέλεση)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	μέγεθος κλήσης εντολής (vc_call `{shown}`: {len} byte, όριο {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	το πολύ {MAX_ALLOWED_COMMANDS} εντολές στο `commandAllowlist`
+@msg	a plug-in may not call this command	ένα πρόσθετο δεν επιτρέπεται να καλέσει αυτή την εντολή
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	το `commandAllowlist` χρειάζεται το δικαίωμα `commands`, και το `commands` χρειάζεται ένα `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	το `commandAllowlist` αναφέρει το `{shown}`, που δεν είναι αναγνωριστικό εντολής ή αναφέρεται δύο φορές
 	Clear Plug-in Cache	Εκκαθάριση κρυφής μνήμης προσθέτου
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	το δικαίωμα `{permission}` χρειάζεται το επίπεδο API προσθέτων {PROGRESS_API}: δώστε `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	η λειτουργική μονάδα εισάγει το `env.{name}` με άλλον τύπο από αυτόν του κεντρικού υπολογιστή: ο τύπος του είναι {signature}
@@ -5973,6 +6070,26 @@ axis	Y Axis	Άξονας Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ή ένα εύρος όπως 1, 3-5, όχι {v}
 	Add to Symbols	Προσθήκη στα σύμβολα
 	Basic Shapes	Βασικά σχήματα
+	Button	Κουμπί
+	Panel	Πίνακας
+	UI Frames	Πλαίσια UI
+	Map Markers	Δείκτες χάρτη
+	Pin	Καρφίτσα
+	Flag	Σημαία
+	Crosshair	Σταυρόνημα
+	Checkpoint	Σημείο ελέγχου
+	Inventory Icons	Εικονίδια αποθέματος
+	Skill Icons	Εικονίδια δεξιοτήτων
+	Attack	Επίθεση
+	Defend	Άμυνα
+	Heal	Θεραπεία
+	Buff	Ενίσχυση
+	Ult	Ult
+	Sword	Ξίφος
+	Shield	Ασπίδα
+	Potion	Φίλτρο
+	Key	Κλειδί
+	Gem	Πετράδι
 	Open Symbol Library	Άνοιγμα βιβλιοθήκης συμβόλων
 	Save Symbol Library	Αποθήκευση βιβλιοθήκης συμβόλων
 	Save Symbol Library…	Αποθήκευση βιβλιοθήκης συμβόλων…
@@ -6027,6 +6144,11 @@ axis	Y Axis	Άξονας Y
 	User Brush Library 9	Βιβλιοθήκη πινέλων χρήστη 9
 	User Brush Library 10	Βιβλιοθήκη πινέλων χρήστη 10
 	Art Ribbons	Γραφικές κορδέλες
+	Zigzag	Ζιγκζάγκ
+	Burst Ray	Ακτίνα κρούσης
+	Dash Trail	Διακεκομμένο ίχνος
+	Speed Line	Γραμμή ταχύτητας
+	Game Trails	Ίχνη παιχνιδιού
 	Calligraphic Nibs	Καλλιγραφικές πένες
 	Pattern Borders	Περιθώρια μοτίβου
 	Scatter Shapes	Σχήματα διασποράς
@@ -6047,6 +6169,8 @@ axis	Y Axis	Άξονας Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Κείμενο σημείου
 	Area Text	Κείμενο περιοχής
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Μέτρηση κειμένου με βάση τα όρια γλυφής
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Εμφάνιση επιλογών προσκόλλησης σε γλυφή
 	Hide Snap to Glyph Options	Απόκρυψη επιλογών προσκόλλησης σε γλυφή
@@ -6461,7 +6585,7 @@ breakText	Glyphs	Γλύφοι
 	Reset Symbol Instance	Επαναφορά στιγμιότυπου συμβόλου
 @msg	type must be static or dynamic, not {v}	το type πρέπει να είναι static ή dynamic, όχι {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	το `{name}` είναι στατικό σύμβολο: ορίστε πρώτα τον τύπο συμβόλου σε Δυναμικό
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Σε διαδρομή, σύνθετη διαδρομή ή κείμενο που έχει επιλεγεί σε στιγμιότυπο συμβόλου αλλάζει μόνο το συμπαγές χρώμα του γεμίσματος και της πινελιάς
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Σε μια διαδρομή, σύνθετη διαδρομή ή κείμενο που έχει επιλεγεί σε στιγμιότυπο συμβόλου μπορούν να αλλάξουν μόνο το γέμισμα, η διαδρομή, η αδιαφάνεια και η ανάμειξη
 @msg	path must be a list of child indices	το path πρέπει να είναι λίστα δεικτών θυγατρικών αντικειμένων
 @msg	no object at path {shown} in the symbol's art	δεν υπάρχει αντικείμενο στη διαδρομή {shown} στο γραφικό του συμβόλου
 @msg	give fill, stroke, opacity and/or blend	δώστε fill, stroke, opacity ή/και blend
@@ -6611,3 +6735,36 @@ breakText	Glyphs	Γλύφοι
 	Align to Pixel Grid	Στοίχιση στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
 @msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`
+	Ignore All	Παράβλεψη όλων
+	Add to Dictionary	Προσθήκη στο λεξικό
+	No Suggestions	Καμία πρόταση
+	Edit Custom Dictionary	Επεξεργασία προσαρμοσμένου λεξικού
+	Entry:	Λήμμα:
+# Script Console
+	Script Console	Κονσόλα σεναρίων
+	Clear Script Console	Εκκαθάριση κονσόλας σεναρίων
+	Copy Script Console	Αντιγραφή κονσόλας σεναρίων
+	Copy All	Αντιγραφή όλων
+	Copy Selected	Αντιγραφή επιλεγμένων
+	Finished	Ολοκληρώθηκε
+	Ended with an error	Τερματίστηκε με σφάλμα
+	Out of fuel	Εξαντλήθηκε το όριο εντολών
+	Ended at a host limit	Τερματίστηκε σε όριο του κεντρικού συστήματος
+	Ended at a limit	Τερματίστηκε σε όριο
+	Stopped	Διακόπηκε
+	Ended by an internal fault	Τερματίστηκε λόγω εσωτερικού σφάλματος
+	time unavailable	ο χρόνος δεν είναι διαθέσιμος
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	πιο αργές: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} κλήση προς το κεντρικό σύστημα|{n} κλήσεις προς το κεντρικό σύστημα
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} παλαιότερη γραμμή απορρίφθηκε|{n} παλαιότερες γραμμές απορρίφθηκαν
+@plural	{n} line cut|{n} lines cut	{n} γραμμή περικόπηκε|{n} γραμμές περικόπηκαν
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	Τα `first` και `last` πρέπει να είναι αριθμοί γραμμών που κρατά η κονσόλα, το `first` πριν από το `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή
+	Deferred Effects	Εφέ σε αναμονή
+@msg	no plug-in effect is deferred	κανένα εφέ προσθέτου δεν είναι σε αναμονή
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Άνοιξε με {n} εφέ προσθέτου σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή το εκτελεί.|Άνοιξε με {n} εφέ προσθέτων σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή τα εκτελεί.

@@ -195,9 +195,10 @@ impl Document {
 /// The default name of a solid swatch: its values in its own colour model ("C=10 M=20 Y=30 K=0",
 /// "R=255 G=128 B=0", "Gray K=40", "L=52 a=70 b=-30").
 pub fn color_name(c: Color) -> String {
-    // Clamped first, so a conversion's tiny negative never reads "-0".
-    let pct = |v: f32| (v.clamp(0.0, 1.0) * 100.0).round();
-    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round();
+    // Clamped first, so a conversion's tiny negative never reads "-0". `clamp` keeps a -0.0, so
+    // `+ 0.0` turns it into 0.
+    let pct = |v: f32| (v.clamp(0.0, 1.0) * 100.0).round() + 0.0;
+    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() + 0.0;
     match c {
         Color::Cmyk { c, m, y, k } => format!("C={} M={} Y={} K={}", pct(c), pct(m), pct(y), pct(k)),
         Color::Rgb { r, g, b } => format!("R={} G={} B={}", byte(r), byte(g), byte(b)),
@@ -491,6 +492,13 @@ mod tests {
         assert_eq!(d.free_swatch_name("Brand"), "Brand 2");
         assert_eq!(d.free_swatch_name("Mine"), "Mine 2", "colour groups share the namespace");
         assert_eq!(d.new_swatch_name(&Paint::solid(Color::rgb(1.0, 0.0, 0.0))), "R=255 G=0 B=0");
+    }
+
+    #[test]
+    fn default_names_read_negative_zero_as_zero() {
+        assert_eq!(color_name(Color::Rgb { r: -0.0, g: 0.5, b: -0.0 }), "R=0 G=128 B=0");
+        assert_eq!(color_name(Color::Cmyk { c: -0.0, m: 0.2, y: 0.3, k: -0.0 }), "C=0 M=20 Y=30 K=0");
+        assert_eq!(color_name(Color::Gray { k: -0.0 }), "Gray K=0");
     }
 
     #[test]

@@ -238,8 +238,24 @@ fn panel_frame(
     family: &str,
     draw: &dyn Fn(&mut VectorcraftApp, &mut egui::Ui),
 ) -> (Option<egui::Pos2>, bool) {
-    let mut input =
-        egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
+    panel_frame_at(ctx, app, None, events, family, draw)
+}
+
+/// [`panel_frame`] with the input's clock set to `time` seconds.
+fn panel_frame_at(
+    ctx: &egui::Context,
+    app: &mut VectorcraftApp,
+    time: Option<f64>,
+    events: Vec<egui::Event>,
+    family: &str,
+    draw: &dyn Fn(&mut VectorcraftApp, &mut egui::Ui),
+) -> (Option<egui::Pos2>, bool) {
+    let mut input = egui::RawInput {
+        time,
+        events,
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))),
+        ..Default::default()
+    };
     app.raw_input_hook(ctx, &mut input);
     let mut out = ctx.run_ui(input, |ui| {
         crate::font_menu::end_stale_preview(app, ui.ctx());
@@ -394,13 +410,16 @@ fn wheel_events_use_the_pointer_position_when_they_occurred() {
     assert_eq!(first_style(&app, id).font_family, "Inter", "the wheel was outside the field");
     assert_eq!(app.session.active().unwrap().history.undo.len(), before);
     assert!(ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. }))), "outside wheel input is left for its owner");
-    panel_frame(&ctx, &mut app, vec![wheel(line, -1.0, Default::default()), egui::Event::PointerMoved(outside)], "Inter", &draw);
+    let after_gap = |ctx: &egui::Context| Some(ctx.input(|i| i.time) + crate::widgets::WHEEL_STREAM_GAP);
+    let later = after_gap(&ctx);
+    panel_frame_at(&ctx, &mut app, later, vec![wheel(line, -1.0, Default::default()), egui::Event::PointerMoved(outside)], "Inter", &draw);
     assert_ne!(first_style(&app, id).font_family, "Inter", "the wheel was over the field before the pointer left");
     assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(first_style(&app, id).font_family, "Inter");
     let button = |pos| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-    panel_frame(&ctx, &mut app, vec![button(field), wheel(line, -1.0, Default::default()), button(outside)], "Inter", &draw);
+    let later = after_gap(&ctx);
+    panel_frame_at(&ctx, &mut app, later, vec![button(field), wheel(line, -1.0, Default::default()), button(outside)], "Inter", &draw);
     assert_ne!(first_style(&app, id).font_family, "Inter", "button events also carry the pointer's position");
     assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
     app.run("edit.undo", json!({})).unwrap();
@@ -412,20 +431,32 @@ fn wheel_events_use_the_pointer_position_when_they_occurred() {
         source: egui::MouseWheelSource::Unknown,
     };
     panel_frame(&ctx, &mut app, vec![end], "Inter", &draw);
-    panel_frame(
+    let later = after_gap(&ctx);
+    panel_frame_at(
         &ctx,
         &mut app,
+        later,
         vec![
-            wheel(egui::MouseWheelUnit::Point, -2.0, Default::default()),
             egui::Event::PointerMoved(field),
             wheel(line, -1.0, Default::default()),
             egui::Event::PointerMoved(outside),
+            wheel(egui::MouseWheelUnit::Point, -2.0, Default::default()),
         ],
         "Inter",
         &draw,
     );
     assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
     assert_eq!(ctx.input(|i| i.smooth_scroll_delta.y), -2.0, "only the outside wheel contributes to panel scrolling");
+    // A fractional turn made before the pointer reached the field does not count toward its notches.
+    let speed = ctx.options(|o| o.input_options.line_scroll_speed);
+    let later = after_gap(&ctx);
+    let early = wheel(egui::MouseWheelUnit::Point, -0.75 * speed, Default::default());
+    panel_frame_at(&ctx, &mut app, later, vec![early, egui::Event::PointerMoved(field)], "Inter", &draw);
+    let later = after_gap(&ctx);
+    panel_frame_at(&ctx, &mut app, later, vec![wheel(line, -0.5, Default::default())], "Inter", &draw);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1, "half a notch on the field");
+    panel_frame(&ctx, &mut app, vec![wheel(line, -0.5, Default::default())], "Inter", &draw);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 2, "a whole notch on the field");
 }
 
 /// A turn queued for one document cannot restyle another document opened before its UI pass.
@@ -512,6 +543,97 @@ fn the_wheel_steps_the_families_in_properties_and_the_control_bar() {
         assert!(at(&next) > at("Inter"), "{place}: {next}");
         assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "{place}");
     }
+}
+
+/// The Character panel in a scroll area, its family field near the bottom of the view.
+fn scrolling_character_panel(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+        ui.add_space(250.0);
+        crate::panels::character::show(app, ui);
+        ui.add_space(600.0);
+    });
+}
+
+/// Scrolling a panel with a still pointer keeps going when the closed family field slides under
+/// the pointer, and the font stays as it was.
+#[test]
+fn scrolling_a_panel_past_the_family_field_under_a_still_pointer_keeps_the_font() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let id = selected_inter(&mut app);
+    let draw = scrolling_character_panel;
+    let mut field = None;
+    for _ in 0..3 {
+        field = panel_frame(&ctx, &mut app, vec![], "Inter", &draw).0;
+    }
+    let field = field.expect("the panel shows the family field");
+    let still = egui::pos2(field.x, field.y - 120.0);
+    panel_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(still)], "Inter", &draw);
+    let before = app.session.active().unwrap().history.undo.len();
+    let mut passed = false;
+    for _ in 0..240 {
+        let at = panel_frame(&ctx, &mut app, vec![wheel(egui::MouseWheelUnit::Point, -6.0, Default::default())], "Inter", &draw).0;
+        if at.is_some_and(|point| point.y < still.y - 30.0) {
+            passed = true;
+            break;
+        }
+    }
+    assert!(passed, "the panel scrolled the field past the pointer");
+    assert_eq!(first_style(&app, id).font_family, "Inter");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before);
+}
+
+/// A family field that a panel scrolled under a still pointer leaves later wheel input to the
+/// panel, including after the stream ends, until the pointer really moves.
+#[test]
+fn a_family_field_scrolled_under_a_still_pointer_takes_the_wheel_after_the_pointer_moves() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let id = selected_inter(&mut app);
+    let draw = scrolling_character_panel;
+    let mut time = 100.0;
+    let mut field = None;
+    for _ in 0..3 {
+        time += 0.02;
+        field = panel_frame_at(&ctx, &mut app, Some(time), vec![], "Inter", &draw).0;
+    }
+    let field = field.expect("the panel shows the family field");
+    let still = egui::pos2(field.x, field.y - 40.0);
+    time += 0.02;
+    panel_frame_at(&ctx, &mut app, Some(time), vec![egui::Event::PointerMoved(still)], "Inter", &draw);
+    let before = app.session.active().unwrap().history.undo.len();
+    let mut under = false;
+    for _ in 0..80 {
+        time += 0.02;
+        panel_frame_at(&ctx, &mut app, Some(time), vec![wheel(egui::MouseWheelUnit::Point, -3.0, Default::default())], "Inter", &draw);
+        let mut at = None;
+        for _ in 0..12 {
+            time += 0.02;
+            at = panel_frame_at(&ctx, &mut app, Some(time), vec![], "Inter", &draw).0;
+        }
+        if at.is_some_and(|point| (point.y - still.y).abs() < 4.0) {
+            under = true;
+            break;
+        }
+    }
+    assert!(under, "the panel scrolled the field under the pointer");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before);
+    time += 5.0;
+    let notch = || wheel(egui::MouseWheelUnit::Line, -1.0, Default::default());
+    panel_frame_at(&ctx, &mut app, Some(time), vec![notch()], "Inter", &draw);
+    assert_eq!(first_style(&app, id).font_family, "Inter", "the still pointer did not arm the field");
+    let mut at = None;
+    for _ in 0..12 {
+        time += 0.02;
+        at = panel_frame_at(&ctx, &mut app, Some(time), vec![], "Inter", &draw).0;
+    }
+    let at = at.expect("the field is still in view");
+    time += 5.0;
+    panel_frame_at(&ctx, &mut app, Some(time), vec![egui::Event::PointerMoved(at), notch()], "Inter", &draw);
+    assert_ne!(first_style(&app, id).font_family, "Inter", "the pointer moved onto the field");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
 }
 
 /// #5253: a family the wheel steps to keeps the type's style when it has that style, else takes the

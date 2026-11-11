@@ -502,10 +502,26 @@ pub fn param_keys(doc: &str) -> Vec<String> {
     out
 }
 
-/// Parameter-name keys that name filesystem paths: fuzzing these with arbitrary strings could
-/// write files anywhere, so callers substitute a temp path.
+/// Parameter-name keys that name a file or folder a command may write: fuzzing these with
+/// arbitrary strings could write files anywhere, so callers substitute a temp path.
 pub fn is_path_key(k: &str) -> bool {
-    k == "path"
+    matches!(k, "path" | "diffPath") || is_folder_key(k)
+}
+
+/// Path keys that name a folder a command creates or writes files into.
+pub fn is_folder_key(k: &str) -> bool {
+    matches!(k, "folder" | "destinationFolder")
+}
+
+/// The location to send under the path key `k`: `safe_path` for a file, a folder next to it for
+/// a folder key.
+pub fn safe_location(k: &str, safe_path: &str) -> String {
+    if is_folder_key(k) { format!("{safe_path}-folder") } else { safe_path.to_string() }
+}
+
+/// `v`, or the temp location for `k` when `k` is a path key and `v` is a string.
+pub fn safe_value(k: &str, v: &Value, safe_path: &str) -> Value {
+    if is_path_key(k) && v.is_string() { json!(safe_location(k, safe_path)) } else { v.clone() }
 }
 
 /// A deterministic list of junk param objects for `doc` (the command's params doc): each
@@ -516,7 +532,7 @@ pub fn junk_params(doc: &str, safe_path: &str) -> Vec<Value> {
     let mut out = vec![Value::Null, json!([]), json!("str"), json!(42), json!({"unknownKey": 1})];
     for k in &keys {
         for (i, v) in junk.iter().enumerate() {
-            let v = if is_path_key(k) && v.is_string() { json!(safe_path) } else { v.clone() };
+            let v = safe_value(k, v, safe_path);
             // Sparse: one key at a time with every junk value, plus a few combos.
             let mut o = serde_json::Map::new();
             o.insert(k.clone(), v.clone());
@@ -524,7 +540,7 @@ pub fn junk_params(doc: &str, safe_path: &str) -> Vec<Value> {
             if i % 5 == 0 {
                 let mut all = serde_json::Map::new();
                 for k2 in &keys {
-                    let v2 = if is_path_key(k2) { json!(safe_path) } else { v.clone() };
+                    let v2 = if is_path_key(k2) { json!(safe_location(k2, safe_path)) } else { v.clone() };
                     all.insert(k2.clone(), v2);
                 }
                 out.push(Value::Object(all));

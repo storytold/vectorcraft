@@ -104,7 +104,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     let list = run(&mut s, "brush.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
     let ids: Vec<&str> = libs.iter().map(|l| l["id"].as_str().unwrap()).collect();
-    assert_eq!(ids, ["art-ribbons", "calligraphic-nibs", "pattern-borders", "scatter-shapes"]);
+    assert_eq!(ids, ["art-ribbons", "calligraphic-nibs", "pattern-borders", "scatter-shapes", "game-trails"]);
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
     let lib = run(&mut s, "brush.library", json!({"library": "art ribbons"}));
     assert_eq!(
@@ -112,8 +112,20 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ["Notched Ribbon", "Double Line", "Wave", "Teardrop", "Striped Ribbon"]
     );
     assert_eq!(libs[0]["count"].as_u64(), Some(5));
+    let trails = run(&mut s, "brush.library", json!({"library": "game-trails"}));
+    assert_eq!(
+        trails["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
+        ["Speed Line", "Dash Trail", "Burst Ray", "Zigzag"]
+    );
+    assert_eq!(libs[4]["count"].as_u64(), Some(4));
     // One kind of brush per library, every brush drawing something.
-    for (id, kind) in [("art-ribbons", "art"), ("calligraphic-nibs", "calligraphic"), ("pattern-borders", "pattern"), ("scatter-shapes", "scatter")] {
+    for (id, kind) in [
+        ("art-ribbons", "art"),
+        ("calligraphic-nibs", "calligraphic"),
+        ("pattern-borders", "pattern"),
+        ("scatter-shapes", "scatter"),
+        ("game-trails", "art"),
+    ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
         for b in &lib.brushes {

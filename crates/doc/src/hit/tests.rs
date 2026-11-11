@@ -880,6 +880,45 @@ fn path_only_picks_paths_through_images() {
     assert_eq!(hit(image_edge, path_only), Some(image), "path only: the image's frame");
 }
 
+/// #6437: in outline mode an image is drawn as its frame and a gradient mesh as its mesh lines,
+/// so a click inside them, on the outline of a path behind, picks that path, and a click on the
+/// frame or a mesh line picks the image or the mesh. In Preview they cover the path as before,
+/// and an image whose pixels show in outline mode (Show Images in Outline Mode) still does.
+#[test]
+fn outline_mode_picks_paths_through_images_and_meshes() {
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let (path, image, under, mesh) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    d.insert(Some(l), 0, Node::path(path, shapes::rectangle(Rect::new(20.0, 20.0, 60.0, 60.0)), Appearance::default_art())).unwrap();
+    let xf = vectorcraft_geom::Affine::translate((10.0, 10.0));
+    let im = crate::ImageObject { key: "k".into(), width: 80, height: 80, xf, link: None, placement: Default::default(), pixels: None };
+    d.insert(Some(l), 1, Node::new(image, NodeKind::Image(Box::new(im)))).unwrap();
+    d.insert(Some(l), 2, Node::path(under, shapes::rectangle(Rect::new(120.0, 120.0, 160.0, 160.0)), Appearance::default_art())).unwrap();
+    let area = shapes::rectangle(Rect::new(110.0, 110.0, 190.0, 190.0));
+    let m = crate::GradientMesh::for_path_with(&area, 2, 2, &|_| (Color::BLACK, 1.0)).unwrap();
+    d.insert(Some(l), 3, Node::new(mesh, NodeKind::Mesh(m))).unwrap();
+    let outline = HitOptions { outline: true, ..Default::default() };
+    let hit = |d: &Document, p: Point, opt| hit_test(d, p, opt).map(|h| h.leaf);
+    // The image: the path's edge and the inside, then the frame.
+    let (path_edge, inside, frame) = (Point::new(20.5, 40.0), Point::new(80.0, 80.0), Point::new(89.5, 50.0));
+    assert_eq!(hit(&d, path_edge, HitOptions::default()), Some(image), "Preview: the image covers the path");
+    assert_eq!(hit(&d, inside, HitOptions::default()), Some(image));
+    assert_eq!(hit(&d, path_edge, outline), Some(path), "outline: the path through the image");
+    assert_eq!(hit(&d, inside, outline), None, "outline: not inside the image");
+    assert_eq!(hit(&d, frame, outline), Some(image), "outline: the image's frame");
+    // The mesh: the path's edge and the inside, then its edge and a mesh line inside it.
+    let (under_edge, inside, edge, line) = (Point::new(120.5, 130.0), Point::new(130.0, 170.0), Point::new(189.5, 130.0), Point::new(150.0, 170.0));
+    assert_eq!(hit(&d, under_edge, HitOptions::default()), Some(mesh), "Preview: the mesh covers the path");
+    assert_eq!(hit(&d, inside, HitOptions::default()), Some(mesh));
+    assert_eq!(hit(&d, under_edge, outline), Some(under), "outline: the path through the mesh");
+    assert_eq!(hit(&d, inside, outline), None, "outline: not between the mesh lines");
+    assert_eq!(hit(&d, edge, outline), Some(mesh), "outline: the mesh's edge");
+    assert_eq!(hit(&d, line, outline), Some(mesh), "outline: a mesh line");
+    // Show Images in Outline Mode: the image's pixels are drawn, and it covers the path again.
+    d.setup.outline_images = true;
+    assert_eq!(hit(&d, path_edge, outline), Some(image));
+}
+
 /// Type Object Selection by Path Only: point type is picked on its baseline, area type on its
 /// frame and type on a path on its path, no longer anywhere in its bounds.
 #[test]

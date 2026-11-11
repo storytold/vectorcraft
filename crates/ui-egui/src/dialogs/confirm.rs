@@ -63,6 +63,31 @@ pub(crate) fn ask_replace(app: &mut VectorcraftApp, path: &str, typed: &str) {
     app.ui.dialog = Some(Dialog::new(REPLACE, fields));
 }
 
+/// The dialog kind of the question Reset Preferences asks over the Preferences dialog
+/// ([`ask_reset_prefs`]). Fields: `message`, `detail`.
+pub const RESET_PREFS: &str = "resetPreferences";
+
+pub(super) const RESET_PREFS_SPEC: DialogSpec = DialogSpec { confirm: reset_prefs, ..SPEC };
+
+/// Ask whether to reset the preferences, over the Preferences dialog open now. Cancel and Escape
+/// show Preferences again as it was; OK shows it again with every preference at its default value
+/// ([`crate::prefs_dialog::reset_fields`]). Nothing is applied until OK in Preferences.
+pub(crate) fn ask_reset_prefs(app: &mut VectorcraftApp) {
+    let under = app.ui.dialog.take().and_then(|d| serde_json::to_value(d).ok());
+    let message = tl!("Reset all preferences to their defaults?");
+    let detail = tl!("The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.");
+    let fields = json!({"message": message, "detail": detail, super::PARENT: under});
+    app.ui.dialog = Some(Dialog::new(RESET_PREFS, fields));
+}
+
+/// OK on [`ask_reset_prefs`]: Preferences again, its fields at their defaults.
+fn reset_prefs(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut prefs = super::parent(d).filter(|p| p.kind == "preferences").ok_or("the dialog it was opened over is no longer open")?;
+    crate::prefs_dialog::reset_fields(&mut prefs);
+    app.ui.dialog = Some(prefs);
+    Ok(Value::Null)
+}
+
 /// Most messages kept for later while a dialog is open ([`tell`]).
 const MAX_WAITING: usize = 16;
 

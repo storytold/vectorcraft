@@ -7,6 +7,8 @@
 //! stack, and prefix operators, assignment chains, `else if` chains and labels with loops, so long
 //! runs of them do not nest at all.
 
+mod xml;
+
 use std::collections::{HashMap, HashSet};
 
 use crate::LineTable;
@@ -69,11 +71,13 @@ pub(crate) struct Parser<'s> {
     /// The next statement stands in a statement list, where a label's body may be a function
     /// declaration. Read and cleared as each statement starts.
     in_list: bool,
+    /// Read E4X syntax.
+    e4x: bool,
 }
 
 impl<'s> Parser<'s> {
     pub(crate) fn new(src: &'s [u16], options: &crate::Options, keep_tokens: bool) -> Result<Self> {
-        let lex = Lexer::new(src, options.preprocessor_lines, options.max_depth);
+        let lex = Lexer::new(src, options.preprocessor_lines, options.max_depth).with_e4x(options.e4x);
         let placeholder =
             Token { kind: TokenKind::Eof, span: Span::default(), line: 1, column: 1, newline_before: false, escaped: false, legacy_octal: false };
         let mut parser = Self {
@@ -90,6 +94,7 @@ impl<'s> Parser<'s> {
             tokens: keep_tokens.then(Vec::new),
             function_allowed: false,
             in_list: false,
+            e4x: options.e4x,
         };
         parser.tok = parser.next_significant()?;
         Ok(parser)
@@ -391,6 +396,7 @@ impl<'s> Parser<'s> {
                 self.semicolon()?;
                 Ok(self.ast.push_stmt(Stmt::Debugger, self.span_from(start)))
             }
+            Keyword::Default if self.at_default_xml_namespace() => self.parse_default_xml_namespace(start),
             _ => {
                 let expr = self.parse_expression(false)?;
                 self.semicolon()?;
@@ -488,7 +494,14 @@ impl<'s> Parser<'s> {
 
     fn parse_for(&mut self, start: Span) -> Result<StmtId> {
         self.bump()?;
+        let each = self.e4x && self.tok.ident() == Some("each");
+        if each {
+            self.bump()?;
+        }
         self.expect(Punct::LParen)?;
+        if each {
+            return self.parse_for_each(start);
+        }
         let init = if self.at(Punct::Semicolon) {
             None
         } else if self.at_keyword(Keyword::Var) {
@@ -501,14 +514,14 @@ impl<'s> Parser<'s> {
                 if self.ctx.strict && decl.init.is_some() {
                     return Err(self.error_at_token(&self.tok, "a for-in variable cannot have an initializer in strict mode code"));
                 }
-                return self.parse_for_in(ForInTarget::Var(decl), start);
+                return self.parse_for_in(ForInTarget::Var(decl), start, false);
             }
             Some(ForInit::Var(decls))
         } else {
             let expr = self.parse_expression(true)?;
             if self.at_keyword(Keyword::In) {
                 self.check_target(expr, "invalid left-hand side in for-in loop")?;
-                return self.parse_for_in(ForInTarget::Expr(expr), start);
+                return self.parse_for_in(ForInTarget::Expr(expr), start, false);
             }
             Some(ForInit::Expr(expr))
         };
@@ -522,12 +535,27 @@ impl<'s> Parser<'s> {
     }
 
     /// The rest of `for (target in object) body`, from `in`.
-    fn parse_for_in(&mut self, target: ForInTarget, start: Span) -> Result<StmtId> {
+    fn parse_for_in(&mut self, target: ForInTarget, start: Span, each: bool) -> Result<StmtId> {
         self.expect_keyword(Keyword::In)?;
         let object = self.parse_expression(false)?;
         self.expect(Punct::RParen)?;
         let body = self.parse_loop_body()?;
-        Ok(self.ast.push_stmt(Stmt::ForIn { target, object, body }, self.span_from(start)))
+        Ok(self.ast.push_stmt(Stmt::ForIn { target, object, body, each }, self.span_from(start)))
+    }
+
+    /// `for each (target in object) body`, from the target (ECMA-357 section 12.3).
+    fn parse_for_each(&mut self, start: Span) -> Result<StmtId> {
+        if self.at_keyword(Keyword::Var) {
+            self.bump()?;
+            let mut decls = self.parse_var_decls(true)?;
+            let (Some(decl), true) = (decls.pop(), decls.is_empty()) else {
+                return Err(self.error_at_token(&self.tok, "for each takes one variable"));
+            };
+            return self.parse_for_in(ForInTarget::Var(decl), start, true);
+        }
+        let expr = self.parse_expression(true)?;
+        self.check_target(expr, "invalid left-hand side in for each loop")?;
+        self.parse_for_in(ForInTarget::Expr(expr), start, true)
     }
 
     /// `break` or `continue`, with an optional label on the same line, which must name a label
@@ -608,7 +636,7 @@ impl<'s> Parser<'s> {
             let test = if self.at_keyword(Keyword::Case) {
                 self.bump()?;
                 Some(self.parse_expression(false)?)
-            } else if self.at_keyword(Keyword::Default) {
+            } else if self.at_keyword(Keyword::Default) && !self.at_default_xml_namespace() {
                 if has_default {
                     return Err(self.error_at_token(&self.tok, "more than one default clause in switch statement"));
                 }
@@ -620,7 +648,10 @@ impl<'s> Parser<'s> {
             };
             self.expect(Punct::Colon)?;
             let mut body = Vec::new();
-            while !(self.at_keyword(Keyword::Case) || self.at_keyword(Keyword::Default) || self.at(Punct::RBrace)) {
+            while !(self.at_keyword(Keyword::Case)
+                || (self.at_keyword(Keyword::Default) && !self.at_default_xml_namespace())
+                || self.at(Punct::RBrace))
+            {
                 if self.tok.kind == TokenKind::Eof {
                     return Err(self.unexpected());
                 }
@@ -953,8 +984,13 @@ impl<'s> Parser<'s> {
         let mut expr = self.parse_primary()?;
         loop {
             match &self.tok.kind {
+                TokenKind::Punct(Punct::DotDot) => expr = self.parse_xml_descendants(expr)?,
                 TokenKind::Punct(Punct::Dot) => {
                     self.bump()?;
+                    if self.e4x && self.at_e4x_member() {
+                        expr = self.parse_xml_member(expr)?;
+                        continue;
+                    }
                     let Some(name) = self.tok.identifier_name().map(str::to_string) else {
                         return Err(self.error_at_token(&self.tok, format!("expected a property name but found {}", describe(&self.tok))));
                     };
@@ -1050,10 +1086,16 @@ impl<'s> Parser<'s> {
                 self.expect(Punct::RParen)?;
                 return Ok(self.ast.push_expr(Expr::Paren(inner), self.span_from(start)));
             }
+            TokenKind::Punct(Punct::Lt) if self.e4x => return self.parse_xml_literal(),
+            TokenKind::Punct(Punct::At | Punct::Star) if self.e4x => return self.parse_xml_scope_name(),
             _ => return Err(self.unexpected()),
         };
         let token = self.bump()?;
-        Ok(self.ast.push_expr(expr, token.span))
+        let id = self.ast.push_expr(expr, token.span);
+        if self.e4x && self.at(Punct::ColonColon) && matches!(token.kind, TokenKind::Ident(_)) {
+            return self.parse_xml_qualified_primary(id);
+        }
+        Ok(id)
     }
 
     fn parse_function_expression(&mut self) -> Result<ExprId> {
@@ -1232,5 +1274,6 @@ fn describe(token: &Token) -> String {
         TokenKind::String(_) => "string".into(),
         TokenKind::RegExp { .. } => "regular expression".into(),
         TokenKind::Directive(_) => "preprocessor line".into(),
+        TokenKind::XmlLiteral => "XML literal".into(),
     }
 }

@@ -239,6 +239,18 @@ impl<'p> Colors<'p> {
         }
     }
 
+    /// The space of colour space array `a` (`[/Separation name alt tint]` or `[/DeviceN …]`, such
+    /// as an image's) among the file's: matched by its kind, its colorant names and its tint
+    /// transform, not by the page's walk. `None` for another array.
+    pub fn array_space(&mut self, a: &Array<'_>) -> Option<Space> {
+        self.scan();
+        let mut it = a.flex_iter();
+        let (device_n, names) = ink_names(&mut it)?;
+        it.next::<Object<'_>>()?;
+        let key = debug_text(&Function::new(&it.next::<Object<'_>>()?)?)?;
+        self.spaces.iter().position(|s| s.device_n == device_n && s.names == names && s.key == key).map(Space::Inks)
+    }
+
     /// Whether a space of inks `names` has the kind, colorant count and tint transform of a space
     /// of other inks. [`Colors::space_of`] tells such spaces apart only by the names from the
     /// page's walk.

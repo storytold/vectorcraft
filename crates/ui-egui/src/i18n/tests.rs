@@ -227,6 +227,24 @@ fn each_language_counts_with_its_plural_rule() {
     }
 }
 
+/// The Script Console's counted phrases have a row in every complete catalog, and a count picks
+/// the language's own form.
+#[test]
+fn script_console_counts_take_each_language_s_form() {
+    const COUNTED: [(&str, &str); 3] =
+        [("{n} host call", "{n} host calls"), ("{n} earlier line dropped", "{n} earlier lines dropped"), ("{n} line cut", "{n} lines cut")];
+    for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
+        for (one, other) in COUNTED {
+            assert!(l.catalog().plural(one, other, 0).is_some(), "{} is missing the row for {other}", l.code);
+        }
+    }
+    assert_eq!([1, 2].map(|n| trn(de(), n, COUNTED[0].0, COUNTED[0].1)), ["1 Host-Aufruf", "2 Host-Aufrufe"]);
+    let ru = Lang::from_code("ru").expect("registered");
+    assert_eq!([1, 3, 5].map(|n| trn(ru, n, COUNTED[2].0, COUNTED[2].1)), ["1 строка обрезана", "3 строки обрезаны", "5 строк обрезано"]);
+    let fr = Lang::from_code("fr").expect("registered");
+    assert_eq!([0, 1].map(|n| trn(fr, n, COUNTED[1].0, COUNTED[1].1)), ["0 ligne antérieure supprimée", "1 ligne antérieure supprimée"]);
+}
+
 #[test]
 fn candidates_walk_from_specific_to_general() {
     assert_eq!(candidates("pt_BR.UTF-8"), ["pt-br", "pt"]);
@@ -1995,6 +2013,47 @@ fn dataset_import_repeated_column_error_is_translated() {
         let lang = Lang::from_code(code).expect("registered");
         let shown = message(lang, &e);
         assert!(!shown.contains(want), "{code}: {shown}");
+    }
+}
+
+/// The errors of a command's parameter schema are translated in every language that translates
+/// every message, with the parameter's path and the refused value kept.
+#[test]
+fn parameter_schema_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::Session;
+    let scanned = message_literals();
+    for template in [
+        "the params must be an object, not {got}",
+        "unknown parameter `{path}`; the object takes no keys",
+        "unknown parameter `{path}`; it takes: {keys}",
+        "missing `{path}`",
+        "`{path}` must be {expected}, not {got}",
+    ] {
+        assert!(scanned.contains(template), "{template}");
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let errors = [
+        (s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": -1})).unwrap_err().to_string(), "`zoom`", "must be", "-1"),
+        (s.execute("view.saved.new", &json!({"center": [0, 0]})).unwrap_err().to_string(), "`zoom`", "missing", ""),
+        (s.execute("view.saved.list", &json!(5)).unwrap_err().to_string(), "5", "must be", ""),
+    ];
+    s.execute("view.saved.new", &json!({"name": "A", "center": [0, 0], "zoom": 1})).unwrap();
+    let nested = [
+        (s.execute("view.saved.edit", &json!({"edits": [{"name": "A"}, {"name": "A", "delete": 1}]})).unwrap_err().to_string(), "`edits[1].delete`"),
+        (s.execute("view.saved.edit", &json!({"edits": [{"name": "A", "x": 1}]})).unwrap_err().to_string(), "`edits[0].x`"),
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, kept, english, value) in &errors {
+            let shown = message(lang, e);
+            assert!(shown.contains(kept) && shown.contains(value) && !shown.contains(english), "{code}: {shown}");
+        }
+        for (e, kept) in &nested {
+            let shown = message(lang, e);
+            assert!(shown.contains(kept) && !shown.contains("unknown parameter") && !shown.contains("must be"), "{code}: {shown}");
+        }
     }
 }
 

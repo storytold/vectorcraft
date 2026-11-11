@@ -547,6 +547,11 @@ impl Tool for SmartPenTool {
         key == ToolKey::Tab && (self.press.is_some() || self.active(cx).is_some())
     }
 
+    /// A path being drawn: Escape ends it.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.active(cx).is_some()
+    }
+
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.stop();
         self.marquee = None;

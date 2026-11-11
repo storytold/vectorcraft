@@ -12,7 +12,7 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     // Direct-selected anchors transform alone (see [`apply_transform`]), about their own centre.
     let st = s.doc()?;
     if !bool_or(p, "copy", false)
-        && let Some(b) = effects::preview::anchor_bounds(&st.selection, &st.doc, s.prefs.use_preview_bounds)
+        && let Some(b) = effects::preview::anchor_bounds_with(&st.selection, &st.doc, s.bounds_measure())
     {
         return Ok(b.center());
     }

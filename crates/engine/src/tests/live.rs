@@ -945,6 +945,34 @@ fn mesh_point_colour_move_and_undo() {
     assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": 99, "color": "#000000"})).is_err());
 }
 
+/// #2752: a Mesh tool click on a star, solid or gradient filled, gives a mesh with every point of
+/// the star on its border, in one undo step that gives the star back.
+#[test]
+fn a_mesh_tool_click_keeps_a_stars_points() {
+    for gradient in [false, true] {
+        let mut s = session();
+        let a = id_of(&s.execute("shape.star", &json!({"cx": 300, "cy": 300, "radius1": 200, "radius2": 80, "points": 5})).unwrap());
+        if gradient {
+            s.execute("paint.setFill", &json!({"ids": [a.0], "gradient": {"kind": "linear"}})).unwrap();
+        } else {
+            fill(&mut s, a, "#0000ff");
+        }
+        let star = node(&s, a).path_data().unwrap().clone();
+        sel(&mut s, &[a]);
+        let undos = undo_len(&s);
+        s.execute("object.mesh.create", &json!({"at": [300, 300]})).unwrap();
+        assert_eq!(undo_len(&s), undos + 1);
+        let m = mesh_of(&s, a);
+        let border = m.outline().to_bezpath();
+        for anchor in &star.subpaths[0].anchors {
+            assert!(m.points.iter().any(|q| q.p.distance(anchor.p) < 1e-6), "{:?} is not a mesh point", anchor.p);
+            assert!(vectorcraft_geom::Shape::bounding_box(&border).inflate(1e-6, 1e-6).contains(anchor.p));
+        }
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, a).path_data(), Some(&star));
+    }
+}
+
 /// A mesh point's `color` with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes
 /// nothing, also when `opacity` is given and when Add Mesh Line takes it; `#rrggbb` still sets it.
 #[test]

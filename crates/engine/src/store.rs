@@ -11,6 +11,9 @@
 //! * **ICC profiles**: the bytes of each profile `color.loadProfile` registered, as `.icc` files
 //!   named after the profile, never the path they came from (a profile in a system folder may
 //!   move or go away). Attaching the folder registers them again.
+//! * **Color Settings**: the working spaces, intent and black point compensation
+//!   `edit.colorSettings` sets, as one JSON file (#6335). Attaching it, after the profiles, makes
+//!   them the active settings again.
 //! * **Plug-ins**: the module of each plug-in `plugin.install` installs, as a `.wasm` file named
 //!   after its id (as Illustrator keeps plug-ins in its Plug-ins folder); `plugin.remove` deletes it.
 //!   Attaching the folder installs them again, except in Safe Mode and except the ones the user
@@ -132,11 +135,18 @@ fn too_large(max: u64) -> String {
     format!("larger than {max} bytes")
 }
 
+/// Whether `old` holds exactly `bytes`. It is read no further than one byte past their length, so a
+/// large file is not read into memory.
+pub(crate) fn holds(old: impl Read, bytes: &[u8]) -> bool {
+    let mut read = vec![];
+    old.take(bytes.len() as u64 + 1).read_to_end(&mut read).is_ok() && read == bytes
+}
+
 /// Write `bytes` to `dir/file`, making the folder; nothing is written when the file has them
 /// already. A failure is logged: remembering is best effort and never fails the command.
 fn put(dir: &Path, file: &str, bytes: &[u8]) -> bool {
     let path = dir.join(file);
-    if std::fs::read(&path).is_ok_and(|old| old == bytes) {
+    if std::fs::File::open(&path).is_ok_and(|old| holds(old, bytes)) {
         return true;
     }
     let written = std::fs::create_dir_all(dir).and_then(|()| write_atomic(&path, bytes));
@@ -291,6 +301,31 @@ impl Session {
         if let Some(dir) = &self.profile_dir {
             take(dir, &format!("{}.{PROFILE_EXT}", file_stem(name)));
         }
+    }
+
+    /// Keep Edit › Color Settings (the working spaces, intent and black point compensation) in the
+    /// file `path`, and make the settings saved there the active ones (#6335). After
+    /// [`Session::attach_profile_store`]: they may name a profile it registers. Settings that can't be
+    /// read, or that name a profile that is gone, leave the defaults with a log record, and the file
+    /// as it is until the settings change.
+    pub fn attach_color_settings(&mut self, path: PathBuf) {
+        if path.exists() {
+            let restored = read_capped(&path, MAX_PRESET_FILE)
+                .and_then(|bytes| serde_json::from_slice::<vectorcraft_color::cms::ColorSettings>(&bytes).map_err(|e| e.to_string()))
+                .and_then(|settings| vectorcraft_color::cms::set_active(&settings).map_err(|e| e.to_string()));
+            if let Err(e) = restored {
+                log::warn!("not using the saved color settings {}: {e}", path.display());
+            }
+        }
+        self.color_settings_file = Some(path);
+    }
+
+    /// Write `settings` to the file [`Session::attach_color_settings`] named; `false` when they
+    /// didn't go there.
+    pub(crate) fn store_color_settings(&self, settings: &vectorcraft_color::cms::ColorSettings) -> bool {
+        let Some(path) = &self.color_settings_file else { return false };
+        let (Some(dir), Some(file)) = (path.parent(), path.file_name().and_then(|f| f.to_str())) else { return false };
+        serde_json::to_vec_pretty(settings).is_ok_and(|bytes| put(dir, file, &bytes))
     }
 
     /// Keep the plug-ins this session installs in `dir`, take the disabled plug-ins saved there

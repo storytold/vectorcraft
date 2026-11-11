@@ -235,6 +235,7 @@ antiAlias	Sharp	锐利
 	Average…	平均…
 	Axis:	轴：
 	Background Color:	背景颜色：
+	Guide Label:	参考线标签：
 	Show Center Mark	显示中心标记
 	Show Cross Hairs	显示十字线
 	Show Video Safe Areas	显示视频安全区域
@@ -243,7 +244,6 @@ antiAlias	Sharp	锐利
 	Update While Dragging	拖动时更新
 	Hide Video Rulers	隐藏视频标尺
 	Background Contents	背景内容
-	Background Contents:	背景内容：
 	Background:	背景：
 	Backspace	Backspace
 	Bar Graph Tool	条形图工具
@@ -529,6 +529,7 @@ antiAlias	Sharp	锐利
 	Coming soon — tracked in the parity plan	即将推出 — 在对标计划中跟踪
 	Command Click to Select Objects Behind	按住 Command 单击选择后方对象
 	Command Dialog	命令对话框
+	Command API Reference	命令 API 参考
 	Community	社区
 	Compatibility:	兼容性：
 	Compatible Gradient and Gradient Mesh Printing	兼容渐变和渐变网格打印
@@ -614,7 +615,6 @@ antiAlias	Sharp	锐利
 	Couldn't {} {name}: {e}	无法{} {name}：{e}
 	Create	创建
 	Create Clipping Mask	创建剪切蒙版
-	Create Document	创建文档
 	Create from Guides	从参考线创建
 	Create from Selection	从选区创建
 	Create From:	创建自：
@@ -1217,6 +1217,7 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Preferences	首选项
 file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG
 file-filter	PDF-compatible .ai	PDF 兼容 .ai
@@ -1806,6 +1807,8 @@ file-filter	Templates	模板
 	Lock (⌘2)	锁定 (⌘2)
 	Lock Grid	锁定网格
 	Lock Guides	锁定参考线
+	Lock Guides by Default	默认锁定参考线
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	按住 Cmd/Ctrl 从标尺拖动创建画板参考线
 	Lock Slices	锁定切片
 	Lock Station Point	锁定基准点
 	Lossless (lossy WebP isn't available yet)	无失真 (尚未提供有失真的 WebP)
@@ -2044,7 +2047,6 @@ file-filter	Templates	模板
 	New Color Group…	新建颜色组…
 	New Document Presets	新建文档预设
 	New file	新建文件
-	New from Template	从模板新建
 	New from Template…	从模板新建…
 	New Graphic Style	新建图形样式
 	New Graphic Style (Alt-click to name it)	新建图形样式 (Alt+点击可命名)
@@ -2719,6 +2721,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset OpenType Features	重置 OpenType 特性
 	Reset Panel	重置面板
 	Reset Preferences	重置首选项
+	Export Preferences…	导出首选项…
+	Import Preferences…	导入首选项…
+	Save the applied preferences to a JSON file	将已应用的首选项保存到 JSON 文件
+	Apply the preferences in a file Export Preferences saved	应用“导出首选项”所保存文件中的首选项
+	Export Preferences	导出首选项
+	Import Preferences	导入首选项
 	Search Preferences	搜索首选项
 	No settings found	未找到设置
 	Reset Profiles	重置配置文件
@@ -2741,6 +2749,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Responsive	响应式
 	Restore	恢复
 	Restore every preference to its default (applied on OK)	把所有首选项恢复为默认值 (点击确定后应用)
+	Reset all preferences to their defaults?	将所有首选项重置为默认值？
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
 	Restored documents open unsaved: save them to keep them.	恢复的文档处于未存储状态：请存储以保留。
 	Restrict printing, editing and other tasks	限制打印、编辑及其他操作
@@ -2828,6 +2838,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Save PDF Preset	保存 PDF 预设
 	Save Perspective Grid Preset	存储透视网格预设
 	Save Preset	保存预设
+	Save Document Preset	保存文档预设
 	Preset {number}	预设 {number}
 	Save Preset…	存储预设…
 	Save Print Preset	保存打印预设
@@ -3005,6 +3016,20 @@ digits	Malayalam	马拉雅拉姆数字
 	Settings…	设置…
 	Setup…	设置…
 	Shadows and Glows	阴影与光晕
+	Game HUD	游戏 HUD
+	Health Fill	生命
+	Mana Glow	法力
+	Damage Flash	伤害
+	Quest Outline	任务
+	Coin Shine	金币
+	Boss Alert	首领
+	Status Effects	状态效果
+	Poison Tint	中毒
+	Freeze Edge	冰冻
+	Burn Aura	灼烧
+	Stun Pulse	眩晕
+	Stealth Fade	隐身
+	Shield Buff	护盾
 	Shape	形状
 	Shape Builder	形状生成器
 	Shape Builder Regions	形状生成器区域
@@ -3374,7 +3399,6 @@ digits	Malayalam	马拉雅拉姆数字
 	Template	模板
 	Templates	模板
 	Templates Folder	模板文件夹
-	Templates…	模板…
 	Text Displayed in Cell:	单元格中显示的文字：
 	Text Export Options	文本导出选项
 	Text Fill & Stroke Color	文字填色和描边颜色
@@ -3421,6 +3445,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Tiles are numbered across, then down; leave the range empty for every tile.	拼贴先由左至右再由上至下编号；范围留空表示全部拼贴。
 	Copies per Sheet (as many as fit, in a grid)	每张纸印多份 (尽量排满，按网格排列)
 	Tint	色调
+	Fill Tint	填色色调
+	Stroke Tint	描边色调
 	Tip extends past the end point	箭头超出端点
 	Tip on the end point	箭头位于端点
 	Title Case	词首大写
@@ -4142,6 +4168,20 @@ imageTrace	Outline	轮廓
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必须介于 {min} 和 {max} 之间 (实际为 {x})
 @msg	`{key}` must be one of {_1}	`{key}` 必须是 {_1} 之一
 @msg	unknown preference `{key}`	未知首选项 `{key}`
+@msg	Preferences imported.	已导入首选项。
+@msg	not a preferences file: {e}	不是首选项文件：{e}
+@msg	not a preferences file: no JSON object	不是首选项文件：没有 JSON 对象
+@msg	not a preferences file (format `{format}`)	不是首选项文件（格式 `{format}`）
+@msg	not a preferences file: no `format`	不是首选项文件：没有 `format`
+@msg	not a preferences file: no `version`	不是首选项文件：没有 `version`
+@msg	not a preferences file: no `prefs`	不是首选项文件：没有 `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	该文件由更新版本的 VectorCraft 保存（版本 {v}）
+@msg	the file holds no preferences	该文件不包含首选项
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` 指定的是文件夹，首选项文件不包含文件夹
+@msg	the file is larger than 1 MB	文件大于 1 MB
+@msg	give `path` or `data`	请提供 `path` 或 `data`
+@msg	`{key}` must be an object	`{key}` 必须是对象
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` 需单独运行，不能作为批处理步骤
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	数据恢复没有可保存副本的位置：请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	数据恢复无法将副本保存到 {path}：{e}
 @msg	Plug-ins can't be loaded from {path}: {e}	无法从 {path} 载入增效工具：{e}
@@ -4314,6 +4354,11 @@ imageTrace	Outline	轮廓
 @msg	artboard {0} does not exist	画板 {0} 不存在
 @msg	cannot read PDF: {0}	无法读取 PDF：{0}
 @msg	invalid PDF setting: {0}	PDF 设置无效：{0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：{label} 页面不带 UserUnit，以点为单位写入，遵守上限的应用会将页面裁切为 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持尺寸：文件将以 PDF 1.6 写入
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	画板 {n} 的页面为 {size}，对 PDF 3 至 14,400 单位的页面边长而言过长过窄：以 UserUnit {unit} 写入，使短边保持 3 单位以上，遵守上限的应用会把长边裁到 14,400 单位
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 文件的实数最大为 {max}，而画板 {n} 的页面长 {side} pt，需要更大的数：请选择不带 PDF/X 标准的 PDF 1.6 或更高版本，或使用更小的画板
 @msg	page {0} does not exist (the PDF has {1})	页面 {0} 不存在 (该 PDF 有 {1} 页)
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail：页面 {n} 不存在 (该文件有 1 页)
 @msg	the PDF has no pages	该 PDF 没有页面
@@ -4361,6 +4406,7 @@ imageTrace	Outline	轮廓
 @msg	{label}…	{label}…
 @msg	no blend options	没有混合选项
 @msg	bad color {v}	颜色 {v} 无效
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` 应为 null、图层颜色名称或 #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必须是 0.1 到 10 之间的数字
 @msg	the Color Picker is not open	拾色器未打开
 @msg	the Simplify slider is not open	简化滑块未打开
@@ -4510,6 +4556,7 @@ imageTrace	Outline	轮廓
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已载入“{name}”：已略过 {n} 个步骤
 @msg	not an action set file	不是动作组文件
 @msg	the action set file is larger than 8 MiB	动作组文件大于 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：参考将大于 {MAX_BYTES} 字节
 @msg	the action set file holds more than 1,000 actions	动作组文件包含超过 1,000 个动作
 @msg	the action set file needs a later version of VectorCraft	动作组文件需要更高版本的 VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	动作组文件中有动作超过 10,000 个步骤
@@ -4526,6 +4573,32 @@ imageTrace	Outline	轮廓
 @msg	the library item is damaged	库项目已损坏
 @msg	{_1} font families available	有 {_1} 个可用的字体系列
 @msg	{_1} has no {_2} style	{_1} 没有 {_2} 样式
+	Run	运行
+	Run Script	运行脚本
+	Stop Script	停止脚本
+	Show External Script Warning	显示外部脚本警告
+	A Script Is Running	脚本正在运行
+	Script Alert	脚本提示
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
+	Do not show this warning again	不再显示此警告
+	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
+	This script has added a great many objects. Continue, or stop it and undo what it did?	此脚本已添加大量对象。要继续，还是停止并撤销其更改？
+@msg	Choose a .js or .jsx script	请选择 .js 或 .jsx 脚本
+@msg	Ran {name}	已运行 {name}
+@msg	The script was stopped and its changes were undone	脚本已停止，其更改已撤销
+@msg	a script is running: stop it or wait for it to finish	脚本正在运行：请停止它或等待其完成
+@msg	this is a compiled script, which cannot be run; use its source text	这是已编译的脚本，无法运行；请使用其源文本
+@msg	the script is not UTF-8 text	脚本不是 UTF-8 文本
+@msg	the script is too large to run	脚本过大，无法运行
+@msg	a drag or an undo group is open; finish it before running a script	拖动或撤销组尚未结束；请在运行脚本前完成
+@msg	the script left a document that cannot be kept	脚本留下了无法保留的文档
+@msg	the script is no longer in the Scripts folder	脚本已不在 Scripts 文件夹中
+	Some scripts were not listed	部分脚本未列出
+	The Scripts folder cannot be read	无法读取 Scripts 文件夹
+@msg	the script's run is no longer available	脚本运行已不可用
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
+@msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
+@msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
@@ -4720,14 +4793,17 @@ imageTrace	Outline	轮廓
 @msg	Invalid drawing scale	图纸比例无效
 @msg	Invalid real scale	实际比例无效
 @msg	Measured anchor no longer exists	测量锚点已不存在
+@msg	Invalid measured point	测量点无效
 @msg	Measured segment no longer exists	测量线段已不存在
 @msg	Non-finite dimension	尺寸标注不是有限值
+@msg	Only linear dimensions are horizontal or vertical	只有线性尺寸可以是水平或垂直的
 @msg	Scale Text Attributes: selected type has no scale to bake	缩放文本属性：所选文本没有可应用的缩放
 @msg	Scale must be drawing:real, for example 1:10	比例必须为 图纸:实际，例如 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	比例必须介于 1:1000000 和 1000000:1 之间
 @msg	Second measured segment no longer exists	第二条测量线段已不存在
 @msg	Unknown dimension mode	未知的尺寸标注模式
 @msg	Unknown dimension option {k}	未知的尺寸标注选项 {k}
+@msg	Unknown dimension orientation	未知的尺寸标注方向
 @msg	span must be "object" or "selection", got {v}	span 必须是 "object" 或 "selection"，实际为 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而不是色板
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 放置渐变：请给出 `gradient`
@@ -5457,7 +5533,8 @@ lighting	Light	光源
 	Bevel both sides	双面斜角
 	Presets	预设
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	一个对象只能应用一种 3D 效果。请编辑现有效果的选项，或先将其移去。
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}目前需要路径或复合路径。请先将文字、图像和编组转换为路径。
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label}目前需要路径、复合路径、文字、编组、混合或符号实例。请先扩展其他对象。
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}无法从图像生成立体：请先使用“对象 › 图像描摹 › 创建”进行描摹。
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有两个锚点的形状
 @msg	The shape is too complex for a 3D effect	形状过于复杂，无法应用 3D 效果
 @msg	The 3D surface is too complex; simplify the shape	3D 表面过于复杂；请简化形状
@@ -5465,6 +5542,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知参数 `{key}`；您是否想输入 `{near}`？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知参数 `{key}`；该命令没有参数
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
+@msg	the params must be an object, not {got}	参数必须是对象，而不是 {got}
+@msg	unknown parameter `{path}`; the object takes no keys	未知参数 `{path}`；该对象不接受任何键
+@msg	unknown parameter `{path}`; it takes: {keys}	未知参数 `{path}`；它接受：{keys}
+@msg	missing `{path}`	缺少 `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` 必须是 {expected}，而不是 {got}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
 @msg	the JPEG XL file is cut short	JPEG XL 文件不完整
@@ -5518,6 +5600,7 @@ lighting	Light	光源
 	Preview (1 inch on the page)	预览（页面上 1 英寸）
 	Set as Default	设为默认
 	 out from a highlighted edge to place its dimension  |  	 从高亮的边向外拖动以放置其尺寸  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 两个点，然后移动并单击以放置对齐、水平或垂直尺寸  |  
 	 cancels  |  Double-click the tool for options	 取消  |  双击工具打开选项
 	Linear	线性
 	Angular	角度
@@ -5774,6 +5857,20 @@ axis	Y Axis	Y 轴
 	Show its progress, see Cancel and write log lines	显示进度、检测取消请求并写入日志行
 	Keep settings of its own	保存自己的设置
 	Keep a cache of its own, which you can clear	保存自己的缓存，您可以清除它
+	Run these commands on the document: {ids}	在文档上运行这些命令：{ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}”在 `commandAllowlist` 中列出了增效工具不能调用的 `{id}`
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`：{why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`：清单的 `commandAllowlist` 未列出它
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`：ID 或参数位于模块内存之外
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`：ID 或参数不是 UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`：参数不是 JSON 对象
+@msg	only a filter with the usual budget declares `commandAllowlist`	只有使用通常预算的滤镜才能声明 `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	命令调用（每次运行 {MAX_CALLS} 次调用和 {MAX_CALL_BYTES} 字节）
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	命令调用大小（vc_call `{shown}`：{len} 字节，上限 {MAX_CALL_DATA}）
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` 中最多 {MAX_ALLOWED_COMMANDS} 个命令
+@msg	a plug-in may not call this command	增效工具不能调用此命令
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` 需要权限 `commands`，而 `commands` 需要 `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` 列出的 `{shown}` 不是命令 ID，或列出了两次
 	Clear Plug-in Cache	清除增效工具缓存
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	权限 `{permission}` 需要增效工具 API 级别 {PROGRESS_API}：请设置 `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模块以与宿主不同的类型导入 `env.{name}`：宿主的类型为 {signature}
@@ -5860,6 +5957,26 @@ axis	Y Axis	Y 轴
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：应为 all 或 1, 3-5 这样的范围，而不是 {v}
 	Add to Symbols	添加到符号
 	Basic Shapes	基本形状
+	Button	按钮
+	Panel	面板
+	UI Frames	UI 框架
+	Map Markers	地图标记
+	Pin	图钉
+	Flag	旗帜
+	Crosshair	准星
+	Checkpoint	检查点
+	Inventory Icons	物品栏图标
+	Skill Icons	技能图标
+	Attack	攻击
+	Defend	防御
+	Heal	治疗
+	Buff	增益
+	Ult	终极技
+	Sword	剑
+	Shield	盾
+	Potion	药水
+	Key	钥匙
+	Gem	宝石
 	Open Symbol Library	打开符号库
 	Save Symbol Library	保存符号库
 	Save Symbol Library…	保存符号库…
@@ -5914,6 +6031,11 @@ axis	Y Axis	Y 轴
 	User Brush Library 9	用户画笔库 9
 	User Brush Library 10	用户画笔库 10
 	Art Ribbons	艺术丝带
+	Zigzag	锯齿
+	Burst Ray	冲击射线
+	Dash Trail	虚线轨迹
+	Speed Line	速度线
+	Game Trails	游戏轨迹
 	Calligraphic Nibs	书法笔尖
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状
@@ -5934,6 +6056,8 @@ axis	Y Axis	Y 轴
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	点文字
 	Area Text	区域文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	按字形边界度量文字
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	显示靠齐字符选项
 	Hide Snap to Glyph Options	隐藏靠齐字符选项
@@ -6350,7 +6474,7 @@ breakText	Glyphs	字形
 	Reset Symbol Instance	重置符号实例
 @msg	type must be static or dynamic, not {v}	type 必须是 static 或 dynamic,而不是 {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` 是静态符号:请先将其符号类型设为动态
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	在符号实例中选中的路径、复合路径或文字只能更改填色和描边的纯色
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	在符号实例中选中的路径、复合路径或文字只能更改填色、描边、不透明度和混合模式
 @msg	path must be a list of child indices	path 必须是子项索引列表
 @msg	no object at path {shown} in the symbol's art	符号图稿中路径 {shown} 处没有对象
 @msg	give fill, stroke, opacity and/or blend	请提供 fill、stroke、opacity 和/或 blend
@@ -6500,3 +6624,33 @@ breakText	Glyphs	字形
 	Align to Pixel Grid	对齐像素网格
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`
+	Edit Custom Dictionary	编辑自定义词典
+	Entry:	条目：
+# Script Console
+	Script Console	脚本控制台
+	Clear Script Console	清除脚本控制台
+	Copy Script Console	复制脚本控制台
+	Copy All	全部复制
+	Copy Selected	复制所选内容
+	Finished	已完成
+	Ended with an error	因错误结束
+	Out of fuel	已用尽指令上限
+	Ended at a host limit	在宿主限制处结束
+	Ended at a limit	在限制处结束
+	Stopped	已停止
+	Ended by an internal fault	因内部错误结束
+	time unavailable	时间不可用
+	{ms} ms	{ms} 毫秒
+	{time}, {calls}	{time}，{calls}
+	slowest: {commands}	最慢的命令：{commands}
+	{dropped}, {cut}	{dropped}，{cut}
+@plural	{n} host call|{n} host calls	宿主调用 {n} 次
+@plural	{n} earlier line dropped|{n} earlier lines dropped	已丢弃 {n} 行较早内容
+@plural	{n} line cut|{n} lines cut	已截断 {n} 行
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必须是控制台保留的行号，且 `first` 不能在 `last` 之后
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	刷新延迟的效果
+	Deferred Effects	延迟的效果
+@msg	no plug-in effect is deferred	没有延迟的增效工具效果
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	打开时延迟了 {n} 个增效工具效果。效果 › 刷新延迟的效果可运行它们。

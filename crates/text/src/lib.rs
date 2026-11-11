@@ -19,6 +19,7 @@ pub mod embed;
 mod features;
 mod fontconfig;
 mod fontdb;
+mod harakat;
 pub mod hyphen;
 mod justify;
 mod kashida;
@@ -48,6 +49,7 @@ pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
+pub use shape::spacing_scale;
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
@@ -283,6 +285,14 @@ pub struct LineInfo {
     pub x0: f64,
     /// Right edge of the line content, trailing spaces excluded.
     pub x1: f64,
+    /// The tracking after the line's last character (in `x1` and in its glyph's advance) that the
+    /// line's alignment leaves out: the line is aligned as if it ended this much before `x1` (a
+    /// centred line is centred and a right-aligned one, or the text after the last tab of
+    /// right-aligned area type, ends there; a left-aligned line starts where it would anyway). 0
+    /// when spaces or a tab typed before a paragraph's end or a forced line break end the line,
+    /// when a hyphen ends it or its last character hangs, in justified lines and lines that push
+    /// characters in, in vertical and right-to-left lines, and in type on a path.
+    pub trailing: f64,
     pub ascent: f64,
     pub descent: f64,
     /// Area type: how far the line's baseline sits below the top of its frame cell (inside the

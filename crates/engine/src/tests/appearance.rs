@@ -647,6 +647,28 @@ fn edits_change_the_active_row_of_the_first_selected_object() {
     assert!(!e.contains("internal error"), "{e}");
 }
 
+/// After an aligned Remove Item or Duplicate Item, the active row follows the rows that changed in
+/// the first selected object, also when that object paints above the others.
+#[test]
+fn aligned_remove_and_duplicate_keep_the_active_row_of_the_first_selected_object() {
+    let mut s = session();
+    let (_, b) = reversed_pair(&mut s);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0})); // b's red fill
+    // a's row 0 is b's white fill, row 1, so b's red fill stays at row 0.
+    run(&mut s, "appearance.removeItem", json!({"indices": [0], "aligned": true}));
+    assert_eq!(node(&s, b).appearance.items.len(), 2);
+    assert_eq!(s.appearance_item(), Some(0));
+    assert_eq!(fill_paint(&node(&s, b), 0).color().unwrap().to_hex(), "#ff0000");
+
+    let mut s = session();
+    let (_, b) = reversed_pair(&mut s);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 1})); // b's white fill, a's row 0
+    // The copy goes above b's white fill, at 2; the active row stays on the original.
+    run(&mut s, "appearance.duplicateItem", json!({"indices": [0], "aligned": true}));
+    assert_eq!(node(&s, b).appearance.items.len(), 4);
+    assert_eq!(s.appearance_item(), Some(1));
+}
+
 /// `effect.apply`'s reply names the new effect by its index in the object whose row `item` is,
 /// also when the objects painted after it already have effects there.
 #[test]
