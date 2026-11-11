@@ -366,6 +366,23 @@ fn import_puts_the_files_own_title_in_file_info_only() {
 }
 
 #[test]
+fn imported_svg_titles_are_filtered_and_bounded() {
+    for (raw, expected) in [
+        ("Untitled-2".to_string(), None),
+        ("\u{7f}".to_string(), None),
+        ("Re\u{7f}lease  Plan".to_string(), Some("Release Plan".to_string())),
+        ("λ".repeat(65_537), Some("λ".repeat(65_536))),
+    ] {
+        let svg = svg_titled(&format!("<title>{raw}</title>"));
+        for format in ["svg", "svgz"] {
+            let name = format!("box.{format}");
+            let bytes = if format == "svgz" { vectorcraft_svg::compress(&svg) } else { svg.as_bytes().to_vec() };
+            assert_eq!(opened(&name, &bytes), [name.clone(), expected.clone().unwrap_or(name)], "{format}");
+        }
+    }
+}
+
+#[test]
 fn a_file_with_a_title_opened_from_a_path_is_named_after_the_file() {
     let dir = std::env::temp_dir().join(format!("vc-infotitle-open-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
