@@ -124,6 +124,9 @@ pub struct Prefs {
     pub guide_style: String,
     /// Lock Guides by Default: the app starts with View › Guides › Lock Guides on.
     pub lock_guides_by_default: bool,
+    /// Artboard Guides with Cmd/Ctrl + Ruler Drag: Cmd/Ctrl held when a guide is dragged out of a
+    /// ruler makes it a guide of the active artboard, or with the Artboard tool a canvas guide.
+    pub cmd_ruler_drag_artboard_guides: bool,
     pub grid_color: String,
     pub grid_style: String,
     pub gridline_every: f64,
@@ -434,6 +437,7 @@ impl Default for Prefs {
             guide_color: s("#4affff"),
             guide_style: s("lines"),
             lock_guides_by_default: false,
+            cmd_ruler_drag_artboard_guides: false,
             grid_color: s("#c8c8c8"),
             grid_style: s("lines"),
             gridline_every: 72.0,

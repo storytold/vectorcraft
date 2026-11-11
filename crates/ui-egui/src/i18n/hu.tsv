@@ -2377,6 +2377,7 @@ file-filter	Templates	Sablonok
 	Lock Grid	Rács zárolása
 	Lock Guides	Segédvonalak zárolása
 	Lock Guides by Default	Segédvonalak zárolása alapértelmezetten
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Rajztábla-segédvonalak Cmd/Ctrl + húzással a vonalzóból
 	Lock Others	Többi zárolása
 	Lock Slices	Szeletek zárolása
 	Lock Station Point	Nézőpont zárolása

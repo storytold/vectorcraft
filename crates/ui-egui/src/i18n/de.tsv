@@ -1893,6 +1893,7 @@ file-filter	Templates	Vorlagen
 	Lock Grid	Raster sperren
 	Lock Guides	Hilfslinien sperren
 	Lock Guides by Default	Hilfslinien standardmäßig sperren
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Zeichenflächen-Hilfslinien mit Cmd/Ctrl + Ziehen aus dem Lineal
 	Lock Others	Andere sperren
 	Lock Slices	Slices sperren
 	Lock Station Point	Standpunkt sperren
