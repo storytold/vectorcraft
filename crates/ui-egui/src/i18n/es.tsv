@@ -3575,6 +3575,8 @@ digits	Malayalam	Malayálam
 	Copies per Sheet (as many as fit, in a grid)	Copias por hoja (tantas como quepan, en cuadrícula)
 	Gutter:	Medianil:
 	Tint	Matiz
+	Fill Tint	Matiz de relleno
+	Stroke Tint	Matiz de trazo
 	Tip extends past the end point	La punta se extiende más allá del punto final
 	Tip on the end point	Punta en el punto final
 	Title Case	Tipo Título

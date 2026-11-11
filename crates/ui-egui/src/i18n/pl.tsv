@@ -2201,6 +2201,8 @@ digits	Malayalam	Malajalam
 	Green	Zielony
 	Shifts the tints of global and spot colors; other colors stay.	Przesuwa tinty kolorów globalnych i dodatkowych; pozostałe kolory bez zmian.
 	Tint	Tinta
+	Fill Tint	Tinta wypełnienia
+	Stroke Tint	Tinta obrysu
 	Color Guide Options	Opcje przewodnika kolorów
 	Less	Mniej
 	Steps:	Kroki:

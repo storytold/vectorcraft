@@ -2285,6 +2285,8 @@ digits	Malayalam	Malajálamské
 	Green	Zelená
 	Shifts the tints of global and spot colors; other colors stay.	Posune tóny globálních a přímých barev; ostatní barvy zůstanou.
 	Tint	Tón
+	Fill Tint	Tón výplně
+	Stroke Tint	Tón tahu
 	Color Guide Options	Možnosti průvodce barvami
 	Less	Méně
 	Steps:	Kroky:

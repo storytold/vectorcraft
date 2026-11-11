@@ -2244,6 +2244,8 @@ digits	Malayalam	Malajalam
 	Green	Vihreä
 	Shifts the tints of global and spot colors; other colors stay.	Siirtää globaalien värien ja spottivärien sävyjä; muut värit säilyvät.
 	Tint	Sävy
+	Fill Tint	Täytön sävy
+	Stroke Tint	Viivan sävy
 	Color Guide Options	Väriopasteen asetukset
 	Less	Vähemmän
 	Steps:	Vaiheet:

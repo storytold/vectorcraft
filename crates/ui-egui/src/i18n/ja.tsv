@@ -3890,6 +3890,8 @@ file-filter	Templates	テンプレート
 	Text Wrap Options	テキストの回り込みオプション
 	Tile Full Pages	ページ全体を分割
 	Tint	濃度
+	Fill Tint	濃度 (塗り)
+	Stroke Tint	濃度 (線)
 	Tip extends past the end point	先端をパスの端点より先に伸ばす
 	Tip on the end point	先端をパスの端点に合わせる
 	Top	上

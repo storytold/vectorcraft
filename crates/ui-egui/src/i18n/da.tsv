@@ -2089,6 +2089,8 @@ digits	Malayalam	Malayalam
 	Green	Grøn
 	Shifts the tints of global and spot colors; other colors stay.	Flytter nuancerne af globale farver og spotfarver; andre farver forbliver uændrede.
 	Tint	Nuance
+	Fill Tint	Fyldnuance
+	Stroke Tint	Stregnuance
 	Color Guide Options	Indstillinger for farveguide
 	Less	Mindre
 	Steps:	Trin:

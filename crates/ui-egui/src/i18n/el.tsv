@@ -2085,6 +2085,8 @@ font-technology	Variable	Μεταβλητές
 	Threshold	Κατώφλι
 	Tile	Παράθεση
 	Tint	Χρωματική απόχρωση
+	Fill Tint	Χρωματική απόχρωση γεμίσματος
+	Stroke Tint	Χρωματική απόχρωση περιγράμματος
 	Tolerance	Ανοχή
 	Tolerance:	Ανοχή:
 	Tool Options…	Επιλογές εργαλείου…

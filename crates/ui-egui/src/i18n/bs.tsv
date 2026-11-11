@@ -2256,6 +2256,8 @@ digits	Malayalam	Malajalam
 	Green	Zelena
 	Shifts the tints of global and spot colors; other colors stay.	Pomjera nijanse globalnih i spot boja; ostale boje ostaju.
 	Tint	Preliv
+	Fill Tint	Preliv ispune
+	Stroke Tint	Preliv poteza
 	Color Guide Options	Opcije vodiča za boje
 	Less	Manje
 	Steps:	Koraci:
