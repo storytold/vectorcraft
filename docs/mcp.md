@@ -137,6 +137,12 @@ the suite) keep the agent to the folders you give it:
   closed. When another hidden library has the same file name, the libraries take `loaded/<file name>`,
   `loaded/<file name> (2)`, `(3)` and so on in the order of their full ids, and each one keeps its id in both
   replies. The other entries keep their order, and the app's own state is not changed.
+- `links.list`, `links.check`, `links.info` and the `missingLinks`, `modifiedLinks` and `updatedLinks` rows of
+  `document.open` leave out a linked file's path when the file is outside the read roots (a relative path is taken
+  from the document's folder): `path`, `found`, and in `links.info` also `link` and `location`, with the `fileSize`
+  and `modified` the document keeps of that file. Each row keeps its id, `name` (`fileName`), status and other
+  fields. This applies to every document, also one the person or a client with wider roots opened. The paths a
+  client gives `links.relink` and `links.unembed` stay in their replies, and the document's links are not changed.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
@@ -5710,10 +5716,12 @@ reduced size"; the document keeps the whole file) or, when it can't be read that
 allowance has bytes, drawn as a crossed gray box on the canvas and left out of exports ("too large to draw"); `document.open` and `file.place` say the same in their `warnings`). `links.info {id?}` is the Link Info: `image.info`'s fields plus
 `status`, `format`, the file's `ppi` and the `effectivePpi`, `scale` (% of 100%), `rotation` (degrees,
 counter-clockwise), `placement` and, for a linked file, `fileName`, `location`, `fileSize`, `created`, `modified`.
+With automation read roots, a file outside them has no `path` or `found` in `links.list` and `links.check`, and no
+`link`, `path`, `location`, `fileSize` or `modified` in `links.info`; its row keeps the file's name.
 `links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
 (another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
-`links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeftÃ¢â‚¬Â¦bottomRight,
+`links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeft…bottomRight,
 clip?}` decides how a relinked or updated file takes an image's place (default `bounds`: stretched into the old
 bounds; `clip` puts it in a clip group of the old bounds when it is larger). The UI commands `links.editOriginal` and
 `links.reveal` open the linked file in its app or show it in its folder (desktop). Edit Original runs only from the app's window,
