@@ -1819,6 +1819,8 @@ script reads files with them:
   objects for the same path are different objects.
 - `name`, `displayName`, `fsName`, `absoluteURI`, `fullName`, `relativeURI`, `path`, `parent` and `toString()` come
   from the path. `exists`, `length`, `created`, `modified`, `hidden`, `readonly` and `alias` read the file system.
+  `exists` is true for a `File` only when the path names something other than a folder, and for a `Folder` only
+  when it names a folder.
   `File.encode`, `File.decode` and `File.isEncodingAvailable` (and the same on `Folder`), `File.fs`, and the folders
   `Folder.temp`, `Folder.desktop`, `Folder.myDocuments`, `Folder.userData` and the others are there too.
 - `open('r')` opens a file to read, and `read([chars])`, `readln()`, `readch()`, `seek(pos[, mode])`, `tell()`, `eof`

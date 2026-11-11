@@ -183,11 +183,15 @@ fn home_folder() -> String {
 }
 
 /// The folders `Folder.temp`, `Folder.desktop` and the others name, `null` where there is none.
+/// On the web every one is `null`, and no platform folder is looked up.
 fn locations(home: &str) -> Data {
+    if cfg!(target_arch = "wasm32") {
+        return Data::Object(PLACES.iter().map(|k| (k.to_string(), Data::Null)).collect());
+    }
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
     let join = |a: &str, b: &str| Path::new(a).join(b).to_string_lossy().into_owned();
     let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_string_lossy().into_owned()));
-    let temp = std::env::temp_dir().to_string_lossy().into_owned();
+    let temp = temp_folder().to_string_lossy().into_owned();
     let (user_data, app_data, common, system, trash) = if WINDOWS {
         (env("APPDATA"), env("PROGRAMDATA"), env("CommonProgramFiles"), env("SystemRoot"), None)
     } else if cfg!(target_os = "macos") {
@@ -203,7 +207,6 @@ fn locations(home: &str) -> Data {
         (Some(data.clone()), Some("/usr/share".to_string()), Some("/usr/share".to_string()), Some("/".to_string()), Some(join(&data, "Trash")))
     };
     let s = |v: Option<String>| v.map_or(Data::Null, Data::String);
-    let web = cfg!(target_arch = "wasm32");
     let places = vec![
         ("appData", app_data),
         ("appPackage", exe.clone()),
@@ -216,7 +219,15 @@ fn locations(home: &str) -> Data {
         ("trash", trash),
         ("userData", user_data),
     ];
-    Data::Object(places.into_iter().map(|(k, v)| (k.to_string(), if web { Data::Null } else { s(v) })).collect())
+    Data::Object(places.into_iter().map(|(k, v)| (k.to_string(), s(v))).collect())
+}
+
+/// The names [`locations`] gives.
+const PLACES: [&str; 10] = ["appData", "appPackage", "commonFiles", "desktop", "myDocuments", "startup", "system", "temp", "trash", "userData"];
+
+/// The folder for temporary files: the platform's, or on the web the root, where nothing is read.
+fn temp_folder() -> std::path::PathBuf {
+    if cfg!(target_arch = "wasm32") { std::path::PathBuf::from("/") } else { std::env::temp_dir() }
 }
 
 /// The start of an absolute path.
@@ -343,12 +354,12 @@ impl Pathname {
     }
 }
 
-/// `s` with every character but letters, digits and `-_.!~*'()` written as `%xx` escapes of its
+/// `s` with every character but letters, digits and `/-_.!~*'()` written as `%xx` escapes of its
 /// UTF-8 bytes (RFC 2396).
 fn encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
-        if b.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&b) {
+        if b.is_ascii_alphanumeric() || b"/-_.!~*'()".contains(&b) {
             out.push(b as char);
         } else {
             out.push_str(&format!("%{b:02X}"));
@@ -835,14 +846,30 @@ fn temp_name(host: &Host, _: &[Data]) -> Result<Data, HostError> {
     let mut disk = host.disk.borrow_mut();
     disk.temps += 1;
     let name = format!("vc{:05}.tmp", disk.temps);
-    Ok(Data::String(std::env::temp_dir().join(name).to_string_lossy().into_owned()))
+    Ok(Data::String(temp_folder().join(name).to_string_lossy().into_owned()))
+}
+
+fn locations_of(host: &Host, _: &[Data]) -> Result<Data, HostError> {
+    Ok(locations(&host.disk.borrow().home))
+}
+
+fn encode_text(_: &Host, a: &[Data]) -> Result<Data, HostError> {
+    Ok(Data::String(encode(&arg_text(a, 0))))
+}
+
+fn decode_text(_: &Host, a: &[Data]) -> Result<Data, HostError> {
+    Ok(Data::String(decode(&arg_text(a, 0))))
+}
+
+fn encoding_available(_: &Host, a: &[Data]) -> Result<Data, HostError> {
+    Ok(Data::Bool(Encoding::parse(&arg_text(a, 0)).is_some()))
 }
 
 /// Adds `File` and `Folder` to the realm.
 pub(super) fn install(realm: &mut Realm, host: &Rc<Host>) -> Result<(), RunError> {
-    let (start, home) = {
+    let start = {
         let disk = host.disk.borrow();
-        (disk.pathname(&disk.start, &disk.start, false).fs(), disk.home.clone())
+        disk.pathname(&disk.start, &disk.start, false).fs()
     };
     let value = |s: &str| HostItem::Value(Data::String(s.to_string()));
     let text = HostItem::Object(vec![
@@ -851,7 +878,6 @@ pub(super) fn install(realm: &mut Realm, host: &Rc<Host>) -> Result<(), RunError
         ("noPicker".into(), value(NO_PICKER)),
         ("badMode".into(), value(BAD_MODE)),
     ]);
-    let pure = |f: fn(&str) -> Data| HostItem::Function(Rc::new(move |a| Ok(f(&arg_text(&a, 0)))));
     let system = if WINDOWS {
         "Windows"
     } else if cfg!(target_os = "macos") {
@@ -864,10 +890,10 @@ pub(super) fn install(realm: &mut Realm, host: &Rc<Host>) -> Result<(), RunError
         ("system".into(), value(system)),
         ("lineFeed".into(), value(if WINDOWS { "Windows" } else { "Unix" })),
         ("current".into(), HostItem::Function(Rc::new(move |_| Ok(Data::String(start.clone()))))),
-        ("locations".into(), HostItem::Function(Rc::new(move |_| Ok(locations(&home))))),
-        ("encode".into(), pure(|s| Data::String(encode(s)))),
-        ("decode".into(), pure(|s| Data::String(decode(s)))),
-        ("encodingAvailable".into(), pure(|s| Data::Bool(Encoding::parse(s).is_some()))),
+        ("locations".into(), call(host, locations_of)),
+        ("encode".into(), call(host, encode_text)),
+        ("decode".into(), call(host, decode_text)),
+        ("encodingAvailable".into(), call(host, encoding_available)),
         ("parse".into(), call(host, parse)),
         ("relative".into(), call(host, relative)),
         ("tempName".into(), call(host, temp_name)),
@@ -935,7 +961,7 @@ mod tests {
     #[test]
     fn uri_escapes_are_utf8_both_ways() {
         assert_eq!(encode("caf\u{e9} 1"), "caf%C3%A9%201");
-        assert_eq!(encode("a-_.!~*'()/b"), "a-_.!~*'()%2Fb");
+        assert_eq!(encode("a-_.!~*'()/b"), "a-_.!~*'()/b");
         assert_eq!(decode("caf%C3%A9%20x"), "caf\u{e9} x");
         assert_eq!(decode("100%"), "100%");
         assert_eq!(decode("%E9"), "%E9", "a lone Latin-1 escape is not UTF-8");
