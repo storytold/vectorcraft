@@ -7374,13 +7374,14 @@ Character Style Options uses `charStyle.edit {name, to, attrs}` to replace the n
 attribute map in one undo step. `to` is trimmed and must be unique. The command updates text using the style
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`
 dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`, `tracking`, `case`,
-`position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `rotation`,
-`language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
+`position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `tcyUpDown`,
+`tcyLeftRight`, `rotation`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
 Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
-`baseline_shift` (points, -1296 to 1296), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
+`baseline_shift` (points, -1296 to 1296), the Tate-chu-yoko Settings `tcyUpDown` and `tcyLeftRight` (points,
+-1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.
@@ -7409,7 +7410,7 @@ captured attributes. Without selected text, it starts with the character default
 (including `charAlign: "emBoxCenter"` in Japanese); changing a Basic field keeps other seeded attributes.
 Without selected text, the New Paragraph Style dialog sends no `attrs`, and the engine gives the new style the
 paragraph defaults for the interface language. Reset Panel in Basic Character
-Formats removes those fields from the definition, Reset Panel in Advanced Character Formats removes its five, Reset
+Formats removes those fields from the definition, Reset Panel in Advanced Character Formats removes its seven, Reset
 Panel in Character Color removes its five attributes and Reset Panel in OpenType Features removes `features`.
 `ui.charStyleOptions.resetPanel {}` performs that reset for the section selected in either character-style
 dialog; it is disabled on General.
