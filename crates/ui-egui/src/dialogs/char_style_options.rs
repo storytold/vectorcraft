@@ -661,18 +661,22 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
             ("kerning", tl!("Kerning")),
             ("tracking", tl!("Tracking")),
         ] {
-            ui.label(caption);
+            let row = ui.label(caption);
             if d.fields.get(key).is_some_and(Value::is_null) {
                 d.fields.insert(key.into(), json!(""));
             }
-            form::text(ui, d, key, 190.0);
+            ui.label_inputs_by(row.id, |ui| form::text(ui, d, key, 190.0));
             ui.end_row();
         }
-        ui.label(tl!("Case"));
-        choice(ui, d, "case", &[("normal", tl!("Normal")), ("allCaps", tl!("All Caps")), ("smallCaps", tl!("Small Caps"))]);
+        let row = ui.label(tl!("Case"));
+        ui.label_inputs_by(row.id, |ui| {
+            choice(ui, d, "case", &[("normal", tl!("Normal")), ("allCaps", tl!("All Caps")), ("smallCaps", tl!("Small Caps"))]);
+        });
         ui.end_row();
-        ui.label(tl!("Position"));
-        choice(ui, d, "position", &[("normal", tl!("Normal")), ("superscript", tl!("Superscript")), ("subscript", tl!("Subscript"))]);
+        let row = ui.label(tl!("Position"));
+        ui.label_inputs_by(row.id, |ui| {
+            choice(ui, d, "position", &[("normal", tl!("Normal")), ("superscript", tl!("Superscript")), ("subscript", tl!("Subscript"))]);
+        });
         ui.end_row();
         for (key, caption) in [
             ("underline", tl!("Underline")),
@@ -693,20 +697,22 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
             }
             ui.end_row();
         }
-        ui.label(tl!("Character Alignment"));
-        choice(
-            ui,
-            d,
-            "charAlign",
-            &[
-                ("romanBaseline", tl!("Roman Baseline")),
-                ("emBoxTop", tl!("Em Box Top/Right")),
-                ("emBoxCenter", tl!("Em Box Center")),
-                ("emBoxBottom", tl!("Em Box Bottom/Left")),
-                ("icfTop", tl!("ICF Top/Right")),
-                ("icfBottom", tl!("ICF Bottom/Left")),
-            ],
-        );
+        let row = ui.label(tl!("Character Alignment"));
+        ui.label_inputs_by(row.id, |ui| {
+            choice(
+                ui,
+                d,
+                "charAlign",
+                &[
+                    ("romanBaseline", tl!("Roman Baseline")),
+                    ("emBoxTop", tl!("Em Box Top/Right")),
+                    ("emBoxCenter", tl!("Em Box Center")),
+                    ("emBoxBottom", tl!("Em Box Bottom/Left")),
+                    ("icfTop", tl!("ICF Top/Right")),
+                    ("icfBottom", tl!("ICF Bottom/Left")),
+                ],
+            );
+        });
         ui.end_row();
     });
 }
@@ -721,20 +727,20 @@ pub(crate) fn advanced_body(ui: &mut egui::Ui, d: &mut Dialog) {
             ("baseline_shift", tl!("Baseline Shift"), "pt"),
             ("rotation", tl!("Character Rotation"), "°"),
         ] {
-            ui.label(caption);
+            let row = ui.label(caption);
             if d.fields.get(key).is_some_and(Value::is_null) {
                 d.fields.insert(key.into(), json!(""));
             }
             ui.horizontal(|ui| {
-                form::text(ui, d, key, 160.0);
+                ui.label_inputs_by(row.id, |ui| form::text(ui, d, key, 160.0));
                 ui.label(unit);
             });
             ui.end_row();
         }
-        ui.label(tl!("Language:"));
+        let row = ui.label(tl!("Language:"));
         let names: Vec<&str> = std::iter::once(" ").chain(vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, _, _)| *name)).collect();
         let current = d.fields.get("language").and_then(Value::as_str).unwrap_or("").to_string();
-        if let Some(i) = crate::widgets::dropdown(ui, (KIND, "language"), &current, &names, 190.0) {
+        if let Some(i) = ui.label_inputs_by(row.id, |ui| crate::widgets::dropdown(ui, (KIND, "language"), &current, &names, 190.0)) {
             d.fields.insert("language".into(), if i == 0 { Value::Null } else { names.get(i).map_or(Value::Null, |name| json!(name)) });
         }
         ui.end_row();
@@ -799,31 +805,31 @@ fn paint_choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
 pub(crate) fn color_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("character-style-color").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         for (key, caption) in [("fill", tl!("Fill")), ("stroke", tl!("Stroke"))] {
-            ui.label(caption);
-            paint_choice(ui, d, key);
+            let row = ui.label(caption);
+            ui.label_inputs_by(row.id, |ui| paint_choice(ui, d, key));
             ui.end_row();
             let tint_key = format!("{key}_tint");
-            ui.label(tl!("Tint"));
+            let row = ui.label(tl!("Tint"));
             if d.fields.get(&tint_key).is_none_or(Value::is_null) {
                 d.fields.insert(tint_key.clone(), json!(""));
             }
             let linked = d.fields.get(key).and_then(|p| p.get("swatch")).is_some_and(Value::is_string);
             ui.add_enabled_ui(linked, |ui| {
                 ui.horizontal(|ui| {
-                    form::text(ui, d, &tint_key, 160.0);
+                    ui.label_inputs_by(row.id, |ui| form::text(ui, d, &tint_key, 160.0));
                     ui.label("%");
                 });
             });
             ui.end_row();
         }
-        ui.label(tl!("Weight"));
+        let row = ui.label(tl!("Weight"));
         if d.fields.get("stroke_width").is_none_or(Value::is_null) {
             d.fields.insert("stroke_width".into(), json!(""));
         }
         let stroked = d.fields.get("stroke").and_then(|p| p.get("type")).and_then(Value::as_str) != Some("none");
         ui.add_enabled_ui(stroked, |ui| {
             ui.horizontal(|ui| {
-                form::text(ui, d, "stroke_width", 160.0);
+                ui.label_inputs_by(row.id, |ui| form::text(ui, d, "stroke_width", 160.0));
                 ui.label("pt");
             });
         });
@@ -839,11 +845,11 @@ pub(crate) fn opentype_body(ui: &mut egui::Ui, d: &mut Dialog) {
     let figures: Vec<(&str, &str)> = FIGURE_VALUES.into_iter().zip(crate::panels::opentype::FIGURES).collect();
     let positions: Vec<(&str, &str)> = POSITION_VALUES.into_iter().zip(crate::panels::opentype::POSITIONS).collect();
     egui::Grid::new("character-style-opentype").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        ui.label(tl!("Figure:"));
-        choice(ui, d, "ot_figure", &figures);
+        let row = ui.label(tl!("Figure:"));
+        ui.label_inputs_by(row.id, |ui| choice(ui, d, "ot_figure", &figures));
         ui.end_row();
-        ui.label(tl!("Position:"));
-        choice(ui, d, "ot_position", &positions);
+        let row = ui.label(tl!("Position:"));
+        ui.label_inputs_by(row.id, |ui| choice(ui, d, "ot_position", &positions));
         ui.end_row();
         for (key, caption) in [
             ("ot_liga", tl!("Standard Ligatures")),
@@ -929,8 +935,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                         opentype_body(ui, d);
                     } else {
                         ui.horizontal(|ui| {
-                            ui.label(tl!("Style Name:"));
-                            form::text(ui, d, "name", 190.0);
+                            let row = ui.label(tl!("Style Name:"));
+                            ui.label_inputs_by(row.id, |ui| form::text(ui, d, "name", 190.0));
                         });
                         ui.separator();
                         if let Ok(attrs) = edited_attrs(d) {
@@ -1837,7 +1843,7 @@ mod tests {
             };
             let shown = crate::i18n::message(crate::i18n::current(), &why);
             let mut fonts = false;
-            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).with_accessibility_check(false).build_ui_state(
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
                 move |ui, app: &mut VectorcraftApp| {
                     if !std::mem::replace(&mut fonts, true) {
                         crate::theme::install_fonts(ui.ctx());
@@ -1854,6 +1860,36 @@ mod tests {
             assert!(super::super::confirm(app).is_err(), "{key} confirm");
             assert!(app.ui.dialog.is_some(), "{key} dialog stays open");
             assert_eq!(app.session.doc().unwrap().doc.char_styles.len(), styles, "{key} style count");
+        }
+    }
+
+    #[test]
+    fn every_section_names_its_inputs_in_both_dialogs() {
+        for new_style in [false, true] {
+            for section in ["general", "basic", "advanced", "color", "opentype"] {
+                let mut app = app();
+                if new_style {
+                    app.run("ui.newCharStyle", json!({})).unwrap();
+                } else {
+                    app.run("charStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+                    open(&mut app, "Body").unwrap();
+                }
+                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
+                let mut fonts = false;
+                // The harness fails a frame that leaves an input without an accessible name.
+                let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+                    move |ui, app: &mut VectorcraftApp| {
+                        if !std::mem::replace(&mut fonts, true) {
+                            crate::theme::install_fonts(ui.ctx());
+                            return;
+                        }
+                        super::super::show(app, ui.ctx());
+                    },
+                    app,
+                );
+                h.run_steps(4);
+                assert!(h.unnamed_widgets().is_empty(), "new {new_style}, {section}: {:?}", h.unnamed_widgets());
+            }
         }
     }
 
