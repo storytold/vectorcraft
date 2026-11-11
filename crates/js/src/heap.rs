@@ -175,14 +175,13 @@ pub(crate) enum NativeKind {
 
 /// What a function object runs. `Bound` is a function made by `Function.prototype.bind` (section
 /// 15.3.4.5): calling it calls `target` with `this` and `args` before the arguments it is given.
-/// `Data` is a host function given [`crate::Data`]; with `text`, each argument arrives as the
-/// string `String(value)` gives.
+/// `Data` is a host function given [`crate::Data`], its arguments read as `read` says.
 #[derive(Clone)]
 pub(crate) enum Func {
     Closure { code: Rc<Code>, env: EnvId },
     Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
-    Data { f: DataFn, name: Rc<str>, text: bool },
+    Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
     Bound { target: ObjId, this: Value, args: Rc<[Value]> },
 }
 

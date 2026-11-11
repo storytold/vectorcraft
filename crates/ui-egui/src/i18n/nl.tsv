@@ -4109,6 +4109,7 @@ imageTrace	Outline	Contour
 	Stop Script	Script stoppen
 	Show External Script Warning	Waarschuwing voor externe scripts tonen
 	A Script Is Running	Er wordt een script uitgevoerd
+	Script Alert	Scriptmelding
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen
 	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.

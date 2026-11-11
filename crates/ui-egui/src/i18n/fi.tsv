@@ -4313,6 +4313,7 @@ imageTrace	Outline	Ääriviiva
 	Stop Script	Pysäytä komentosarja
 	Show External Script Warning	Näytä ulkoisten komentosarjojen varoitus
 	A Script Is Running	Komentosarja on käynnissä
+	Script Alert	Komentosarjan ilmoitus
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
 	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
 	Stop the script and undo what it did? Then quit again.	Pysäytetäänkö komentosarja ja kumotaan sen muutokset? Lopeta sitten uudelleen.

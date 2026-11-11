@@ -27,8 +27,14 @@
 //! there too. The session's console gets a start line, the run's output, its uncaught error, an end
 //! line and a report line; the run's report holds its own output and error, its time, its host
 //! calls by kind and its slowest commands.
+//!
+//! `alert`, `confirm` and `prompt` open dialogs ([`dialogs`]): in the app the run waits for the
+//! person's answer, and a run with nobody to ask takes its answers from `script.run`'s `answers`.
 
 pub mod console;
+pub mod dialogs;
+
+pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -80,7 +86,7 @@ const MAX_BRIDGE_BYTES: u64 = 4 << 30;
 /// The version `vc.api.version` gives.
 pub const API_VERSION: &str = "1.0";
 /// The features `vc.api.has` knows.
-pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console"];
+pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs"];
 /// The most commands a run's report lists in `slowestCommands`.
 pub const SLOWEST_COMMANDS: usize = 5;
 
@@ -135,6 +141,8 @@ pub(crate) struct Request {
     pub source: String,
     pub args: Map<String, Value>,
     pub fuel: u64,
+    /// The answers to the dialogs of a run with nobody to ask, in order.
+    pub answers: Vec<DialogAnswer>,
 }
 
 thread_local! {
@@ -468,6 +476,8 @@ struct Host {
     commands: RefCell<HashMap<&'static str, (u64, u128, u128)>>,
     /// The time the run's slices took, in nanoseconds.
     run_nanos: Cell<u128>,
+    /// `alert`, `confirm` and `prompt`: their answers and the list the report gives.
+    dialogs: dialogs::Dialogs,
 }
 
 /// A run's host calls by kind, as its report gives them in `hostCallCounts`.
@@ -975,7 +985,7 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 
 /// `message`, with what to do about a failure that comes from a script written for another program.
 fn explained(kind: &RunErrorKind, message: &str, source: &str, line: u32) -> String {
-    const HOST_OBJECTS: &[&str] = &["app", "alert", "confirm", "prompt", "File", "Folder", "Window", "BridgeTalk", "activeDocument", "documents"];
+    const HOST_OBJECTS: &[&str] = &["app", "File", "Folder", "Window", "BridgeTalk", "activeDocument", "documents"];
     let names_host_object =
         message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
     let directive =
@@ -1029,6 +1039,23 @@ impl Session {
     /// to stop no longer waits: the next [`Session::script_pump`] ends it.
     pub fn script_waiting(&self) -> bool {
         !self.script_stop.is_set() && self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.waiting.get())).unwrap_or(false)
+    }
+
+    /// The dialog (`alert`, `confirm` or `prompt`) the running script waits at for the person's
+    /// answer. A run asked to stop no longer waits: the next [`Session::script_pump`] ends it.
+    pub fn script_dialog(&self) -> Option<ScriptDialog> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.dialogs.waiting())).flatten()
+    }
+
+    /// Gives the dialog the running script waits at its answer; the next [`Session::script_pump`]
+    /// goes on from the call. → false when nothing waits, the answer is for another kind of
+    /// dialog, or a prompt's text is longer than [`dialogs::MAX_PROMPT_BYTES`].
+    pub fn script_answer(&mut self, answer: DialogAnswer) -> bool {
+        let Some(k) = self.script_key.as_ref().filter(|_| !self.script_stop.is_set()) else { return false };
+        with_job(k, |j| j.host.dialogs.answer(&mut j.realm, answer)).unwrap_or(false)
     }
 
     /// The name of the running script.
@@ -1132,6 +1159,7 @@ impl Session {
             counts: Counts::default(),
             commands: RefCell::default(),
             run_nanos: Cell::new(0),
+            dialogs: dialogs::Dialogs::new(self.script_frames, &realm, request.answers),
         });
         let args = to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0))
             .map_err(|place| EngineError::BadParams { cmd: "script.run".into(), msg: format!("`args{place}` is nested more than 64 levels deep") })?;
@@ -1140,6 +1168,7 @@ impl Session {
         let started = realm
             .define_host_object("vc", vc_object(&host, args))
             .and_then(|()| realm.define_host_object("$", dollar_object(&host)))
+            .and_then(|()| dialogs::install(&mut realm, &host))
             .and_then(|()| realm.start(&request.source));
         if let Err(e) = started {
             let mut report = failure_report(&request.name, &e, &request.source, &host, 0, 0);
@@ -1163,10 +1192,19 @@ impl Session {
         let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.0)) else {
             return Some(Err(EngineError::Other(JOB_GONE.to_string())));
         };
-        if job.host.waiting.get() && !self.script_stop.is_set() {
+        if let Some(e) = job.host.dialogs.take_failure() {
+            return Some(self.script_failed(job, &e));
+        }
+        if (job.host.waiting.get() || job.host.dialogs.is_waiting()) && !self.script_stop.is_set() {
             JOBS.with(|jobs| jobs.borrow_mut().insert(key.0, job));
             self.script_key = Some(key);
             return None;
+        }
+        // A stop while a dialog waits ends the run there; the interpreter cannot go on from the call.
+        if job.realm.waits() {
+            let kind = LimitKind::Interrupted;
+            let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
+            return Some(self.script_failed(job, &e));
         }
         if vectorcraft_doc::cancel::check().is_err() {
             self.script_stop.set();
@@ -1184,6 +1222,12 @@ impl Session {
                 self.script_key = Some(key);
                 None
             }
+            Ok(Ok(Progress::Done(_))) if job.host.dialogs.unused() > 0 => {
+                let n = job.host.dialogs.unused();
+                let kind = LimitKind::Host;
+                let message = format!("`answers` has {n} answer{} the script did not use", if n == 1 { "" } else { "s" });
+                Some(self.script_failed(job, &RunError { kind: RunErrorKind::Limit(kind), message, line: 0, column: 0 }))
+            }
             Ok(Ok(Progress::Done(_))) => {
                 let r = self.script_commit(job);
                 self.trim_histories();
@@ -1193,6 +1237,7 @@ impl Session {
     }
 
     fn script_failed(&mut self, job: Job, e: &RunError) -> Result<Value> {
+        job.host.dialogs.stopped();
         let fuel_left = job.realm.fuel_left();
         let mut report = failure_report(&job.name, e, "", &job.host, fuel_left, job.realm.limits().fuel.saturating_sub(fuel_left));
         close_run(self, &job.host, &mut report, ending(&e.kind));
@@ -1288,7 +1333,7 @@ impl Session {
             if let Some(result) = self.script_pump() {
                 return result;
             }
-            if self.script_waiting() {
+            if self.script_waiting() || self.script_dialog().is_some() {
                 self.script_stop.set();
             }
         }
@@ -1347,8 +1392,8 @@ fn line_to(s: &mut Session, host: &Host, entry: console::Entry, cut: bool) {
 
 /// Ends the console lines of `host`'s run: the line `$.write` left unended, then for a failed run
 /// (`report["ok"]` false) its error as `name:line:column: message`, then an end line and a report
-/// line in the session's console. Adds the run's time, host calls by kind, slowest commands and
-/// console to `report`.
+/// line in the session's console. Adds the run's time, host calls by kind, slowest commands,
+/// console and dialogs to `report`.
 fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::Ending) {
     let mut pending = std::mem::take(&mut *host.pending.borrow_mut());
     if !pending.is_empty() {
@@ -1379,6 +1424,7 @@ fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::
         o.insert("hostCallCounts".into(), host.counts.json());
         o.insert("slowestCommands".into(), Value::Array(slow_json));
         o.insert("console".into(), host.console.borrow().report());
+        host.dialogs.report(o);
     }
 }
 

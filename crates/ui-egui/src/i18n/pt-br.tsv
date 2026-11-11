@@ -5066,6 +5066,7 @@ axis	Both	Ambos
 	Stop Script	Parar script
 	Show External Script Warning	Mostrar aviso de scripts externos
 	A Script Is Running	Um script está em execução
+	Script Alert	Alerta do script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Um script pode alterar os documentos abertos e gravar arquivos pelos comandos que executa. Execute apenas scripts em que você confia.
 	Do not show this warning again	Não mostrar este aviso novamente
 	Stop the script and undo what it did? Then quit again.	Parar o script e desfazer o que ele fez? Depois, saia novamente.

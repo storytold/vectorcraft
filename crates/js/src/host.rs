@@ -57,10 +57,37 @@ pub enum HostError {
     Range(String),
     /// Ends the run with [`LimitKind::Host`] and this message. The script cannot catch it.
     Abort(String),
+    /// Pauses the run at this call: [`crate::Realm::advance`] returns [`crate::Progress::Paused`],
+    /// and the call's result is the value [`crate::Realm::answer`] gives it. A function may return
+    /// it only while [`crate::Realm::wait_flag`] is set; otherwise the run ends with an internal
+    /// error.
+    Wait,
 }
 
 /// A function the host gives a script, with its arguments converted.
 pub type HostFunction = Rc<dyn Fn(Vec<Data>) -> Result<Data, HostError>>;
+
+/// How one argument of a [`HostItem::Converted`] function is read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Arg {
+    /// The string `String(value)` gives.
+    Text,
+    /// `undefined` as [`Data::Undefined`], any other value as the string `String(value)` gives.
+    TextOrUndefined,
+    /// The boolean `Boolean(value)` gives.
+    Bool,
+}
+
+/// How the arguments of a host function are read.
+#[derive(Clone)]
+pub(crate) enum ArgRead {
+    /// Each as [`Data`].
+    Data,
+    /// Each as the string `String(value)` gives.
+    Text,
+    /// One by one as the list says; those past its end are not read.
+    Each(Rc<[Arg]>),
+}
 
 /// A member of an object the host adds to the global environment.
 #[derive(Clone)]
@@ -70,6 +97,9 @@ pub enum HostItem {
     Function(HostFunction),
     /// A function whose arguments arrive as strings, each the string `String(value)` gives.
     TextFunction(HostFunction),
+    /// A function whose arguments arrive converted one by one as the list says. Arguments past the
+    /// end of the list are not read and do not reach the function.
+    Converted(Vec<Arg>, HostFunction),
     /// A property whose value the function gives each time it is read.
     Getter(HostFunction),
     /// A frozen object with these members.
@@ -277,20 +307,32 @@ impl Interp {
         Ok(Value::Object(id))
     }
 
-    /// Calls host function `f`: reads its arguments (with `text`, each as the string `String(value)`
-    /// gives), runs it, and gives its result to the script.
-    pub(crate) fn call_data(&mut self, f: &crate::heap::DataFn, name: &Rc<str>, args: &[Value], text: bool) -> JsResult<Value> {
+    /// Calls host function `f`: reads its arguments as `how` says, runs it, and gives its result to
+    /// the script.
+    pub(crate) fn call_data(&mut self, f: &crate::heap::DataFn, name: &Rc<str>, args: &[Value], how: &ArgRead) -> JsResult<Value> {
         let mut reading = Reading { limits: self.data_limits, bytes: 0, entries: 0, ancestors: Vec::new(), path: Vec::new(), function: name.clone() };
+        let args = match how {
+            ArgRead::Each(list) => args.get(..list.len().min(args.len())).unwrap_or(args),
+            _ => args,
+        };
         let mut data = Vec::with_capacity(args.len());
         // A conversion can run the script's own `toString`, which may collect garbage.
         let mark = self.temp_roots.len();
-        if text {
+        if !matches!(how, ArgRead::Data) {
             self.temp_roots.extend(args.iter().cloned());
         }
         let mut read = Ok(());
         for (i, a) in args.iter().enumerate() {
             reading.path.push(Step::Index(u32::try_from(i).unwrap_or(u32::MAX)));
-            let d = if text { self.read_text(a, &mut reading) } else { self.read_data(a, &mut reading) };
+            let d = match how {
+                ArgRead::Data => self.read_data(a, &mut reading),
+                ArgRead::Text => self.read_text(a, &mut reading),
+                ArgRead::Each(list) => match list.get(i) {
+                    Some(Arg::TextOrUndefined) if matches!(a, Value::Undefined) => Ok(Data::Undefined),
+                    Some(Arg::Bool) => Ok(Data::Bool(a.truthy())),
+                    _ => self.read_text(a, &mut reading),
+                },
+            };
             match d {
                 Ok(d) => data.push(d),
                 Err(e) => {
@@ -302,8 +344,19 @@ impl Interp {
         }
         self.temp_roots.truncate(mark);
         read?;
-        match f(data) {
+        // Only the script's own code, in a run that can pause, can wait for a result.
+        let can_wait = self.in_slice && self.reentry == 0;
+        self.can_wait.set(can_wait);
+        let result = f(data);
+        self.can_wait.set(false);
+        match result {
             Ok(d) => self.write_data(d, 0, false),
+            Err(HostError::Wait) if can_wait => {
+                self.waiting = true;
+                self.pause.set(true);
+                Ok(Value::Undefined)
+            }
+            Err(HostError::Wait) => Err(Abrupt::Internal(format!("{name} waited for its result where the run cannot pause"))),
             Err(HostError::Abort(message)) => {
                 self.host_abort = Some(message);
                 Err(Abrupt::Limit(LimitKind::Host))
@@ -357,17 +410,28 @@ impl Interp {
         let full = format!("{path}.{name}");
         let prop = match item {
             HostItem::Value(d) => Prop::Data { value: self.write_data(d, 0, true)?, flags: ENUMERABLE },
-            HostItem::Function(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, false)), flags: ENUMERABLE },
-            HostItem::TextFunction(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, true)), flags: ENUMERABLE },
-            HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, false)), set: None, flags: ENUMERABLE },
+            HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, ArgRead::Data)), set: None, flags: ENUMERABLE },
             HostItem::Object(items) => Prop::Data { value: Value::Object(self.host_object(&full, items)?), flags: ENUMERABLE },
+            HostItem::Function(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Data)), flags: ENUMERABLE },
+            HostItem::TextFunction(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Text)), flags: ENUMERABLE },
+            HostItem::Converted(list, f) => {
+                Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Each(list.into()))), flags: ENUMERABLE }
+            }
         };
         self.define(o, key(&name), prop)
     }
 
-    fn host_function(&mut self, f: HostFunction, name: &str, text: bool) -> ObjId {
+    /// Adds the global function `name` with its arguments converted as `args` says. A script may
+    /// replace or delete it, as it may a built-in function.
+    pub(crate) fn install_host_function(&mut self, name: &str, args: Vec<Arg>, f: HostFunction) -> JsResult<()> {
+        let o = self.host_function(f, name, ArgRead::Each(args.into()));
+        let global = self.global;
+        self.define(global, key(name), Prop::Data { value: Value::Object(o), flags: crate::heap::HIDDEN })
+    }
+
+    fn host_function(&mut self, f: HostFunction, name: &str, read: ArgRead) -> ObjId {
         let proto = self.intrinsics.function_proto;
-        self.heap.alloc_object(Object::new(Class::Function(Func::Data { f, name: name.into(), text }), Some(proto)))
+        self.heap.alloc_object(Object::new(Class::Function(Func::Data { f, name: name.into(), read }), Some(proto)))
     }
 }
 
