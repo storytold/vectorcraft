@@ -3677,8 +3677,8 @@ is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `su
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
 `path.insertAnchor` keeps the direct-selected anchors and selected segments of the path on the same points: those
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
-selected as its two halves, and the new anchor is direct-selected with them. Undo restores the path and the selection
-in one step.
+selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
+the selection in one step.
 
 `path.reshape {id, x, y, dx, dy, tol?, focal?, radius?}` (a Reshape tool drag) grabs the path at `x`, `y`, adding an
 anchor there unless one lies within `tol` (3 by default), and moves that point by `dx`, `dy`.

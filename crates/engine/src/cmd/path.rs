@@ -1534,7 +1534,7 @@ fn stretch_weights(anchors: &[Anchor], closed: bool, roles: &[Stretch]) -> Vec<[
 /// After an anchor is added at `(si, added)` of path `id`, number the direct-selected anchors and
 /// selected segments after it on that subpath one higher, so the selection keeps the same points.
 /// A selected segment that the new anchor splits stays selected as its two halves, and the new
-/// anchor is added to the direct-selected anchors.
+/// anchor joins its ends in the anchors that move with it.
 fn renumber_after_insert(sel: &mut Selection, id: NodeId, si: usize, added: usize) {
     if let Some(set) = sel.anchors.get_mut(&id) {
         // A selected anchor index can name no anchor (`select.anchors` takes any index), so the
