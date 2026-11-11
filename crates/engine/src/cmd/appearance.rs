@@ -939,7 +939,10 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted))
     })?;
-    s.remap_appearance_item(&ids, |a| (!idx.contains(&a)).then(|| a - idx.iter().filter(|i| **i < a).count()));
+    // The rows removed from the active row's object, which need not come first in `ids`.
+    let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
+    let gone = active.and_then(|a| ids.iter().position(|id| *id == a)).and_then(|k| per.get(k)).unwrap_or(&idx);
+    s.remap_appearance_item(&ids, |a| (!gone.contains(&a)).then(|| a - gone.iter().filter(|i| **i < a).count()));
     ok()
 }
 
@@ -1023,10 +1026,12 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
     // Rows at or above each copy move up by one (by the block, for copies placed at `to`).
     let m = idx.len();
     let landed = active_at.or(first_at);
+    // The rows copied in the active row's object, which need not come first in `ids`.
+    let copied = active.and_then(|a| ids.iter().position(|id| *id == a)).and_then(|k| per.get(k)).unwrap_or(&idx);
     s.remap_appearance_item(&ids, |a| {
         Some(match to {
             Some(_) => a + if landed.is_some_and(|at| at <= a) { m } else { 0 },
-            None => a + idx.iter().filter(|i| **i < a).count(),
+            None => a + copied.iter().filter(|i| **i < a).count(),
         })
     });
     ok()
