@@ -199,8 +199,9 @@ fn writes_user_units(set: &PdfSettings) -> bool {
 }
 
 /// `long_pages_in_points` is on in a file without a standard. PDF/X files write long pages in
-/// points anyway, and PDF/A files keep the `UserUnit`, which keeps their page boundaries within
-/// 14,400 units (ISO 19005-2, 6.1.13).
+/// points anyway, and PDF/A files from PDF 1.5 on keep the `UserUnit`, which keeps their page
+/// boundaries within 14,400 units (ISO 19005-2, 6.1.13). A PDF/A file at PDF 1.4 has no
+/// `UserUnit` and writes long pages in points either way.
 fn long_pages_in_points(set: &PdfSettings) -> bool {
     set.long_pages_in_points && set.standard == Standard::None
 }
