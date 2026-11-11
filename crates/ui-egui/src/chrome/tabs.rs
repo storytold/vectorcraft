@@ -200,8 +200,8 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
         ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley.clone(), t.text);
         hovering_art |= crate::document_drag::hover_tab(app, &resp, win, xr.expand(3.0));
-        // A middle-click anywhere on the tab closes it as the × does (#6506), so a modified
-        // document still asks to save first.
+        // A middle-click anywhere on the tab closes it as the × does (#6506), so closing a
+        // modified document's last view still asks to save first.
         if xresp.clicked() || resp.middle_clicked() || xresp.middle_clicked() {
             close = Some(win);
         } else if resp.clicked() {

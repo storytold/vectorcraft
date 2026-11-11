@@ -553,6 +553,15 @@ fn a_middle_click_on_a_tab_closes_it_as_the_close_box_does() {
     assert_eq!(app.session.documents().len(), 2, "the middle-click closed the first document");
     assert_eq!((uid(&app, 0), uid(&app, 1)), (second, third));
     assert!(app.ui.dialog.is_none(), "a saved document closes without asking");
+    // A middle-click on the × itself closes too: the third, saved document's.
+    let titles = frame(&mut app, vec![]);
+    assert_eq!(titles.len(), 2, "{titles:?}");
+    let title = titles[1];
+    let x = if super::CLOSE_BEFORE_TITLE { title.left() - 16.0 } else { title.right() + 20.0 };
+    middle_click(&mut app, egui::pos2(x, title.center().y));
+    assert_eq!(app.session.documents().len(), 1, "the middle-click on the × closed the third document");
+    assert_eq!(uid(&app, 0), second);
+    assert!(app.ui.dialog.is_none(), "a saved document closes without asking");
 }
 
 /// One headless frame of the status bar; returns the artboard navigator's buttons, left to
