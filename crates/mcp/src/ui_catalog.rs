@@ -39,7 +39,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.save",
         "Save",
         "Cmd+S",
-        "{path?, format?, options?, svg?: {…SVG options}} = document.save, written through the app (a document saved as SVG, PDF or .ai, or opened from one Save can write back, saves as that again, with the same options); with no path known (never saved, converted) the Save As panel asks first",
+        "{path?, format?, options?, svg?: {…SVG options}} = document.save, written through the app (a document saved as SVG, PDF or .ai, or opened from one Save can write back, saves as that again, with the same options); with no path known (never saved, converted) the Save As panel asks first; ordinary Save to the document's existing file refused by filesystem permissions or a read-only volume opens Save As in Documents with the same name, format and options; cancelling keeps the original path and modified state. Explicit destinations and Close/Quit keep their existing error dialog. Automation gets READ_ONLY_LOCATION: followed by the reason and no panel",
     ),
     (
         "file.place",

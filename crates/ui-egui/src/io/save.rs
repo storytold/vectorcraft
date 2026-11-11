@@ -315,17 +315,23 @@ pub(super) fn save_suggesting(
         filters,
     };
     let picked = pick_finished(app, &pick, |picked, file_type| with_picked_type(picked, &pick.name, file_type, first.format, mode))?;
+    // Only the read-only retry carries options for the original format through Save As.
+    // A different format must use its own normal options flow instead.
+    let changed_retry_format = suggestion.is_some() && fileio::format_for_name(&picked).is_some_and(|f| f.id != first.format.id);
     // The picked file type wins over a `format` param.
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = q.as_object_mut() {
         o.remove("format");
+        if changed_retry_format {
+            o.remove("options");
+        }
         o.insert("path".into(), json!(picked));
     }
     let chosen = plan(app, mode, &acknowledged(&q))?;
     if let Some(r) = chosen.path.as_deref().and_then(|path| ask_before_losing(app, path, save_command(mode), &q)) {
         return Ok(r);
     }
-    if ask && asks_options(mode, chosen.format) {
+    if (ask || changed_retry_format) && asks_options(mode, chosen.format) {
         let path = chosen.path.clone().unwrap_or_default();
         let r = ask_format_options(app, mode, chosen.format, &path);
         crate::dialogs::opened_by_panel(app);

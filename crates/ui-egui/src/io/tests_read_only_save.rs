@@ -264,3 +264,18 @@ fn readonly_busy_picker_and_save_changes_keep_the_existing_error_flow() {
     assert_eq!(app.session.documents().len(), 1);
     assert!(app.session.doc().unwrap().is_dirty());
 }
+
+#[test]
+fn readonly_changed_format_asks_for_its_options_before_writing() {
+    let (mut app, files) = app("svg", ErrorKind::PermissionDenied);
+    let before = state(&app);
+    let (shown, _) = off_the_ui_thread(&mut app.services);
+    assert_eq!(app.run("file.save", json!({})).unwrap()["pending"], "fileDialog");
+    shown.answer(&["/elsewhere/Poster.pdf"]);
+    poll(&mut app);
+    let dialog = app.ui.dialog.as_ref().expect("the picked format's Save dialog");
+    assert_eq!(dialog.kind, "savePdf");
+    assert_eq!(dialog.str("path"), "/elsewhere/Poster.pdf");
+    assert_eq!(state(&app), before);
+    assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg"]);
+}
