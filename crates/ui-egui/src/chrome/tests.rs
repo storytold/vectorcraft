@@ -163,22 +163,7 @@ fn status_readout_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, wi
 
 /// Collect status-bar text, positions, clips and elision state with explicit pointer events.
 fn status_readout_frame_events(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32, events: Vec<egui::Event>) -> Vec<StatusText> {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 300.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::status_bar(app, ui));
-    out.textures_delta.clear();
-    out.shapes
-        .iter()
-        .filter_map(|s| match &s.shape {
-            egui::Shape::Text(t) => Some(StatusText {
-                text: t.galley.job.text.clone(),
-                at: t.pos,
-                clip: s.clip_rect,
-                bounds: egui::Rect::from_min_size(t.pos, t.galley.size()),
-                elided: t.galley.elided,
-            }),
-            _ => None,
-        })
-        .collect()
+    bar_frame(app, ctx, width, None, events, super::status_bar).0
 }
 
 /// Find a required text record by prefix, failing the test when it is absent.
@@ -371,6 +356,127 @@ fn narrow_status_bars_preserve_the_message_and_hide_optional_readouts() {
     let texts = status_readout_frame(&mut app, &ctx, 600.0);
     let message = status_text(&texts, "Saved recovery data");
     assert!(message.clip.left() >= status_text(&texts, "Selection").bounds.right());
+}
+
+/// A function that draws one of the bars at the bottom of the window.
+type DrawBar = fn(&mut crate::VectorcraftApp, &mut egui::Ui);
+
+/// The texts (positions, clips and elision state) and the screen-reader tree of one frame of
+/// `draw` in a window `width` points wide, at `time` with `events`.
+fn bar_frame(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    width: f32,
+    time: Option<f64>,
+    events: Vec<egui::Event>,
+    draw: DrawBar,
+) -> (Vec<StatusText>, Vec<egui::accesskit::Node>) {
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 300.0));
+    let input = egui::RawInput { screen_rect: Some(screen), time, events, ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| draw(app, ui));
+    out.textures_delta.clear();
+    let texts = out
+        .shapes
+        .iter()
+        .filter_map(|s| match &s.shape {
+            egui::Shape::Text(t) => Some(StatusText {
+                text: t.galley.job.text.clone(),
+                at: t.pos,
+                clip: s.clip_rect,
+                bounds: egui::Rect::from_min_size(t.pos, t.galley.size()),
+                elided: t.galley.elided,
+            }),
+            _ => None,
+        })
+        .collect();
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
+    (texts, nodes)
+}
+
+/// The texts of `draw` with the pointer away, the screen-reader tree, and the texts after the
+/// pointer has rested on the first text that starts with `prefix` for longer than the tooltip delay.
+fn bar_hover(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    width: f32,
+    prefix: &str,
+    draw: DrawBar,
+) -> (Vec<StatusText>, Vec<egui::accesskit::Node>, Vec<StatusText>) {
+    let t = ctx.input(|i| i.time) + 1.0;
+    bar_frame(app, ctx, width, Some(t), vec![egui::Event::PointerGone], draw);
+    let (texts, nodes) = bar_frame(app, ctx, width, Some(t + 0.1), vec![], draw);
+    let at = status_text(&texts, prefix);
+    let pos = at.clip.intersect(at.bounds).center();
+    bar_frame(app, ctx, width, Some(t + 1.0), vec![egui::Event::PointerMoved(pos)], draw);
+    bar_frame(app, ctx, width, Some(t + 3.0), vec![], draw);
+    let (hovered, _) = bar_frame(app, ctx, width, Some(t + 3.1), vec![], draw);
+    (texts, nodes, hovered)
+}
+
+/// Checks the field whose full text is `full`: in a window `narrow` wide it ends in an ellipsis
+/// inside the window, screen readers get the full text, and resting the pointer on it shows the
+/// full text in a tooltip no wider than the window; in a window `wide` wide it shows in full with no
+/// tooltip.
+fn assert_clipped_text_shows_on_hover(app: &mut crate::VectorcraftApp, ctx: &egui::Context, full: &str, narrow: f32, wide: f32, draw: DrawBar) {
+    let prefix: String = full.chars().take(4).collect();
+    let (texts, nodes, hovered) = bar_hover(app, ctx, narrow, &prefix, draw);
+    let field = status_text(&texts, &prefix);
+    assert_eq!(field.text, full);
+    assert!(field.elided, "{narrow}: the text is clipped: {field:?}");
+    assert!(field.bounds.right() <= narrow, "{narrow}: the ellipsis is inside the window: {field:?}");
+    assert!(nodes.iter().any(|n| n.value() == Some(full)), "{narrow}: screen readers receive the full text");
+    let tip: Vec<_> = hovered.iter().filter(|t| t.text == full && !t.elided).collect();
+    assert_eq!(tip.len(), 1, "{narrow}: the tooltip shows the full text: {hovered:?}");
+    assert!(tip[0].bounds.left() >= 0.0 && tip[0].bounds.right() <= narrow, "{narrow}: the tooltip wraps within the window: {tip:?}");
+
+    let (texts, _, hovered) = bar_hover(app, ctx, wide, &prefix, draw);
+    assert!(!status_text(&texts, &prefix).elided, "{wide}: the text fits");
+    assert_eq!(hovered.iter().filter(|t| t.text == full).count(), 1, "{wide}: no tooltip: {hovered:?}");
+}
+
+/// A status message too long for the bar ends in an ellipsis and shows in full on hover, in a
+/// tooltip that wraps within the window (#6622).
+#[test]
+fn a_clipped_status_message_shows_in_full_on_hover() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    let long = format!("Saved recovery data for {}illustration.vectorcraft", "a-long-folder-name/".repeat(12));
+    app.ui.status = long.clone();
+    assert_clipped_text_shows_on_hover(&mut app, &ctx, &long, 700.0, 20000.0, super::status_bar);
+    app.ui.status = "Saved recovery data for Untitled-1".to_owned();
+    let (texts, _, hovered) = bar_hover(&mut app, &ctx, 700.0, "Saved", super::status_bar);
+    assert!(!status_text(&texts, "Saved").elided);
+    assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Saved")).count(), 1, "a message that fits has no tooltip: {hovered:?}");
+}
+
+/// The Help Bar's hint ends in an ellipsis when it is wider than the window and shows in full on
+/// hover, in a tooltip that wraps within the window (#6622). The Dimension tool's hint is wider
+/// than the smallest main window (800 points); 400 points is that window at UI Scaling 2.0.
+#[test]
+fn a_clipped_help_bar_hint_shows_in_full_on_hover() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    app.select_tool("dimension");
+    let hint: String = super::hint_segments(app.session.tool_id()).into_iter().map(|(s, _)| s).collect();
+    for narrow in [800.0, 400.0] {
+        assert_clipped_text_shows_on_hover(&mut app, &ctx, &hint, narrow, 3000.0, super::hint_bar);
+    }
+}
+
+/// In a narrow status bar the tool name ends in an ellipsis, shows in full on hover, and leaves
+/// the status message its room (#6622). 640 and 500 points are the smallest main window (800
+/// points) at UI Scaling 1.25 and 1.6.
+#[test]
+fn a_clipped_tool_name_shows_in_full_on_hover() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    for narrow in [640.0, 500.0] {
+        assert_clipped_text_shows_on_hover(&mut app, &ctx, "Selection", narrow, 1400.0, super::status_bar);
+        let (texts, _) = bar_frame(&mut app, &ctx, narrow, None, vec![], super::status_bar);
+        let tool = status_text(&texts, "Selection");
+        let message = status_text(&texts, "Saved recovery data");
+        assert!(message.clip.left() >= tool.bounds.right() && message.clip.width() >= 24.0, "{narrow}: the message keeps room: {texts:?}");
+    }
 }
 
 /// Busy-job transitions preserve message placement, labels and accessibility.
