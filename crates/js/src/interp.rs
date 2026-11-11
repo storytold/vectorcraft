@@ -197,6 +197,16 @@ pub(crate) struct Interp {
     pub(crate) evaluated: u32,
     /// The tag of the source the last run's error was raised in.
     pub(crate) error_tag: u32,
+    /// The mark of the host error ([`crate::HostError::Marked`]) whose exception or limit is
+    /// propagating.
+    pub(crate) thrown_mark: Option<u32>,
+    /// The marked exceptions `finally` blocks are running for, innermost last, each with its mark,
+    /// which the block's end throws it on with. A block left by `break`, `continue` or `return`
+    /// leaves its entry until the run ends, so there are at most as many as the host errors the
+    /// run's host marked.
+    pub(crate) finally_marks: Vec<(ObjId, u32)>,
+    /// The mark of the host error the last run ended with.
+    pub(crate) error_mark: Option<u32>,
 }
 
 /// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
@@ -394,6 +404,9 @@ impl Interp {
             source_tag: crate::realm::UNKNOWN_SOURCE,
             evaluated: 0,
             error_tag: crate::realm::UNKNOWN_SOURCE,
+            thrown_mark: None,
+            finally_marks: Vec::new(),
+            error_mark: None,
         };
         crate::builtins::install(&mut interp);
         interp.fuel = limits.fuel;
@@ -552,6 +565,7 @@ impl Interp {
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
         roots.values.push(&self.last_thrown);
+        roots.objects.extend(self.finally_marks.iter().map(|&(id, _)| id));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -640,6 +654,8 @@ impl Interp {
         loop {
             let Some(frame) = self.frames.last_mut() else { return Err(Abrupt::Throw(v)) };
             if let Some(h) = frame.code.handler(frame.pc.saturating_sub(1)) {
+                // A catch clause starts with `PushCatch`; every other handler is a `finally` block's.
+                let caught = matches!(frame.code.ops.get(h.target as usize), Some(Op::PushCatch(_)));
                 let target_len = frame.base + h.depth as usize;
                 while frame.env_depth > h.env_depth {
                     let outer = self.heap.env(frame.env).and_then(Env::outer);
@@ -652,6 +668,9 @@ impl Interp {
                     return internal("handler stack deeper than the stack");
                 }
                 self.stack.truncate(target_len);
+                if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
+                    self.finally_marks.push((*id, mark));
+                }
                 self.stack.push(v);
                 self.throw_site = None;
                 return Ok(());
@@ -753,7 +772,10 @@ impl Interp {
             Op::Jump(t) => self.jump_to(t),
             Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => self.op_branch(t, matches!(op, Op::JumpIfTrue(_)), false),
             Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => self.op_branch(t, matches!(op, Op::JumpIfTrueKeep(_)), true),
-            Op::Throw => Err(Abrupt::Throw(self.pop()?)),
+            Op::Throw => {
+                self.thrown_mark = None;
+                Err(Abrupt::Throw(self.pop()?))
+            }
             Op::ThrowReferenceError(i) => self.op_throw_reference_error(i),
             Op::EndFinally(t) => self.op_end_finally(t),
             Op::NewObject => self.op_new_object(),
@@ -835,7 +857,14 @@ impl Interp {
             return self.pop().map(drop);
         }
         if kind == 1.0 {
-            return Err(Abrupt::Throw(self.pop()?));
+            let v = self.pop()?;
+            if let Value::Object(o) = v
+                && let Some(i) = self.finally_marks.iter().rposition(|&(id, _)| id == o)
+            {
+                self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark)| mark);
+                self.finally_marks.truncate(i);
+            }
+            return Err(Abrupt::Throw(v));
         }
         let k = (kind - 2.0) as usize;
         let target = self.frame()?.code.finally_tables.get(table as usize).and_then(|t| t.get(k)).copied();

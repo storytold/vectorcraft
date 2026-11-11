@@ -1603,7 +1603,9 @@ VectorCraft reads them by these rules of its own:
   Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
   `source`. A `JSINCLUDE` folder outside the script's folder is passed over.
 - A missing or refused included file ends the run before any of it runs. An error in an included file or a file `$.evalFile`
-  ran is reported at that file's line and column, and the report's `file` names the file.
+  ran is reported at that file's line and column, and the report's `file` names the file. So is an error `$.evalFile`
+  throws for a file it cannot run, such as a syntax error, when no `catch` takes it. When a `catch` takes that error
+  and a later `throw` raises it again, the error is reported where that `throw` is, as any other thrown error is.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records
