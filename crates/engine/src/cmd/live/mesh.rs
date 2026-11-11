@@ -49,10 +49,7 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
                 match n.appearance.fill_paint() {
                     // The points take the colours the gradient paints there.
                     Paint::Gradient(g) => {
-                        path.bounds().and_then(|b| GradientMesh::for_path_with(&path, rows, cols, &*gradient_sampler(&g, b, model))).map(|mut m| {
-                            m.highlight(app, highlight);
-                            m
-                        })
+                        path.bounds().and_then(|b| GradientMesh::for_path_shaded(&path, rows, cols, &*gradient_sampler(&g, b, model), app, highlight))
                     }
                     p => GradientMesh::for_path(&path, rows, cols, p.color().unwrap_or(Color::WHITE), app, highlight),
                 }

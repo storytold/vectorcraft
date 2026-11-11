@@ -59,6 +59,13 @@ pub struct Session {
     pub clipboard: Clipboard,
     /// Executed commands (for actions and debugging), the most recent ones kept ([`Journal`]).
     pub journal: Journal,
+    /// About the most memory the undo steps of all the open documents may keep together
+    /// ([`History::bytes`]): past it the oldest steps of any of them go, but each keeps its last
+    /// [`History::MIN_STEPS`] undo (and redo) steps. [`default_history_budget`] by default.
+    pub history_budget: usize,
+    /// The budget and histories [`Session::trim_histories`] last left, so it does not count the
+    /// steps again while none of them changed.
+    pub(crate) histories_seen: Option<history::HistoriesSeen>,
     pub(crate) tool: Box<dyn Tool>,
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
@@ -155,9 +162,15 @@ pub struct Session {
     /// Where the ICC profiles `color.loadProfile` loads are kept; `None`: only for the process
     /// ([`Session::attach_profile_store`]).
     profile_dir: Option<std::path::PathBuf>,
+    /// The file Edit › Color Settings are kept in; `None`: only for the process
+    /// ([`Session::attach_color_settings`]).
+    color_settings_file: Option<std::path::PathBuf>,
     /// Where the plug-ins `plugin.install` installs are kept; `None`: only for the process
     /// ([`Session::attach_plugin_store`]).
     plugin_dir: Option<std::path::PathBuf>,
+    /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
+    /// ([`Session::attach_scripts_dir`]).
+    scripts_dir: Option<std::path::PathBuf>,
     /// The plug-in ids whose grant in the plug-in store should be gone but could not be removed:
     /// [`Session::plugin_approver`] and a load of the store do not count those grants, and a successful
     /// [`Session::store_grant`] for the id takes it out.
@@ -249,6 +262,10 @@ pub struct Session {
     pub(crate) script_stop: vectorcraft_js::Interrupt,
     /// The report of the run that ended last.
     pub(crate) script_report: Option<Value>,
+    /// The Script Console's lines ([`script::console`]).
+    pub(crate) script_console: script::console::Console,
+    /// The runs started in this session, which numbers each run's console lines.
+    pub(crate) script_runs: u64,
     /// `script.run` starts the job and returns, and the frontend advances it once per frame
     /// ([`Session::script_pump`]). Off, `script.run` advances it to its end.
     pub script_frames: bool,
@@ -354,6 +371,8 @@ use command_sets::given_ids;
 pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
 pub use doc_state::{DocState, OpenRows, RecalledSelection};
 pub use error::{EngineError, Result, SCRIPT_BUSY};
+#[cfg(test)]
+use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
 pub(crate) use interaction::PreviewCopies;
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};

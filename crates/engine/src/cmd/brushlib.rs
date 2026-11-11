@@ -165,13 +165,14 @@ pub struct BuiltinBrushLibrary {
     make: fn() -> BrushLibrary,
 }
 
-/// The built-in brush libraries, in menu order: original brushes generated in code, one library
-/// per kind of brush.
+/// The built-in brush libraries, in menu order: original brushes generated in code.
 pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "art-ribbons", name: "Art Ribbons", make: art_ribbons },
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
+    BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
+    BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
 ];
 
 /// Built-in library `id`, made once.
@@ -378,6 +379,73 @@ fn scatter_shapes() -> BrushLibrary {
     built("Scatter Shapes", doc, brushes)
 }
 
+/// Game Trails: art brushes for motion lines and impact streaks (original game HUD / VFX art).
+fn game_trails() -> BrushLibrary {
+    let speed = {
+        let n = 32;
+        let half = |x: f64| 2.2 * (1.0 - x / 100.0).powf(1.2).max(0.08);
+        let xs = |i: usize| 100.0 * i as f64 / n as f64;
+        let mut pts: Vec<Point> = (0..=n).map(xs).map(|x| Point::new(x, -half(x))).collect();
+        pts.extend((0..n).rev().map(xs).map(|x| Point::new(x, half(x))));
+        PathData::single(SubPath::polyline(&pts, true))
+    };
+    let dash = group(vec![
+        black(shapes::rounded_rectangle(Rect::new(0.0, -1.0, 14.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(22.0, -1.0, 36.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(44.0, -1.0, 58.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(66.0, -1.0, 80.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(88.0, -1.0, 100.0, 1.0), 1.0)),
+    ]);
+    let burst = {
+        // A wedge that flares from a tip at x=0 to a wide end at x=100.
+        let tip = Point::new(0.0, 0.0);
+        let top = Point::new(100.0, -6.0);
+        let bot = Point::new(100.0, 6.0);
+        PathData::single(SubPath::polyline(&[tip, top, bot], true))
+    };
+    let zigzag = band(100.0, 1.8, 40, |x| {
+        let t = (x / 12.5).floor();
+        let local = (x / 12.5) - t;
+        if (t as i32) % 2 == 0 { -3.0 + 6.0 * local } else { 3.0 - 6.0 * local }
+    });
+    let brushes = vec![
+        art("Speed Line", black(speed), Colorization::Tints),
+        art("Dash Trail", dash, Colorization::Tints),
+        art("Burst Ray", black(burst), Colorization::Tints),
+        art("Zigzag", black(zigzag), Colorization::Tints),
+    ];
+    built("Game Trails", Document::new(100.0, 100.0), brushes)
+}
+
+/// Energy Beams: art brushes for laser, plasma and charge strokes (original game VFX art).
+fn energy_beams() -> BrushLibrary {
+    let laser = {
+        let n = 32;
+        let half = |x: f64| 1.6 * (1.0 - (x / 100.0 - 0.5).abs() * 1.6).max(0.12);
+        let xs = |i: usize| 100.0 * i as f64 / n as f64;
+        let mut pts: Vec<Point> = (0..=n).map(xs).map(|x| Point::new(x, -half(x))).collect();
+        pts.extend((0..n).rev().map(xs).map(|x| Point::new(x, half(x))));
+        PathData::single(SubPath::polyline(&pts, true))
+    };
+    let plasma = band(100.0, 2.2, 48, |x| 4.0 * (x / 100.0 * std::f64::consts::PI).sin());
+    let charge = band(100.0, 1.6, 56, |x| 3.5 * (x / 100.0 * std::f64::consts::TAU).sin());
+    let spark = group(vec![
+        black(shapes::rounded_rectangle(Rect::new(0.0, -1.2, 10.0, 1.2), 0.8)),
+        black(shapes::rounded_rectangle(Rect::new(18.0, -0.9, 28.0, 0.9), 0.7)),
+        black(shapes::rounded_rectangle(Rect::new(36.0, -1.4, 48.0, 1.4), 0.9)),
+        black(shapes::rounded_rectangle(Rect::new(56.0, -0.8, 66.0, 0.8), 0.6)),
+        black(shapes::rounded_rectangle(Rect::new(74.0, -1.1, 86.0, 1.1), 0.8)),
+        black(shapes::rounded_rectangle(Rect::new(92.0, -0.7, 100.0, 0.7), 0.5)),
+    ]);
+    let brushes = vec![
+        art("Laser Bolt", black(laser), Colorization::Tints),
+        art("Plasma Arc", black(plasma), Colorization::Tints),
+        art("Charge Wave", black(charge), Colorization::Tints),
+        art("Spark Trail", spark, Colorization::Tints),
+    ];
+    built("Energy Beams", Document::new(100.0, 100.0), brushes)
+}
+
 // ---------- commands ----------
 
 fn builtin_info(b: &BuiltinBrushLibrary) -> LibraryInfo {
@@ -458,7 +526,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // nothing to apply is no edit, and a click that only applies brushes the document has is
     // named for that.
     let mut probe = (*st.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let doc_names: Vec<String> = picked.iter().map(|n| target(&imported.renamed, n)).collect();
     let paths = if apply { brush_targets(&st.doc, &roots(s, p)?) } else { vec![] };
     let paint = stroke_paint(s);

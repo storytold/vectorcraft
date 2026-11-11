@@ -79,7 +79,7 @@ fn revolve_stops_at_the_first_mesh_past_the_budget() {
     assert!(whole.as_ref().is_err_and(|e| !e.contains("to export")), "the stroke's own error: {whole:?}");
     // With room for less than the fill's mesh, the stroke's is never built.
     let mut total = 0;
-    let capped = meshes_within(&n, &mut total, triangles - 1);
+    let capped = meshes_within(None, &n, &mut total, triangles - 1);
     assert!(capped.as_ref().is_err_and(|e| e.contains("too complex to export")), "{capped:?}");
     assert_eq!(total, triangles);
 }
@@ -92,10 +92,10 @@ fn the_objects_of_one_asset_share_one_triangle_budget() {
     b.appearance.effects.push(fx(EXTRUDE, json!({})));
     let triangles = |n: &Node| three_d_meshes(n).unwrap().iter().map(|m| m.mesh.triangles.len()).sum::<usize>();
     let (ta, tb) = (triangles(&a), triangles(&b));
-    assert!(meshes_of_within([&a], ta).is_ok());
-    assert!(meshes_of_within([&b], tb).is_ok());
-    assert!(meshes_of_within([&a, &b], ta.max(tb)).is_err_and(|e| e.contains("too complex to export")));
-    assert_eq!(meshes_of_within([&a, &b], ta + tb).map(|m| m.len()), Ok(4));
+    assert!(meshes_of_within(None, [&a], ta).is_ok());
+    assert!(meshes_of_within(None, [&b], tb).is_ok());
+    assert!(meshes_of_within(None, [&a, &b], ta.max(tb)).is_err_and(|e| e.contains("too complex to export")));
+    assert_eq!(meshes_of_within(None, [&a, &b], ta + tb).map(|m| m.len()), Ok(4));
     assert_eq!(three_d_meshes_of([&a, &b]).map(|m| m.len()), Ok(4));
 }
 

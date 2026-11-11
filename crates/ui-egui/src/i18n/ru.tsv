@@ -287,6 +287,7 @@ font-technology	Variable	Вариативные
 	Average…	Усреднить…
 	Axis:	Ось:
 	Background Color:	Цвет фона:
+	Guide Label:	Метка направляющих:
 	Show Center Mark	Показать центральную метку
 	Show Cross Hairs	Показать перекрестие
 	Show Video Safe Areas	Показать безопасные зоны видео
@@ -1275,6 +1276,7 @@ file-filter	Swatch libraries	Библиотеки образцов
 file-filter	Flattener presets	Наборы объединения
 file-filter	PDF presets	Наборы PDF
 file-filter	Print presets	Наборы печати
+file-filter	Preferences	Настройки
 file-filter	Export presets	Наборы настроек экспорта
 file-filter	SVG Compressed	Сжатый SVG
 file-filter	PDF-compatible .ai	.ai, совместимый с PDF
@@ -1681,6 +1683,7 @@ file-filter	Templates	Шаблоны
 	Include Linked Files	Включать связанные файлы
 	Include Metadata	Включать метаданные
 	Include non-printing layers	Включать непечатаемые слои
+	Write pages longer than 200 in at full size in points	Записывать страницы длиннее 200 in в полном размере, в пунктах
 	Include SVG Code	Включать код SVG
 	Include Swatches for Tints	Включать образцы для оттенков
 	Inflate…	Надувание…
@@ -1922,6 +1925,7 @@ file-filter	Templates	Шаблоны
 	Lock Grid	Заблокировать сетку
 	Lock Guides	Заблокировать направляющие
 	Lock Guides by Default	Блокировать направляющие по умолчанию
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Направляющие монтажной области с Cmd/Ctrl + перетаскиванием с линейки
 	Lock Others	Заблокировать остальные
 	Lock Slices	Заблокировать фрагменты
 	Lock Station Point	Заблокировать точку стояния
@@ -2356,6 +2360,8 @@ file-filter	Templates	Шаблоны
 	Open…	Открыть…
 	Optical	Оптический
 	Optical Margin Alignment	Оптическое выравнивание полей
+	Dynamic Text	Динамический текст
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст по контуру в связанном тексте не может использовать динамический текст: {frames}
 	Optimize for fast web view	Оптимизировать для быстрого просмотра в web
 	Optimized	Оптимизировано
 	Options	Параметры
@@ -2847,6 +2853,12 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Сбросить функции OpenType
 	Reset Panel	Сбросить панель
 	Reset Preferences	Сбросить настройки
+	Export Preferences…	Экспортировать настройки…
+	Import Preferences…	Импортировать настройки…
+	Save the applied preferences to a JSON file	Сохранить применённые настройки в файл JSON
+	Apply the preferences in a file Export Preferences saved	Применить настройки из файла, сохранённого командой «Экспортировать настройки»
+	Export Preferences	Экспортировать настройки
+	Import Preferences	Импортировать настройки
 	Search Preferences	Поиск в настройках
 	No settings found	Настройки не найдены
 	Reset Profiles	Сбросить профили
@@ -2870,6 +2882,8 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивный
 	Restore	Восстановить
 	Restore every preference to its default (applied on OK)	Восстановить все настройки по умолчанию (применяется при нажатии ОК)
+	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значения по умолчанию применяются, когда вы нажимаете ОК в окне «Настройки». Отмена там сохраняет текущие настройки.
 	Restore Recovered Documents	Восстановить восстановленные документы
 	Restored documents open unsaved: save them to keep them.	Восстановленные документы открываются несохранёнными: сохраните их, чтобы оставить.
 	Restrict printing, editing and other tasks	Ограничить печать, редактирование и другие задачи
@@ -3170,6 +3184,20 @@ digits	Malayalam	Малаялам
 	Settings…	Параметры…
 	Setup…	Настройка…
 	Shadows and Glows	Тени и свечения
+	Game HUD	Игровой HUD
+	Health Fill	Здоровье
+	Mana Glow	Мана
+	Damage Flash	Урон
+	Quest Outline	Квест
+	Coin Shine	Монета
+	Boss Alert	Босс
+	Status Effects	Эффекты статуса
+	Poison Tint	Яд
+	Freeze Edge	Заморозка
+	Burn Aura	Ожог
+	Stun Pulse	Оглушение
+	Stealth Fade	Скрытность
+	Shield Buff	Щит
 	Shape	Фигура
 	Shape Builder	Создание фигур
 	Shape Builder Regions	Области создания фигур
@@ -3588,6 +3616,8 @@ digits	Malayalam	Малаялам
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруются слева направо, затем вниз; оставьте диапазон пустым для всех плиток.
 	Copies per Sheet (as many as fit, in a grid)	Копий на лист (сколько поместится, сеткой)
 	Tint	Оттенок
+	Fill Tint	Оттенок заливки
+	Stroke Tint	Оттенок обводки
 	Tip extends past the end point	Кончик выходит за конечную точку
 	Tip on the end point	Кончик на конечной точке
 	Title Case	Как в заголовке
@@ -4108,6 +4138,7 @@ axis	Both	Оба
 	Stop Script	Остановить скрипт
 	Show External Script Warning	Показывать предупреждение о внешних скриптах
 	A Script Is Running	Выполняется скрипт
+	Script Alert	Сообщение скрипта
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт может изменять открытые документы и записывать файлы с помощью выполняемых команд. Запускайте только те скрипты, которым доверяете.
 	Do not show this warning again	Больше не показывать это предупреждение
 	Stop the script and undo what it did? Then quit again.	Остановить скрипт и отменить его изменения? Затем выйдите ещё раз.
@@ -4121,6 +4152,9 @@ axis	Both	Оба
 @msg	the script is too large to run	скрипт слишком велик для выполнения
 @msg	a drag or an undo group is open; finish it before running a script	открыто перетаскивание или группа отмены; завершите их перед запуском скрипта
 @msg	the script left a document that cannot be kept	скрипт оставил документ, который нельзя сохранить
+@msg	the script is no longer in the Scripts folder	скрипт больше не находится в папке Scripts
+	Some scripts were not listed	Некоторые сценарии не показаны
+	The Scripts folder cannot be read	Не удалось прочитать папку Scripts
 @msg	the script's run is no longer available	выполнение скрипта больше недоступно
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	неудавшаяся команда изменила шаги отмены, которые не удалось восстановить, поэтому скрипт остановлен
 @msg	a recovery copy could not be written, so the script was not run	не удалось записать копию для восстановления, поэтому скрипт не выполнен
@@ -4305,6 +4339,7 @@ axis	Both	Оба
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis должно быть "vertical", "horizontal" или углом в градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black или цвет, например "#ff8800"
 @msg	bad color {v}	недопустимый цвет {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` должен быть null, именем цвета слоя или #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio должно быть числом от 0,1 до 10
 @msg	the Color Picker is not open	палитра цветов не открыта
 @msg	the Simplify slider is not open	ползунок «Упростить» не открыт
@@ -4368,6 +4403,11 @@ axis	Both	Оба
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	внутренняя ошибка в `{cmd}`: {msg} (документ оставлен в прежнем состоянии; пожалуйста, сообщите об этой ошибке)
 @msg	internal error: {msg} (please report this bug)	внутренняя ошибка: {msg} (пожалуйста, сообщите об этой ошибке)
 @msg	invalid PDF setting: {0}	недопустимый параметр PDF: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): страницы {label} записываются без UserUnit, в пунктах, и приложения, соблюдающие ограничение, обрезают страницу до 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	в PDF 1.5 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы сохранить размер: файл записывается как PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	страница монтажной области {n} имеет размер {size} и слишком длинная и узкая для сторон страницы PDF от 3 до 14 400 единиц: она записывается с UserUnit {unit}, которая держит короткую сторону не меньше 3 единиц, а приложения, соблюдающие предел, обрезают длинную сторону до 14 400 единиц
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	файлы {label} вмещают вещественные числа до {max}, а странице монтажной области {n} длиной {side} pt нужны большие: выберите PDF 1.6 или новее без стандарта PDF/X или монтажную область меньшего размера
 @msg	invalid image data for `{0}`	недопустимые данные изображения для `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	недопустимые параметры для `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	не является изображением, которое читает VectorCraft
@@ -4705,6 +4745,20 @@ axis	Both	Оба
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	неизвестная панель `{raw}`
 @msg	unknown preference `{key}`	неизвестная настройка `{key}`
+@msg	Preferences imported.	Настройки импортированы.
+@msg	not a preferences file: {e}	не является файлом настроек: {e}
+@msg	not a preferences file: no JSON object	не является файлом настроек: нет объекта JSON
+@msg	not a preferences file (format `{format}`)	не является файлом настроек (формат `{format}`)
+@msg	not a preferences file: no `format`	не является файлом настроек: нет `format`
+@msg	not a preferences file: no `version`	не является файлом настроек: нет `version`
+@msg	not a preferences file: no `prefs`	не является файлом настроек: нет `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	файл сохранён более новой версией VectorCraft (версия {v})
+@msg	the file holds no preferences	файл не содержит настроек
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` указывает папку, а файлы настроек не содержат папок
+@msg	the file is larger than 1 MB	файл больше 1 МБ
+@msg	give `path` or `data`	укажите `path` или `data`
+@msg	`{key}` must be an object	`{key}` должен быть объектом
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` выполняется отдельно, а не как шаг пакета
 @msg	unknown preset (one of {_1})	неизвестный набор (один из: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	неизвестный набор `{name}` (high, medium, low или сохранённый: см. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	неизвестный набор `{name}` (см. flattener.presets.list)
@@ -4913,6 +4967,8 @@ axis	Both	Оба
 @msg	invalid object id {value}: expected a non-negative integer	недопустимый идентификатор объекта {value}: ожидается неотрицательное целое число
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	элемент {index} в `{key}` равен {value}, а не идентификатору объекта (неотрицательному целому числу)
 @msg	no such object id {value}	объект с идентификатором {value} не существует
+@msg	id {value} is a ruler guide, not an object	идентификатор {value} принадлежит направляющей, а не объекту
+@msg	a ruler guide goes only directly in a layer or sublayer	направляющая может находиться только непосредственно в слое или подслое
 @msg	id {value} is a layer, not an object	идентификатор {value} относится к слою, а не к объекту
 @msg	id {value} is a layer, not an object; move layers with layer.move	идентификатор {value} относится к слою, а не к объекту; перемещайте слои с помощью layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	у автоматизации нет доступа к файловой системе: нет права на чтение: {path}
@@ -5212,7 +5268,8 @@ lighting	Light	Свет
 	Bevel both sides	Фаска с обеих сторон
 	Presets	Наборы
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	У объекта может быть только один 3D-эффект. Измените параметры существующего эффекта или сначала удалите его.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}: пока требуется контур, составной контур, текст или группа. Сначала преобразуйте изображения и другие объекты в контуры.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label}: пока требуется контур, составной контур, текст, группа, переход или экземпляр символа. Сначала разберите другие объекты.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}: из изображения нельзя построить тело. Сначала трассируйте его командой Объект › Трассировка изображения › Создать.
 @msg	{label} requires a shape with at least two anchors	{label}: требуется фигура не менее чем с двумя опорными точками
 @msg	The shape is too complex for a 3D effect	Фигура слишком сложна для 3D-эффекта
 @msg	The 3D surface is too complex; simplify the shape	3D-поверхность слишком сложна; упростите фигуру
@@ -5271,6 +5328,7 @@ lighting	Light	Свет
 	Preview (1 inch on the page)	Просмотр (1 дюйм на странице)
 	Set as Default	Установить по умолчанию
 	 out from a highlighted edge to place its dimension  |  	 наружу от подсвеченного края, чтобы разместить его размер  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 по двум точкам, затем переместите и щёлкните, чтобы разместить выровненный, горизонтальный или вертикальный размер  |  
 	 cancels  |  Double-click the tool for options	 отменяет  |  Двойной щелчок по инструменту открывает параметры
 	Linear	Линейный
 	Angular	Угловой
@@ -5303,14 +5361,17 @@ lighting	Light	Свет
 @msg	Invalid drawing scale	Недопустимый масштаб чертежа
 @msg	Invalid real scale	Недопустимый реальный масштаб
 @msg	Measured anchor no longer exists	Измеряемая опорная точка больше не существует
+@msg	Invalid measured point	Недопустимая измеряемая точка
 @msg	Measured segment no longer exists	Измеряемый сегмент больше не существует
 @msg	Non-finite dimension	Размер не является конечным числом
+@msg	Only linear dimensions are horizontal or vertical	Только линейные размеры бывают горизонтальными или вертикальными
 @msg	Scale Text Attributes: selected type has no scale to bake	Масштабировать атрибуты текста: у выбранного текста нет масштаба для применения
 @msg	Scale must be drawing:real, for example 1:10	Масштаб должен быть в виде чертёж:реальность, например 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Соотношение масштаба должно быть от 1:1000000 до 1000000:1
 @msg	Second measured segment no longer exists	Второй измеряемый сегмент больше не существует
 @msg	Unknown dimension mode	Неизвестный режим размера
 @msg	Unknown dimension option {k}	Неизвестный параметр размера {k}
+@msg	Unknown dimension orientation	Неизвестная ориентация размера
 @msg	Unknown dimension style	Неизвестный стиль размера
 @msg	Unknown unit	Неизвестная единица
 # Revolve cap description
@@ -5574,6 +5635,20 @@ axis	Y Axis	Ось Y
 	Show its progress, see Cancel and write log lines	Показывать свой ход выполнения, замечать отмену и записывать строки журнала
 	Keep settings of its own	Хранить собственные настройки
 	Keep a cache of its own, which you can clear	Хранить собственный кэш, который можно очистить
+	Run these commands on the document: {ids}	Выполнять в документе эти команды: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» указывает в `commandAllowlist` команду `{id}`, которую модуль вызывать не может
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: в `commandAllowlist` манифеста её нет
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID или аргументы лежат вне памяти модуля
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID или аргументы не в UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: аргументы не являются объектом JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` может объявлять только фильтр с обычным бюджетом
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	вызовы команд ({MAX_CALLS} вызовов и {MAX_CALL_BYTES} байт за запуск)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	размер вызова команды (vc_call `{shown}`: {len} байт, предел {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	не более {MAX_ALLOWED_COMMANDS} команд в `commandAllowlist`
+@msg	a plug-in may not call this command	модуль не может вызывать эту команду
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	для `commandAllowlist` нужно разрешение `commands`, а для `commands` нужен `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` указывает `{shown}`, который не является ID команды или указан дважды
 	Clear Plug-in Cache	Очистить кэш модуля
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	разрешению `{permission}` нужен уровень API модулей {PROGRESS_API}: укажите `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль импортирует `env.{name}` с другим типом, чем у хоста: у хоста тип {signature}
@@ -5663,6 +5738,23 @@ axis	Y Axis	Ось Y
 	Button	Кнопка
 	Panel	Панель
 	UI Frames	UI-рамки
+	Map Markers	Маркеры карты
+	Pin	Булавка
+	Flag	Флаг
+	Crosshair	Прицел
+	Checkpoint	Контрольная точка
+	Inventory Icons	Иконки инвентаря
+	Skill Icons	Иконки навыков
+	Attack	Атака
+	Defend	Защита
+	Heal	Лечение
+	Buff	Усиление
+	Ult	Ульт
+	Sword	Меч
+	Shield	Щит
+	Potion	Зелье
+	Key	Ключ
+	Gem	Самоцвет
 	Open Symbol Library	Открыть библиотеку символов
 	Save Symbol Library	Сохранить библиотеку символов
 	Save Symbol Library…	Сохранить библиотеку символов…
@@ -5717,6 +5809,16 @@ axis	Y Axis	Ось Y
 	User Brush Library 9	Пользовательская библиотека кистей 9
 	User Brush Library 10	Пользовательская библиотека кистей 10
 	Art Ribbons	Художественные ленты
+	Zigzag	Зигзаг
+	Burst Ray	Ударный луч
+	Dash Trail	Пунктирный след
+	Speed Line	Линия скорости
+	Game Trails	Игровые следы
+	Energy Beams	Энергетические лучи
+	Laser Bolt	Лазерный заряд
+	Plasma Arc	Плазменная дуга
+	Charge Wave	Волна заряда
+	Spark Trail	Искра-след
 	Calligraphic Nibs	Каллиграфические перья
 	Pattern Borders	Узорные каймы
 	Scatter Shapes	Рассеянные фигуры
@@ -6783,3 +6885,33 @@ shape	Open	Открытый
 	Ignore All	Пропустить все
 	Add to Dictionary	Добавить в словарь
 	No Suggestions	Нет вариантов
+	Edit Custom Dictionary	Редактировать пользовательский словарь
+	Entry:	Запись:
+# Script Console
+	Script Console	Консоль скриптов
+	Clear Script Console	Очистить консоль скриптов
+	Copy Script Console	Копировать консоль скриптов
+	Copy All	Копировать всё
+	Copy Selected	Копировать выделенное
+	Finished	Завершено
+	Ended with an error	Завершено с ошибкой
+	Out of fuel	Исчерпан лимит инструкций
+	Ended at a host limit	Завершено на лимите хоста
+	Ended at a limit	Завершено на лимите
+	Stopped	Остановлено
+	Ended by an internal fault	Завершено из-за внутренней ошибки
+	time unavailable	время недоступно
+	{ms} ms	{ms} мс
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	самые медленные: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} вызов хоста|{n} вызова хоста|{n} вызовов хоста
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} прежняя строка отброшена|{n} прежние строки отброшены|{n} прежних строк отброшено
+@plural	{n} line cut|{n} lines cut	{n} строка обрезана|{n} строки обрезаны|{n} строк обрезано
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Обновить отложенные эффекты
+	Deferred Effects	Отложенные эффекты
+@msg	no plug-in effect is deferred	нет отложенных эффектов модулей
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Открыто с {n} отложенным эффектом модуля. Эффект › Обновить отложенные эффекты выполнит его.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.

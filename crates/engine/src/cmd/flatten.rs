@@ -49,9 +49,9 @@ mod presets;
 mod report;
 
 pub(crate) use analysis::{outlined_text, see_through_images};
-#[cfg(test)]
-pub(crate) use apply::with_every_region;
 pub(crate) use apply::{expand_transparent_tile_images, flatten_document, flatten_expanded, has_transparent_tile_images};
+#[cfg(test)]
+pub(crate) use apply::{with_clips_ignored, with_every_region};
 pub use commands::specs;
 pub use options::FlattenOptions;
 pub use presets::{FlattenerPreset, PRESET_EXTS, PRESET_FORMAT};

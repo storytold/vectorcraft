@@ -230,7 +230,8 @@ fn weigh(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&Docum
             return false;
         }
         let mask = n.extras().mask.as_deref().filter(|m| left.masks && !m.disabled).map(|m| &m.art);
-        n.children().into_iter().flatten().chain(mask).all(|c| left.object() && count(c, doc, left, depth))
+        // A layer's ruler guides draw nothing in its thumbnail and use no budget.
+        n.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).chain(mask).all(|c| left.object() && count(c, doc, left, depth))
     }
     let mut left = Left { nodes, anchors, steps: THUMB_COUNT_STEPS, masks };
     let small = count(n, doc, &mut left, 0);
@@ -928,6 +929,7 @@ mod tests {
         thumbs.receive(ctx, done);
     }
 
+    /// Prioritize the shown document’s thumbnails, requeue them when revisited, and retain cached rows.
     #[test]
     fn the_shown_documents_thumbnails_are_made_before_the_queued_ones_of_another() {
         let ctx = egui::Context::default();
@@ -957,10 +959,15 @@ mod tests {
             assert!(thumbs.texture(&ctx, &src_b, n, 24).is_some(), "the shown document's thumbnails are shown");
         }
         // Shown again, document 1's rows are asked for again and come back.
+        // Hold the worker so texture() cannot collect a completed row before the count.
+        let release = hold(&thumbs);
         for n in &a_rows {
             assert!(thumbs.texture(&ctx, &src_a, n, 24).is_none());
         }
         assert_eq!(thumbs.pending.keys().filter(|k| k.0 == 1).count(), 3);
+        release.send(()).expect("the held job is waiting");
+        let held = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the held job finishes");
+        assert_eq!(held.key.0, (0, NodeId(0)));
         for _ in &a_rows {
             receive_checked(&ctx, &mut thumbs, 1, &a, &a_rows);
         }

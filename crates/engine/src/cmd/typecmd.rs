@@ -8,10 +8,10 @@ use vectorcraft_doc::{AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAl
 use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
-use super::pathops::{len_param, num_param, shape_node};
+use super::pathops::{length_given, number_given, shape_node};
 use super::{
     CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, id_param, index, number_or, ok,
-    str_param, switch_or, targets,
+    str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -114,6 +114,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of type on a path's path by dx, dy points, with their handles; the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging an anchor of the path)",
             has_doc,
             reshape_path
+        ),
+        cmd!(
+            "text.setPathHandle",
+            "Move Type Path Handle",
+            [],
+            None,
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path)",
+            has_doc,
+            set_path_handle
         ),
         cmd!(
             "text.fitHeadline",
@@ -240,16 +249,16 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = text_targets(s, p, C)?;
     let range = TextRange::parse(p, C)?;
     let remove = switch_or(p, "remove", false, C)?;
-    let reading = str_param(p, "text").map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
+    let reading = text_param(p, "text", C)?.map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
     if !remove && reading.is_none() {
         return Err(bad(C, "give `text` (the reading) or `remove`"));
     }
-    let position = match str_param(p, "position").map(str::to_ascii_lowercase).as_deref() {
+    let position = match text_param(p, "position", C)?.map(str::to_ascii_lowercase).as_deref() {
         None | Some("above") | Some("right") => RubyPosition::Above,
         Some("below") | Some("left") => RubyPosition::Below,
         Some(_) => return Err(bad(C, "`position` is above or below")),
     };
-    let align = match str_param(p, "align").map(str::to_ascii_lowercase).as_deref() {
+    let align = match text_param(p, "align", C)?.map(str::to_ascii_lowercase).as_deref() {
         None | Some("center") | Some("centre") => RubyAlign::Center,
         Some("start") | Some("left") | Some("top") => RubyAlign::Start,
         Some("end") | Some("right") | Some("bottom") => RubyAlign::End,
@@ -587,6 +596,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         if texts.is_empty() {
             return Err(EngineError::Other("Create Outlines: select text objects".into()));
         }
+        let before = (!super::dimension::reached(d, &roots).is_empty()).then(|| d.clone());
         let ended = super::dimension::end_links(d, &roots);
         let mut new_sel: Vec<NodeId> = roots.iter().copied().filter(|r| !texts.contains(r)).collect();
         let mut out = vec![];
@@ -682,7 +692,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 new_sel.push(gid);
             }
         }
-        super::dimension::restore_unchanged(d, ended);
+        if let Some(before) = &before {
+            super::dimension::restore_unchanged(before, d, ended);
+        }
         // Outlined frames of threaded text leave their threads with the text they show.
         super::threads::leave_threads(d, &threaded);
         sel.set(new_sel);
@@ -803,19 +815,21 @@ pub(crate) fn justify_param(v: &str) -> Option<Justify> {
 
 fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setStyle";
-    let font = str_param(p, "font").map(str::to_string);
-    let style = str_param(p, "style").map(str::to_string);
-    let size = len_param(p, "size");
+    let font = text_param(p, "font", C)?.map(str::to_string);
+    let style = text_param(p, "style", C)?.map(str::to_string);
+    let size = length_given(p, "size", C)?;
     if size.is_some_and(|v| v <= 0.0) {
         return Err(bad(C, "size must be positive"));
     }
     let leading = match p.get("leading") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
-        Some(_) => Some(Some(len_param(p, "leading").ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0))),
+        Some(_) => {
+            Some(Some(length_given(p, "leading", C).ok().flatten().ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0)))
+        }
     };
-    let tracking = num_param(p, "tracking");
-    let justify = match str_param(p, "justify") {
+    let tracking = number_given(p, "tracking", C)?;
+    let justify = match text_param(p, "justify", C)? {
         Some(j) => Some(justify_param(j).ok_or_else(|| bad(C, "justify must be auto|left|center|right|justifyAll"))?),
         None => None,
     };
@@ -1259,6 +1273,35 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
             t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
         };
         if !(t.move_path_anchors(&refs, d) && within(t)) {
+            t.kind = before;
+            return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
+        }
+        refresh_bounds(t);
+        Ok(())
+    })?;
+    ok()
+}
+
+fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.setPathHandle";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let si = super::draw2::usize_opt(p, "subpath", C)?.unwrap_or(0);
+    let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing anchor"))?;
+    let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
+    let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
+    let independent = switch_or(p, "independent", false, C)?;
+    let node = s.doc()?.doc.node(id);
+    let on_path = matches!(node.map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }));
+    if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
+        return Err(bad(C, "not type on a path outside perspective"));
+    }
+    s.edit("Reshape Type Path", |doc, _| {
+        let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+        let before = t.kind.clone();
+        let within = |t: &TextObject| {
+            t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
+        };
+        if !(t.set_path_handle((si, ai), out, pos, independent) && within(t)) {
             t.kind = before;
             return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
         }

@@ -1101,8 +1101,9 @@ pub fn with_id(xml: &str, id: &str) -> Option<String> {
     let f = filter_element(&doc).ok()?;
     let at = f.attributes().find(|a| a.name() == "id" && a.namespace().is_none())?.range_value();
     let (start, end) = (at.start.checked_sub(head)?, at.end.checked_sub(head)?);
-    // The value may sit in single quotes: those are escaped too.
-    let id = escaped(id).replace('\'', "&apos;");
+    // The value may sit in single quotes: those are escaped too. A tab, line feed or carriage
+    // return is written as a character reference, which attribute-value normalization keeps.
+    let id = escaped(id).replace('\'', "&apos;").replace('\t', "&#9;").replace('\n', "&#10;").replace('\r', "&#13;");
     Some(format!("{}{}{}", xml.get(..start)?, id, xml.get(end..)?))
 }
 

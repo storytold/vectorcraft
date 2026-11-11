@@ -370,7 +370,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 return;
             }
             let k = match &n.kind {
-                NodeKind::Layer { .. } => None,
+                // The Guides row counts paths made into guides; ruler guides are not objects.
+                NodeKind::Layer { .. } | NodeKind::RulerGuide { .. } => None,
                 NodeKind::Group { clip: true, .. } => Some("clipGroups"),
                 NodeKind::Group { .. } => Some("groups"),
                 NodeKind::Path { guide: true, .. } => Some("guides"),

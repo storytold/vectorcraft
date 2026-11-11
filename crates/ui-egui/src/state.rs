@@ -208,6 +208,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
     (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
+    (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
@@ -392,6 +393,11 @@ pub struct UiState {
     /// That popup's first text field is still to take the keyboard.
     #[serde(skip)]
     pub transient_focus: bool,
+    /// The Separations Preview panel is still to scroll its Color Settings section into view:
+    /// Edit › Color Settings… and Assign Profile… show the panel for it, and the section sits below
+    /// the plates and Proof Setup, out of sight in a short window (#6419).
+    #[serde(skip)]
+    pub color_settings_scroll: bool,
     /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
     #[serde(skip)]
     pub find_font_in: String,
@@ -1009,6 +1015,7 @@ impl Default for UiState {
             open_panel: None,
             transient_panel: None,
             transient_focus: false,
+            color_settings_scroll: false,
             find_font_in: String::new(),
             control_bar: false,
             control_bar_bottom: false,

@@ -596,6 +596,8 @@ impl Renderer {
                 Some(a) => self.draw_live_body(ctx, f, &a, true),
                 None => self.draw_live_node(ctx, f, n),
             },
+            // The canvas draws ruler guides over the art; the renderer draws nothing for them.
+            NodeKind::RulerGuide { .. } => {}
         }
     }
 
@@ -680,18 +682,20 @@ impl Renderer {
             self.draw_knockout(ctx, f, children);
         } else if let Some((_, path)) = self.isolation_path(f) {
             // Isolation mode, in a container on the way down to the isolated one: each run of
-            // members around it draws dimmed as one (#833).
+            // members around it draws dimmed as one (#833). A run of ruler guides alone draws
+            // nothing, so it gets no dimmed pass.
+            let draws = |run: &[Arc<Node>]| run.iter().any(|c| !c.is_ruler_guide());
             let mut rest = children;
             while let Some(i) = rest.iter().position(|c| path.contains(&c.id)) {
                 let (around, from) = rest.split_at(i);
-                if !around.is_empty() {
+                if draws(around) {
                     self.dimmed(ctx, f, &mut |r, c, fr| around.iter().for_each(|n| r.draw_arc(c, fr, n)));
                 }
                 let Some((on_path, after)) = from.split_first() else { break };
                 self.draw_arc(ctx, f, on_path);
                 rest = after;
             }
-            if !rest.is_empty() {
+            if draws(rest) {
                 self.dimmed(ctx, f, &mut |r, c, fr| rest.iter().for_each(|n| r.draw_arc(c, fr, n)));
             }
         } else {

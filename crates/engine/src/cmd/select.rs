@@ -252,6 +252,18 @@ pub(crate) fn selectable_ids(d: &Document, iso: Option<NodeId>) -> BTreeSet<Node
 /// Whether [`walk_selectable`] visits `id`, read from the objects that hold it instead of a walk of
 /// the document. `locks` is the document's [`Document::locked_artboards`].
 pub(crate) fn is_selectable(d: &Document, iso: Option<NodeId>, locks: &LockedArtboards, id: NodeId) -> bool {
+    is_selectable_within(d, iso, Some(locks), id)
+}
+
+/// [`is_selectable`] without the locked artboards, for an edit's new selection: after the edit,
+/// the session takes the art on a locked artboard out of the selection, except the new art the
+/// edit made.
+pub(crate) fn is_selectable_on_any_artboard(d: &Document, iso: Option<NodeId>, id: NodeId) -> bool {
+    is_selectable_within(d, iso, None, id)
+}
+
+/// [`is_selectable`], leaving out the locked artboards when `locks` is `None`.
+fn is_selectable_within(d: &Document, iso: Option<NodeId>, locks: Option<&LockedArtboards>, id: NodeId) -> bool {
     let Some(a) = d.ancestry(id) else { return false };
     if !a.iter().all(|i| d.node(*i).is_some_and(|n| n.visible && !n.locked && !n.is_template())) {
         return false;
@@ -262,7 +274,7 @@ pub(crate) fn is_selectable(d: &Document, iso: Option<NodeId>, locks: &LockedArt
         None => {
             // The object Select All takes: the outermost one that is not a layer.
             let top = a.iter().filter_map(|i| d.node(*i)).find(|n| !n.is_layer());
-            top.is_some_and(|t| locks.is_empty() || !locks.holds(t))
+            top.is_some_and(|t| locks.is_none_or(|l| l.is_empty() || !l.holds(t)))
         }
     }
 }
@@ -430,15 +442,16 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
         if id.is_some() {
             return Err(bad("select.key", "give `id` or `guide`, not both"));
         }
-        if !sel.guides.contains(&g) {
+        let gid = super::docmenu::guide_ids(&s.doc()?.doc).get(g).copied();
+        let Some(gid) = gid.filter(|id| sel.guides.contains(id)) else {
             return Err(bad("select.key", format!("guide {g} is not selected")));
-        }
+        };
         if sel.is_empty() {
             return Err(bad("select.key", "select objects to align to the guide"));
         }
         s.select(|_, sel| {
             sel.key = None;
-            sel.key_guide = Some(g);
+            sel.key_guide = Some(gid);
         })?;
         return key_result(s);
     }
@@ -460,9 +473,9 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// `{key}`, with `guide` when a guide is the key.
 fn key_result(s: &Session) -> Result<Value> {
-    let sel = &s.doc()?.selection;
-    let mut out = json!({ "key": sel.key });
-    if let Some(g) = sel.key_guide {
+    let st = s.doc()?;
+    let mut out = json!({ "key": st.selection.key });
+    if let Some(g) = st.selection.key_guide.and_then(|id| super::docmenu::guide_indexes(&st.doc, &[id]).first().copied()) {
         out["guide"] = json!(g);
     }
     Ok(out)

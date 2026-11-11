@@ -377,7 +377,7 @@ fn placeable(l: &Node) -> bool {
 fn art_of<'a>(nodes: impl Iterator<Item = &'a Arc<Node>>) -> Vec<Node> {
     nodes
         .filter_map(|c| match &c.kind {
-            NodeKind::Path { guide: true, .. } => None,
+            _ if c.is_guide() => None,
             NodeKind::Layer { children, clip, .. } => placeable(c).then(|| {
                 let mut g = (**c).clone();
                 g.kind = NodeKind::Group { children: art_of(children.iter()).into_iter().map(Arc::new).collect(), clip: *clip };

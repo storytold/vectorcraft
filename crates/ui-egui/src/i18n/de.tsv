@@ -264,6 +264,7 @@ font-technology	Variable	Variabel
 	Average…	Durchschnitt berechnen…
 	Axis:	Achse:
 	Background Color:	Hintergrundfarbe:
+	Guide Label:	Farbmarkierung der Hilfslinien:
 	Show Center Mark	Mittelpunktmarke einblenden
 	Show Cross Hairs	Fadenkreuz einblenden
 	Show Video Safe Areas	Videosichere Bereiche einblenden
@@ -1248,6 +1249,7 @@ file-filter	Swatch libraries	Farbfeldbibliotheken
 file-filter	Flattener presets	Reduzierungsvorgaben
 file-filter	PDF presets	PDF-Vorgaben
 file-filter	Print presets	Druckvorgaben
+file-filter	Preferences	Voreinstellungen
 file-filter	Export presets	Exportvorgaben
 file-filter	SVG Compressed	SVG komprimiert
 file-filter	PDF-compatible .ai	PDF-kompatible .ai
@@ -1653,6 +1655,7 @@ file-filter	Templates	Vorlagen
 	Include Linked Files	Verknüpfte Dateien einschließen
 	Include Metadata	Metadaten einschließen
 	Include non-printing layers	Nicht druckende Ebenen einschließen
+	Write pages longer than 200 in at full size in points	Seiten über 200 in in voller Größe in Punkt schreiben
 	Include SVG Code	SVG-Code einschließen
 	Include Swatches for Tints	Farbfelder für Tonwerte einschließen
 	Inflate…	Aufblasen…
@@ -1893,6 +1896,7 @@ file-filter	Templates	Vorlagen
 	Lock Grid	Raster sperren
 	Lock Guides	Hilfslinien sperren
 	Lock Guides by Default	Hilfslinien standardmäßig sperren
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Zeichenflächen-Hilfslinien mit Cmd/Ctrl + Ziehen aus dem Lineal
 	Lock Others	Andere sperren
 	Lock Slices	Slices sperren
 	Lock Station Point	Standpunkt sperren
@@ -2285,6 +2289,8 @@ file-filter	Templates	Vorlagen
 	Open…	Öffnen…
 	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
+	Dynamic Text	Dynamischer Text
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	Pfadtext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
 	Options	Optionen
@@ -2776,6 +2782,12 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	OpenType-Funktionen zurücksetzen
 	Reset Panel	Bedienfeld zurücksetzen
 	Reset Preferences	Voreinstellungen zurücksetzen
+	Export Preferences…	Voreinstellungen exportieren…
+	Import Preferences…	Voreinstellungen importieren…
+	Save the applied preferences to a JSON file	Die angewendeten Voreinstellungen in einer JSON-Datei speichern
+	Apply the preferences in a file Export Preferences saved	Die Voreinstellungen aus einer mit „Voreinstellungen exportieren“ gespeicherten Datei anwenden
+	Export Preferences	Voreinstellungen exportieren
+	Import Preferences	Voreinstellungen importieren
 	Search Preferences	Voreinstellungen durchsuchen
 	No settings found	Keine Einstellungen gefunden
 	Reset Profiles	Profile zurücksetzen
@@ -2799,6 +2811,8 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Wiederherstellen
 	Restore every preference to its default (applied on OK)	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen (wird bei OK angewendet)
+	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
 	Restored documents open unsaved: save them to keep them.	Wiederhergestellte Dokumente werden ungespeichert geöffnet: Speichern Sie sie, um sie zu behalten.
 	Restrict printing, editing and other tasks	Drucken, Bearbeiten und andere Aufgaben einschränken
@@ -3099,6 +3113,20 @@ digits	Malayalam	Malayalam
 	Settings…	Einstellungen…
 	Setup…	Einrichten…
 	Shadows and Glows	Schatten und Leuchteffekte
+	Game HUD	Spiel-HUD
+	Health Fill	Leben
+	Mana Glow	Mana
+	Damage Flash	Schaden
+	Quest Outline	Quest
+	Coin Shine	Münze
+	Boss Alert	Boss
+	Status Effects	Statuseffekte
+	Poison Tint	Gift
+	Freeze Edge	Frost
+	Burn Aura	Brand
+	Stun Pulse	Betäubung
+	Stealth Fade	Schleichen
+	Shield Buff	Schild
 	Shape	Form
 	Shape Builder	Formerstellung
 	Shape Builder Regions	Formerstellungsbereiche
@@ -3502,6 +3530,8 @@ effect	Points	Punkte
 	Copies per Sheet (as many as fit, in a grid)	Kopien pro Blatt (so viele wie passen, im Raster)
 	Gutter:	Zwischenraum:
 	Tint	Tonwert
+	Fill Tint	Flächentonwert
+	Stroke Tint	Konturtonwert
 	Tip extends past the end point	Spitze ragt über den Endpunkt hinaus
 	Tip on the end point	Spitze auf dem Endpunkt
 	Title Case	Wortanfänge groß
@@ -3987,6 +4017,7 @@ theme	Appearance	Erscheinungsbild
 	Stop Script	Skript stoppen
 	Show External Script Warning	Warnung bei externen Skripten anzeigen
 	A Script Is Running	Ein Skript wird ausgeführt
+	Script Alert	Skriptmeldung
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ein Skript kann die geöffneten Dokumente ändern und über die ausgeführten Befehle Dateien schreiben. Führen Sie nur Skripte aus, denen Sie vertrauen.
 	Do not show this warning again	Diese Warnung nicht mehr anzeigen
 	Stop the script and undo what it did? Then quit again.	Skript stoppen und seine Änderungen rückgängig machen? Beenden Sie danach erneut.
@@ -4000,6 +4031,9 @@ theme	Appearance	Erscheinungsbild
 @msg	the script is too large to run	das Skript ist zu groß zum Ausführen
 @msg	a drag or an undo group is open; finish it before running a script	ein Ziehvorgang oder eine Rückgängig-Gruppe ist offen; schließen Sie sie ab, bevor Sie ein Skript ausführen
 @msg	the script left a document that cannot be kept	das Skript hat ein Dokument hinterlassen, das nicht behalten werden kann
+@msg	the script is no longer in the Scripts folder	das Skript befindet sich nicht mehr im Ordner „Scripts“
+	Some scripts were not listed	Einige Skripte wurden nicht aufgeführt
+	The Scripts folder cannot be read	Der Ordner „Scripts“ kann nicht gelesen werden
 @msg	the script's run is no longer available	der Lauf des Skripts ist nicht mehr verfügbar
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	ein fehlgeschlagener Befehl hat Rückgängig-Schritte geändert, die nicht wiederhergestellt werden konnten, daher wurde das Skript angehalten
 @msg	a recovery copy could not be written, so the script was not run	eine Wiederherstellungskopie konnte nicht geschrieben werden, daher wurde das Skript nicht ausgeführt
@@ -4184,6 +4218,7 @@ theme	Appearance	Erscheinungsbild
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis muss "vertical", "horizontal" oder ein Winkel in Grad sein, nicht `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black oder eine Farbe wie "#ff8800"
 @msg	bad color {v}	ungültige Farbe {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` ist null, der Name einer Ebenenfarbe oder #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio muss eine Zahl von 0,1 bis 10 sein
 @msg	the Color Picker is not open	der Farbwähler ist nicht geöffnet
 @msg	the Simplify slider is not open	der Regler „Vereinfachen“ ist nicht geöffnet
@@ -4247,6 +4282,11 @@ theme	Appearance	Erscheinungsbild
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	interner Fehler in `{cmd}`: {msg} (das Dokument wurde im vorherigen Zustand belassen; bitte melden Sie diesen Fehler)
 @msg	internal error: {msg} (please report this bug)	interner Fehler: {msg} (bitte melden Sie diesen Fehler)
 @msg	invalid PDF setting: {0}	ungültige PDF-Einstellung: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	die Seite der Zeichenfläche {n} ist {size} groß und damit länger als die PDF-Seitengrenze von 14.400 pt (200 in): sie wird mit einer UserUnit von {unit} geschrieben, daher zeigen Apps, die UserUnit ignorieren, sie entsprechend oft kleiner an
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	die Seite der Zeichenfläche {n} ist {size} groß und damit länger als die PDF-Seitengrenze von 14.400 pt (200 in): {label}-Seiten werden ohne UserUnit in Punkt geschrieben, und Apps, die die Grenze einhalten, schneiden die Seite auf 200 in ab
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 hat keine UserUnit, die eine Seite länger als 14.400 pt (200 in) braucht, um ihre Größe zu behalten: die Datei wird als PDF 1.6 geschrieben
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	die Seite der Zeichenfläche {n} ist {size} groß und damit zu lang und schmal für PDF-Seitenlängen von 3 bis 14.400 Einheiten: sie wird mit einer UserUnit von {unit} geschrieben, die die kurze Seite bei mindestens 3 Einheiten hält, und Apps, die die Grenze einhalten, schneiden die lange Seite auf 14.400 Einheiten ab
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-Dateien fassen reelle Zahlen bis {max}, und die Seite der Zeichenfläche {n} mit {side} pt Länge braucht größere: wählen Sie PDF 1.6 oder höher ohne PDF/X-Standard oder eine kleinere Zeichenfläche
 @msg	invalid image data for `{0}`	ungültige Bilddaten für `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	ungültige Parameter für `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	ist kein Bild, das VectorCraft lesen kann
@@ -4585,6 +4625,20 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
 @msg	unknown panel `{raw}`	unbekanntes Bedienfeld `{raw}`
 @msg	unknown preference `{key}`	unbekannte Voreinstellung `{key}`
+@msg	Preferences imported.	Voreinstellungen importiert.
+@msg	not a preferences file: {e}	keine Voreinstellungsdatei: {e}
+@msg	not a preferences file: no JSON object	keine Voreinstellungsdatei: kein JSON-Objekt
+@msg	not a preferences file (format `{format}`)	keine Voreinstellungsdatei (Format `{format}`)
+@msg	not a preferences file: no `format`	keine Voreinstellungsdatei: kein `format`
+@msg	not a preferences file: no `version`	keine Voreinstellungsdatei: keine `version`
+@msg	not a preferences file: no `prefs`	keine Voreinstellungsdatei: keine `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	die Datei wurde mit einer neueren Version von VectorCraft gespeichert (Version {v})
+@msg	the file holds no preferences	die Datei enthält keine Voreinstellungen
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` nennt einen Ordner, und Voreinstellungsdateien enthalten keine Ordner
+@msg	the file is larger than 1 MB	die Datei ist größer als 1 MB
+@msg	give `path` or `data`	geben Sie `path` oder `data` an
+@msg	`{key}` must be an object	`{key}` muss ein Objekt sein
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` läuft für sich allein, nicht als Stapelschritt
 @msg	unknown preset (one of {_1})	unbekannte Vorgabe (eine von {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	unbekannte Vorgabe `{name}` (high, medium, low oder eine gespeicherte: siehe flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	unbekannte Vorgabe `{name}` (siehe flattener.presets.list)
@@ -4812,6 +4866,8 @@ theme	Appearance	Erscheinungsbild
 @msg	invalid object id {value}: expected a non-negative integer	ungültige Objekt-ID {value}: erwartet wird eine nicht negative ganze Zahl
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	Eintrag {index} von `{key}` ist {value}, keine Objekt-ID (nicht negative ganze Zahl)
 @msg	no such object id {value}	kein Objekt mit der ID {value}
+@msg	id {value} is a ruler guide, not an object	die ID {value} gehört zu einer Hilfslinie, nicht zu einem Objekt
+@msg	a ruler guide goes only directly in a layer or sublayer	eine Hilfslinie kann nur direkt in einer Ebene oder Unterebene liegen
 @msg	id {value} is a layer, not an object	die ID {value} ist eine Ebene, kein Objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	die ID {value} ist eine Ebene, kein Objekt; verschieben Sie Ebenen mit layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	Dateisystemzugriff für die Automatisierung ist nicht gewährt: Die Leseberechtigung fehlt: {path}
@@ -5176,7 +5232,8 @@ lighting	Light	Licht
 	Bevel both sides	Abgeflachte Kante beidseitig
 	Presets	Vorgaben
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ein Objekt kann nur einen 3D-Effekt haben. Bearbeiten Sie die Optionen des vorhandenen Effekts oder entfernen Sie ihn zuerst.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} erfordert derzeit einen Pfad, zusammengesetzten Pfad, Text oder eine Gruppe. Wandeln Sie Bilder und andere Objekte zuerst in Pfade um.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} erfordert derzeit einen Pfad, zusammengesetzten Pfad, Text, eine Gruppe, eine Angleichung oder eine Symbolinstanz. Wandeln Sie andere Objekte zuerst um.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kann aus einem Bild keinen Körper erstellen: Zeichnen Sie es zuerst mit Objekt › Bildnachzeichner › Erstellen nach.
 @msg	{label} requires a shape with at least two anchors	{label} erfordert eine Form mit mindestens zwei Ankerpunkten
 @msg	The shape is too complex for a 3D effect	Die Form ist für einen 3D-Effekt zu komplex
 @msg	The 3D surface is too complex; simplify the shape	Die 3D-Oberfläche ist zu komplex; vereinfachen Sie die Form
@@ -5242,6 +5299,7 @@ effect	Soft	Weich
 	Preview (1 inch on the page)	Vorschau (1 Zoll auf der Seite)
 	Set as Default	Als Standard festlegen
 	 out from a highlighted edge to place its dimension  |  	 von einer hervorgehobenen Kante nach außen, um ihre Bemaßung zu platzieren  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 auf zwei Punkte, dann bewegen und klicken, um eine ausgerichtete, horizontale oder vertikale Bemaßung zu platzieren  |  
 	 cancels  |  Double-click the tool for options	 bricht ab  |  Doppelklick auf das Werkzeug für Optionen
 	Linear	Linear
 	Angular	Winkel
@@ -5274,14 +5332,17 @@ effect	Soft	Weich
 @msg	Invalid drawing scale	Ungültiger Zeichnungsmaßstab
 @msg	Invalid real scale	Ungültiger realer Maßstab
 @msg	Measured anchor no longer exists	Der gemessene Ankerpunkt existiert nicht mehr
+@msg	Invalid measured point	Ungültiger gemessener Punkt
 @msg	Measured segment no longer exists	Das gemessene Segment existiert nicht mehr
 @msg	Non-finite dimension	Die Bemaßung ist keine endliche Zahl
+@msg	Only linear dimensions are horizontal or vertical	Nur lineare Bemaßungen sind horizontal oder vertikal
 @msg	Scale Text Attributes: selected type has no scale to bake	Textattribute skalieren: Der ausgewählte Text weist keine zu übernehmende Skalierung auf
 @msg	Scale must be drawing:real, for example 1:10	Der Maßstab muss Zeichnung:Realität sein, zum Beispiel 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Das Maßstabsverhältnis muss zwischen 1:1000000 und 1000000:1 liegen
 @msg	Second measured segment no longer exists	Das zweite gemessene Segment existiert nicht mehr
 @msg	Unknown dimension mode	Unbekannter Bemaßungsmodus
 @msg	Unknown dimension option {k}	Unbekannte Bemaßungsoption {k}
+@msg	Unknown dimension orientation	Unbekannte Bemaßungsausrichtung
 @msg	Unknown dimension style	Unbekannter Bemaßungsstil
 @msg	Unknown unit	Unbekannte Einheit
 # Revolve cap description
@@ -5546,6 +5607,20 @@ axis	Y Axis	Y-Achse
 	Show its progress, see Cancel and write log lines	Den Fortschritt anzeigen, ein Abbrechen erkennen und Protokollzeilen schreiben
 	Keep settings of its own	Eigene Einstellungen speichern
 	Keep a cache of its own, which you can clear	Einen eigenen Cache anlegen, den Sie leeren können
+	Run these commands on the document: {ids}	Diese Befehle im Dokument ausführen: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	„{name}“ führt `{id}` in `commandAllowlist` auf, den ein Plug-in nicht aufrufen darf
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: die `commandAllowlist` des Manifests führt ihn nicht auf
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: die ID oder die Argumente liegen außerhalb des Speichers des Moduls
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: die ID oder die Argumente sind kein UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: die Argumente sind kein JSON-Objekt
+@msg	only a filter with the usual budget declares `commandAllowlist`	nur ein Filter mit dem üblichen Budget deklariert `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	Befehlsaufrufe ({MAX_CALLS} Aufrufe und {MAX_CALL_BYTES} Byte pro Lauf)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	Größe eines Befehlsaufrufs (vc_call `{shown}`: {len} Byte, Grenze {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	höchstens {MAX_ALLOWED_COMMANDS} Befehle in `commandAllowlist`
+@msg	a plug-in may not call this command	ein Plug-in darf diesen Befehl nicht aufrufen
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` braucht die Berechtigung `commands`, und `commands` braucht eine `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` nennt `{shown}`, das keine Befehls-ID ist oder doppelt aufgeführt ist
 	Clear Plug-in Cache	Plug-in-Cache leeren
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	die Berechtigung `{permission}` braucht die Plug-in-API-Stufe {PROGRESS_API}: Geben Sie `api` {PROGRESS_API} an
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	das Modul importiert `env.{name}` mit einem anderen Typ als dem des Hosts: Der Typ des Hosts ist {signature}
@@ -5635,6 +5710,23 @@ axis	Y Axis	Y-Achse
 	Button	Schaltfläche
 	Panel	Bedienfeld
 	UI Frames	UI-Rahmen
+	Map Markers	Kartenmarkierungen
+	Pin	Stecknadel
+	Flag	Flagge
+	Crosshair	Fadenkreuz
+	Checkpoint	Kontrollpunkt
+	Inventory Icons	Inventar-Symbole
+	Skill Icons	Fähigkeitssymbole
+	Attack	Angriff
+	Defend	Verteidigung
+	Heal	Heilung
+	Buff	Buff
+	Ult	Ult
+	Sword	Schwert
+	Shield	Schild
+	Potion	Trank
+	Key	Schlüssel
+	Gem	Edelstein
 	Open Symbol Library	Symbol-Bibliothek öffnen
 	Save Symbol Library	Symbol-Bibliothek speichern
 	Save Symbol Library…	Symbol-Bibliothek speichern…
@@ -5689,6 +5781,16 @@ axis	Y Axis	Y-Achse
 	User Brush Library 9	Benutzer-Pinsel-Bibliothek 9
 	User Brush Library 10	Benutzer-Pinsel-Bibliothek 10
 	Art Ribbons	Bildbänder
+	Zigzag	Zickzack
+	Burst Ray	Stoßstrahl
+	Dash Trail	Strichelspur
+	Speed Line	Geschwindigkeitslinie
+	Game Trails	Spielspuren
+	Energy Beams	Energiestrahlen
+	Laser Bolt	Laserbolzen
+	Plasma Arc	Plasmabogen
+	Charge Wave	Ladewelle
+	Spark Trail	Funkenspur
 	Calligraphic Nibs	Kalligrafie-Federn
 	Pattern Borders	Musterbordüren
 	Scatter Shapes	Streuformen
@@ -6281,3 +6383,33 @@ breakText	Glyphs	Glyphen
 	Ignore All	Alle ignorieren
 	Add to Dictionary	Zum Wörterbuch hinzufügen
 	No Suggestions	Keine Vorschläge
+	Edit Custom Dictionary	Benutzerwörterbuch bearbeiten
+	Entry:	Eintrag:
+# Script Console
+	Script Console	Skriptkonsole
+	Clear Script Console	Skriptkonsole leeren
+	Copy Script Console	Skriptkonsole kopieren
+	Copy All	Alles kopieren
+	Copy Selected	Auswahl kopieren
+	Finished	Beendet
+	Ended with an error	Mit einem Fehler beendet
+	Out of fuel	Anweisungslimit erreicht
+	Ended at a host limit	An einem Host-Limit beendet
+	Ended at a limit	An einem Limit beendet
+	Stopped	Gestoppt
+	Ended by an internal fault	Durch einen internen Fehler beendet
+	time unavailable	Zeit nicht verfügbar
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	langsamste: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} Host-Aufruf|{n} Host-Aufrufe
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ältere Zeile verworfen|{n} ältere Zeilen verworfen
+@plural	{n} line cut|{n} lines cut	{n} Zeile gekürzt|{n} Zeilen gekürzt
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` und `last` müssen Nummern von Zeilen sein, die die Konsole enthält, `first` vor `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Zurückgestellte Effekte aktualisieren
+	Deferred Effects	Zurückgestellte Effekte
+@msg	no plug-in effect is deferred	kein Plug-in-Effekt ist zurückgestellt
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Mit {n} zurückgestelltem Plug-in-Effekt geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt ihn aus.|Mit {n} zurückgestellten Plug-in-Effekten geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt sie aus.

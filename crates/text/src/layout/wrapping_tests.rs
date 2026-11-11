@@ -16,6 +16,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             len,
             run: 0,
             adv,
+            tracking: 0.0,
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
@@ -136,6 +137,7 @@ fn composition_trim_stays_along_the_line_when_a_character_rotates() {
                 system_layout: false,
                 fractional_widths: true,
                 upright_cluster: None,
+                tcy_block: None,
                 out: TextLayout::default(),
             };
             cx.emit(&glyph, pre, origin, angle, 30.0 - lead, 0);

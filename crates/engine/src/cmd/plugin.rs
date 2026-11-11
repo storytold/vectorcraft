@@ -88,6 +88,9 @@ pub fn describe(p: &Plugin) -> Value {
     if m.paint_output {
         v["paintOutput"] = json!(true);
     }
+    if !m.command_allowlist.is_empty() {
+        v["commandAllowlist"] = json!(m.command_allowlist);
+    }
     if !m.commands.is_empty() {
         let commands: Vec<Value> = m
             .commands
@@ -258,6 +261,37 @@ impl FilterRun {
         self.plugin.run(&self.input, &self.params).map_err(err)
     }
 
+    /// Does the plug-in call commands (its manifest's `commandAllowlist`)? Then it runs only in the
+    /// session ([`FilterRun::run_with_calls`]).
+    pub fn calls(&self) -> bool {
+        !self.plugin.manifest().command_allowlist.is_empty()
+    }
+
+    /// Runs the plug-in in `s`, making the command calls it asks for on the active document
+    /// ([`super::plugin_call::call`]) → its output.
+    fn run_calling(&self, s: &mut Session) -> Result<Vec<u8>> {
+        let may = self.plugin.manifest().permissions();
+        let calls = super::plugin_call::Calls::of(s, may.contains(&Permission::DocRead), may.contains(&Permission::DocWrite));
+        let mut bridge = |id: &str, args: &Value| super::plugin_call::call(s, &calls, id, args);
+        self.plugin.run_calling(&self.input, &self.params, self.plugin.limits(), &mut bridge).0.map_err(err)
+    }
+
+    /// Runs a plug-in that calls commands and applies its output: the calls and the output are one
+    /// undo step, and a run that fails changes nothing ([`super::plugin_call::transaction`]).
+    fn run_with_calls(self, s: &mut Session) -> Result<Value> {
+        let label = self.label();
+        super::plugin_call::transaction(s, &label, |s| {
+            let output = self.run_calling(s)?;
+            self.finish(s, &output)
+        })
+    }
+
+    /// The name of its undo step: the plug-in's, or its command's.
+    fn label(&self) -> String {
+        let m = self.plugin.manifest();
+        self.command.as_ref().map_or_else(|| m.name.trim_end_matches('…').to_string(), Command::shown_label)
+    }
+
     /// Hands in `output`, which [`FilterRun::run`] returned: the next `plugin.run` that makes this
     /// same run (same plug-in, `ids` and parameters, the document unchanged) applies it instead of
     /// running the plug-in. Any other run drops it.
@@ -277,9 +311,9 @@ impl FilterRun {
             return Err(not_granted(&m.name, Permission::State));
         }
         let may_write = may.contains(&Permission::DocWrite);
-        let (inputs, parent) = (self.inputs, self.parent);
         // A command's undo step is named after the command.
-        let label = self.command.as_ref().map_or_else(|| m.name.trim_end_matches('…').to_string(), Command::shown_label);
+        let label = self.label();
+        let (inputs, parent) = (self.inputs, self.parent);
         let ids = s.edit(&label, |d, sel| {
             let before = (!may_write).then(|| d.layers.clone());
             let ids = objects::apply_output(d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
@@ -316,6 +350,12 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
     // An output handed in is for this run only (the app hands it in just before), whatever it does.
     let handed = s.plugin_output.take();
     let r = FilterRun::prepare(s, p)?;
+    // One that calls commands runs here, where it can make them, on the document with any edit in
+    // progress committed.
+    if r.calls() {
+        let r = if super::plugin_call::settle(s)? { FilterRun::prepare(s, p)? } else { r };
+        return r.run_with_calls(s);
+    }
     // Handed in for this very run (the app ran it in the background), it is what running the
     // plug-in again would return.
     let handed = handed.filter(|h| (h.serial, &h.input, &h.params) == (r.plugin.serial(), &r.input, &r.params));
@@ -463,6 +503,16 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
         }
     };
     let r = FilterRun::prepare_with(s, plugin, Some(command), id, p)?;
+    if r.calls() {
+        let r = match super::plugin_call::settle(s)? {
+            true => {
+                let (plugin, command) = command_of(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
+                FilterRun::prepare_with(s, plugin, Some(command), id, p)?
+            }
+            false => r,
+        };
+        return r.run_with_calls(s).map_err(failed);
+    }
     let output = r.run().map_err(&failed)?;
     r.finish(s, &output).map_err(failed)
 }
@@ -654,6 +704,16 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
             "`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app",
         ));
     }
+    // A plug-in never calls a command no plug-in may call, whatever its manifest lists.
+    let (unknown, refused) = super::plugin_call::check_allowlist(plugin.manifest());
+    if let Some(id) = refused.first() {
+        let (name, id) = (
+            permissions::display_text(&plugin.manifest().name, permissions::MAX_SHOWN_NAME),
+            permissions::display_text(id, permissions::MAX_SHOWN_FIELD),
+        );
+        return Err(bad(C, format!("“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call")));
+    }
+    let unknown: Vec<String> = unknown.into_iter().map(str::to_string).collect();
     // A heavy plug-in is installed once a person agrees.
     if plugin.manifest().budget == Budget::Heavy && !allow_heavy {
         let (minutes, times) = vectorcraft_plugins::heavy_terms();
@@ -726,7 +786,11 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     if changed {
         s.store_disabled_plugins();
     }
-    Ok(describe_installed(&registry::install(plugin)))
+    let mut v = describe_installed(&registry::install(plugin));
+    if !unknown.is_empty() {
+        v["unknownCommands"] = json!(unknown);
+    }
+    Ok(v)
 }
 
 /// `plugin.inspect`: what installing the module would install, without installing it, whether that
@@ -737,6 +801,13 @@ fn inspect(s: &mut Session, p: &Value) -> Result<Value> {
         let mut v = describe(&plugin);
         v["needsApproval"] = json!(!s.plugin_approved(&plugin));
         v["needsReplace"] = json!(takes_over(s, &plugin));
+        let (unknown, refused) = super::plugin_call::check_allowlist(plugin.manifest());
+        if !unknown.is_empty() {
+            v["unknownCommands"] = json!(unknown);
+        }
+        if !refused.is_empty() {
+            v["refusedCommands"] = json!(refused);
+        }
         v
     })
 }
@@ -773,6 +844,15 @@ pub(crate) fn sync_prefs(s: &Session) {
         return;
     }
     *last = Some((folder.to_string(), s.plugin_dir.clone(), load_folder(s, folder)));
+}
+
+/// The Additional Plug-ins Folder preference was cleared from `old`: when `old` is the folder last
+/// loaded, it is forgotten, so setting the preference to it again loads it again.
+pub(crate) fn forget_prefs_folder(old: &str) {
+    let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    if last.as_ref().is_some_and(|(f, _, _)| f == old.trim()) {
+        *last = None;
+    }
 }
 
 /// Turns Safe Mode on for `--safe-mode`, before the plug-in folder is attached: no plug-in loads or
@@ -971,7 +1051,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -989,7 +1069,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids}",
             has_doc,
             run
         ),
@@ -998,7 +1078,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
+            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
             always,
             install
         ),
@@ -1007,7 +1087,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Inspect Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true)",
+            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true), unknownCommands?: [id] (commandAllowlist ids no command has) and refusedCommands?: [id] (commandAllowlist ids no plug-in may call: plugin.install refuses the module)",
             always,
             inspect
         ),

@@ -292,7 +292,7 @@ fn profile_presets_round_trip_their_ids() {
 #[test]
 fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
     // Saved files store these names: they may only ever be appended to.
-    const SAVED: [&str; 40] = [
+    const SAVED: [&str; 41] = [
         "Triangle",
         "TriangleOpen",
         "Circle",
@@ -333,6 +333,7 @@ fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
         "Kite",
         "TriangleBar",
         "Oval",
+        "LineArrow",
     ];
     for name in SAVED {
         let a: Arrowhead = serde_json::from_value(serde_json::json!(name)).unwrap();
@@ -366,9 +367,15 @@ fn outset_covers_arrowheads() {
     st.arrow_scale = (100.0, 200.0);
     assert_eq!(st.arrow_weight(false), 4.0);
     assert_eq!(st.arrow_weight(true), 8.0);
-    assert_eq!((st.head_reach(false), st.head_reach(true)), (0.0, HEAD_REACH * 8.0 + 2.0));
+    let reach = Arrowhead::Triangle.reach();
+    assert_eq!((st.head_reach(false), st.head_reach(true)), (0.0, reach * 8.0 + 2.0));
     // A 32 pt head whose tip sits up to its length (plus the cap) past the end point.
-    assert_eq!(a.outset(), HEAD_REACH * 8.0 + 2.0);
+    assert_eq!(a.outset(), reach * 8.0 + 2.0);
+    // The line arrow's arms spread twice as wide, so it reaches further from its tip.
+    a.stroke_mut().unwrap().end_arrow = Some(Arrowhead::LineArrow);
+    assert!(Arrowhead::LineArrow.reach() > reach);
+    assert_eq!(a.outset(), Arrowhead::LineArrow.reach() * 8.0 + 2.0);
+    a.stroke_mut().unwrap().end_arrow = Some(Arrowhead::Triangle);
     a.stroke_mut().unwrap().width = 0.01;
     assert_eq!(a.stroke().unwrap().arrow_weight(true), 0.25, "heads keep a minimum size");
 }

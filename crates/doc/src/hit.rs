@@ -588,7 +588,8 @@ fn may_hit(parent: &Node, i: usize, c: &Node, p: Point, opt: HitOptions, symbols
     if !c.visible || editable_only && (c.locked || c.is_template()) {
         return false;
     }
-    if opt.skip_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+    // A ruler guide is picked by the guide commands, never by an object hit test.
+    if c.is_ruler_guide() || opt.skip_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
         return false;
     }
     // (An envelope's content sits where it was, not where the envelope draws it.)
@@ -870,10 +871,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             on_type_path(n, t, p, opt.tol).then_some(HitKind::Outline)
         }
         // An image is hit within its frame (on the frame's edge only with Selection by Path Only,
-        // #3291), and where its own fills and strokes paint ([`image_paint`]) except in outline
-        // mode.
+        // #3291, and in outline mode where the frame is all that is drawn, #6437), and where its
+        // own fills and strokes paint ([`image_paint`]) except in outline mode.
         NodeKind::Image(im) => {
-            if opt.path_only {
+            if opt.path_only || (opt.outline && !symbols.document().setup.outline_images) {
                 use vectorcraft_geom::kurbo::Shape;
                 let mut frame = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1);
                 frame.apply_affine(im.xf);
@@ -908,6 +909,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             let bp = m.outline().to_bezpath();
             if stroke_contains(&bp, 0.0, opt.tol, p) {
                 return Some(HitKind::Outline);
+            }
+            // Outline mode draws the mesh lines, not the colours between them (#6437).
+            if opt.outline {
+                return stroke_contains(&m.lines().to_bezpath(), 0.0, opt.tol, p).then_some(HitKind::Outline);
             }
             (!opt.path_only && fill_contains(&bp, vectorcraft_geom::FillRule::NonZero, p)).then_some(HitKind::Fill)
         }
@@ -1252,7 +1257,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
         // marquee touches none of it, as clicks don't (#5309).
         Some(s) if !doc.is_editable(s.id) => vec![],
         Some(s) => match s.children() {
-            Some(c) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
+            Some(c) => c.iter().enumerate().filter(|(i, c)| !c.is_ruler_guide() && !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
             // A single object isolated: only it.
             None => doc
                 .parent_of(s.id)
@@ -1281,7 +1286,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
                 if c.visible && !c.locked && !c.is_template() {
                     out.extend(layer_objects(c, r));
                 }
-            } else {
+            } else if !c.is_ruler_guide() {
                 out.push((c, r));
             }
         }

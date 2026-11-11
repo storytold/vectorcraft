@@ -194,7 +194,7 @@ impl Importer {
             _ => self.named("", NodeKind::Group { children: kids, clip: false })?,
         };
         // usvg clips a `<use>` of a symbol to its viewport: that only counts when it cuts the art.
-        let whole = g.clip_path().is_none_or(|cp| uncut(cp, ts, &art, xf));
+        let whole = g.clip_path().is_none_or(|cp| uncut(cp, ts, &art, xf, &|p, m| self.clip_text(p, m)));
         let name = match self.symbols.get(&sym) {
             Some(made) if whole && made.art == without_ids(&art) && made.reuse.allows(xf) => made.name.clone(),
             Some(_) => return None,
@@ -500,26 +500,32 @@ impl Importer {
     }
 
     /// Put `art` in layer `l` at `index` (at most its end) unclipped: a clipping mask on the layer
-    /// becomes a clip group in it, holding the art it clipped.
+    /// becomes a clip group in it, holding the art it clipped. The layer's ruler guides stay last,
+    /// outside the clip group.
     pub(super) fn add_unclipped(&mut self, l: &mut Node, index: usize, art: Vec<Arc<Node>>) {
         if art.is_empty() {
             return;
         }
         if let NodeKind::Layer { children, clip: clip @ true, .. } = &mut l.kind {
             *clip = false;
-            let clipped = std::mem::take(children);
+            let mut clipped = std::mem::take(children);
+            let guides = clipped.split_off(Node::guide_run_start(&clipped));
             if let Some(group) = self.named("", NodeKind::Group { children: clipped, clip: true }) {
                 children.push(Arc::new(group));
             }
+            children.extend(guides);
         }
         if let Some(ch) = l.children_mut() {
-            let i = index.min(ch.len());
+            let i = index.min(Node::guide_run_start(ch));
             ch.splice(i..i, art);
         }
     }
 
     fn clip_node(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
-        let mut shapes = clip_shapes(cp, ts);
+        if let Some(n) = self.clip_type(cp, ts) {
+            return Some(n);
+        }
+        let mut shapes = clip_shapes(cp, ts, &|p, m| self.clip_text(p, m));
         let id = cp.id().to_string();
         if shapes.len() == 1 {
             let (bp, r) = shapes.pop()?;
@@ -538,6 +544,53 @@ impl Importer {
             return None;
         }
         self.named(&id, NodeKind::Group { children, clip: false })
+    }
+
+    /// The glyph outlines, in the document, of the text a clip placeholder path `p` stands for (see
+    /// [`text`]), whose user space `m` maps to the document; nothing when the text is hidden. `None`
+    /// when `p` isn't a placeholder: in a clip path only its id tells (usvg paints clip path content
+    /// black).
+    fn clip_text(&self, p: &usvg::Path, m: Affine) -> Option<Vec<(BezPath, FillRule)>> {
+        if p.id().is_empty() {
+            return None;
+        }
+        let i = self.slots.find(p)?;
+        let t = self.slots.texts.get(i)?;
+        if !p.is_visible() {
+            return Some(vec![]);
+        }
+        let mut bp = BezPath::clone(&*self.slots.outlines(i)?);
+        bp.apply_affine(m * self.slots.inner(p) * t.obj.xf);
+        let r = p.fill().map(|f| rule(f.rule())).unwrap_or_default();
+        Some(if bp.elements().is_empty() { vec![] } else { vec![(bp, r)] })
+    }
+
+    /// Clip path `cp` (on an element whose user space `ts` maps to the document) as live type, when
+    /// all it holds is one visible text that clips by the non-zero rule and has no clip path of its
+    /// own: the text object with no fill or stroke, the same structure Make Clipping Mask produces
+    /// for type.
+    fn clip_type(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
+        let mut m = ts * aff(cp.transform());
+        let mut kids = cp.root().children();
+        while let [usvg::Node::Group(g)] = kids
+            && g.clip_path().is_none()
+        {
+            m *= aff(g.transform());
+            kids = g.children();
+        }
+        let [usvg::Node::Path(p)] = kids else { return None };
+        if p.id().is_empty() || !p.is_visible() || p.fill().is_some_and(|f| f.rule() == usvg::FillRule::EvenOdd) {
+            return None;
+        }
+        let mut obj = self.slots.texts.get(self.slots.find(p)?)?.obj.clone();
+        obj.xf = m * self.slots.inner(p) * obj.xf;
+        let grow = text::size_scale(&obj, obj.xf);
+        for run in &mut obj.runs {
+            run.style.fill = Paint::None;
+            run.style.stroke = Paint::None;
+        }
+        text::fold_scale(&mut obj, grow);
+        self.named(cp.id(), NodeKind::Text(Box::new(obj)))
     }
 
     /// One clip path child: a path, or a compound path of its subpaths when it has several.

@@ -22,8 +22,10 @@ impl Exporter<'_> {
     /// Opacity mask → luminosity soft mask. Outside the art the backdrop is black (clip) or white;
     /// invert is a white Difference rect on top (luminance is linear, so luma(1 − c) = 1 − luma(c)).
     fn soft_mask(&mut self, s: &mut Surface, m: &vectorcraft_doc::OpacityMask, page: Rect) -> Option<krilla::mask::Mask> {
+        let transform = s.group_transform();
         let mut sb = s.stream_builder();
-        let mut ms = sb.surface();
+        let mut ms = Surface::stream(sb.surface());
+        ms.push_transform(&transform);
         // An opaque backdrop when it matters: white outside the art (no clip), or black for the
         // inverting Difference pass below to turn white.
         if !m.clip || m.invert {
@@ -39,6 +41,8 @@ impl Exporter<'_> {
         self.image_left_out = image_left_out.map(|outer| outer || incomplete);
         (self.knockout, self.overprint) = (knockout, overprint);
         if incomplete {
+            ms.pop();
+            ms.finish();
             return None;
         }
         if m.invert {
@@ -46,6 +50,7 @@ impl Exporter<'_> {
             cover(&mut ms, page, 255, 1.0);
             ms.pop();
         }
+        ms.pop();
         ms.finish();
         Some(krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity))
     }
@@ -96,20 +101,26 @@ impl Exporter<'_> {
             s.opacity = 1.0;
             s
         };
+        let transform = s.group_transform();
         let mut sb = s.stream_builder();
-        let mut ms = sb.surface();
+        let mut ms = Surface::stream(sb.surface());
+        ms.push_transform(&transform);
         cover(&mut ms, page, 255, 1.0);
         let alpha = {
+            let transform = ms.group_transform();
             let mut ab = ms.stream_builder();
-            let mut als = ab.surface();
+            let mut als = Surface::stream(ab.surface());
+            als.push_transform(&transform);
             let overprint = std::mem::take(&mut self.overprint);
             self.measured_node(&mut als, &shape, page, false, Some(measured));
             self.overprint = overprint;
+            als.pop();
             als.finish();
             krilla::mask::Mask::new(ab.finish(), krilla::mask::MaskType::Alpha)
         };
         ms.push_mask(alpha);
         cover(&mut ms, page, 0, 1.0);
+        ms.pop();
         ms.pop();
         ms.finish();
         krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
@@ -307,6 +318,8 @@ impl Exporter<'_> {
                     self.node(s, c, page, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         self.knockout = enclosing;
         for _ in 0..pushes {

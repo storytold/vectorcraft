@@ -131,6 +131,57 @@ fn hovering_another_title_switches_the_open_menu() {
 }
 
 #[test]
+fn opening_the_file_menu_reads_the_scripts_folder_again() {
+    let dir = std::env::temp_dir().join(format!("vc-menu-bar-scripts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut session = vectorcraft_engine::Session::new();
+    session.attach_scripts_dir(dir.clone());
+    let mut app = VectorcraftApp::new(session, crate::Services::default());
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    // The scripts File › Scripts lists.
+    let listed = || {
+        let (_, file) = menu_tree().into_iter().find(|(title, _)| *title == "File").unwrap();
+        let scripts = file.iter().find_map(|item| match item {
+            Item::Sub("Scripts", items) => Some(items.clone()),
+            _ => None,
+        });
+        scripts
+            .unwrap()
+            .iter()
+            .filter_map(|item| if let Item::Cmd(label, crate::scripts_menu::COMMAND, _) = item { Some(*label) } else { None })
+            .collect::<Vec<_>>()
+    };
+    // One frame of the bar, then the listing a read it started gave.
+    let frame = |app: &mut VectorcraftApp| {
+        let titles = bar_frame(app, &ctx, vec![]);
+        crate::scripts_menu::wait();
+        titles
+    };
+    std::fs::write(dir.join("a.js"), "").unwrap();
+    frame(&mut app);
+    let titles = frame(&mut app);
+    assert!(listed().is_empty(), "the bar reads nothing while its menus are closed");
+    egui::Popup::open_id(&ctx, titles[0].1);
+    frame(&mut app);
+    assert_eq!(listed(), ["a"]);
+    // While File stays open the folder is not read again.
+    std::fs::write(dir.join("b.js"), "").unwrap();
+    frame(&mut app);
+    assert_eq!(listed(), ["a"]);
+    // Nor when another menu opens; the next time File opens it is.
+    egui::Popup::open_id(&ctx, titles[1].1);
+    let t = frame(&mut app);
+    assert_eq!((open_titles(&ctx, &t), listed()), (vec![1], vec!["a"]));
+    egui::Popup::open_id(&ctx, titles[0].1);
+    frame(&mut app);
+    assert_eq!(listed(), ["a", "b"]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn a_popup_covering_a_title_does_not_switch_menus() {
     let ctx = egui::Context::default();
     let p = egui::pos2(90.0, 12.0);
@@ -260,6 +311,44 @@ fn optical_margin_alignment_is_a_checked_type_menu_item() {
     app.run("type.orientation.vertical", json!({})).unwrap();
     assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(true));
     assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+}
+
+/// Type › Dynamic Text runs `type.dynamicText`, is enabled for type on a path that is in no
+/// thread, and is checked while the selected type on a path has it on.
+#[test]
+fn dynamic_text_is_a_checked_type_menu_item() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let ids: Vec<&str> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Cmd("Dynamic Text", id, _) => Some(id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ids, ["type.dynamicText"]);
+    let id = "type.dynamicText";
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    assert!(!enabled(&app, id));
+    let point = app.run("text.create", json!({"x": 10, "y": 10, "text": "Point"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [point]})).unwrap();
+    assert!(!enabled(&app, id), "point type");
+    let path = app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap()["id"].clone();
+    let t = app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    assert!(enabled(&app, id));
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(true));
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    let frame = app.run("shape.rectangle", json!({"x": 60, "y": 200, "width": 200, "height": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [t, frame]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    assert!(!enabled(&app, id), "type on a path in a thread");
 }
 
 /// Type › Optical Margin Alignment menu check uses `shared_text_flag`; mixed values stay unchecked.

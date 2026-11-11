@@ -157,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{selectedArtboards?: [n…], art?: bool, lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (as edit.copy) (selected ruler guides go too; the Artboard tool chosen, or selectedArtboards given: artboard.cut); refused while an object of a symbol instance's art is selected",
+            "{selectedArtboards?: [n…], art?: bool, lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (as edit.copy) removes the objects it copies, in one undo step: a compound-path member selected on its own leaves the compound's other members in the compound (selected ruler guides go too; the Artboard tool chosen, or selectedArtboards given: artboard.cut); refused while an object of a symbol instance's art is selected",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -166,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
+            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses (a compound-path member selected on its own, whole or in part, with Direct or Group Selection, is copied as an ordinary path with the compound's paint, transparency, opacity mask, fill rule and graphic style link (while it has that style's look), a gradient keeping the compound's fit; the compound is copied when it is selected, or when every member is selected whole outside isolation mode), and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -220,7 +220,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides); without ids, refused while an object of a symbol instance's art is selected",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -931,7 +931,11 @@ fn without_inner(doc: &Document, placed: Vec<(NodeId, Option<Vec<usize>>)>) -> i
     })
 }
 
-/// The direct-selection flag and resolved root nodes for Copy and Cut operations.
+/// The direct-selection flag and resolved root nodes for Copy and Cut operations. A compound-path
+/// member selected on its own (whole, with Direct or Group Selection, or by some of its anchors or
+/// segments) is taken as itself, so Copy copies it as an ordinary path and Cut removes it alone. The
+/// compound is taken whole when it is selected, or when every one of its members is selected whole
+/// outside isolation mode; in an isolated compound every member is taken as itself.
 fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let st = s.doc()?;
     // The Pen and the Curvature tool leave the anchor they placed or edited selected: Copy takes
@@ -940,9 +944,19 @@ fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature") && !picked;
     let direct = !in_drawing_tool && (!st.selection.anchors.is_empty() || !st.selection.segments.is_empty());
     let in_isolated_compound = st.isolation.is_some_and(|iso| st.doc.node(iso).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
-    let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_compound, member| {
-        in_isolated_compound || (direct && (st.selection.partial(member).is_some() || st.selection.segments.contains_key(&member)))
-    });
+    // A member counts as selected whole when Copy would take it unchanged: no anchors or segments
+    // of it are picked, the picked ones cover every segment, or a drawing tool's own anchor is
+    // all that is picked.
+    let selected: std::collections::HashSet<NodeId> = st.selection.objects.iter().copied().collect();
+    let whole = |m: &vectorcraft_doc::Node| selected.contains(&m.id) && (!direct || super::clipboard::copied_whole(m, &st.selection));
+    // Worked out once per compound: every selected member asks about its compound.
+    let checked = std::cell::RefCell::new(std::collections::HashMap::new());
+    let all_members_whole = |compound: NodeId| {
+        *checked.borrow_mut().entry(compound).or_insert_with(|| {
+            st.doc.node(compound).and_then(|n| n.children()).is_some_and(|members| !members.is_empty() && members.iter().all(|m| whole(m)))
+        })
+    };
+    let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |compound, _member| in_isolated_compound || !all_members_whole(compound));
     Ok((direct, roots))
 }
 
@@ -977,8 +991,8 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
         .selection
         .guides
         .iter()
-        .filter_map(|i| st.doc.guides.get(*i))
-        .map(|g| vectorcraft_doc::Guide { layer: None, artboard: None, ..g.clone() })
+        .filter_map(|i| st.doc.ruler_guide(*i))
+        .map(|g| vectorcraft_doc::Guide { layer: None, artboard: None, id: None, ..g })
         .collect();
     let roots = if st.selection.is_empty() && !guides.is_empty() { vec![] } else { targets };
     let mut clip = Clipboard::copy(st, &roots, direct);
@@ -990,7 +1004,7 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
     // Guides alone: the artboard the first one belongs to, or crosses, is where in-place pastes
     // measure from, as the objects' artboard is.
     if clip.nodes.is_empty()
-        && let Some(g) = st.selection.guides.first().and_then(|i| st.doc.guides.get(*i))
+        && let Some(g) = st.selection.guides.first().and_then(|i| st.doc.ruler_guide(*i))
     {
         let board = g.artboard.and_then(|id| st.doc.artboards.iter().find(|a| a.id == id)).or_else(|| {
             st.doc
@@ -1016,8 +1030,8 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
         copy(s, p)?;
         return clear(s, &json!({}));
     }
-    // Copy promotes a compound member to its compound. Cut must remove the same objects it
-    // copied, while Clear on its own deletes exactly the selected members.
+    // Cut removes the same objects Copy takes: a compound member selected on its own, or the
+    // whole compound when it is selected or every member is selected whole.
     let (direct, roots) = copy_cut_targets(s)?;
     let res = copy(s, p)?;
     if res.get("copied").and_then(Value::as_u64) == Some(0) {
@@ -1039,18 +1053,14 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
     s.edit("Cut", |d, selection| {
         // The selected ruler guides were copied too (#3226): they go in the same undo step.
         let gone = selection.guides.clone();
-        d.retain_guides(selection, |i, _| !gone.contains(&i));
+        d.retain_guides(selection, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         let mut survivors = vec![];
         let mut pieces = super::pathops::Beside::replacing(d, roots);
         for id in roots {
             let Some(node) = d.node(*id) else { continue };
             let has_direct = sel.anchors.contains_key(id) || sel.segments.contains_key(id);
-            if !has_direct {
-                d.remove(*id)?;
-                continue;
-            }
-            if node.path_data().is_none() {
-                d.remove(*id)?;
+            if !has_direct || node.path_data().is_none() {
+                remove_leaving_no_empty_compound(d, *id)?;
                 continue;
             }
             let original = super::path::deletion_source(d, *id)?;
@@ -1073,13 +1083,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
             }
             subpaths.retain(|sp| sp.anchors.len() >= 2);
             if subpaths.is_empty() {
-                let parent = d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
-                d.remove(*id)?;
-                if let Some(p) = parent
-                    && d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))
-                {
-                    d.remove(p)?;
-                }
+                remove_leaving_no_empty_compound(d, *id)?;
             } else {
                 survivors.extend(super::path::replace_deleted_pieces(d, &mut pieces, original, subpaths)?);
             }
@@ -1091,6 +1095,19 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// Remove object `id`, and the compound path that held it when it was the compound's last member.
+/// A compound left with one member stays a compound path, as after Clear.
+fn remove_leaving_no_empty_compound(d: &mut Document, id: NodeId) -> Result<()> {
+    let parent = d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
+    d.remove(id)?;
+    if let Some(p) = parent
+        && d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))
+    {
+        d.remove(p)?;
+    }
+    Ok(())
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1136,7 +1153,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if with_guides {
             let gone = sel.guides.clone();
-            d.retain_guides(sel, |i, _| !gone.contains(&i));
+            d.retain_guides(sel, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         }
         if is_explicit {
             for id in &ids {
@@ -1315,7 +1332,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         vec![Affine::IDENTITY]
     };
     let (ids, imported, artboards, into) = s.edit(mode.label(), |d, sel| {
-        let imported = clip.import_into(d, choices, same_doc);
+        let imported = clip.import_into(d, choices, same_doc)?;
         // Draw Inside: the clip group of the object drawn into, made on the first paste.
         let into = inside.map(|t| super::create::draw_inside_group(d, t)).transpose()?;
         let artboards: Vec<usize> = boards
@@ -1421,8 +1438,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             for g in &clip.guides {
                 let pos = g.pos + if g.vertical { dv.x } else { dv.y };
                 if pos.is_finite() {
-                    sel.guides.push(d.guides.len());
-                    d.guides.push(vectorcraft_doc::Guide { pos, layer: guide_layer, ..g.clone() });
+                    sel.guides.push(d.add_ruler_guide(&vectorcraft_doc::Guide { pos, layer: guide_layer, ..g.clone() }));
                 }
             }
         }

@@ -166,7 +166,7 @@ fn an_error_names_the_script_its_place_and_kind() {
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
     assert!(run(&mut s, "app.activeDocument;").unwrap_err().to_string().contains("`vc`"));
-    assert!(run(&mut s, "#target x\n1").unwrap_err().to_string().contains("#target"));
+    assert!(run(&mut s, "#targetengine x\n1").unwrap_err().to_string().contains("unsupported script directive: #targetengine"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
 
@@ -862,6 +862,44 @@ fn a_file_saved_before_a_failure_stays_written_and_is_named() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// A run in the app's frames keeps the file-access scope its `script.run` came in, whatever scope
+/// the frames that advance it run in.
+#[test]
+fn a_framed_run_keeps_the_file_access_scope_it_started_in() {
+    let dir = std::env::temp_dir().join(format!("vc-script-scope-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (allowed, outside) = (dir.join("allowed"), dir.join("outside"));
+    std::fs::create_dir_all(&allowed).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[&allowed], &[&allowed]).unwrap().unwrap();
+    let export = |target: &std::path::Path| {
+        let p = target.to_string_lossy().into_owned();
+        format!("try {{ vc.run('document.export', {{path: {p:?}, format: 'svg'}}); vc.log('ok'); }} catch (e) {{ vc.log(e.name); }}")
+    };
+    let finish = |s: &mut Session| {
+        loop {
+            if let Some(r) = s.script_pump() {
+                return r;
+            }
+        }
+    };
+    let mut s = two_docs();
+    s.script_frames = true;
+    let confined_target = outside.join("confined.svg");
+    let started = crate::file_access::confine(Some(&roots), || run(&mut s, &export(&confined_target))).unwrap();
+    assert_eq!(started["running"], true);
+    let r = crate::file_access::unconfined(|| finish(&mut s)).unwrap();
+    assert_eq!(r["log"], json!(["Error"]), "a confined caller's run stays confined: {r}");
+    assert!(!confined_target.exists());
+    let user_target = outside.join("user.svg");
+    let started = crate::file_access::unconfined(|| run(&mut s, &export(&user_target))).unwrap();
+    assert_eq!(started["running"], true);
+    let r = crate::file_access::confine(Some(&roots), || finish(&mut s)).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "a run the person started is not confined by a later caller: {r}");
+    assert!(user_target.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_committed_run_exports_what_it_drew() {
     let path = std::env::temp_dir().join(format!("vc-script-export-{}.svg", std::process::id()));
@@ -951,6 +989,15 @@ fn source_text() -> impl proptest::strategy::Strategy<Value = String> {
         Just("{".to_string()),
         Just("try {".to_string()),
         Just("} catch (e) {}".to_string()),
+        Just("\n#include \"x.jsxinc\"\n".to_string()),
+        Just("\n//@include 'x\n".to_string()),
+        Just("\n#includepath \";;..;\"\n".to_string()),
+        Just("\n#script \"\"\n".to_string()),
+        Just("\n#target\n".to_string()),
+        Just("\n#strict on\n".to_string()),
+        Just("\n#\u{0}\n".to_string()),
+        Just("try { $.evalFile('x.jsx', NaN); } catch (e) {}".to_string()),
+        "\n#[a-z]{0,12}[ -~]{0,20}\n",
         "[ -~]{0,30}",
         "\\PC{0,10}",
     ];

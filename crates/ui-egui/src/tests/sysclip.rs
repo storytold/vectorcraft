@@ -174,8 +174,9 @@ pub(super) fn pasted(app: &VectorcraftApp) -> Vec<Node> {
     st.selection.objects.iter().map(|id| st.doc.node(*id).unwrap().clone()).collect()
 }
 
+/// The objects on the first layer (its ruler guides left out).
 pub(super) fn count(app: &VectorcraftApp) -> usize {
-    app.session.active().unwrap().doc.layers[0].children().unwrap().len()
+    app.session.active().unwrap().doc.layers[0].children().unwrap().iter().filter(|c| !c.is_ruler_guide()).count()
 }
 
 /// An egui `PasteImage` from the host is the signal to read the rich system clipboard: it must

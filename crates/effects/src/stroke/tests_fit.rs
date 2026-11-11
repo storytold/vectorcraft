@@ -223,3 +223,17 @@ fn smooth_points_of_curves_stay_smooth_with_any_join() {
         assert!((a - want).abs() / want < 0.005, "{join:?}: {a} vs {want}");
     }
 }
+
+#[test]
+fn a_long_pattern_restarted_on_many_short_subpaths_draws_solid() {
+    // Each subpath walks the zero-length entries in full although it is far shorter than a period.
+    let mut pattern = vec![0.0; 2000];
+    pattern[0] = 1.0;
+    let mut b = BezPath::new();
+    for i in 0..20_000 {
+        b.move_to((i as f64 * 2.0, 0.0));
+        b.line_to((i as f64 * 2.0 + 0.01, 0.0));
+    }
+    let d = Dash { pattern, offset: 0.0, align_corners: false };
+    assert!(dash(&b, &d).is_none());
+}

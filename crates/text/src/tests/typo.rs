@@ -66,6 +66,24 @@ fn optical_pairs_cross_paint_runs_and_manual_and_tracking_are_independent() {
     assert!((pair_advance(&rtl_manual) - pair_advance(&rtl_pair_zero) - 20.0).abs() < 0.01, "manual spacing changes the adjacent right-to-left pair");
 }
 
+/// At 50% Horizontal Scale the tracking adds half the space it adds at 100% (`spacing_scale`),
+/// and the Optical pairs measure their gaps without it: tracked, each advance is the untracked
+/// Optical one and the tracking, the corrections unchanged.
+#[test]
+fn optical_pairs_in_horizontally_scaled_type_measure_without_the_scaled_tracking() {
+    let st = CharStyle { font_family: "JetBrains Mono".into(), size: 100.0, optical_kerning: true, h_scale: 50.0, ..CharStyle::default() };
+    let advances = |st: CharStyle| layout(db(), &TextObject::point(Point::ZERO, "IIAV", st)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let optical = advances(st.clone());
+    let unkerned = advances(CharStyle { kerning: Some(0.0), ..st.clone() });
+    assert!((optical[0] - unkerned[0]).abs() > 0.1, "Optical changes the monospaced pair at 50%: {optical:?} {unkerned:?}");
+    let tracked = advances(CharStyle { tracking: 100.0, ..st });
+    assert_eq!(optical.len(), tracked.len());
+    for (o, t) in optical.iter().zip(&tracked) {
+        // 100/1000 of the 100 pt em drawn 50% wide.
+        assert!((t - o - 5.0).abs() < 0.01, "{optical:?} {tracked:?}");
+    }
+}
+
 #[test]
 fn rtl_manual_kerning_spaces_the_character_from_the_next_in_reading_order() {
     for optical_kerning in [false, true] {

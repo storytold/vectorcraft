@@ -127,7 +127,17 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     let under = |e: &crate::menus::MenuEntry| e.path == ["Window", "Brush Libraries"];
     let opened: Vec<_> =
         entries.iter().filter(|e| under(e) && e.command.as_deref() == Some("window.brushLibrary")).map(|e| e.params["library"].clone()).collect();
-    assert_eq!(opened, [json!("art-ribbons"), json!("calligraphic-nibs"), json!("pattern-borders"), json!("scatter-shapes")]);
+    assert_eq!(
+        opened,
+        [
+            json!("art-ribbons"),
+            json!("calligraphic-nibs"),
+            json!("pattern-borders"),
+            json!("scatter-shapes"),
+            json!("game-trails"),
+            json!("energy-beams")
+        ]
+    );
     let enabled = |cmd: &str| entries.iter().find(|e| under(e) && e.command.as_deref() == Some(cmd)).map(|e| e.enabled);
     assert_eq!(enabled("window.brushLibrary.other"), Some(true));
     assert_eq!(enabled("ui.saveBrushLibrary"), Some(true), "a new document has the default brushes");

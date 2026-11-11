@@ -774,8 +774,9 @@ fn divide_dashes(s: &mut Session, p: &Value) -> Result<Value> {
                 continue;
             }
             let only = (segs.len() < sp.segment_count()).then_some(&segs);
-            let out = pt::divide_dashes(sp, only, spec, MAX_PIECES.saturating_sub(made))
-                .ok_or_else(|| bad(C, "that makes too many pieces (at most 100000): make the dashes longer"))?;
+            let out = pt::divide_dashes(sp, only, spec, MAX_PIECES.saturating_sub(made)).ok_or_else(|| {
+                bad(C, "that makes too many pieces (at most 100000) or dash steps: simplify the dash pattern or make the dashes longer")
+            })?;
             made += out.len();
             for (piece, kind) in out.into_iter().filter(|(_, k)| !(remove_gaps && *k == pt::Piece::Gap)) {
                 dashes += usize::from(kind == pt::Piece::Dash);
@@ -825,7 +826,7 @@ fn dashed_paths(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 
 fn expand_dashes(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.pathtools.expandDashes";
-    let too_many = || bad(C, "that makes too many pieces (at most 100000): make the dashes longer");
+    let too_many = || bad(C, "that makes too many pieces (at most 100000) or dash steps: simplify the dash pattern or make the dashes longer");
     let roots = checked_ids_or_selection(s, p, C)?;
     let d = &s.doc()?.doc;
     // Each dashed path and its dashes, as the canvas draws them.

@@ -55,6 +55,8 @@
 	Scripts	Skrip
 	Check Script…	Periksa skrip…
 	Check Script	Periksa skrip
+	Some scripts were not listed	Beberapa skrip tidak dicantumkan
+	The Scripts folder cannot be read	Folder Scripts tidak dapat dibaca
 	Other Script…	Skrip lain…
 	Document Setup…	Pengaturan dokumen…
 	Switch Units	Ganti satuan
@@ -365,6 +367,7 @@
 	Smart Punctuation…	Tanda baca cerdas…
 	Create Outlines	Buat garis luar
 	Optical Margin Alignment	Perataan margin optik
+	Dynamic Text	Teks dinamis
 	Fill with Placeholder Text	Isi dengan teks placeholder
 	Insert Inline Symbol	Sisipkan simbol sebaris
 	Show Hidden Characters	Tampilkan karakter tersembunyi
@@ -560,6 +563,7 @@
 	Show Guides	Tampilkan panduan
 	Lock Guides	Kunci panduan
 	Lock Guides by Default	Kunci panduan secara default
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Panduan artboard dengan Cmd/Ctrl + seret dari penggaris
 	Unlock Guides	Buka kunci panduan
 	Make Guides	Buat panduan
 	Release Guides	Lepaskan panduan
@@ -712,6 +716,20 @@
 	Other Library…	Pustaka lain…
 	Graphic Style Libraries	Pustaka gaya grafis
 	Shadows and Glows	Bayangan dan pendar
+	Game HUD	HUD Game
+	Health Fill	Nyawa
+	Mana Glow	Mana
+	Damage Flash	Damage
+	Quest Outline	Quest
+	Coin Shine	Koin
+	Boss Alert	Boss
+	Status Effects	Efek Status
+	Poison Tint	Racun
+	Freeze Edge	Beku
+	Burn Aura	Bakar
+	Stun Pulse	Pingsan
+	Stealth Fade	Menghilang
+	Shield Buff	Perisai
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
 	Gradient Finishes	Finishing gradien
@@ -2081,6 +2099,8 @@ digits	Malayalam	Malayalam
 	Green	Hijau
 	Shifts the tints of global and spot colors; other colors stay.	Menggeser tint warna global dan warna spot; warna lainnya tetap.
 	Tint	Tint
+	Fill Tint	Tint isian
+	Stroke Tint	Tint stroke
 	Color Guide Options	Opsi panduan warna
 	Less	Lebih sedikit
 	Steps:	Langkah:
@@ -2434,6 +2454,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Dimensi file
 	Transforms	Transformasi
 	Background Color:	Warna latar belakang:
+	Guide Label:	Label panduan:
 	Show Center Mark	Tampilkan tanda tengah
 	Show Cross Hairs	Tampilkan garis silang
 	Show Video Safe Areas	Tampilkan area aman video
@@ -2678,6 +2699,7 @@ antiAlias	Sharp	Tajam
 	General › Thumbnails	Umum › Miniatur
 	Grayscale images	Gambar skala abu-abu
 	Include non-printing layers	Sertakan lapisan non-cetak
+	Write pages longer than 200 in at full size in points	Tulis halaman yang lebih panjang dari 200 in dalam ukuran penuh, dalam poin
 	Left:	Kiri:
 	Mark as trapped	Tandai sebagai ter-trap
 	Marks and Bleeds	Tanda dan bleed
@@ -3480,6 +3502,12 @@ theme	Appearance	Tampilan
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
 	Render Threads (-1 = Automatic)	Utas render (-1 = Otomatis)
 	Reset Preferences	Atur ulang preferensi
+	Export Preferences…	Ekspor preferensi…
+	Import Preferences…	Impor preferensi…
+	Save the applied preferences to a JSON file	Simpan preferensi yang diterapkan ke file JSON
+	Apply the preferences in a file Export Preferences saved	Terapkan preferensi dari file yang disimpan oleh Ekspor preferensi
+	Export Preferences	Ekspor preferensi
+	Import Preferences	Impor preferensi
 	Search Preferences	Cari preferensi
 	No settings found	Tidak ada pengaturan yang ditemukan
 	Scale Corners	Skalakan sudut
@@ -3850,6 +3878,8 @@ font-technology	Variable	Variabel
 	Preferences	Preferensi
 	Previous	Sebelumnya
 	Restore every preference to its default (applied on OK)	Kembalikan semua preferensi ke defaultnya (diterapkan saat OK)
+	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
 	Smart Guides (View → Smart Guides)	Panduan pintar (Tampilan → Panduan pintar)
 	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}
@@ -4078,6 +4108,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Hentikan Skrip
 	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
 	A Script Is Running	Skrip Sedang Berjalan
+	Script Alert	Peringatan Skrip
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
@@ -4595,6 +4626,20 @@ imageTrace	Outline	Kontur
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	overprint `{o}` tidak dikenal (pertahankan, simulasikan, atau buang)
 @msg	unknown panel `{raw}`	panel `{raw}` tidak dikenal
 @msg	unknown preference `{key}`	preferensi `{key}` tidak dikenal
+@msg	Preferences imported.	Preferensi diimpor.
+@msg	not a preferences file: {e}	bukan file preferensi: {e}
+@msg	not a preferences file: no JSON object	bukan file preferensi: tidak ada objek JSON
+@msg	not a preferences file (format `{format}`)	bukan file preferensi (format `{format}`)
+@msg	not a preferences file: no `format`	bukan file preferensi: tidak ada `format`
+@msg	not a preferences file: no `version`	bukan file preferensi: tidak ada `version`
+@msg	not a preferences file: no `prefs`	bukan file preferensi: tidak ada `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	file disimpan oleh versi VectorCraft yang lebih baru (versi {v})
+@msg	the file holds no preferences	file tidak berisi preferensi
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` menunjuk folder, dan file preferensi tidak menyertakan folder
+@msg	the file is larger than 1 MB	file lebih besar dari 1 MB
+@msg	give `path` or `data`	berikan `path` atau `data`
+@msg	`{key}` must be an object	`{key}` harus berupa objek
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` dijalankan sendiri, bukan sebagai langkah batch
 @msg	unknown preset (one of {_1})	preset tidak dikenal (salah satu dari {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preset `{name}` tidak dikenal (tinggi, sedang, rendah, atau yang tersimpan: lihat flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preset `{name}` tidak dikenal (lihat flattener.presets.list)
@@ -4759,6 +4804,8 @@ imageTrace	Outline	Kontur
 @msg	invalid object id {value}: expected a non-negative integer	id objek {value} tidak valid: harus berupa bilangan bulat non-negatif
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	entri {index} dari `{key}` adalah {value}, bukan id objek (bilangan bulat non-negatif)
 @msg	no such object id {value}	tidak ada objek dengan id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} adalah panduan, bukan objek
+@msg	a ruler guide goes only directly in a layer or sublayer	panduan hanya dapat berada langsung di lapisan atau sublapisan
 @msg	automation filesystem access is not granted: read authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas baca tidak ada: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas tulis tidak ada: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	jalur otomatisasi ditolak: di luar akar baca {root}: {path}
@@ -5091,6 +5138,7 @@ file-filter	Swatch libraries	Pustaka swatch
 file-filter	Flattener presets	Preset perata
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset cetak
+file-filter	Preferences	Preferensi
 file-filter	Export presets	Preset ekspor
 file-filter	SVG Compressed	SVG terkompresi
 file-filter	PDF-compatible .ai	.ai kompatibel PDF
@@ -5150,7 +5198,8 @@ mark-style	Japanese	Jepang
 	Bevel both sides	Bevel di kedua sisi
 	Presets	Preset
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Sebuah objek hanya menerima satu efek 3D. Edit opsi efek yang sudah ada, atau hapus dulu efek tersebut.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} saat ini memerlukan jalur atau jalur majemuk. Konversikan dulu teks, gambar, dan grup menjadi jalur.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} saat ini memerlukan jalur, jalur majemuk, teks, grup, blend, atau instans simbol. Perluas dulu objek lainnya.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} tidak dapat membuat benda padat dari gambar: lacak dulu dengan Objek › Image Trace › Buat.
 @msg	{label} requires a shape with at least two anchors	{label} memerlukan bentuk dengan setidaknya dua jangkar
 @msg	The shape is too complex for a 3D effect	Bentuknya terlalu kompleks untuk efek 3D
 @msg	The 3D surface is too complex; simplify the shape	Permukaan 3D terlalu kompleks; sederhanakan bentuknya
@@ -5264,6 +5313,7 @@ mark-style	Japanese	Jepang
 	Preview (1 inch on the page)	Pratinjau (1 inci di halaman)
 	Set as Default	Atur sebagai default
 	 out from a highlighted edge to place its dimension  |  	 keluar dari tepi yang disorot untuk menempatkan dimensinya  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 dua titik, lalu gerakkan dan klik untuk menempatkan dimensi sejajar, horizontal, atau vertikal  |  
 	 cancels  |  Double-click the tool for options	 membatalkan  |  Klik dua kali alat untuk opsi
 	Angular	Sudut
 	Away from the Line	Menjauhi garis
@@ -5293,14 +5343,17 @@ mark-style	Japanese	Jepang
 @msg	Invalid drawing scale	Skala gambar tidak valid
 @msg	Invalid real scale	Skala sebenarnya tidak valid
 @msg	Measured anchor no longer exists	Titik jangkar yang diukur sudah tidak ada
+@msg	Invalid measured point	Titik yang diukur tidak valid
 @msg	Measured segment no longer exists	Segmen yang diukur sudah tidak ada
 @msg	Non-finite dimension	Dimensi bukan bilangan berhingga
+@msg	Only linear dimensions are horizontal or vertical	Hanya dimensi linear yang horizontal atau vertikal
 @msg	Scale Text Attributes: selected type has no scale to bake	Skalakan atribut teks: teks yang dipilih tidak memiliki skala untuk diterapkan
 @msg	Scale must be drawing:real, for example 1:10	Skala harus dalam format gambar:sebenarnya, misalnya 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Rasio skala harus antara 1:1000000 dan 1000000:1
 @msg	Second measured segment no longer exists	Segmen yang diukur kedua sudah tidak ada
 @msg	Unknown dimension mode	Mode dimensi tidak dikenal
 @msg	Unknown dimension option {k}	Opsi dimensi {k} tidak dikenal
+@msg	Unknown dimension orientation	Orientasi dimensi tidak dikenal
 @msg	Unknown dimension style	Gaya dimensi tidak dikenal
 @msg	Unknown unit	Satuan tidak dikenal
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Menutup ujung melingkar profil terbuka. Sapuan parsial mempertahankan sisi potongannya tetap terbuka.
@@ -5810,6 +5863,7 @@ axis	Y Axis	Sumbu Y
 	Show its progress, see Cancel and write log lines	Menampilkan kemajuannya, mengenali pembatalan, dan menulis baris log
 	Keep settings of its own	Menyimpan pengaturannya sendiri
 	Keep a cache of its own, which you can clear	Menyimpan cache-nya sendiri, yang dapat Anda kosongkan
+	Run these commands on the document: {ids}	Menjalankan perintah ini pada dokumen: {ids}
 	Clear Plug-in Cache	Kosongkan cache plug-in
 # Actions panel: action sets (#3712).
 	New Set…	Set baru…
@@ -5859,6 +5913,23 @@ axis	Y Axis	Sumbu Y
 	Button	Tombol
 	Panel	Panel
 	UI Frames	Bingkai UI
+	Map Markers	Penanda Peta
+	Pin	Pin
+	Flag	Bendera
+	Crosshair	Bidik silang
+	Checkpoint	Pos pemeriksaan
+	Inventory Icons	Ikon Inventaris
+	Skill Icons	Ikon Keahlian
+	Attack	Serang
+	Defend	Bertahan
+	Heal	Pulihkan
+	Buff	Buff
+	Ult	Ult
+	Sword	Pedang
+	Shield	Perisai
+	Potion	Ramuan
+	Key	Kunci
+	Gem	Permata
 	Open Symbol Library	Buka pustaka simbol
 	Save Symbol Library	Simpan pustaka simbol
 	Save Symbol Library…	Simpan pustaka simbol…
@@ -5907,6 +5978,16 @@ axis	Y Axis	Sumbu Y
 	User Brush Library 9	Pustaka kuas pengguna 9
 	User Brush Library 10	Pustaka kuas pengguna 10
 	Art Ribbons	Pita seni
+	Zigzag	Zigzag
+	Burst Ray	Sinar ledakan
+	Dash Trail	Jejak putus-putus
+	Speed Line	Garis kecepatan
+	Game Trails	Jejak game
+	Energy Beams	Sinar Energi
+	Laser Bolt	Bolt Laser
+	Plasma Arc	Busur Plasma
+	Charge Wave	Gelombang Muatan
+	Spark Trail	Jejak Percikan
 	Calligraphic Nibs	Pena kaligrafi
 	Pattern Borders	Bingkai pola
 	Scatter Shapes	Bentuk sebar
@@ -6454,3 +6535,30 @@ breakText	Glyphs	Glif
 # Align to Pixel Grid
 	Align to Pixel Grid	Sejajarkan ke grid piksel
 @msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
+	Edit Custom Dictionary	Edit kamus kustom
+	Entry:	Entri:
+# Script Console
+	Script Console	Konsol Skrip
+	Clear Script Console	Bersihkan Konsol Skrip
+	Copy Script Console	Salin Konsol Skrip
+	Copy All	Salin Semua
+	Copy Selected	Salin yang Dipilih
+	Finished	Selesai
+	Ended with an error	Berakhir dengan galat
+	Out of fuel	Batas instruksi tercapai
+	Ended at a host limit	Berakhir pada batas host
+	Ended at a limit	Berakhir pada batas
+	Stopped	Dihentikan
+	Ended by an internal fault	Berakhir karena galat internal
+	time unavailable	waktu tidak tersedia
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	paling lambat: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} panggilan host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} baris lama dibuang
+@plural	{n} line cut|{n} lines cut	{n} baris dipotong
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Segarkan efek yang ditunda
+	Deferred Effects	Efek yang ditunda

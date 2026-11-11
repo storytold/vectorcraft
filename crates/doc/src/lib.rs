@@ -207,8 +207,12 @@ pub struct Document {
     /// Object › Graph › Design…: art graphs can draw as markers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub graph_designs: Vec<GraphDesign>,
-    #[serde(default)]
-    pub guides: Vec<Guide>,
+    /// The saved form of the ruler guides: read from a file, then made into
+    /// [`NodeKind::RulerGuide`] nodes on their layers ([`Document::guides_into_nodes`]), and
+    /// written from those nodes when saving ([`Document::guides_to_saved`]). Empty in between.
+    /// Each entry read counts as an object against the read's node budget.
+    #[serde(default, rename = "guides", deserialize_with = "crate::node::counted_list")]
+    saved_guides: Vec<Guide>,
     /// View → New View… (at most [`SavedView::MAX`]); saved with the document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub views: Vec<SavedView>,
@@ -339,6 +343,11 @@ pub struct Document {
     /// names it as the file's active artboard. `None`: the first. Native files do not keep it.
     #[serde(skip)]
     pub opened_artboard: Option<u32>,
+    /// The file this document was read from recorded its units (a `.ai` file's
+    /// `%AI5_RulerUnits`): it opens in them. A file that records none opens in Preferences ›
+    /// Units › General (#5820). Native files do not keep it: they always keep their units.
+    #[serde(skip)]
+    pub units_from_file: bool,
     /// Some object is a dimension (the Dimension tool): edits refresh dimensions only while this
     /// is set, so documents without any pay nothing for them.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -346,6 +355,9 @@ pub struct Document {
     /// Where each node is in the tree, for lookups by id ([`id_index`]): a cache, never saved.
     #[serde(skip)]
     index: id_index::IdIndex,
+    /// The ruler guides as [`Document::ruler_guides`] lists them: a cache, never saved.
+    #[serde(skip)]
+    guide_cache: document_guides::GuideCache,
 }
 
 fn ppi72() -> f64 {

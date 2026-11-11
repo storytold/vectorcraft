@@ -112,7 +112,7 @@ impl Session {
             },
             Err(e) => Err(e),
         };
-        match result {
+        let r = match result {
             Ok(v) => {
                 st.selection.prune(&st.doc);
                 // An edit that selects what it unlocks, shows or pastes leaves locked guides out,
@@ -153,7 +153,12 @@ impl Session {
                 cmd::globaledit::follow_history(st);
                 Err(e)
             }
+        };
+        // An edit a frontend makes itself, outside a command, keeps to the shared budget too.
+        if r.is_ok() && self.depth == 0 && !self.in_tool_actions {
+            self.trim_histories();
         }
+        r
     }
 
     /// [`Session::edit`] with the step named `template`, its `{name}` placeholder filled with `name`
@@ -394,6 +399,9 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         self.journal.push(preview);
         self.journal_in_undo_groups(doc, &grouped, journal);
+        if self.depth == 0 {
+            self.trim_histories();
+        }
         Ok(())
     }
 

@@ -365,6 +365,8 @@
 	Smart Punctuation…	Inteligentna interpunkcja…
 	Create Outlines	Utwórz kontury
 	Optical Margin Alignment	Optyczne wyrównanie marginesów
+	Dynamic Text	Tekst dynamiczny
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
 	Show Hidden Characters	Pokaż ukryte znaki
@@ -567,6 +569,7 @@
 	Show Guides	Pokaż linie pomocnicze
 	Lock Guides	Zablokuj linie pomocnicze
 	Lock Guides by Default	Domyślnie blokuj linie pomocnicze
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Linie pomocnicze obszaru kompozycji z Cmd/Ctrl + przeciąganiem z linijki
 	Unlock Guides	Odblokuj linie pomocnicze
 	Make Guides	Utwórz linie pomocnicze
 	Release Guides	Uwolnij linie pomocnicze
@@ -722,6 +725,20 @@
 	Other Library…	Inna biblioteka…
 	Graphic Style Libraries	Biblioteki stylów graficznych
 	Shadows and Glows	Cienie i blaski
+	Game HUD	HUD gry
+	Health Fill	Zdrowie
+	Mana Glow	Mana
+	Damage Flash	Obrażenia
+	Quest Outline	Zadanie
+	Coin Shine	Moneta
+	Boss Alert	Boss
+	Status Effects	Efekty statusu
+	Poison Tint	Trucizna
+	Freeze Edge	Mróz
+	Burn Aura	Oparzenie
+	Stun Pulse	Ogłuszenie
+	Stealth Fade	Ukrycie
+	Shield Buff	Tarcza
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
 	Gradient Finishes	Wykończenia gradientowe
@@ -2193,6 +2210,8 @@ digits	Malayalam	Malajalam
 	Green	Zielony
 	Shifts the tints of global and spot colors; other colors stay.	Przesuwa tinty kolorów globalnych i dodatkowych; pozostałe kolory bez zmian.
 	Tint	Tinta
+	Fill Tint	Tinta wypełnienia
+	Stroke Tint	Tinta obrysu
 	Color Guide Options	Opcje przewodnika kolorów
 	Less	Mniej
 	Steps:	Kroki:
@@ -2559,6 +2578,7 @@ digits	Malayalam	Malajalam
 	File Dimensions	Wymiary pliku
 	Transforms	Przekształcenia
 	Background Color:	Kolor tła:
+	Guide Label:	Etykieta linii pomocniczych:
 	Show Center Mark	Pokaż znacznik środka
 	Show Cross Hairs	Pokaż krzyż nitkowy
 	Show Video Safe Areas	Pokaż bezpieczne obszary wideo
@@ -2780,6 +2800,7 @@ antiAlias	Sharp	Ostre
 	General › Thumbnails	Ogólne › Miniatury
 	Grayscale images	Obrazy w skali szarości
 	Include non-printing layers	Uwzględnij warstwy niedrukowane
+	Write pages longer than 200 in at full size in points	Zapisuj strony dłuższe niż 200 in w pełnym rozmiarze, w punktach
 	Left:	Lewy:
 	Mark as trapped	Oznacz jako z zalewkami
 	Marks and Bleeds	Znaczniki i spady
@@ -3620,6 +3641,12 @@ theme	Appearance	Wygląd
 	Real-time Drawing and Editing	Rysowanie i edycja w czasie rzeczywistym
 	Render Threads (-1 = Automatic)	Wątki renderowania (-1 = automatycznie)
 	Reset Preferences	Resetuj preferencje
+	Export Preferences…	Eksportuj preferencje…
+	Import Preferences…	Importuj preferencje…
+	Save the applied preferences to a JSON file	Zapisz zastosowane preferencje w pliku JSON
+	Apply the preferences in a file Export Preferences saved	Zastosuj preferencje z pliku zapisanego poleceniem Eksportuj preferencje
+	Export Preferences	Eksportuj preferencje
+	Import Preferences	Importuj preferencje
 	Search Preferences	Szukaj w preferencjach
 	No settings found	Nie znaleziono ustawień
 	Scale Corners	Skaluj narożniki
@@ -3976,6 +4003,8 @@ font-technology	Variable	Zmienne
 	Preferences	Preferencje
 	Previous	Wstecz
 	Restore every preference to its default (applied on OK)	Przywróć domyślne wartości wszystkich preferencji (zastosowane po OK)
+	Reset all preferences to their defaults?	Przywrócić domyślne wartości wszystkich preferencji?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Wartości domyślne zostaną zastosowane po kliknięciu OK w Preferencjach. Anuluj w tym oknie zachowuje bieżące preferencje.
 	Smaller ↔ Larger	Mniejszy ↔ większy
 	Smart Guides (View → Smart Guides)	Inteligentne linie pomocnicze (Widok → Inteligentne linie pomocnicze)
 	Couldn't save recovery data: {e}	Nie udało się zapisać danych odzyskiwania: {e}
@@ -4205,6 +4234,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Zatrzymaj skrypt
 	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
 	A Script Is Running	Skrypt jest uruchomiony
+	Script Alert	Komunikat skryptu
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
 	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.
@@ -4218,6 +4248,9 @@ imageTrace	Outline	Kontur
 @msg	the script is too large to run	skrypt jest zbyt duży, aby go uruchomić
 @msg	a drag or an undo group is open; finish it before running a script	otwarte jest przeciąganie lub grupa cofania; zakończ je przed uruchomieniem skryptu
 @msg	the script left a document that cannot be kept	skrypt pozostawił dokument, którego nie można zachować
+@msg	the script is no longer in the Scripts folder	skryptu nie ma już w folderze Scripts
+	Some scripts were not listed	Niektóre skrypty nie zostały wyświetlone
+	The Scripts folder cannot be read	Nie można odczytać folderu Scripts
 @msg	the script's run is no longer available	uruchomienie skryptu nie jest już dostępne
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	nieudane polecenie zmieniło kroki cofania, których nie udało się przywrócić, więc skrypt został zatrzymany
 @msg	a recovery copy could not be written, so the script was not run	nie udało się zapisać kopii odzyskiwania, więc skrypt nie został uruchomiony
@@ -4401,6 +4434,7 @@ imageTrace	Outline	Kontur
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musi mieć wartość "vertical", "horizontal" lub kąt w stopniach, nie `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tło {other}: transparent, white, black lub kolor, np. "#ff8800"
 @msg	bad color {v}	nieprawidłowy kolor {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` to null, nazwa koloru warstwy lub #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musi być liczbą od 0,1 do 10
 @msg	the Color Picker is not open	Próbnik kolorów nie jest otwarty
 @msg	the Simplify slider is not open	Suwak Uprość nie jest otwarty
@@ -4464,6 +4498,11 @@ imageTrace	Outline	Kontur
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	błąd wewnętrzny w `{cmd}`: {msg} (dokument pozostał bez zmian; zgłoś ten błąd)
 @msg	internal error: {msg} (please report this bug)	błąd wewnętrzny: {msg} (zgłoś ten błąd)
 @msg	invalid PDF setting: {0}	nieprawidłowe ustawienie PDF: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	strona obszaru kompozycji {n} ma {size}, czyli więcej niż limit strony PDF wynoszący 14 400 pt (200 in): jest zapisywana z UserUnit {unit}, więc aplikacje ignorujące UserUnit pokazują ją tyle razy mniejszą
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	strona obszaru kompozycji {n} ma {size}, czyli więcej niż limit strony PDF wynoszący 14 400 pt (200 in): strony {label} są zapisywane bez UserUnit, w punktach, a aplikacje przestrzegające limitu przycinają stronę do 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 nie ma UserUnit, którego strona dłuższa niż 14 400 pt (200 in) potrzebuje, aby zachować rozmiar: plik jest zapisywany jako PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	strona obszaru kompozycji {n} ma {size} i jest za długa i za wąska dla boków strony PDF od 3 do 14 400 jednostek: jest zapisywana z UserUnit {unit}, która utrzymuje krótszy bok na co najmniej 3 jednostkach, a aplikacje przestrzegające limitu przycinają dłuższy bok do 14 400 jednostek
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	pliki {label} mieszczą liczby rzeczywiste do {max}, a strona obszaru kompozycji {n} o długości {side} pt wymaga większych: wybierz PDF 1.6 lub nowszy bez standardu PDF/X albo mniejszy obszar kompozycji
 @msg	invalid image data for `{0}`	nieprawidłowe dane obrazu dla `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	nieprawidłowe parametry dla `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	nie jest obrazem obsługiwanym przez VectorCraft
@@ -4803,6 +4842,20 @@ imageTrace	Outline	Kontur
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
 @msg	unknown panel `{raw}`	nieznany panel `{raw}`
 @msg	unknown preference `{key}`	nieznana preferencja `{key}`
+@msg	Preferences imported.	Zaimportowano preferencje.
+@msg	not a preferences file: {e}	to nie jest plik preferencji: {e}
+@msg	not a preferences file: no JSON object	to nie jest plik preferencji: brak obiektu JSON
+@msg	not a preferences file (format `{format}`)	to nie jest plik preferencji (format `{format}`)
+@msg	not a preferences file: no `format`	to nie jest plik preferencji: brak `format`
+@msg	not a preferences file: no `version`	to nie jest plik preferencji: brak `version`
+@msg	not a preferences file: no `prefs`	to nie jest plik preferencji: brak `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	plik zapisano w nowszej wersji programu VectorCraft (wersja {v})
+@msg	the file holds no preferences	plik nie zawiera preferencji
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` wskazuje folder, a pliki preferencji nie zawierają folderów
+@msg	the file is larger than 1 MB	plik jest większy niż 1 MB
+@msg	give `path` or `data`	podaj `path` lub `data`
+@msg	`{key}` must be an object	`{key}` musi być obiektem
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` działa samodzielnie, nie jako krok wsadu
 @msg	unknown preset (one of {_1})	nieznane ustawienie (jedno z: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	nieznane ustawienie `{name}` (high, medium, low lub zapisane: patrz flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	nieznane ustawienie `{name}` (patrz flattener.presets.list)
@@ -4983,6 +5036,8 @@ imageTrace	Outline	Kontur
 @msg	invalid object id {value}: expected a non-negative integer	nieprawidłowy identyfikator obiektu {value}: oczekiwano nieujemnej liczby całkowitej
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} w `{key}` to {value}, a nie identyfikator obiektu (nieujemna liczba całkowita)
 @msg	no such object id {value}	brak obiektu o identyfikatorze {value}
+@msg	id {value} is a ruler guide, not an object	identyfikator {value} należy do linii pomocniczej, a nie do obiektu
+@msg	a ruler guide goes only directly in a layer or sublayer	linia pomocnicza może się znajdować tylko bezpośrednio w warstwie lub podwarstwie
 @msg	id {value} is a layer, not an object	identyfikator {value} oznacza warstwę, a nie obiekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	identyfikator {value} oznacza warstwę, a nie obiekt; warstwy przenosi się za pomocą layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	nie przyznano dostępu automatyzacji do systemu plików: brak uprawnień do odczytu: {path}
@@ -5381,6 +5436,7 @@ file-filter	Swatch libraries	Biblioteki próbek
 file-filter	Flattener presets	Ustawienia spłaszczania
 file-filter	PDF presets	Ustawienia PDF
 file-filter	Print presets	Ustawienia drukowania
+file-filter	Preferences	Preferencje
 file-filter	Export presets	Ustawienia eksportu
 file-filter	SVG Compressed	SVG skompresowany
 file-filter	PDF-compatible .ai	.ai zgodny z PDF
@@ -5439,7 +5495,8 @@ mark-style	Japanese	Japońskie
 	Bevel both sides	Faza po obu stronach
 	Presets	Ustawienia
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Obiekt może mieć jeden efekt 3D. Edytuj opcje istniejącego efektu lub najpierw go usuń.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} wymaga obecnie ścieżki, ścieżki złożonej, tekstu lub grupy. Najpierw przekonwertuj obrazy i inne obiekty na ścieżki.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} wymaga obecnie ścieżki, ścieżki złożonej, tekstu, grupy, przejścia lub wystąpienia symbolu. Najpierw rozszerz inne obiekty.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} nie może utworzyć bryły z obrazu: najpierw obrysuj go poleceniem Obiekt › Obrys obrazu › Utwórz.
 @msg	{label} requires a shape with at least two anchors	{label} wymaga kształtu z co najmniej dwoma punktami
 @msg	The shape is too complex for a 3D effect	Kształt jest zbyt złożony dla efektu 3D
 @msg	The 3D surface is too complex; simplify the shape	Powierzchnia 3D jest zbyt złożona; uprość kształt
@@ -5520,6 +5577,7 @@ mark-style	Japanese	Japońskie
 	Preview (1 inch on the page)	Podgląd (1 cal na stronie)
 	Set as Default	Ustaw jako domyślne
 	 out from a highlighted edge to place its dimension  |  	 od podświetlonej krawędzi na zewnątrz, aby umieścić jej wymiar  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 dwa punkty, potem przesuń i kliknij, aby umieścić wymiar wyrównany, poziomy lub pionowy  |  
 	 cancels  |  Double-click the tool for options	 anuluje  |  Kliknij dwukrotnie narzędzie, aby wyświetlić opcje
 	Angular	Kątowy
 	Away from the Line	Z dala od linii
@@ -5549,14 +5607,17 @@ mark-style	Japanese	Japońskie
 @msg	Invalid drawing scale	Nieprawidłowa skala rysunku
 @msg	Invalid real scale	Nieprawidłowa skala rzeczywista
 @msg	Measured anchor no longer exists	Mierzony punkt kontrolny już nie istnieje
+@msg	Invalid measured point	Nieprawidłowy mierzony punkt
 @msg	Measured segment no longer exists	Mierzony odcinek już nie istnieje
 @msg	Non-finite dimension	Wymiar nie jest liczbą skończoną
+@msg	Only linear dimensions are horizontal or vertical	Tylko wymiary liniowe są poziome lub pionowe
 @msg	Scale Text Attributes: selected type has no scale to bake	Skaluj atrybuty tekstu: wybrany tekst nie ma skali do zastosowania
 @msg	Scale must be drawing:real, for example 1:10	Skala musi mieć postać rysunek:rzeczywistość, na przykład 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Współczynnik skali musi mieścić się między 1:1000000 a 1000000:1
 @msg	Second measured segment no longer exists	Drugi mierzony odcinek już nie istnieje
 @msg	Unknown dimension mode	Nieznany tryb wymiaru
 @msg	Unknown dimension option {k}	Nieznana opcja wymiaru {k}
+@msg	Unknown dimension orientation	Nieznana orientacja wymiaru
 @msg	Unknown dimension style	Nieznany styl wymiaru
 @msg	Unknown unit	Nieznana jednostka
 # Revolve cap description
@@ -5817,6 +5878,20 @@ axis	Y Axis	Oś Y
 	Show its progress, see Cancel and write log lines	Pokazywać swój postęp, wykrywać anulowanie i zapisywać wiersze dziennika
 	Keep settings of its own	Przechowywać własne ustawienia
 	Keep a cache of its own, which you can clear	Przechowywać własną pamięć podręczną, którą możesz wyczyścić
+	Run these commands on the document: {ids}	Uruchamiać w dokumencie te polecenia: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	„{name}” wymienia w `commandAllowlist` polecenie `{id}`, którego wtyczka nie może wywołać
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: `commandAllowlist` manifestu go nie wymienia
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID lub argumenty leżą poza pamięcią modułu
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID lub argumenty nie są w UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: argumenty nie są obiektem JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	tylko filtr ze zwykłym budżetem deklaruje `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	wywołania poleceń ({MAX_CALLS} wywołań i {MAX_CALL_BYTES} bajtów na uruchomienie)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	rozmiar wywołania polecenia (vc_call `{shown}`: {len} bajtów, limit {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	najwyżej {MAX_ALLOWED_COMMANDS} poleceń w `commandAllowlist`
+@msg	a plug-in may not call this command	wtyczka nie może wywołać tego polecenia
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` potrzebuje uprawnienia `commands`, a `commands` potrzebuje `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` wymienia `{shown}`, które nie jest ID polecenia lub występuje dwa razy
 	Clear Plug-in Cache	Wyczyść pamięć podręczną wtyczki
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	uprawnienie `{permission}` wymaga poziomu API wtyczek {PROGRESS_API}: podaj `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	moduł importuje `env.{name}` z innym typem niż typ hosta: typ hosta to {signature}
@@ -5906,6 +5981,23 @@ axis	Y Axis	Oś Y
 	Button	Przycisk
 	Panel	Panel
 	UI Frames	Ramki UI
+	Map Markers	Znaczniki mapy
+	Pin	Pinezka
+	Flag	Flaga
+	Crosshair	Celownik
+	Checkpoint	Punkt kontrolny
+	Inventory Icons	Ikony ekwipunku
+	Skill Icons	Ikony umiejętności
+	Attack	Atak
+	Defend	Obrona
+	Heal	Leczenie
+	Buff	Wzmocnienie
+	Ult	Ult
+	Sword	Miecz
+	Shield	Tarcza
+	Potion	Mikstura
+	Key	Klucz
+	Gem	Klejnot
 	Open Symbol Library	Otwórz bibliotekę symboli
 	Save Symbol Library	Zapisz bibliotekę symboli
 	Save Symbol Library…	Zapisz bibliotekę symboli…
@@ -5960,6 +6052,16 @@ axis	Y Axis	Oś Y
 	User Brush Library 9	Biblioteka pędzli użytkownika 9
 	User Brush Library 10	Biblioteka pędzli użytkownika 10
 	Art Ribbons	Wstęgi artystyczne
+	Zigzag	Zygzak
+	Burst Ray	Promień uderzenia
+	Dash Trail	Ślad kreskowany
+	Speed Line	Linia prędkości
+	Game Trails	Ślady gry
+	Energy Beams	Wiązki energii
+	Laser Bolt	Pocisk laserowy
+	Plasma Arc	Łuk plazmowy
+	Charge Wave	Fala ładunku
+	Spark Trail	Ślad iskier
 	Calligraphic Nibs	Stalówki kaligraficzne
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone
@@ -6550,3 +6652,33 @@ breakText	Glyphs	Glify
 	Ignore All	Ignoruj wszystko
 	Add to Dictionary	Dodaj do słownika
 	No Suggestions	Brak sugestii
+	Edit Custom Dictionary	Edytuj słownik użytkownika
+	Entry:	Wpis:
+# Script Console
+	Script Console	Konsola skryptów
+	Clear Script Console	Wyczyść konsolę skryptów
+	Copy Script Console	Kopiuj konsolę skryptów
+	Copy All	Kopiuj wszystko
+	Copy Selected	Kopiuj zaznaczenie
+	Finished	Zakończono
+	Ended with an error	Zakończono z błędem
+	Out of fuel	Wyczerpano limit instrukcji
+	Ended at a host limit	Zakończono na limicie hosta
+	Ended at a limit	Zakończono na limicie
+	Stopped	Zatrzymano
+	Ended by an internal fault	Zakończono z powodu błędu wewnętrznego
+	time unavailable	czas niedostępny
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	najwolniejsze: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} wywołanie hosta|{n} wywołania hosta|{n} wywołań hosta
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} odrzucony wcześniejszy wiersz|{n} odrzucone wcześniejsze wiersze|{n} odrzuconych wcześniejszych wierszy
+@plural	{n} line cut|{n} lines cut	{n} skrócony wiersz|{n} skrócone wiersze|{n} skróconych wierszy
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` muszą być numerami wierszy przechowywanych w konsoli, `first` przed `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Odśwież odroczone efekty
+	Deferred Effects	Odroczone efekty
+@msg	no plug-in effect is deferred	żaden efekt wtyczki nie jest odroczony
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otwarto z {n} odroczonym efektem wtyczki. Efekt › Odśwież odroczone efekty go uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.

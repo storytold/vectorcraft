@@ -32,7 +32,7 @@ fn open(app: &mut VectorcraftApp, kind: &str, fields: serde_json::Value) {
 }
 
 fn objects(app: &VectorcraftApp) -> usize {
-    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.iter().filter(|c| !c.is_ruler_guide()).count())).sum()
 }
 
 #[test]
@@ -570,11 +570,11 @@ fn split_into_grid_opens_at_the_selections_size_and_previews() {
     ]);
     frame(&mut app, Default::default());
     // The preview: 2 × 3 cells and the guides along their edges, not yet an undo step.
-    assert_eq!((objects(&app), app.session.doc().unwrap().doc.guides.len()), (6, 10));
+    assert_eq!((objects(&app), app.session.doc().unwrap().doc.ruler_guides().len()), (6, 10));
     assert!(app.session.in_interaction());
     confirm(&mut app).unwrap();
     let st = app.session.doc().unwrap();
-    assert_eq!((objects(&app), st.doc.guides.len(), st.history.undo.len()), (6, 10, undo + 1));
+    assert_eq!((objects(&app), st.doc.ruler_guides().len(), st.history.undo.len()), (6, 10, undo + 1));
     assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
     // Cancel rolls a preview back.
     app.run("select.all", json!({})).unwrap();
@@ -660,6 +660,7 @@ impl PluginIntField {
             budget: Default::default(),
             paint_output: false,
             commands: Vec::new(),
+            command_allowlist: Vec::new(),
         };
         let mut f = PluginIntField { ctx, d: Dialog::new(plugin::KIND, json!({ "seed": start })), m, pos: egui::Pos2::ZERO };
         fn number_rect(shape: &egui::Shape, text: &str) -> Option<egui::Rect> {
@@ -1751,6 +1752,64 @@ fn new_artboard_options_give_the_new_artboard_its_background_color() {
         super::confirm(&mut app).unwrap();
         let ab = app.session.doc().unwrap().doc.artboards.last().cloned().unwrap();
         assert_eq!(ab.color.map(|c| c.to_hex()).as_deref(), want);
+    }
+}
+
+/// Artboard Options shows the artboard's guide label on its Guide Label: row (None, a layer color's
+/// name, or Custom). OK sets a label picked there in one undo step, keeps it while another field
+/// changes, and a null `guideLabel` clears it; Cancel leaves it. OK with nothing changed adds no
+/// undo step, and a new artboard's Artboard Options gives it the label picked.
+#[test]
+fn artboard_options_shows_sets_and_clears_the_guide_label() {
+    let mut app = app();
+    let label = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards[0].guide_label.map(vectorcraft_doc::LayerColor::label_text);
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let lines = |app: &mut VectorcraftApp| {
+        let text = crate::tests_labels::painted_text(app, |app, ui| show(app, ui.ctx()));
+        text.lines().map(str::trim).map(str::to_string).collect::<Vec<_>>()
+    };
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let shown = lines(&mut app);
+    assert!(shown.iter().any(|l| l == "Guide Label:"), "{shown:?}");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["guideLabel"], json!(null));
+    let u = undo(&app);
+    super::confirm(&mut app).unwrap();
+    assert_eq!((label(&app), undo(&app)), (None, u), "OK with nothing changed");
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!("Orange"));
+    super::confirm(&mut app).unwrap();
+    assert_eq!((label(&app).as_deref(), undo(&app)), (Some("Orange"), u + 1));
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["guideLabel"], json!("Orange"));
+    assert!(lines(&mut app).iter().any(|l| l == "Orange"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!("#123456"));
+    cancel(&mut app);
+    assert_eq!(label(&app).as_deref(), Some("Orange"), "Cancel leaves it");
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    assert!(lines(&mut app).iter().any(|l| l == "Orange"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!("#123456"));
+    super::confirm(&mut app).unwrap();
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    assert!(lines(&mut app).iter().any(|l| l == "Custom"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Card"));
+    super::confirm(&mut app).unwrap();
+    assert_eq!(label(&app).as_deref(), Some("#123456"), "kept while another field changes");
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!("purple"));
+    assert!(super::confirm(&mut app).is_err(), "a name in other letter case is refused");
+    assert_eq!(label(&app).as_deref(), Some("#123456"));
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), json!(null));
+    super::confirm(&mut app).unwrap();
+    assert_eq!(label(&app), None);
+    for (picked, want) in [(Some(json!("Teal")), Some("Teal")), (None, None)] {
+        app.run("ui.newArtboard", json!({})).unwrap();
+        if let Some(c) = picked {
+            app.ui.dialog.as_mut().unwrap().fields.insert("guideLabel".into(), c);
+        }
+        super::confirm(&mut app).unwrap();
+        let ab = app.session.doc().unwrap().doc.artboards.last().cloned().unwrap();
+        assert_eq!(ab.guide_label.map(vectorcraft_doc::LayerColor::label_text).as_deref(), want);
     }
 }
 

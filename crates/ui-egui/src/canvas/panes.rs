@@ -12,8 +12,8 @@ use super::outline::{c32, node_outline, stroke_path, too_many_anchors};
 use super::view::fit_zoom;
 use super::{
     Affine, CacheKey, Point, Rect, RulerScale, Sense, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, Xf, artboard_edges, cache_key,
-    dim_on_canvas, frame_options, frame_view, grid, guides_of, json, paint_paper, pixel_region, pos2, rulers, shows_artboards, textured_quad, vec2,
-    view_rects,
+    dim_on_canvas, frame_options, frame_view, grid, guides_of, json, paint_paper, pixel_region, plugin_key, pos2, rulers, shows_artboards,
+    textured_quad, vec2, view_rects,
 };
 use crate::doc_windows::Win;
 use crate::thumb_worker::ThumbWorker;
@@ -303,7 +303,8 @@ pub(crate) fn pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) 
     // View › Pixel Preview, as the canvas draws it.
     let pixel = (app.ui.view.pixel_preview && v.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
-    let mut key = cache_key(app, ui, st, &t, &v, (pw, ph, ppp), (pixel, smooth_images));
+    let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
+    let mut key = cache_key(app, ui, st, &t, &v, (pw, ph, ppp), (pixel, smooth_images, plugins));
     // The current document's drag and Image Trace hold are not this document's, and this view has
     // its own Outline or Preview.
     (key.dragging, key.trace_source, key.outline) = (false, None, v.outline);

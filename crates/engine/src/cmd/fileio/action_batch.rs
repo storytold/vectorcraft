@@ -1018,6 +1018,65 @@ mod tests {
         }
     }
 
+    /// Source file names that differ only in case (`a.svg` and `sub/A.svg`) get Export for Screens
+    /// folders of their own: names are compared without case, so the second folder is numbered,
+    /// since Windows and macOS would make `a` and `A` one folder.
+    #[test]
+    fn batch_override_export_numbers_folders_that_differ_only_in_case() {
+        let src = tmp("screens-case-src");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        write_svg(&src, "a.svg", "#f00");
+        write_svg(&src.join("sub"), "A.svg", "#0f0");
+        let dest = tmp("screens-case-out");
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "folder": src.to_string_lossy(),
+                    "includeSubdirs": true,
+                    "destinationFolder": dest.to_string_lossy(),
+                    "commands": [{"command": "document.exportForScreens", "params": {"formats": [{"format": "svg"}]}}]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(file_names(&dest), ["A-2", "a"], "{r}");
+        for (folder, fill) in [("a", "#ff0000"), ("A-2", "#00ff00")] {
+            assert_eq!(file_names(&dest.join(folder)), ["Artboard-1.svg"], "{r}");
+            let svg = std::fs::read_to_string(dest.join(folder).join("Artboard-1.svg")).unwrap();
+            assert!(svg.contains(fill), "{folder}: {svg}");
+        }
+    }
+
+    /// A source file with nothing left of its name without its extension (` .svg`) gets the folder
+    /// `file`, numbered before a source file named `file.svg` takes it.
+    #[test]
+    fn batch_override_export_names_the_folder_of_an_empty_name_file() {
+        let src = tmp("screens-empty-src");
+        write_svg(&src, " .svg", "#f00");
+        write_svg(&src, "file.svg", "#0f0");
+        let dest = tmp("screens-empty-out");
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "folder": src.to_string_lossy(),
+                    "destinationFolder": dest.to_string_lossy(),
+                    "commands": [{"command": "document.exportForScreens", "params": {"formats": [{"format": "svg"}]}}]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(file_names(&dest), ["file", "file-2"], "{r}");
+        for (folder, fill) in [("file", "#ff0000"), ("file-2", "#00ff00")] {
+            assert_eq!(file_names(&dest.join(folder)), ["Artboard-1.svg"], "{r}");
+            let svg = std::fs::read_to_string(dest.join(folder).join("Artboard-1.svg")).unwrap();
+            assert!(svg.contains(fill), "{folder}: {svg}");
+        }
+    }
+
     /// A source file whose name without its extension ends in a period (`a..svg`) gets the folder
     /// name without it, numbered after the folder of `a.svg`: Windows drops the period from a folder
     /// name, so `a.` and `a` would be one folder there.

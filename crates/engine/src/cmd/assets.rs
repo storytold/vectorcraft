@@ -116,13 +116,15 @@ pub(crate) fn art_under(doc: &vectorcraft_doc::Document, id: NodeId, out: &mut V
     let Some(n) = doc.node(id) else { return };
     if n.is_layer() {
         if let Some(kids) = n.children() {
-            for c in kids {
+            for c in kids.iter().filter(|c| !c.is_ruler_guide()) {
                 art_under(doc, c.id, out);
             }
         }
         return;
     }
-    out.push(id);
+    if !n.is_ruler_guide() {
+        out.push(id);
+    }
 }
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
@@ -213,7 +215,7 @@ fn add_3d(s: &mut Session, p: &Value) -> Result<Value> {
     ids.dedup();
     for id in &ids {
         let n = d.node(*id).ok_or_else(|| bad(C, format!("no such object {0}", id.0)))?;
-        if let Err(e) = vectorcraft_render::effects::three_d_meshes(n) {
+        if let Err(e) = vectorcraft_render::effects::three_d_meshes_in(Some(d), n) {
             let what = n.name.clone().unwrap_or_else(|| format!("#{}", id.0));
             return Err(bad(C, format!("{what} can't be exported in 3D: {e}")));
         }
@@ -281,7 +283,8 @@ fn export_3d(s: &mut Session, p: &Value) -> Result<Value> {
             a.nodes.iter().map(|node| d.node(*node).ok_or_else(|| bad(C, format!("no such object {0}", node.0)))).collect::<Result<Vec<_>>>()?;
         // The asset's objects share one budget of triangles.
         let what = &a.name;
-        let parts = vectorcraft_render::effects::three_d_meshes_of(nodes).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
+        let parts =
+            vectorcraft_render::effects::three_d_meshes_of_in(Some(d), nodes).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
         let base = Some(safe_file_name(&a.name)).filter(|b| !b.is_empty()).unwrap_or_else(|| "Asset".into());
         let mut stem = base.clone();
         let mut k = 1;

@@ -1824,6 +1824,44 @@ fn pattern_and_symbol_art_with_plugin_effects_follow_the_plugins_installed() {
     plugin_change_draws_as_new(with_art(d, vec![group]), ID, Some(triangle(82.0, 32.0, 10.0)), Some(triangle(82.0, 32.0, 30.0)));
 }
 
+/// A document draws plug-in effects ([`draws_plugin_effects`]) when an object in its layers, in a
+/// symbol's or a pattern's art, or in a brush's art has a visible plug-in effect, and not when its
+/// objects have no effect, another effect or a hidden plug-in effect.
+#[test]
+fn a_document_draws_plugin_effects_where_any_of_its_art_has_one() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind};
+    use vectorcraft_geom::shapes::rectangle;
+    let plugin = || effect("plugin.test.render.draws", serde_json::json!({}));
+    let square = |d: &mut Document, effects: Vec<vectorcraft_doc::Effect>| {
+        filled(d, rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Paint::solid(Color::BLACK), effects)
+    };
+    let mut cases: Vec<(&str, Document, bool)> = vec![];
+    for (name, effects, draws) in [
+        ("no effect", vec![], false),
+        ("another effect", vec![drop_shadow()], false),
+        ("hidden plug-in effect", vec![vectorcraft_doc::Effect { visible: false, ..plugin() }], false),
+        ("plug-in effect", vec![plugin()], true),
+    ] {
+        let mut d = Document::new(200.0, 100.0);
+        let n = square(&mut d, effects);
+        cases.push((name, with_art(d, vec![n]), draws));
+    }
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, vec![plugin()]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Shaped".into(), art: Arc::new(art) });
+    cases.push(("symbol art", d, true));
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, vec![plugin()]);
+    d.patterns.push(vectorcraft_doc::pattern::PatternDef::new("Shaped", vec![Arc::new(art)]));
+    cases.push(("pattern art", d, true));
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, vec![plugin()]);
+    vectorcraft_brush::store(&mut d, &[Brush { name: "Shaped".into(), kind: BrushKind::Art(ArtBrush { art, ..Default::default() }) }]);
+    cases.push(("brush art", d, true));
+    let wrong: Vec<&str> = cases.iter().filter(|(_, d, draws)| draws_plugin_effects(d) != *draws).map(|(name, ..)| *name).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
 fn effect(id: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
     vectorcraft_doc::Effect { id: id.into(), params, visible: true }
 }

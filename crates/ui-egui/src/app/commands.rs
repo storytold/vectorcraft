@@ -73,6 +73,7 @@ fn substitute_warnings_follow_current_font_inventory() {
 impl VectorcraftApp {
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        let touch_workspace = self.session.prefs.touch_workspace;
         // A file dialog it shows off the UI thread runs it again with the path picked.
         let result = if self.picks.is_entry_free() {
             let entry = picks::Entry::Command(id.to_string(), params.clone());
@@ -80,6 +81,9 @@ impl VectorcraftApp {
         } else {
             self.run_now(id, params)
         };
+        if id == "prefs.import" && result.is_ok() {
+            crate::prefs_dialog::imported(self, touch_workspace);
+        }
         placing::settle_swatch_paste(self);
         result
     }
@@ -403,6 +407,10 @@ impl VectorcraftApp {
         let switched = if fresh { self.session.select_tool(id, v) } else { self.session.switch_tool(id, v) };
         if let Err(e) = switched {
             self.ui.status = e.to_string();
+        }
+        if before != self.session.tool_id() {
+            // A control gesture cannot resume after another tool has owned the pointer.
+            self.control_rotate_press = None;
         }
         // A newly chosen Artboard tool starts on the active artboard (the view's).
         if before != "artboard"

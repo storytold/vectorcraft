@@ -62,9 +62,14 @@ fn arrays_nested_past_the_depth_limit_are_refused() {
     assert!(nested(100_000));
 }
 
-/// The children of the first layer.
+/// The children of the first layer, its ruler guides left out.
 fn art(doc: &Document) -> Vec<Arc<Node>> {
-    doc.layers.first().and_then(|l| l.children()).cloned().unwrap_or_default()
+    doc.layers.first().and_then(|l| l.children()).into_iter().flatten().filter(|c| !c.is_ruler_guide()).cloned().collect()
+}
+
+/// The ruler guides of `doc` by their line, artboard and layer.
+fn guide_lines(doc: &Document) -> Vec<Guide> {
+    doc.ruler_guides().into_iter().map(|g| Guide { artboard: g.artboard, layer: g.layer, ..Guide::new(g.vertical, g.pos) }).collect()
 }
 
 fn fill(n: &Node) -> Paint {
@@ -7501,6 +7506,101 @@ fn a_mesh_envelope_opens_live_with_its_points_and_handles() {
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
+/// A mesh envelope bent far round, its end columns leaning more than halfway over (a warp's grid
+/// bent into an arc), opens live the way it runs: its columns along the arc, as in the file.
+#[test]
+fn a_mesh_envelope_bent_far_round_opens_the_way_it_runs() {
+    use vectorcraft_doc::live::{EnvelopeKind, H_DOWN, H_LEFT, H_RIGHT, H_UP};
+    // 3 columns along an arc round (100, 0) from 160 to 20 degrees, rows at radius 60 and 90: the
+    // end columns lean 70 degrees over.
+    let at = |(i, j): (usize, usize)| {
+        let (a, r) = ((160.0 - i as f64 * 140.0 / 3.0).to_radians(), 60.0 + j as f64 * 30.0);
+        (100.0 + r * a.cos(), r * a.sin())
+    };
+    let handle = |p: (usize, usize), q: (usize, usize)| {
+        let ((x, y), (u, v)) = (at(p), at(q));
+        (x + (u - x) / 3.0, y + (v - y) / 3.0)
+    };
+    // Written with its first index across the arc and its second along it, so that the grid reads
+    // turned round and has to be turned upright.
+    let shape = mesh_text(1, 3, &|(i, j)| at((j, i)), &|p, q| handle((p.1, p.0), (q.1, q.0)), None);
+    // Row r of the envelope is row 1 - r of the file (art space has y up).
+    let doc_pt = |(x, y): (f64, f64)| Point::new(x, 100.0 - y);
+    let (mut points, mut handles) = (vec![], vec![]);
+    for r in 0..=1usize {
+        for c in 0..=3usize {
+            let g = (c, 1 - r);
+            let p = doc_pt(at(g));
+            points.push(p);
+            let towards = |q: Option<(usize, usize)>| q.filter(|q| q.0 <= 3 && q.1 <= 1).map_or(kurbo::Vec2::ZERO, |q| doc_pt(handle(g, q)) - p);
+            let mut h = [kurbo::Vec2::ZERO; 4];
+            h[H_RIGHT] = towards(Some((g.0 + 1, g.1)));
+            h[H_LEFT] = towards(g.0.checked_sub(1).map(|i| (i, g.1)));
+            h[H_UP] = towards(Some((g.0, g.1 + 1)));
+            h[H_DOWN] = towards(g.1.checked_sub(1).map(|j| (g.0, j)));
+            handles.push(h);
+        }
+    }
+    let want = EnvelopeKind::Mesh { rows: 1, cols: 3, points, handles };
+    let r = read_ok(&layer(&envelope_of(&shape, ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&want))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let EnvelopeKind::Mesh { rows, cols, points: got, .. } = live_envelope(&a[0]).1 else { panic!("{a:#?}") };
+    assert_eq!((*rows, *cols), (1, 3));
+    let EnvelopeKind::Mesh { points: want, .. } = &want else { panic!("{want:?}") };
+    assert!(got.iter().zip(want).all(|(p, q)| (*p - *q).hypot() < 1e-6), "{got:?}");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+/// A mesh envelope bent halfway round, its grid running down an arc from top to bottom so that its
+/// end rows cancel out, opens the same way round wherever it sits on the page and whichever way
+/// round the file writes it.
+#[test]
+fn a_mesh_envelope_bent_halfway_round_opens_the_same_way_wherever_it_is() {
+    use vectorcraft_doc::live::{EnvelopeKind, H_DOWN, H_LEFT, H_RIGHT, H_UP};
+    for cx in [100.0, 100.1, 37.0, 250.3, 12.7] {
+        // 4 rows down an arc round (cx, 0) from 90 to 270 degrees, columns at radius 90 and 60.
+        let at = |(i, j): (usize, usize)| {
+            let (a, r) = ((90.0 + i as f64 * 45.0_f64).to_radians(), 60.0 + j as f64 * 30.0);
+            (cx + r * a.cos(), r * a.sin())
+        };
+        let handle = |p: (usize, usize), q: (usize, usize)| {
+            let ((x, y), (u, v)) = (at(p), at(q));
+            (x + (u - x) / 3.0, y + (v - y) / 3.0)
+        };
+        // Row r of the envelope is the arc's point r from the top, column c the radius 1 - c: the
+        // outer one is on the left.
+        let doc_pt = |(x, y): (f64, f64)| Point::new(x, 100.0 - y);
+        let (mut points, mut handles) = (vec![], vec![]);
+        for r in 0..=4usize {
+            for c in 0..=1usize {
+                let g = (r, 1 - c);
+                let p = doc_pt(at(g));
+                points.push(p);
+                let towards = |q: Option<(usize, usize)>| q.filter(|q| q.0 <= 4 && q.1 <= 1).map_or(kurbo::Vec2::ZERO, |q| doc_pt(handle(g, q)) - p);
+                let mut h = [kurbo::Vec2::ZERO; 4];
+                h[H_DOWN] = towards(Some((g.0 + 1, g.1)));
+                h[H_UP] = towards(g.0.checked_sub(1).map(|i| (i, g.1)));
+                h[H_RIGHT] = towards(g.1.checked_sub(1).map(|j| (g.0, j)));
+                h[H_LEFT] = towards(Some((g.0, g.1 + 1)));
+                handles.push(h);
+            }
+        }
+        let want = EnvelopeKind::Mesh { rows: 4, cols: 1, points, handles };
+        let along = mesh_text(4, 1, &at, &handle, None);
+        let across = mesh_text(1, 4, &|(i, j)| at((j, i)), &|p, q| handle((p.1, p.0), (q.1, q.0)), None);
+        for shape in [along, across] {
+            let r = read_ok(&layer(&envelope_of(&shape, ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&want))));
+            let a = art(&r.doc);
+            assert_eq!(a.len(), 1, "{a:#?}");
+            let EnvelopeKind::Mesh { rows, cols, points: got, .. } = live_envelope(&a[0]).1 else { panic!("at {cx}: {a:#?}") };
+            assert_eq!((*rows, *cols), (4, 1), "at {cx}");
+            let EnvelopeKind::Mesh { points: want, .. } = &want else { panic!("{want:?}") };
+            assert!(got.iter().zip(want).all(|(p, q)| (*p - *q).hypot() < 1e-6), "at {cx}: {got:?}");
+        }
+    }
+}
+
 /// An envelope made with a top object opens as a live envelope whose top path is the edge of its
 /// one-patch mesh, an anchor on the edge included; its contents stay the rectangle.
 #[test]
@@ -7785,6 +7885,63 @@ fn an_envelope_whose_contents_are_edited_opens_live_in_edit_contents() {
     assert_eq!(fill(&content[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
 }
 
+/// While an envelope's contents are edited, its mesh is kept in its dictionary, and in some files it
+/// lies away from the drawn art by a move, the contents with the drawn art. Where the mesh draws the
+/// contents as large as the drawn art but elsewhere, the envelope opens live with its mesh moved
+/// onto that art; where it draws them at another size, it keeps its drawn art.
+#[test]
+fn an_envelope_in_edit_contents_whose_mesh_stayed_behind_opens_live_on_its_drawn_art() {
+    use kurbo::Shape as _;
+    use vectorcraft_doc::live::EnvelopeKind;
+    // The top object of `an_envelope_whose_contents_are_edited_opens_live_in_edit_contents`.
+    let at = |(i, j): (usize, usize)| (40.0 + i as f64 * 120.0, 20.0 + j as f64 * 60.0);
+    let handle = |p: (usize, usize), q: (usize, usize)| match (p, q) {
+        ((0, 1), (1, 1)) => (70.0, 95.0),
+        ((1, 1), (0, 1)) => (130.0, 95.0),
+        _ => {
+            let ((x, y), (u, v)) = (at(p), at(q));
+            (x + (u - x) / 3.0, y + (v - y) / 3.0)
+        }
+    };
+    let mesh = mesh_text(1, 1, &at, &handle, None);
+    let mut bp = kurbo::BezPath::new();
+    bp.move_to((40.0, 20.0));
+    bp.curve_to((70.0, 5.0), (130.0, 5.0), (160.0, 20.0));
+    bp.curve_to((160.0, 40.0), (160.0, 60.0), (160.0, 80.0));
+    bp.curve_to((120.0, 80.0), (80.0, 80.0), (40.0, 80.0));
+    bp.curve_to((40.0, 60.0), (40.0, 40.0), (40.0, 20.0));
+    bp.close_path();
+    let shaped = |a: Affine| EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&(a * bp.clone())), corners: None };
+    let keys = ENVELOPE_KEYS.replace("0 /Bool (AIDeformEditModeKey)", "1 /Bool (AIDeformEditModeKey)");
+    // The contents and the drawn art lie 30 points right and 15 down of where the mesh in the
+    // dictionary draws them.
+    let moved = Affine::translate((30.0, 15.0));
+    let contents = Rect::new(70.0, 35.0, 190.0, 95.0);
+    let read_with = |drawn: &EnvelopeKind| {
+        let block = format!("0 g\n{mesh}");
+        let red = format!("{RED}{}f\n", rect_path(contents.x0, 100.0 - contents.y1, contents.x1, 100.0 - contents.y0));
+        read_ok(&layer(&envelope_parts(&red, &keys, &block, 3, &drawn_box(drawn, contents, contents))))
+    };
+    let r = read_with(&shaped(moved));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let (content, kind, _, editing, _) = live_envelope(&a[0]);
+    assert!(editing);
+    let EnvelopeKind::TopObject { path, .. } = kind else { panic!("{kind:?}") };
+    // Moved as far as the drawn art's box lies from the box of what the mesh draws.
+    let (got, want) = (path.to_bezpath().bounding_box(), (moved * bp.clone()).bounding_box());
+    assert!((got.origin() - want.origin()).hypot() < 0.01 && (got.size() - want.size()).to_vec2().hypot() < 1e-6, "{got:?} {want:?}");
+    assert_eq!(content.len(), 1, "{content:#?}");
+    assert_eq!(content[0].geometric_bounds(), Some(contents));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    // Drawn art moved and a tenth larger isn't the mesh's art moved: it stays.
+    let r = read_with(&shaped(moved * Affine::scale_about(1.1, (100.0, 50.0))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert_eq!(r.warnings, [super::envelope::DRAWN]);
+}
+
 /// An envelope that doesn't read (a warp style number past the list, a mesh envelope whose shape
 /// isn't a mesh, one whose plugin never closes it) keeps its drawn art, with one note; the art
 /// round it is read as ever.
@@ -7992,7 +8149,7 @@ fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
     let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
     let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
     let settle = |w: &super::envelope::WarpedLook, spent| {
-        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, page };
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], envelopes: vec![], checks: 1, spent, page };
         warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
     };
     let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };
@@ -8307,17 +8464,16 @@ fn canvas_wide_guide_paths_are_ruler_guides_of_their_layer() {
     );
     let doc = read(canvas_stream(&layer(&body)).as_bytes()).unwrap().doc;
     let top = &doc.layers[0];
-    let kids = top.children().unwrap();
+    let kids = art(&doc);
     assert_eq!(kids.len(), 2, "the square and the sublayer");
     assert!(matches!(kids[0].kind, NodeKind::Path { guide: false, .. }));
     let sub = &kids[1];
-    assert!(sub.children().unwrap().is_empty());
-    let want = [
-        Guide { vertical: false, pos: 60.0, artboard: None, layer: Some(top.id) },
-        Guide { vertical: true, pos: 25.0, artboard: None, layer: Some(top.id) },
-        Guide { vertical: false, pos: 10.0, artboard: None, layer: Some(sub.id) },
-    ];
-    assert_eq!(doc.guides, want);
+    assert!(sub.children().unwrap().iter().all(|c| c.is_ruler_guide()));
+    let at = |vertical, pos, layer| Guide { layer: Some(layer), ..Guide::new(vertical, pos) };
+    let want = [at(false, 60.0, top.id), at(true, 25.0, top.id), at(false, 10.0, sub.id)];
+    assert_eq!(guide_lines(&doc), want);
+    // The guides sit above the layers' art.
+    assert!(top.children().unwrap()[2..].iter().all(|c| c.is_ruler_guide()));
 }
 
 /// #779: a straight `(N) *` guide path from edge to edge of one artboard is a ruler guide of that
@@ -8326,7 +8482,7 @@ fn canvas_wide_guide_paths_are_ruler_guides_of_their_layer() {
 fn artboard_wide_guide_paths_are_ruler_guides_of_their_artboard() {
     // The crop marks' artboard, 0 0 200 100.
     let doc = read(canvas_stream(&layer(&guide_line(0.0, 30.0, 200.0, 30.0, "N"))).as_bytes()).unwrap().doc;
-    assert_eq!(doc.guides, [Guide { vertical: false, pos: 70.0, artboard: Some(1), layer: Some(doc.layers[0].id) }]);
+    assert_eq!(guide_lines(&doc), [Guide { artboard: Some(1), layer: Some(doc.layers[0].id), ..Guide::new(false, 70.0) }]);
     assert!(art(&doc).is_empty());
     // The second of two artboards: art space x 400 to 600, y -150 to 0.
     let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
@@ -8335,7 +8491,7 @@ fn artboard_wide_guide_paths_are_ruler_guides_of_their_artboard() {
                   %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
     let doc = read_ok(&format!("{boards}{}", layer(&guide_line(500.0, 0.0, 500.0, -150.0, "N")))).doc;
     assert_eq!(doc.artboards[1].id, 2);
-    assert_eq!(doc.guides, [Guide { vertical: true, pos: 500.0, artboard: Some(2), layer: Some(doc.layers[0].id) }]);
+    assert_eq!(guide_lines(&doc), [Guide { artboard: Some(2), layer: Some(doc.layers[0].id), ..Guide::new(true, 500.0) }]);
 }
 
 /// Guide paths that aren't ruler guides stay guide paths: `(S) *` ones (guides made from objects),
@@ -8354,7 +8510,7 @@ fn other_guide_paths_stay_guide_paths() {
     ];
     for body in cases {
         let doc = read(canvas_stream(&layer(&body)).as_bytes()).unwrap().doc;
-        assert!(doc.guides.is_empty(), "{body}");
+        assert!(doc.ruler_guides().is_empty(), "{body}");
         assert_eq!(art(&doc).len(), 1, "{body}");
     }
 }
@@ -8370,18 +8526,42 @@ fn layer_with(ops: &str) -> Node {
 /// the colour index and the last one change nothing.
 #[test]
 fn the_template_flag_of_a_layer() {
+    // Index 4 is the file's Magenta (#6502).
     let l = layer_with("1 1 0 0 1 0 0 4 255 79 255 1 50 0");
     let NodeKind::Layer { template, printable, dim_images, color, .. } = l.kind else { panic!() };
     assert!(template && !printable && l.locked);
-    assert_eq!((dim_images, color), (Some(50), LayerColor::Preset(4)));
+    assert_eq!((dim_images, color), (Some(50), LayerColor::Preset(5)));
+    // Index 5 is the file's Cyan (#6502).
     for ops in ["1 1 1 1 1 0 1 5 1 2 3 1 30 0", "1 1 1 1 1 0 0 5 1 2 3 1 30 1", "1 1 1 1 1 0 1 5 1 2 3 1 30"] {
         let l = layer_with(ops);
         let NodeKind::Layer { template, printable, dim_images, color, .. } = l.kind else { panic!() };
         assert!(template && printable && !l.locked, "{ops}");
-        assert_eq!((dim_images, color), (Some(30), LayerColor::Preset(5)), "{ops}");
+        assert_eq!((dim_images, color), (Some(30), LayerColor::Preset(6)), "{ops}");
     }
     let l = layer_with("1 1 1 1 0 0 1 0 79 128 255 0 50 0");
     assert!(matches!(l.kind, NodeKind::Layer { template: false, .. }));
+}
+
+/// #6502: an `.ai` file numbers Magenta, Cyan and Yellow 4, 5 and 6 (the index and RGB pairs of
+/// the `Lb` records in files users sent), so they open as those presets; the index decides, not
+/// the RGB beside it, and the other presets keep their position.
+#[test]
+fn layer_colour_indexes_follow_the_file_format() {
+    let color = |ops: &str| match layer_with(ops).kind {
+        NodeKind::Layer { color, .. } => color,
+        _ => panic!(),
+    };
+    let preset = |name: &str| {
+        let i = vectorcraft_doc::LAYER_COLORS.iter().position(|(n, _)| *n == name).unwrap();
+        LayerColor::Preset(u8::try_from(i).unwrap())
+    };
+    for (index, rgb, name) in
+        [(3, "79 79 255", "Blue"), (4, "255 79 255", "Magenta"), (5, "79 255 255", "Cyan"), (6, "255 255 79", "Yellow"), (7, "128 128 128", "Gray")]
+    {
+        assert_eq!(color(&format!("1 1 1 1 0 0 0 {index} {rgb} 0 50 0")), preset(name), "index {index}");
+    }
+    // The RGB beside an index doesn't change the preset.
+    assert_eq!(color("1 1 1 1 0 0 0 4 255 255 79 0 50 0"), preset("Magenta"));
 }
 
 /// The colour index is one place earlier in eleven and twelve operands, as in ten, and the twelfth

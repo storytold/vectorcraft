@@ -40,7 +40,7 @@ fn a_press_where_a_mask_hides_a_selected_object_drags_it() {
 #[test]
 fn direct_and_group_selection_pick_ruler_guides() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(true, 100.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 100.0));
     let (s, p) = (Selection::default(), paint());
     let c = cx(&d, &s, &p);
     let down = |t: &mut DirectSelectionTool, y: f64| t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, y));
@@ -62,7 +62,7 @@ fn direct_and_group_selection_pick_ruler_guides() {
 #[test]
 fn a_cmd_shift_double_click_releases_the_guide_under_the_pointer() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 300.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 300.0));
     let Some(NodeKind::Path { guide, .. }) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("the rectangle is a path") };
     *guide = true;
     let (s, p) = (Selection::default(), paint());
@@ -848,7 +848,7 @@ fn crossed_segments_match_testing_a_path_for_each_segment() {
 #[test]
 fn marquee_selects_ruler_guides() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 80.0));
     let s = Selection::default();
     let p = paint();
     let cx = cx(&d, &s, &p);
@@ -2333,4 +2333,39 @@ fn a_press_on_a_clipping_path_in_a_dynamic_instance_picks_it() {
     let drawn =
         outline.iter().find_map(|o| if let Overlay::Path { path, .. } = o { Some(vectorcraft_geom::kurbo::Shape::bounding_box(path)) } else { None });
     assert_eq!(drawn, Some(Rect::new(310.0, 310.0, 320.0, 320.0)));
+}
+
+/// #3565: selected type on a path shows its path's direction handles, as a path selected whole
+/// shows its own, and a press on one drags it with `text.setPathHandle` (Shift: 45° steps round
+/// its anchor; Alt: that side only); none with Show handles when multiple anchors are selected off.
+#[test]
+fn type_on_a_path_shows_and_drags_its_paths_handles() {
+    let (mut d, text) = doc_with_path_type();
+    let Some(vectorcraft_doc::NodeKind::Text(t)) = d.node_mut(text).map(|n| &mut n.kind) else { panic!("type") };
+    let vectorcraft_doc::TextKind::OnPath { path, .. } = &mut t.kind else { panic!("on a path") };
+    path.subpaths[0].anchors[0].h_out = Point::new(100.0, 200.0);
+    path.subpaths[0].anchors[1].h_in = Point::new(400.0, 200.0);
+    let p = paint();
+    let mut s = Selection::default();
+    s.add(text);
+    let c = cx(&d, &s, &p);
+    let handles = |c: &ToolContext| -> Vec<Point> {
+        DirectSelectionTool::new(false).overlays(c).iter().filter_map(|o| if let Overlay::Handle { p, .. } = o { Some(*p) } else { None }).collect()
+    };
+    assert_eq!(handles(&c), vec![Point::new(100.0, 200.0), Point::new(400.0, 200.0)]);
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 101.0, 201.0)), vec![Action::Begin("Reshape".into())]);
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 210.0).with_mods(Mods { alt: true, ..Mods::default() }));
+    assert!(
+        matches!(&a[..], [Action::Preview(n, v)] if n == "text.setPathHandle" && v["id"] == text.0 && v["subpath"] == 0 && v["anchor"] == 0 && v["which"] == "out" && v["independent"] == true),
+        "{a:?}"
+    );
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 130.0, 210.0)), vec![Action::Commit]);
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 399.0, 201.0));
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 390.0, 120.0).with_mods(Mods { shift: true, ..Mods::default() }));
+    let Some(Action::Preview(n, v)) = a.first() else { panic!("{a:?}") };
+    assert_eq!((n.as_str(), &v["anchor"], &v["which"]), ("text.setPathHandle", &json!(1), &json!("in")));
+    assert!((v["x"].as_f64().unwrap() - 400.0).abs() < 1e-9, "Shift keeps it straight above its anchor: {v}");
+    assert!(handles(&ToolContext { handles_multiple: false, ..cx(&d, &s, &p) }).is_empty());
 }

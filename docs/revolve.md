@@ -2,13 +2,14 @@
 
 This initial implementation follows the scope agreed in [issue #605](https://github.com/storytold/vectorcraft/issues/605#issuecomment-6070543567).
 
-Select a path, compound path, type, or a group or layer of them, then choose **Effect > 3D and Materials > Revolve**.
+Select a path, compound path, type, clipping group, blend, symbol instance, or a group or layer of them, then choose **Effect > 3D and Materials > Revolve**.
 On a group or layer, every visible member sweeps about one axis, as [the help page](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html)
 describes for a group. The following rules are VectorCraft's own: type stays editable and sweeps as its glyph outlines,
 the shared axis lies on the chosen edge of the members' bounds together, and each member keeps its own paint.
-The faces of all members draw in one back-to-front order. The opacity and blending mode of a member, or of a group
-inside the group, apply once to all its faces. Where a face of another member lies between its faces in that order
-and overlaps them on the page, its faces are split there, and the opacity and blending mode apply once to each part.
+The faces of all members draw in one back-to-front order. The opacity, blending mode and opacity mask of a member,
+or of a group inside the group, apply once to all its faces. Where a face of another member lies between its faces
+in that order and overlaps them on the page, its faces are split there, and the opacity, blending mode and opacity
+mask apply once to each part. The mask stays where it is on the page; it does not turn with the faces.
 Two faces overlap when the convex hulls of their outlines come within the 0.75 pt seam stroke of each other. After
 4,194,304 overlap tests on one group, each further face of such a member is drawn as a part of its own.
 The profile's horizontal distance from a vertical axis is its radius. **Axis side** chooses the left or right
@@ -96,7 +97,7 @@ with the standard command.
 
 - Lighting offers Standard, Diffuse, Top Left and Right, using the [shared original rigs](three-d.md#presets).
   Other effective settings show Custom; changing the view does not change the recognized lighting preset.
-- Paths, compound paths, type, and groups or layers of them only. Images and other objects must be converted to paths first.
+- Paths, compound paths, type, clipping groups, blends, symbol instances, and groups or layers of them. A clipping group, a blend or a symbol instance sweeps the art it shows about one axis, as described in [three-d.md](three-d.md#clipping-groups-blends-and-symbol-instances). Images must be traced first with Object › Image Trace › Make, and other live objects expanded.
 - Open profiles have circular end caps by default; turning Cap off keeps them open. Partial-sweep angular cut sides remain open. Closed profile boundaries are swept as provided.
 - One Revolve per source object. Edit its options rather than applying another.
 - Object-level Revolve uses the top visible fill, falling back to a stroke. Per-item Revolve uses that item's paint.
