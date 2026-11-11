@@ -76,9 +76,11 @@ fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: b
     let mut images = vec![];
     for (_, r) in regions {
         let area = outset(r, bleed);
-        // At most MAX_PIXELS, and 65535 pixels a side.
+        // At most MAX_PIXELS, and no side longer than the renderer draws (rounded up to whole
+        // pixels below).
         let side = area.width().max(area.height()).max(1.0);
-        let scale = (doc.raster_effects_ppi / 72.0).min((MAX_PIXELS / (area.width() * area.height()).max(1.0)).sqrt()).min(65_535.0 / side);
+        let longest = f64::from(vectorcraft_render::MAX_RASTER_SIDE) - 2.0;
+        let scale = (doc.raster_effects_ppi / 72.0).min((MAX_PIXELS / (area.width() * area.height()).max(1.0)).sqrt()).min(longest / side);
         if !(scale.is_finite() && scale > 0.0) {
             continue;
         }

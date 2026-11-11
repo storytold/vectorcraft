@@ -6197,7 +6197,9 @@ as Overprint Preview shows them (darkened); either way the file has no overprint
 overprints. `flattenerPreset` (High Resolution, Medium Resolution, Low Resolution or a saved preset,
 `flattener.presets.list`) flattens transparency before printing, as Object → Flatten Transparency does; empty, a
 PDF keeps it live (PostScript, which has none, uses `file.print`'s `flattenerPreset`, else this one, else medium).
-`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution.
+`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution,
+or at the highest resolution that fits when the image would be larger than 64 million pixels or longer than 32,768
+pixels a side.
 `color.profile` names an RGB or CMYK profile: composite PDF colours are converted to it with `color.intent` (CMYK
 colours keep their numbers with `preserveNumbers`), so a CMYK profile writes device CMYK; separations separate with a
 CMYK one. Settings saved before these options load with their defaults.
