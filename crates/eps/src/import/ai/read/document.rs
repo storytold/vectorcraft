@@ -1253,6 +1253,7 @@ impl<'a> Reader<'a> {
         }
         if let Some(u) = self.ruler_units.and_then(ruler_unit) {
             doc.units = u;
+            doc.units_from_file = true;
         }
         // The file's own swatches in place of the defaults, in its order and colour groups.
         let own_palette = match self.palette_swatches(&doc.patterns) {
