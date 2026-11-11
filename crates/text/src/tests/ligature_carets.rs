@@ -718,7 +718,7 @@ fn an_upright_ligature_on_a_path_takes_its_stop_in_its_turned_cell() {
 /// On a path, an upright ligature in vertical type reads along the path in order: the top of its
 /// cell comes first, and its font caret (600 units down the cell) is drawn where the caret, a click
 /// and the selection put the stop, on a path running either way with any path effect. A glyph lying
-/// on its side keeps its top toward the path's end.
+/// on its side is a quarter turn clockwise from that, as horizontal type on the path sets it.
 #[test]
 fn an_upright_ligature_on_a_path_reads_along_it_in_order() {
     use vectorcraft_doc::PathEffect;
@@ -763,8 +763,8 @@ fn an_upright_ligature_on_a_path_reads_along_it_in_order() {
         let (q0, q1) = (along(q[0][0]), along(q[0][1]));
         assert!((q0.min(q1) - drawn.min(0.0)).abs() < 1e-6 && (q0.max(q1) - drawn.max(0.0)).abs() < 1e-6, "{to} {effect:?}: {q:?} against {drawn}");
     }
-    // Without Standard Vertical Roman Alignment the letter lies on its side: its top still faces
-    // the path's end and its advance runs across the path, to its right.
+    // Without Standard Vertical Roman Alignment the letter lies on its side: its top faces the
+    // path's left and its advance runs along the path.
     let mut line = BezPath::new();
     line.move_to((0.0, 0.0));
     line.line_to((1000.0, 0.0));
@@ -774,9 +774,9 @@ fn an_upright_ligature_on_a_path_reads_along_it_in_order() {
     let l = layout(&db, &t);
     let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
     let tangent = Vec2::new(s.angle.cos(), s.angle.sin());
-    let right = Vec2::new(-tangent.y, tangent.x);
+    let left = Vec2::new(tangent.y, -tangent.x);
     let (pen, up, ahead) = (s.xf * Point::ZERO, s.xf * Point::new(0.0, -500.0), s.xf * Point::new(500.0, 0.0));
-    assert!((up - pen).dot(tangent) > 1.0 && (ahead - pen).dot(right) > 1.0, "{pen:?} {up:?} {ahead:?}");
+    assert!((up - pen).dot(left) > 1.0 && (ahead - pen).dot(tangent) > 1.0, "{pen:?} {up:?} {ahead:?}");
 }
 
 /// On a path, an upright ligature whose cell Proportional Metrics shortens (`vpal`, from 1000 units

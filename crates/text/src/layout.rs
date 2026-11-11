@@ -137,6 +137,10 @@ struct Ctx<'a> {
     /// next glyph of its cluster would take, the turn it got, the line-space x that next glyph is
     /// set after), so that a combining mark shaped into the same cluster turns with it.
     upright_cluster: Option<(usize, usize, Affine, f64)>,
+    /// Vertical type on a path: the tate-chu-yoko block [`Self::emit`] is placing, as (the
+    /// block's transform from its first glyph's place on the path, the center of its em in the
+    /// column before that transform), so that the block's other glyphs stand with it on a curve.
+    tcy_block: Option<(Affine, Point)>,
     out: TextLayout,
 }
 
@@ -365,28 +369,82 @@ impl Ctx<'_> {
                 let proportional = g.vpal.filter(|_| g.face.vertical_glyph(g.gid).is_some()).map_or(0.0, |a| a.advance) / g.sy;
                 (cell + proportional, top)
             });
-        if self.vertical && self.on_path {
-            // Vertical path type keeps the baseline path and turns each glyph across it.
-            m = Affine::rotate_about(std::f64::consts::FRAC_PI_2, origin) * m;
-            if let Some((cell, top)) = path_cell {
-                // An upright glyph whose top then faces the path's end turns half a turn about the
-                // center of its cell (without its Character Rotation), so that its top faces the
-                // path's start and the characters of an upright ligature read along the path in
-                // order. The effects that keep the glyph's up direction fixed already turn it so on
-                // a path that runs to the left.
-                let turned = m * unturned;
-                let tangent = Vec2::new(angle.cos(), angle.sin());
-                let along = |y: f64| (turned * Point::new(0.0, y) - origin).dot(tangent);
-                if along(-top) > along(cell - top) {
-                    let centre = turned * Point::new(g.face.advance(g.gid) * 0.5, cell * 0.5 - top);
-                    m = Affine::translate(centre.to_vec2() * 2.0) * Affine::scale(-1.0) * m;
+        // Vertical type on a path: the column is centered on the line Align to Path puts the baseline
+        // on, so the em boxes of upright glyphs, tate-chu-yoko blocks and glyphs lying on their side
+        // straddle the path. Glyph space here is horizontal path type's: x runs along the path and y
+        // across it, to the right of the path's direction.
+        if let (true, true, Some(t)) = (self.vertical, self.on_path, g.tcy) {
+            // Tate-chu-yoko stands upright as one block: set across the column, centered on its em of
+            // it and on the path, its top toward the path's start, then moved by
+            // its Up/Down toward the path's start and by its Left/Right to the path's left, whatever
+            // the effect does to the glyph's axes. The block's first glyph sets where the block
+            // stands; the others take its em, its place on the path and its column, so the block
+            // stays whole on a curve.
+            let (block, centre) = match self.tcy_block.filter(|_| t.pen > 0.0) {
+                Some(b) => b,
+                None => {
+                    // A later glyph without its first glyph: placed back by its pen offset.
+                    let (em, back) =
+                        if t.pen > 0.0 { (t.pen, Affine::translate((-t.pen, 0.0))) } else { (self.style_at(g.byte).size, Affine::IDENTITY) };
+                    let centre = Point::new(em * 0.5, 0.0);
+                    let squeeze =
+                        Affine::translate((centre.x, 0.0)) * Affine::scale_non_uniform(t.squeeze, 1.0) * Affine::translate((-centre.x, 0.0));
+                    let on_path = pre * back;
+                    let mut block = on_path * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, centre) * squeeze;
+                    // The effects that keep the glyph's axes fixed leave the block's top toward the
+                    // path's end on a path that runs to the left: it turns half a turn about its
+                    // center, as an upright glyph does.
+                    let tangent = Vec2::new(angle.cos(), angle.sin());
+                    if (block * Point::new(centre.x, centre.y - 1.0) - block * centre).dot(tangent) > 0.0 {
+                        block = Affine::translate((on_path * centre).to_vec2() * 2.0) * Affine::scale(-1.0) * block;
+                    }
+                    let left = Vec2::new(tangent.y, -tangent.x);
+                    block = Affine::translate(-tangent * t.up + left * t.right) * block;
+                    self.tcy_block = Some((block, centre));
+                    (block, centre)
                 }
+            };
+            let em = centre.x * 2.0;
+            let across = Affine::translate((centre.x - t.width * 0.5 + t.ink, centre.y + g.face.ideographic_centre() * em));
+            m = block * across * local;
+        } else if self.vertical && self.on_path && (g.inline.is_some() || !stands_upright(g)) {
+            // A glyph lying on its side (and an inline graphic) is a quarter turn clockwise from an
+            // upright glyph, as horizontal type on the path sets it: its baseline runs along the path
+            // and its top faces the path's left. It moves across the path so that the center of its
+            // ideographic em box lies on the path.
+            // <https://www.w3.org/TR/css-writing-modes-3/#vertical-orientations>
+            // <https://www.unicode.org/reports/tr50/>
+            let centre = g.face.ideographic_centre() * g.face.units_per_em() * g.sy;
+            m = pre * Affine::translate((0.0, centre)) * local;
+        } else if self.vertical && self.on_path {
+            // An upright glyph is a quarter turn counterclockwise from horizontal path type's pose,
+            // turned in glyph space so that every effect bends it as it bends glyphs lying on their
+            // side: its top faces the path's start and the characters of an upright ligature read
+            // along the path in order. The center of its cell (without its Character Rotation) keeps
+            // its place along the path, and its em box is centered across the path.
+            let (cell, top) = path_cell.unwrap_or((0.0, 0.0));
+            let unrotated = local * unturned;
+            let middle = Point::new(g.face.units_per_em() * 0.5, cell * 0.5 - top);
+            // The em box's middle across the column, which the shaper's offsets then move.
+            let at = Point::new(g.face.units_per_em() * g.sx * 0.5, (unrotated * middle).y);
+            let target = Point::new(-at.y, 0.0);
+            let quarter = Affine::new([0.0, -1.0, 1.0, 0.0, 0.0, 0.0]);
+            let mut turn = Affine::translate(target.to_vec2() - (quarter * at).to_vec2()) * quarter;
+            // The effects that keep the glyph's axes fixed (Stair Step) leave its top toward the
+            // path's end on a path that runs to the left: it turns half a turn about its cell's
+            // center.
+            let tangent = Vec2::new(angle.cos(), angle.sin());
+            let placed = pre * turn * unrotated;
+            if (placed * Point::new(middle.x, middle.y - 1.0) - placed * middle).dot(tangent) > 0.0 {
+                turn = Affine::translate(target.to_vec2() * 2.0) * Affine::scale(-1.0) * turn;
             }
+            m = pre * turn * local;
         } else if let (true, Some(t)) = (self.vertical, g.tcy) {
             // Tate-chu-yoko: the block set across the column, centred on its em of it, then moved up
             // by its Up/Down and right by its Left/Right (line x runs down the column and line y
-            // from right to left across it).
-            let em = self.style_at(g.byte).size;
+            // from right to left across it). Every glyph of the block takes the em of its first
+            // glyph, the pen offset of the others.
+            let em = if t.pen > 0.0 { t.pen } else { self.style_at(g.byte).size };
             let start = origin.x - t.pen;
             let centre = Point::new(start + em * 0.5, origin.y - g.face.ideographic_centre() * em);
             let across = Affine::translate((centre.x - t.width * 0.5 + t.ink - origin.x, 0.0));
@@ -629,6 +687,7 @@ mod emit_kashida_mark_last {
             system_layout: false,
             fractional_widths: true,
             upright_cluster: None,
+            tcy_block: None,
             out: TextLayout::default(),
         };
         // Last visual glyph of the cluster: a mark that wrongly keeps the mark run (run 1).
@@ -692,6 +751,7 @@ mod emit_kashida_mark_last {
             system_layout: false,
             fractional_widths: true,
             upright_cluster: None,
+            tcy_block: None,
             out: TextLayout::default(),
         };
         // Simulate the pre-fix path: clone run from the mark glyph only.
