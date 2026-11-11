@@ -1,8 +1,11 @@
 //! A script's preprocessor lines, read before it runs, as the public guide lists them
 //! (<https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/>):
 //! `#include` and `//@include` put the text of another file in place of the line, `#includepath`
-//! sets the folders `#include` looks in, `#script` names the run, and `#target` and `#strict off`
-//! are accepted. The same lines are read in a file `$.evalFile` runs.
+//! sets the folders `#include` looks in, `#script` names the run, `#strict on` turns on the checks
+//! of `$.strict` (<https://extendscript.docsforadobe.dev/extendscript-tools-features/dollar-object/>:
+//! a write to a read-only property is a runtime error, and objects that take no new properties
+//! refuse them), and `#target` and `#strict off` are accepted. The same lines are read in a file
+//! `$.evalFile` runs.
 //!
 //! VectorCraft's own rules:
 //!
@@ -13,9 +16,15 @@
 //!   the `JSINCLUDE` environment variable. A later `#includepath` replaces the list.
 //! - Files are read through the script's [`ScriptScope`]: a refused path ends the run, except a
 //!   `JSINCLUDE` folder outside the scope, which is passed over.
-//! - `#target` takes any value and changes nothing. `#targetengine`, `#engine` and `#strict on` are
-//!   refused as unsupported, and any other `#name` as unknown; `//@name` with another name stays a
-//!   comment.
+//! - `#target` takes any value and changes nothing. `#targetengine` and `#engine` are refused as
+//!   unsupported, and any other `#name` as unknown; `//@name` with another name stays a comment.
+//! - The last `#strict on` or `#strict off` of the script and the files it includes sets the checks
+//!   for the whole run; without one they are off. A write to a property that has only a getter is
+//!   checked as a read-only one, the objects that take no new properties are those that are not
+//!   extensible (`Object.preventExtensions`, `Object.seal`, `Object.freeze`), and the rest of ES5
+//!   strict mode is left to `'use strict'`. Code that `eval` and `Function` compile takes the
+//!   checks of the code that compiles it; a file `$.evalFile` runs takes its own `#strict` line if
+//!   it has one, and otherwise the caller's.
 //! - A run reads at most [`MAX_DEPTH`] levels of nested files, [`MAX_FILES`] files,
 //!   [`MAX_TOTAL_BYTES`] of source in all (the script's own included) and 8 MiB a file, and looks up
 //!   at most [`MAX_PROBES`] paths. A file may be included again once its earlier inclusion has
@@ -97,12 +106,13 @@ pub(crate) struct Failure {
     pub column: u32,
 }
 
-/// A source with its preprocessor lines read: the text to run, where its lines came from, and the
-/// name its `#script` line gave.
+/// A source with its preprocessor lines read: the text to run, where its lines came from, the
+/// name its `#script` line gave, and what its last `#strict` line set (`None` without one).
 pub(crate) struct Expanded {
     pub source: String,
     pub map: SourceMap,
     pub name: Option<String>,
+    pub strict: Option<bool>,
 }
 
 /// A file being run: its name for people and the folder its relative paths start from (none for a
@@ -130,13 +140,14 @@ pub(crate) struct Files {
 }
 
 /// The output being built: its UTF-16 text, the line it is on, the units since that line began,
-/// and whether its last unit is a carriage return.
+/// whether its last unit is a carriage return, and what the last `#strict` line so far set.
 struct Out {
     units: Vec<u16>,
     line: u32,
     column: u32,
     after_cr: bool,
     map: SourceMap,
+    strict: Option<bool>,
 }
 
 impl Out {
@@ -330,7 +341,7 @@ impl Files {
     /// `text`, the file `shown` in folder `dir`, with its preprocessor lines read. With `script`,
     /// its `#script` line names the run.
     fn expand(&mut self, shown: Arc<str>, dir: Option<PathBuf>, text: &str, script: bool) -> Result<Expanded, Failure> {
-        let mut out = Out { units: Vec::with_capacity(text.len()), line: 1, column: 0, after_cr: false, map: SourceMap::default() };
+        let mut out = Out { units: Vec::with_capacity(text.len()), line: 1, column: 0, after_cr: false, map: SourceMap::default(), strict: None };
         let mut name = None;
         self.file(&mut out, shown, dir.as_deref(), text, script, &mut name)?;
         let source = String::from_utf16(&out.units).map_err(|_| Failure {
@@ -341,7 +352,7 @@ impl Files {
             line: 0,
             column: 0,
         })?;
-        Ok(Expanded { source, map: out.map, name })
+        Ok(Expanded { source, map: out.map, name, strict: out.strict })
     }
 
     /// Adds file `shown` (in folder `dir`, with text `text`) to `out`, its included files in place
@@ -414,8 +425,8 @@ impl Files {
                     }
                 }
                 Some(DirectiveName::Strict) => match value.to_ascii_lowercase().as_str() {
-                    "off" => {}
-                    "on" => return Err(at(FailKind::Syntax, format!("unsupported strict checking: {label} on"))),
+                    "off" => out.strict = Some(false),
+                    "on" => out.strict = Some(true),
                     _ => return Err(at(FailKind::Syntax, format!("{label} takes on or off"))),
                 },
                 Some(DirectiveName::TargetEngine) => return Err(at(FailKind::Syntax, format!("unsupported script directive: {label}"))),

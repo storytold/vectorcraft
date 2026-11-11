@@ -197,6 +197,18 @@ pub(crate) struct Interp {
     pub(crate) evaluated: u32,
     /// The tag of the source the last run's error was raised in.
     pub(crate) error_tag: u32,
+    /// The mark of the host error ([`crate::HostError::Marked`]) whose exception or limit is
+    /// propagating.
+    pub(crate) thrown_mark: Option<u32>,
+    /// The marked exceptions `finally` blocks are running for, innermost last, each with its mark,
+    /// which the block's end throws it on with, and the stack slot that holds it while the block
+    /// runs. An entry whose slot no longer holds its exception belongs to a block that `break`,
+    /// `continue` or `return` left, and [`Self::drop_left_finally_marks`] removes it.
+    pub(crate) finally_marks: Vec<(ObjId, u32, usize)>,
+    /// The mark of the host error the last run ended with.
+    pub(crate) error_mark: Option<u32>,
+    /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
+    pub(crate) strict_writes: bool,
 }
 
 /// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
@@ -394,6 +406,10 @@ impl Interp {
             source_tag: crate::realm::UNKNOWN_SOURCE,
             evaluated: 0,
             error_tag: crate::realm::UNKNOWN_SOURCE,
+            thrown_mark: None,
+            finally_marks: Vec::new(),
+            error_mark: None,
+            strict_writes: false,
         };
         crate::builtins::install(&mut interp);
         interp.fuel = limits.fuel;
@@ -547,11 +563,20 @@ impl Interp {
         Ok(())
     }
 
+    /// Removes the [`Self::finally_marks`] entries of `finally` blocks that `break`, `continue` or
+    /// `return` left: those whose stack slot no longer holds their exception.
+    fn drop_left_finally_marks(&mut self) {
+        let stack = &self.stack;
+        self.finally_marks.retain(|&(id, _, slot)| matches!(stack.get(slot), Some(Value::Object(o)) if *o == id));
+    }
+
     pub(crate) fn collect_garbage(&mut self) {
+        self.drop_left_finally_marks();
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
         roots.values.push(&self.last_thrown);
+        roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -640,6 +665,8 @@ impl Interp {
         loop {
             let Some(frame) = self.frames.last_mut() else { return Err(Abrupt::Throw(v)) };
             if let Some(h) = frame.code.handler(frame.pc.saturating_sub(1)) {
+                // A catch clause starts with `PushCatch`; every other handler is a `finally` block's.
+                let caught = matches!(frame.code.ops.get(h.target as usize), Some(Op::PushCatch(_)));
                 let target_len = frame.base + h.depth as usize;
                 while frame.env_depth > h.env_depth {
                     let outer = self.heap.env(frame.env).and_then(Env::outer);
@@ -652,6 +679,10 @@ impl Interp {
                     return internal("handler stack deeper than the stack");
                 }
                 self.stack.truncate(target_len);
+                self.drop_left_finally_marks();
+                if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
+                    self.finally_marks.push((*id, mark, target_len));
+                }
                 self.stack.push(v);
                 self.throw_site = None;
                 return Ok(());
@@ -698,6 +729,18 @@ impl Interp {
 
     fn strict(&self) -> bool {
         self.frames.last().is_some_and(|f| f.code.strict)
+    }
+
+    /// Does a property write the running code makes throw when it cannot be made? It does in
+    /// strict mode code and in code from a source with [`crate::bytecode::Source::strict_writes`].
+    fn strict_writes(&self) -> bool {
+        self.frames.last().is_some_and(|f| f.code.strict || f.code.source.strict_writes)
+    }
+
+    /// [`crate::bytecode::Source::strict_writes`] for source compiled now: the running code's,
+    /// or the realm's between runs.
+    pub(crate) fn writes_mode(&self) -> bool {
+        self.frames.last().map_or(self.strict_writes, |f| f.code.source.strict_writes)
     }
 
     fn exec(&mut self, op: Op) -> JsResult<()> {
@@ -753,7 +796,10 @@ impl Interp {
             Op::Jump(t) => self.jump_to(t),
             Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => self.op_branch(t, matches!(op, Op::JumpIfTrue(_)), false),
             Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => self.op_branch(t, matches!(op, Op::JumpIfTrueKeep(_)), true),
-            Op::Throw => Err(Abrupt::Throw(self.pop()?)),
+            Op::Throw => {
+                self.thrown_mark = None;
+                Err(Abrupt::Throw(self.pop()?))
+            }
             Op::ThrowReferenceError(i) => self.op_throw_reference_error(i),
             Op::EndFinally(t) => self.op_end_finally(t),
             Op::NewObject => self.op_new_object(),
@@ -835,7 +881,14 @@ impl Interp {
             return self.pop().map(drop);
         }
         if kind == 1.0 {
-            return Err(Abrupt::Throw(self.pop()?));
+            let v = self.pop()?;
+            if let Value::Object(o) = v
+                && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, _)| id == o)
+            {
+                self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
+                self.finally_marks.truncate(i);
+            }
+            return Err(Abrupt::Throw(v));
         }
         let k = (kind - 2.0) as usize;
         let target = self.frame()?.code.finally_tables.get(table as usize).and_then(|t| t.get(k)).copied();
@@ -918,11 +971,14 @@ impl Interp {
                     _ => Ok(()),
                 }
             }
-            Resolved::Obj { object, .. } => self.put(object, name.clone(), v, strict),
+            Resolved::Obj { object, .. } => {
+                let throw = self.strict_writes();
+                self.put(object, name.clone(), v, throw)
+            }
             Resolved::Unresolved if strict => Err(self.not_defined(name)),
             Resolved::Unresolved => {
-                let global = self.global;
-                self.put(global, name.clone(), v, false)
+                let (global, throw) = (self.global, self.strict_writes());
+                self.put(global, name.clone(), v, throw)
             }
         }
     }
@@ -1453,7 +1509,10 @@ impl Interp {
     fn put_value(&mut self, base: &Value, k: Key, v: Value) -> JsResult<()> {
         let strict = self.strict();
         match base {
-            Value::Object(o) => self.put(*o, k, v, strict),
+            Value::Object(o) => {
+                let throw = self.strict_writes();
+                self.put(*o, k, v, throw)
+            }
             Value::Undefined | Value::Null => {
                 let message = format!(
                     "cannot set property '{}' of {}",
@@ -1869,7 +1928,9 @@ impl Interp {
                     // keeps itself reachable.
                     return Ok(Prepared::Done(self.call_data(&f, &name, &args, &read)?));
                 }
-                Func::Eval { f, end, name } => return Ok(Prepared::Done(self.call_evaluator(&f, &end, &name, &args)?)),
+                Func::Eval { f, end, strict_writes, name } => {
+                    return Ok(Prepared::Done(self.call_evaluator(&f, &end, &strict_writes, &name, &args)?));
+                }
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
                     return match host(&js_args) {
@@ -2138,11 +2199,17 @@ impl Interp {
     /// Parses and compiles source for eval code or a script, counting it against the source
     /// limit.
     pub(crate) fn compile_source(&mut self, units: &[u16], strict: bool, kind: CodeKind) -> Result<Rc<Code>, CompileError> {
+        let writes = self.writes_mode();
+        self.compile_source_writes(units, strict, writes, kind)
+    }
+
+    /// [`Interp::compile_source`], with [`crate::bytecode::Source::strict_writes`] set to `writes`.
+    pub(crate) fn compile_source_writes(&mut self, units: &[u16], strict: bool, writes: bool, kind: CodeKind) -> Result<Rc<Code>, CompileError> {
         self.source_units = self.source_units.saturating_add(units.len());
         let remaining = self.options.max_source_units.saturating_sub(self.source_units.saturating_sub(units.len()));
         let options = Options { strict, max_source_units: remaining, ..self.options.clone() };
         let program = crate::parse_utf16(units, &options).map_err(CompileError::Syntax)?;
-        let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: self.source_tag });
+        let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: self.source_tag, strict_writes: writes });
         compile_program(&program, &source, kind).map_err(|e| match e {
             CompileFail::Syntax(s) => CompileError::Syntax(s),
             CompileFail::Internal(m) => CompileError::Internal(m),
