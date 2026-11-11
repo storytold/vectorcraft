@@ -1481,6 +1481,22 @@ fn rasterize_refuses_an_image_longer_than_the_renderer_draws() {
     assert!(close(b.y0, vb.y0) && b.y1 >= vb.y1, "{b:?} covers {vb:?}");
 }
 
+/// Art that snaps to exactly 32,768 pixels a side is rasterized, wherever it is on the canvas.
+#[test]
+fn rasterize_takes_art_that_snaps_to_32768_pixels_a_side() {
+    let scale = 400.0 / 72.0;
+    for y in [100_000.0, 250_000.0, 333_333.3, 777_777.7] {
+        let mut s = session();
+        let probe = rect(&mut s, 10.0, y, 100.0, 5898.0);
+        let vb = s.doc().unwrap().doc.bounds_of(&[probe], true).unwrap();
+        let h = 5898.0 + (32_767.8 / scale - vb.height());
+        let a = rect(&mut s, 200.0, y, 100.0, h);
+        sel(&mut s, &[a]);
+        let r = s.execute("object.rasterize", &json!({"ppi": 400, "padding": 0})).unwrap_or_else(|e| panic!("at y = {y}: {e}"));
+        assert_eq!(r["height"].as_u64(), Some(u64::from(vectorcraft_render::MAX_RASTER_SIDE)), "at y = {y}: {r}");
+    }
+}
+
 /// Rasterize refuses a resolution given as text or as another value that is not a number, and the
 /// selected art stays as it was.
 #[test]

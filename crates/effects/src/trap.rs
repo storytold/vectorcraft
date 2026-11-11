@@ -218,34 +218,66 @@ fn visible(sources: &[TrapSource]) -> Vec<PathData> {
 /// The pairs `(i, j)`, `i < j`, in ascending order, of `rects` (`None`: left out) that come within
 /// `reach_x` of each other across x and `reach_y` across y. A sweep over the rects sorted by their
 /// left edge, so shapes spread over the page cost about one check each rather than one per pair.
-fn near_pairs(rects: &[Option<Rect>], reach_x: f64, reach_y: f64) -> Vec<(usize, usize)> {
+/// `None` when there are more than [`MAX_NEAR_PAIRS`] (many shapes all within reach of each other
+/// make the pair list grow with the square of their count) or the sweep examines more than
+/// `MAX_NEAR_SCAN` pairs (many shapes sharing an x range, far apart in y).
+fn near_pairs(rects: &[Option<Rect>], reach_x: f64, reach_y: f64) -> Option<Vec<(usize, usize)>> {
+    near_pairs_within(rects, reach_x, reach_y, MAX_NEAR_SCAN)
+}
+
+fn near_pairs_within(rects: &[Option<Rect>], reach_x: f64, reach_y: f64, max_scan: usize) -> Option<Vec<(usize, usize)>> {
     let mut order: Vec<(usize, Rect)> = rects.iter().enumerate().filter_map(|(i, r)| r.map(|r| (i, r))).collect();
     order.sort_unstable_by(|a, b| a.1.x0.total_cmp(&b.1.x0).then(a.0.cmp(&b.0)));
     let mut pairs = vec![];
+    let mut scanned = 0usize;
     for (k, &(i, a)) in order.iter().enumerate() {
         // Later rects start at or right of `a`, so only how far right they start can rule them out.
         for &(j, b) in order[k + 1..].iter().take_while(|(_, b)| b.x0 <= a.x1 + reach_x) {
+            // Rects sharing an x range but far apart in y are examined without being stored.
+            scanned += 1;
+            if scanned > max_scan {
+                return None;
+            }
             if b.y0 <= a.y1 + reach_y && a.y0 <= b.y1 + reach_y {
+                if pairs.len() >= MAX_NEAR_PAIRS {
+                    return None;
+                }
                 pairs.push((i.min(j), i.max(j)));
             }
         }
     }
     pairs.sort_unstable();
-    pairs
+    Some(pairs)
 }
+
+/// Most pairs the sweep in `near_pairs` examines, stored or not (a plain bounds check each).
+const MAX_NEAR_SCAN: usize = 1 << 27;
+
+/// Most candidate pairs one trap evaluation keeps; past it no traps are made (the art draws as is).
+/// Each pair costs a boolean trap band, so real art stays far below this.
+pub const MAX_NEAR_PAIRS: usize = 1 << 20;
 
 /// The traps between `sources` (back to front) with options `o`: for each two sources of
 /// different solid colours whose visible parts meet, the strip of the darker one's visible part
 /// next to the lighter one's (the other way round with [`TrapOptions::reverse`]), painted per
-/// [`trap_paint`]. Empty when no visible edges of different colours meet.
+/// [`trap_paint`]. Empty when no visible edges of different colours meet, or when there are more
+/// than [`MAX_NEAR_PAIRS`] candidate pairs or the pair scan is too long (see [`try_traps`] to tell
+/// those apart).
 pub fn traps(sources: &[TrapSource], o: &TrapOptions) -> Vec<TrapPiece> {
+    try_traps(sources, o).unwrap_or_default()
+}
+
+/// [`traps`], but `None` when there are more than [`MAX_NEAR_PAIRS`] candidate pairs or the scan for
+/// them is too long (`MAX_NEAR_SCAN` pairs examined), as opposed to
+/// `Some` of an empty list when no edges meet.
+pub fn try_traps(sources: &[TrapSource], o: &TrapOptions) -> Option<Vec<TrapPiece>> {
     let colors: Vec<Option<Color>> = sources.iter().map(|s| trap_color(&s.fill)).collect();
     if colors.iter().flatten().count() < 2 {
-        return vec![];
+        return Some(vec![]);
     }
     let (w, r) = (o.thickness, o.height_width);
     if !(w.is_finite() && w > 0.0 && r.is_finite() && r > 0.0) {
-        return vec![]; // `trap_band` cuts nothing with these.
+        return Some(vec![]); // `trap_band` cuts nothing with these.
     }
     let vis = visible(sources);
     // Only pairs whose visible parts come within the trap's reach can trap (`trap_band` rejects
@@ -257,7 +289,8 @@ pub fn traps(sources: &[TrapSource], o: &TrapOptions) -> Vec<TrapPiece> {
     let extent = rects.iter().flatten().flat_map(|b| [b.x0, b.y0, b.x1, b.y1]).fold(0.0_f64, |m, v| m.max(v.abs()));
     let hair = 1e-9 * (1.0 + extent + w * r.max(1.0));
     let mut out = vec![];
-    for (i, j) in near_pairs(&rects, w + hair, w * r + hair) {
+    let pairs = near_pairs(&rects, w + hair, w * r + hair)?;
+    for (i, j) in pairs {
         let (Some(ci), Some(cj)) = (colors[i], colors[j]) else { continue };
         if vis[i].is_empty() || vis[j].is_empty() || same_color(&sources[i].fill, &sources[j].fill, ci, cj) {
             continue;
@@ -276,7 +309,7 @@ pub fn traps(sources: &[TrapSource], o: &TrapOptions) -> Vec<TrapPiece> {
         let Some(color) = colors[from] else { continue };
         out.push(TrapPiece { path: band, paint: trap_paint(&sources[from].fill, color, o), from, into });
     }
-    out
+    Some(out)
 }
 
 /// A trap's appearance: one overprinting fill of `paint`, no stroke.
@@ -380,9 +413,18 @@ mod tests {
     }
 
     #[test]
+    fn the_pair_scan_is_bounded_even_when_no_pair_is_near() {
+        // Eleven rects share an x range but lie far apart in y: 55 pairs are examined, none stored.
+        let rects: Vec<Option<Rect>> = (0..11).map(|k| Some(Rect::new(0.0, k as f64 * 1000.0, 10.0, k as f64 * 1000.0 + 10.0))).collect();
+        assert_eq!(near_pairs_within(&rects, 1.0, 1.0, 100), Some(vec![]));
+        assert_eq!(near_pairs_within(&rects, 1.0, 1.0, 54), None);
+    }
+
+    #[test]
     fn no_trap_without_adjoining_edges_of_different_colours() {
         let apart = vec![src(Rect::new(0.0, 0.0, 10.0, 10.0), yellow()), src(Rect::new(30.0, 0.0, 40.0, 10.0), blue())];
         assert!(traps(&apart, &TrapOptions::default()).is_empty());
+        assert_eq!(try_traps(&apart, &TrapOptions::default()).map(|t| t.len()), Some(0), "no edges meet: empty, not over the cap");
         let same = vec![src(Rect::new(0.0, 0.0, 10.0, 10.0), blue()), src(Rect::new(10.0, 0.0, 20.0, 10.0), blue())];
         assert!(traps(&same, &TrapOptions::default()).is_empty());
         let mut unfilled = abutting();
@@ -431,10 +473,13 @@ mod tests {
     fn only_shapes_within_reach_are_paired() {
         let s = many_apart_and_one_abutting();
         let rects: Vec<Option<Rect>> = s.iter().map(|t| t.path.bounds()).collect();
-        assert_eq!(near_pairs(&rects, 1.0, 1.0), vec![(0, 2000)], "the squares 10 pt apart are never paired");
+        assert_eq!(near_pairs(&rects, 1.0, 1.0), Some(vec![(0, 2000)]), "the squares 10 pt apart are never paired");
         // Reaching 10 pt, neighbours in a row pair, in ascending order; left-out rects never do.
         let row: Vec<Option<Rect>> = [3, 1, 0, 2].iter().map(|&k| s[k].path.bounds()).chain([None]).collect();
-        assert_eq!(near_pairs(&row, 10.0, 10.0), vec![(0, 3), (1, 2), (1, 3)]);
+        assert_eq!(near_pairs(&row, 10.0, 10.0), Some(vec![(0, 3), (1, 2), (1, 3)]));
+        // Past the allowance the pair list stops growing instead of being built.
+        let packed = vec![Some(Rect::new(0.0, 0.0, 1.0, 1.0)); 1500];
+        assert_eq!(near_pairs(&packed, 1.0, 1.0), None);
         let t = traps(&s, &TrapOptions { thickness: 1.0, ..Default::default() });
         assert_eq!(t.len(), 1, "only the abutting pair traps");
         assert_eq!((t[0].from, t[0].into), (2000, 0));
