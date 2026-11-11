@@ -2872,6 +2872,8 @@ digits	Malayalam	Malaiàlam
 	Open…	Obre…
 	Optical	Òptic
 	Optical Margin Alignment	Alineació òptica de marges
+	Dynamic Text	Text dinàmic
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	el text sobre un traçat d’un text enllaçat no pot fer servir el text dinàmic: {frames}
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat
 	Options	Opcions

@@ -2273,6 +2273,8 @@ font-technology	Variable	Variabla
 	Open…	Öppna…
 	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
+	Dynamic Text	Dynamisk text
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	text på bana i länkad text kan inte använda dynamisk text: {frames}
 	Optimize for fast web view	Optimera för snabb webbvisning
 	Optimized	Optimerad
 	Options	Alternativ

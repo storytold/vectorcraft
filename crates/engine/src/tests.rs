@@ -47,6 +47,7 @@ mod docsetup;
 mod document_move;
 mod draw2;
 mod dynamic_symbols;
+mod dynamic_text;
 mod editcolors;
 mod effectedit;
 mod emptytype;

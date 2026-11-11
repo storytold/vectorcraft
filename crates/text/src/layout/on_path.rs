@@ -294,6 +294,8 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             .count()
     };
     let (mut steps, mut s0, mut hung) = arrange(&sg);
+    // What the whole text takes along the path and what the span holds: Dynamic Text's first guess.
+    cx.out.path_fill = Some((steps.iter().sum(), avail + hung.0 + hung.1));
     // Where the text that fits ends: before the first glyph that doesn't, which threaded text
     // flows on from, as from the last line of area type.
     let mut fits = text_len;

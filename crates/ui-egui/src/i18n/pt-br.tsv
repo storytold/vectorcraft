@@ -1930,6 +1930,8 @@ antiAlias	Sharp	Nítido
 	Open…	Abrir…
 	Optical	Óptico
 	Optical Margin Alignment	Alinhamento de Margem Óptica
+	Dynamic Text	Texto Dinâmico
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	o texto em um caminho de um texto encadeado não pode usar Texto Dinâmico: {frames}
 	Optimize for fast web view	Otimizar para visualização rápida na web
 	Optimized	Otimizado
 	Options	Opções

@@ -48,7 +48,7 @@ pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
 pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
-pub use layout::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
+pub use layout::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 pub use shape::spacing_scale;
 pub use vectorcraft_doc::TextObject;
 
@@ -362,9 +362,14 @@ pub struct TextLayout {
     pub on_path: bool,
     /// Area type: the frame cells text flowed into (one per row/column).
     pub frames: Vec<Rect>,
-    /// Shrink Text to Fit: the factor the text's sizes, leading and baseline shifts were scaled
-    /// by to fit its frame (1.0 when the text is not shrunk).
+    /// Shrink Text to Fit and Dynamic Text: the factor the text's sizes, leading and baseline
+    /// shifts were scaled by to fit its frame or the span of its path (1.0 when the text is not
+    /// scaled). Shrink Text to Fit keeps it at most 1; Dynamic Text may take it above 1.
     pub fit_scale: f64,
+    /// Type on a path: the length the arranged glyphs take along the path, and the length of the
+    /// span between the brackets with what hangs outside them ([`Self::fit_scale`]'s first guess
+    /// for Dynamic Text). `None` for other type and for a path with no length.
+    pub path_fill: Option<(f64, f64)>,
     /// Inline graphics, in text order.
     pub inlines: Vec<InlineGlyph>,
     /// List markers, in text order.
@@ -384,6 +389,7 @@ impl Default for TextLayout {
             on_path: false,
             frames: Vec::new(),
             fit_scale: 1.0,
+            path_fill: None,
             inlines: Vec::new(),
             markers: Vec::new(),
         }

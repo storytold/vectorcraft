@@ -2232,6 +2232,8 @@ file-filter	Templates	模板
 	Open…	打开…
 	Optical	视觉
 	Optical Margin Alignment	视觉边界对齐
+	Dynamic Text	动态文本
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
 	Options	选项

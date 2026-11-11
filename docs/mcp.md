@@ -1364,7 +1364,7 @@ These commands refuse a string, a number or another value that is not true or fa
 `clockwise` in `shape.spiral`; `closed` in `shape.arc` and `path.create`; `vertical` and `placeholder` in `text.create`
 and `text.createInPath`; `underline`, `strikethrough`, `allCaps`, `proportionalMetrics`, `tateChuYoko`, `standardVerticalRoman` and `noBreak`
 in `text.setRangeStyle` and `text.setFormat`, which also checks `hyphenate`, `hyphenateCapitalized` and
-`romanHangingPunctuation`; `effective` and `story` in `text.getRange`; `story` in `text.setRangeStyle`; `on` in `type.opticalMarginAlignment`, `type.systemLayout`
+`romanHangingPunctuation`; `effective` and `story` in `text.getRange`; `story` in `text.setRangeStyle`; `on` in `type.opticalMarginAlignment`, `type.dynamicText`, `type.systemLayout`
 and `type.fractionalWidths`; `remove` and `overhang` in `type.ruby`; `expandInstances` in `symbol.delete`; `alt` in
 `symbol.spray` and `symbol.adjust`; `spot` and `global` in `swatch.new` and `swatch.edit`; `unlink` in
 `swatch.delete`; `fromArtwork`, `toGlobal` and `includeTints` in `swatch.newGroup`; `global` and `selection` in
@@ -7210,6 +7210,33 @@ begins or ends, dragging the centre bracket slides the type along its path and, 
 
 ```json
 {"name":"run_command","arguments":{"command":"type.pathOptions","params":{"start":0.25,"end":0.75,"flip":true}}}
+```
+
+## Dynamic Text
+
+`type.dynamicText {on?: bool, ids?}` (Type › Dynamic Text, and the Contextual Task Bar for type on a path) turns
+Dynamic Text on or off for the selected type on a path; without `on` it sets the opposite of the first object's
+setting. With Dynamic Text on, the text spans the stretch between its start and end brackets and its size follows
+the text, growing or shrinking to fill it, and it fits again after each edit to the text and each move of a bracket
+([Dynamic Text overview](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/dynamic-text-overview.html),
+[start and end points](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/reposition-start-and-end-points.html)).
+The rest of this entry is VectorCraft's own rules. The layout scales every character's size, leading, baseline shift
+and tate-chu-yoko offsets by one factor, so runs keep their proportions; Type on a Path Options › Spacing is not
+scaled. The first character's size, in document points, moves in steps of 0.1 pt within 0.1 to 1,296 pt; text that
+still runs past the end bracket at 0.1 pt overflows. Reshaping or scaling the path fits the text again. The stored
+sizes do not change: turning Dynamic Text off writes the sizes the text was drawn at into its characters, so it keeps
+its look, in one undo step. Point type and area type in the selection are left as they are. Type on a path in a
+thread is refused with an error that names it, and the menu item and the task bar item are not offered for it;
+`text.thread.create` and `text.thread.add` turn Dynamic Text off on the frames they thread, at their drawn sizes, and
+list them in `dynamicTextOff`. When every object already has the setting asked for, nothing changes and no undo step
+is recorded. It replies `{on, ids, fitScale}` (the first object's factor, 1 when off), and the menu item is checked
+while the first selected type on a path has it on. `document.inspect` reports `dynamicText` and `fitScale` for type
+on a path. New type and documents from before it have it off, and it is saved only when on. SVG, PDF, EPS and the
+editing data for other apps write the type at its drawn sizes; the editing data does not hold the setting and says
+so in a warning.
+
+```json
+{"name":"run_command","arguments":{"command":"type.dynamicText","params":{"on":true}}}
 ```
 
 ## Paragraph attributes per paragraph

@@ -2326,6 +2326,8 @@ font-technology	Variable	Variables
 	Open…	Ouvrir…
 	Optical	Optique
 	Optical Margin Alignment	Alignement optique des marges
+	Dynamic Text	Texte dynamique
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	le texte curviligne d’un texte lié ne peut pas utiliser le texte dynamique : {frames}
 	Optimize for fast web view	Optimiser pour un affichage web rapide
 	Optimized	Optimisé
 	Options	Options
