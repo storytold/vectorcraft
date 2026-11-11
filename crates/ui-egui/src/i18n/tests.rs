@@ -7,10 +7,7 @@ const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registere
 fn hebrew_locale_file_flow_and_plural_categories() {
     let he = Lang::from_code("he").expect("Hebrew is registered");
     assert_eq!(he.name(), "עברית");
-    assert!(
-        !he.complete_menus(),
-        "the first catalog is intentionally partial"
-    );
+    assert!(!he.complete_menus(), "the first catalog is intentionally partial");
     for tag in ["he", "he-IL", "he_IL.UTF-8", "HE-il", "he-Hebr-IL"] {
         assert_eq!(lang_from_tag(tag), Some(he), "{tag}");
     }
@@ -28,20 +25,28 @@ fn hebrew_locale_file_flow_and_plural_categories() {
     ] {
         assert_eq!(tr(he, english), expected);
     }
-    assert_eq!(
-        tr(he, "untranslated VectorCraft sentinel"),
-        "untranslated VectorCraft sentinel"
-    );
-    assert_eq!(
-        [0, 1, 2, 3, 10, 20, 21].map(he.0.plural),
-        [2, 0, 1, 2, 2, 2, 2]
-    );
+    assert_eq!(tr(he, "untranslated VectorCraft sentinel"), "untranslated VectorCraft sentinel");
+    assert_eq!([0, 1, 2, 3, 10, 20, 21].map(he.0.plural), [2, 0, 1, 2, 2, 2, 2]);
     for (n, expected) in [(0, "0 קבצים"), (1, "1 קובץ"), (2, "2 קבצים"), (21, "21 קבצים")] {
         assert_eq!(trn(he, n, "{n} file", "{n} files"), expected);
     }
     let (rows, errors) = parse_entries(he.0.source);
     assert!(errors.is_empty(), "{errors:?}");
     assert!(rows.len() >= 80, "expected a useful initial file/edit catalog");
+}
+
+#[test]
+fn hebrew_top_level_menus_are_source_linked_and_translated() {
+    let he = Lang::from_code("he").expect("Hebrew registered");
+    let titles: Vec<_> = crate::menus::menu_tree().into_iter().map(|(title, _)| title).filter(|title| *title != "VectorCraft").collect();
+    assert_eq!(titles.len(), 9, "native source menu tree changed");
+    for english in titles {
+        assert_ne!(tr(he, english), english, "untranslated top-level menu: {english}");
+        assert_eq!(tr(Lang::EN, english), english, "English menus must remain unchanged");
+    }
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rows.len() >= 208, "the seven additional menu titles must be registered");
 }
 
 #[test]
@@ -146,7 +151,6 @@ fn hebrew_save_options_dialog_controls_are_translated() {
     assert!(errors.is_empty(), "{errors:?}");
 }
 
-
 /// Native Save PDF and PDF-security controls must be readable in Hebrew, while
 /// preserving their original English source identifiers and the fallback path.
 #[test]
@@ -190,15 +194,8 @@ fn hebrew_save_pdf_options_and_security_controls_are_localized() {
         "Enable text access for screen readers",
         "Files of a PDF standard can't be password-protected.",
     ] {
-        assert!(
-            source.contains(&format!(r#"tl!("{english}")"#)),
-            "source key missing: {english}"
-        );
-        assert_ne!(
-            tr(he, english),
-            english,
-            "Save PDF control untranslated: {english}"
-        );
+        assert!(source.contains(&format!(r#"tl!("{english}")"#)), "source key missing: {english}");
+        assert_ne!(tr(he, english), english, "Save PDF control untranslated: {english}");
     }
     assert_eq!(tr(he, "Save PDF"), "שמירת PDF");
     assert_eq!(tr(he, "Permissions"), "הרשאות");

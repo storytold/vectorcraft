@@ -27,7 +27,12 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     let tree = menu_tree_named(app.session.prefs.font_names_in_english);
     // No application menu in the window (as in Illustrator): the bar starts at File on every
     // platform. The VectorCraft menu stays in the tree: the native Mac bar takes it from there.
-    let tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != "VectorCraft").collect();
+    let mut tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != "VectorCraft").collect();
+    // Hebrew mirrors the in-window menu titles, putting File to the right of Help.
+    // Command identifiers and the shared native menu tree retain their original order.
+    if crate::i18n::current().code() == "he" {
+        tree.reverse();
+    }
     // A menu bar for its layout and menu-button style, but the titles use `Popup::menu` directly:
     // egui 0.37's `MenuButton` opens the title under a resting pointer while another menu is open,
     // and the app switches titles on movement only (`switch_on_hover`, the native behaviour).
