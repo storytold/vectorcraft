@@ -482,7 +482,7 @@ impl FontDb {
     /// Load a system font covering `c` (preferred fallback families first, then any cataloged
     /// file under 40 MB). Returns true if one was loaded. Misses are remembered.
     #[cfg(not(target_arch = "wasm32"))]
-    fn system_fallback(&self, c: char) -> bool {
+    pub(super) fn system_fallback(&self, c: char) -> bool {
         if c.is_control() || c.is_whitespace() {
             return false;
         }
