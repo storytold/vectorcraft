@@ -1,0 +1,21 @@
+[package]
+name = "vectorcraft-cdr"
+description = "Bounded reader for CorelDRAW 5 to 13 drawings: RIFF index, compressed lists, shapes, fills, outlines, pages and layers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Synthetic-file builders for tests and fuzz seeds; not a CorelDRAW writer.
+synth = []
+
+[dependencies]
+flate2 = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+vectorcraft-cdr = { path = ".", features = ["synth"] }

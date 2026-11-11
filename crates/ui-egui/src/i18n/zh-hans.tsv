@@ -4741,6 +4741,17 @@ imageTrace	Outline	轮廓
 @msg	the HEIC or HEIF file can't be read	无法读取 HEIC 或 HEIF 文件
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 文件包含无法读取的图像类型
 @msg	HEIC and HEIF images can't be opened in this build	此版本无法打开 HEIC 和 HEIF 图像
+@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	无法打开 CorelDRAW {version} 绘图：VectorCraft 读取的版本为 5 到 13
+@msg	this CorelDRAW drawing can't be read ({why})	无法读取此 CorelDRAW 绘图 ({why})
+@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	无法打开用 CorelDRAW 14 或更高版本保存的绘图：VectorCraft 读取的版本为 5 到 13
+@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	已略去 VectorCraft 尚不能读取的 CorelDRAW 文本、位图、调和、轮廓图、画笔描边和其他对象
+@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	已略去 CorelDRAW 的渐变、图样、底纹和 PostScript 填充
+@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	VectorCraft 不能读取的 CorelDRAW 颜色模型中的颜色已作为黑色打开
+@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	绘图仅按编号存储的 CorelDRAW 库颜色已作为黑色专色打开
+@msg	CorelDRAW outline arrowheads were left out	已略去 CorelDRAW 轮廓线的箭头
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	已略去绘图中嵌套过深或超出导入限制的部分
+@msg	damaged parts of the drawing were left out	已略去绘图中损坏的部分
+@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	长度超过 163,830 pt 的 CorelDRAW 页面已按该长度打开，其边缘附近的图稿位于画板之外
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
 @msg	zipped 32-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 32 位 PSD 图像数据
 @msg	{depth}-bit PSD files in this colour mode can't be read	无法读取此颜色模式下的 {depth} 位 PSD 文件

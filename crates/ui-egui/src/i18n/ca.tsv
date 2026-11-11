@@ -6535,6 +6535,17 @@ breakText	Glyphs	Glifs
 @msg	the HEIC or HEIF file can't be read	no es pot llegir el fitxer HEIC o HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	el fitxer HEIC o HEIF conté un tipus d'imatge que no es pot llegir
 @msg	HEIC and HEIF images can't be opened in this build	les imatges HEIC i HEIF no es poden obrir en aquesta compilació
+@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	no es poden obrir dibuixos del CorelDRAW {version}: el VectorCraft llegeix les versions 5 a 13
+@msg	this CorelDRAW drawing can't be read ({why})	no es pot llegir aquest dibuix del CorelDRAW ({why})
+@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	no es poden obrir dibuixos desats amb la versió 14 o posterior del CorelDRAW: el VectorCraft llegeix les versions 5 a 13
+@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	s’han omès els textos, els mapes de bits, les fusions, les siluetes, els traços de pinzell i altres objectes del CorelDRAW que el VectorCraft encara no llegeix
+@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	s’han omès els emplenaments degradats, de patró, de textura i PostScript del CorelDRAW
+@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	els colors en models de color del CorelDRAW que el VectorCraft no llegeix s’han obert en negre
+@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	els colors de biblioteca del CorelDRAW que el dibuix desa només pel número s’han obert com a colors directes negres
+@msg	CorelDRAW outline arrowheads were left out	s’han omès les puntes de fletxa dels contorns del CorelDRAW
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	s’han omès les parts del dibuix imbricades massa a fons o fora dels límits d’importació
+@msg	damaged parts of the drawing were left out	s’han omès les parts danyades del dibuix
+@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	les pàgines del CorelDRAW de més de 163.830 pt s’han obert amb aquesta longitud, i el dibuix a prop de les vores queda fora del tauler
 @msg	You must choose a side pattern.	Heu de triar un patró lateral.
 @msg	invalid pattern tile choice	opció de mosaic de patró no vàlida
 @msg	no pattern named `{choice}`	no hi ha cap patró anomenat `{choice}`

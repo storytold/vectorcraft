@@ -1,0 +1,108 @@
+//! What one read may take. The values are VectorCraft's own; wasm32 gets half the memory limits.
+
+use crate::Error;
+
+/// The most a read may take, checked before every allocation and descent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    /// Bytes of input.
+    pub input: usize,
+    /// Bytes inflated from compressed lists, all lists of one file together.
+    pub inflated: usize,
+    /// Nested lists below the file's own. Deeper content is left out with a warning.
+    pub depth: usize,
+    /// Chunks in the index, nested ones included.
+    pub chunks: usize,
+    /// Objects mapped (shapes, groups and guidelines).
+    pub objects: usize,
+    /// Points of all curves together.
+    pub coordinates: usize,
+    /// Arguments of one `loda` record.
+    pub arguments: usize,
+    /// Dashes of one outline.
+    pub dashes: usize,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const MIB: usize = 1 << 20;
+
+impl Default for Limits {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn default() -> Self {
+        Limits {
+            input: 512 * MIB,
+            inflated: 1024 * MIB,
+            depth: 256,
+            chunks: 2_000_000,
+            objects: 1_000_000,
+            coordinates: 16_000_000,
+            arguments: 64,
+            dashes: 250_000,
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn default() -> Self {
+        Limits {
+            input: 256 << 20,
+            inflated: 512 << 20,
+            depth: 256,
+            chunks: 2_000_000,
+            objects: 1_000_000,
+            coordinates: 16_000_000,
+            arguments: 64,
+            dashes: 250_000,
+        }
+    }
+}
+
+/// The running counters of one read against its [`Limits`].
+#[derive(Debug)]
+pub(crate) struct Budget {
+    pub(crate) limits: Limits,
+    inflated: usize,
+    chunks: usize,
+    objects: usize,
+    coordinates: usize,
+}
+
+impl Budget {
+    pub(crate) fn new(limits: Limits) -> Self {
+        Budget { limits, inflated: 0, chunks: 0, objects: 0, coordinates: 0 }
+    }
+
+    /// Bytes an inflate may still produce.
+    pub(crate) fn inflate_left(&self) -> usize {
+        self.limits.inflated.saturating_sub(self.inflated)
+    }
+
+    pub(crate) fn take_inflated(&mut self, n: usize) -> Result<(), Error> {
+        self.inflated = self.inflated.checked_add(n).filter(|&t| t <= self.limits.inflated).ok_or(Error::Limit("inflated size"))?;
+        Ok(())
+    }
+
+    pub(crate) fn take_chunk(&mut self) -> Result<(), Error> {
+        self.chunks += 1;
+        if self.chunks > self.limits.chunks { Err(Error::Limit("chunk count")) } else { Ok(()) }
+    }
+
+    /// One more object, or `false` when the drawing already holds as many as a read maps.
+    pub(crate) fn take_object(&mut self) -> bool {
+        if self.objects >= self.limits.objects {
+            return false;
+        }
+        self.objects += 1;
+        true
+    }
+
+    /// `n` more curve points, or `false` past the limit (nothing is taken then).
+    pub(crate) fn take_coordinates(&mut self, n: usize) -> bool {
+        match self.coordinates.checked_add(n).filter(|&t| t <= self.limits.coordinates) {
+            Some(t) => {
+                self.coordinates = t;
+                true
+            }
+            None => false,
+        }
+    }
+}

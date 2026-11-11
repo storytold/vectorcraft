@@ -7587,6 +7587,17 @@ antiAlias	Sharp	शार्प
 @msg	the job would print more than {_1} pages	नौकरी {_1} पृष्ठों से अधिक प्रिंट करेगी
 @msg	the job would print more than {MAX_PAGES} pages	इस जॉब में {MAX_PAGES} से अधिक पेज प्रिंट होंगे
 @msg	the JPEG 2000 file can't be read	JPEG 2000 फ़ाइल पढ़ा नहीं जा सकता
+@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	CorelDRAW {version} की ड्रॉइंग नहीं खोली जा सकतीं: VectorCraft संस्करण 5 से 13 तक पढ़ता है
+@msg	this CorelDRAW drawing can't be read ({why})	इस CorelDRAW ड्रॉइंग को पढ़ा नहीं जा सकता ({why})
+@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	CorelDRAW 14 या बाद के संस्करण में सहेजी गई ड्रॉइंग नहीं खोली जा सकतीं: VectorCraft संस्करण 5 से 13 तक पढ़ता है
+@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CorelDRAW के टेक्स्ट, बिटमैप, ब्लेंड, कंटूर, ब्रश स्ट्रोक और अन्य ऑब्जेक्ट, जिन्हें VectorCraft अभी नहीं पढ़ता, छोड़ दिए गए
+@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	CorelDRAW के फ़ाउंटेन, पैटर्न, टेक्सचर और PostScript फ़िल छोड़ दिए गए
+@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	जिन CorelDRAW रंग मॉडलों को VectorCraft नहीं पढ़ता, उनके रंग काले के रूप में खोले गए
+@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	CorelDRAW लाइब्रेरी के जिन रंगों को ड्रॉइंग केवल संख्या से सहेजती है, वे काले स्पॉट रंगों के रूप में खोले गए
+@msg	CorelDRAW outline arrowheads were left out	CorelDRAW आउटलाइन के तीर-शीर्ष छोड़ दिए गए
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	ड्रॉइंग के बहुत गहराई तक नेस्ट किए गए या आयात सीमाओं से परे के हिस्से छोड़ दिए गए
+@msg	damaged parts of the drawing were left out	ड्रॉइंग के क्षतिग्रस्त हिस्से छोड़ दिए गए
+@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt से लंबे CorelDRAW पेज उसी लंबाई पर खोले गए, और उनके किनारों के पास का आर्ट आर्टबोर्ड के बाहर है
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 फ़ाइल में एक unसमर्थित रंग स्थान या JPX सामग्री है
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	वेक्टर क्रेफ्ट की अंतिम शुरुआत अपनी विंडो दिखाई देने से पहले {name} पर समाप्त हुई, इसलिए यह {summary} पर शुरू हुआ। उस ग्राफिक्स प्रोसेसर को फिर से आज़माने के लिए, वरीयताओं को बदलें › प्रदर्शन › ग्राफिक्स प्रोसेसर या WGPU_BACKEND सेट के साथ शुरू होता है।
 @msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	जब यह ग्राफिक्स प्रोसेसर को सूचीबद्ध करता है, तो यह केवल ओपनजीएल के साथ {summary} पर शुरू हुआ। फिर से अन्य ग्राफिक्स बैकेंड की कोशिश करने के लिए, वरीयताओं को बदलें › प्रदर्शन › ग्राफिक्स प्रोसेसर या WGPU_BACKEND सेट के साथ शुरू होता है।

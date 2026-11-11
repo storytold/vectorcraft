@@ -4980,6 +4980,17 @@ axis	Both	Обидві
 @msg	the HEIC or HEIF file can't be read	не вдається прочитати файл HEIC або HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC або HEIF містить зображення такого типу, яке не вдається прочитати
 @msg	HEIC and HEIF images can't be opened in this build	зображення HEIC і HEIF не можна відкрити в цій збірці
+@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	не вдається відкрити малюнки CorelDRAW {version}: VectorCraft читає версії з 5 по 13
+@msg	this CorelDRAW drawing can't be read ({why})	не вдається прочитати цей малюнок CorelDRAW ({why})
+@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	не вдається відкрити малюнки, збережені в CorelDRAW 14 або новішій версії: VectorCraft читає версії з 5 по 13
+@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	текст, растрові зображення, перетікання, контури, мазки пензля та інші об’єкти CorelDRAW, які VectorCraft поки не читає, було пропущено
+@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	градієнтні, візерункові, текстурні та PostScript-заливки CorelDRAW було пропущено
+@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	кольори в колірних моделях CorelDRAW, які VectorCraft не читає, відкрито як чорні
+@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	бібліотечні кольори CorelDRAW, які малюнок зберігає лише за номером, відкрито як чорні плашкові кольори
+@msg	CorelDRAW outline arrowheads were left out	наконечники стрілок абрисів CorelDRAW було пропущено
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	частини малюнка із надто глибоким вкладенням або поза межами обмежень імпорту було пропущено
+@msg	damaged parts of the drawing were left out	пошкоджені частини малюнка було пропущено
+@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	сторінки CorelDRAW, довші за 163 830 pt, відкрито з цією довжиною, і графіка біля їхніх країв лежить поза монтажною областю
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
 @msg	zipped 32-bit PSD image data with prediction can't be read	32-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються

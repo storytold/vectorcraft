@@ -5235,6 +5235,17 @@ imageTrace	Outline	Obrys
 @msg	the HEIC or HEIF file can't be read	soubor HEIC nebo HEIF nelze přečíst
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	soubor HEIC nebo HEIF obsahuje druh obrázku, který nelze přečíst
 @msg	HEIC and HEIF images can't be opened in this build	obrázky HEIC a HEIF nelze v tomto sestavení otevřít
+@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	výkresy CorelDRAW {version} nelze otevřít: VectorCraft čte verze 5 až 13
+@msg	this CorelDRAW drawing can't be read ({why})	tento výkres CorelDRAW nelze přečíst ({why})
+@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	výkresy uložené v CorelDRAW 14 nebo novějším nelze otevřít: VectorCraft čte verze 5 až 13
+@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	texty, bitmapy, prolnutí, kontury, tahy štětcem a další objekty CorelDRAW, které VectorCraft zatím nečte, byly vynechány
+@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	přechodové, vzorkové, texturové a PostScriptové výplně CorelDRAW byly vynechány
+@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	barvy v barevných modelech CorelDRAW, které VectorCraft nečte, byly otevřeny jako černé
+@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	knihovní barvy CorelDRAW, které výkres ukládá jen číslem, byly otevřeny jako černé přímé barvy
+@msg	CorelDRAW outline arrowheads were left out	šipky na obrysových čarách CorelDRAW byly vynechány
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	části výkresu vnořené příliš hluboko nebo za hranicemi importu byly vynechány
+@msg	damaged parts of the drawing were left out	poškozené části výkresu byly vynechány
+@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	stránky CorelDRAW delší než 163 830 pt byly otevřeny v této délce a kresba u jejich okrajů leží mimo pracovní plochu
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD je příliš velký na přečtení ({_1} × {_2} obrazových bodů)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zazipovaná 32bitová obrazová data PSD s predikcí nelze přečíst
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}bitové soubory PSD v tomto barevném režimu nelze přečíst

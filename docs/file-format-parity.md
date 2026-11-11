@@ -17,9 +17,9 @@ from the public specifications, and users' own `.ai` files are used locally only
 
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
-| Formats opened or placed | ~30 | 30 | missing: FreeHand, CorelDRAW, DWG, PICT, PS |
+| Formats opened or placed | ~30 | 31 | missing: FreeHand, DWG, PICT, PS; CorelDRAW versions 5 to 13 only |
 | Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, artboards) or as legacy version 7 (layers and groups, one artboard per file) |
-| Formats opened or placed | ~30 | 29 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, PS |
+| Formats opened or placed | ~30 | 30 | missing: FreeHand, DWG, HEIC/HEIF, PICT, PS; CorelDRAW versions 5 to 13 only |
 | Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, images, type, symbols, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 18 | missing: DWG; extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
@@ -304,7 +304,7 @@ Names in the editing data that aren't UTF-8 (layers, objects, artboards, colors,
 | PICT | open, place (legacy) | no | no | rarely used |
 | Pixar PXR | open, place (legacy) | yes (any set of the R, G, B and A channels in 8 or 12 bits, dumped or run-length encoded, in tiles; R alone is gray; alpha matted to black or unassociated) | no | recognized by its magic number; 12-bit samples are clamped to 0.0 to 1.0; null tiles are transparent with A and black without; the offsets aren't read, and the image takes the default resolution; a file cut short, with header values or packets the format doesn't define, or past the pixel allowance is refused with a message; tested on synthetic files only; tests in `crates/engine/src/cmd/fileio/tests_pxrread.rs` and `crates/engine/tests/import_fuzz.rs` |
 | FreeHand `.fh*` | open (legacy) | no | no | |
-| CorelDRAW `.cdr` | open | no | no | |
+| CorelDRAW `.cdr` | open | yes (versions 5 to 13: pages, layers, guidelines, groups, curves, rectangles, ellipses, arcs, polygons, uniform fills and outlines; text, bitmaps, blends, contours, brush strokes, fountain, pattern, texture and PostScript fills and arrowheads are left out with a warning; the ZIP files of versions 14 on are refused) | no | `.cdt` templates open as new untitled documents; File › Place reads both; record layouts and their sources in `crates/cdr/PROVENANCE.md`; synthetic test files only; tests in `crates/cdr/tests/read.rs`, `crates/engine/src/cmd/fileio/tests_cdr.rs` and `crates/engine/tests/import_fuzz.rs` |
 | Text `.txt` | place, export | place (Text Import Options) | yes | |
 | RTF `.rtf` | place | place (area type with fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests/textimport.rs`, `place/rtf.rs`; fuzzed (`text_import_fuzz.rs`); `\'hh` bytes read as Windows-1252 or Mac Roman only |
 | Word `.docx` | place | place (area type with the document's styles and its fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests/textimport.rs`, `place/docx.rs`; fuzzed (`text_import_fuzz.rs`); list numbers, pictures and text boxes are left out |

@@ -90,6 +90,10 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if vectorcraft_affinity::is_affinity(bytes) {
         return format("affinity");
     }
+    if super::cdr::is_cdr(bytes) {
+        // A template keeps its meaning from the extension.
+        return by_name.filter(|f| f.id == "cdt").or_else(|| format("cdr"));
+    }
     if vectorcraft_format::sniff(bytes) {
         // A template keeps its meaning from the extension, like .ait.
         return by_name.filter(|f| f.id == "template").or_else(|| format("vectorcraft"));
@@ -492,6 +496,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
         }
+        "cdr" | "cdt" => {
+            let (doc, warnings) = super::cdr::import(bytes)?;
+            (doc, warnings, false)
+        }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
@@ -647,9 +655,9 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
         .cloned()
         .collect();
     let source_path = path.clone().filter(|_| !losses.is_empty());
-    // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
-    // document.
-    let template = as_template || doc.template || matches!(format.id, "ait" | "template");
+    // A template (saved by Save as Template, or an .ait, .vctemplate or .cdt file) opens as a new
+    // untitled document.
+    let template = as_template || doc.template || matches!(format.id, "ait" | "template" | "cdt");
     if template {
         doc.template = false;
         doc.title = s.next_untitled();

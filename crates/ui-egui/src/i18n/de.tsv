@@ -4978,6 +4978,17 @@ theme	Appearance	Erscheinungsbild
 @msg	the HEIC or HEIF file can't be read	die HEIC- oder HEIF-Datei kann nicht gelesen werden
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	die HEIC- oder HEIF-Datei enthält eine Bildart, die nicht gelesen werden kann
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- und HEIF-Bilder können in diesem Build nicht geöffnet werden
+@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	Zeichnungen aus CorelDRAW {version} können nicht geöffnet werden: VectorCraft liest die Versionen 5 bis 13
+@msg	this CorelDRAW drawing can't be read ({why})	diese CorelDRAW-Zeichnung kann nicht gelesen werden ({why})
+@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	Zeichnungen, die mit CorelDRAW 14 oder neuer gespeichert wurden, können nicht geöffnet werden: VectorCraft liest die Versionen 5 bis 13
+@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	Texte, Bitmaps, Überblendungen, Konturen, Pinselstriche und andere CorelDRAW-Objekte, die VectorCraft noch nicht liest, wurden ausgelassen
+@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	CorelDRAW-Verlaufs-, Muster-, Textur- und PostScript-Füllungen wurden ausgelassen
+@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	Farben in CorelDRAW-Farbmodellen, die VectorCraft nicht liest, wurden als Schwarz geöffnet
+@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	CorelDRAW-Bibliotheksfarben, die die Zeichnung nur als Nummer speichert, wurden als schwarze Volltonfarben geöffnet
+@msg	CorelDRAW outline arrowheads were left out	Pfeilspitzen an CorelDRAW-Umrisslinien wurden ausgelassen
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	Teile der Zeichnung, die zu tief verschachtelt sind oder die Importgrenzen überschreiten, wurden ausgelassen
+@msg	damaged parts of the drawing were left out	beschädigte Teile der Zeichnung wurden ausgelassen
+@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CorelDRAW-Seiten, die länger als 163.830 pt sind, wurden in dieser Länge geöffnet, und Grafik nahe ihren Rändern liegt außerhalb der Zeichenfläche
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden

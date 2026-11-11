@@ -4996,6 +4996,17 @@ axis	Both	Entrambi
 @msg	the HEIC or HEIF file can't be read	impossibile leggere il file HEIC o HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	il file HEIC o HEIF contiene un tipo di immagine che non può essere letto
 @msg	HEIC and HEIF images can't be opened in this build	le immagini HEIC e HEIF non possono essere aperte in questa build
+@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	impossibile aprire i disegni di CorelDRAW {version}: VectorCraft legge le versioni da 5 a 13
+@msg	this CorelDRAW drawing can't be read ({why})	impossibile leggere questo disegno di CorelDRAW ({why})
+@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	impossibile aprire i disegni salvati con CorelDRAW 14 o successivo: VectorCraft legge le versioni da 5 a 13
+@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	testi, bitmap, fusioni, contorni progressivi, tratti di pennello e altri oggetti di CorelDRAW che VectorCraft non legge ancora sono stati omessi
+@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	i riempimenti sfumati, a motivo, a texture e PostScript di CorelDRAW sono stati omessi
+@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	i colori in modelli di colore di CorelDRAW che VectorCraft non legge sono stati aperti in nero
+@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	i colori di libreria di CorelDRAW che il disegno salva solo per numero sono stati aperti come colori spot neri
+@msg	CorelDRAW outline arrowheads were left out	le punte di freccia dei contorni di CorelDRAW sono state omesse
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	le parti del disegno annidate troppo in profondità o oltre i limiti di importazione sono state omesse
+@msg	damaged parts of the drawing were left out	le parti danneggiate del disegno sono state omesse
+@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	le pagine di CorelDRAW più lunghe di 163.830 pt sono state aperte con quella lunghezza, e la grafica vicina ai loro bordi si trova fuori dalla tavola da disegno
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'immagine PSD è troppo grande per essere letta ({_1} × {_2} pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	i dati immagine PSD a 32 bit compressi ZIP con previsione non possono essere letti
 @msg	{depth}-bit PSD files in this colour mode can't be read	i file PSD a {depth} bit in questo metodo colore non possono essere letti

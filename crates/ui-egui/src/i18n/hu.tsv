@@ -5470,6 +5470,17 @@ imageTrace	Outline	Körvonal
 @msg	the HEIC or HEIF file can't be read	a HEIC- vagy HEIF-fájl nem olvasható
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	a HEIC- vagy HEIF-fájl olyan képtípust tartalmaz, amely nem olvasható
 @msg	HEIC and HEIF images can't be opened in this build	a HEIC- és HEIF-képek ebben a buildben nem nyithatók meg
+@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	a CorelDRAW {version} rajzai nem nyithatók meg; a VectorCraft ezeket a verziókat olvassa: 5–13
+@msg	this CorelDRAW drawing can't be read ({why})	ez a CorelDRAW-rajz nem olvasható ({why})
+@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	a CorelDRAW 14-es vagy újabb verziójával mentett rajzok nem nyithatók meg; a VectorCraft ezeket a verziókat olvassa: 5–13
+@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	kimaradtak a CorelDRAW szövegei, bitképei, összemosásai, kontúrjai, ecsetvonásai és egyéb objektumai, amelyeket a VectorCraft még nem olvas
+@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	kimaradtak a CorelDRAW színátmenetes, mintázatos, textúrás és PostScript-kitöltései
+@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	a CorelDRAW olyan színmodelljeiben megadott színek, amelyeket a VectorCraft nem olvas, feketeként nyíltak meg
+@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	a CorelDRAW könyvtári színei, amelyeket a rajz csak számként tárol, fekete direktszínként nyíltak meg
+@msg	CorelDRAW outline arrowheads were left out	kimaradtak a CorelDRAW körvonalainak nyílhegyei
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	kimaradtak a rajz túl mélyen egymásba ágyazott vagy az importálási korlátokon túli részei
+@msg	damaged parts of the drawing were left out	kimaradtak a rajz sérült részei
+@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	a 163 830 pt-nál hosszabb CorelDRAW-oldalak ekkora hosszal nyíltak meg, és a szélük közelében lévő grafika a rajztáblán kívül esik
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a PSD-kép túl nagy a beolvasáshoz ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	a PDF mentése párbeszédablak nem nyílt meg
 @msg	the scale is not a usable number	a méretarány nem használható szám

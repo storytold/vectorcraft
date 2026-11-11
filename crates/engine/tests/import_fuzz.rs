@@ -6,7 +6,8 @@
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
-//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
+//! CorelDRAW drawings (mutated and cut short, plain and compressed, opened and placed), nor the
 //! font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
@@ -265,6 +266,40 @@ proptest! {
             assert!(no_panic(s.execute("file.place.queue", &json!({"files":[p]}))).is_err());
         });
         prop_assert!(r.is_ok(), "Affinity placement panicked: {:?}", r.err());
+    }
+}
+
+// ---------- CorelDRAW drawings ----------
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn cdr_mutated_drawings_render_and_export(
+        version in prop::sample::select(vec![500u16, 600, 700, 800, 900, 1000, 1100, 1200, 1300]),
+        compress: bool,
+        cut in 12usize..8192,
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = vectorcraft_cdr::synth::sample(version, compress && version >= 700);
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        bytes.truncate(cut);
+        survive("CorelDRAW drawing", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn cdr_garbage_opens_and_places_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = b"RIFF\0\0\0\0CDRB".to_vec();
+        bytes.extend(tail);
+        survive("CorelDRAW garbage", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CorelDRAW placement panicked: {:?}", r.err());
     }
 }
 
