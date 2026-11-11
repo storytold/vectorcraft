@@ -2,7 +2,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-10 · **Change:** minor (docs tidy-up, no content change: stray notes at the top moved into the revision table; scores and estimates unchanged; previously minor: Raster effects 85% → 88%, gallery thumbnails and in-dialog preview in; headline numbers unchanged; Symbols area ~87% → ~88%: dynamic instance parts take opacity, blend, gradient and pattern on the canvas; G5 docs sync for Overlap and Pattern auto corners; previously minor: Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-11 · **Change:** minor (Gujarati (`gu`): 4,235-row machine-assisted interface catalog, desktop font fallback; messages and native review pending; docs tidy-up, no content change: stray notes at the top moved into the revision table; scores and estimates unchanged; previously minor: Raster effects 85% → 88%, gallery thumbnails and in-dialog preview in; headline numbers unchanged; Symbols area ~87% → ~88%: dynamic instance parts take opacity, blend, gradient and pattern on the canvas; G5 docs sync for Overlap and Pattern auto corners; previously minor: Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -96,6 +96,7 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Simplified Chinese | `zh-hans` | partial (messages in English) | 85% |
 | Spanish | `es` | full | 100% |
 | Hindi | `hi` | catalog complete; machine-assisted draft, native review pending | complete under the scanner |
+| Gujarati | `gu` | catalog of 4,235 interface strings; machine-assisted draft, native review pending | menus and dialogs; status messages not yet |
 | Arabic | `ar` | none (no right-to-left interface) | 0% |
 | French | `fr` | full | 100% |
 | Portuguese (Brazil) | `pt-br` | full | 100% |
@@ -219,6 +220,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 | 2026-11-03 | minor | UI: Window → Help Bar toggles the tool-help strip separately from the status bar and saves visibility with workspaces. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
+| 2026-11-11 | minor | Gujarati (`gu`): 4,235-row machine-assisted interface catalog, one/other plurals, desktop Gujarati font fallback; messages not yet translated; native review pending |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | Progress log row for the Type Tools add-on's Release Type on a Path (#5532); headline numbers unchanged. |
 | 2026-11-03 | minor | Progress log row for the Type Tools add-on's Text Tweaker (#4924); headline numbers unchanged. |

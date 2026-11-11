@@ -4,6 +4,17 @@ use super::*;
 const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registered");
 
 #[test]
+fn gujarati_resolves_locales_and_uses_one_other_plurals() {
+    let gu = Lang::from_code("gu").expect("gu registered");
+    for tag in ["gu", "gu-IN", "gu_IN.UTF-8", "GU-in", "gu-Gujr-IN"] {
+        assert_eq!(lang_from_tag(tag), Some(gu), "{tag}");
+    }
+    assert_eq!(gu.name(), "ગુજરાતી");
+    assert_eq!([0, 1, 2, 21].map(gu.0.plural), [1, 0, 1, 1]);
+    assert_eq!(tr(gu, "Save"), "સાચવો");
+}
+
+#[test]
 fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     let hi = Lang::from_code("hi").expect("hi registered");
     for tag in ["hi", "hi-IN", "hi_IN.UTF-8", "HI-in", "hi-Deva-IN"] {
@@ -461,6 +472,10 @@ fn is_devanagari(c: char) -> bool {
     matches!(c as u32, 0x0900..=0x097F | 0x1CD0..=0x1CFF | 0xA8E0..=0xA8FF)
 }
 
+fn is_gujarati(c: char) -> bool {
+    matches!(c as u32, 0x0A80..=0x0AFF)
+}
+
 /// The UI fonts draw every character the catalogs use, in every family the UI draws text with
 /// (the web build has no system fonts to fall back to). Chinese and Japanese characters come from
 /// the craft-fonts build input, which is optional: without it they are left to the installed
@@ -474,6 +489,7 @@ fn bundled_fonts_cover_the_catalogs() {
     let japanese_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_japanese());
     let georgian_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_georgian());
     let devanagari_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Deva"));
+    let gujarati_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Gujr"));
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -497,6 +513,7 @@ fn bundled_fonts_cover_the_catalogs() {
                         && (cjk_checked || !is_cjk(*c))
                         && (georgian_ui_font || !is_georgian(*c))
                         && (devanagari_ui_font || !is_devanagari(*c))
+                        && (gujarati_ui_font || !is_gujarati(*c))
                 })
                 .collect();
             for family in &families {
