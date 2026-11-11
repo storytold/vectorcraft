@@ -178,6 +178,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
+    BuiltinBrushLibrary { id: "impact-bursts", name: "Impact Bursts", make: impact_bursts },
 ];
 
 /// Built-in library `id`, made once.
@@ -710,6 +711,69 @@ pub(crate) fn dry_media() -> BrushLibrary {
         art("Charcoal Dust", dust, Colorization::Tints),
     ];
     built("Dry Media", Document::new(100.0, 100.0), brushes)
+
+/// Impact Bursts: art brushes for hit sparks, shocks and crack strokes (original game VFX art).
+fn impact_bursts() -> BrushLibrary {
+    let star = group(vec![
+        black(polygon(&[(0.0, 0.0), (100.0, -8.0), (88.0, 0.0), (100.0, 8.0)])),
+        black(polygon(&[(12.0, 0.0), (70.0, -14.0), (62.0, 0.0), (70.0, 14.0)])),
+        black(polygon(&[(20.0, 0.0), (48.0, -18.0), (42.0, 0.0), (48.0, 18.0)])),
+        black(polygon(&[(28.0, 0.0), (40.0, -10.0), (36.0, 0.0), (40.0, 10.0)])),
+    ]);
+    let ring_shock =
+        group(vec![ring(Point::new(50.0, 0.0), 18.0, 14.0), ring(Point::new(50.0, 0.0), 28.0, 25.0), ring(Point::new(50.0, 0.0), 38.0, 36.0)]);
+    let slash = {
+        let n = 40;
+        let half = |x: f64| {
+            let t = x / 100.0;
+            let arch = 10.0 * (t * std::f64::consts::PI).sin();
+            1.4 + 2.2 * (1.0 - (t - 0.5).abs() * 2.0).max(0.0) + arch * 0.05
+        };
+        let mid = |x: f64| 8.0 * ((x / 100.0) * std::f64::consts::PI).sin() - 4.0;
+        let xs = |i: usize| 100.0 * i as f64 / n as f64;
+        let mut pts: Vec<Point> = (0..=n).map(xs).map(|x| Point::new(x, mid(x) - half(x))).collect();
+        pts.extend((0..n).rev().map(xs).map(|x| Point::new(x, mid(x) + half(x))));
+        PathData::single(SubPath::polyline(&pts, true))
+    };
+    let spark_fan = group(vec![
+        black(polygon(&[(0.0, 0.0), (55.0, -16.0), (48.0, -12.0)])),
+        black(polygon(&[(0.0, 0.0), (70.0, -6.0), (62.0, -2.0)])),
+        black(polygon(&[(0.0, 0.0), (100.0, 0.0), (90.0, 2.0)])),
+        black(polygon(&[(0.0, 0.0), (70.0, 6.0), (62.0, 2.0)])),
+        black(polygon(&[(0.0, 0.0), (55.0, 16.0), (48.0, 12.0)])),
+        black(polygon(&[(0.0, 0.0), (35.0, -10.0), (30.0, -6.0)])),
+        black(polygon(&[(0.0, 0.0), (35.0, 10.0), (30.0, 6.0)])),
+    ]);
+    let debris = group(vec![
+        black(shapes::rectangle(Rect::new(4.0, -3.0, 12.0, 1.0))),
+        black(polygon(&[(18.0, 2.0), (28.0, -2.0), (30.0, 4.0)])),
+        black(shapes::rectangle(Rect::new(36.0, -4.0, 44.0, -1.0))),
+        black(polygon(&[(50.0, 1.0), (58.0, 5.0), (62.0, -2.0)])),
+        black(shapes::rectangle(Rect::new(68.0, -2.0, 78.0, 2.0))),
+        black(polygon(&[(82.0, -4.0), (90.0, -1.0), (88.0, 3.0)])),
+        black(shapes::rectangle(Rect::new(92.0, 0.0, 100.0, 3.0))),
+    ]);
+    let crack = band(100.0, 1.4, 48, |x| {
+        let t = (x / 8.0).floor();
+        let local = (x / 8.0) - t;
+        let amp = if (t as i32) % 3 == 0 {
+            5.0
+        } else if (t as i32) % 3 == 1 {
+            -3.5
+        } else {
+            2.0
+        };
+        if (t as i32) % 2 == 0 { amp * local } else { amp * (1.0 - local) }
+    });
+    let brushes = vec![
+        art("Star Burst", star, Colorization::Tints),
+        art("Ring Shock", ring_shock, Colorization::Tints),
+        art("Slash Arc", black(slash), Colorization::Tints),
+        art("Spark Fan", spark_fan, Colorization::Tints),
+        art("Debris Spray", debris, Colorization::Tints),
+        art("Crack Line", black(crack), Colorization::Tints),
+    ];
+    built("Impact Bursts", Document::new(100.0, 100.0), brushes)
 }
 
 // ---------- commands ----------
