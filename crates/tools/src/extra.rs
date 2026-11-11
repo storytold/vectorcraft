@@ -402,11 +402,8 @@ impl ReshapeTool {
     /// `path.reshape`'s params for `press` dragged by `d`.
     fn params(cx: &ToolContext, press: &ReshapePress, d: Vec2) -> Value {
         let others: Vec<[usize; 2]> = press.others.iter().map(|&((si, ai), _)| [si, ai]).collect();
-        let mut v = json!({ "id": press.id.0, "x": press.at.x, "y": press.at.y, "dx": d.x, "dy": d.y, "tol": cx.tol(4.0) });
-        if !others.is_empty() {
-            v["focal"] = json!(others);
-        }
-        v
+        // `focal` is sent when empty too: without it, `path.reshape` follows the earlier rule.
+        json!({ "id": press.id.0, "x": press.at.x, "y": press.at.y, "dx": d.x, "dy": d.y, "tol": cx.tol(4.0), "focal": others })
     }
 }
 

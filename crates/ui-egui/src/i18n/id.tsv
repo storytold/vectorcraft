@@ -2102,6 +2102,8 @@ digits	Malayalam	Malayalam
 	Green	Hijau
 	Shifts the tints of global and spot colors; other colors stay.	Menggeser tint warna global dan warna spot; warna lainnya tetap.
 	Tint	Tint
+	Fill Tint	Tint isian
+	Stroke Tint	Tint stroke
 	Color Guide Options	Opsi panduan warna
 	Less	Lebih sedikit
 	Steps:	Langkah:
@@ -5340,6 +5342,7 @@ mark-style	Japanese	Jepang
 @msg	Invalid drawing scale	Skala gambar tidak valid
 @msg	Invalid real scale	Skala sebenarnya tidak valid
 @msg	Measured anchor no longer exists	Titik jangkar yang diukur sudah tidak ada
+@msg	Invalid measured point	Titik yang diukur tidak valid
 @msg	Measured segment no longer exists	Segmen yang diukur sudah tidak ada
 @msg	Non-finite dimension	Dimensi bukan bilangan berhingga
 @msg	Only linear dimensions are horizontal or vertical	Hanya dimensi linear yang horizontal atau vertikal

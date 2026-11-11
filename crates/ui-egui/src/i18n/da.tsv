@@ -2102,6 +2102,8 @@ digits	Malayalam	Malayalam
 	Green	Grøn
 	Shifts the tints of global and spot colors; other colors stay.	Flytter nuancerne af globale farver og spotfarver; andre farver forbliver uændrede.
 	Tint	Nuance
+	Fill Tint	Fyldnuance
+	Stroke Tint	Stregnuance
 	Color Guide Options	Indstillinger for farveguide
 	Less	Mindre
 	Steps:	Trin:
@@ -5340,6 +5342,7 @@ mark-style	Japanese	Japansk
 @msg	Invalid drawing scale	Ugyldig tegningsmålestok
 @msg	Invalid real scale	Ugyldig virkelig målestok
 @msg	Measured anchor no longer exists	Det målte ankerpunkt findes ikke længere
+@msg	Invalid measured point	Ugyldigt målt punkt
 @msg	Measured segment no longer exists	Det målte segment findes ikke længere
 @msg	Non-finite dimension	Ikke-endeligt mål
 @msg	Only linear dimensions are horizontal or vertical	Kun lineære mål er vandrette eller lodrette

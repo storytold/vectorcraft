@@ -264,7 +264,8 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
         "v_scale" => tl!("Vertical Scale"),
         "baseline_shift" => tl!("Baseline Shift"),
         "rotation" => tl!("Character Rotation"),
-        "fill_tint" | "stroke_tint" => tl!("Tint"),
+        "fill_tint" => tl!("Fill Tint"),
+        "stroke_tint" => tl!("Stroke Tint"),
         "stroke_width" => tl!("Weight"),
         _ => return Err("unknown character style number field".into()),
     };
@@ -826,19 +827,19 @@ fn paint_choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
 /// the stroke Weight and Overprint Fill and Overprint Stroke, each unset or set.
 pub(crate) fn color_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("character-style-color").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        for (key, caption) in [("fill", tl!("Fill")), ("stroke", tl!("Stroke"))] {
+        for (key, caption, tint_name) in [("fill", tl!("Fill"), tl!("Fill Tint")), ("stroke", tl!("Stroke"), tl!("Stroke Tint"))] {
             let row = ui.label(caption);
             ui.label_inputs_by(row.id, |ui| paint_choice(ui, d, key));
             ui.end_row();
             let tint_key = format!("{key}_tint");
-            let row = ui.label(tl!("Tint"));
+            ui.label(tl!("Tint"));
             if d.fields.get(&tint_key).is_none_or(Value::is_null) {
                 d.fields.insert(tint_key.clone(), json!(""));
             }
             let linked = d.fields.get(key).and_then(|p| p.get("swatch")).is_some_and(Value::is_string);
             ui.add_enabled_ui(linked, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label_inputs_by(row.id, |ui| form::text(ui, d, &tint_key, 160.0));
+                    form::text_named(ui, d, &tint_key, tint_name, 160.0);
                     ui.label("%");
                 });
             });
@@ -1686,8 +1687,8 @@ mod tests {
     fn color_tint_and_weight_outside_their_limits_are_errors() {
         let linked = json!({"type": "solid", "color": {"model": "gray", "k": 0.5}, "swatch": "Ink"});
         for (key, value, message) in [
-            ("fill_tint", "150", "Tint must be a number from 0 to 100"),
-            ("stroke_tint", "-1", "Tint must be a number from 0 to 100"),
+            ("fill_tint", "150", "Fill Tint must be a number from 0 to 100"),
+            ("stroke_tint", "-1", "Stroke Tint must be a number from 0 to 100"),
             ("stroke_width", "-1", "Weight must be a number from 0 to 4000000"),
             ("stroke_width", "thick", "Weight must be a number"),
         ] {
@@ -1927,6 +1928,46 @@ mod tests {
                 h.run_steps(4);
                 assert!(h.unnamed_widgets().is_empty(), "new {new_style}, {section}: {:?}", h.unnamed_widgets());
             }
+        }
+    }
+
+    #[test]
+    fn fill_and_stroke_tint_fields_have_distinct_names() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        for new_style in [false, true] {
+            let mut app = app();
+            app.run("swatch.new", json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
+            if new_style {
+                app.run("ui.newCharStyle", json!({})).unwrap();
+            } else {
+                app.run("charStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+                open(&mut app, "Body").unwrap();
+            }
+            let brand = json!(app.session.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap());
+            {
+                let d = app.ui.dialog.as_mut().unwrap();
+                d.fields.insert("section".into(), json!("color"));
+                d.fields.insert("fill".into(), brand.clone());
+                d.fields.insert("stroke".into(), brand);
+            }
+            let mut fonts = false;
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+                move |ui, app: &mut VectorcraftApp| {
+                    if !std::mem::replace(&mut fonts, true) {
+                        crate::theme::install_fonts(ui.ctx());
+                        return;
+                    }
+                    super::super::show(app, ui.ctx());
+                },
+                app,
+            );
+            h.run_steps(4);
+            for name in ["Fill Tint", "Stroke Tint"] {
+                let field = h.get_by_role_and_label(Role::TextInput, name);
+                assert!(!field.accesskit_node().is_disabled(), "new {new_style}: {name} is enabled for a linked swatch");
+            }
+            assert!(h.query_by_role_and_label(Role::TextInput, "Tint").is_none(), "new {new_style}: a field is named only Tint");
         }
     }
 

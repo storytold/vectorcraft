@@ -4864,6 +4864,8 @@ antiAlias	Sharp	शार्प
 	Tilt	झुकाव
 	Time (hhmmss)	समय (hhmms)
 	Tint	टिंट
+	Fill Tint	फ़िल टिंट
+	Stroke Tint	स्ट्रोक टिंट
 	Tint Reduction	टिंट में कमी
 	Tints	टिंट्स
 	Tints and Shades	टिंट्स और शेड्स
@@ -6634,6 +6636,7 @@ antiAlias	Sharp	शार्प
 @msg	matrix must be finite and invertible, depth finite	matrix: मैट्रिक्स को परिमित और उलटा, गहराई परिमित होना चाहिए
 @msg	matte: {e}	मैट: {e}
 @msg	Measured anchor no longer exists	मापने वाला एंकर अब मौजूद नहीं है
+@msg	Invalid measured point	मापा गया बिंदु अमान्य है
 @msg	Measured segment no longer exists	मापदंड अब मौजूद नहीं है
 @msg	member is for order front, forward, backward or back	member केवल order front, forward, backward या back के लिए है
 @msg	memory budget (the selection is too large to hand over)	स्मृति बजट (चुनाव बहुत बड़ा है)

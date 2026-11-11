@@ -3901,6 +3901,8 @@ file-filter	Templates	テンプレート
 	Text Wrap Options	テキストの回り込みオプション
 	Tile Full Pages	ページ全体を分割
 	Tint	濃度
+	Fill Tint	濃度 (塗り)
+	Stroke Tint	濃度 (線)
 	Tip extends past the end point	先端をパスの端点より先に伸ばす
 	Tip on the end point	先端をパスの端点に合わせる
 	Top	上
@@ -5406,6 +5408,7 @@ lighting	Light	ライト
 @msg	Invalid drawing scale	図面の縮尺が無効です
 @msg	Invalid real scale	実寸の縮尺が無効です
 @msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
+@msg	Invalid measured point	測定した点が無効です
 @msg	Measured segment no longer exists	測定したセグメントはもう存在しません
 @msg	Non-finite dimension	寸法が有限ではありません
 @msg	Only linear dimensions are horizontal or vertical	水平または垂直にできるのは直線寸法のみです

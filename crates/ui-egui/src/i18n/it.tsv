@@ -3623,6 +3623,8 @@ digits	Malayalam	Malayalam
 	Copies per Sheet (as many as fit, in a grid)	Copie per foglio (quante ne entrano, in griglia)
 	Gutter:	Spazio intermedio:
 	Tint	Tinta
+	Fill Tint	Tinta riempimento
+	Stroke Tint	Tinta traccia
 	Tip extends past the end point	La punta si estende oltre il punto finale
 	Tip on the end point	Punta sul punto finale
 	Title Case	Iniziali maiuscole
@@ -5363,6 +5365,7 @@ lighting	Light	Luce
 @msg	Invalid drawing scale	Scala del disegno non valida
 @msg	Invalid real scale	Scala reale non valida
 @msg	Measured anchor no longer exists	Il punto di ancoraggio misurato non esiste più
+@msg	Invalid measured point	Punto misurato non valido
 @msg	Measured segment no longer exists	Il segmento misurato non esiste più
 @msg	Non-finite dimension	Quota non finita
 @msg	Only linear dimensions are horizontal or vertical	Solo le quote lineari sono orizzontali o verticali

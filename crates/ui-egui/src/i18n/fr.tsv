@@ -3577,6 +3577,8 @@ digits	Malayalam	Malayalam
 	Copies per Sheet (as many as fit, in a grid)	Copies par feuille (autant qu’il en tient, en grille)
 	Tiles are numbered across, then down; leave the range empty for every tile.	Les carreaux sont numérotés de gauche à droite, puis de haut en bas ; laissez la plage vide pour tous les carreaux.
 	Tint	Teinte
+	Fill Tint	Teinte du fond
+	Stroke Tint	Teinte du contour
 	Tip extends past the end point	La pointe dépasse le point d’extrémité
 	Tip on the end point	Pointe sur le point d’extrémité
 	Title Case	Majuscule à chaque mot
@@ -5746,6 +5748,7 @@ theme	Appearance	Apparence
 @msg	Invalid drawing scale	Échelle du dessin non valide
 @msg	Invalid real scale	Échelle réelle non valide
 @msg	Measured anchor no longer exists	Le point d’ancrage mesuré n’existe plus
+@msg	Invalid measured point	Point mesuré non valide
 @msg	Measured segment no longer exists	Le segment mesuré n’existe plus
 @msg	Non-finite dimension	Cote non finie
 @msg	Only linear dimensions are horizontal or vertical	Seules les cotes linéaires sont horizontales ou verticales

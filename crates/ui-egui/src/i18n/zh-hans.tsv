@@ -3449,6 +3449,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Tiles are numbered across, then down; leave the range empty for every tile.	拼贴先由左至右再由上至下编号；范围留空表示全部拼贴。
 	Copies per Sheet (as many as fit, in a grid)	每张纸印多份 (尽量排满，按网格排列)
 	Tint	色调
+	Fill Tint	填色色调
+	Stroke Tint	描边色调
 	Tip extends past the end point	箭头超出端点
 	Tip on the end point	箭头位于端点
 	Title Case	词首大写
@@ -4794,6 +4796,7 @@ imageTrace	Outline	轮廓
 @msg	Invalid drawing scale	图纸比例无效
 @msg	Invalid real scale	实际比例无效
 @msg	Measured anchor no longer exists	测量锚点已不存在
+@msg	Invalid measured point	测量点无效
 @msg	Measured segment no longer exists	测量线段已不存在
 @msg	Non-finite dimension	尺寸标注不是有限值
 @msg	Only linear dimensions are horizontal or vertical	只有线性尺寸可以是水平或垂直的

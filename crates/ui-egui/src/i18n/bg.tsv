@@ -3499,6 +3499,8 @@ digits	Malayalam	Малаялам
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плочките се номерират напречно, след това надолу; оставете диапазона празен за всяка плочка.
 	Copies per Sheet (as many as fit, in a grid)	Копия на лист (колкото се побират, в мрежа)
 	Tint	Оттенък
+	Fill Tint	Оттенък на запълване
+	Stroke Tint	Оттенък на щриха
 	Tip extends past the end point	Връхът продължава след крайната точка
 	Tip on the end point	Връх върху крайната точка
 	Title Case	Заглавни букви
@@ -5570,6 +5572,7 @@ theme	Appearance	Външен вид
 @msg	Invalid drawing scale	Невалиден мащаб на чертежа
 @msg	Invalid real scale	Невалиден реален мащаб
 @msg	Measured anchor no longer exists	Измерената опорна точка вече не съществува
+@msg	Invalid measured point	Невалидна измерена точка
 @msg	Measured segment no longer exists	Измереният сегмент вече не съществува
 @msg	Non-finite dimension	Размерът не е крайно число
 @msg	Only linear dimensions are horizontal or vertical	Само линейните размери са хоризонтални или вертикални

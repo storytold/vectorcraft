@@ -2620,6 +2620,7 @@ file-filter	Templates	範本
 @msg	Invalid drawing scale	圖紙比例無效
 @msg	Invalid real scale	實際比例無效
 @msg	Measured anchor no longer exists	測量的錨點已不存在
+@msg	Invalid measured point	測量點無效
 @msg	Measured segment no longer exists	測量的線段已不存在
 @msg	Non-finite dimension	尺寸標註不是有限值
 @msg	Only linear dimensions are horizontal or vertical	只有線性尺寸可以是水平或垂直的
@@ -4563,6 +4564,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Copies per Sheet (as many as fit, in a grid)	每張紙印多份 (盡量排滿，以格點排列)
 	Gutter:	間距：
 	Tint	色調
+	Fill Tint	填色色調
+	Stroke Tint	筆畫色調
 	Tip extends past the end point	尖端延伸超過終點
 	Tip on the end point	尖端位於終點
 	Title Case	標題式大小寫

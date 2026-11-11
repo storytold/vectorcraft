@@ -3396,6 +3396,8 @@ digits	Malayalam	Malayalam
 	tile {number}	kiremit {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Fayanslar önce baştan sonra aşağı doğru numaralandırılır; aralığı her döşeme için boş bırakın.
 	Tint	Renk tonu
+	Fill Tint	Dolgu Renk Tonu
+	Stroke Tint	Kontur Renk Tonu
 	Tip extends past the end point	İpucu bitiş noktasının ötesine uzanıyor
 	Tip on the end point	Bitiş noktasına dair ipucu
 	Title Case	Başlık Durumu
@@ -5431,6 +5433,7 @@ theme	Appearance	Görünüm
 @msg	Invalid drawing scale	Geçersiz çizim ölçeği
 @msg	Invalid real scale	Geçersiz gerçek ölçek
 @msg	Measured anchor no longer exists	Ölçülen çapa artık mevcut değil
+@msg	Invalid measured point	Geçersiz ölçülen nokta
 @msg	Measured segment no longer exists	Ölçülen segment artık mevcut değil
 @msg	Non-finite dimension	Sonlu olmayan boyut
 @msg	Only linear dimensions are horizontal or vertical	Yalnızca doğrusal boyutlar yatay veya dikey olabilir

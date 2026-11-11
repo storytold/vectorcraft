@@ -814,8 +814,15 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
     let mut changed = false;
     // Is `n` in `out` yet?
     let mut listed_n = false;
+    // A symbol instance's fill tints its art before the adjustment, as the canvas draws it.
+    let symbol_art = match &n.kind {
+        NodeKind::SymbolInstance { symbol, .. } if effects::has_adjustment(&n) => {
+            d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_render::instance_art(&s.art, &n))
+        }
+        _ => None,
+    };
     if effects::has_adjustment(&n)
-        && let Some(m) = effects::adjust_in_document(d, &n)
+        && let Some(m) = effects::adjust_in_document(d, &n, symbol_art)
     {
         out.push((id, 0));
         listed_n = true;
