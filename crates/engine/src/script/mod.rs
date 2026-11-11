@@ -505,6 +505,8 @@ struct Host {
     /// The last error `$.evalFile` raised for a file it could not run, with the file, line and
     /// column that error is at.
     eval_failure: RefCell<Option<EvalFailure>>,
+    /// What the last `#strict` line of the file `$.evalFile` last gave set (`None` without one).
+    eval_strict: Cell<Option<bool>>,
 }
 
 /// An error `$.evalFile` raised, as thrown, and the file, line and column it is at.
@@ -963,7 +965,12 @@ fn dollar_object(host: &Rc<Host>) -> Vec<(String, HostItem)> {
     let eval_file = {
         let h = host.clone();
         let end = host.clone();
-        HostItem::Evaluator { source: function(move |a| eval_file(&h, a)), end: Rc::new(move || end.files.borrow_mut().end_eval()) }
+        let strict = host.clone();
+        HostItem::Evaluator {
+            source: function(move |a| eval_file(&h, a)),
+            end: Rc::new(move || end.files.borrow_mut().end_eval()),
+            strict_writes: Rc::new(move || strict.eval_strict.get()),
+        }
     };
     vec![
         ("write".into(), writer(false)),
@@ -1012,6 +1019,7 @@ fn eval_file(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostErro
         return Err(HostError::Syntax(message));
     }
     host.eval_maps.borrow_mut().push(expanded.map);
+    host.eval_strict.set(expanded.strict);
     Ok(Data::String(expanded.source))
 }
 
@@ -1317,6 +1325,7 @@ impl Session {
             script_map: RefCell::default(),
             eval_maps: RefCell::default(),
             eval_failure: RefCell::default(),
+            eval_strict: Cell::new(None),
         });
         let args = to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0))
             .map_err(|place| EngineError::BadParams { cmd: "script.run".into(), msg: format!("`args{place}` is nested more than 64 levels deep") })?;
@@ -1326,6 +1335,7 @@ impl Session {
             Err(f) => Err(preprocessor_error(f)),
             Ok(expanded) => {
                 *host.script_map.borrow_mut() = expanded.map;
+                realm.set_strict_writes(expanded.strict == Some(true));
                 realm
                     .define_host_object("vc", vc_object(&host, args))
                     .and_then(|()| realm.define_host_object("$", dollar_object(&host)))
