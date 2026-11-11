@@ -730,6 +730,13 @@
 	Quest Outline	Zadanie
 	Coin Shine	Moneta
 	Boss Alert	Boss
+	Status Effects	Efekty statusu
+	Poison Tint	Trucizna
+	Freeze Edge	Mróz
+	Burn Aura	Oparzenie
+	Stun Pulse	Ogłuszenie
+	Stealth Fade	Ukrycie
+	Shield Buff	Tarcza
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
 	Gradient Finishes	Wykończenia gradientowe
@@ -4224,6 +4231,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Zatrzymaj skrypt
 	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
 	A Script Is Running	Skrypt jest uruchomiony
+	Script Alert	Komunikat skryptu
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
 	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.
@@ -6646,3 +6654,9 @@ breakText	Glyphs	Glify
 	{ms} ms, {calls} host calls	{ms} ms, wywołania hosta: {calls}
 	{dropped} earlier lines dropped, {cut} lines cut	Odrzucone wcześniejsze wiersze: {dropped}, skrócone wiersze: {cut}
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` muszą być numerami wierszy przechowywanych w konsoli, `first` przed `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Odśwież odroczone efekty
+	Deferred Effects	Odroczone efekty
+@msg	no plug-in effect is deferred	żaden efekt wtyczki nie jest odroczony
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otwarto z {n} odroczonym efektem wtyczki. Efekt › Odśwież odroczone efekty go uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.

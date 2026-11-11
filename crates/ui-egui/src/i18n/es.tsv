@@ -3156,6 +3156,13 @@ digits	Malayalam	Malayálam
 	Quest Outline	Misión
 	Coin Shine	Moneda
 	Boss Alert	Jefe
+	Status Effects	Efectos de estado
+	Poison Tint	Veneno
+	Freeze Edge	Congelación
+	Burn Aura	Quemadura
+	Stun Pulse	Aturdimiento
+	Stealth Fade	Sigilo
+	Shield Buff	Escudo
 	Shape	Forma
 	Shape Builder	Generador de formas
 	Shape Builder Regions	Regiones del generador de formas
@@ -4091,6 +4098,7 @@ axis	Both	Ambos
 	Stop Script	Detener script
 	Show External Script Warning	Mostrar advertencia de scripts externos
 	A Script Is Running	Se está ejecutando un script
+	Script Alert	Aviso del script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script puede cambiar los documentos abiertos y escribir archivos mediante los comandos que ejecuta. Ejecute solo scripts de confianza.
 	Do not show this warning again	No volver a mostrar esta advertencia
 	Stop the script and undo what it did? Then quit again.	¿Detener el script y deshacer lo que hizo? Después, vuelva a salir.
@@ -6733,3 +6741,9 @@ breakText	Glyphs	Glifos
 	{ms} ms, {calls} host calls	{ms} ms, {calls} llamadas al host
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} líneas anteriores descartadas, {cut} líneas recortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` y `last` deben ser números de líneas que la consola conserva, `first` antes que `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Actualizar efectos aplazados
+	Deferred Effects	Efectos aplazados
+@msg	no plug-in effect is deferred	no hay ningún efecto de plugin aplazado
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Se abrió con {n} efecto de plugin aplazado. Efecto › Actualizar efectos aplazados lo ejecuta.|Se abrió con {n} efectos de plugin aplazados. Efecto › Actualizar efectos aplazados los ejecuta.

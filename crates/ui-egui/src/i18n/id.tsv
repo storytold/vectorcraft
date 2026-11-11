@@ -722,6 +722,13 @@
 	Quest Outline	Quest
 	Coin Shine	Koin
 	Boss Alert	Boss
+	Status Effects	Efek Status
+	Poison Tint	Racun
+	Freeze Edge	Beku
+	Burn Aura	Bakar
+	Stun Pulse	Pingsan
+	Stealth Fade	Menghilang
+	Shield Buff	Perisai
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
 	Gradient Finishes	Finishing gradien
@@ -4099,6 +4106,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Hentikan Skrip
 	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
 	A Script Is Running	Skrip Sedang Berjalan
+	Script Alert	Peringatan Skrip
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
@@ -6529,3 +6537,7 @@ breakText	Glyphs	Glif
 	Ended by an internal fault	Berakhir karena galat internal
 	{ms} ms, {calls} host calls	{ms} ms, {calls} panggilan host
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} baris lama dibuang, {cut} baris dipotong
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Segarkan efek yang ditunda
+	Deferred Effects	Efek yang ditunda

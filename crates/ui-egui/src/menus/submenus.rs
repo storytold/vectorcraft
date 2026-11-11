@@ -136,6 +136,7 @@ pub(super) fn effect_menu() -> Vec<Item> {
         c("Last Effect…", "effect.last"),
         Sep,
         c("Document Raster Effects Settings…", "document.rasterEffectsSettings"),
+        c("Refresh Deferred Effects", "effect.refreshDeferred"),
         Sep,
         Item::Header("Vector Effects"),
     ];

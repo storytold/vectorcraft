@@ -3955,6 +3955,13 @@ digits	Malayalam	Malaiàlam
 	Quest Outline	Missió
 	Coin Shine	Moneda
 	Boss Alert	Cap
+	Status Effects	Efectes d’estat
+	Poison Tint	Verí
+	Freeze Edge	Congelació
+	Burn Aura	Cremada
+	Stun Pulse	Atordiment
+	Stealth Fade	Sigil
+	Shield Buff	Escut
 	Shape	Forma
 	Shape Builder	Constructor de formes
 	Shape Builder Delete	Suprimeix del constructor de formes
@@ -5196,6 +5203,7 @@ digits	Malayalam	Malaiàlam
 	Stop Script	Atura l'script
 	Show External Script Warning	Mostra l'avís dels scripts externs
 	A Script Is Running	S'està executant un script
+	Script Alert	Avís de l'script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
 	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
@@ -6771,3 +6779,9 @@ breakText	Glyphs	Glifs
 	{ms} ms, {calls} host calls	{ms} ms, {calls} crides a l’amfitrió
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} línies anteriors descartades, {cut} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Actualitza els efectes ajornats
+	Deferred Effects	Efectes ajornats
+@msg	no plug-in effect is deferred	no hi ha cap efecte de complement ajornat
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	S’ha obert amb {n} efecte de complement ajornat. Efecte › Actualitza els efectes ajornats l’executa.|S’ha obert amb {n} efectes de complement ajornats. Efecte › Actualitza els efectes ajornats els executa.

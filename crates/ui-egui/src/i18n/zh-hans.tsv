@@ -3023,6 +3023,13 @@ digits	Malayalam	马拉雅拉姆数字
 	Quest Outline	任务
 	Coin Shine	金币
 	Boss Alert	首领
+	Status Effects	状态效果
+	Poison Tint	中毒
+	Freeze Edge	冰冻
+	Burn Aura	灼烧
+	Stun Pulse	眩晕
+	Stealth Fade	隐身
+	Shield Buff	护盾
 	Shape	形状
 	Shape Builder	形状生成器
 	Shape Builder Regions	形状生成器区域
@@ -4571,6 +4578,7 @@ imageTrace	Outline	轮廓
 	Stop Script	停止脚本
 	Show External Script Warning	显示外部脚本警告
 	A Script Is Running	脚本正在运行
+	Script Alert	脚本提示
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告
 	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
@@ -6628,3 +6636,9 @@ breakText	Glyphs	字形
 	{ms} ms, {calls} host calls	{ms} 毫秒，宿主调用 {calls} 次
 	{dropped} earlier lines dropped, {cut} lines cut	已丢弃 {dropped} 行较早内容，已截断 {cut} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必须是控制台保留的行号，且 `first` 不能在 `last` 之后
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	刷新延迟的效果
+	Deferred Effects	延迟的效果
+@msg	no plug-in effect is deferred	没有延迟的增效工具效果
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	打开时延迟了 {n} 个增效工具效果。效果 › 刷新延迟的效果可运行它们。

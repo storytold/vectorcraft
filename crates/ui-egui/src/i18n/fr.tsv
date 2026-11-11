@@ -3148,6 +3148,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Quête
 	Coin Shine	Pièce
 	Boss Alert	Boss
+	Status Effects	Effets de statut
+	Poison Tint	Poison
+	Freeze Edge	Gel
+	Burn Aura	Brûlure
+	Stun Pulse	Étourdissement
+	Stealth Fade	Furtivité
+	Shield Buff	Bouclier
 	Shape	Forme
 	Shape Builder	Concepteur de forme
 	Shape Builder Regions	Zones du Concepteur de forme
@@ -4080,6 +4087,7 @@ axis	Both	Les deux
 	Stop Script	Arrêter le script
 	Show External Script Warning	Afficher l’avertissement des scripts externes
 	A Script Is Running	Un script est en cours d’exécution
+	Script Alert	Alerte de script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script peut modifier les documents ouverts et écrire des fichiers au moyen des commandes qu’il exécute. N’exécutez que des scripts de confiance.
 	Do not show this warning again	Ne plus afficher cet avertissement
 	Stop the script and undo what it did? Then quit again.	Arrêter le script et annuler ce qu’il a fait ? Quittez ensuite à nouveau.
@@ -6785,3 +6793,9 @@ breakText	Glyphs	Glyphes
 	{ms} ms, {calls} host calls	{ms} ms, {calls} appels à l’hôte
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} lignes antérieures supprimées, {cut} lignes coupées
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` et `last` doivent être des numéros de lignes que la console contient, `first` avant `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Actualiser les effets différés
+	Deferred Effects	Effets différés
+@msg	no plug-in effect is deferred	aucun effet de plug-in n’est différé
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Ouvert avec {n} effet de plug-in différé. Effet › Actualiser les effets différés l’exécute.|Ouvert avec {n} effets de plug-in différés. Effet › Actualiser les effets différés les exécute.

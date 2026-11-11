@@ -3185,6 +3185,13 @@ digits	Malayalam	Малаялам
 	Quest Outline	Квест
 	Coin Shine	Монета
 	Boss Alert	Бос
+	Status Effects	Ефекти статусу
+	Poison Tint	Отрута
+	Freeze Edge	Заморозка
+	Burn Aura	Опік
+	Stun Pulse	Оглушення
+	Stealth Fade	Невидимість
+	Shield Buff	Щит
 	Shape	Фігура
 	Shape Builder	Створення фігур
 	Shape Builder Regions	Області створення фігур
@@ -4118,6 +4125,7 @@ axis	Both	Обидві
 	Stop Script	Зупинити скрипт
 	Show External Script Warning	Показувати попередження про зовнішні скрипти
 	A Script Is Running	Виконується скрипт
+	Script Alert	Повідомлення скрипту
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
 	Do not show this warning again	Більше не показувати це попередження
 	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
@@ -6391,3 +6399,9 @@ breakText	Glyphs	Гліфи
 	{ms} ms, {calls} host calls	{ms} мс, викликів хоста: {calls}
 	{dropped} earlier lines dropped, {cut} lines cut	Відкинуто попередніх рядків: {dropped}, обрізано рядків: {cut}
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` і `last` мають бути номерами рядків, які зберігає консоль, причому `first` не пізніше `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Оновити відкладені ефекти
+	Deferred Effects	Відкладені ефекти
+@msg	no plug-in effect is deferred	немає відкладених ефектів модулів
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Відкрито з {n} відкладеним ефектом модуля. Ефект › Оновити відкладені ефекти виконає його.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.

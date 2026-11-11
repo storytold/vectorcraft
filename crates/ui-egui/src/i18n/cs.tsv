@@ -783,6 +783,13 @@
 	Quest Outline	Úkol
 	Coin Shine	Mince
 	Boss Alert	Boss
+	Status Effects	Stavové efekty
+	Poison Tint	Jed
+	Freeze Edge	Zmrazení
+	Burn Aura	Spálení
+	Stun Pulse	Omráčení
+	Stealth Fade	Plížení
+	Shield Buff	Štít
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
 	Gradient Finishes	Přechodové povrchy
@@ -4401,6 +4408,7 @@ imageTrace	Outline	Obrys
 	Stop Script	Zastavit skript
 	Show External Script Warning	Zobrazit upozornění u externích skriptů
 	A Script Is Running	Běží skript
+	Script Alert	Upozornění skriptu
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skript může měnit otevřené dokumenty a prostřednictvím příkazů, které spouští, zapisovat soubory. Spouštějte jen skripty, kterým důvěřujete.
 	Do not show this warning again	Toto upozornění již nezobrazovat
 	Stop the script and undo what it did? Then quit again.	Zastavit skript a vrátit jeho změny? Potom aplikaci ukončete znovu.
@@ -6790,3 +6798,9 @@ breakText	Glyphs	Glyfy
 	{ms} ms, {calls} host calls	{ms} ms, {calls} volání hostitele
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} starších řádků zahozeno, {cut} řádků zkráceno
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` a `last` musí být čísla řádků, které konzole uchovává, `first` před `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Obnovit odložené efekty
+	Deferred Effects	Odložené efekty
+@msg	no plug-in effect is deferred	žádný efekt zásuvného modulu není odložen
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otevřeno s {n} odloženým efektem zásuvného modulu. Efekt › Obnovit odložené efekty jej spustí.|Otevřeno s {n} odloženými efekty zásuvných modulů. Efekt › Obnovit odložené efekty je spustí.|Otevřeno s {n} odloženými efekty zásuvných modulů. Efekt › Obnovit odložené efekty je spustí.

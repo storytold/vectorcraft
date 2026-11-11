@@ -736,6 +736,13 @@
 	Quest Outline	Quest
 	Coin Shine	Munt
 	Boss Alert	Baas
+	Status Effects	Statuseffecten
+	Poison Tint	Gif
+	Freeze Edge	Bevriezing
+	Burn Aura	Brand
+	Stun Pulse	Verdoving
+	Stealth Fade	Sluipen
+	Shield Buff	Schild
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
 	Gradient Finishes	Verloopafwerkingen
@@ -4113,6 +4120,7 @@ imageTrace	Outline	Contour
 	Stop Script	Script stoppen
 	Show External Script Warning	Waarschuwing voor externe scripts tonen
 	A Script Is Running	Er wordt een script uitgevoerd
+	Script Alert	Scriptmelding
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen
 	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
@@ -6580,3 +6588,7 @@ breakText	Glyphs	Glyphs
 	Ended by an internal fault	Beëindigd door een interne fout
 	{ms} ms, {calls} host calls	{ms} ms, {calls} host-aanroepen
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eerdere regels verwijderd, {cut} regels ingekort
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
+	Deferred Effects	Uitgestelde effecten
