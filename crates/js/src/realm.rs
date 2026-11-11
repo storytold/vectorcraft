@@ -223,6 +223,7 @@ impl Realm {
         interp.last_thrown = Value::Undefined;
         interp.last_error = Value::Null;
         interp.host_abort = None;
+        interp.waiting = false;
         interp.error_tag = UNKNOWN_SOURCE;
         let strict = interp.options.strict;
         interp.source_tag = 0;
@@ -248,6 +249,7 @@ impl Realm {
         interp.frames.clear();
         interp.temp_roots.clear();
         interp.join_stack.clear();
+        interp.waiting = false;
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {
@@ -277,16 +279,22 @@ impl Realm {
     /// instruction), and pauses where it can resume: between two instructions of the script's own
     /// code. A getter, a built-in's callback or another nested run has native frames under it, so
     /// it runs on to its end, for at most [`Realm::set_unbroken_fuel`] more. Once this has returned
-    /// [`Progress::Done`] or an error, the run is over.
+    /// [`Progress::Done`] or an error, the run is over. While a host function's call waits for its
+    /// result ([`Realm::waits`]), the run does not advance: this gives an internal error.
     pub fn advance(&mut self, slice: u64) -> Result<Progress, RunError> {
         let interp = &mut self.interp;
         if interp.frames.is_empty() {
             return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0 });
         }
+        if interp.waiting {
+            return Err(RunError { kind: RunErrorKind::Internal, message: "the run waits for a host function's result".into(), line: 0, column: 0 });
+        }
         let total = interp.fuel;
         let cap = slice.saturating_add(self.unbroken_fuel).min(total);
         interp.fuel = cap;
+        interp.in_slice = true;
         let r = interp.execute_slice(cap - slice.min(cap));
+        interp.in_slice = false;
         let used = cap - interp.fuel;
         interp.fuel = total - used;
         match r {
@@ -306,6 +314,38 @@ impl Realm {
     /// The flag a host function sets to end the current slice at the next point it can pause.
     pub fn pause_flag(&self) -> std::rc::Rc<std::cell::Cell<bool>> {
         self.interp.pause.clone()
+    }
+
+    /// The flag that is set while a host function runs where it may return
+    /// [`crate::HostError::Wait`]: called by the script's own code in a run [`Realm::advance`]
+    /// carries on, and not from a getter, a conversion or a built-in's callback.
+    pub fn wait_flag(&self) -> std::rc::Rc<std::cell::Cell<bool>> {
+        self.interp.can_wait.clone()
+    }
+
+    /// Does a host function's call wait for the result [`Realm::answer`] gives it?
+    pub fn waits(&self) -> bool {
+        self.interp.waiting
+    }
+
+    /// Gives the call that waits ([`crate::HostError::Wait`]) its result `d`; the next
+    /// [`Realm::advance`] goes on from there. A result past the heap limit ends the run with that
+    /// limit, and with no call waiting this gives an internal error.
+    pub fn answer(&mut self, d: crate::Data) -> Result<(), RunError> {
+        let interp = &mut self.interp;
+        if !interp.waiting {
+            return Err(RunError { kind: RunErrorKind::Internal, message: "no host function waits for a result".into(), line: 0, column: 0 });
+        }
+        interp.waiting = false;
+        // The value on top of the stack stood in for the result.
+        let r = interp.write_data(d, 0, false).and_then(|v| {
+            interp.stack.pop();
+            interp.push(v)
+        });
+        match r {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
     }
 
     /// Has this realm stop when `interrupt` is set, in place of its own flag.
@@ -346,6 +386,16 @@ impl Realm {
     /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
     pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
         match crate::builtins::extensions::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Defines the global function `name`, whose arguments arrive converted as `args` says
+    /// ([`crate::HostItem::Converted`]). Unlike a host object, a script may replace or delete it, as
+    /// it may a built-in function.
+    pub fn define_host_function(&mut self, name: &str, args: Vec<crate::Arg>, f: crate::HostFunction) -> Result<(), RunError> {
+        match self.interp.install_host_function(name, args, f) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }

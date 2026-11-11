@@ -342,7 +342,7 @@ impl VectorcraftApp {
         self.poll_finished_work();
         crate::script_runs::poll(self);
         crate::scripts_menu::poll(self, ctx);
-        if self.session.script_running() && !self.session.script_waiting() {
+        if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
             // A script in `$.sleep` goes on when its time is up; until then the app can idle.
             match self.session.script_sleep_left() {
                 Some(left) => ctx.request_repaint_after(left),
@@ -375,9 +375,7 @@ impl VectorcraftApp {
             unsaved::finish_pending(self);
             if self.session.script_running() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                if self.ui.dialog.is_none() {
-                    self.ui.dialog = Some(crate::state::Dialog::new(dialogs::script_run::CLOSE_KIND, serde_json::json!({})));
-                }
+                dialogs::script_run::ask_to_close(self);
             } else if self.file_sheet_open() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.status(picks::busy());
