@@ -21,15 +21,15 @@ use std::fmt::Write;
 use kurbo::{ParamCurveArclen, PathSeg};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
-    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, Mojikumi, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign,
-    PathEffect, TextKind, TextObject, VerticalAlign,
+    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, LineCap, LineJoin, Mojikumi, Node, NodeId, NodeKind, ParaDirection,
+    ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
 };
 use vectorcraft_geom::{Affine, PathData, Point};
 
 use crate::ps;
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and stroke weight, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -347,6 +347,9 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             fill: unlinked(&s.fill),
             stroke: unlinked(&s.stroke),
             stroke_width: if stroked { s.stroke_width } else { CharStyle::default().stroke_width },
+            stroke_cap: if stroked { s.stroke_cap } else { CharStyle::default().stroke_cap },
+            stroke_join: if stroked { s.stroke_join } else { CharStyle::default().stroke_join },
+            stroke_miter_limit: if stroked { miter_limit(s.stroke_miter_limit) } else { CharStyle::default().stroke_miter_limit },
             all_caps: s.all_caps,
             small_caps: s.small_caps.filter(|v| *v == default_small_caps),
             tate_chu_yoko: s.tate_chu_yoko,
@@ -357,7 +360,19 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
     };
     let run_lost = |s: &CharStyle| {
         let stroked = !s.stroke.is_none();
-        let s = CharStyle { stroke_width: if stroked { s.stroke_width } else { CharStyle::default().stroke_width }, ..s.clone() };
+        // Without a stroke, its weight, cap, join and miter limit draw nothing: nothing is lost.
+        let unstroked = CharStyle::default();
+        let s = if stroked {
+            s.clone()
+        } else {
+            CharStyle {
+                stroke_width: unstroked.stroke_width,
+                stroke_cap: unstroked.stroke_cap,
+                stroke_join: unstroked.stroke_join,
+                stroke_miter_limit: unstroked.stroke_miter_limit,
+                ..s.clone()
+            }
+        };
         // A Lab color is written as RGB.
         let lab = |p: &Paint| matches!(p, Paint::Solid { color: Color::Lab { .. }, .. });
         s != held_char(&s) || lab(&s.fill) || lab(&s.stroke) || !font_kept(&s)
@@ -417,26 +432,87 @@ fn baseline_direction(st: &CharStyle) -> i64 {
     }
 }
 
-/// The name the font of style `st` is written under, and whether it's TrueType: an installed
-/// face's PostScript name; else its family and style as `family-style` (the family alone for
-/// Regular), the form the reader's `family_style` splits.
-fn font_name(st: &CharStyle) -> (String, bool) {
+/// A font of the font set, as its `CoolTypeFont` record names it.
+#[derive(Clone, Debug, PartialEq)]
+struct FontRecord {
+    /// The PostScript name (`/0`).
+    name: String,
+    /// Whether its outlines are TrueType (`/2`).
+    truetype: bool,
+    /// For a variable font, where in its design space the type is set (`/4`): each `fvar` axis in
+    /// the font's order, in the axis's own units. Empty for a static font, which has none: without
+    /// it, an app that opens the file takes a variable font's default instance (#6388).
+    design: Vec<f32>,
+    /// For a variable font, its version string (`/5`, name ID 5); empty for a static font.
+    version: String,
+}
+
+/// The font the font set names for style `st`: an installed face's PostScript name, and for a
+/// variable font the setting of each of its axes (the named instance's, or the style's own
+/// Variable Font setting, clamped to the axis as layout clamps it) and its version; else its family
+/// and style as `family-style` (the family alone for Regular), the form the reader's
+/// `family_style` splits.
+fn font_name(st: &CharStyle) -> FontRecord {
     let db = vectorcraft_text::FontDb::global();
     // The face of that family and style (the font database gives a fallback face for others).
+    let record = |name: String| FontRecord { name, truetype: false, design: vec![], version: String::new() };
     match db
         .face_version(&st.font_family, &st.font_style, st.font_version.as_deref())
         .filter(|f| f.family == st.font_family && f.style == st.font_style)
     {
-        Some(face) => (face.postscript_name(), face.is_truetype()),
-        None if st.font_style.is_empty() || st.font_style == "Regular" => (st.font_family.clone(), false),
-        None => (format!("{}-{}", st.font_family, st.font_style.replace(' ', "")), false),
+        Some(face) => {
+            let axes = face.axes();
+            let design: Vec<f32> = axes
+                .iter()
+                .map(|a| {
+                    let own = face.axis_value(a.tag).unwrap_or(a.default);
+                    let set = st.font_axes.get(String::from_utf8_lossy(&a.tag).as_ref()).copied().filter(|v| v.is_finite());
+                    set.map_or(own, |v| (v as f32).clamp(a.min.min(a.max), a.max.max(a.min)))
+                })
+                .collect();
+            let version = if design.is_empty() { String::new() } else { face.version.clone() };
+            FontRecord { name: face.postscript_name(), truetype: face.is_truetype(), design, version }
+        }
+        None if st.font_style.is_empty() || st.font_style == "Regular" => record(st.font_family.clone()),
+        None => record(format!("{}-{}", st.font_family, st.font_style.replace(' ', ""))),
     }
+}
+
+/// The text document's number for a stroke's cap (key 61), as PostScript numbers them: 0 butt, 1
+/// round, 2 projecting.
+fn cap_code(cap: LineCap) -> i64 {
+    match cap {
+        LineCap::Butt => 0,
+        LineCap::Round => 1,
+        LineCap::Square => 2,
+    }
+}
+
+/// The text document's number for a stroke's join (key 62), as PostScript numbers them: 0 miter, 1
+/// round, 2 bevel.
+fn join_code(join: LineJoin) -> i64 {
+    match join {
+        LineJoin::Miter => 0,
+        LineJoin::Round => 1,
+        LineJoin::Bevel => 2,
+    }
+}
+
+/// A stroke's miter limit (key 64) as the reader takes it back: at least 1 and at most 500, 10 when
+/// it isn't a number at least 1.
+fn miter_limit(v: f64) -> f64 {
+    if v.is_finite() && v >= 1.0 { v.min(500.0) } else { 10.0 }
+}
+
+/// `v` as the 16.16 fixed-point number a design vector holds (`wght` 700 is 45875200).
+fn fixed(v: f32) -> i64 {
+    if v.is_finite() { (f64::from(v) * 65536.0).round() as i64 } else { 0 }
 }
 
 /// Does the font of style `st` come back as itself: the family and style the reader makes of the
 /// name it is written under (as its `char_style` does)?
 fn font_kept(st: &CharStyle) -> bool {
-    let (family, style) = crate::family_style(&font_name(st).0);
+    let (family, style) = crate::family_style(&font_name(st).name);
     let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
     family == st.font_family && style == st.font_style
 }
@@ -507,8 +583,8 @@ fn place_on(segments: &[[f64; 8]], f: f64) -> f64 {
 /// The text document being written.
 #[derive(Default)]
 pub(in crate::ai_editing) struct TextDoc {
-    /// Each font's PostScript name and whether it's TrueType.
-    fonts: Vec<(String, bool)>,
+    /// The fonts the runs name, each once: two settings of one variable font are two fonts.
+    fonts: Vec<FontRecord>,
     frames: Vec<V>,
     stories: Vec<V>,
     /// The story and frame each text object of a thread is written as.
@@ -533,11 +609,15 @@ impl TextDoc {
 
     /// The index of the font of `st` in the font set.
     fn font(&mut self, st: &CharStyle) -> i64 {
-        let (name, truetype) = font_name(st);
-        let i = match self.fonts.iter().position(|(n, _)| *n == name) {
+        let font = font_name(st);
+        // Two installed versions of one font are two fonts, so each keeps its own `/5`.
+        let same = |f: &FontRecord| {
+            f.name == font.name && f.version == font.version && f.design.iter().map(|v| fixed(*v)).eq(font.design.iter().map(|v| fixed(*v)))
+        };
+        let i = match self.fonts.iter().position(same) {
             Some(i) => i,
             None => {
-                self.fonts.push((name, truetype));
+                self.fonts.push(font);
                 self.fonts.len() - 1
             }
         };
@@ -582,7 +662,12 @@ impl TextDoc {
         }
         d.extend([(56, V::Bool(fill.is_some())), (57, V::Bool(stroke.is_some()))]);
         if stroke.is_some() {
-            d.push((63, V::Small(st.stroke_width / scale)));
+            d.extend([
+                (61, V::Int(cap_code(st.stroke_cap))),
+                (62, V::Int(join_code(st.stroke_join))),
+                (63, V::Small(st.stroke_width / scale)),
+                (64, real(miter_limit(st.stroke_miter_limit))),
+            ]);
         }
         dict(d)
     }
@@ -806,7 +891,9 @@ impl TextDoc {
         let total = bytes.saturating_add(added);
         let total_values = self.doc_values.saturating_add(values);
         // The font set: each name in UTF-16 with its dictionary round it.
-        let fonts: usize = self.fonts.iter().map(|(n, _)| n.encode_utf16().count() * 2 + 64).sum();
+        // A design vector's numbers and a version string add to it.
+        let fonts: usize =
+            self.fonts.iter().map(|f| f.name.encode_utf16().count() * 2 + 64 + f.design.len() * 12 + f.version.encode_utf16().count() * 2).sum();
         // ASCII85 writes five characters for every four bytes.
         if total.saturating_add(RESERVE).saturating_add(fonts).saturating_mul(5) / 4 <= crate::import::MAX_TEXT_DOCUMENT / 4
             && total_values.saturating_add(RESERVE_VALUES) <= crate::import::MAX_TEXT_VALUES
@@ -924,8 +1011,17 @@ impl TextDoc {
         let mut fonts: Vec<V> = self
             .fonts
             .iter()
-            .map(|(name, truetype)| {
-                dict(vec![(99, V::Name("CoolTypeFont")), (0, dict(vec![(0, V::Str(name.clone())), (2, V::Int(i64::from(*truetype)))]))])
+            .map(|f| {
+                let mut font = vec![(0, V::Str(f.name.clone())), (2, V::Int(i64::from(f.truetype)))];
+                // A variable font's place in its design space and its version (#6388); a static
+                // font has neither.
+                if !f.design.is_empty() {
+                    font.push((4, V::List(f.design.iter().map(|v| V::Int(fixed(*v))).collect())));
+                    if !f.version.is_empty() {
+                        font.push((5, V::Str(f.version.clone())));
+                    }
+                }
+                dict(vec![(99, V::Name("CoolTypeFont")), (0, dict(font))])
             })
             .collect();
         fonts.push(dict(vec![(99, V::Name("CoolTypeFont")), (0, dict(vec![(0, V::Str(HIDDEN_GLYPH_FONT.into())), (2, V::Int(0))]))]));

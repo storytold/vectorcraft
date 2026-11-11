@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Assets",
             [],
             None,
-            "{} → {assets: [{id, name, nodes: [id…], bounds: [x, y, width, height] | null (the crop: the bounds the renderer measures for what its art draws, effects included), format3D: usda|usdz|gltf|obj | null (a 3D asset's mesh format; null for art exported as pictures)}]} the Asset Export panel's assets, in order",
+            "{} → {assets: [{id, name, nodes: [id…], bounds: [x, y, width, height] | null (the crop: the bounds the renderer measures for what its art draws, effects included, with the clips of the groups and layers that hold it), format3D: usda|usdz|gltf|obj | null (a 3D asset's mesh format; null for art exported as pictures)}]} the Asset Export panel's assets, in order",
             has_doc,
             list
         ),
@@ -213,7 +213,7 @@ fn add_3d(s: &mut Session, p: &Value) -> Result<Value> {
     ids.dedup();
     for id in &ids {
         let n = d.node(*id).ok_or_else(|| bad(C, format!("no such object {0}", id.0)))?;
-        if let Err(e) = vectorcraft_render::effects::three_d_meshes(n) {
+        if let Err(e) = vectorcraft_render::effects::three_d_meshes_in(Some(d), n) {
             let what = n.name.clone().unwrap_or_else(|| format!("#{}", id.0));
             return Err(bad(C, format!("{what} can't be exported in 3D: {e}")));
         }
@@ -281,7 +281,8 @@ fn export_3d(s: &mut Session, p: &Value) -> Result<Value> {
             a.nodes.iter().map(|node| d.node(*node).ok_or_else(|| bad(C, format!("no such object {0}", node.0)))).collect::<Result<Vec<_>>>()?;
         // The asset's objects share one budget of triangles.
         let what = &a.name;
-        let parts = vectorcraft_render::effects::three_d_meshes_of(nodes).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
+        let parts =
+            vectorcraft_render::effects::three_d_meshes_of_in(Some(d), nodes).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
         let base = Some(safe_file_name(&a.name)).filter(|b| !b.is_empty()).unwrap_or_else(|| "Asset".into());
         let mut stem = base.clone();
         let mut k = 1;

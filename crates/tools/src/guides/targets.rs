@@ -213,6 +213,17 @@ impl Targets {
         t.index()
     }
 
+    /// Targets for the ends of a measurement: [`Self::collect`]'s, and with `glyphs` (Snap to Glyph
+    /// on) the guides those options ask for from the live text in `visible` (all of it for None),
+    /// without the outlines' anchor points, which Anchor Point gives the Pen and moved objects.
+    pub fn for_measure(doc: &Document, visible: Option<Rect>, glyphs: Option<GlyphSnap>) -> Self {
+        let mut t = Self::collect(doc, &[], None);
+        if let Some(o) = glyphs {
+            t.push_glyphs(doc, &[], visible, GlyphSnap { anchors: false, ..o });
+        }
+        t.index()
+    }
+
     /// Targets for a dragged direction handle of path `id`: the other art, and the anchors of `id`
     /// (its bounds and the segments through the handle move with it, so they would chase it).
     pub fn for_handle(doc: &Document, id: NodeId) -> Self {
@@ -1181,6 +1192,47 @@ impl Targets {
             ov.extend(self.label(p + d, "align"));
         }
         (d, ov, held.contains(&true))
+    }
+
+    /// [`Self::snap_moved_to_rulers`] for a selection a move Shift keeps to its line (through the
+    /// grabbed point `p`, along `dir`), its bounds now `r`: the edge or centre of `r` that a ruler
+    /// guide runs past within `tol` goes onto it by sliding along the line, the way needing the
+    /// shortest slide winning and at most twice `tol` (a line nearly parallel to a guide would
+    /// carry the selection far to meet it). Returns the shift along the line and the guides.
+    pub(crate) fn snap_moved_along_to_rulers(&self, p: Point, r: Rect, dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>) {
+        let len = dir.hypot();
+        if !len.is_finite() || len <= 1e-9 {
+            return (Vec2::ZERO, vec![]);
+        }
+        let u = dir / len;
+        // The way along the line, where the guide is and where it starts, and whether it is upright.
+        let mut best: Option<(f64, f64, Point, bool)> = None;
+        for (vertical, c) in [(true, u.x), (false, u.y)] {
+            if c.abs() <= 1e-9 {
+                continue;
+            }
+            let vs = if vertical { [r.x0, r.center().x, r.x1] } else { [r.y0, r.center().y, r.y1] };
+            let (mid, half) =
+                if vertical { (Point::new(0.0, r.center().y), r.height() / 2.0) } else { (Point::new(r.center().x, 0.0), r.width() / 2.0) };
+            for (t, from, _) in self.rulers.iter().filter(|g| g.vertical == vertical).filter_map(|g| g.line_at(mid, tol + half)) {
+                for v in vs {
+                    let s = (t - v) / c;
+                    if (t - v).abs() <= tol && s.abs() <= 2.0 * tol && best.is_none_or(|b| s.abs() < b.0.abs()) {
+                        best = Some((s, t, from, vertical));
+                    }
+                }
+            }
+        }
+        let Some((s, t, from, vertical)) = best else { return (Vec2::ZERO, vec![]) };
+        let moved = r + u * s;
+        let line = if vertical {
+            self.line(Point::new(t, from.y.min(moved.y0)), Point::new(t, from.y.max(moved.y1)))
+        } else {
+            self.line(Point::new(from.x.min(moved.x0), t), Point::new(from.x.max(moved.x1), t))
+        };
+        let mut ov: Vec<Overlay> = line.into_iter().collect();
+        ov.extend(self.label(p + u * s, "align"));
+        (u * s, ov)
     }
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for

@@ -2,11 +2,12 @@ use super::state::{SUBJECT_COMMANDS, enabled, has_subject, waits_for_ime};
 use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
-/// generic parameter dialog (fields = the defaults) instead of running immediately.
+/// generic parameter dialog (fields = the defaults) instead of running immediately. A script of the
+/// Scripts folder runs, whatever its name ends with.
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
-        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog");
+        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog" | crate::scripts_menu::COMMAND);
     if dialog {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }
@@ -138,6 +139,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
         return;
     }
+    // A command chosen while the tool computes an edit on another thread (a Shape Builder merge)
+    // comes after it: the edit is applied first, so the command's dialog, or the app's own dialog
+    // (Recolor Artwork), opens on the art as the gesture left it.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
     // A shortcut or a palette pick on a filter plug-in does nothing while its menu item is dimmed.
     if id == "plugin.dialog" && !enabled(app, id) {
         return;
@@ -278,6 +284,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Composite Fonts…: the document's composite fonts, to edit before OK sets them.
     if id == crate::dialogs::composite_fonts::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::composite_fonts::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
+    if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
             app.status(e);
         }
         return true;

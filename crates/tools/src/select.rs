@@ -368,6 +368,14 @@ impl MoveSnap {
             if q != start + d {
                 d = q - start;
                 guides = ov;
+            } else if guides.is_empty()
+                && let Some(b) = self.bounds
+            {
+                // Nothing else lined up: the bounds slide along the line onto a ruler guide, as
+                // they do without Shift (#4312).
+                let (adj, ov) = t.snap_moved_along_to_rulers(start + d, b + d, u, cx.tol(cx.snap_tolerance));
+                d += adj;
+                guides = ov;
             }
         }
         if cx.snap_to_pixel
@@ -419,7 +427,7 @@ struct MemoState {
 struct Measured {
     revision: (u64, u64),
     objects: Vec<NodeId>,
-    preview: bool,
+    measure: vectorcraft_effects::preview::Measure,
     bounds: Option<Option<Rect>>,
     oriented: Option<Option<OrientedBox>>,
     by_object: HashMap<NodeId, Option<Option<Rect>>>,
@@ -427,7 +435,7 @@ struct Measured {
 
 impl Measured {
     fn is_for(&self, cx: &ToolContext) -> bool {
-        self.revision == cx.revision && self.preview == cx.preview_bounds && self.objects == cx.selection.objects
+        self.revision == cx.revision && self.measure == cx.bounds_measure() && self.objects == cx.selection.objects
     }
 }
 
@@ -450,7 +458,7 @@ impl PreviewMemo {
         let fresh = || Measured {
             revision: cx.revision,
             objects: cx.selection.objects.clone(),
-            preview: cx.preview_bounds,
+            measure: cx.bounds_measure(),
             bounds: None,
             oriented: None,
             by_object: HashMap::new(),
@@ -487,15 +495,16 @@ fn remembered<T: Clone>(cx: &ToolContext, slot: impl Fn(&mut Measured) -> &mut O
 }
 
 /// Selection bounds used for the bounding box: visual bounds as drawn with Use Preview Bounds
-/// ([`vectorcraft_effects::preview`]), else geometric bounds.
+/// ([`vectorcraft_effects::preview`]), else geometric bounds, with point type measured by its
+/// glyphs with Measure Type by Glyph Bounds ([`ToolContext::bounds_measure`]).
 pub fn selection_bounds(cx: &ToolContext) -> Option<Rect> {
-    remembered(cx, |m| &mut m.bounds, || vectorcraft_effects::preview::bounds_of(cx.doc, &cx.selection.objects, cx.preview_bounds))
+    remembered(cx, |m| &mut m.bounds, || vectorcraft_effects::preview::bounds_of_with(cx.doc, &cx.selection.objects, cx.bounds_measure()))
 }
 
 /// [`selection_bounds`] square to the selection's own angle: the bounding box the Selection tool
 /// shows and drags (rotated after a rotation).
 pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
-    remembered(cx, |m| &mut m.oriented, || vectorcraft_effects::preview::oriented_bounds(cx.doc, &cx.selection.objects, cx.preview_bounds))
+    remembered(cx, |m| &mut m.oriented, || vectorcraft_effects::preview::oriented_bounds_with(cx.doc, &cx.selection.objects, cx.bounds_measure()))
 }
 
 /// [`selection_box`] while the canvas shows it (View › Show Bounding Box, and no anchors selected
@@ -527,7 +536,7 @@ fn object_bounds(cx: &ToolContext, id: NodeId) -> Option<Rect> {
 /// which compares the whole selection: a walk of every selected object checking it each time takes
 /// time in the square of their number.
 fn with_object_bounds<R>(cx: &ToolContext, walk: impl FnOnce(&mut dyn FnMut(NodeId) -> Option<Rect>) -> R) -> R {
-    let mut measure = |id: NodeId| vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds);
+    let mut measure = |id: NodeId| vectorcraft_effects::preview::bounds_of_with(cx.doc, &[id], cx.bounds_measure());
     let Some(mut st) = cx.preview_memo.and_then(|memo| memo.0.try_borrow_mut().ok()) else {
         return walk(&mut measure);
     };
@@ -820,6 +829,10 @@ impl Tool for SelectionTool {
 
     fn wants_rehover(&self) -> bool {
         self.alt_hover
+    }
+
+    fn resizing(&self) -> bool {
+        matches!(self.state, State::Scaling { .. })
     }
 
     fn transforming(&self) -> bool {

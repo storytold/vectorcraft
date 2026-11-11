@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, method?: classic|perceptual (as paint.editGradient; default classic), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), dither?: bool (linear and radial fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, a solid color or `none` changes that object for this instance only, and a gradient or pattern is refused → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, method?: classic|perceptual (as paint.editGradient; default classic), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), dither?: bool (linear and radial fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern) → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke",
             [],
             None,
-            "{…as paint.setFill, item?: the stroke item to set} same as paint.setFill, for the stroke; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, a solid color or `none` changes that object for this instance only, and a gradient or pattern is refused",
+            "{…as paint.setFill, item?: the stroke item to set} same as paint.setFill, for the stroke; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's stroke changes for this instance only (solid, none, gradient or pattern)",
             has_doc,
             |s, p| { set_paint(s, p, false) }
         ),
@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects; a gradient mesh point last clicked with the Mesh tool or Direct Selection takes the opacity itself). On a path directly in a graph series, the graph also stores the opacity and blend mode of the object and of the topmost visible fill and stroke (exceptions: docs/mcp.md)",
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects; a gradient mesh point last clicked with the Mesh tool or Direct Selection takes the opacity itself). With an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, opacity and blend change that object for this instance only (isolate, knockout, knockoutShape, aligned and target are refused). On a path directly in a graph series, the graph also stores the opacity and blend mode of the object and of the topmost visible fill and stroke (exceptions: docs/mcp.md)",
             has_doc,
             transparency
         ),
@@ -487,12 +487,9 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         s.remember_paint(&paint);
         return Ok(json!({"objects": ids.len()}));
     }
-    // An object of a dynamic symbol instance's art selected with Direct Selection: a solid color or
-    // none changes that object for this instance only, and anything else is refused.
+    // An object of a dynamic symbol instance's art selected with Direct Selection: that object's
+    // fill or stroke changes for this instance only (solid, none, gradient or pattern).
     if let Some((id, path)) = selected_part_target(s, p, cmd)? {
-        if !part_takes(&paint) {
-            return Err(super::brushsym::part_only());
-        }
         super::brushsym::edit_part(s, id, &path, if fill { "Fill Color" } else { "Stroke Color" }, |o| {
             if fill {
                 o.fill = Some(paint.clone());
@@ -620,8 +617,9 @@ fn selected_part_target(s: &Session, p: &Value, cmd: &str) -> Result<Option<(Nod
     Ok(part)
 }
 
-/// Can an object of a dynamic symbol instance's art selected with Direct Selection take `paint`? A
-/// solid color or none can; a gradient or pattern cannot.
+/// Can Invert / Complement recolour `paint` on an object of a dynamic symbol instance's art selected
+/// with Direct Selection? A solid color or none can; a gradient or pattern cannot (one override
+/// holds one paint, and those commands recolour solid colours only).
 pub(crate) fn part_takes(paint: &Paint) -> bool {
     matches!(paint, Paint::Solid { .. } | Paint::None)
 }
@@ -962,6 +960,46 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
 
 fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "transparency.set";
+    // An object of a dynamic symbol instance's art selected with Direct Selection: opacity and
+    // blend change that object for this instance only. Isolate, knockout and Appearance `item` /
+    // `target` stay refused here (they act on the instance or a stack row).
+    if p.get("ids").is_none()
+        && p.get("id").is_none()
+        && p.get("item").is_none()
+        && let Some((id, path)) = super::brushsym::selected_part(s)?
+    {
+        for key in ["isolate", "knockout", "knockoutShape", "aligned", "target"] {
+            if p.get(key).is_some() {
+                return Err(super::brushsym::part_only());
+            }
+        }
+        if p.get("opacity").is_none() && p.get("blend").is_none() {
+            return Err(bad(C, "give opacity or blend"));
+        }
+        check_numbers(p, &["opacity"], C)?;
+        let opacity = match p.get("opacity") {
+            None => None,
+            Some(Value::Null) => Some(None),
+            Some(v) => Some(Some(v.as_f64().map(super::opacitymask::percent).ok_or_else(|| bad(C, "opacity must be a number"))?)),
+        };
+        let blend = match p.get("blend") {
+            None => None,
+            Some(Value::Null) => Some(None),
+            Some(b) => {
+                let name = b.as_str().ok_or_else(|| bad(C, "blend must be a mode name"))?;
+                Some(Some(BlendMode::parse(name).ok_or_else(|| bad(C, format!("unknown blend mode {b}")))?))
+            }
+        };
+        super::brushsym::edit_part(s, id, &path, "Transparency", |o| {
+            if let Some(op) = opacity {
+                o.opacity = op;
+            }
+            if let Some(b) = blend {
+                o.blend = b;
+            }
+        })?;
+        return ok();
+    }
     super::opacitymask::refuse_symbol_part_unnamed(s, p)?;
     let ids = super::opacitymask::transparency_targets(s, p)?;
     if ids.is_empty() {

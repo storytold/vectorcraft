@@ -43,12 +43,17 @@ fn cell(c: &str) -> Cell {
 }
 
 pub(super) fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<Option<f64>>>) {
+    let csv = csv.strip_prefix('\u{feff}').unwrap_or(csv);
     // Records end at line breaks outside quotes; a record is tab-separated if it has a tab outside quotes.
     let rows: Vec<Vec<Cell>> = split_unquoted(csv, '\n')
         .into_iter()
         .map(|l| l.trim_end_matches('\r'))
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
+            // A lone `""` line is a single blank value (`to_csv` writes it so the row isn't dropped as empty).
+            if l.trim() == "\"\"" {
+                return vec![Cell { text: String::new(), quoted: false }];
+            }
             let tabs = split_unquoted(l, '\t');
             let parts = if tabs.len() > 1 { tabs } else { split_unquoted(l, ',') };
             parts.into_iter().map(cell).collect()
@@ -169,7 +174,9 @@ pub(super) fn fmt_value(v: f64) -> String {
         // `{:.0}` prints its exact digits.
         if v.abs() < 9e18 { format!("{}", v.round() as i64) } else { format!("{v:.0}") }
     } else {
-        format!("{:.2}", v).trim_end_matches('0').trim_end_matches('.').to_string()
+        let s = format!("{:.2}", v).trim_end_matches('0').trim_end_matches('.').to_string();
+        // A tiny negative rounds to "-0.00"; show it as plain zero like -0.0.
+        if s == "-0" { "0".to_string() } else { s }
     }
 }
 

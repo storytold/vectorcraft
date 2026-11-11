@@ -6,8 +6,8 @@ use super::raster::{
     shade_filter, shadow_filter, silhouette,
 };
 use super::{
-    Affine, Arc, BezPath, FillRule, Frame, GeomContext, Ink, Node, NodeKind, RasterFx, Rect, RenderContext, Renderer, Shape, Vec2, blend_mode,
-    effects, fill_rule, peniko,
+    Affine, Arc, BezPath, FillRule, Frame, GeomContext, Ink, Node, NodeKind, RasterFx, Rect, RenderContext, Renderer, Shape, SymbolBoxes, Vec2,
+    blend_mode, effects, fill_rule, peniko,
 };
 
 #[cfg(test)]
@@ -340,7 +340,7 @@ impl Renderer {
             let e = match self.fx_geom.remove(&key) {
                 Some(e) if Arc::ptr_eq(&e.node, &o) => e,
                 _ => {
-                    let (g, carry) = effected_path_carrying(n, bp);
+                    let (g, carry) = effected_path_carrying(f.symbols.document(), n, bp);
                     FxGeom { g: Arc::new(g), carried: carried(n, &carry), items: vec![None; n.appearance.items.len()], node: o, stamp }
                 }
             };
@@ -349,7 +349,7 @@ impl Renderer {
         let (g, carried) = match &cached {
             Some((_, e)) => (e.g.clone(), e.carried.clone()),
             None => {
-                let (g, carry) = effected_path_carrying(n, bp);
+                let (g, carry) = effected_path_carrying(f.symbols.document(), n, bp);
                 (Arc::new(g), carried(n, &carry))
             }
         };
@@ -380,7 +380,7 @@ impl Renderer {
             self.hairline(ctx, f, g, [0, 0, 0, 255]);
             return;
         }
-        let gctx = GeomContext::of(paints);
+        let gctx = GeomContext { doc: Some(f.symbols.document()), ..GeomContext::of(paints) };
         let rfx = effects::raster_effects(&n.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
@@ -437,7 +437,13 @@ impl Renderer {
                 let region = if clipped { self.clip_of(&art) } else { None };
                 // A symbol's art can change while the instance doesn't: no cached shadows.
                 let cache = (cache && !matches!(a.kind, NodeKind::SymbolInstance { .. })).then_some(0);
-                let bounds = rasterize_bounds(f.symbols, a, &rfx);
+                // A 3D effect's art is in hand: Rasterize takes its bounds, measured once while it is
+                // kept, without building it again.
+                let rasterizes = rfx.iter().any(|x| matches!(x, RasterFx::Rasterize(_)));
+                let bounds = match rasterizes.then(|| self.three_d_art_bounds(f.symbols, &art)).flatten() {
+                    Some(b) => b,
+                    None => rasterize_bounds(f.symbols, a, &rfx),
+                };
                 let reach = bounds.map_or(reach, |b| reach.union(b));
                 let content = Content { node: a, owner: Some(a), cache, reach, outline: region.as_deref().map(|r| (&r.0, r.1)), bounds, kept: None };
                 self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.draw_fx_art(c, fr, a, &art));
@@ -487,6 +493,91 @@ impl Renderer {
         {
             return art;
         }
+        // Made to measure it ([`Self::measured_fx_art`]): taken out, and kept in `fx_arts` from now
+        // on if made from what it reads now, else made again.
+        let measured = self.measured.remove(&key).filter(|m| Arc::ptr_eq(&m.0, a)).map(|m| {
+            self.measured_bytes = self.measured_bytes.saturating_sub(crate::lru::node_bytes(&m.1));
+            (m.1, m.2)
+        });
+        let art = match measured {
+            Some((art, was)) => {
+                let now = match &found {
+                    Some(f) => Some(f.0),
+                    None => self.outside_key(doc, a),
+                };
+                if was == now { art } else { self.make_fx_art(doc, a) }
+            }
+            None => self.make_fx_art(doc, a),
+        };
+        if cache {
+            let bytes = crate::lru::node_bytes(&art);
+            self.fx_arts.insert(key, (a.clone(), art.clone(), found), bytes, self.stamp);
+        }
+        art
+    }
+
+    /// The art [`Self::fx_art`] draws for `a`, to measure it: the art kept for it, else made now and
+    /// held until the frame ends ([`Renderer::measured`]), for [`Self::fx_art`] to keep if `a` is
+    /// drawn. What is measured but never drawn (culled, off the view) is let go, and isn't kept in
+    /// place of what is drawn.
+    pub(crate) fn measured_fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Arc<Node> {
+        let key = Arc::as_ptr(a) as usize;
+        if let Some((node, art, found)) = self.fx_arts.get(&key, self.stamp)
+            && Arc::ptr_eq(node, a)
+        {
+            let (art, was) = (art.clone(), found.as_ref().map(|f| f.0));
+            if was.is_none_or(|was| self.live_found(doc, a).0 == was) {
+                return art;
+            }
+        }
+        let now = self.outside_key(doc, a);
+        if let Some((node, art, was)) = self.measured.get(&key)
+            && Arc::ptr_eq(node, a)
+            && *was == now
+        {
+            return art.clone();
+        }
+        let art = self.make_fx_art(doc, a);
+        // Art held for an object before (made from what it read then) gives way.
+        if let Some(old) = self.measured.remove(&key) {
+            self.measured_bytes = self.measured_bytes.saturating_sub(crate::lru::node_bytes(&old.1));
+        }
+        let bytes = crate::lru::node_bytes(&art);
+        // Within a budget: past it, what is measured is made again to draw it.
+        if self.measured_bytes + bytes <= self.measured_budget {
+            self.measured_bytes += bytes;
+            self.measured.insert(key, (a.clone(), art.clone(), now));
+        }
+        art
+    }
+
+    /// The bounds of `art`, art [`Self::fx_art`] made for an object, when it is a 3D effect's art
+    /// ([`super::three_d_art_bounds`]), measured once while it is kept; `None` for any other art.
+    pub(crate) fn three_d_art_bounds(&mut self, symbols: &SymbolBoxes, art: &Arc<Node>) -> Option<Option<Rect>> {
+        let key = Arc::as_ptr(art) as usize;
+        // Raster effects in the art spread by the resolution; brushed strokes in it draw from the
+        // brushes.
+        let at = (super::raster::doc_raster_ppi(symbols.document()).to_bits(), self.brushes.library_key(symbols.document(), self.stamp));
+        let (kept, measured) =
+            self.three_d_bounds.get(&key).filter(|e| std::ptr::eq(e.0.as_ptr(), Arc::as_ptr(art))).map(|e| (true, e.1.filter(|m| m.0 == at)))?;
+        if let (true, Some((_, b))) = (kept, measured) {
+            return Some(b);
+        }
+        let b = super::three_d_art_bounds(symbols, art);
+        self.three_d_bounds.insert(key, (Arc::downgrade(art), Some((at, b))));
+        Some(b)
+    }
+
+    /// The key of what `a`'s art reads from outside it ([`Self::live_found`]), `None` when it reads
+    /// nothing.
+    fn outside_key(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Option<u64> {
+        (evaluates_live(a) || reads_outside(a)).then(|| self.live_found(doc, a).0)
+    }
+
+    /// The art [`Self::fx_art`] draws for `a`, made now.
+    fn make_fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Arc<Node> {
+        // Whether the art is a 3D effect's ([`Self::three_d_art_bounds`]).
+        let mut three_d = false;
         let symbol = match &a.kind {
             NodeKind::SymbolInstance { symbol, .. } => {
                 doc.symbols.iter().find(|s| s.name == *symbol).map(|s| crate::brush_fx::instance_art(&s.art, a))
@@ -496,8 +587,12 @@ impl Renderer {
         let container = is_container(a);
         let art = match effects::crop_marks_art(a)
             .or_else(|| crate::addons::halftone::art(doc, a))
-            .or_else(|| effects::revolve_art(a))
-            .or_else(|| effects::solid_art(a))
+            .or_else(|| {
+                let art = effects::revolve_art_in(Some(doc), a).or_else(|| effects::solid_art_in(Some(doc), a));
+                self.stats.three_d_built += usize::from(art.is_some());
+                three_d |= art.is_some();
+                art
+            })
             .or_else(|| effects::reshape(Some(doc), a, symbol.as_ref()))
         {
             Some(r) => r,
@@ -505,7 +600,16 @@ impl Renderer {
             None if matches!(a.kind, NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::Path { .. } | NodeKind::Compound { .. }) => (**a).clone(),
             None => effects::outline_art(Some(doc), a, symbol.as_ref()).unwrap_or_else(|| Node::group(a.id, vec![])),
         };
-        let art = if effects::has_revolve(a) || effects::has_solid(a) { effects::evaluate_container(Some(doc), &art).unwrap_or(art) } else { art };
+        let has_three_d = effects::has_revolve(a) || effects::has_solid(a);
+        let mut art = if has_three_d { effects::evaluate_container(Some(doc), &art).unwrap_or(art) } else { art };
+        // A 3D effect on a fill or stroke that built nothing (Revolve after Roughen, a solid too
+        // complex) draws the item as without it: left in the art, it would draw the art as an
+        // object with effects again, and that art again, without end.
+        if has_three_d && !three_d && !container {
+            for item in &mut art.appearance.items {
+                item.effects_mut().retain(|e| !effects::is_three_d(&e.id));
+            }
+        }
         // Vector Halftone samples the object with its colour adjustments: its dots keep their inks.
         let outer = if effects::addons::halftone::has_halftone(a) { None } else { effects::color_map(&a.appearance.effects) };
         let mut art = self.adjusted_art(doc, art, outer.as_ref());
@@ -520,9 +624,18 @@ impl Renderer {
         // knockout setting says).
         art.knockout = if container { a.knockout } else { vectorcraft_doc::Knockout::Off };
         let art = Arc::new(art);
-        if cache {
-            let bytes = crate::lru::node_bytes(&art);
-            self.fx_arts.insert(key, (a.clone(), art.clone(), found), bytes, self.stamp);
+        if three_d {
+            // A renderer that only measures (an export, Fit to Artwork Bounds) ends no frame: what
+            // it no longer holds is let go here too.
+            if self.three_d_bounds.len() >= (2 * self.three_d_kept).max(1024) {
+                self.three_d_bounds.retain(|_, e| e.0.strong_count() > 0);
+                self.three_d_kept = self.three_d_bounds.len();
+                #[cfg(test)]
+                {
+                    self.three_d_sweeps += 1;
+                }
+            }
+            self.three_d_bounds.insert(Arc::as_ptr(&art) as usize, (Arc::downgrade(&art), None));
         }
         art
     }

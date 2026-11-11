@@ -236,6 +236,7 @@ impl TypeInks {
         text.xf = Affine::new([a, b, c, d, 0.0, 0.0]);
         text.cached_bounds = None;
         text.cached_baselines.clear();
+        text.cached_ink = None;
         let content = content_hash(&text).map(|hash| (hash, by_node.1, inputs));
         match content.and_then(|key| self.content.get(&key)) {
             Some(ink) => {

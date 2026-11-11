@@ -535,6 +535,32 @@ proptest! {
         renders(&s, &out)?;
     }
 
+    /// A live effect that declares `paintOutput` returning hostile pieces, on objects or on a fill:
+    /// drawing, export and Expand Appearance never crash.
+    #[test]
+    fn hostile_painted_effect_output_never_crashes(
+        objects in prop::collection::vec(arb_object(), 0..5),
+        junk in prop::option::weighted(0.1, arb_junk()),
+        on_fill in any::<bool>(),
+    ) {
+        let mut s = rich_session();
+        s.execute("select.all", &json!({})).unwrap();
+        let out = output(&objects, &[], junk);
+        let manifest = r#"{"id":"fuzz.painted","name":"Fuzz","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{}}"#;
+        install(&mut s, &wat::parse_str(tpl::returning(manifest, &out)).unwrap()).unwrap();
+        let item = if on_fill { json!(0) } else { Value::Null };
+        let r = catch_quiet(|| s.execute("effect.apply", &json!({"effect": "plugin.fuzz.painted", "item": item})).map(|_| ()));
+        if let Err(msg) = r {
+            return Err(TestCaseError::fail(format!("panicked on {out}: {msg}")));
+        }
+        renders(&s, &out)?;
+        let r = catch_quiet(|| s.execute("effect.expandAppearance", &json!({})).map(|_| ()));
+        if let Err(msg) = r {
+            return Err(TestCaseError::fail(format!("expanding panicked on {out}: {msg}")));
+        }
+        renders(&s, &out)?;
+    }
+
     /// An importer's hostile output (`document.open`) either opens a document that renders and
     /// exports, or is an error that opens nothing.
     #[test]
@@ -669,6 +695,7 @@ proptest! {
             prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
         }
         let mut s = rich_session();
+        s.allow_plugin_grants_from_requests();
         let module = wat::parse_str(tpl::returning(&text, r#"{"objects":[]}"#)).unwrap();
         let data = vectorcraft_format::base64_encode(&module);
         let r = catch_quiet(|| {
@@ -798,6 +825,65 @@ proptest! {
         }
     }
 
+    /// Manifests with hostile `inputs` (unknown, repeated and oddly cased kinds, long lists, junk of
+    /// every type) with any `api`, kind and permissions parse to an error or to a filter at `api` 2
+    /// or later asking for each kind once, whose `permissions` list `doc.read` so that installing
+    /// it asks for approval. One that installs and echoes its input on a document
+    /// with type, images and symbols leaves the document as it was, and it still renders.
+    #[test]
+    fn hostile_manifest_inputs_never_crash(
+        kind in prop::sample::select(vec!["filter", "effect", "exporter"]),
+        names in prop::collection::vec(prop::sample::select(vec!["type", "image", "symbolInstance", "Type", "text", "path", ""]), 0..6),
+        long in prop::option::weighted(0.1, 4usize..300),
+        inputs in prop::option::weighted(0.8, prop_oneof![Just(Value::Null), arb_junk()]),
+        api in prop_oneof![2 => Just(json!(2)), 1 => Just(json!(1)), 1 => Just(json!(3)), 1 => arb_junk()],
+        permissions in prop_oneof![Just(Value::Null), Just(json!([])), Just(json!(["doc.read", "doc.write"])), Just(json!(["doc.write"]))],
+    ) {
+        let mut m = json!({"id": "fuzz.inputs", "name": "Inputs", "kind": kind, "api": api});
+        if kind == "exporter" {
+            m["extensions"] = json!(["fz"]);
+        }
+        if !permissions.is_null() {
+            m["permissions"] = permissions;
+        }
+        m["inputs"] = match (inputs, long) {
+            (_, Some(n)) => json!(vec!["image"; n]),
+            (Some(Value::Null) | None, None) => json!(names),
+            (Some(junk), None) => junk,
+        };
+        let text = m.to_string();
+        let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
+        let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
+        if let Ok(man) = &parsed {
+            let kinds = man.input_kinds();
+            prop_assert_eq!(kinds.len(), man.inputs.len(), "{}", text);
+            prop_assert!(kinds.iter().enumerate().all(|(i, k)| !kinds[..i].contains(k)), "{}", text);
+            prop_assert!(kinds.is_empty() || (man.kind == vectorcraft_plugins::Kind::Filter && man.api >= 2), "{}", text);
+            let reads = man.permissions.as_ref().is_some_and(|p| p.iter().any(|n| n == "doc.read"));
+            prop_assert!(kinds.is_empty() || (man.asks_permissions() && reads), "{}", text);
+        }
+        let mut s = rich_session();
+        s.allow_plugin_grants_from_requests();
+        let module = wat::parse_str(tpl::module(&text, tpl::ECHO, "", 1)).unwrap();
+        let data = vectorcraft_format::base64_encode(&module);
+        let grant = json!(["doc.read", "doc.write", "state", "effect.render", "export.write"]);
+        let before = s.doc().unwrap().doc.clone();
+        let r = catch_quiet(|| {
+            let installed = s.execute("plugin.install", &json!({"dataBase64": data, "grant": grant})).is_ok();
+            let _ = s.execute("select.all", &json!({}));
+            let ran = installed && s.execute("plugin.run", &json!({"id": "fuzz.inputs"})).is_ok();
+            (installed, ran)
+        });
+        let (installed, ran) = r.map_err(|msg| TestCaseError::fail(format!("panicked running {text}: {msg}")))?;
+        prop_assert!(!installed || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
+        if ran {
+            prop_assert!(s.doc().unwrap().doc.layers == before.layers, "an echo changed the document: {}", text);
+        }
+        renders(&s, &text)?;
+        vectorcraft_plugins::registry::remove("fuzz.inputs");
+        vectorcraft_plugins::registry::revoke("fuzz.inputs");
+    }
+
     /// A plug-in that calls the storage imports with hostile keys (`..`, separators, device names,
     /// control characters, too long), values, lengths and pointers in and out of its memory runs to
     /// an output, never a panic; every call returns a length or a storage code, and the settings and
@@ -831,6 +917,7 @@ proptest! {
         let _ = std::fs::remove_dir_all(&store.0);
         let folder = store.0.clone();
         let mut s = Session::new();
+        s.allow_plugin_grants_from_requests();
         s.attach_plugin_store(folder.clone());
         let storing = |id: &str| format!(r#"{{"id":"{id}","name":"F","kind":"filter","api":2,"permissions":["settings","cache"]}}"#);
         let grant = json!(["settings", "cache"]);

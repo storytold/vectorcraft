@@ -2669,6 +2669,7 @@ fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
 fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
     use vectorcraft_plugins::wat as tpl;
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.allow_plugin_grants_from_requests();
     app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
     let (at_once, asks) = ("test.UI.heavy_filter-at-once", "test.UI.heavy_filter-asks");
     for (id, params, chord) in [(at_once, "{}", "Cmd+Alt+Shift+F7"), (asks, r#"{"wiggle":{"type":"bool"}}"#, "Cmd+Alt+Shift+F8")] {

@@ -27,6 +27,7 @@
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, ScreenSize, pdf};
+use vectorcraft_engine::cmd::params::{drop_unread_row_options, screen_formats};
 
 use super::{DialogSpec, form, png_options, svg_options};
 use crate::state::Dialog;
@@ -213,12 +214,29 @@ pub(crate) fn saved_options(app: &VectorcraftApp, saved: &Map<String, Value>, id
         options.insert("antiAlias".into(), aa.clone());
     }
     if let Some(o) = saved.get("settings").and_then(|v| v.get(id)).and_then(Value::as_object) {
-        options.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
+        let mut o = o.clone();
+        drop_unread_row_options(&mut o);
+        options.extend(o);
     }
     options
 }
 
-/// A row with its size as the text the Scale field shows (`2x`, `100w`, `100h`, `72ppi`).
+/// Export settings `settings` (as `document.exportSettings` or a preset holds them) without the
+/// keys the export no longer reads in its rows and per-format settings, and without settings for a
+/// format it doesn't write.
+pub(crate) fn drop_unread_screen_settings(settings: &mut Map<String, Value>) {
+    if let Some(rows) = settings.get_mut("formats").and_then(Value::as_array_mut) {
+        rows.iter_mut().filter_map(Value::as_object_mut).for_each(drop_unread_row_options);
+    }
+    if let Some(all) = settings.get_mut("settings").and_then(Value::as_object_mut) {
+        let formats = screen_formats();
+        all.retain(|id, _| formats.contains(&id.as_str()));
+        all.values_mut().filter_map(Value::as_object_mut).for_each(drop_unread_row_options);
+    }
+}
+
+/// A row with its size as the text the Scale field shows (`2x`, `100w`, `100h`, `72ppi`), without
+/// the keys the export no longer reads.
 fn editable_row(row: &Value) -> Value {
     let num = |k: &str| row.get(k).and_then(Value::as_f64);
     let text = match (num("width"), num("height"), num("ppi"), row.get("scale")) {
@@ -231,6 +249,7 @@ fn editable_row(row: &Value) -> Value {
     };
     let mut r = row.clone();
     if let Some(o) = r.as_object_mut() {
+        drop_unread_row_options(o);
         for k in ["width", "height", "ppi"] {
             o.remove(k);
         }
@@ -887,7 +906,11 @@ pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
         d.fields.insert("formats".into(), json!(rows));
         d.fields.insert("preset".into(), json!(p));
     }
-    if let (Some(all), Some(given)) = (d.fields.get_mut("settings").and_then(Value::as_object_mut), st["settings"].as_object()) {
+    // Settings for a format the export doesn't write, and keys it no longer reads, are left out.
+    let mut given = Map::from_iter([("settings".to_string(), st["settings"].clone())]);
+    drop_unread_screen_settings(&mut given);
+    if let (Some(all), Some(given)) = (d.fields.get_mut("settings").and_then(Value::as_object_mut), given.get("settings").and_then(Value::as_object))
+    {
         for (id, o) in given {
             match (all.get_mut(id).and_then(Value::as_object_mut), o.as_object()) {
                 (Some(mine), Some(o)) => mine.extend(o.iter().map(|(k, v)| (k.clone(), v.clone()))),

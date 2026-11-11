@@ -239,10 +239,12 @@ impl Node {
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.reach(symbols))),
             // The frame and each shape the image's own fills and strokes paint, a stroke's grown by
             // the farthest it can reach from its shape.
-            NodeKind::Image(_) => crate::hit::image_paint(self).iter().fold(self.geometric(symbols), |acc, (bp, _, item)| {
-                let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
-                vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
-            }),
+            NodeKind::Image(_) => {
+                crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(self.geometric(symbols), |acc, (bp, _, item)| {
+                    let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
+                    vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
+                })
+            }
             // Keys and steps placed on a spine, turned to it with Align to Path, can reach past the
             // keys and the spine.
             NodeKind::Blend { children, spec } => {
@@ -371,7 +373,10 @@ impl Node {
             NodeKind::SymbolInstance { symbol, xf } => {
                 let b = match symbols.and_then(|s| Some((s, s.art(symbol)?))) {
                     Some((s, art)) if !s.art_strokes() => xf.transform_rect_bbox(art.geometric),
-                    Some((_, art)) if moves_only(*xf) => xf.transform_rect_bbox(art.visual),
+                    // A symbol drawn at other than its natural size goes through its 9-slice guides.
+                    Some((s, art)) if moves_only(*xf) && s.document().symbol_slice_map_of(symbol, art.geometric, *xf).is_none() => {
+                        xf.transform_rect_bbox(art.visual)
+                    }
                     Some((s, art)) => {
                         let placed = xf.transform_rect_bbox(art.geometric);
                         match s.placed_visual(symbol, *xf).or_else(|| s.sliced_visual(symbol, *xf)) {

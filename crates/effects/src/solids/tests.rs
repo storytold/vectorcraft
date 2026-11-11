@@ -205,12 +205,12 @@ fn a_stroked_open_path_builds_a_ribbon() {
 /// still draws.
 #[test]
 fn a_stroke_past_the_limits_is_left_out() {
-    // 1,500 corners: within the 2,048 points of the fill's solid, but not the stroke's outline.
-    let points: Vec<Point> = (0..1500)
+    // 40,000 corners: within the 65,536 points of the fill's solid, but not the stroke's outline.
+    let points: Vec<Point> = (0..40_000)
         .map(|k| {
-            let (s, c) = (k as f64 * std::f64::consts::TAU / 1500.0).sin_cos();
-            let r = if k % 2 == 0 { 100.0 } else { 96.0 };
-            Point::new(200.0 + r * c, 200.0 + r * s)
+            let (s, c) = (k as f64 * std::f64::consts::TAU / 40_000.0).sin_cos();
+            let r = if k % 2 == 0 { 10_000.0 } else { 9_999.0 };
+            Point::new(20_000.0 + r * c, 20_000.0 + r * s)
         })
         .collect();
     let path = PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
@@ -330,7 +330,7 @@ fn export_and_expand_bake_faces_with_their_own_ids() {
         let mut n = square_node();
         n.id = d.alloc_id();
         n.appearance.effects.push(fx(id, json!({"bevel": "rounded"})));
-        assert_eq!(crate::bake_appearance(&n), solid_art(&n), "{id}");
+        assert_eq!(crate::bake_appearance(None, &n), solid_art(&n), "{id}");
         let mut stroke = |_: &mut Document, _: &PathData, _: FillRule, _: &StrokeLayer| None;
         let art = crate::expand_leaf(&mut d, &n, &mut stroke).unwrap();
         let mut ids = std::collections::HashSet::new();
@@ -356,7 +356,7 @@ fn a_twisted_tapered_hollow_inflate_exports_and_expands() {
     let params = json!({"twist": 120, "taper": 50, "cap": false, "bothSides": true, "rotationX": -20, "rotationY": 35});
     n.appearance.effects.push(fx(INFLATE, params));
     let art = solid_art(&n).unwrap();
-    assert_eq!(crate::bake_appearance(&n), Some(art.clone()));
+    assert_eq!(crate::bake_appearance(None, &n), Some(art.clone()));
     assert!(faces(&art).len() > 20, "{} faces", faces(&art).len());
     let mut stroke = |_: &mut Document, _: &PathData, _: FillRule, _: &StrokeLayer| None;
     let expanded = crate::expand_leaf(&mut d, &n, &mut stroke).unwrap();
@@ -591,13 +591,14 @@ fn a_3d_effect_on_a_group_turns_every_member_about_one_shared_axis() {
     // Hidden members and guides are left out; a group holding what can't become a solid is
     // refused with what to do.
     let mut g = group(EXTRUDE, json!({}));
-    let mut clip = Node::group(NodeId(5), vec![Arc::new(square_at(6, 0.0, RED))]);
-    clip.kind = NodeKind::Group { children: clip.children().unwrap().clone(), clip: true };
+    let mut woven = Node::group(NodeId(5), vec![Arc::new(square_at(6, 0.0, RED))]);
+    woven.kind = NodeKind::Intertwine { children: woven.children().unwrap().clone() };
     if let NodeKind::Group { children, .. } = &mut g.kind {
-        children.push(Arc::new(clip));
+        children.push(Arc::new(woven));
     }
     let err = validate_solid(&g, EXTRUDE, &json!({})).unwrap_err();
-    assert!(err.contains("clipping groups"), "{err}");
+    assert!(err.contains("release or expand its other objects"), "{err}");
+    assert!(err.contains("type, groups, clipping groups, blends and symbol instances"), "{err}");
     assert!(solid_art(&g).is_none(), "drawn as the group it is");
 }
 

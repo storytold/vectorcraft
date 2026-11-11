@@ -169,7 +169,7 @@ impl<'a> Reader<'a> {
         }
         if let Some(d) = self.gradient_def.as_mut() {
             match w {
-                "Bs" => d.stop(&vals, &mut self.stop_spots),
+                "Bs" => d.stop(&vals, &mut self.stop_spots, &mut self.names),
                 "BD" => {
                     if let Some((name, g)) = self.gradient_def.take().and_then(GradientDef::finish) {
                         self.global_names.define(Global::Gradient, &name);
@@ -227,7 +227,7 @@ impl<'a> Reader<'a> {
             "Lb" => self.layer_attrs(&vals),
             "Ln" => {
                 if let Some(Frame { kind: Kind::Layer(a), .. }) = self.frames.last_mut() {
-                    a.name = vals.iter().rev().find_map(V::text).unwrap_or_default();
+                    a.name = vals.iter().rev().find_map(|v| self.names.text(v)).unwrap_or_default();
                 }
             }
             "LB" => self.layer_end()?,
@@ -319,12 +319,12 @@ impl<'a> Reader<'a> {
             "A" => self.gs.locked = Self::nums(&vals).last() == Some(&1.0),
             "XW" => self.state_marker(&vals, hidden),
             // Gradients.
-            "Bd" => self.gradient_def = GradientDef::begin(&vals),
+            "Bd" => self.gradient_def = GradientDef::begin(&vals, &mut self.names),
             "Bs" | "BD" => {}
             "Bb" => self.instance = Some(Instance::begin(&vals)),
             "Bg" => {
                 if let Some(i) = self.instance.as_mut() {
-                    i.bg(&vals);
+                    i.bg(&vals, &mut self.names);
                 }
             }
             "Bm" => {
@@ -359,6 +359,14 @@ impl<'a> Reader<'a> {
             "XN" => {
                 if let Some(r) = self.raster.as_mut() {
                     r.space = vals.iter().rev().find_map(V::text);
+                }
+            }
+            // `n [… (name) /Separation] XC`: the image's samples are that ink's tints. A device
+            // space (`/DeviceGray XC` after a linked image's file name) changes nothing read here.
+            "XC" => {
+                let ink = paint::separation_ink(&vals, &mut self.names);
+                if let Some(r) = self.raster.as_mut() {
+                    r.ink = ink;
                 }
             }
             // Placed files.
@@ -463,8 +471,9 @@ impl<'a> Reader<'a> {
         a.dim = flag(4, false).then_some(dim_pct.round() as u8);
         let index = n.get(at).copied().unwrap_or(0.0);
         let rgb = |i: usize| n.get(at + i).map_or(0, |v| v.clamp(0.0, 255.0) as u8);
+        // The file numbers some presets differently from `LAYER_COLORS` (#6502).
         a.color = Some(if (0.0..vectorcraft_doc::LAYER_COLORS.len() as f64).contains(&index) && index.fract() == 0.0 {
-            LayerColor::Preset(index as u8)
+            LayerColor::Preset(crate::ai_ops::preset_of_ai_layer_index(index as u8))
         } else {
             LayerColor::Custom([rgb(1), rgb(2), rgb(3)])
         });
@@ -479,7 +488,7 @@ impl<'a> Reader<'a> {
         if self.frames.is_empty() {
             return;
         }
-        let name = vals.iter().find_map(|v| if let V::Str(_) = v { v.text() } else { None });
+        let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| self.names.text(v));
         let Some(tile) = name.as_deref().and_then(|n| self.pattern_tiles.get(n)).copied() else {
             self.unread_pattern(w);
             return;
@@ -523,7 +532,7 @@ impl<'a> Reader<'a> {
     }
 
     fn color(&mut self, w: &str, vals: &[V]) {
-        let Some((p, named)) = paint::color_op(w, vals) else { return };
+        let Some((p, named)) = paint::color_op_in(w, vals, &mut self.names) else { return };
         // Registration (`Xs`, `Xz`) says nothing of the document's colour model.
         let registration = matches!(w, "Xs" | "XS" | "Xz" | "XZ") || p.is_registration();
         match p.color().filter(|_| !registration) {
@@ -706,7 +715,7 @@ impl<'a> Reader<'a> {
     /// follows an object.
     fn style_marker(&mut self, vals: &[V], hidden: bool) {
         let code = Self::nums(vals).last().copied().unwrap_or(0.0);
-        let style = vals.iter().rev().find_map(V::text).unwrap_or_default();
+        let style = vals.iter().rev().find_map(|v| self.names.text(v)).unwrap_or_default();
         let after = std::mem::take(&mut self.after_object);
         // An object's own state block ends `6 () XW` (a layer's `7 () XW`): an `Xy` before it isn't the layer's.
         if code == 6.0 {
@@ -752,6 +761,24 @@ impl<'a> Reader<'a> {
         {
             return;
         }
+        // A variable-width stroke's look that draws nothing but copies read from `%_` lines: an
+        // empty group, which [`styled`] takes the stroke for.
+        let drawn;
+        let look = if !hidden
+            && slot_of(object.name.as_deref()).is_none()
+            && matches!(look.kind, NodeKind::Group { .. })
+            && self.styles.get(&style).is_some_and(|st| st.uneven)
+            && !draws(look, &self.hidden_ids)
+        {
+            let mut copy = look.clone();
+            if let Some(children) = copy.children_mut() {
+                children.clear();
+            }
+            drawn = copy;
+            &drawn
+        } else {
+            look
+        };
         // A style read here: the object, painted as it says.
         if let Some(mut appearance) = self.styles.get(&style).and_then(|st| {
             styled(
@@ -1062,10 +1089,13 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     use crate::import::ai::style::StyleItem;
     // A text object's slot (an empty group standing for it) takes the style as the type will.
     let slot = slot_of(object.name.as_deref()).is_some();
+    // Several fills and strokes, on a path or a compound path.
+    let stacked = !slot && !st.simple && st.stacked && matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
     // A symbol instance draws its symbol's art: it keeps its drawn look.
     if !st.plain
         || matches!(object.kind, NodeKind::SymbolInstance { .. })
-        || (!slot && !st.simple)
+        // A look with no outline in it to keep takes a variable-width stroke as the object's own.
+        || (!slot && !st.simple && !stacked && (!st.uneven || draws(look, &HashSet::new())))
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
         || (st.pathfinder
             && (slot || !st.items.is_empty() || object.is_compound_shape() || !matches!(object.kind, NodeKind::Group { clip: false, .. })))
@@ -1080,6 +1110,19 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     // drawn look has each where the app placed it.
     let mut placed = HashMap::new();
     placed_paints(look, &mut placed, 0);
+    // A stack's gradients are each its own swatch, placed where the drawn look has it: one fitted
+    // to the object's bounds instead could lie elsewhere, so such a stack keeps its drawn look.
+    if stacked {
+        let mut seen = HashSet::new();
+        let placed_apart = st.items.iter().all(|i| match i {
+            StyleItem::Gradient { name: Some(n), .. } => seen.insert(n) && placed.contains_key(paints.names.get(Global::Gradient, n)),
+            StyleItem::Gradient { name: None, .. } => false,
+            _ => true,
+        });
+        if !placed_apart {
+            return None;
+        }
+    }
     let mut items = vec![];
     for (n, item) in st.items.iter().enumerate() {
         let mut layer = match item {
@@ -1087,8 +1130,9 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
             StyleItem::Gradient { name, angle } => {
                 // The drawn look's gradients are keyed by the names they got in the document.
                 let paint = match (name.as_ref().and_then(|n| placed.get(paints.names.get(Global::Gradient, n))), gradients, own_gradient) {
-                    // Other objects than type: the object's own, as they always were.
-                    (_, 1, Some(own)) if !slot => own.paint.clone(),
+                    // Other objects than type: the object's own, as they always were (a stack's
+                    // where its drawn look places it).
+                    (_, 1, Some(own)) if !slot && !stacked => own.paint.clone(),
                     (Some(p), ..) => p.clone(),
                     (None, 1, Some(own)) => own.paint.clone(),
                     _ => {
@@ -1256,6 +1300,21 @@ fn strip(n: &mut Node, hidden: &HashSet<NodeId>) {
         for c in children.iter_mut() {
             strip(Arc::make_mut(c), hidden);
         }
+    }
+}
+
+/// Whether `n` holds anything that draws, apart from the children read from `%_` lines (`hidden`):
+/// a path or a compound path with a paint of its own, or a node other than a group or those.
+fn draws(n: &Node, hidden: &HashSet<NodeId>) -> bool {
+    if hidden.contains(&n.id) {
+        return false;
+    }
+    let paints = n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none());
+    match (&n.kind, n.children()) {
+        (NodeKind::Compound { .. }, Some(children)) => paints && children.iter().any(|c| c.visible && !hidden.contains(&c.id)),
+        (NodeKind::Group { .. }, Some(children)) => children.iter().any(|c| c.visible && draws(c, hidden)),
+        (NodeKind::Path { .. }, _) => paints,
+        _ => true,
     }
 }
 

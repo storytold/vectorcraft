@@ -385,6 +385,7 @@ font-technology	Variable	Változó
 	B4	B4
 	B5	B5
 	Background Color:	Háttérszín:
+	Guide Label:	Segédvonalak címkéje:
 	Show Center Mark	Középjel megjelenítése
 	Show Cross Hairs	Szálkereszt megjelenítése
 	Show Video Safe Areas	Biztonságos videoterületek megjelenítése
@@ -393,7 +394,6 @@ font-technology	Variable	Változó
 	Update While Dragging	Frissítés húzás közben
 	Hide Video Rulers	Videovonalzók elrejtése
 	Background Contents	Háttértartalom
-	Background Contents:	Háttértartalom:
 	Background:	Háttér:
 	Backspace	Backspace
 	Balance	Egyensúly
@@ -742,6 +742,11 @@ font-technology	Variable	Változó
 	Color Table ({n} colors)	Színtábla ({n} szín)
 	Color Theme	Színtéma
 	Color Themes	Színtémák
+	Color Wheel	Színkör
+	Hue ring	Színárnyalat-gyűrű
+	Saturation and brightness	Telítettség és fényesség
+	Color field	Színmező
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés
@@ -756,6 +761,7 @@ font-technology	Variable	Változó
 	Command	Parancs
 	Command Click to Select Objects Behind	Cmd+kattintás a mögöttes objektumok kijelöléséhez
 	Command Dialog	Parancs párbeszédablaka
+	Command API Reference	Parancsok API-referenciája
 	Commenting, filling in form fields and signing	Megjegyzések, űrlapmezők kitöltése és aláírás
 	Commits	Commitok
 	Community	Közösség
@@ -859,7 +865,6 @@ font-technology	Variable	Változó
 	Craquelure…	Repedezettség…
 	Create	Létrehozás
 	Create Clipping Mask	Vágómaszk létrehozása
-	Create Document	Dokumentum létrehozása
 	Create from Guides	Létrehozás segédvonalakból
 	Create from Selection	Létrehozás a kijelölésből
 	Create From:	Létrehozás ebből:
@@ -1156,7 +1161,7 @@ font-technology	Variable	Változó
 	Drag to float as a toolbar	Húzd el, hogy önálló eszköztárként lebegjen
 	Drag to float the toolbar	Húzd el az eszköztár lebegtetéséhez
 	Drag to move	Húzással áthelyezhető
-	Drag to the window's left edge to dock	Dokkoláshoz húzd az ablak bal szélére
+	Drag to the window's left or right edge to dock	Dokkoláshoz húzd az ablak bal vagy jobb szélére
 	Step up or down	Léptetés fel vagy le
 	Drag values or labels. Double-click a value to type.	Húzd az értékeket vagy a címkéket. Gépeléshez kattints duplán egy értékre.
 	Draw	Rajzolás
@@ -1568,6 +1573,7 @@ file-filter	Swatch libraries	Színminta-könyvtárak
 file-filter	Flattener presets	Lapítási előbeállítások
 file-filter	PDF presets	PDF-előbeállítások
 file-filter	Print presets	Nyomtatási előbeállítások
+file-filter	Preferences	Beállítások
 file-filter	Export presets	Exportálási előbeállítások
 file-filter	SVG Compressed	Tömörített SVG
 file-filter	PDF-compatible .ai	PDF-kompatibilis .ai
@@ -2372,6 +2378,8 @@ file-filter	Templates	Sablonok
 	Lock (⌘2)	Zárolás (⌘2)
 	Lock Grid	Rács zárolása
 	Lock Guides	Segédvonalak zárolása
+	Lock Guides by Default	Segédvonalak zárolása alapértelmezetten
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Rajztábla-segédvonalak Cmd/Ctrl + húzással a vonalzóból
 	Lock Others	Többi zárolása
 	Lock Slices	Szeletek zárolása
 	Lock Station Point	Nézőpont zárolása
@@ -2593,7 +2601,6 @@ file-filter	Templates	Sablonok
 	New Data Set…	Új adatkészlet…
 	New Document Presets	Új dokumentum előbeállításai
 	New file	Új fájl
-	New from Template	Új sablonból
 	New from Template…	Új sablonból…
 	New Graphic Style	Új grafikai stílus
 	New Graphic Style (Alt-click to name it)	Új grafikai stílus (Alt+kattintás: elnevezéssel)
@@ -3357,6 +3364,12 @@ mark-style	Japanese	Japán
 	Reset Painting	Painting visszaállítása
 	Reset Panel	Panel visszaállítása
 	Reset Preferences	Beállítások visszaállítása
+	Export Preferences…	Beállítások exportálása…
+	Import Preferences…	Beállítások importálása…
+	Save the applied preferences to a JSON file	Az alkalmazott beállítások mentése JSON-fájlba
+	Apply the preferences in a file Export Preferences saved	A Beállítások exportálása paranccsal mentett fájl beállításainak alkalmazása
+	Export Preferences	Beállítások exportálása
+	Import Preferences	Beállítások importálása
 	Search Preferences	Keresés a beállításokban
 	No settings found	Nincs ilyen beállítás
 	Reset Printing and Proofing	Printing and Proofing visszaállítása
@@ -3393,6 +3406,8 @@ mark-style	Japanese	Japán
 	Responsive	Reszponzív
 	Restore	Visszaállít
 	Restore every preference to its default (applied on OK)	Minden beállítás visszaállítása az alapértékre (az OK gombbal lép életbe)
+	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
 	Restored documents open unsaved: save them to keep them.	A visszaállított dokumentumok mentetlenül nyílnak meg: mentsd őket, ha meg akarod tartani.
 	Restrict printing, editing and other tasks	Nyomtatás, szerkesztés és más műveletek korlátozása
@@ -3511,6 +3526,7 @@ mark-style	Japanese	Japán
 	Save PDF Preset	PDF-előbeállítás mentése
 	Save Perspective Grid Preset	Perspektivikus rács előbeállításának mentése
 	Save Preset	Előbeállítás mentése
+	Save Document Preset	Dokumentum-előbeállítás mentése
 	Preset {number}	Előbeállítás {number}
 	Save Preset…	Előbeállítás mentése…
 	Save Print Preset	Nyomtatási előbeállítás mentése
@@ -3748,6 +3764,20 @@ mark-style	Japanese	Japán
 	Shades of Gray	Szürkeárnyalatok
 	Shading	Árnyékolás
 	Shadows and Glows	Árnyékok és ragyogások
+	Game HUD	Játék HUD
+	Health Fill	Életerő
+	Mana Glow	Mana
+	Damage Flash	Sebzés
+	Quest Outline	Küldetés
+	Coin Shine	Érme
+	Boss Alert	Főellenség
+	Status Effects	Állapot hatások
+	Poison Tint	Méreg
+	Freeze Edge	Fagy
+	Burn Aura	Égés
+	Stun Pulse	Kábítás
+	Stealth Fade	Lopakodás
+	Shield Buff	Pajzs
 	Shape	Alakzat
 	Shape Builder	Alakzatépítő
 	Shape Builder Regions	Alakzatépítő területei
@@ -4159,7 +4189,6 @@ mark-style	Japanese	Japán
 	Template	Sablon
 	Templates	Sablonok
 	Templates Folder	Sablonok mappája
-	Templates…	Sablonok…
 	Tetrad	Tetrád
 	Tetrad 2	Tetrád 2
 	Tetrad 3	Tetrád 3
@@ -4225,7 +4254,10 @@ mark-style	Japanese	Japán
 	tile {number}	csempe {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	A csempék számozása vízszintesen, majd lefelé halad; az összes csempéhez hagyd üresen a tartományt.
 	Tilt	Dőlés
+	Copies per Sheet (as many as fit, in a grid)	Példány laponként (ahány elfér, rácsban)
 	Tint	Tónus
+	Fill Tint	Kitöltés tónusa
+	Stroke Tint	Körvonal tónusa
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok
 	Tips	Tippek
@@ -4811,6 +4843,7 @@ imageTrace	Outline	Körvonal
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	az axis értéke "vertical", "horizontal" vagy fokban megadott szög lehet, ez nem az: `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black vagy egy szín, például "#ff8800"
 @msg	bad color {v}	hibás szín: {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	a `guideLabel` értéke null, egy rétegszín neve vagy #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio: 0,1 és 10 közötti szám kell
 @msg	the Color Picker is not open	a Színválasztó nincs megnyitva
 @msg	the Simplify slider is not open	az Egyszerűsítés csúszka nincs megnyitva
@@ -4857,6 +4890,32 @@ imageTrace	Outline	Körvonal
 @msg	compressed (RLE) bitmaps can't be read yet	a tömörített (RLE) bitképek még nem olvashatók
 @msg	Convert to Artboards: selection has no area	Átalakítás rajztáblákká: a kijelölésnek nincs területe
 @msg	Convert to Shape: no rectangles or ellipses selected	Átalakítás alakzattá: nincs kijelölt téglalap vagy ellipszis
+	Run	Futtatás
+	Run Script	Parancsfájl futtatása
+	Stop Script	Parancsfájl leállítása
+	Show External Script Warning	Figyelmeztetés külső parancsfájlok előtt
+	A Script Is Running	Egy parancsfájl fut
+	Script Alert	Parancsfájl-értesítés
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
+	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
+	Stop the script and undo what it did? Then quit again.	Leállítja a parancsfájlt, és visszavonja a módosításait? Ezután lépjen ki újra.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Ez a parancsfájl nagyon sok objektumot adott hozzá. Folytatja, vagy leállítja és visszavonja a módosításait?
+@msg	Choose a .js or .jsx script	Válasszon .js vagy .jsx parancsfájlt
+@msg	Ran {name}	Lefutott: {name}
+@msg	The script was stopped and its changes were undone	A parancsfájl leállt, a módosításai visszavonva
+@msg	a script is running: stop it or wait for it to finish	egy parancsfájl fut: állítsa le, vagy várja meg, hogy befejeződjön
+@msg	this is a compiled script, which cannot be run; use its source text	ez lefordított parancsfájl, amely nem futtatható; használja a forrásszövegét
+@msg	the script is not UTF-8 text	a parancsfájl nem UTF-8 szöveg
+@msg	the script is too large to run	a parancsfájl túl nagy a futtatáshoz
+@msg	a drag or an undo group is open; finish it before running a script	húzás vagy visszavonási csoport van folyamatban; fejezze be a parancsfájl futtatása előtt
+@msg	the script left a document that cannot be kept	a parancsfájl olyan dokumentumot hagyott hátra, amely nem tartható meg
+@msg	the script is no longer in the Scripts folder	a parancsfájl már nincs a Scripts mappában
+	Some scripts were not listed	Néhány szkript nem szerepel a listában
+	The Scripts folder cannot be read	A Scripts mappa nem olvasható
+@msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
+@msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
+@msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
@@ -4943,6 +5002,11 @@ imageTrace	Outline	Körvonal
 @msg	Invalid panel layout; restored the default dock	Érvénytelen panelelrendezés; az alapértelmezett dokk visszaállítva
 @msg	invalid parameters for `{cmd}`: {msg}	érvénytelen paraméterek (`{cmd}`): {msg}
 @msg	invalid PDF setting: {0}	érvénytelen PDF-beállítás: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: {unit} UserUnit értékkel íródik, így a UserUnit-ot figyelmen kívül hagyó alkalmazások ennyiszer kisebbnek mutatják
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: a(z) {label} oldalak UserUnit nélkül, pontokban íródnak, és a korlátot betartó alkalmazások 200 in-re vágják az oldalt
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	a PDF 1.5-ben nincs UserUnit, amelyre egy 14 400 pt-nál (200 in) hosszabb oldalnak szüksége van a mérete megtartásához: a fájl PDF 1.6-ként íródik
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	a(z) {n}. rajztábla oldala {size}, túl hosszú és keskeny a PDF 3 és 14 400 egység közötti oldalaihoz: {unit} UserUnit értékkel íródik, amely a rövid oldalt legalább 3 egységen tartja, és a korlátot betartó alkalmazások a hosszú oldalt 14 400 egységre vágják
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	a(z) {label} fájlok legfeljebb {max} értékű valós számokat tárolnak, a(z) {n}. rajztábla {side} pt hosszú oldalához pedig nagyobbak kellenek: válassza a PDF 1.6-os vagy újabb verziót PDF/X szabvány nélkül, vagy egy kisebb rajztáblát
 @msg	invalid restored panel group	érvénytelen visszaállított panelcsoport
 @msg	is not an image VectorCraft reads	nem olyan kép, amelyet a VectorCraft olvas
 @msg	it ends inside a group or compound path	egy csoporton vagy összetett útvonalon belül ér véget
@@ -5091,6 +5155,7 @@ imageTrace	Outline	Körvonal
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” betöltve; kihagyott lépések: {n}
 @msg	not an action set file	nem műveletkészlet-fájl
 @msg	the action set file is larger than 8 MiB	a műveletkészlet-fájl nagyobb 8 MiB-nál
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: a referencia nagyobb lenne {MAX_BYTES} bájtnál
 @msg	the action set file holds more than 1,000 actions	a műveletkészlet-fájl több mint 1000 műveletet tartalmaz
 @msg	the action set file needs a later version of VectorCraft	a műveletkészlet-fájlhoz a VectorCraft újabb verziója kell
 @msg	an action in the action set file has more than 10,000 steps	a műveletkészlet-fájl egyik műveletében több mint 10 000 lépés van
@@ -5163,7 +5228,10 @@ imageTrace	Outline	Körvonal
 @msg	object {id} is not a path	az objektum nem útvonal: {id}
 @msg	object {id} is not a selected top-level object	az objektum nem kijelölt legfelső szintű objektum: {id}
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	a VectorCraft által még nem olvasható ecsetek kimaradtak az Ecsetek panelről ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	a több kitöltésű vagy körvonalú, effektusos vagy ecsetes objektumok a megrajzolt kinézetükkel kerültek be ({_1}): a megjelenésük még nem szerkeszthető
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	a több kitöltésű vagy körvonalú, változó szélességű körvonalú, effektusos vagy ecsetes objektumok a megrajzolt kinézetükkel kerültek be ({_1}): a megjelenésük még nem szerkeszthető
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	a(z) `{name}` név nem UTF-8, ezért {label} kódolással lett beolvasva: ha hibásnak tűnik, nyissa meg a fájlt másik legacyNameEncoding értékkel
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	a(z) `{name}` név nem UTF-8, és egyes részei {label} kódolásban sem érvényesek: nyissa meg a fájlt másik legacyNameEncoding értékkel
+@msg	more names that aren't UTF-8 were read as {label} ({count})	további nem UTF-8 nevek lettek {label} kódolással beolvasva ({count})
 @msg	Offset Path: select paths	Útvonal eltolása: jelölj ki útvonalakat
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Útvonal eltolása: az eltolás után semmi sem marad a kijelölt útvonalakból (a befelé eltolás nagyobb az alakzatoknál)
 @msg	onto must name a floating panel	az onto egy lebegő panelt kell megnevezzen
@@ -5386,6 +5454,10 @@ imageTrace	Outline	Körvonal
 @msg	the PSD file is cut short	a PSD-fájl csonka
 @msg	the PSD file's header is damaged	a PSD-fájl fejléce sérült
 @msg	the PSD file's image data can't be read: {e}	a PSD-fájl képadatai nem olvashatók: {e}
+@msg	the JPEG XL file is cut short	a JPEG XL-fájl csonka
+@msg	the JPEG XL container is too large to read	a JPEG XL-konténer túl nagy az olvasáshoz
+@msg	CMYK JPEG XL images can't be read	CMYK módú JPEG XL-képek nem olvashatók
+@msg	the JPEG XL file can't be read: {e}	a JPEG XL-fájl nem olvasható: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	a PSD-fájl képadatai ismeretlen tömörítést használnak ({m})
 @msg	the PCX file is cut short	a PCX-fájl csonka
 @msg	the PCX file's header is damaged	a PCX-fájl fejléce sérült
@@ -5444,6 +5516,20 @@ imageTrace	Outline	Körvonal
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
 @msg	unknown panel `{raw}`	ismeretlen panel: `{raw}`
 @msg	unknown preference `{key}`	ismeretlen beállítás: `{key}`
+@msg	Preferences imported.	A beállítások importálva.
+@msg	not a preferences file: {e}	nem beállításfájl: {e}
+@msg	not a preferences file: no JSON object	nem beállításfájl: nincs JSON-objektum
+@msg	not a preferences file (format `{format}`)	nem beállításfájl (formátum: `{format}`)
+@msg	not a preferences file: no `format`	nem beállításfájl: nincs `format`
+@msg	not a preferences file: no `version`	nem beállításfájl: nincs `version`
+@msg	not a preferences file: no `prefs`	nem beállításfájl: nincs `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	a fájlt a VectorCraft újabb verziója mentette (verzió: {v})
+@msg	the file holds no preferences	a fájl nem tartalmaz beállításokat
+@msg	`{key}` names a folder, which preferences files leave out	a(z) `{key}` mappát ad meg, a beállításfájlok pedig nem tartalmaznak mappákat
+@msg	the file is larger than 1 MB	a fájl nagyobb 1 MB-nál
+@msg	give `path` or `data`	adja meg a `path` vagy a `data` értékét
+@msg	`{key}` must be an object	a(z) `{key}` értékének objektumnak kell lennie
+@msg	`prefs.import` runs on its own, not as a batch step	a `prefs.import` önállóan fut, nem kötegelt lépésként
 @msg	unknown preset (one of {_1})	ismeretlen előbeállítás (ezek egyike lehet: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (high, medium, low vagy egy mentett; lásd: flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (lásd: flattener.presets.list)
@@ -5557,7 +5643,8 @@ imageTrace	Outline	Körvonal
 	Bevel both sides	Élletörés mindkét oldalon
 	Presets	Készletek
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Egy objektumnak csak egy 3D effektusa lehet. Szerkessze a meglévő effektus beállításait, vagy előbb távolítsa el.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} egyelőre görbét vagy összetett görbét igényel. Előbb alakítsa görbévé a szöveget, a képeket és a csoportokat.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} egyelőre görbét, összetett görbét, szöveget, csoportot, összemosást vagy szimbólumpéldányt igényel. Előbb bontsa ki az egyéb objektumokat.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} képből nem tud testet létrehozni: előbb vektorizálja az Objektum › Képvektorizálás › Létrehozás paranccsal.
 @msg	{label} requires a shape with at least two anchors	{label} legalább két szerkesztőpontos alakzatot igényel
 @msg	The shape is too complex for a 3D effect	Az alakzat túl összetett a 3D effektushoz
 @msg	The 3D surface is too complex; simplify the shape	A 3D felület túl összetett; egyszerűsítse az alakzatot
@@ -5565,6 +5652,11 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; did you mean `{near}`?	ismeretlen paraméter: `{key}`; erre gondolt: `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	ismeretlen paraméter: `{key}`; a parancsnak nincs paramétere
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
+@msg	the params must be an object, not {got}	a paramétereknek objektumnak kell lenniük, nem ez: {got}
+@msg	unknown parameter `{path}`; the object takes no keys	ismeretlen paraméter: `{path}`; az objektum nem fogad el kulcsokat
+@msg	unknown parameter `{path}`; it takes: {keys}	ismeretlen paraméter: `{path}`; ezeket fogadja el: {keys}
+@msg	missing `{path}`	hiányzik: `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}`: {expected} kell, nem ez: {got}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: nem PNG, JPEG, WebP, TIFF vagy BMP kép
@@ -5610,6 +5702,7 @@ imageTrace	Outline	Körvonal
 	Preview (1 inch on the page)	Előnézet (1 hüvelyk az oldalon)
 	Set as Default	Beállítás alapértelmezettként
 	 out from a highlighted edge to place its dimension  |  	 egy kiemelt élről kifelé a méret elhelyezéséhez  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 két pontra, majd mozgasd a mutatót, és kattints az igazított, vízszintes vagy függőleges méret elhelyezéséhez  |  
 	 cancels  |  Double-click the tool for options	 megszakítja  |  Dupla kattintás az eszközre a beállításokhoz
 	Angular	Szög
 	Away from the Line	A vonaltól távol
@@ -5639,14 +5732,17 @@ imageTrace	Outline	Körvonal
 @msg	Invalid drawing scale	Érvénytelen rajzlépték
 @msg	Invalid real scale	Érvénytelen valós lépték
 @msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
+@msg	Invalid measured point	Érvénytelen mért pont
 @msg	Measured segment no longer exists	A mért szakasz már nem létezik
 @msg	Non-finite dimension	Nem véges méret
+@msg	Only linear dimensions are horizontal or vertical	Csak a lineáris méretek lehetnek vízszintesek vagy függőlegesek
 @msg	Scale Text Attributes: selected type has no scale to bake	Szövegattribútumok méretezése: a kijelölt szövegnek nincs alkalmazható méretezése
 @msg	Scale must be drawing:real, for example 1:10	A léptéknek rajz:valós alakúnak kell lennie, például 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	A lépték aránya 1:1000000 és 1000000:1 között lehet
 @msg	Second measured segment no longer exists	A második mért szakasz már nem létezik
 @msg	Unknown dimension mode	Ismeretlen méretezési mód
 @msg	Unknown dimension option {k}	Ismeretlen méretezési beállítás: {k}
+@msg	Unknown dimension orientation	Ismeretlen méretezési tájolás
 @msg	Unknown dimension style	Ismeretlen méretezési stílus
 @msg	Unknown unit	Ismeretlen mértékegység
 # Revolve cap description
@@ -5889,7 +5985,7 @@ axis	Y Axis	Y tengely
 @msg	Running “{name}”…	Futtatás: „{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	az élő effektus a dokumentum rajzolása közben fut, ezért nem lehet `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	az exportáló bővítmény mindig az exportálás keretét kapja: hagyd ki a `budget` kulcsot
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): telepítsd az `allowHeavy: true` megadásával, miután a felhasználó beleegyezett
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): egy személynek jóvá kell hagynia az asztali alkalmazásban, vagy add meg az `allowHeavy: true` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Telepíted a(z) „{name}” bővítményt, amely ezeket az engedélyeket kéri?
 	ID: {id}	Azonosító: {id}
@@ -5906,21 +6002,46 @@ axis	Y Axis	Y tengely
 	Show its progress, see Cancel and write log lines	Megjelenítheti az előrehaladását, észlelheti a megszakítást és naplósorokat írhat
 	Keep settings of its own	Saját beállításokat tárolhat
 	Keep a cache of its own, which you can clear	Saját gyorsítótárat tárolhat, amelyet Ön kiüríthet
+	Run these commands on the document: {ids}	Ezeket a parancsokat futtathatja a dokumentumon: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	a(z) „{name}” a(z) `{id}` parancsot sorolja fel a `commandAllowlist` listában, amelyet bővítmény nem hívhat meg
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: a jegyzék `commandAllowlist` listája nem sorolja fel
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: az azonosító vagy az argumentumok a modul memóriáján kívül esnek
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: az azonosító vagy az argumentumok nem UTF-8 kódolásúak
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: az argumentumok nem JSON-objektumot alkotnak
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` listát csak a szokásos keretű szűrő adhat meg
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	parancshívások (futásonként {MAX_CALLS} hívás és {MAX_CALL_BYTES} bájt)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	parancshívás mérete (vc_call `{shown}`: {len} bájt, korlát {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	legfeljebb {MAX_ALLOWED_COMMANDS} parancs a `commandAllowlist` listában
+@msg	a plug-in may not call this command	bővítmény nem hívhatja meg ezt a parancsot
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	a `commandAllowlist` listához a `commands` engedély szükséges, a `commands` engedélyhez pedig `commandAllowlist` lista
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	a `commandAllowlist` a(z) `{shown}` elemet nevezi meg, amely nem parancsazonosító, vagy kétszer szerepel
 	Clear Plug-in Cache	Bővítmény gyorsítótárának kiürítése
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	a(z) `{permission}` engedélyhez {PROGRESS_API}. szintű bővítmény-API kell: adja meg az `api` {PROGRESS_API} értéket
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	a modul az `env.{name}` elemet a gazdaprogramétól eltérő típussal importálja: a gazdaprogram típusa {signature}
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	a modul importálja az `env.{name}` elemet, amelyet bővítmény csak {PROGRESS_API}. szintű bővítmény-API-val (`api` {PROGRESS_API}) és a(z) `{permission}` engedéllyel használhat
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	a modul importálja a(z) `{from}.{name}` elemet, amelyet a gazdaprogram nem kínál: bővítmény csak a docs/plugins.md által felsorolt `env.vc_*` függvényeket importálhatja (2. szintű bővítmény-API), WASI-t, fájlokat és hálózatot nem
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	az `api` értéke {_1}; ez a gazdaprogram az 1 és {API_LEVEL} közötti bővítmény-API-szinteket támogatja
+@msg	`paintOutput` may only be true	A `paintOutput` értéke csak true lehet
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	a `paintOutput` csak élő effektushoz (`kind` "effect") használható, `api` 2 mellett
 @msg	`grant` must be a list of permission names	a `grant` értékének engedélynevek listájának kell lennie
 @msg	`grant` names an unknown permission `{shown}`	a `grant` ismeretlen engedélyt nevez meg: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	egy `{_1}` fajtájú bővítménynek szüksége van a(z) `{_2}` engedélyre
 @msg	at most {MAX_PERMISSIONS} `permissions`	legfeljebb {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	a(z) `{shown}` engedély nem vonatkozik `{_1}` fajtájú bővítményre
 @msg	permission `{shown}` is listed twice	a(z) `{shown}` engedély kétszer szerepel
+@msg	only a filter declares `inputs`	`inputs` kulcsot csak szűrő adhat meg
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	az `inputs` ismeretlen objektumfajtát nevez meg: `{shown}`; használja a type, image vagy symbolInstance értéket
+@msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
+@msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
+@msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	memóriakeret (a(z) {_1} objektumnak {size} bájt bemenet kell, {left} maradt)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektumkeret (több mint {MAX_OBJECTS} csak olvasható objektum)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
 @msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	a(z) „{name}” a következő engedélyeket kéri: {asked}; telepítsd egy őket felsoroló `grant` értékkel, ha a felhasználó beleegyezik
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	a(z) „{name}” a következő engedélyeket kéri: {asked}; egy személynek jóvá kell hagynia őket az asztali alkalmazásban, vagy add meg a `grant` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	a `grant` és az `allowHeavy` csak --allow-plugin-grants kapcsolóval indított munkamenetben érvényes: hagyd jóvá a bővítményt az asztali alkalmazásban
+@msg	Only the person at the keyboard can approve installing a plug-in	Bővítmény telepítését csak a billentyűzetnél ülő személy hagyhatja jóvá
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a(z) „{name}” nem kapta meg a(z) `{p}` engedélyt, amelyre a kimenetének szüksége van: semmi sem változott
 @msg	a heavy filter runs in the background, so it can't declare `commands`	a nehéz szűrő a háttérben fut, ezért nem deklarálhat `commands` értéket
 @msg	at most {MAX_COMMANDS} `commands`	legfeljebb {MAX_COMMANDS} `commands`
@@ -5981,6 +6102,20 @@ axis	Y Axis	Y tengely
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all vagy egy tartomány, például 1, 3-5, nem {v}
 	Add to Symbols	Hozzáadás a szimbólumokhoz
 	Basic Shapes	Alapalakzatok
+	Button	Gomb
+	Panel	Panel
+	UI Frames	UI keretek
+	Map Markers	Térképjelölők
+	Pin	Gombostű
+	Flag	Zászló
+	Crosshair	Célkereszt
+	Checkpoint	Ellenőrzőpont
+	Inventory Icons	Leltári ikonok
+	Sword	Kard
+	Shield	Pajzs
+	Potion	Bájital
+	Key	Kulcs
+	Gem	Drágakő
 	Open Symbol Library	Szimbólumkönyvtár megnyitása
 	Save Symbol Library	Szimbólumkönyvtár mentése
 	Save Symbol Library…	Szimbólumkönyvtár mentése…
@@ -6035,6 +6170,11 @@ axis	Y Axis	Y tengely
 	User Brush Library 9	Felhasználói ecsetkönyvtár 9
 	User Brush Library 10	Felhasználói ecsetkönyvtár 10
 	Art Ribbons	Grafikus szalagok
+	Zigzag	Cikkcakk
+	Burst Ray	Ütéssugár
+	Dash Trail	Szaggatott nyom
+	Speed Line	Sebességvonal
+	Game Trails	Játéknyomok
 	Calligraphic Nibs	Kalligrafikus tollhegyek
 	Pattern Borders	Mintázatszegélyek
 	Scatter Shapes	Szórt alakzatok
@@ -6055,6 +6195,8 @@ axis	Y Axis	Y tengely
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Pontszöveg
 	Area Text	Területszöveg
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Szöveg mérése a glifahatárok szerint
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glifához illesztés beállításainak megjelenítése
 	Hide Snap to Glyph Options	Glifához illesztés beállításainak elrejtése
@@ -6469,7 +6611,7 @@ breakText	Glyphs	Glifák
 	Reset Symbol Instance	Szimbólumpéldány visszaállítása
 @msg	type must be static or dynamic, not {v}	a type értéke static vagy dynamic lehet, nem {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statikus szimbólum: előbb állítsa a szimbólum típusát Dinamikusra
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Egy szimbólumpéldányban kijelölt útvonalnak, összetett útvonalnak vagy szövegnek csak a kitöltés és a körvonal egyszínű színe módosítható
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Egy szimbólumpéldányban kijelölt görbe, összetett görbe vagy szöveg esetén csak a kitöltés, a körvonal, az átlátszatlanság és a keverési mód módosítható
 @msg	path must be a list of child indices	a path gyermekindexek listája kell legyen
 @msg	no object at path {shown} in the symbol's art	a szimbólum grafikájában nincs objektum a(z) {shown} útvonalon
 @msg	give fill, stroke, opacity and/or blend	adja meg a fill, stroke, opacity és/vagy blend értékét
@@ -6618,3 +6760,37 @@ breakText	Glyphs	Glifák
 # Align to Pixel Grid
 	Align to Pixel Grid	Igazítás a pixelrácshoz
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
+@msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`
+	Ignore All	Az összes kihagyása
+	Add to Dictionary	Hozzáadás a szótárhoz
+	No Suggestions	Nincs javaslat
+	Edit Custom Dictionary	Egyéni szótár szerkesztése
+	Entry:	Bejegyzés:
+# Script Console
+	Script Console	Parancsfájlkonzol
+	Clear Script Console	Parancsfájlkonzol törlése
+	Copy Script Console	Parancsfájlkonzol másolása
+	Copy All	Összes másolása
+	Copy Selected	Kijelölés másolása
+	Finished	Befejeződött
+	Ended with an error	Hibával ért véget
+	Out of fuel	Elfogyott az utasításkeret
+	Ended at a host limit	Gazdakorlátnál ért véget
+	Ended at a limit	Korlátnál ért véget
+	Stopped	Leállítva
+	Ended by an internal fault	Belső hiba miatt ért véget
+	time unavailable	az idő nem érhető el
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	leglassabbak: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} gazdahívás
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} korábbi sor elvetve
+@plural	{n} line cut|{n} lines cut	{n} sor levágva
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Elhalasztott effektusok frissítése
+	Deferred Effects	Elhalasztott effektusok
+@msg	no plug-in effect is deferred	nincs elhalasztott bővítményeffektus
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.

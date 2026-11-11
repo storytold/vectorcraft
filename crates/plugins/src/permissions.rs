@@ -5,21 +5,25 @@
 //! `doc.read`, `doc.write`, `state` and `progress` are the names of the plug-in capability model in
 //! storytold/photocraft#662; the other names are VectorCraft's own. A manifest without
 //! `permissions` gets the ones its kind implies ([`Permission::implied`]): what every plug-in of
-//! that kind could do before manifests listed them. `progress`, `settings` and `cache`, which let a
-//! plug-in use the host imports of API level 2 ([`crate::host`]), are never implied: a manifest
-//! lists them.
+//! that kind could do before manifests listed them. `progress`, `settings`, `cache` and `commands`,
+//! which let a plug-in use the host imports of API level 2 ([`crate::host`]), are never implied: a
+//! manifest lists them.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{Error, Kind, Result};
 
 /// The plug-in API level this host implements. A manifest's `api` (1 when left out) may be at most
-/// this.
+/// this. Level 2 adds the host imports ([`PROGRESS_API`]) and a live effect's `paintOutput`
+/// ([`crate::painted`]).
 pub const API_LEVEL: u32 = 2;
 
 /// The API level that adds the host imports ([`crate::host::IMPORTS`]) and the `progress`,
-/// `settings` and `cache` permissions they need.
+/// `settings`, `cache` and `commands` permissions they need.
 pub const PROGRESS_API: u32 = 2;
+
+/// The API level that adds a filter's `inputs` ([`crate::InputKind`]).
+pub const INPUTS_API: u32 = 2;
 
 /// Most permissions a manifest may list.
 pub const MAX_PERMISSIONS: usize = 16;
@@ -66,10 +70,14 @@ pub enum Permission {
     /// Keep a cache of its own, which the user can clear ([`crate::storage`]).
     #[serde(rename = "cache")]
     Cache,
+    /// Run the VectorCraft commands its manifest's `commandAllowlist` names, with `vc_call`
+    /// ([`crate::host::IMPORTS`]): a filter only.
+    #[serde(rename = "commands")]
+    Commands,
 }
 
 /// Every permission this host grants, in the order prompts list them.
-pub const ALL: [Permission; 9] = [
+pub const ALL: [Permission; 10] = [
     Permission::DocRead,
     Permission::DocWrite,
     Permission::State,
@@ -79,11 +87,13 @@ pub const ALL: [Permission; 9] = [
     Permission::Progress,
     Permission::Settings,
     Permission::Cache,
+    Permission::Commands,
 ];
 
 /// The permissions of the host imports, which any kind may list and none implies; each needs plug-in
-/// API level [`PROGRESS_API`].
-pub const HOST: [Permission; 3] = [Permission::Progress, Permission::Settings, Permission::Cache];
+/// API level [`PROGRESS_API`]. Only a filter with a `commandAllowlist` may list `commands`
+/// ([`crate::manifest::Manifest::command_allowlist`]).
+pub const HOST: [Permission; 4] = [Permission::Progress, Permission::Settings, Permission::Cache, Permission::Commands];
 
 impl Permission {
     /// Its name in a manifest and in `plugin.install`'s `grant`.
@@ -98,6 +108,7 @@ impl Permission {
             Permission::Progress => "progress",
             Permission::Settings => "settings",
             Permission::Cache => "cache",
+            Permission::Commands => "commands",
         }
     }
 
@@ -118,6 +129,7 @@ impl Permission {
             Permission::Progress => "Show its progress, see Cancel and write log lines",
             Permission::Settings => "Keep settings of its own",
             Permission::Cache => "Keep a cache of its own, which you can clear",
+            Permission::Commands => "Run these commands",
         }
     }
 

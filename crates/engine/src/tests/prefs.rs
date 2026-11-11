@@ -242,6 +242,110 @@ fn reset_category_and_all() {
     assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
 }
 
+/// A rectangle made into a guide path; nothing is selected after.
+fn guide_path(s: &mut Session, x: f64) -> NodeId {
+    let id = square(s, x, 0.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    id
+}
+
+/// Lock Guides by Default is off, and preferences saved before it existed leave guides unlocked.
+#[test]
+fn lock_guides_by_default_is_off_and_older_preferences_leave_guides_unlocked() {
+    assert!(!Prefs::default().lock_guides_by_default);
+    let older: Prefs = serde_json::from_value(json!({"keyboardIncrement": 4})).unwrap();
+    assert!(!older.lock_guides_by_default);
+    let mut s = Session::new();
+    s.apply_prefs(older);
+    assert!(!s.guides_locked());
+    assert!(s.execute("prefs.set", &json!({"key": "lockGuidesByDefault", "value": "yes"})).is_err());
+    assert!(!s.guides_locked() && !s.prefs.lock_guides_by_default);
+}
+
+/// Preferences saved with the option on start a session with guides locked. A document opened in
+/// it has its ruler guides and guide paths locked, and new guides can still be made. View › Guides
+/// › Lock Guides then unlocks them for the session and leaves the preference on.
+#[test]
+fn saved_lock_guides_by_default_locks_a_new_session_and_the_documents_it_opens() {
+    let file = std::env::temp_dir().join(format!("vc-lock-guides-{}.vectorcraft", std::process::id()));
+    let file = file.to_string_lossy().to_string();
+    let mut unlocked = new_doc();
+    assert!(!unlocked.guides_locked(), "a session without the preference");
+    let path = guide_path(&mut unlocked, 100.0);
+    unlocked.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    unlocked.execute("document.save", &json!({"path": file})).unwrap();
+
+    // The preference is set with no document open, as a headless session can.
+    let mut first = Session::new();
+    first.execute("prefs.set", &json!({"key": "lockGuidesByDefault", "value": true})).unwrap();
+    let saved = first.prefs.to_json();
+    assert_eq!(saved["lockGuidesByDefault"], json!(true));
+
+    let mut s = Session::new();
+    s.apply_prefs(serde_json::from_value(saved).unwrap());
+    assert!(s.guides_locked());
+    s.execute("document.open", &json!({"path": file})).unwrap();
+    let _ = std::fs::remove_file(&file);
+    assert!(s.guides_locked(), "opening a document keeps the lock");
+    assert!(matches!(s.execute("guide.select", &json!({"indexes": [0]})), Err(EngineError::Disabled(..))));
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "a guide path can't be selected");
+    assert_eq!(s.execute("guide.add", &json!({"vertical": false, "pos": 20})).unwrap()["index"], 1);
+
+    assert_eq!(s.execute("view.guides.lock", &json!({})).unwrap(), json!({"locked": false}));
+    assert!(s.prefs.lock_guides_by_default, "the menu leaves the preference as it is");
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, [path]);
+}
+
+/// Changing the preference sets the lock at once and deselects guides in every open document.
+/// A change to any other preference, or setting it to the value it has, keeps the session's lock.
+#[test]
+fn changing_lock_guides_by_default_sets_the_lock_and_other_changes_keep_it() {
+    let mut s = new_doc();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let path = guide_path(&mut s, 100.0);
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+
+    set_pref(&mut s, "lockGuidesByDefault", json!(true));
+    assert!(s.guides_locked());
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the guide path in the active document");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert!(s.doc().unwrap().selection.guides.is_empty(), "the ruler guide in the other document");
+
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    set_pref(&mut s, "keyboardIncrement", json!(4));
+    set_pref(&mut s, "lockGuidesByDefault", json!(true));
+    assert!(!s.guides_locked(), "the session's unlock stays");
+
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    set_pref(&mut s, "lockGuidesByDefault", json!(false));
+    assert!(!s.guides_locked(), "turning the preference off unlocks guides");
+}
+
+/// Reset turns the option off and unlocks guides. With the option already off, a reset keeps a
+/// lock set from the View menu.
+#[test]
+fn resetting_lock_guides_by_default_unlocks_guides_only_when_it_was_on() {
+    let mut s = new_doc();
+    for params in [json!({"category": "Guides & Grid"}), json!({})] {
+        set_pref(&mut s, "lockGuidesByDefault", json!(true));
+        assert!(s.guides_locked());
+        s.execute("prefs.reset", &params).unwrap();
+        assert!(!s.prefs.lock_guides_by_default, "{params}");
+        assert!(!s.guides_locked(), "{params}");
+    }
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert!(s.guides_locked());
+}
+
 /// `prefs.set` refuses a recovery or plug-ins folder that is missing or is a file. Nothing changes,
 /// other values in the same call included, and the document gets no undo step.
 #[test]

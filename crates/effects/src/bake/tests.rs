@@ -536,7 +536,7 @@ fn a_baked_stroke_keeps_its_raster_effects() {
         s.effects.push(fx("path.offsetPath", json!({"offset": 5.0})));
         s.effects.push(fx("stylize.dropShadow", json!({})));
     }
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let ch = m.children().unwrap();
     let Some(AppearanceItem::Fill(f)) = ch[1].appearance.items.first() else { panic!("the outline is filled") };
     assert_eq!(f.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.dropShadow"]);
@@ -551,7 +551,7 @@ fn a_baked_stroke_leaves_dither_behind() {
         g.gradient.dither = true;
         s.paint = Paint::Gradient(Box::new(g));
     }
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let ch = m.children().unwrap();
     let Some(AppearanceItem::Fill(f)) = ch[1].appearance.items.first() else { panic!("the outline is filled") };
     let Paint::Gradient(g) = &f.paint else { panic!("a gradient fill") };
@@ -567,7 +567,7 @@ fn a_baked_stroke_with_a_gradient_along_it_becomes_meshes_clipped_to_its_outline
         s.gradient_mode = vectorcraft_doc::StrokeGradientMode::Along;
         s.opacity = 0.5;
     }
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let ch = m.children().unwrap();
     let NodeKind::Group { children, clip: true } = &ch[1].kind else { panic!("a clip group: {:?}", ch[1].kind) };
     assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
@@ -600,10 +600,10 @@ fn a_baked_transform_copy_keeps_its_scaled_stroke() {
     // Distort Appearance: the 200% copy's stroke is 4 pt, as outside the envelope, so its outline
     // is 204 pt wide.
     let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1, "strokes": true}));
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let w = widths(&m);
     assert_eq!(w.len(), 2, "{w:?}");
-    assert!((w[0] - 102.0).abs() < 0.5 && (w[1] - 204.0).abs() < 0.5, "{w:?}");
+    assert!((w[1] - 102.0).abs() < 0.5 && (w[0] - 204.0).abs() < 0.5, "the original on top: {w:?}");
     assert!(baked_paths(&m).iter().all(|p| p.appearance.stroke().is_none()), "the strokes are outlined");
 }
 
@@ -611,7 +611,7 @@ fn a_baked_transform_copy_keeps_its_scaled_stroke() {
 fn a_baked_transform_copy_keeps_its_moved_pattern() {
     let paint = Paint::Pattern { pattern: "p".into(), xf: vectorcraft_geom::Affine::IDENTITY };
     let n = transformed(paint, Paint::None, 0.0, json!({"moveH": 30, "copies": 1, "patterns": true}));
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let xs: Vec<f64> = baked_paths(&m)
         .iter()
         .map(|p| match p.appearance.fill_paint() {
@@ -619,14 +619,14 @@ fn a_baked_transform_copy_keeps_its_moved_pattern() {
             p => panic!("not a pattern: {p:?}"),
         })
         .collect();
-    assert_eq!(xs, vec![0.0, 30.0]);
+    assert_eq!(xs, vec![30.0, 0.0], "the original on top");
 }
 
 #[test]
 fn a_baked_transform_without_its_options_outlines_the_copies_together() {
     // Without Scale Strokes & Effects the copy keeps the 2 pt stroke: one outline of both squares.
     let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1}));
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let w = widths(&m);
     assert_eq!(w.len(), 1, "{w:?}");
     assert!((w[0] - 202.0).abs() < 0.5, "{w:?}");

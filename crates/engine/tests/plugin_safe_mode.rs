@@ -204,6 +204,7 @@ fn a_disabled_plug_in_whose_new_grant_cant_be_stored_stays_disabled() {
     let _f = fresh();
     let dir = tmp_dir("reinstall-no-grant");
     let mut s = launch(&dir);
+    s.allow_plugin_grants_from_requests();
     let manifest = r#"{"id":"test.sm.g","name":"Test","version":"1","kind":"filter","permissions":["doc.read"]}"#;
     let module = |out: &str| vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(manifest, out)).unwrap());
     s.execute("plugin.install", &json!({"dataBase64": module(r#"{"objects":[]}"#), "grant": ["doc.read"]})).unwrap();
@@ -214,6 +215,37 @@ fn a_disabled_plug_in_whose_new_grant_cant_be_stored_stays_disabled() {
     s.execute("plugin.install", &json!({"dataBase64": module(r#"{"objects":[],"error":null}"#), "grant": ["doc.read"], "replace": true})).unwrap();
     assert_eq!(safe_mode::disabled().len(), 1, "the module the update could not replace stays disabled");
     safe_mode::set_disabled(vec![]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A stored module that lists no permissions and isn't read, because it is disabled or Safe Mode is
+/// on, leaves the grant for its id in the store. The load that reads it forgets the grant.
+#[test]
+fn a_stored_module_that_is_not_read_keeps_the_grant_for_its_id() {
+    let _f = fresh();
+    let dir = tmp_dir("unread-grant");
+    let id = "test.sm.unread";
+    let mut s = launch(&dir);
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&filter(id))})).unwrap();
+    let grants = dir.join("grants.json");
+    let entry = serde_json::to_vec(&json!([{"id": id, "hash": "0".repeat(64), "permissions": ["doc.read"]}])).unwrap();
+    std::fs::write(&grants, &entry).unwrap();
+
+    s.execute("plugin.setEnabled", &json!({"id": id, "enabled": false})).unwrap();
+    let mut s = launch(&dir);
+    assert!(!installed(id), "the disabled module is skipped");
+    assert_eq!(std::fs::read(&grants).unwrap(), entry, "a disabled module keeps the grant");
+
+    s.execute("plugin.setEnabled", &json!({"id": id, "enabled": true})).unwrap();
+    vectorcraft_engine::cmd::plugin::start_in_safe_mode();
+    let mut s = launch(&dir);
+    assert!(!installed(id), "Safe Mode loads nothing");
+    assert_eq!(std::fs::read(&grants).unwrap(), entry, "Safe Mode keeps the grant");
+
+    safe_mode::set_active(None);
+    vectorcraft_engine::cmd::plugin::load_prefs_folder(&mut s);
+    assert!(installed(id));
+    assert!(!grants.exists(), "the load that reads the module forgets the grant");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -429,4 +461,44 @@ fn expand_appearance_keeps_a_plug_in_effect_safe_mode_skips() {
     s.execute("appearance.setItem", &json!({"index": 0, "visible": false})).unwrap();
     safe_mode::set_active(Some(safe_mode::Source::Flag));
     s.execute("effect.expandAppearance", &json!({})).unwrap();
+}
+
+/// In Safe Mode, a plug-in effect on a dimension selected with the art it measures does not stop
+/// Expand Appearance: the dimension is left as it is, its effect included, and the art expands.
+#[test]
+fn expand_appearance_in_safe_mode_leaves_a_dimension_selected_with_its_art() {
+    let _f = fresh();
+    let mut s = Session::new();
+    let fx = wat::parse_str(tpl::returning(&tpl::manifest("test.sm.dim", "effect", "{}"), r#"{"objects":[]}"#)).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&fx)})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let art = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 72, "height": 72})).unwrap()["id"].clone();
+    s.execute("paint.setStroke", &json!({"ids": [art], "color": "#000000"})).unwrap();
+    s.execute("appearance.addStroke", &json!({})).unwrap();
+    let source = json!({"kind": "segment", "edge": {"node": art, "subpath": 0, "segment": 0}});
+    let dim = s.execute("dimension.create", &json!({"source": source})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [dim]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "plugin.test.sm.dim"})).unwrap();
+    s.execute("select.set", &json!({"ids": [art, dim]})).unwrap();
+    let node = |s: &mut Session, id: &Value| {
+        let inspect = s.execute("document.inspect", &json!({})).unwrap();
+        let mut found = Value::Null;
+        let mut stack = vec![inspect["layers"].clone()];
+        while let Some(v) = stack.pop() {
+            match v {
+                Value::Array(a) => stack.extend(a),
+                Value::Object(o) if o.get("id") == Some(id) => found = Value::Object(o),
+                Value::Object(o) => stack.extend(o.into_iter().map(|(_, v)| v)),
+                _ => {}
+            }
+        }
+        found
+    };
+    let kept = node(&mut s, &dim);
+    let measured = node(&mut s, &art);
+    safe_mode::set_active(Some(safe_mode::Source::Flag));
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    safe_mode::set_active(None);
+    assert_ne!(node(&mut s, &art), measured, "the art expands");
+    assert_eq!(node(&mut s, &dim), kept, "the dimension and its effect stay as they are");
 }

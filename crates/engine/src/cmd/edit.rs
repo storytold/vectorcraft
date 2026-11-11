@@ -157,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{selectedArtboards?: [n…], art?: bool, lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (as edit.copy) (selected ruler guides go too; the Artboard tool chosen, or selectedArtboards given: artboard.cut); refused while an object of a symbol instance's art is selected",
+            "{selectedArtboards?: [n…], art?: bool, lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (as edit.copy) removes the objects it copies, in one undo step: a compound-path member selected on its own leaves the compound's other members in the compound (selected ruler guides go too; the Artboard tool chosen, or selectedArtboards given: artboard.cut); refused while an object of a symbol instance's art is selected",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -166,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
+            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses (a compound-path member selected on its own, whole or in part, with Direct or Group Selection, is copied as an ordinary path with the compound's paint, transparency, opacity mask, fill rule and graphic style link (while it has that style's look), a gradient keeping the compound's fit; the compound is copied when it is selected, or when every member is selected whole outside isolation mode), and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -220,7 +220,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides); without ids, refused while an object of a symbol instance's art is selected",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -931,7 +931,11 @@ fn without_inner(doc: &Document, placed: Vec<(NodeId, Option<Vec<usize>>)>) -> i
     })
 }
 
-/// The direct-selection flag and resolved root nodes for Copy and Cut operations.
+/// The direct-selection flag and resolved root nodes for Copy and Cut operations. A compound-path
+/// member selected on its own (whole, with Direct or Group Selection, or by some of its anchors or
+/// segments) is taken as itself, so Copy copies it as an ordinary path and Cut removes it alone. The
+/// compound is taken whole when it is selected, or when every one of its members is selected whole
+/// outside isolation mode; in an isolated compound every member is taken as itself.
 fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let st = s.doc()?;
     // The Pen and the Curvature tool leave the anchor they placed or edited selected: Copy takes
@@ -940,9 +944,19 @@ fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature") && !picked;
     let direct = !in_drawing_tool && (!st.selection.anchors.is_empty() || !st.selection.segments.is_empty());
     let in_isolated_compound = st.isolation.is_some_and(|iso| st.doc.node(iso).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
-    let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_compound, member| {
-        in_isolated_compound || (direct && (st.selection.partial(member).is_some() || st.selection.segments.contains_key(&member)))
-    });
+    // A member counts as selected whole when Copy would take it unchanged: no anchors or segments
+    // of it are picked, the picked ones cover every segment, or a drawing tool's own anchor is
+    // all that is picked.
+    let selected: std::collections::HashSet<NodeId> = st.selection.objects.iter().copied().collect();
+    let whole = |m: &vectorcraft_doc::Node| selected.contains(&m.id) && (!direct || super::clipboard::copied_whole(m, &st.selection));
+    // Worked out once per compound: every selected member asks about its compound.
+    let checked = std::cell::RefCell::new(std::collections::HashMap::new());
+    let all_members_whole = |compound: NodeId| {
+        *checked.borrow_mut().entry(compound).or_insert_with(|| {
+            st.doc.node(compound).and_then(|n| n.children()).is_some_and(|members| !members.is_empty() && members.iter().all(|m| whole(m)))
+        })
+    };
+    let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |compound, _member| in_isolated_compound || !all_members_whole(compound));
     Ok((direct, roots))
 }
 
@@ -1016,8 +1030,8 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
         copy(s, p)?;
         return clear(s, &json!({}));
     }
-    // Copy promotes a compound member to its compound. Cut must remove the same objects it
-    // copied, while Clear on its own deletes exactly the selected members.
+    // Cut removes the same objects Copy takes: a compound member selected on its own, or the
+    // whole compound when it is selected or every member is selected whole.
     let (direct, roots) = copy_cut_targets(s)?;
     let res = copy(s, p)?;
     if res.get("copied").and_then(Value::as_u64) == Some(0) {
@@ -1027,6 +1041,12 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     if !direct { clear(s, &json!({ "ids": roots, "guides": true })) } else { cut_direct_selection(s, &roots) }
 }
 
+/// Remove the geometry copied by a direct-selection Cut, including selected guides in one edit.
+/// Select every surviving piece while retaining intentional compound-path structure.
+/// `roots` contains the copied targets: whole-object roots are removed in full, while partial paths
+/// lose only the copied geometry. An exhausted partial path is removed, along with its compound
+/// parent if now empty; layers remain. Returns JSON `null` on success, replacing direct-selection
+/// references with surviving object IDs.
 fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
     let st = s.doc()?;
     let sel = st.selection.clone();
@@ -1035,50 +1055,59 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
         let gone = selection.guides.clone();
         d.retain_guides(selection, |i, _| !gone.contains(&i));
         let mut survivors = vec![];
+        let mut pieces = super::pathops::Beside::replacing(d, roots);
         for id in roots {
             let Some(node) = d.node(*id) else { continue };
             let has_direct = sel.anchors.contains_key(id) || sel.segments.contains_key(id);
-            if !has_direct {
-                d.remove(*id)?;
+            if !has_direct || node.path_data().is_none() {
+                remove_leaving_no_empty_compound(d, *id)?;
                 continue;
             }
-            let Some(path) = node.path_data() else {
-                d.remove(*id)?;
-                continue;
-            };
+            let original = super::path::deletion_source(d, *id)?;
 
             let seg_refs = sel.segments.get(id);
             let anchor_refs = sel.anchors.get(id);
             let mut subpaths = Vec::new();
-            for (si, sp) in path.subpaths.iter().enumerate() {
-                let cuts = super::clipboard::subpath_selected_segments(sp, si, seg_refs, anchor_refs);
+            let owned = std::mem::take(&mut super::path::path_mut(d, *id)?.subpaths);
+            for (si, sp) in owned.into_iter().enumerate() {
+                let cuts = super::clipboard::subpath_selected_segments(&sp, si, seg_refs, anchor_refs);
                 if cuts.is_empty() {
-                    subpaths.push(sp.clone());
+                    subpaths.push(sp);
+                } else if seg_refs.is_some_and(|segments| !segments.is_empty()) {
+                    subpaths.extend(super::path::without_segments(sp, &cuts));
                 } else {
-                    subpaths.extend(super::path::without_segments(sp.clone(), &cuts));
+                    // Picked anchors leave the path with their connections, as Clear removes them.
+                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flatten().filter_map(|&(s, a)| (s == si).then_some(a)).collect();
+                    subpaths.extend(super::path::without_anchors(sp, &gone));
                 }
             }
             subpaths.retain(|sp| sp.anchors.len() >= 2);
             if subpaths.is_empty() {
-                let parent = d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
-                d.remove(*id)?;
-                if let Some(p) = parent
-                    && d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))
-                {
-                    d.remove(p)?;
-                }
+                remove_leaving_no_empty_compound(d, *id)?;
             } else {
-                let path_node = super::path::path_mut(d, *id)?;
-                path_node.subpaths = subpaths;
-                survivors.push(*id);
+                survivors.extend(super::path::replace_deleted_pieces(d, &mut pieces, original, subpaths)?);
             }
         }
+        pieces.finish(d)?;
         selection.set(survivors);
         selection.anchors.clear();
         selection.segments.clear();
         Ok(())
     })?;
     ok()
+}
+
+/// Remove object `id`, and the compound path that held it when it was the compound's last member.
+/// A compound left with one member stays a compound path, as after Clear.
+fn remove_leaving_no_empty_compound(d: &mut Document, id: NodeId) -> Result<()> {
+    let parent = d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
+    d.remove(id)?;
+    if let Some(p) = parent
+        && d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))
+    {
+        d.remove(p)?;
+    }
+    Ok(())
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {

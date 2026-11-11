@@ -62,6 +62,38 @@ pub fn fit_first_line(db: &FontDb, t: &mut TextObject) -> bool {
     true
 }
 
+/// Area type whose source lays out `lines` lines in its frame, more than fit here: a font that isn't
+/// available shows in the fallback font, whose lines may reach lower, and the source may set a last
+/// line whose descent passes the frame's bottom, which isn't drawn here. For importers: the frame is
+/// made taller, from its bottom, by its lines' deepest descent plus 0.05 pt, when that lays out
+/// more of the source's lines and no more than it has. Horizontal type only. Whether it was.
+pub fn fit_source_lines(db: &FontDb, t: &mut TextObject, lines: usize) -> bool {
+    let TextKind::Area { frame } = &t.kind else { return false };
+    if t.vertical {
+        return false;
+    }
+    let Some(b) = frame.bounds().filter(|b| b.height() > 1e-6) else { return false };
+    let laid = layout(db, t);
+    let have = laid.lines.len();
+    if !laid.overflow || have == 0 || have >= lines {
+        return false;
+    }
+    // The deepest descent of its lines (a little more, for the rounding of the layout).
+    let Some(descent) = laid.lines.iter().map(|l| l.descent).reduce(f64::max).filter(|d| d.is_finite() && *d > 0.0) else { return false };
+    let by = (b.height() + descent + 0.05) / b.height();
+    if !(by.is_finite() && by > 1.0) {
+        return false;
+    }
+    let taller = frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)));
+    let short = std::mem::replace(&mut t.kind, TextKind::Area { frame: taller });
+    let now = layout(db, t).lines.len();
+    if now > have && now <= lines {
+        return true;
+    }
+    t.kind = short;
+    false
+}
+
 /// The underline and strikethrough bars of `t` laid out as `layout` (#847): per run and line, a
 /// bar from the stretch's first glyph to its last one's advance, placed and sized by the font's
 /// own underline and strikeout metrics through the glyph's transform (so the size, baseline shift
@@ -342,6 +374,7 @@ fn layout_runs(db: &FontDb, t: &TextObject, opts: &LayoutOptions, set: Option<&T
         system_layout: t.system_layout,
         fractional_widths: t.fractional_widths,
         upright_cluster: None,
+        tcy_block: None,
         out: TextLayout::default(),
     };
     // Vertical type: line space turned a quarter turn clockwise (lines become columns, each next

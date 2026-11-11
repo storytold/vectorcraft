@@ -17,8 +17,9 @@ pub fn items() -> Vec<(String, String, String)> {
         let label = if path.is_empty() { c.label.to_string() } else { format!("{path} › {}", c.label) };
         items.push((label, c.id.to_string(), menus::shortcut_of(c.id).unwrap_or("").to_string()));
     }
-    // `plugin.dialog` runs nothing without an id: [`build`] lists each filter instead.
-    for c in menus::UI_COMMANDS.iter().filter(|c| c.0 != "plugin.dialog") {
+    // `plugin.dialog` runs nothing without an id: [`build`] lists each filter instead. A script of
+    // the Scripts folder runs from File › Scripts, by its path.
+    for c in menus::UI_COMMANDS.iter().filter(|c| c.0 != "plugin.dialog" && c.0 != crate::scripts_menu::COMMAND) {
         items.push((c.1.to_string(), c.0.to_string(), menus::shortcut_of(c.0).unwrap_or("").to_string()));
     }
     for tool in vectorcraft_tools::catalog::all_tools() {

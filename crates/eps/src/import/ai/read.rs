@@ -125,7 +125,7 @@ use vectorcraft_geom::{AnchorKind, FillRule, PathData};
 use super::super::ate::CANVAS_CENTRE;
 use super::super::graphics::HAIRLINE;
 use super::lex::{Lexer, Tok};
-use super::obj::{self, Obj, V};
+use super::obj::{self, NameEncoding, Obj, V};
 use super::paint::{self, Global, GradientDef, Instance, Named, ShownNames};
 use crate::ps;
 
@@ -238,22 +238,30 @@ pub(super) fn remember_xml_id(xml_ids: &mut HashMap<String, Option<NodeId>>, byt
     }
 }
 
+/// [`read_in`], names that aren't UTF-8 read as Windows-1252.
+#[cfg(test)]
+pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+    read_in(data, large_canvas, NameEncoding::default())
+}
+
 /// Read the structure of the editing data `data`, applying the file's `%AI24_LargeCanvasScale` only
 /// when `large_canvas` is set: an EPS's page is drawn at the full size, but a `.ai`'s PDF part may
-/// keep the reduced one, which the PDF import reads as it is (#2031).
-pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
-    read_with(data, large_canvas, false)
+/// keep the reduced one, which the PDF import reads as it is (#2031). Names that aren't UTF-8
+/// (layers, objects, artboards, colors, gradients, patterns, graphic styles, swatches, brushes,
+/// symbols, variables and data sets) are read in `names`, each with a warning.
+pub fn read_in(data: &[u8], large_canvas: bool, names: NameEncoding) -> Result<Structure, String> {
+    read_with(data, large_canvas, false, names)
 }
 
-/// [`read`] for a file whose page art replaces the objects the reader doesn't read (see
+/// [`read_in`] for a file whose page art replaces the objects the reader doesn't read (see
 /// [`Reader::unread_box`]): an image past the hard limits ([`raster::Limits`]) is then such an
-/// object, where [`read`] leaves it out with a note.
-pub(crate) fn read_over_page(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
-    read_with(data, large_canvas, true)
+/// object, where [`read_in`] leaves it out with a note.
+pub(crate) fn read_over_page(data: &[u8], large_canvas: bool, names: NameEncoding) -> Result<Structure, String> {
+    read_with(data, large_canvas, true, names)
 }
 
-fn read_with(data: &[u8], large_canvas: bool, page_art: bool) -> Result<Structure, String> {
-    let mut r = Reader::with_names(data);
+fn read_with(data: &[u8], large_canvas: bool, page_art: bool, names: NameEncoding) -> Result<Structure, String> {
+    let mut r = Reader::with_names(data, names);
     r.large_canvas = large_canvas.then_some(1.0);
     r.page_art = page_art;
     r.run()?;
@@ -263,17 +271,18 @@ fn read_with(data: &[u8], large_canvas: bool, page_art: bool) -> Result<Structur
 /// How many objects [`read`] counts against [`MAX_NODES`] in the editing data `data`.
 #[cfg(test)]
 pub(crate) fn objects_read(data: &[u8]) -> Result<usize, String> {
-    let mut r = Reader::with_names(data);
+    let mut r = Reader::with_names(data, NameEncoding::default());
     r.run()?;
     Ok(r.nodes)
 }
 
 /// [`read`] for editing data kept apart from the program `ps` it came with (an EPS's private
 /// data): the program's header gives the author and the custom colors the editing data's header
-/// doesn't. `page_art`: as [`read_over_page`] reads a file.
-pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8], page_art: bool) -> Result<Structure, String> {
-    let header = Reader::header_of(ps);
-    let mut r = Reader::with_names(data);
+/// doesn't. `page_art`: as [`read_over_page`] reads a file. `names`: the encoding of names that
+/// aren't UTF-8.
+pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8], page_art: bool, names: NameEncoding) -> Result<Structure, String> {
+    let header = Reader::header_of(ps, names);
+    let mut r = Reader::with_names(data, names);
     r.large_canvas = large_canvas.then_some(1.0);
     r.page_art = page_art;
     // The program's custom colors have swatches of their names, which no gradient or pattern takes.
@@ -292,8 +301,8 @@ pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8], page_art: bool) -
 /// and patterns. Names come only from what the reader reads: not from the alternates of versioned
 /// content, the prolog, resources, sections it skips (such as symbols and the text document) or
 /// what follows the trailer. The palette the reader keeps is the last one outside those and the
-/// sections it reads on their own.
-fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
+/// sections it reads on their own. Names that aren't UTF-8 are read in `encoding`.
+fn swatch_names(data: &[u8], encoding: NameEncoding) -> (ShownNames, Option<&[u8]>) {
     /// The sections the reader reads on their own whose definitions and colors it keeps.
     const READ_APART: &[&str] = &["BeginPattern", "BeginBrushPattern", "BeginPluginObject", "BeginArtStyles", "BeginArtStyleList"];
     /// Whether the marker `m` ends what began with `begin` and ends with `end`, `depth` of its kind
@@ -311,7 +320,9 @@ fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
     }
     let mut names = ShownNames::default();
     names.reserve(vectorcraft_color::swatch::REGISTRATION);
-    let mut colors = paint::ColorNames::default();
+    // The reader reads these names again, and keeps the notes on them.
+    let mut decoder = obj::Names::new(encoding);
+    let mut colors = paint::ColorNames::new(encoding);
     let mut lex = Lexer::new(data);
     // What the reader skips wherever it is (the marker of one of its kind nested in it, its end
     // marker, how many are open inside it, and where reading goes on when it doesn't end), the
@@ -386,7 +397,7 @@ fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
             // A palette's names are those of the palette kept, as the palette reads them.
             _ if skip.is_some() || palette_at.is_some() || section.is_some_and(|s| !s.3) => continue,
             Tok::Str(s) | Tok::Hex(s) if std::mem::take(&mut head) => {
-                let text = obj::text(s);
+                let text = decoder.bytes(s);
                 if !text.contains('\n') {
                     names.reserve(&text);
                 }
@@ -396,7 +407,7 @@ fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
         colors.token(t.tok);
     }
     colors.gradients.iter().filter(|n| !n.contains('\n')).for_each(|n| names.reserve(n));
-    let palette = palette.map(super::palette::palette).unwrap_or_default();
+    let palette = palette.map(|p| super::palette::palette(p, &mut decoder)).unwrap_or_default();
     if palette.is_empty() {
         for mode in [ColorMode::Rgb, ColorMode::Cmyk] {
             let (swatches, groups) = vectorcraft_color::default_swatches(mode.model());
@@ -546,6 +557,9 @@ struct Reader<'a> {
     envelope_spent: super::envelope::Spent,
     /// The text objects read with a Warp ([`super::envelope::WarpedType`]).
     warped_type: Vec<super::envelope::WarpedLook>,
+    /// The envelopes of type read with their drawn art, settled once the type is laid out
+    /// ([`super::envelope::TypedEnvelope`]).
+    typed_envelopes: Vec<super::envelope::TypedEnvelope>,
     /// The live envelopes made so far and the drawn art each took the place of
     /// ([`Structure::envelopes_drawn`]).
     envelopes_drawn: Vec<(NodeId, Node)>,
@@ -631,6 +645,8 @@ struct Reader<'a> {
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
+    /// How names that aren't UTF-8 are read, and the notes on them.
+    names: obj::Names,
     /// The file has brush objects (the brush manager's order or a brush).
     brush_objects: bool,
     /// The brush manager's order.
@@ -668,13 +684,14 @@ pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
 impl<'a> Reader<'a> {
     /// A reader of the editing data `data` as a whole, with the names its gradients and patterns
     /// get in the document and its art styles found first ([`swatch_names`]): the symbols defined
-    /// before the art styles section use them too.
-    fn with_names(data: &'a [u8]) -> Self {
+    /// before the art styles section use them too. Names that aren't UTF-8 are read in `encoding`.
+    fn with_names(data: &'a [u8], encoding: NameEncoding) -> Self {
         let mut r = Self::new(data);
-        let (names, styles) = swatch_names(data);
+        r.names = obj::Names::new(encoding);
+        let (names, styles) = swatch_names(data, encoding);
         r.global_names = names;
         if let Some(section) = styles {
-            r.styles = super::style::art_styles(section);
+            r.styles = super::style::art_styles_in(section, &mut r.names);
         }
         r
     }
@@ -755,6 +772,7 @@ impl<'a> Reader<'a> {
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
             warped_type: Vec::new(),
+            typed_envelopes: Vec::new(),
             envelopes_drawn: Vec::new(),
             clip_fills: HashSet::new(),
             looks: HashSet::new(),
@@ -794,6 +812,7 @@ impl<'a> Reader<'a> {
             v7_patterns: HashSet::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
+            names: obj::Names::default(),
             brush_objects: false,
             brush_order: None,
             brush_drafts: Vec::new(),

@@ -21,6 +21,7 @@ pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, e
 pub(crate) use export::{
     export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
 };
+pub(crate) use open::report_installed;
 pub(crate) use open::{EXPORT_PRESETS, import_presets, open_with_on, opened};
 pub use open::{
     MAX_RECENT_FILES, OpensAs, ask_revert, install_module, install_plugin, new_from_template, note_recent, open_bytes, open_dialog, open_document,

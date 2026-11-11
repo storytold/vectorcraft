@@ -109,6 +109,19 @@ fn text_keeps_its_z_order_between_shapes() {
 }
 
 #[test]
+fn a_css_transform_places_text() {
+    // A `transform` declaration in a rule or `style` beats the attribute, as on shapes.
+    for body in [
+        r#"<style>text { transform: translate(10px, 20px) }</style><text transform="translate(300 0)" y="20">Moved</text>"#,
+        r#"<text style="transform: translate(10px, 20px)" transform="translate(300 0)" y="20">Moved</text>"#,
+    ] {
+        let d = open(body);
+        let t = only_text(&d);
+        assert!(t.xf.translation().to_point().distance(Point::new(10.0, 40.0)) < 1e-9, "{body}: {:?}", t.xf);
+    }
+}
+
+#[test]
 fn text_keeps_its_parent_group_clip_and_mask() {
     let d = open(
         r##"<defs><clipPath id="c"><rect width="50" height="50"/></clipPath>

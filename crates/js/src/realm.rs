@@ -51,14 +51,40 @@ pub enum LimitKind {
     Reentry,
     /// The host set the interrupt flag.
     Interrupted,
+    /// A getter, a callback of a built-in or another nested run spent [`MAX_UNBROKEN_FUEL`]
+    /// without returning to the point where a resumable run can pause.
+    Unbroken,
+    /// A host function ended the run ([`crate::HostError::Abort`]).
+    Host,
+}
+
+/// The tag [`Realm::error_source`] gives for a source that is neither the realm's script nor an
+/// evaluator's: code that `eval` or `Function` compiled, or an error with no place.
+pub const UNKNOWN_SOURCE: u32 = u32::MAX;
+
+/// The fuel [`Realm::advance`] lets a slice spend, past the slice it was asked for, in a nested run
+/// it cannot pause.
+pub const MAX_UNBROKEN_FUEL: u64 = 200_000_000;
+
+/// How far a resumable run got.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Progress {
+    /// The slice ended; call [`Realm::advance`] again.
+    Paused,
+    /// The script ended, with its completion value.
+    Done(JsValue),
 }
 
 /// A flag the host sets, from any thread, to stop the running script at its next instruction.
 /// It stays set until [`Interrupt::clear`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Interrupt(Arc<AtomicBool>);
 
 impl Interrupt {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn set(&self) {
         self.0.store(true, Ordering::Relaxed);
     }
@@ -121,6 +147,7 @@ impl From<SyntaxError> for RunError {
 /// A global environment with the built-ins, in which scripts run one after another.
 pub struct Realm {
     interp: Interp,
+    unbroken_fuel: u64,
 }
 
 impl Default for Realm {
@@ -138,7 +165,21 @@ impl Realm {
     /// `options`; [`Options::max_source_units`] caps the source parsed in one run, all of it
     /// counted together.
     pub fn with_options(options: Options, limits: Limits) -> Self {
-        Self { interp: Interp::new(options, limits) }
+        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL }
+    }
+
+    /// Sets the fuel [`Realm::advance`] lets a nested run spend past its slice (by default
+    /// [`MAX_UNBROKEN_FUEL`]).
+    pub fn set_unbroken_fuel(&mut self, fuel: u64) {
+        self.unbroken_fuel = fuel;
+    }
+
+    /// With `on`, the scripts run next (and the code they define and evaluate) throw a
+    /// `TypeError` when they assign to a read-only or getter-only property or add a property to
+    /// an object that is not extensible, as strict mode code does, without the rest of strict
+    /// mode. Off by default.
+    pub fn set_strict_writes(&mut self, on: bool) {
+        self.interp.strict_writes = on;
     }
 
     pub fn limits(&self) -> &Limits {
@@ -173,6 +214,13 @@ impl Realm {
     /// value of the last expression statement that ran). A realm whose built-ins could not be
     /// installed runs nothing and gives an internal error.
     pub fn run(&mut self, source: &str) -> Result<JsValue, RunError> {
+        let code = self.compile(source)?;
+        let result = self.interp.run_global(code, false);
+        self.outcome(result)
+    }
+
+    /// Compiles `source` and readies the realm for a run.
+    fn compile(&mut self, source: &str) -> Result<std::rc::Rc<crate::bytecode::Code>, RunError> {
         let interp = &mut self.interp;
         if let Some(message) = &interp.install_error {
             return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0 });
@@ -181,18 +229,39 @@ impl Realm {
         interp.source_units = 0;
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;
+        interp.host_abort = None;
+        interp.waiting = false;
+        interp.error_tag = UNKNOWN_SOURCE;
+        interp.thrown_mark = None;
+        interp.finally_marks.clear();
+        interp.error_mark = None;
         let strict = interp.options.strict;
-        let code = match interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global)) {
-            Ok(code) => code,
-            Err(CompileError::Syntax(e)) => return Err(e.into()),
-            Err(CompileError::Internal(m)) => return Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0 }),
-        };
-        let result = interp.run_global(code, false);
-        let (line, column) = interp.throw_site.take().map_or((0, 0), |(code, pc)| code.line_column(pc));
+        interp.source_tag = 0;
+        let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
+        interp.source_tag = UNKNOWN_SOURCE;
+        match code {
+            Ok(code) => Ok(code),
+            Err(CompileError::Syntax(e)) => {
+                interp.error_tag = 0;
+                Err(e.into())
+            }
+            Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0 }),
+        }
+    }
+
+    /// The end of a run: its completion value or error, with the interpreter's stacks emptied.
+    fn outcome(&mut self, result: Result<Value, Abrupt>) -> Result<JsValue, RunError> {
+        let interp = &mut self.interp;
+        let site = interp.throw_site.take();
+        interp.error_tag = site.as_ref().map_or(UNKNOWN_SOURCE, |(code, _)| code.source.tag);
+        let (line, column) = site.map_or((0, 0), |(code, pc)| code.line_column(pc));
+        interp.error_mark = interp.thrown_mark.take().filter(|_| matches!(result, Err(Abrupt::Throw(_) | Abrupt::Limit(LimitKind::Host))));
+        interp.finally_marks.clear();
         interp.stack.clear();
         interp.frames.clear();
         interp.temp_roots.clear();
         interp.join_stack.clear();
+        interp.waiting = false;
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {
@@ -200,8 +269,142 @@ impl Realm {
                 interp.last_thrown = v;
                 Err(RunError { kind: RunErrorKind::Thrown, message, line, column })
             }
+            Err(Abrupt::Limit(LimitKind::Host)) => {
+                let message = interp.host_abort.take().unwrap_or_else(|| format!("limit reached: {:?}", LimitKind::Host));
+                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line, column })
+            }
             Err(Abrupt::Limit(kind)) => Err(RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line, column }),
             Err(Abrupt::Internal(message)) => Err(RunError { kind: RunErrorKind::Internal, message, line, column }),
+        }
+    }
+
+    /// Begins a run that [`Realm::advance`] carries on: compiles `source` and enters it.
+    pub fn start(&mut self, source: &str) -> Result<(), RunError> {
+        let code = self.compile(source)?;
+        match self.interp.enter_global(code, false) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Runs the script begun with [`Realm::start`] for about `slice` units of fuel (at least one
+    /// instruction), and pauses where it can resume: between two instructions of the script's own
+    /// code. A getter, a built-in's callback or another nested run has native frames under it, so
+    /// it runs on to its end, for at most [`Realm::set_unbroken_fuel`] more. Once this has returned
+    /// [`Progress::Done`] or an error, the run is over. While a host function's call waits for its
+    /// result ([`Realm::waits`]), the run does not advance: this gives an internal error.
+    pub fn advance(&mut self, slice: u64) -> Result<Progress, RunError> {
+        let interp = &mut self.interp;
+        if interp.frames.is_empty() {
+            return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0 });
+        }
+        if interp.waiting {
+            return Err(RunError { kind: RunErrorKind::Internal, message: "the run waits for a host function's result".into(), line: 0, column: 0 });
+        }
+        let total = interp.fuel;
+        let cap = slice.saturating_add(self.unbroken_fuel).min(total);
+        interp.fuel = cap;
+        interp.in_slice = true;
+        let r = interp.execute_slice(cap - slice.min(cap));
+        interp.in_slice = false;
+        let used = cap - interp.fuel;
+        interp.fuel = total - used;
+        match r {
+            Ok(None) => Ok(Progress::Paused),
+            Ok(Some(v)) => self.outcome(Ok(v)).map(Progress::Done),
+            // The run's own fuel is not used up, so it was the allowance of this slice.
+            Err(Abrupt::Limit(LimitKind::Fuel)) if total > cap => self.outcome(Err(Abrupt::Limit(LimitKind::Unbroken))).map(Progress::Done),
+            Err(e) => self.outcome(Err(e)).map(Progress::Done),
+        }
+    }
+
+    /// Is a run begun with [`Realm::start`] still going?
+    pub fn is_running(&self) -> bool {
+        !self.interp.frames.is_empty()
+    }
+
+    /// The flag a host function sets to end the current slice at the next point it can pause.
+    pub fn pause_flag(&self) -> std::rc::Rc<std::cell::Cell<bool>> {
+        self.interp.pause.clone()
+    }
+
+    /// The flag that is set while a host function runs where it may return
+    /// [`crate::HostError::Wait`]: called by the script's own code in a run [`Realm::advance`]
+    /// carries on, and not from a getter, a conversion or a built-in's callback.
+    pub fn wait_flag(&self) -> std::rc::Rc<std::cell::Cell<bool>> {
+        self.interp.can_wait.clone()
+    }
+
+    /// Does a host function's call wait for the result [`Realm::answer`] gives it?
+    pub fn waits(&self) -> bool {
+        self.interp.waiting
+    }
+
+    /// Gives the call that waits ([`crate::HostError::Wait`]) its result `d`; the next
+    /// [`Realm::advance`] goes on from there. A result past the heap limit ends the run with that
+    /// limit, and with no call waiting this gives an internal error.
+    pub fn answer(&mut self, d: crate::Data) -> Result<(), RunError> {
+        let interp = &mut self.interp;
+        if !interp.waiting {
+            return Err(RunError { kind: RunErrorKind::Internal, message: "no host function waits for a result".into(), line: 0, column: 0 });
+        }
+        interp.waiting = false;
+        // The value on top of the stack stood in for the result.
+        let r = interp.write_data(d, 0, false).and_then(|v| {
+            interp.stack.pop();
+            interp.push(v)
+        });
+        match r {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Has this realm stop when `interrupt` is set, in place of its own flag.
+    pub fn share_interrupt(&mut self, interrupt: &Interrupt) {
+        self.interp.interrupt = interrupt.0.clone();
+    }
+
+    /// Which source the last error's `line` and `column` are in: 0 for the script given to
+    /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
+    /// [`crate::HostItem::Evaluator`] gave in this realm, and [`UNKNOWN_SOURCE`] otherwise.
+    pub fn error_source(&self) -> u32 {
+        self.interp.error_tag
+    }
+
+    /// The mark of the host error ([`crate::HostError::Marked`]) the last run ended with, when no
+    /// `catch` clause took that error's exception on its way out; `None` otherwise.
+    pub fn error_mark(&self) -> Option<u32> {
+        self.interp.error_mark
+    }
+
+    /// Fuel the run has left.
+    pub fn fuel_left(&self) -> u64 {
+        self.interp.fuel
+    }
+
+    /// Sets how much a value passed to or from a host function may carry.
+    pub fn set_data_limits(&mut self, limits: crate::DataLimits) {
+        self.interp.data_limits = limits;
+    }
+
+    /// Adds the frozen object `name`, with `items`, to the global environment. Scripts cannot add
+    /// to it, change it or replace it. A heap too small for it ends with the error the realm's
+    /// next run would give.
+    pub fn define_host_object(&mut self, name: &str, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
+        match self.interp.install_host_object(name, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Defines the global function `name`, whose arguments arrive converted as `args` says
+    /// ([`crate::HostItem::Converted`]). Unlike a host object, a script may replace or delete it, as
+    /// it may a built-in function.
+    pub fn define_host_function(&mut self, name: &str, args: Vec<crate::Arg>, f: crate::HostFunction) -> Result<(), RunError> {
+        match self.interp.install_host_function(name, args, f) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
         }
     }
 

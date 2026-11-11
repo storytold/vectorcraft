@@ -410,6 +410,9 @@ struct LineJustification {
     start_x: f64,
     after: Vec<Option<usize>>,
     kashidas: Vec<(usize, f64)>,
+    /// Right-aligned area type: the line's last tab, which takes the text after it to the right
+    /// edge (the text before it sits at its stops, from the left edge).
+    last_tab: Option<usize>,
 }
 
 fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut paragraph: ParagraphData<'_, '_>) -> bool {
@@ -464,6 +467,9 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
     true
 }
 
+/// The geometry of the line of `paragraph` from glyph `index`, placed at `position`: where it
+/// ends with its trailing spaces trimmed, its hyphen, its room and margins, the glyphs that hang or
+/// stay out of justification, and whether it is the paragraph's last line.
 fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData<'_, '_>, position: LinePosition, index: usize) -> LineGeometry {
     let para = paragraph.para;
     let sg = &paragraph.sg;
@@ -571,7 +577,11 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
     // Justification adds nothing to the list marker's glyphs.
     let mut held = held;
     held.extend(index..paragraph.marker.min(body));
-    let last_of_para = position.end >= n || position.end.checked_sub(1).and_then(|i| sg.get(i)).is_some_and(|g| g.ch == '\u{2028}');
+    // A line a soft return ends is justified as a wrapped one is: only the paragraph's last line
+    // keeps the alignment of Justify Left, Center or Right. A paragraph that ends in a soft return
+    // ends with the empty line after it (`run_paragraph_lines`).
+    let soft_return = position.end > index && sg.get(position.end - 1).is_some_and(|g| g.ch == '\u{2028}');
+    let last_of_para = position.end >= n && !soft_return;
     LineGeometry {
         position,
         index,
@@ -607,6 +617,17 @@ fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usiz
         })
 }
 
+// May a pushed-in line close a CJK gap after `g`? Not after a list marker or an inline graphic,
+// which the push-in's room does not count either.
+fn may_squeeze(g: &SGlyph) -> bool {
+    g.len > 0 && g.inline.is_none()
+}
+
+// How much a pushed-in line's `squeeze` adds to the CJK gap after `g`.
+fn squeeze_after(g: &SGlyph, squeeze: f64, vertical: bool) -> f64 {
+    if may_squeeze(g) { squeeze * squeeze_em(g, vertical) } else { 0.0 }
+}
+
 // What justification may change of glyph `j`: nothing of a `held` glyph, and no glyph
 // scaling of a `hung` one.
 fn flow_line_flex(glyph: usize, flex: &[Flex], held: &[usize], hung: &[usize]) -> Flex {
@@ -620,6 +641,9 @@ fn flow_line_flex(glyph: usize, flex: &[Flex], held: &[usize], hung: &[usize]) -
     value
 }
 
+/// How `line` of `paragraph` is aligned: where it starts, what justification adds to its spaces,
+/// gaps and glyphs, its kashidas, and, in right-aligned area type, its last tab, which takes the
+/// text after it to the right edge.
 fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry) -> LineJustification {
     let para = paragraph.para;
     let sg = &paragraph.sg;
@@ -672,8 +696,10 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
     // the same share of the em of the glyph before it, at most [`PUSH_IN_SQUEEZE`].
     let pushed_in = line.position.pushed_in && paragraph.regions.is_some() && cjk_gaps > 0 && width > room + EPS;
     if pushed_in {
-        let ems: f64 =
-            (line.index..line.body).filter(|&j| is_cjk_gap(j, held, &after, line.index, sg)).map(|j| squeeze_em(&sg[j], cx.vertical)).sum();
+        let ems: f64 = (line.index..line.body)
+            .filter(|&j| is_cjk_gap(j, held, &after, line.index, sg) && may_squeeze(&sg[j]))
+            .map(|j| squeeze_em(&sg[j], cx.vertical))
+            .sum();
         if ems > EPS {
             squeeze = ((room - width) / ems).max(-PUSH_IN_SQUEEZE);
         }
@@ -705,7 +731,14 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
         }
     }
     let position = &line.position;
-    let start_x = if justify || pushed_in {
+    // Right-aligned area type with a tab: the text before the last tab sits at its stops, from the
+    // left edge, and the text after it against the right edge, as Illustrator's own layout in a
+    // user's `.ai` sets a price list. Centred and justified lines are aligned as a whole.
+    let last_tab = (para.justify == Justify::Right && !justify && !paragraph.rtl && paragraph.regions.is_some())
+        // A tab ending the line counts: its text sits at the left edge, the tab up to the right one.
+        .then(|| (line.index..line.position.end).rev().find(|&j| sg.get(j).is_some_and(|g| g.ch == '\t' && g.len > 0)))
+        .flatten();
+    let start_x = if justify || pushed_in || last_tab.is_some() {
         line.ax0 - line.opt_l
     } else if paragraph.regions.is_none() {
         match align {
@@ -720,9 +753,43 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             _ => line.ax1 + line.opt_r - width,
         }
     };
-    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas }
+    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas, last_tab }
 }
 
+/// The advance and leader of tab `glyph_index` of `line`, at pen position `x`: up to its stop
+/// ([`tab_advance`], measured from `tab_origin` less `tab_shift`), or, for the last tab of
+/// right-aligned area type ([`LineJustification::last_tab`]), up to where the rest of the line
+/// ends on the right edge. The tab after a list marker keeps the width `prepend_marker` gave it
+/// (`advance`).
+fn tab_glyph<'p>(
+    paragraph: &'p ParagraphData<'_, '_>,
+    line: &LineGeometry,
+    justification: &LineJustification,
+    glyph_index: usize,
+    x: f64,
+    (tab_origin, tab_shift): (f64, f64),
+    advance: f64,
+) -> (f64, &'p str) {
+    let sg = &paragraph.sg;
+    // The tab of a list marker keeps the width `prepend_marker` gave it.
+    if !sg.get(glyph_index).is_some_and(|g| g.len > 0) {
+        return (advance, "");
+    }
+    let (advance, leader) = tab_advance(&paragraph.para.tabs, tab_origin, x - tab_shift, sg.get(glyph_index + 1..line.trimmed).unwrap_or_default());
+    if justification.last_tab != Some(glyph_index) {
+        return (advance, leader);
+    }
+    // The width of what follows up to the line's end (nothing, when the tab ends the line), with
+    // the hyphen a hyphenated line ends with.
+    let after = sg.get(glyph_index + 1..line.trimmed).unwrap_or_default();
+    let hyphen = line.hyphen.as_ref().map_or(0.0, |g| g.adv);
+    let rest = if after.is_empty() { 0.0 } else { after.iter().map(|g| g.adv).sum::<f64>() - line.end_trim + hyphen };
+    ((line.ax1 + line.opt_r - rest - x).max(0.0), leader)
+}
+
+/// Lay out `line` of `paragraph` as `justification` aligns it: each glyph placed along the
+/// baseline (tabs as [`tab_glyph`] sets them), its hyphen, and the line's record, then the pen
+/// moved on past it.
 fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry, justification: &LineJustification) {
     let para = paragraph.para;
     let sg = &paragraph.sg;
@@ -762,10 +829,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         let mut scale = 1.0;
         let mut leader = "";
         if glyph.ch == '\t' {
-            // The tab of a list marker keeps the width `prepend_marker` gave it.
-            if glyph.len > 0 {
-                (advance, leader) = tab_advance(&para.tabs, tab_origin, x - tab_shift, &sg[glyph_index + 1..trimmed.max(glyph_index + 1)]);
-            }
+            (advance, leader) = tab_glyph(paragraph, line, justification, glyph_index, x, (tab_origin, tab_shift), advance);
         } else if glyph_index < body {
             let flex = flow_line_flex(glyph_index, &paragraph.flex, &line.held, &line.hung);
             if is_word_space(glyph) {
@@ -778,7 +842,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
                 advance += justification.per_space;
             } else if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
                 if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
-                    advance += justification.per_cjk + justification.squeeze * squeeze_em(glyph, cx.vertical);
+                    advance += justification.per_cjk + squeeze_after(glyph, justification.squeeze, cx.vertical);
                 }
             } else if !line.held.contains(&glyph_index)
                 && drawn_after(index, glyph_index, &justification.after).and_then(|next| sg.get(next)).is_some_and(|next| !next.continues_tcy())

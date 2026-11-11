@@ -14,6 +14,13 @@ fn fmt_value_does_not_saturate_beyond_i64() {
     assert_eq!(super::fmt_value(2.5), "2.5");
 }
 
+#[test]
+fn fmt_value_tiny_negative_is_zero() {
+    assert_eq!(super::fmt_value(-0.004), "0");
+    assert_eq!(super::fmt_value(-0.0049), "0");
+    assert_eq!(super::fmt_value(-0.006), "-0.01");
+}
+
 fn graph(s: &mut Session, ty: &str) -> NodeId {
     let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
     NodeId(
@@ -4048,6 +4055,45 @@ fn formatting_the_whole_graphs_text_survives_it_being_drawn_again() {
     assert_eq!(spec(&s, id).label_styles, vectorcraft_doc::LabelStyles::default());
 }
 
+/// An anti-aliasing method given to one category label is kept for every category label when the graph is drawn
+/// again, through save and open, and undoes with the change.
+#[test]
+fn a_graph_labels_anti_aliasing_method_survives_it_being_drawn_again() {
+    use vectorcraft_doc::text::TypeAntiAlias;
+    let methods = |s: &Session, id: NodeId| -> Vec<(String, TypeAntiAlias)> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let mut out = vec![];
+        for g in ["Axes", "Legend"] {
+            for c in group(&n, g).children().unwrap() {
+                if let NodeKind::Text(t) = &c.kind {
+                    out.push((t.plain_text(), t.anti_alias));
+                }
+            }
+        }
+        out
+    };
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("text.setFormat", &json!({"ids": [c.0], "antiAlias": "strong"})).unwrap();
+    label_looks(&mut s, id);
+    let drawn = methods(&s, id);
+    let method = |t: &str| drawn.iter().find(|(x, _)| x == t).map(|(_, m)| *m).unwrap();
+    assert_eq!((method("Q1"), method("Q3")), (TypeAntiAlias::Strong, TypeAntiAlias::Strong), "every category label: {drawn:?}");
+    assert_eq!((method("0"), method("2024")), (TypeAntiAlias::Sharp, TypeAntiAlias::Sharp), "other labels: {drawn:?}");
+    // One undo takes the data change back, the next the method and the kept method together.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.categories_anti_alias, None);
+    s.execute("edit.redo", &json!({})).unwrap();
+    let path = vectorcraft_testkit::temp_dir("graph-label-anti-alias").join("labels.vectorcraft");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.categories_anti_alias, Some(TypeAntiAlias::Strong));
+    assert!(serde_json::to_value(GraphSpec::default()).unwrap().get("labelStyles").is_none());
+}
+
 /// A stroke given to all of a graph's text without a weight is kept at 1 pt, as `paint.setStroke` keeps it.
 #[test]
 fn a_stroke_given_to_the_whole_graphs_text_is_kept_at_1_pt() {
@@ -4197,4 +4243,258 @@ fn character_formats_are_kept_and_bigger_labels_space_out() {
             assert!(t.runs[0].style.size <= 1296.0 && t.runs[0].style.tracking.is_finite());
         }
     }
+}
+
+#[test]
+fn csv_leading_byte_order_mark_is_ignored() {
+    assert_eq!(super::parse_csv("\u{feff}1,2\n3,4"), super::parse_csv("1,2\n3,4"));
+}
+
+#[test]
+fn csv_round_trip_keeps_blank_row_in_single_column_graph() {
+    let mut g = GraphSpec::default();
+    g.set_cells(vec![vec![Some(1.0)], vec![None], vec![Some(3.0)]]);
+    let (_, c, r) = super::parse_csv(&g.to_csv());
+    assert!(c.is_empty());
+    assert_eq!(r, g.cells());
+}
+
+/// Each generated label's text, paragraph attributes and alignment.
+fn label_paras(s: &Session, id: NodeId) -> Vec<(String, vectorcraft_doc::ParaStyle)> {
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let mut out = vec![];
+    for name in ["Axes", "Legend"] {
+        for c in group(&n, name).children().unwrap() {
+            if let NodeKind::Text(t) = &c.kind {
+                out.push((t.plain_text(), t.para.clone()));
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn paragraph_formats_are_kept_when_the_graph_is_drawn_again() {
+    use vectorcraft_doc::{Composer, ParaDirection, text::Kashida};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let aligned: Vec<_> = label_paras(&s, id).into_iter().map(|(t, p)| (t, p.justify)).collect();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"composer": "singleLine", "kashida": "long", "direction": "rightToLeft", "wordSpacing": [70, 90, 120]}))
+        .unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let paras = label_paras(&s, id);
+    assert!(!paras.is_empty());
+    for (text, p) in &paras {
+        assert_eq!(p.composer, Composer::SingleLine, "{text}");
+        assert_eq!(p.kashida, Kashida::Long, "{text}");
+        assert_eq!(p.direction, Some(ParaDirection::RightToLeft), "{text}");
+        assert_eq!(p.justification.word_spacing, [70.0, 90.0, 120.0], "{text}");
+    }
+    // The graph still aligns each label to its place.
+    assert_eq!(paras.iter().map(|(t, p)| (t.clone(), p.justify)).collect::<Vec<_>>(), aligned);
+    // One kind of label: only that kind keeps it, also through save and open.
+    let col = graph(&mut s, "column");
+    let v = text_id(&s, col, "Axes", "4");
+    s.execute("select.set", &json!({"ids": [v.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"composer": "singleLine"})).unwrap();
+    let path = vectorcraft_testkit::temp_dir("graph-label-paras").join("labels.vectorcraft");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    s.execute("select.set", &json!({"ids": [col.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": col.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let paras = label_paras(&s, col);
+    let composer = |t: &str| paras.iter().find(|(x, _)| x == t).unwrap().1.composer;
+    assert_eq!(composer("0"), Composer::SingleLine, "every value axis number");
+    assert_eq!(composer("Q1"), Composer::default(), "category labels as they were");
+    assert_eq!(composer("2024"), Composer::default(), "legend labels as they were");
+    // Part of a label's text: nothing kept.
+    let q = text_id(&s, col, "Axes", "Q2");
+    s.execute("select.set", &json!({"ids": [q.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"kashida": "short", "start": 0, "end": 1})).unwrap();
+    s.execute("graph.setData", &json!({"id": col.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    assert!(label_paras(&s, col).iter().all(|(_, p)| p.kashida == Kashida::default()));
+    // Spacing that would be out of order in the kept attributes is refused, even when it is in order on the label.
+    let v = text_id(&s, col, "Axes", "4");
+    s.execute("select.set", &json!({"ids": [col.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"wordSpacing": [60, 70, 80]})).unwrap();
+    s.execute("select.set", &json!({"ids": [v.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"wordSpacing": [80, 100, 133], "start": 0, "end": 1})).unwrap();
+    assert!(s.execute("text.setFormat", &json!({"wordSpacing": {"min": 90}})).is_err());
+    let kept = spec(&s, col).label_styles.values_para.unwrap();
+    assert_eq!(kept.justification.word_spacing, [60.0, 70.0, 80.0]);
+}
+
+#[test]
+fn a_legend_across_top_spaces_its_labels_by_their_kept_paragraph_settings() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("graph.setType", &json!({"legendAcrossTop": true})).unwrap();
+    let l = text_id(&s, id, "Legend", "2024");
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"leftIndent": 40})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let label = group(&n, "Legend").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == "2024")).unwrap();
+    let label = label.geometric_bounds().unwrap();
+    let next = series_parts(&s, id, 1).last().unwrap().geometric_bounds().unwrap();
+    assert!(next.x0 >= label.x1, "the next swatch starts after the indented label: {label:?} {next:?}");
+}
+
+#[test]
+fn a_centered_label_with_kept_leading_stays_centered_when_the_graph_is_drawn_again() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ|1,3,2\nQ2,5,4\nQ3,-1,6";
+    let id = NodeId(
+        s.execute("graph.create", &json!({"type": "bar", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let middle = |s: &Session| {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let label = group(&n, "Axes").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == "Q\n1")).unwrap();
+        let b = label.geometric_bounds().unwrap();
+        (b.y0 + b.y1) / 2.0
+    };
+    let before = middle(&s);
+    let l = text_id(&s, id, "Axes", "Q\n1");
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"autoLeading": 400, "spaceBefore": 6})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let after = middle(&s);
+    assert!((after - before).abs() < 0.01, "the two-line category label keeps its middle: {before} {after}");
+}
+
+#[test]
+fn a_centered_label_with_an_empty_middle_line_and_kept_leading_stays_centered() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ||1,3,2\nQ2,5,4\nQ3,-1,6";
+    let id = NodeId(
+        s.execute("graph.create", &json!({"type": "bar", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let middle = |s: &Session| {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let label =
+            group(&n, "Axes").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == "Q\n\n1")).unwrap();
+        let b = label.geometric_bounds().unwrap();
+        (b.y0 + b.y1) / 2.0
+    };
+    let before = middle(&s);
+    let l = text_id(&s, id, "Axes", "Q\n\n1");
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"autoLeading": 400})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let after = middle(&s);
+    assert!((after - before).abs() < 0.01, "the three-line category label keeps its middle: {before} {after}");
+}
+
+#[test]
+fn a_legend_across_top_measures_its_labels_with_system_layout() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    s.execute("type.systemLayout", &json!({"on": true})).unwrap();
+    // Each `i` at 2 pt advances a whole point with System Layout, far more than its own width.
+    let name = "i".repeat(60);
+    let csv = format!(",{name},2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6");
+    let id = NodeId(
+        s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("graph.setType", &json!({"legendAcrossTop": true})).unwrap();
+    let l = text_id(&s, id, "Legend", &name);
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"size": 2})).unwrap();
+    s.execute("text.setFormat", &json!({"leftIndent": 1})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let label = group(&n, "Legend").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == name)).unwrap();
+    let label = label.geometric_bounds().unwrap();
+    let next = series_parts(&s, id, 1).last().unwrap().geometric_bounds().unwrap();
+    assert!(next.x0 >= label.x1, "the next swatch starts after the label set with System Layout: {label:?} {next:?}");
+}
+
+#[test]
+fn a_legend_label_with_a_kept_negative_indent_stays_clear_of_its_swatch() {
+    for across_top in [true, false] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"legendAcrossTop": across_top})).unwrap();
+        let l = text_id(&s, id, "Legend", "2025");
+        s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+        s.execute("text.setFormat", &json!({"leftIndent": -40})).unwrap();
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let bounds = |text: &str| {
+            let label =
+                group(&n, "Legend").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == text)).unwrap();
+            label.geometric_bounds().unwrap()
+        };
+        let (first, label) = (bounds("2024"), bounds("2025"));
+        let swatch = series_parts(&s, id, 1).last().unwrap().geometric_bounds().unwrap();
+        assert!(label.x0 >= swatch.x1, "the label starts after its swatch (across top: {across_top}): {swatch:?} {label:?}");
+        if across_top {
+            assert!(swatch.x0 >= first.x1, "the swatch starts after the label before it: {first:?} {swatch:?}");
+        }
+    }
+}
+
+#[test]
+fn a_legend_makes_room_for_the_kept_leading_of_its_labels() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",20|24,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
+    let id = NodeId(
+        s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let l = text_id(&s, id, "Legend", "20\n24");
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"autoLeading": 400})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let bounds = |text: &str| {
+        let label = group(&n, "Legend").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == text)).unwrap();
+        label.geometric_bounds().unwrap()
+    };
+    let (first, next) = (bounds("20\n24"), bounds("2025"));
+    assert!(next.y0 >= first.y1, "the next legend label starts below the first one: {first:?} {next:?}");
+}
+
+#[test]
+fn a_legend_label_with_kept_negative_space_before_stays_below_the_entry_above_it() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,20|25\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
+    let id = NodeId(
+        s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let l = text_id(&s, id, "Legend", "20\n25");
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"spaceBefore": -60})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let bounds = |text: &str| {
+        let label = group(&n, "Legend").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == text)).unwrap();
+        label.geometric_bounds().unwrap()
+    };
+    let (first, next) = (bounds("2024"), bounds("20\n25"));
+    assert!(next.y0 >= first.y1, "the second legend label starts below the first one: {first:?} {next:?}");
 }

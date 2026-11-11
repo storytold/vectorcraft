@@ -74,8 +74,9 @@ pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
     ("-90°", -90.0),
 ];
 
-use super::{ControlResponse, Sender};
+use super::ControlResponse;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 
 /// Zoom stop stepping reads this (set each UI frame and before commands) so canvas wheel zoom
 /// matches the status bar when Display Print Size at 100% Zoom is on.
@@ -201,11 +202,13 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("attributes", "Attributes", "settings"),
     (crate::panels::svg_interactivity::ID, "SVG Interactivity", "spline-pointer"),
     ("colorThemes", "Color Themes", "sun"),
+    (crate::panels::color_wheel::ID, "Color Wheel", "circle"),
     (crate::panels::links::ID, "Links", "link"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
     (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
+    (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
@@ -265,6 +268,10 @@ pub struct ViewFlags {
     pub live_paint_gaps: bool,
     /// Type → Show Hidden Characters.
     pub hidden_chars: bool,
+    /// Edit › Spelling › Auto Spell Check: a red underline under the words of the type its
+    /// dictionaries don't know.
+    #[serde(default)]
+    pub auto_spell_check: bool,
     /// View → Hide/Show Template: template layers drawn (dimmed) or left out of the canvas.
     #[serde(default = "yes")]
     pub templates: bool,
@@ -292,6 +299,7 @@ impl Default for ViewFlags {
             gradient_annotator: true,
             live_paint_gaps: false,
             hidden_chars: false,
+            auto_spell_check: false,
             templates: true,
         }
     }
@@ -341,6 +349,21 @@ pub struct ReplaceFontWarning {
     pub styles: Vec<(String, String)>,
 }
 
+/// A misspelled word right-clicked on the canvas ([`UiState::context_spelling`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContextSpelling {
+    /// The document's `uid`.
+    pub uid: u64,
+    /// The type object.
+    pub id: vectorcraft_doc::NodeId,
+    /// The word's bytes in the object's plain text, which `text.editRange` replaces.
+    pub start: usize,
+    pub end: usize,
+    pub word: String,
+    /// What the dictionary of the word's language suggests instead, best first.
+    pub suggestions: Vec<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
@@ -370,6 +393,11 @@ pub struct UiState {
     /// That popup's first text field is still to take the keyboard.
     #[serde(skip)]
     pub transient_focus: bool,
+    /// The Separations Preview panel is still to scroll its Color Settings section into view:
+    /// Edit › Color Settings… and Assign Profile… show the panel for it, and the section sits below
+    /// the plates and Proof Setup, out of sight in a short window (#6419).
+    #[serde(skip)]
+    pub color_settings_scroll: bool,
     /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
     #[serde(skip)]
     pub find_font_in: String,
@@ -408,6 +436,10 @@ pub struct UiState {
     /// while it is open ([`crate::panels::artboards::MenuFacts`]). Not saved.
     #[serde(skip)]
     pub context_artboards: Option<crate::panels::artboards::MenuFacts>,
+    /// The word with Auto Spell Check's red line under the last right-click on the canvas, for the
+    /// context menu's suggestions, Ignore All and Add to Dictionary while it is open. Not saved.
+    #[serde(skip)]
+    pub context_spelling: Option<ContextSpelling>,
     /// Which link statuses the active document's images and placed documents have, for Select ›
     /// Linked, Embedded, Missing and Modified to be on only when some do (refreshed by
     /// [`crate::addons::select::link_status::refresh`]). Not saved.
@@ -471,6 +503,11 @@ pub struct UiState {
     /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
     #[serde(default)]
     pub tools_beside_canvas: bool,
+    /// The docked Tools panel stands on the right, between the canvas and the panels, instead of on
+    /// the left (dropped there, or `window.panel.dock {panel: "tools", side: "right"}`). Off by
+    /// default, and off in state saved without it.
+    #[serde(default)]
+    pub toolbar_right: bool,
     pub status_bar: bool,
     pub help_bar: bool,
     pub dock: bool,
@@ -978,6 +1015,7 @@ impl Default for UiState {
             open_panel: None,
             transient_panel: None,
             transient_focus: false,
+            color_settings_scroll: false,
             find_font_in: String::new(),
             control_bar: false,
             control_bar_bottom: false,
@@ -990,6 +1028,7 @@ impl Default for UiState {
             context_locked: None,
             context_intertwine: None,
             context_artboards: None,
+            context_spelling: None,
             link_statuses: Default::default(),
             slot_tool: Default::default(),
             floating_flyouts: vec![],
@@ -1008,6 +1047,7 @@ impl Default for UiState {
             dock_width: None,
             toolbar_pos: None,
             tools_beside_canvas: false,
+            toolbar_right: false,
             status_bar: true,
             help_bar: true,
             dock: true,

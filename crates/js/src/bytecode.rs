@@ -171,6 +171,11 @@ pub(crate) struct Handler {
 pub(crate) struct Source {
     pub(crate) lines: LineTable,
     pub(crate) text: Rc<[u16]>,
+    /// Which source this is, as [`crate::Realm::error_source`] gives it.
+    pub(crate) tag: u32,
+    /// Writes to read-only and getter-only properties, and new properties on objects that are
+    /// not extensible, throw in this source's code even where it is not strict mode code.
+    pub(crate) strict_writes: bool,
 }
 
 #[derive(Debug)]

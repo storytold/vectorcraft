@@ -93,8 +93,9 @@ impl std::fmt::Display for StorageError {
 /// Where one plug-in's settings and cache are kept. Every key and name the host passes is a
 /// [`valid_name`], and every value is within its cap ([`MAX_SETTING_BYTES`], [`MAX_CACHE_ENTRY`]);
 /// the storage enforces the totals. The calls that read or write a file charge `meter` the bytes
-/// they read and write ([`Meter::take`]) before they do: a settings call the whole settings file it
-/// reads and the whole file it writes, a cache call the entry it reads or writes.
+/// they read and write ([`Meter::take`]) before they do: a settings call the whole settings file
+/// when it reads the file and the whole file when it writes it, a cache call the entry it reads or
+/// writes. A settings call that the storage answers from memory charges nothing.
 pub trait Storage: Send + Sync {
     /// The value of setting `key`, if it has one.
     fn setting(&self, key: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError>;

@@ -1,11 +1,37 @@
+use std::sync::Arc;
+
 use serde_json::json;
 use vectorcraft_doc::color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Effect, Node};
-use vectorcraft_geom::{Affine, Rect, shapes};
+use vectorcraft_geom::{Affine, Point, Rect, shapes};
 
 use super::{DRAG_PIXEL_BUDGET, Drawn, PIXEL_BUDGET, drag_scale, filter_region, filter_region_within, pan_margin};
 use crate::tests_fontchange::{fonts_steady, with_fonts_unchanged};
 use crate::{RenderOptions, Rendered, Renderer};
+
+/// The hash renderers compare to redraw art linked to swatches changes with a global swatch's
+/// color and spot flag and with the Spot Colors option.
+#[test]
+fn paint_names_follow_global_swatch_colors_and_spot_flags() {
+    let mut d = Document::new(100.0, 100.0);
+    d.swatches.push(vectorcraft_doc::color::Swatch {
+        name: "Brand".into(),
+        paint: Paint::solid(Color::rgb(1.0, 0.0, 0.0)),
+        global: true,
+        spot: false,
+    });
+    let last = d.swatches.len() - 1;
+    let first = super::paint_names(&d);
+    d.swatches[last].spot = true;
+    assert_ne!(super::paint_names(&d), first, "spot flag");
+    d.swatches[last].spot = false;
+    assert_eq!(super::paint_names(&d), first, "nothing changed");
+    d.swatches[last].paint = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    assert_ne!(super::paint_names(&d), first, "color");
+    d.swatches[last].paint = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    d.spot_use_lab = !d.spot_use_lab;
+    assert_ne!(super::paint_names(&d), first, "Spot Colors option");
+}
 
 /// #1706: the raster a shadow or glow is filtered in stays within the pixel budget however
 /// far the blur spreads at the zoom (it was up to 65535 pixels a side: 16 GB).
@@ -158,8 +184,8 @@ fn shadow_rasters_keep_their_node_and_a_byte_budget() {
 /// kept for any pan: its grid starts at the reach's first whole device pixel, which a pan by whole
 /// pixels moves with the art, so the raster drawn after the pan is the one a fresh renderer makes,
 /// also for pans that aren't multiples of the raster's scale. A pan by a fraction of a pixel
-/// places the raster at the nearest whole pixel, as a full-size raster kept whole is placed, and
-/// here draws as a fresh renderer draws too. A 100 pt glow at 500% (scale 2) and a 2 pt glow
+/// keeps the raster and places it at the nearest whole pixel, as a full-size raster kept whole is
+/// placed. A 100 pt glow at 500% (scale 2) and a 2 pt glow
 /// round the page at 800% (scale 3, near the narrowest blur made coarser).
 #[test]
 fn a_coarser_glow_kept_whole_draws_after_a_pan_as_made_again() {
@@ -186,7 +212,22 @@ fn a_coarser_glow_kept_whole_draws_after_a_pan_as_made_again() {
             assert_eq!(image(&r), kept, "blur {blur}, pan {pan:?}: the raster kept is drawn");
             let mut fresh = Renderer::new();
             fresh.threads = 2;
-            assert!(panned.pixels == fresh.render(&d, size.0, size.1, xf, &opts).pixels, "blur {blur}, pan {pan:?}");
+            if pan.0.fract() == 0.0 && pan.1.fract() == 0.0 {
+                assert!(panned.pixels == fresh.render(&d, size.0, size.1, xf, &opts).pixels, "blur {blur}, pan {pan:?}");
+            } else {
+                // Right of the rectangle's soft edge the frame holds only the glow, which the kept raster
+                // places at the whole pixel nearest the pan, where a fresh render draws it too. A pan of
+                // half a pixel is as near to the pixels on both sides, so either one is accepted.
+                let right = (xf * Point::new(rect.x1, rect.y0)).x.ceil() as usize + 3;
+                let row = size.0 as usize * 4;
+                let glow = |p: &[u8]| p.chunks(row).flat_map(|r| r[right * 4..].to_vec()).collect::<Vec<_>>();
+                let nearest = |v: f64| if (v - v.trunc()).abs() == 0.5 { vec![v.floor(), v.ceil()] } else { vec![v.round()] };
+                let found = nearest(pan.0).into_iter().flat_map(|x| nearest(pan.1).into_iter().map(move |y| (x, y))).any(|whole| {
+                    let at = Affine::translate(whole) * base;
+                    glow(&panned.pixels) == glow(&fresh.render(&d, size.0, size.1, at, &opts).pixels)
+                });
+                assert!(found, "blur {blur}, pan {pan:?}: the glow is drawn at the whole pixel nearest the pan");
+            }
         }
     }
 }
@@ -515,6 +556,698 @@ fn visual_bounds_include_shadow() {
     let n = &d.layers[0].children().unwrap()[0];
     let b = super::visual_bounds(&d.symbol_boxes(), n).unwrap();
     assert!(b.x1 >= 10.0 + 7.0 + 7.5 - 1e-9);
+}
+
+/// A shadow after a 3D effect reaches as far past the solid as it says, once: the solid's art keeps
+/// the raster effects that follow the 3D effect, and the object paints them over that art.
+#[test]
+fn a_shadow_after_a_3d_effect_reaches_past_the_solid_once() {
+    let r = Rect::new(40.0, 40.0, 60.0, 60.0);
+    let extrude = ("threeD.extrude", json!({"depth": 20.0, "position": "isometricTop"}));
+    let shadow = ("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0}));
+    let measure = |d: &Document| super::cull_bounds(&d.symbol_boxes(), &d.layers[0].children().unwrap()[0]).unwrap();
+    let solid = measure(&doc_with(r, Color::BLACK, vec![extrude.clone()]));
+    let shadowed = measure(&doc_with(r, Color::BLACK, vec![extrude, shadow]));
+    assert_eq!(shadowed.union(solid), shadowed);
+    let grown = [solid.x0 - shadowed.x0, solid.y0 - shadowed.y0, shadowed.x1 - solid.x1, shadowed.y1 - solid.y1];
+    assert!(grown.iter().all(|g| *g <= 20.0 + 1e-6) && grown.iter().any(|g| *g >= 20.0 - 1e-6), "{solid:?} {shadowed:?}");
+}
+
+/// Revolve builds no art from type: the type draws its glyphs, and its bounds hold them.
+#[test]
+fn revolved_type_is_measured_by_the_glyphs_it_draws() {
+    use vectorcraft_doc::NodeKind;
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    let _fonts = fonts_steady();
+    let mut d = Document::new(100.0, 100.0);
+    let style = CharStyle { size: 30.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "KW", style))));
+    n.appearance.effects = vec![Effect { id: "threeD.revolve".into(), params: json!({}), visible: true }];
+    let l = d.layers[0].id;
+    let id = d.insert(Some(l), 0, n).unwrap();
+    let (img, b) = with_fonts_unchanged(|| (render(&d), super::cull_bounds(&d.symbol_boxes(), d.node(id).unwrap()).unwrap()));
+    let inked: Vec<(u32, u32)> = (0..100).flat_map(|y| (0..100).map(move |x| (x, y))).filter(|&(x, y)| img.pixel(x, y)[0] < 250).collect();
+    assert!(!inked.is_empty());
+    assert!(inked.iter().all(|&(x, y)| b.inflate(1.0, 1.0).contains(vectorcraft_geom::Point::new(f64::from(x), f64::from(y)))), "{b:?}");
+}
+
+/// An export crops to the solid a 3D effect draws on type, not to the letters, and so does
+/// Object › Rasterize.
+#[test]
+fn an_export_and_rasterize_hold_the_solid_of_3d_type() {
+    use vectorcraft_doc::NodeKind;
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    let _fonts = fonts_steady();
+    let mut d = Document::new(100.0, 100.0);
+    let style = CharStyle { size: 30.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "K", style))));
+    let letters = with_fonts_unchanged(|| crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap());
+    n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+    let solid_doc = doc_of(&mut d, n.clone());
+    let (solid, rasterized) = with_fonts_unchanged(|| {
+        let n = &solid_doc.layers[0].children().unwrap()[0];
+        (crate::encode::art_bounds(&solid_doc).unwrap(), crate::drawn_bounds(&solid_doc, n).unwrap())
+    });
+    assert!(solid.width() > letters.width() + 15.0, "{letters:?} {solid:?}");
+    assert!(rasterized.width() > letters.width() + 15.0, "{letters:?} {rasterized:?}");
+}
+
+/// A symbol instance, a blend and a clipping group with Extrude & Bevel, alone or in a group, draw
+/// their solids on the canvas, in an export and in Object › Rasterize, not their flat art.
+#[test]
+fn a_symbol_instance_a_blend_and_a_clipping_group_draw_their_solids() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind, Symbol};
+    let square = |x: f64, y: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut d = Document::new(200.0, 200.0);
+    d.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: square(0.0, 0.0) });
+    let mut clip = (*square(30.0, 30.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() });
+    let instance = NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((40.0, 40.0)) };
+    let clipped = NodeKind::Group { children: vec![Arc::new(clip), square(20.0, 20.0)], clip: true };
+    let in_group = |kind: NodeKind| NodeKind::Group { children: vec![Arc::new(Node::new(NodeId(0), kind)), square(100.0, 100.0)], clip: false };
+    let kinds = [
+        ("a symbol instance", instance.clone()),
+        ("a blend", NodeKind::Blend { children: vec![square(30.0, 30.0), square(60.0, 40.0)], spec }),
+        ("a clipping group", clipped.clone()),
+        ("a group holding a symbol instance", in_group(instance)),
+        ("a group holding a clipping group", in_group(clipped)),
+    ];
+    for (what, kind) in kinds {
+        let mut n = Node::new(d.alloc_id(), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let solid_doc = doc_of(&mut d.clone(), n);
+        let n = &solid_doc.layers[0].children().unwrap()[0];
+        let (solid, rasterized) = (crate::encode::art_bounds(&solid_doc).unwrap(), crate::drawn_bounds(&solid_doc, n).unwrap());
+        let size = |r: Rect| r.width() + r.height();
+        assert!(size(solid) > size(flat) + 20.0, "{what}: {flat:?} {solid:?}");
+        assert!(size(rasterized) > size(flat) + 20.0, "{what}: {flat:?} {rasterized:?}");
+        // The renderer builds the solid from the object itself, with the document's symbols, as
+        // the effect builds it: one solid built, not the object's art drawn again with the effect.
+        let built = vectorcraft_effects::solid_art_in(Some(&solid_doc), n).and_then(|a| a.visual_bounds()).unwrap();
+        assert!((solid.x0 - built.x0).abs() < 1.0 && (solid.x1 - built.x1).abs() < 1.0, "{what}: {built:?} {solid:?}");
+        let mut r = Renderer::new();
+        r.art_bounds_on(&solid_doc, Rect::new(0.0, 0.0, 200.0, 200.0));
+        assert_eq!(r.stats.three_d_built, 1, "{what}");
+    }
+}
+
+/// A loaded file can hold a 3D effect on art past the limits commands check: a blend of more
+/// than 4,096 objects, art nested more than 64 levels deep in a clipping group. The art then draws
+/// as it does without the effect, and drawing it does not fail.
+#[test]
+fn art_past_the_three_d_limits_draws_as_without_the_effect() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind};
+    let square = |x: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut clip = (*square(0.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let mut deep = (*square(0.0)).clone();
+    for _ in 0..200 {
+        deep = Node::group(NodeId(0), vec![Arc::new(deep)]);
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(1000), ..Default::default() });
+    let kinds = [
+        ("a blend of 6,000 objects", NodeKind::Blend { children: (0..6).map(|i| square(30.0 * i as f64)).collect(), spec }),
+        ("art 200 levels deep in a clip", NodeKind::Group { children: vec![Arc::new(clip), Arc::new(deep)], clip: true }),
+    ];
+    let d = Document::new(200.0, 200.0);
+    for (what, kind) in kinds {
+        let mut n = Node::new(NodeId(500), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let loaded = doc_of(&mut d.clone(), n);
+        let n = &loaded.layers[0].children().unwrap()[0];
+        assert!(vectorcraft_effects::validate_three_d_in(Some(&loaded), n, "threeD.extrude", &json!({})).is_err(), "{what}");
+        assert_eq!(crate::encode::art_bounds(&loaded), Some(flat), "{what}");
+        assert!(crate::drawn_bounds(&loaded, n).is_some(), "{what}");
+    }
+}
+
+fn doc_of(d: &mut Document, n: Node) -> Document {
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    d.clone()
+}
+
+/// A shadow on a fill after its own 3D effect is drawn on the fill's solid and reaches past it
+/// once: Object › Rasterize takes the solid and the shadow, no more.
+#[test]
+fn a_fills_shadow_after_its_3d_effect_reaches_past_its_solid_once() {
+    let mut d = doc_with(Rect::new(40.0, 40.0, 60.0, 60.0), Color::BLACK, vec![]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let fill = |shadow: bool| {
+        let mut fx = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0, "position": "isometricTop"}), visible: true }];
+        if shadow {
+            fx.push(Effect { id: "stylize.dropShadow".into(), params: json!({"x": 20, "y": 0, "blur": 0}), visible: true });
+        }
+        fx
+    };
+    d.node_mut(id).unwrap().appearance.fill_mut().unwrap().effects = fill(false);
+    let solid = crate::drawn_bounds(&d, d.node(id).unwrap()).unwrap();
+    d.node_mut(id).unwrap().appearance.fill_mut().unwrap().effects = fill(true);
+    let shadowed = crate::drawn_bounds(&d, d.node(id).unwrap()).unwrap();
+    let grown = [solid.x0 - shadowed.x0, solid.y0 - shadowed.y0, shadowed.x1 - solid.x1, shadowed.y1 - solid.y1];
+    assert!(grown.iter().all(|g| *g <= 20.0 + 1e-6) && grown.iter().any(|g| *g >= 20.0 - 1e-6), "{solid:?} {shadowed:?}");
+}
+
+/// A fill's own 3D effect leaves the brushed stroke drawn with its brush: Object › Rasterize, exports
+/// and culling take the brush's art in, and Rasterize and exports no more than the solid and that
+/// art.
+#[test]
+fn a_brushed_stroke_beside_a_fills_3d_effect_is_measured_with_its_brush() {
+    let mut d = doc_with(Rect::new(40.0, 40.0, 60.0, 60.0), Color::BLACK, vec![]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    {
+        let n = d.node_mut(id).unwrap();
+        n.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::BLACK), 1.0)));
+        if let Some(vectorcraft_doc::AppearanceItem::Stroke(s)) = n.appearance.items.last_mut() {
+            s.brush = Some("10 pt. Oval".into());
+        }
+        n.appearance.fill_mut().unwrap().effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0, "position": "isometricTop"}), visible: true }];
+    }
+    let n = d.node(id).unwrap();
+    let brush = vectorcraft_brush::expand(&d, n).and_then(|art| art.visual_bounds()).unwrap();
+    let symbols = d.symbol_boxes();
+    let rasterized = crate::drawn_bounds(&d, n).unwrap();
+    let exported = crate::effect_bounds(&symbols, n).unwrap();
+    for (what, b) in [("Rasterize", rasterized), ("exports", exported), ("culling", super::cull_bounds(&symbols, n).unwrap())] {
+        assert_eq!(b.union(brush), b, "{what}: {b:?} holds the brush's art {brush:?}");
+    }
+    // The solid alone, without the stroke: what else may be measured.
+    let mut plain = d.clone();
+    plain.node_mut(id).unwrap().appearance.items.retain(|i| !matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_)));
+    let solid = crate::drawn_bounds(&plain, plain.node(id).unwrap()).unwrap();
+    let most = solid.union(brush).inflate(1.0, 1.0);
+    for (what, b) in [("Rasterize", rasterized), ("exports", exported)] {
+        assert_eq!(most.union(b), most, "{what}: {b:?} no more than the solid and the brush's art {most:?}");
+    }
+}
+
+/// The renderer measures a 3D object with Crop Marks as the free measure does: by the marks and
+/// the object, which paints its own shadow inside them, counted once.
+#[test]
+fn the_renderer_measures_3d_art_with_crop_marks_as_drawn() {
+    let fx = vec![
+        ("threeD.extrude", json!({"depth": 30.0, "position": "isometricTop"})),
+        ("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0})),
+        (crate::effects::CROP_MARKS, json!({})),
+    ];
+    let d = doc_with(Rect::new(40.0, 40.0, 60.0, 60.0), Color::BLACK, fx);
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let symbols = d.symbol_boxes();
+    let free = super::cull_bounds(&symbols, &n).unwrap();
+    assert_eq!(Renderer::new().bounds_of(&symbols, &n), Some(free));
+}
+
+/// Vector Halftone draws dots in place of a 3D effect's solid: the renderer doesn't measure the
+/// object by art it holds to draw it with, and measures it as the free measure does.
+#[test]
+fn the_renderer_measures_3d_art_with_vector_halftone_as_drawn() {
+    let fx = vec![("threeD.extrude", json!({"depth": 30.0, "position": "isometricTop"})), (crate::effects::addons::halftone::HALFTONE, json!({}))];
+    let d = doc_with(Rect::new(40.0, 40.0, 60.0, 60.0), Color::BLACK, fx);
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let symbols = d.symbol_boxes();
+    let free = super::cull_bounds(&symbols, &n).unwrap();
+    let mut r = Renderer::new();
+    // A consistency check: measured from the dots' art, the bounds come out the same.
+    assert_eq!(r.bounds_of(&symbols, &n), Some(free));
+    assert_eq!(r.measured_bytes(), 0, "no art held");
+}
+
+/// A renderer measures the art over each artboard as [`crate::encode::art_bounds_on`] does, and
+/// builds each 3D solid once for every artboard it measures.
+#[test]
+fn a_renderer_measures_the_art_on_each_artboard_building_each_solid_once() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let boards = 30;
+    for i in 0..boards {
+        let x = f64::from(i) * 100.0;
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(x + 30.0, 30.0, x + 60.0, 60.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 40.0, "position": "isometricTop"}), visible: true }];
+        d.insert(Some(l), 0, n).unwrap();
+    }
+    let mut r = Renderer::new();
+    for i in 0..boards {
+        let rect = Rect::new(f64::from(i) * 100.0, 0.0, f64::from(i) * 100.0 + 100.0, 100.0);
+        assert_eq!(r.art_bounds_on(&d, rect), crate::encode::art_bounds_on(&d, rect), "artboard {i}");
+    }
+    assert_eq!(r.stats.three_d_built, boards as usize, "each solid built once");
+}
+
+/// A 3D object measured but not drawn (off the view) doesn't keep its art past the frame: what is
+/// kept is what is drawn.
+#[test]
+fn only_drawn_3d_art_is_kept() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let mut ids = vec![];
+    for x in [30.0, 530.0] {
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(x, 30.0, x + 30.0, 60.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+        ids.push(d.insert(Some(l), 0, n).unwrap());
+    }
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    let kept = |r: &Renderer, id| {
+        let n = d.layers[0].children().unwrap().iter().find(|c| c.id == id).unwrap();
+        r.fx_arts.contains_key(&(Arc::as_ptr(n) as usize))
+    };
+    assert!(kept(&r, ids[0]), "drawn, kept");
+    assert!(!kept(&r, ids[1]), "off the view, let go");
+    assert!(r.measured.is_empty());
+}
+
+/// Art made to measure objects is held within a budget: past it, objects are measured and their
+/// art is made again if they are drawn.
+#[test]
+fn measured_art_is_held_within_its_budget() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    for i in 0..20 {
+        let x = 500.0 + f64::from(i) * 40.0;
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(x, 30.0, x + 30.0, 60.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+        d.insert(Some(l), 0, n).unwrap();
+    }
+    let symbols = d.symbol_boxes();
+    let mut r = Renderer::new();
+    let one = {
+        let n = &d.layers[0].children().unwrap()[0];
+        r.bounds_of(&symbols, n);
+        r.measured_bytes
+    };
+    r.let_go_of_measured();
+    r.measured_budget = one * 3;
+    for n in d.layers[0].children().unwrap() {
+        r.bounds_of(&symbols, n);
+    }
+    assert!(r.measured_bytes <= one * 3 && r.measured.len() <= 3, "{} bytes in {} entries", r.measured_bytes, r.measured.len());
+    // Every object is measured right, those past the budget too, and draws as a new renderer
+    // draws it, its art made again.
+    for n in d.layers[0].children().unwrap() {
+        assert_eq!(r.bounds_of(&symbols, n), super::cull_bounds(&symbols, n), "{:?}", n.id);
+    }
+    let (view, opts) = (Affine::translate((-500.0, 0.0)), RenderOptions::default());
+    let drawn = r.render(&d, 800, 100, view, &opts).pixels;
+    assert!(drawn == Renderer::new().render(&d, 800, 100, view, &opts).pixels);
+}
+
+/// An edit to 3D objects the frame doesn't draw (hidden, in a hidden group, drawn hidden) builds
+/// nothing to measure them, and changes nothing.
+#[test]
+fn an_edit_out_of_sight_builds_nothing() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let extruded = |d: &mut Document, x: f64| {
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(x, 30.0, x + 20.0, 50.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+        n
+    };
+    let mut hidden = extruded(&mut d, 10.0);
+    hidden.visible = false;
+    let member = extruded(&mut d, 40.0);
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(member)]);
+    group.visible = false;
+    let drawn_hidden = extruded(&mut d, 70.0);
+    let ids = [d.insert(Some(l), 0, hidden).unwrap(), group.children().unwrap()[0].id, d.insert(Some(l), 0, drawn_hidden).unwrap()];
+    d.insert(Some(l), 0, group).unwrap();
+    let opts = RenderOptions { hidden: vec![ids[2]], ..Default::default() };
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    let mut e = d.clone();
+    for id in ids {
+        e.node_mut(id).unwrap().appearance.effects[0].params = json!({"depth": 5.0});
+    }
+    let built = r.stats.three_d_built;
+    assert_eq!(r.changed(&d, &e, &opts), crate::Changed::Nothing);
+    assert_eq!((r.stats.three_d_built - built, r.measured.len()), (0, 0));
+}
+
+/// The bounds of 3D art kept for a pass that only measures stay as many as the art still held.
+#[test]
+fn a_measuring_pass_keeps_the_bounds_of_held_art_only() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    for i in 0..3000 {
+        let x = f64::from(i) * 30.0;
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(x, 30.0, x + 20.0, 50.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 2.0}), visible: true }];
+        d.insert(Some(l), 0, n).unwrap();
+    }
+    let symbols = d.symbol_boxes();
+    let mut r = Renderer::new();
+    // Nothing measured is held: the art is let go once measured.
+    r.measured_budget = 0;
+    for n in d.layers[0].children().unwrap() {
+        r.bounds_of(&symbols, n);
+    }
+    assert_eq!(r.stats.three_d_built, 3000);
+    assert!(r.three_d_bounds.len() <= 1024, "{} kept", r.three_d_bounds.len());
+}
+
+/// While its 3D art is held, a pass that only measures sweeps the bounds kept for 3D art each time
+/// they double, not on every new art past a size.
+#[test]
+fn a_measuring_pass_sweeps_the_bounds_of_held_art_as_they_double() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    for i in 0..3000 {
+        let x = f64::from(i) * 30.0;
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(x, 30.0, x + 20.0, 50.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 2.0}), visible: true }];
+        d.insert(Some(l), 0, n).unwrap();
+    }
+    let mut r = Renderer::new();
+    // Held here, as the art kept to draw is.
+    let held: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| r.measured_fx_art(&d, n)).collect();
+    assert_eq!((held.len(), r.three_d_bounds.len()), (3000, 3000));
+    assert!(r.three_d_sweeps <= 2, "{} sweeps", r.three_d_sweeps);
+}
+
+/// A renderer checks the brush library between frames only once it has measured 3D art, and again
+/// only after measuring 3D art since the library last changed.
+#[test]
+fn the_brush_library_is_checked_only_after_3d_art_is_measured() {
+    let mut d = doc_with(Rect::new(30.0, 30.0, 60.0, 60.0), Color::BLACK, vec![]);
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(r.brush_library, None);
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+    r.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert!(r.brush_library.is_some());
+    // A library changed: the bounds measured with the old one go, and so does its key.
+    let mut lib = vectorcraft_brush::library(&d);
+    lib.retain(|b| b.name != "3 pt. Round");
+    vectorcraft_brush::store(&mut d, &lib);
+    r.check_symbols(&d);
+    assert_eq!(r.brush_library, None);
+}
+
+/// An object whose 3D effect builds nothing (Revolve on a group's fill) is measured by the renderer
+/// as the free measure does it: as the renderer draws it, by its members.
+#[test]
+fn a_3d_effect_that_builds_nothing_is_measured_alike() {
+    let mut d = Document::new(100.0, 100.0);
+    let mut hidden = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(60.0, 10.0, 90.0, 20.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    hidden.visible = false;
+    let shown = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    let mut g = Node::group(d.alloc_id(), vec![Arc::new(hidden), Arc::new(shown)]);
+    g.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+    *g.appearance.items[0].effects_mut() = vec![Effect { id: "threeD.revolve".into(), params: json!({}), visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    let n = d.layers[0].children().unwrap()[0].clone();
+    assert!(crate::effects::has_revolve(&n) && crate::effects::revolve_art(&n).is_none(), "builds nothing");
+    let symbols = d.symbol_boxes();
+    assert_eq!(Renderer::new().effect_bounds(&symbols, &n), crate::effect_bounds(&symbols, &n));
+    assert_eq!(Renderer::new().bounds_of(&symbols, &n), crate::brush_fx::cull_bounds(&symbols, &n));
+}
+
+/// A group with effects of its own that holds an extruded path is measured once for every artboard
+/// of a pass: its bounds are kept after the first.
+#[test]
+fn a_group_holding_3d_art_is_measured_once_a_pass() {
+    let mut d = Document::new(100.0, 100.0);
+    let mut inner = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(30.0, 30.0, 60.0, 60.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    inner.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+    let mut g = Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+    g.appearance.effects = vec![Effect { id: "stylize.dropShadow".into(), params: json!({"x": 4, "y": 4, "blur": 2}), visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    let g = d.layers[0].children().unwrap()[0].clone();
+    let mut r = Renderer::new();
+    let first = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert_eq!(r.art_bounds_on(&d, first), crate::encode::art_bounds_on(&d, first));
+    let key = Arc::as_ptr(&g) as usize;
+    assert!(r.geom.contains_key(&key), "kept for the next artboard");
+    // The group's bounds, planted over the next artboards: they read the kept bounds, measuring
+    // nothing again.
+    let planted = Rect::new(100.0, 0.0, 300.0, 100.0);
+    r.geom.get_mut(&key).unwrap().bounds = Some(planted);
+    for i in 1..3 {
+        let rect = Rect::new(f64::from(i) * 100.0, 0.0, f64::from(i) * 100.0 + 100.0, 100.0);
+        assert_eq!(r.art_bounds_on(&d, rect), Some(planted), "artboard {i}");
+    }
+}
+
+/// A pass that only measures (Fit to Artwork Bounds, an export) holds no 3D art past its budget:
+/// what it measured and didn't keep is let go.
+#[test]
+fn a_measuring_pass_holds_no_art_past_its_budget() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    for i in 0..20 {
+        let x = f64::from(i) * 40.0;
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(x, 30.0, x + 30.0, 60.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+        d.insert(Some(l), 0, n).unwrap();
+    }
+    let mut r = Renderer::new();
+    r.measured_budget = 0;
+    r.art_bounds_on(&d, Rect::new(0.0, 0.0, 100.0, 100.0));
+    assert!(r.measured.is_empty());
+    assert!(r.three_d_bounds.values().all(|e| e.0.strong_count() == 0), "no art held");
+}
+
+/// Drawing an object takes the art made to measure it out of the budget: a frame draws each 3D
+/// object with that art, making none again, while what it measured fits the budget.
+#[test]
+fn drawing_takes_measured_art_out_of_the_budget() {
+    let mut d = Document::new(800.0, 100.0);
+    let l = d.layers[0].id;
+    for i in 0..20 {
+        let x = f64::from(i) * 40.0;
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(x, 30.0, x + 30.0, 60.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+        d.insert(Some(l), 0, n).unwrap();
+    }
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let mut r = Renderer::new();
+    r.bounds_of(&d.symbol_boxes(), &n);
+    assert!(r.measured_bytes > 0);
+    r.fx_art(&d, &n, true);
+    assert_eq!((r.measured_bytes, r.measured.len()), (0, 0), "taken out when drawn");
+    let mut r = Renderer::new();
+    r.render(&d, 800, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(r.stats.three_d_built, 20, "each made once");
+}
+
+/// An object with a brushed stroke whose 3D effect builds nothing is measured by a pass as without
+/// it: not with the room culling leaves for its brush.
+#[test]
+fn a_pass_measures_brushed_art_as_exports_do() {
+    let mut d = Document::new(100.0, 100.0);
+    let mut art = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    art.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::BLACK), 1.0)));
+    if let Some(vectorcraft_doc::AppearanceItem::Stroke(s)) = art.appearance.items.last_mut() {
+        s.brush = Some("10 pt. Oval".into());
+    }
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Brushed".into(), art: Arc::new(art) });
+    let mut n = Node::new(d.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Brushed".into(), xf: Affine::translate((50.0, 50.0)) });
+    n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert_eq!(Renderer::new().art_bounds_on(&d, rect), crate::encode::art_bounds_on(&d, rect));
+    let symbols = d.symbol_boxes().with_brush_art();
+    assert_eq!(Renderer::new().effect_bounds(&symbols, &n), crate::effect_bounds(&symbols, &n));
+}
+
+/// A 3D object whose brushed stroke's brush gets wider is drawn where the brush now reaches, by a
+/// renderer that measured it before: culling leaves room for brush art.
+#[test]
+fn a_3d_objects_wider_brush_is_drawn_where_it_reaches() {
+    let mut d = Document::new(100.0, 100.0);
+    let mut ap = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 1.0);
+    ap.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    let mut n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(104.0, 40.0, 124.0, 60.0)), ap);
+    n.appearance.fill_mut().unwrap().effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 2.0}), visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    let mut lib = vectorcraft_brush::library(&d);
+    let round = lib.iter_mut().find(|b| b.name == "3 pt. Round").unwrap();
+    if let vectorcraft_brush::BrushKind::Calligraphic(c) = &mut round.kind {
+        c.size = 30.0;
+    }
+    vectorcraft_brush::store(&mut d, &lib);
+    let drawn = r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
+    let fresh = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
+    assert!(fresh.iter().any(|c| *c < 128), "the wider brush reaches into the view");
+    assert!(drawn == fresh, "as a new renderer draws it");
+}
+
+/// A 20 pt square at `x` with a fill-level 3D effect, a brushed stroke and Rasterize, in a 100 pt
+/// view: drawn by a renderer that drew it before its brush got wider (`size` pt), and by a new
+/// renderer.
+fn drawn_after_a_brush_widens(x: f64, size: f64) -> (Vec<u8>, Vec<u8>) {
+    let brush = "3 pt. Round";
+    let mut d = Document::new(100.0, 100.0);
+    let mut ap = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 1.0);
+    ap.stroke_mut().unwrap().brush = Some(brush.into());
+    let mut n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 40.0, x + 20.0, 60.0)), ap);
+    n.appearance.fill_mut().unwrap().effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 2.0}), visible: true }];
+    n.appearance.effects = vec![Effect { id: "rasterize".into(), params: json!({"useDocumentResolution": false, "resolution": 72}), visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    let mut lib = vectorcraft_brush::library(&d);
+    let b = lib.iter_mut().find(|b| b.name == brush).unwrap();
+    if let vectorcraft_brush::BrushKind::Calligraphic(c) = &mut b.kind {
+        c.size = size;
+    }
+    vectorcraft_brush::store(&mut d, &lib);
+    let drawn = r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
+    (drawn, Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixels)
+}
+
+/// Rasterize on a brushed 3D object outside the view draws its art with the brush as it is now, by
+/// a renderer that drew it with the brush before: the object is measured again when the brush
+/// library changes, with the brush's art reaching past the room culling leaves for it, and
+/// rasterized again.
+#[test]
+fn a_rasterized_3d_objects_brush_widened_is_drawn() {
+    let (drawn, fresh) = drawn_after_a_brush_widens(140.0, 120.0);
+    assert!(fresh.iter().any(|c| *c < 128), "the wider brush reaches into the view");
+    assert!(drawn == fresh, "as a new renderer draws it");
+}
+
+/// A rasterized brushed 3D object in the view is rasterized again when its brush changes.
+#[test]
+fn a_rasterized_objects_brush_widened_in_view_is_drawn_again() {
+    let (drawn, fresh) = drawn_after_a_brush_widens(40.0, 12.0);
+    let (_, before) = drawn_after_a_brush_widens(40.0, 3.0);
+    assert!(fresh != before, "the wider brush draws otherwise");
+    assert!(drawn == fresh, "as a new renderer draws it");
+}
+
+/// A group with effects of its own that holds a hidden member is measured without it once a pass,
+/// as exports measure it.
+#[test]
+fn a_group_with_a_hidden_member_is_measured_once_a_pass() {
+    let mut d = Document::new(100.0, 100.0);
+    let mut solid = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(30.0, 30.0, 60.0, 60.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    solid.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+    let mut hidden = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(80.0, 80.0, 95.0, 95.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    hidden.visible = false;
+    let mut g = Node::group(d.alloc_id(), vec![Arc::new(solid), Arc::new(hidden)]);
+    g.appearance.effects = vec![Effect { id: "stylize.dropShadow".into(), params: json!({"x": 4, "y": 4, "blur": 2}), visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    let g = d.layers[0].children().unwrap()[0].clone();
+    let mut r = Renderer::new();
+    let first = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert_eq!(r.art_bounds_on(&d, first), crate::encode::art_bounds_on(&d, first));
+    let key = Arc::as_ptr(&g) as usize;
+    assert!(r.pass_bounds.contains_key(&key), "kept for the next artboard");
+    // The group's bounds, planted over the next artboards: they read the kept bounds, measuring
+    // nothing again.
+    let planted = Rect::new(100.0, 0.0, 300.0, 100.0);
+    r.pass_bounds.get_mut(&key).unwrap().1 = Some(planted);
+    for i in 1..3 {
+        let rect = Rect::new(f64::from(i) * 100.0, 0.0, f64::from(i) * 100.0 + 100.0, 100.0);
+        assert_eq!(r.art_bounds_on(&d, rect), Some(planted), "artboard {i}");
+    }
+}
+
+/// Art made again for an object, after what it read from outside it changed, takes the place of
+/// the art held for it, and of its bytes.
+#[test]
+fn art_measured_again_takes_the_place_of_the_held() {
+    let d = doc_with(Rect::new(30.0, 30.0, 60.0, 60.0), Color::BLACK, vec![("threeD.extrude", json!({"depth": 20.0}))]);
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let key = Arc::as_ptr(&n) as usize;
+    let mut r = Renderer::new();
+    let art = r.measured_fx_art(&d, &n);
+    let bytes = r.measured_bytes;
+    // As if it had read something else then.
+    r.measured.insert(key, (n.clone(), art, Some(7)));
+    r.measured_fx_art(&d, &n);
+    assert_eq!((r.measured_bytes, r.measured.len()), (bytes, 1));
 }
 
 /// Multithreaded rendering filters each effect offscreen; it must match the single-threaded
@@ -1117,5 +1850,78 @@ fn an_image_inner_glow_follows_its_visible_pixels() {
         assert!(lum(img.pixel(51, 50)) > 60, "threads {threads}: the glow lights the visible pixels' edge: {:?}", img.pixel(51, 50));
         assert!(lum(img.pixel(68, 50)) > 60, "threads {threads}: and the frame's edge where the pixels reach it: {:?}", img.pixel(68, 50));
         assert!(lum(img.pixel(60, 50)) < lum(img.pixel(51, 50)), "threads {threads}: fading inward");
+    }
+}
+
+/// A 3D effect on a path's fill or stroke that builds nothing (Revolve after Roughen, in a paint
+/// whose copies on the faces would pass the budget) draws the item as without it: the art made for the object is drawn without it, not as an object with
+/// effects again, and that art again, without end. A stroked object draws exactly as without the
+/// 3D effect, with a raster effect of its own (Drop Shadow, Gaussian Blur) too. An object with
+/// only a fill and a raster effect draws from that art, where without the 3D effect it draws as a
+/// path, whose raster effects are clipped to the path's own geometry: there Roughen's spikes are
+/// cut off, so the two differ in a few pixels at the edge and match inside the path. That clipping
+/// is an older bug on main of drawing without the 3D effect, not the design. Either
+/// way the raster effect reaches past what the object draws without it.
+#[test]
+fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
+    let rough =
+        Effect { id: "distort.roughen".into(), params: json!({"size": 10, "relative": false, "detail": 10, "points": "smooth"}), visible: true };
+    let revolve = Effect { id: "threeD.revolve".into(), params: json!({}), visible: true };
+    // A gradient of one color with 1,000 stops.
+    let ramp = |c: Color| {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        let stops = (0..1000).map(|i| GradientStop::new(i as f32 / 1000.0, c)).collect();
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))))
+    };
+    let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({}), visible: true };
+    let blur = Effect { id: "blur.gaussian".into(), params: json!({"radius": 2}), visible: true };
+    let cases = [
+        (vec![], true, true),
+        (vec![], false, true),
+        (vec![shadow.clone()], true, true),
+        (vec![blur.clone()], false, true),
+        (vec![], true, false),
+        (vec![shadow], true, false),
+        (vec![blur], true, false),
+    ];
+    for (object, on_fill, stroked) in cases {
+        let draw = |object: &[Effect], three: bool| {
+            let mut d = Document::new(100.0, 100.0);
+            let stroke = if stroked { ramp(Color::rgb(0.0, 0.0, 1.0)) } else { Paint::None };
+            let ap = Appearance::basic(ramp(Color::BLACK), stroke, 2.0);
+            let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(30.0, 30.0, 60.0, 60.0)), ap);
+            let l = d.layers[0].id;
+            let id = d.insert(Some(l), 0, n).unwrap();
+            let n = d.node_mut(id).unwrap();
+            n.appearance.effects = object.to_vec();
+            let item = if on_fill {
+                n.appearance.fill_mut().unwrap().effects = vec![];
+                &mut n.appearance.items[0]
+            } else {
+                &mut n.appearance.items[1]
+            };
+            *item.effects_mut() = [Some(rough.clone()), three.then(|| revolve.clone())].into_iter().flatten().collect();
+            assert!(crate::effects::revolve_art(d.node(id).unwrap()).is_none(), "builds nothing");
+            Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixels
+        };
+        let what = format!("{object:?} on the fill {on_fill}, stroked {stroked}");
+        let (with, without) = (draw(&object, true), draw(&object, false));
+        if stroked || object.is_empty() {
+            assert!(with == without, "{what}: as without it");
+        } else {
+            // Under 4% of the pixels, all at the edge, where Roughen's spikes are: inside the path
+            // they match.
+            let differ: Vec<(usize, usize)> =
+                (0..100 * 100).filter(|i| with[i * 4..i * 4 + 4] != without[i * 4..i * 4 + 4]).map(|i| (i % 100, i / 100)).collect();
+            assert!(differ.len() * 25 < 100 * 100, "{what}: {} pixels differ", differ.len());
+            let inside = differ.iter().find(|(x, y)| (33..57).contains(x) && (33..57).contains(y));
+            assert!(inside.is_none(), "{what}: differs inside the path at {inside:?}");
+        }
+        if !object.is_empty() {
+            // Ink where the object without its raster effect draws none.
+            let plain = draw(&[], true);
+            let past = (0..100 * 100).filter(|i| plain[i * 4 + 3] == 0 && with[i * 4 + 3] > 0).count();
+            assert!(past > 0, "{what}: drawn past the object");
+        }
     }
 }

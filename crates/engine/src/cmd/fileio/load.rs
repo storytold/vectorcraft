@@ -9,7 +9,7 @@ use vectorcraft_render::effects::pixel::LoadedTexture;
 
 use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, psdread, read_file, readable_format_for_name};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, jxlread, psdread, read_file, readable_format_for_name};
 use crate::cmd::links::Resolved;
 use crate::{EngineError, Prefs};
 
@@ -40,6 +40,22 @@ impl Loaded {
     pub(crate) fn with_grid_prefs(mut self, prefs: &Prefs) -> Self {
         if !self.restored && !matches!(self.format.id, "vectorcraft" | "template") {
             self.doc.grid = prefs.grid();
+        }
+        self
+    }
+
+    /// The file in the units of Preferences › Units › General when it records none of its own: a
+    /// PDF, an EPS or `.ai` without ruler units, a raster image, a metafile, an Affinity file or
+    /// what an importer plug-in reads, as the reference app opens such files (#5820). A native
+    /// document (also one that an SVG, PDF, `.ai` or EPS file carries, `restored`), an SVG (the
+    /// units of its root's size, pixels when it gives none), a DXF drawing (the unit it was read
+    /// in) and a `.ai` or EPS with ruler units keep theirs. Only the units the document shows
+    /// change, not its art.
+    pub(crate) fn with_unit_prefs(mut self, prefs: &Prefs) -> Self {
+        let records_units =
+            self.restored || self.doc.units_from_file || matches!(self.format.id, "vectorcraft" | "template" | "svg" | "svgz" | "dxf");
+        if !records_units {
+            self.doc.units = crate::units::pref_unit(&prefs.units_general);
         }
         self
     }
@@ -101,6 +117,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     }
     if super::pxrread::is_pxr(bytes) {
         return format("pxr");
+    }
+    if jxlread::is_jxl(bytes) {
+        return format("jxl");
     }
     if super::jp2read::is_jpeg2000(bytes) {
         return format("jpeg2000");
@@ -181,7 +200,8 @@ fn through_editing_data(
 ) -> (Document, Vec<String>, bool) {
     let Some(layers) = layers else { return (doc, warnings, false) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
-    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai_from(layers, doc, warnings, outlined, opts.trust_editing_data, unit);
+    let (doc, mut warnings, read) =
+        vectorcraft_eps::layered_ai_from(layers, doc, warnings, outlined, opts.trust_editing_data, unit, opts.legacy_names);
     // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
     if !read {
         return (doc, warnings, false);
@@ -206,12 +226,12 @@ fn from_editing_data_alone(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions)
         return None;
     }
     let private = opened.illustrator_data()?;
-    Some(editing_copy_alone(&private))
+    Some(editing_copy_alone(&private, opts))
 }
 
 /// [`from_editing_data_alone`] of `private`, the editor's copy already read.
-fn editing_copy_alone(private: &[u8]) -> Result<(Document, Vec<String>)> {
-    vectorcraft_eps::ai_alone(private)
+fn editing_copy_alone(private: &[u8], opts: &LoadOptions) -> Result<(Document, Vec<String>)> {
+    vectorcraft_eps::ai_alone_with(private, opts.legacy_names)
         .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})")))
 }
 
@@ -244,7 +264,7 @@ fn without_pdf_part(bytes: &[u8], opts: &LoadOptions, e: &EngineError) -> Option
         return None;
     }
     let private = vectorcraft_pdf::illustrator_data_without_pdf_part(bytes, opts.password.as_deref())?;
-    let (doc, warnings) = vectorcraft_eps::ai_alone_on_page(&private.data, private.trim, private.user_unit).ok()?;
+    let (doc, warnings) = vectorcraft_eps::ai_alone_on_page(&private.data, private.trim, private.user_unit, opts.legacy_names).ok()?;
     let notes = std::iter::once(format!("the PDF part couldn't be read ({e}): the file opened from its editing data")).chain(warnings).collect();
     Some(outlined_if_asked(doc, notes, opts))
 }
@@ -320,7 +340,7 @@ pub(crate) fn page_or_editing_data(
     match read {
         Ok((doc, notes)) => Ok((doc, notes, false)),
         Err(e) if is_placeholder(&e) => {
-            let l = load_with(name, bytes, &LoadOptions { password: opts.password.clone(), ..Default::default() })?;
+            let l = load_with(name, bytes, &LoadOptions { password: opts.password.clone(), legacy_names: opts.legacy_names, ..Default::default() })?;
             Ok((l.doc, l.warnings, true))
         }
         Err(e) if page_index == 0 => match load_with(name, bytes, &LoadOptions { pages: None, ..opts.clone() }) {
@@ -349,7 +369,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ if matches!(format.id, "eps" | "ps") || vectorcraft_pdf::is_postscript(bytes) => {
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import_trusting(bytes, opts.editing_data, opts.trust_editing_data)
+                let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
                     .map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?
@@ -388,7 +408,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 if let Some((o, private)) = opened.as_ref().ok().filter(|_| reads_layers_alone(opts)).and_then(|o| Some((o, editing_copy(o, opts)?)))
                 {
                     let pages = o.trim_pages();
-                    match vectorcraft_eps::ai_layers_alone(&private, &pages.sizes, pages.user_unit) {
+                    match vectorcraft_eps::ai_layers_alone(&private, &pages.sizes, pages.user_unit, opts.legacy_names) {
                         Ok((mut doc, warnings)) => {
                             doc.setup.bleed = pages.bleed;
                             editing_data = true;
@@ -410,8 +430,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                         // decoded draws nothing either): its notes are at most the page's own.
                         let empty = draws_nothing(&r.document) && r.warnings.iter().all(|w| is_page_note(w));
                         let copy_alone = || match &private {
-                            Some(private) => Some(editing_copy_alone(private)),
-                            None if layers.is_some() => opened.as_ref().ok().and_then(|o| editing_copy(o, opts)).map(|p| editing_copy_alone(&p)),
+                            Some(private) => Some(editing_copy_alone(private, opts)),
+                            None if layers.is_some() => {
+                                opened.as_ref().ok().and_then(|o| editing_copy(o, opts)).map(|p| editing_copy_alone(&p, opts))
+                            }
                             None => None,
                         };
                         let alone = (r.only_text || empty)
@@ -484,7 +506,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     // document keeps its text as saved), and every frame of a thread takes its first frame's
     // Optical Margin Alignment setting and writing direction. When that changes the direction of a
     // frame of a restored document, the story flows through that frame's thread again. Threaded
-    // frames keep their size: Auto Size is off for them.
+    // frames keep their size: Auto Size is off for them. The story is laid out in the document's
+    // own composite fonts.
+    let fonts = if doc.text_threads.is_empty() { Default::default() } else { doc.composite_fonts.clone() };
+    let lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&fonts);
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
     } else if !doc.text_threads.is_empty() {
@@ -495,6 +520,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         // paragraph's first-line indent and list marker.
         crate::cmd::threads::mark_continued(&mut doc);
     }
+    drop(lent);
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
@@ -604,7 +630,8 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
 /// Make a loaded file the new active document; `links` is what became of its linked files, and
 /// `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } = loaded.with_grid_prefs(&s.prefs);
+    let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } =
+        loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
     // fallbacks must ask before overwriting the richer source they could not fully read.
     let losses: Vec<String> = warnings
@@ -759,7 +786,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
 /// as RGBA, need more than [`MAX_RASTER_ALLOC`] is refused as too large to draw.
 /// A TIFF with more strips or tiles than the decoder can count
-/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw.
+/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw. JPEG XL images are
+/// read with [`jxlread`] and stored as PNG, with the ICC profile their colors are left in.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -767,25 +795,29 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     }
     if psdread::is_psd(bytes) {
         let cms = vectorcraft_color::cms::active();
-        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, ppi);
+        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, None, ppi);
+    }
+    if jxlread::is_jxl(bytes) {
+        let (img, icc, orientation) = jxlread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?;
+        return as_png(img, icc, jxlread::oriented_resolution(ppi, orientation));
     }
     if super::jp2read::is_jpeg2000(bytes) {
-        return as_png(super::jp2read::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::jp2read::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     if super::heifread::is_heif(bytes) {
         // The EXIF resolution describes the stored pixels; a quarter turn swaps its axes.
         let ppi = ppi.map(|(x, y)| if super::heifread::quarter_turned(bytes) { (y, x) } else { (x, y) });
-        return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     if super::pxrread::is_pxr(bytes) {
-        return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     if reader.format().is_none() && super::tgaread::is_targa(bytes) {
         reader.set_format(image::ImageFormat::Tga);
     }
     if reader.format().is_none() && super::pcxread::is_pcx(bytes) {
-        return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(MAX_RASTER_ALLOC);
@@ -831,7 +863,7 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if f.id == "tga" {
         super::tgaread::fix_alpha(bytes, &mut img);
     }
-    as_png(img, ppi)
+    as_png(img, None, ppi)
 }
 
 /// The EXIF orientation of encoded image `bytes` when it turns or flips the pixels; `None` when
@@ -842,11 +874,17 @@ pub(crate) fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientat
     decoder.orientation().ok().filter(|o| *o != image::metadata::Orientation::NoTransforms)
 }
 
-/// `img` stored as a PNG that keeps the file's resolution.
-fn as_png(img: image::RgbaImage, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
+/// `img` stored as a PNG that keeps the file's resolution and carries `icc`, the ICC profile its
+/// colors are in.
+pub(super) fn as_png(img: image::RgbaImage, icc: Option<Vec<u8>>, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
+    use image::ImageEncoder as _;
     let size = img.dimensions();
     let mut png = Vec::new();
-    img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(err)?;
+    let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
+    if let Some(icc) = icc {
+        encoder.set_icc_profile(icc).map_err(err)?;
+    }
+    img.write_with_encoder(encoder).map_err(err)?;
     let png = match ppi {
         Some(r) => super::ppi::with_png_resolution(&png, r),
         None => png,

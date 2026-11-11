@@ -11,6 +11,9 @@
 //! * **ICC profiles**: the bytes of each profile `color.loadProfile` registered, as `.icc` files
 //!   named after the profile, never the path they came from (a profile in a system folder may
 //!   move or go away). Attaching the folder registers them again.
+//! * **Color Settings**: the working spaces, intent and black point compensation
+//!   `edit.colorSettings` sets, as one JSON file (#6335). Attaching it, after the profiles, makes
+//!   them the active settings again.
 //! * **Plug-ins**: the module of each plug-in `plugin.install` installs, as a `.wasm` file named
 //!   after its id (as Illustrator keeps plug-ins in its Plug-ins folder); `plugin.remove` deletes it.
 //!   Attaching the folder installs them again, except in Safe Mode and except the ones the user
@@ -28,11 +31,12 @@
 //! The files are untrusted input like any other: sizes and counts are capped, a file that does not
 //! parse is skipped with a log record, and every write is atomic.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::SystemTime;
 
 use vectorcraft_pdf::{PdfPreset, builtin_preset};
 use vectorcraft_plugins::safe_mode;
@@ -61,6 +65,8 @@ pub const DISABLED_FILE: &str = "disabled.json";
 pub const DISABLED_LOCK: &str = "disabled.lock";
 /// The file in the plug-in store that holds the permissions the user granted.
 const GRANTS_FILE: &str = "grants.json";
+/// The error of a `plugin.remove` that can't remove the plug-in's grant from [`GRANTS_FILE`].
+pub(crate) const GRANT_NOT_REMOVED: &str = "the plug-in's grant can't be removed from the plug-in store";
 /// The largest grants file read.
 const MAX_GRANTS_FILE: u64 = 1 << 20;
 /// The folder in the plug-in store that holds each plug-in's settings and cache.
@@ -79,9 +85,9 @@ pub(crate) const MAX_CACHE_SCAN: usize = storage::MAX_CACHE_ENTRIES * 2;
 /// Held while a plug-in's settings or cache change, so two runs can't pass a cap together or lose
 /// each other's settings.
 static PLUGIN_DATA_LOCK: Mutex<()> = Mutex::new(());
-/// The closed flag of each plug-in folder's storage, shared by every storage made for the folder
-/// until the plug-in is removed, which sets it and drops it.
-static PLUGIN_DATA_OPEN: Mutex<BTreeMap<PathBuf, Arc<AtomicBool>>> = Mutex::new(BTreeMap::new());
+/// The state of each plug-in folder's storage, shared by every storage made for the folder until
+/// the plug-in is removed, which closes it and drops it.
+static PLUGIN_DATA_OPEN: Mutex<BTreeMap<PathBuf, Arc<PluginData>>> = Mutex::new(BTreeMap::new());
 
 /// The file name (without extension) a stored item called `name` gets: its name made safe for any
 /// file system, then a hash of the name, so that names that differ only in characters a file name
@@ -109,12 +115,18 @@ fn list_files(dir: &Path, ext: &str) -> Vec<PathBuf> {
 
 /// The content of `path` when it is at most `max` bytes; the file is never read past `max`.
 pub(crate) fn read_capped(path: &Path, max: u64) -> Result<Vec<u8>, String> {
-    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    let mut bytes = vec![];
-    file.take(max + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    let bytes = read_past_cap(path, max).map_err(|e| e.to_string())?;
     if bytes.len() as u64 > max {
         return Err(too_large(max));
     }
+    Ok(bytes)
+}
+
+/// The first `max + 1` bytes of `path` at most, so that a result longer than `max` shows the file is
+/// over its cap.
+fn read_past_cap(path: &Path, max: u64) -> std::io::Result<Vec<u8>> {
+    let mut bytes = vec![];
+    std::fs::File::open(path)?.take(max + 1).read_to_end(&mut bytes)?;
     Ok(bytes)
 }
 
@@ -123,11 +135,18 @@ fn too_large(max: u64) -> String {
     format!("larger than {max} bytes")
 }
 
+/// Whether `old` holds exactly `bytes`. It is read no further than one byte past their length, so a
+/// large file is not read into memory.
+pub(crate) fn holds(old: impl Read, bytes: &[u8]) -> bool {
+    let mut read = vec![];
+    old.take(bytes.len() as u64 + 1).read_to_end(&mut read).is_ok() && read == bytes
+}
+
 /// Write `bytes` to `dir/file`, making the folder; nothing is written when the file has them
 /// already. A failure is logged: remembering is best effort and never fails the command.
 fn put(dir: &Path, file: &str, bytes: &[u8]) -> bool {
     let path = dir.join(file);
-    if std::fs::read(&path).is_ok_and(|old| old == bytes) {
+    if std::fs::File::open(&path).is_ok_and(|old| holds(old, bytes)) {
         return true;
     }
     let written = std::fs::create_dir_all(dir).and_then(|()| write_atomic(&path, bytes));
@@ -167,13 +186,21 @@ fn lock_disabled(_: &Path) -> Option<std::fs::File> {
     None
 }
 
-/// Remove `dir/file`; a file that isn't there is what was wanted.
-fn take(dir: &Path, file: &str) {
+#[cfg(test)]
+thread_local! {
+    /// Tests: [`Session::put_back_plugin`] fails on this thread, as on a full volume.
+    pub(crate) static PUT_BACK_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Remove `dir/file` → whether it is gone; a file that isn't there is what was wanted.
+fn take(dir: &Path, file: &str) -> bool {
     let path = dir.join(file);
-    if let Err(e) = std::fs::remove_file(&path)
-        && e.kind() != std::io::ErrorKind::NotFound
-    {
-        log::warn!("can't remove {}: {e}", path.display());
+    match std::fs::remove_file(&path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            log::warn!("can't remove {}: {e}", path.display());
+            false
+        }
+        _ => true,
     }
 }
 
@@ -276,12 +303,40 @@ impl Session {
         }
     }
 
+    /// Keep Edit › Color Settings (the working spaces, intent and black point compensation) in the
+    /// file `path`, and make the settings saved there the active ones (#6335). After
+    /// [`Session::attach_profile_store`]: they may name a profile it registers. Settings that can't be
+    /// read, or that name a profile that is gone, leave the defaults with a log record, and the file
+    /// as it is until the settings change.
+    pub fn attach_color_settings(&mut self, path: PathBuf) {
+        if path.exists() {
+            let restored = read_capped(&path, MAX_PRESET_FILE)
+                .and_then(|bytes| serde_json::from_slice::<vectorcraft_color::cms::ColorSettings>(&bytes).map_err(|e| e.to_string()))
+                .and_then(|settings| vectorcraft_color::cms::set_active(&settings).map_err(|e| e.to_string()));
+            if let Err(e) = restored {
+                log::warn!("not using the saved color settings {}: {e}", path.display());
+            }
+        }
+        self.color_settings_file = Some(path);
+    }
+
+    /// Write `settings` to the file [`Session::attach_color_settings`] named; `false` when they
+    /// didn't go there.
+    pub(crate) fn store_color_settings(&self, settings: &vectorcraft_color::cms::ColorSettings) -> bool {
+        let Some(path) = &self.color_settings_file else { return false };
+        let (Some(dir), Some(file)) = (path.parent(), path.file_name().and_then(|f| f.to_str())) else { return false };
+        serde_json::to_vec_pretty(settings).is_ok_and(|bytes| put(dir, file, &bytes))
+    }
+
     /// Keep the plug-ins this session installs in `dir`, take the disabled plug-ins saved there
     /// ([`DISABLED_FILE`]), and install the stored ones ([`Session::load_stored_plugins`]).
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
         let disabled =
             read_capped(&dir.join(DISABLED_FILE), safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
         safe_mode::set_disabled(disabled);
+        if self.plugin_dir.as_ref() != Some(&dir) {
+            self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        }
         self.plugin_dir = Some(dir);
         self.load_stored_plugins();
     }
@@ -290,15 +345,18 @@ impl Session {
     /// disabled (matched by file name, which is made from the id). The launch marker names each
     /// file while it loads. A module that doesn't load, and one that lists permissions the grants
     /// there don't grant that very module ([`grant_covers`]), is skipped with a log record, and
-    /// stays in the folder with its grant.
+    /// stays in the folder with its grant. A grant for an id whose stored module lists no
+    /// permissions is forgotten; one that can't be removed from the grants file doesn't count for
+    /// the rest of the session ([`Session::plugin_approver`]).
     pub fn load_stored_plugins(&mut self) {
         let Some(dir) = self.plugin_dir.clone() else { return };
         if safe_mode::active() {
             return;
         }
-        let grants = stored_grants(&dir);
+        let grants = self.counted_grants(&dir);
         let limits = vectorcraft_plugins::Limits::default();
         let mut left = MAX_PLUGIN_STORE;
+        let mut asks_nothing = BTreeSet::new();
         for path in list_files(&dir, PLUGIN_EXT) {
             if left == 0 {
                 log::warn!("skipping the other stored plug-ins: they hold more than {MAX_PLUGIN_STORE} bytes together");
@@ -324,6 +382,7 @@ impl Session {
                     let m = plugin.manifest();
                     match grants.get(&m.id).filter(|g| grant_covers(g, &plugin)) {
                         Some(g) => {
+                            asks_nothing.remove(&m.id);
                             vectorcraft_plugins::registry::grant(g.clone());
                             vectorcraft_plugins::registry::set_storage(&m.id, plugin_storage(Some(&dir), &m.id));
                             vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string()));
@@ -334,10 +393,22 @@ impl Session {
                     }
                 }
                 Ok(plugin) => {
+                    asks_nothing.insert(plugin.id().to_string());
                     vectorcraft_plugins::registry::set_storage(plugin.id(), plugin_storage(Some(&dir), plugin.id()));
                     vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string()));
                 }
                 Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
+            }
+        }
+        let kept = read_grants(&dir);
+        for id in &asks_nothing {
+            vectorcraft_plugins::registry::revoke(id);
+            let named = match &kept {
+                Ok(file) => file.names(id),
+                Err(e) => e.unread,
+            };
+            if named && !self.store_grant(id, None) && self.holds_plugin_grant(id) {
+                self.ignore_stored_grant(id);
             }
         }
     }
@@ -378,7 +449,8 @@ impl Session {
 
     /// Whether `plugin` installs without asking the user: it lists no permissions, or this very
     /// module (its id and SHA-256) was granted every one it lists, in the grants of the attached
-    /// plug-in store when there is one ([`grant_covers`]), else in this process's
+    /// plug-in store when there is one ([`grant_covers`]), not counting a grant that should be gone
+    /// and could not be removed ([`Session::ignore_stored_grant`]), else in this process's
     /// ([`vectorcraft_plugins::registry::approved`]).
     pub(crate) fn plugin_approved(&self, plugin: &vectorcraft_plugins::Plugin) -> bool {
         self.plugin_approver()(plugin)
@@ -387,7 +459,7 @@ impl Session {
     /// [`Session::plugin_approved`] for many plug-ins: reads the store's grants once, when it is
     /// made, and checks each plug-in against them.
     pub(crate) fn plugin_approver(&self) -> impl Fn(&vectorcraft_plugins::Plugin) -> bool + use<> {
-        let grants = self.plugin_dir.as_deref().map(stored_grants);
+        let grants = self.plugin_dir.as_deref().map(|dir| self.counted_grants(dir));
         move |plugin| {
             let m = plugin.manifest();
             match &grants {
@@ -395,6 +467,15 @@ impl Session {
                 _ => vectorcraft_plugins::registry::approved(plugin),
             }
         }
+    }
+
+    /// The grants kept in the plug-in store `dir` ([`stored_grants`]) without those this session
+    /// doesn't count ([`Session::ignore_stored_grant`]).
+    fn counted_grants(&self, dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
+        let ignored = self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner());
+        let mut grants = stored_grants(dir);
+        grants.retain(|id, _| !ignored.contains(id));
+        grants
     }
 
     /// Write the module `bytes` of the plug-in `id` to the store → whether they went there (`false`
@@ -416,12 +497,15 @@ impl Session {
     }
 
     /// Return the store's module for the plug-in `id` to `previous`, the bytes it held before a
-    /// write ([`Session::stored_plugin_bytes`]): with `None`, the file is removed.
-    pub(crate) fn put_back_plugin(&self, id: &str, previous: Option<&[u8]>) {
+    /// write ([`Session::stored_plugin_bytes`]): with `None`, the file is removed. → whether the
+    /// store now holds `previous`.
+    pub(crate) fn put_back_plugin(&self, id: &str, previous: Option<&[u8]>) -> bool {
+        #[cfg(test)]
+        if PUT_BACK_FAILS.get() {
+            return false;
+        }
         match previous {
-            Some(bytes) => {
-                self.store_plugin(id, bytes);
-            }
+            Some(bytes) => self.store_plugin(id, bytes),
             None => self.unstore_plugin(id),
         }
     }
@@ -437,13 +521,29 @@ impl Session {
     /// are written back as they were, except one for `id`. A grants file that is too large, can't
     /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
     /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. → whether the store now
-    /// holds what was asked (`false` without a folder).
+    /// holds what was asked (`false` without a folder). When it does, the grant kept for `id` counts
+    /// again ([`Session::ignore_stored_grant`]).
     pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
+        let done = self.write_grant(id, grant);
+        if done {
+            self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+        }
+        done
+    }
+
+    /// Stop counting the store's grant for the plug-in `id` until [`Session::store_grant`] next
+    /// succeeds for it or another store is attached: for a grant that should be gone and could not
+    /// be removed, which would otherwise approve the bytes it covers.
+    pub(crate) fn ignore_stored_grant(&self, id: &str) {
+        self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner()).insert(id.to_string());
+    }
+
+    fn write_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
         let Some(dir) = &self.plugin_dir else { return false };
         let mut file = match read_grants(dir) {
             Ok(file) => file,
             Err(e) => {
-                log::warn!("not updating the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+                log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
                 return false;
             }
         };
@@ -459,8 +559,7 @@ impl Session {
         let mut entries: Vec<serde_json::Value> = file.grants.into_values().filter_map(|g| serde_json::to_value(g).ok()).collect();
         entries.extend(file.other);
         if entries.is_empty() {
-            take(dir, GRANTS_FILE);
-            return true;
+            return take(dir, GRANTS_FILE);
         }
         // The file is read back only up to its cap: written compactly when pretty-printed is larger,
         // and not at all when that is too.
@@ -474,11 +573,20 @@ impl Session {
         }
     }
 
-    /// Remove the plug-in `id` from the store.
-    pub(crate) fn unstore_plugin(&self, id: &str) {
-        if let Some(dir) = &self.plugin_dir {
-            take(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)));
-        }
+    /// Whether the store holds, or may hold, an entry for the plug-in `id`, including one this
+    /// version can't use ([`GrantsFile::names`]). `true` when the grants file can't be opened or
+    /// read, because it may name `id` once it reads again; `false` without a folder, and when the
+    /// file is too large or doesn't hold a list.
+    pub(crate) fn holds_plugin_grant(&self, id: &str) -> bool {
+        self.plugin_dir.as_deref().is_some_and(|dir| match read_grants(dir) {
+            Ok(file) => file.names(id),
+            Err(e) => e.unread,
+        })
+    }
+
+    /// Remove the plug-in `id` from the store → whether its file is gone (`false` without a folder).
+    pub(crate) fn unstore_plugin(&self, id: &str) -> bool {
+        self.plugin_dir.as_deref().is_some_and(|dir| take(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id))))
     }
 
     /// Keep the settings and cache of plug-in `id` in the attached plug-in store from now on; without
@@ -499,17 +607,22 @@ impl Session {
     /// Delete the settings and cache of plug-in `id` from the store, and stop keeping any for it.
     /// The folder is first renamed out of the way (`<folder>.removed`), and that fails, leaving it
     /// as it was, when the rename does; what the deletion then leaves stays under that name, with a
-    /// log record, and is deleted at the plug-in's next removal.
-    pub(crate) fn remove_plugin_storage(&self, id: &str) -> Result<(), StorageError> {
+    /// log record. A later call for the id tries to delete it again. `forget` runs once the folder is
+    /// out of the way, before anything is deleted: when it returns `false`, the folder is renamed
+    /// back and this fails.
+    pub(crate) fn remove_plugin_storage(&self, id: &str, forget: impl FnOnce() -> bool) -> Result<(), StorageError> {
+        let not_forgotten = || StorageError::Io(GRANT_NOT_REMOVED.to_string());
         vectorcraft_plugins::registry::set_storage(id, None);
-        let Some(dir) = &self.plugin_dir else { return Ok(()) };
+        let Some(dir) = &self.plugin_dir else {
+            return if forget() { Ok(()) } else { Err(not_forgotten()) };
+        };
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let path = plugin_data_dir(dir, id);
         // Every storage handed out for the folder, including those runs still hold, is closed once
         // the folder is out of the way; until then they keep working.
         let close = || {
-            if let Some(closed) = PLUGIN_DATA_OPEN.lock().unwrap_or_else(|e| e.into_inner()).remove(&path) {
-                closed.store(true, Ordering::Release);
+            if let Some(data) = PLUGIN_DATA_OPEN.lock().unwrap_or_else(|e| e.into_inner()).remove(&path) {
+                data.closed.store(true, Ordering::Release);
             }
         };
         // A `storage` folder that is a link leads out of the store: nothing there is deleted. A link
@@ -517,6 +630,9 @@ impl Session {
         let data = dir.join(PLUGIN_DATA_DIR);
         if is_link(&data) {
             log::warn!("{} is a link: the plug-in settings and cache it leads to are left", data.display());
+            if !forget() {
+                return Err(not_forgotten());
+            }
             close();
             return Ok(());
         }
@@ -528,6 +644,14 @@ impl Session {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(StorageError::Io(format!("{}: {e}", path.display()))),
             Ok(()) => {}
+        }
+        if !forget() {
+            if std::fs::symlink_metadata(&aside).is_ok()
+                && let Err(e) = std::fs::rename(&aside, &path)
+            {
+                log::warn!("can't move {} back: {e}", aside.display());
+            }
+            return Err(not_forgotten());
         }
         close();
         if std::fs::symlink_metadata(&aside).is_ok()
@@ -568,22 +692,67 @@ pub(crate) fn plugin_data_dir(dir: &Path, id: &str) -> PathBuf {
 fn plugin_storage(dir: Option<&Path>, id: &str) -> Option<Arc<dyn Storage>> {
     let dir = dir?;
     let data = plugin_data_dir(dir, id);
-    let closed = PLUGIN_DATA_OPEN.lock().unwrap_or_else(|e| e.into_inner()).entry(data.clone()).or_default().clone();
-    Some(Arc::new(PluginStorage { root: dir.to_path_buf(), dir: data, closed }))
+    let state = PLUGIN_DATA_OPEN.lock().unwrap_or_else(|e| e.into_inner()).entry(data.clone()).or_default().clone();
+    Some(Arc::new(PluginStorage { root: dir.to_path_buf(), dir: data, state }))
+}
+
+/// A file's size and modified time (`None`: there is no file).
+type FileStamp = Option<(u64, SystemTime)>;
+
+/// The stamp of the file at `path`.
+fn file_stamp(path: &Path) -> Result<FileStamp, StorageError> {
+    match std::fs::metadata(path) {
+        Ok(m) => Ok(Some((m.len(), m.modified().map_err(|e| io(&e))?))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(io(&e)),
+    }
+}
+
+/// The modified time of the folder at `dir` (`None`: it can't be read, or there is no folder).
+fn folder_stamp(dir: &Path) -> Option<SystemTime> {
+    std::fs::symlink_metadata(dir).ok()?.modified().ok()
+}
+
+/// What every storage made for one plug-in folder shares ([`PLUGIN_DATA_OPEN`]).
+#[derive(Default)]
+struct PluginData {
+    /// Set, under [`PLUGIN_DATA_LOCK`], once the plug-in is removed.
+    closed: AtomicBool,
+    kept: Mutex<Kept>,
+}
+
+/// What the folder's files last held in this process.
+#[derive(Default)]
+struct Kept {
+    settings: Option<KeptSettings>,
+    cache: Option<KeptCache>,
+}
+
+/// The settings by key, and the settings file's stamp when they were read or written.
+struct KeptSettings {
+    stamp: FileStamp,
+    values: BTreeMap<String, Vec<u8>>,
+}
+
+/// The bytes of the cache entries, and the cache folder's stamp when they were added up.
+#[derive(Clone, Copy)]
+struct KeptCache {
+    stamp: Option<SystemTime>,
+    bytes: u64,
 }
 
 /// The settings and cache of one plug-in, in its folder of the plug-in store (see the module docs).
 /// Keys and entry names are [`storage::valid_name`]s; an entry's file name is its name as
 /// [`case_safe`] writes it, so that names differing only in case get different files. A link
 /// anywhere in the folder's path below the store is refused, and so is a cache file that is not a
-/// plain file.
+/// plain file. The settings stay in memory ([`Kept`]) while the settings file keeps its size and
+/// modified time, and every change is written to the file before the call returns. The total
+/// `cache_bytes` reports stays in memory while the cache folder keeps its modified time.
 pub(crate) struct PluginStorage {
     /// The plug-in store, and the plug-in's folder in it.
     root: PathBuf,
     dir: PathBuf,
-    /// Set, under [`PLUGIN_DATA_LOCK`], once the plug-in is removed; shared by every storage of the
-    /// folder ([`PLUGIN_DATA_OPEN`]).
-    closed: Arc<AtomicBool>,
+    state: Arc<PluginData>,
 }
 
 /// The sizes of `files` added up, at most `u64::MAX`: the sizes come from the file system.
@@ -657,17 +826,29 @@ impl PluginStorage {
         Ok(())
     }
 
-    /// The settings, by key. A file that is too large or doesn't parse is moved aside
-    /// ([`BAD_SETTINGS_FILE`]) with a log record, and the settings are empty. `meter` is charged the
-    /// file's size before it is read.
-    fn read_settings(&self, meter: &mut Meter) -> Result<BTreeMap<String, Vec<u8>>, StorageError> {
+    fn kept(&self) -> MutexGuard<'_, Kept> {
+        self.state.kept.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// The settings: those in `kept` when the settings file still has their stamp, else the file's,
+    /// which then replace them.
+    fn read_settings<'a>(&self, kept: &'a mut Option<KeptSettings>, meter: &mut Meter) -> Result<&'a mut KeptSettings, StorageError> {
         let path = self.settings_path();
         self.no_links(&path)?;
-        let size = match std::fs::metadata(&path) {
-            Ok(m) => m.len(),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
-            Err(e) => return Err(io(&e)),
+        let stamp = file_stamp(&path)?;
+        let held = match kept.take() {
+            Some(held) if held.stamp == stamp => held,
+            _ => self.load_settings(stamp, meter)?,
         };
+        Ok(kept.insert(held))
+    }
+
+    /// Reads the settings file, whose stamp is `stamp`. A file that is too large or doesn't parse is
+    /// moved aside ([`BAD_SETTINGS_FILE`]) with a log record, and the settings are empty. `meter` is
+    /// charged the file's size before it is read.
+    fn load_settings(&self, stamp: FileStamp, meter: &mut Meter) -> Result<KeptSettings, StorageError> {
+        let path = self.settings_path();
+        let Some((size, _)) = stamp else { return Ok(KeptSettings { stamp, values: BTreeMap::new() }) };
         let readable = size <= storage::MAX_SETTINGS_BYTES as u64;
         if readable {
             meter.take(size)?;
@@ -683,12 +864,30 @@ impl PluginStorage {
                 settings.filter(|s| s.len() <= storage::MAX_SETTINGS && s.values().all(|v| v.len() <= storage::MAX_SETTING_BYTES))
             });
         match parsed {
-            Some(settings) => Ok(settings),
+            Some(values) => Ok(KeptSettings { stamp, values }),
             None => {
                 let aside = self.dir.join(BAD_SETTINGS_FILE);
                 log::warn!("the plug-in settings {} don't read: moved to {} and started empty", path.display(), aside.display());
                 std::fs::rename(&path, &aside).map_err(|e| io(&e))?;
-                Ok(BTreeMap::new())
+                Ok(KeptSettings { stamp: None, values: BTreeMap::new() })
+            }
+        }
+    }
+
+    /// Writes the settings in `kept` to the file and records the file's new stamp. When that fails,
+    /// or settings were written and the file is gone, `kept` is emptied, so the next call reads the
+    /// file again.
+    fn save_settings(&self, kept: &mut Option<KeptSettings>, meter: &mut Meter) -> Result<(), StorageError> {
+        let Some(held) = kept.as_mut() else { return Ok(()) };
+        let written = self.write_settings(&held.values, meter);
+        match (written, file_stamp(&self.settings_path())) {
+            (Ok(()), Ok(stamp)) if stamp.is_some() || held.values.is_empty() => {
+                held.stamp = stamp;
+                Ok(())
+            }
+            (written, _) => {
+                *kept = None;
+                written
             }
         }
     }
@@ -716,7 +915,7 @@ impl PluginStorage {
 
     /// Fails with [`StorageError::Unavailable`] once the storage is closed.
     fn open(&self) -> Result<(), StorageError> {
-        if self.closed.load(Ordering::Acquire) { Err(StorageError::Unavailable) } else { Ok(()) }
+        if self.state.closed.load(Ordering::Acquire) { Err(StorageError::Unavailable) } else { Ok(()) }
     }
 
     /// The entries of the cache folder (plain files named as [`Self::entry_path`] names them, which
@@ -753,28 +952,33 @@ impl Storage for PluginStorage {
     fn setting(&self, key: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
-        Ok(self.read_settings(meter)?.remove(key))
+        let mut kept = self.kept();
+        Ok(self.read_settings(&mut kept.settings, meter)?.values.get(key).cloned())
     }
 
     fn set_setting(&self, key: &str, value: &[u8], meter: &mut Meter) -> Result<(), StorageError> {
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
-        let mut settings = self.read_settings(meter)?;
+        let mut kept = self.kept();
+        let settings = &mut self.read_settings(&mut kept.settings, meter)?.values;
         if value.len() > storage::MAX_SETTING_BYTES || (!settings.contains_key(key) && settings.len() >= storage::MAX_SETTINGS) {
             return Err(StorageError::Full);
         }
+        if settings.get(key).is_some_and(|old| old == value) {
+            return Ok(());
+        }
         settings.insert(key.to_string(), value.to_vec());
-        self.write_settings(&settings, meter)
+        self.save_settings(&mut kept.settings, meter)
     }
 
     fn delete_setting(&self, key: &str, meter: &mut Meter) -> Result<bool, StorageError> {
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
-        let mut settings = self.read_settings(meter)?;
-        if settings.remove(key).is_none() {
+        let mut kept = self.kept();
+        if self.read_settings(&mut kept.settings, meter)?.values.remove(key).is_none() {
             return Ok(false);
         }
-        self.write_settings(&settings, meter).map(|()| true)
+        self.save_settings(&mut kept.settings, meter).map(|()| true)
     }
 
     fn cache_entry(&self, name: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
@@ -808,7 +1012,10 @@ impl Storage for PluginStorage {
         meter.take(value.len() as u64)?;
         std::fs::create_dir_all(self.cache_dir()).map_err(|e| io(&e))?;
         self.no_links(&path)?;
-        write_atomic(&path, value).map_err(|e| io(&e))
+        write_atomic(&path, value).map_err(|e| io(&e))?;
+        let stamp = folder_stamp(&self.cache_dir());
+        self.kept().cache = stamp.map(|_| KeptCache { stamp, bytes: total });
+        Ok(())
     }
 
     fn remove_cache_entry(&self, name: &str) -> Result<bool, StorageError> {
@@ -817,7 +1024,10 @@ impl Storage for PluginStorage {
         let path = self.entry_path(name);
         self.no_links(&path)?;
         match std::fs::remove_file(&path) {
-            Ok(()) => Ok(true),
+            Ok(()) => {
+                self.kept().cache = None;
+                Ok(true)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
             Err(e) => Err(io(&e)),
         }
@@ -845,6 +1055,7 @@ impl Storage for PluginStorage {
                 freed = freed.saturating_add(m.len());
             }
         }
+        self.kept().cache = Some(KeptCache { stamp: folder_stamp(&dir), bytes: 0 });
         Ok(freed)
     }
 
@@ -852,7 +1063,14 @@ impl Storage for PluginStorage {
         if self.open().is_err() {
             return 0;
         }
-        self.cache_files().map(|(files, _)| sum_sizes(&files)).unwrap_or(0)
+        let stamp = folder_stamp(&self.cache_dir());
+        if let Some(kept) = self.kept().cache.filter(|k| k.stamp == stamp) {
+            return kept.bytes;
+        }
+        let Ok((files, _)) = self.cache_files() else { return 0 };
+        let bytes = sum_sizes(&files);
+        self.kept().cache = Some(KeptCache { stamp, bytes });
+        bytes
     }
 }
 
@@ -865,16 +1083,36 @@ struct GrantsFile {
     other: Vec<serde_json::Value>,
 }
 
+impl GrantsFile {
+    /// Whether the file has an entry for the plug-in `id`, usable by this version or not.
+    fn names(&self, id: &str) -> bool {
+        self.grants.contains_key(id) || self.other.iter().any(|e| e.get("id").and_then(serde_json::Value::as_str) == Some(id))
+    }
+}
+
+/// Why the grants file of a plug-in store gave no grants.
+struct GrantsError {
+    /// Opening or reading the file failed, so what it holds is unknown. When `false`, the file is
+    /// too large or doesn't hold a list, and approves nothing.
+    unread: bool,
+    /// The detail for a log record.
+    why: String,
+}
+
 /// The grants file of the plug-in store `dir`: empty when there is none, an error when it is too
 /// large, can't be read or doesn't hold a list. An entry that doesn't parse as a grant, or names an
 /// invalid id, is kept in [`GrantsFile::other`] with a log record.
-fn read_grants(dir: &Path) -> Result<GrantsFile, String> {
+fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
     let path = dir.join(GRANTS_FILE);
-    if !path.exists() {
-        return Ok(GrantsFile::default());
+    let bytes = match read_past_cap(&path, MAX_GRANTS_FILE) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(GrantsFile::default()),
+        Err(e) => return Err(GrantsError { unread: true, why: e.to_string() }),
+    };
+    if bytes.len() as u64 > MAX_GRANTS_FILE {
+        return Err(GrantsError { unread: false, why: too_large(MAX_GRANTS_FILE) });
     }
-    let entries =
-        read_capped(&path, MAX_GRANTS_FILE).and_then(|bytes| serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).map_err(|e| e.to_string()))?;
+    let entries = serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).map_err(|e| GrantsError { unread: false, why: e.to_string() })?;
     let mut file = GrantsFile::default();
     let mut first_error = None;
     for entry in entries {
@@ -902,7 +1140,7 @@ fn stored_grants(dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permission
     match read_grants(dir) {
         Ok(file) => file.grants,
         Err(e) => {
-            log::warn!("skipping the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+            log::warn!("skipping the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
             BTreeMap::new()
         }
     }

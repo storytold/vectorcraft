@@ -44,8 +44,15 @@ impl Session {
             fill_active: true,
             clipboard: Clipboard::default(),
             journal: Journal::default(),
+            history_budget: crate::default_history_budget(),
+            histories_seen: None,
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            held_input: Default::default(),
+            input_count: 0,
+            edit_started_by: None,
+            settling_tool_edit: false,
+            held_ui: vec![],
             tool_step: None,
             selection_at_lend: None,
             lent_selection: None,
@@ -75,9 +82,15 @@ impl Session {
             brush_libraries: Default::default(),
             libraries: Default::default(),
             pdf_preset_dir: None,
+            dictionary_file: None,
             profile_dir: None,
+            color_settings_file: None,
             plugin_dir: None,
+            scripts_dir: None,
+            ignored_plugin_grants: Default::default(),
             plugin_output: None,
+            plugin_install_approval: None,
+            plugin_grants_from_requests: false,
             recent_urls: vec![],
             trace_preset_changes: Default::default(),
             ui_language: None,
@@ -120,6 +133,15 @@ impl Session {
             link_scan: None,
             global_edit_options: Default::default(),
             keyboard_text: false,
+            script_key: None,
+            script_stop: vectorcraft_js::Interrupt::new(),
+            script_report: None,
+            script_console: Default::default(),
+            script_runs: 0,
+            script_frames: false,
+            script_high_water: Default::default(),
+            script_in_run: false,
+            script_copy_first: cfg!(target_arch = "wasm32"),
         }
     }
 
@@ -160,6 +182,9 @@ impl Session {
         }
         self.press_type_selection = None;
         let view = self.last_view;
+        // The edit the tool computes on another thread and the input held for it belong to the
+        // document being left. The switch goes on whatever they did, as for the deactivation.
+        let _ = self.finish_tool_edit_later();
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));

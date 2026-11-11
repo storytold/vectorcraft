@@ -25,7 +25,10 @@ use std::collections::BTreeMap;
 
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{CharStyle, Justify, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{
+    CharStyle, HyphenationOptions, JustificationOptions, Justify, LineCap, LineJoin, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign,
+    PathEffect, TabAlign, TabStop, TextKind, TextObject, TextRun,
+};
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
 /// Longest story read (bytes).
@@ -383,7 +386,32 @@ struct Para {
     space_before: f64,
     space_after: f64,
     hyphenate: bool,
+    /// Key 7: the share of its type size a line takes as its auto leading (1.2: 120%, the default;
+    /// Justification… sets 0 to 500%:
+    /// https://helpx.adobe.com/illustrator/using/line-character-spacing.html). `None`: the default.
+    auto_leading: Option<f64>,
+    /// Keys 10 to 15, in the order of Paragraph panel menu › Hyphenation…: Words Longer Than,
+    /// After First, Before Last, Hyphen Limit, Hyphenation Zone (pt) and Hyphenate Capitalized
+    /// Words. A value that can't be read, or is out of its range, keeps the default.
+    hyphenation: HyphenationOptions,
+    /// Key 30, its list (key 0): the tab stops, each its position from the frame's left edge (key
+    /// 0) and alignment (key 1: 0 left, the default, 1 center, 2 right, 3 decimal, in the order of
+    /// the Tabs panel's buttons), sorted. A stop that can't be read is left out, and so are those
+    /// past the first [`MAX_TABS`]. Leaders aren't read.
+    tabs: Vec<TabStop>,
+    /// The paragraph has more than [`MAX_TABS`] stops: those past them were left out.
+    tabs_truncated: bool,
 }
+
+/// Most tab stops read for one paragraph.
+const MAX_TABS: usize = 1024;
+/// Largest tab stop position read (in the text document's units), as `text.tabs.set` takes it.
+const MAX_TAB_POSITION: f64 = 100_000.0;
+/// Most tab stops a story's paragraphs take in all: a paragraph style's stops are copied into
+/// every paragraph that has them. The paragraphs past it take the default stops, with a warning.
+const MAX_STORY_TABS: usize = 1 << 20;
+/// The warning when [`MAX_STORY_TABS`] leaves tab stops out.
+pub(crate) const TABS_LEFT_OUT: &str = "tab stops past VectorCraft's limits were left out";
 
 /// The text of one story, in the units of the text document.
 #[derive(Debug)]
@@ -405,6 +433,20 @@ pub(super) struct Story {
     /// Vertical type (Type › Type Orientation › Vertical): its lines are columns, from right to
     /// left. Its layout's lines run down from the anchor, each column further left.
     vertical: bool,
+    /// Tab stops past [`MAX_STORY_TABS`] were left out of its paragraphs.
+    tabs_left_out: std::cell::Cell<bool>,
+}
+
+/// Spend `budget` on the tab stops `tabs`: when there aren't enough left, they're left out (the
+/// default stops apply). Whether they were.
+fn spend_tabs(tabs: &mut Vec<TabStop>, budget: &mut usize) -> bool {
+    if tabs.len() <= *budget {
+        *budget -= tabs.len();
+        false
+    } else {
+        tabs.clear();
+        true
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -420,6 +462,12 @@ struct Style {
     fill: Option<Color>,
     stroke: Option<Color>,
     stroke_width: f64,
+    /// Key 61, the stroke's cap: 0 butt, 1 round, 2 projecting (square).
+    stroke_cap: LineCap,
+    /// Key 62, the stroke's join: 0 miter, 1 round, 2 bevel.
+    stroke_join: LineJoin,
+    /// Key 64, the stroke's miter limit (a multiple of the stroke weight).
+    stroke_miter_limit: f64,
     /// Key 12, the case: 1 Small Caps, 2 All Caps.
     caps: u8,
     /// Key 35 at 3: Tate-chu-yoko, the characters set across the column as one block.
@@ -607,7 +655,12 @@ impl Texts {
         if runs.is_empty() {
             runs.push((text.chars().count(), self.style(None)));
         }
-        Some(Story { text, anchor, lines, frames, paras, runs, path_spacing, vertical })
+        let mut budget = MAX_STORY_TABS;
+        let mut tabs_left_out = false;
+        for (_, p) in &mut paras {
+            tabs_left_out |= p.tabs_truncated | spend_tabs(&mut p.tabs, &mut budget);
+        }
+        Some(Story { text, anchor, lines, frames, paras, runs, path_spacing, vertical, tabs_left_out: tabs_left_out.into() })
     }
 
     /// A paragraph's attributes (`run`: its attributes, key 5, and the paragraph style it is based
@@ -633,6 +686,46 @@ impl Texts {
             space_before: num("4"),
             space_after: num("5"),
             hyphenate: !matches!(pick("9"), Some(Val::Bool(false))),
+            auto_leading: pick("7").and_then(Val::num).filter(|v| v.is_finite() && *v > 0.0 && *v <= 5.0),
+            hyphenation: {
+                let d = HyphenationOptions::default();
+                let count = |k: &str, lo: f64, hi: f64, or: u32| {
+                    pick(k).and_then(Val::num).filter(|v| v.is_finite() && v.fract() == 0.0 && (lo..=hi).contains(v)).map_or(or, |v| v as u32)
+                };
+                HyphenationOptions {
+                    words_longer_than: count("10", 1.0, 25.0, d.words_longer_than),
+                    after_first: count("11", 1.0, 15.0, d.after_first),
+                    before_last: count("12", 1.0, 15.0, d.before_last),
+                    hyphen_limit: count("13", 0.0, 25.0, d.hyphen_limit),
+                    zone: pick("14").and_then(Val::num).filter(|v| v.is_finite() && (0.0..=1296.0).contains(v)).unwrap_or(d.zone),
+                    capitalized: match pick("15") {
+                        Some(Val::Bool(b)) => *b,
+                        _ => d.capitalized,
+                    },
+                }
+            },
+            tabs_truncated: pick("30").and_then(|t| t.get("0")).map(Val::list).is_some_and(|list| list.len() > MAX_TABS),
+            tabs: {
+                let list = pick("30").and_then(|t| t.get("0")).map(Val::list).unwrap_or_default();
+                let mut tabs: Vec<TabStop> = list
+                    .iter()
+                    .take(MAX_TABS)
+                    .filter_map(|t| {
+                        let position = t.get("0").and_then(Val::num).filter(|p| (0.0..=MAX_TAB_POSITION).contains(p))?;
+                        let align = match t.get("1").map(Val::num) {
+                            None | Some(Some(0.0)) => TabAlign::Left,
+                            Some(Some(1.0)) => TabAlign::Center,
+                            Some(Some(2.0)) => TabAlign::Right,
+                            Some(Some(3.0)) => TabAlign::Decimal,
+                            _ => return None,
+                        };
+                        Some(TabStop { position, align, leader: String::new(), align_on: '.' })
+                    })
+                    .collect();
+                tabs.sort_by(|a, b| a.position.total_cmp(&b.position));
+                tabs.dedup_by(|a, b| (a.position - b.position).abs() < 1e-6);
+                tabs
+            },
         }
     }
 
@@ -665,6 +758,21 @@ impl Texts {
             fill: if on("56") { Some(pick("53").and_then(paint).unwrap_or(Color::BLACK)) } else { None },
             stroke: if matches!(pick("57"), Some(Val::Bool(true))) { pick("54").and_then(paint) } else { None },
             stroke_width: num("63").filter(|v| *v >= 0.0 && *v < 1e4).unwrap_or(1.0),
+            // Numbered as PostScript's `setlinecap` and `setlinejoin` operators number them
+            // (PostScript Language Reference, 3rd ed.): in users' files the page strokes type with
+            // the cap and join these give, and with key 64 as its miter limit. No file had a bevel
+            // join (2). Any other value keeps the default.
+            stroke_cap: match num("61") {
+                Some(1.0) => LineCap::Round,
+                Some(2.0) => LineCap::Square,
+                _ => LineCap::Butt,
+            },
+            stroke_join: match num("62") {
+                Some(1.0) => LineJoin::Round,
+                Some(2.0) => LineJoin::Bevel,
+                _ => LineJoin::Miter,
+            },
+            stroke_miter_limit: num("64").filter(|v| v.is_finite() && *v >= 1.0).map_or(10.0, |v| v.min(500.0)),
             caps: num("12").filter(|v| *v == 1.0 || *v == 2.0).map_or(0, |v| v as u8),
             tate_chu_yoko: num("35") == Some(3.0),
             standard_vertical_roman: num("35") == Some(1.0),
@@ -1001,7 +1109,6 @@ impl Story {
         // The text document measures in the art's units too: the document's scale carries its
         // sizes and spacings onto the page (a Large Canvas copy is written at 1:10; #2031).
         let scale = scale * art_scale(to_doc);
-        let leading = self.line_leading(scale);
         let chars: Vec<char> = text.chars().collect();
         let mut runs = vec![];
         let mut from = 0usize;
@@ -1012,13 +1119,13 @@ impl Story {
             if piece.is_empty() {
                 continue;
             }
-            runs.push(TextRun::new(piece, char_style(st, scale, leading)));
+            runs.push(TextRun::new(piece, char_style(st, scale)));
         }
         if from < chars.len() {
             let last = self.runs.last().map(|r| &r.1)?;
-            runs.push(TextRun::new(chars.get(from..).unwrap_or_default().iter().collect::<String>(), char_style(last, scale, leading)));
+            runs.push(TextRun::new(chars.get(from..).unwrap_or_default().iter().collect::<String>(), char_style(last, scale)));
         }
-        let first = self.runs.first().map(|r| char_style(&r.1, scale, leading))?;
+        let first = self.runs.first().map(|r| char_style(&r.1, scale))?;
         let mut t = TextObject::point(Point::ZERO, "", first);
         if !runs.is_empty() {
             t.runs = runs;
@@ -1065,6 +1172,21 @@ impl Story {
         !self.lines.is_empty() && vectorcraft_text::fit_first_line(vectorcraft_text::FontDb::global(), t)
     }
 
+    /// Area type of one frame that the file lays more lines out in than fit here: in the fallback
+    /// font, or a last line whose descent the file lets pass the frame's bottom. The frame is made
+    /// taller from its bottom (`vectorcraft_text::fit_source_lines`) so the file's lines show.
+    /// Whether it was.
+    pub(super) fn fit_last_lines(&self, t: &mut TextObject) -> bool {
+        matches!(self.frames.as_slice(), [FrameKind::Area(..)])
+            && vectorcraft_text::fit_source_lines(vectorcraft_text::FontDb::global(), t, self.lines.len())
+    }
+
+    /// Were tab stops past [`MAX_STORY_TABS`] left out of its paragraphs (so far: making its text
+    /// object counts them again)?
+    pub(super) fn tabs_left_out(&self) -> bool {
+        self.tabs_left_out.get()
+    }
+
     /// Area type (`node`, the story's first frame as [`Self::node`] makes it with `template` and
     /// `to_doc`) whose first line the file lays out higher or lower than it is laid out here, as its
     /// page draws it: its first baseline is fixed where the file has it. The font's ascent below the
@@ -1103,38 +1225,6 @@ impl Story {
         true
     }
 
-    /// The leading the file's own line positions imply: the distance from one line to the next, less
-    /// the space between paragraphs that is part of it (a paragraph's space after and the next one's
-    /// space before; a layout's lines are where that space has put them, and the text object adds it
-    /// again).
-    fn line_leading(&self, scale: f64) -> Option<f64> {
-        let para_at = |c: usize| {
-            let mut end = 0usize;
-            for (n, p) in &self.paras {
-                end = end.saturating_add(*n);
-                if c < end {
-                    return Some(p);
-                }
-            }
-            self.paras.last().map(|(_, p)| p)
-        };
-        let chars: Vec<char> = self.text.chars().collect();
-        let breaks: Vec<usize> = chars.iter().enumerate().filter(|(_, c)| matches!(c, '\r' | '\x03')).map(|(i, _)| i).collect();
-        // More lines than breaks: area type wraps, and which break ends which line is unknown.
-        let wraps = self.lines.len() > breaks.len() + 1;
-        self.lines.windows(2).enumerate().find_map(|(i, w)| {
-            let pitch = w[1].1 - w[0].1;
-            let between = match breaks.get(i) {
-                Some(&at) if !wraps && chars.get(at) == Some(&'\r') => {
-                    para_at(at).map_or(0.0, |p| p.space_after) + para_at(at + 1).map_or(0.0, |p| p.space_before)
-                }
-                _ => 0.0,
-            };
-            let l = (pitch - between) * scale;
-            (l.is_finite() && l > 0.0).then_some(l)
-        })
-    }
-
     /// The style of each paragraph of `text` (paragraphs split at `\n`).
     fn paragraph_styles(&self, text: &str, scale: f64) -> Vec<ParaStyle> {
         let count = text.split('\n').count();
@@ -1142,9 +1232,13 @@ impl Story {
         let mut runs = self.paras.iter();
         let mut current = runs.next();
         let mut left = current.map_or(usize::MAX, |r| r.0);
+        let mut budget = MAX_STORY_TABS;
         for p in text.split('\n') {
-            let para = current.map(|r| r.1.clone()).unwrap_or_default();
-            out.push(para_style(&para, scale));
+            let mut style = current.map_or_else(|| para_style(&Para::default(), scale), |r| para_style(&r.1, scale));
+            if spend_tabs(&mut style.tabs, &mut budget) {
+                self.tabs_left_out.set(true);
+            }
+            out.push(style);
             // Each paragraph and its ending `\r` count.
             let mut used = p.chars().count() + 1;
             while used > 0 {
@@ -1165,6 +1259,8 @@ impl Story {
     }
 }
 
+/// The paragraph style of paragraph attributes `p`, its lengths (indents, spacing, the
+/// hyphenation zone) scaled by `scale`, as sizes are.
 fn para_style(p: &Para, scale: f64) -> ParaStyle {
     ParaStyle {
         justify: match p.justify {
@@ -1184,21 +1280,36 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
         space_before: p.space_before * scale,
         space_after: p.space_after * scale,
         hyphenate: p.hyphenate,
+        hyphenation: HyphenationOptions { zone: p.hyphenation.zone * scale, ..p.hyphenation.clone() },
+        tabs: p.tabs.iter().map(|t| TabStop { position: t.position * scale, ..t.clone() }).collect(),
         // A right-to-left paragraph lays its text out from the right whatever letters it has
         // (" 120.5 mm " reads "mm 120.5"); without the key, from its first strong letter.
         direction: p.rtl.then_some(ParaDirection::RightToLeft),
+        justification: JustificationOptions {
+            // Rounded, so the file's 1.2 is the default 120% exactly.
+            auto_leading: p.auto_leading.map_or(JustificationOptions::default().auto_leading, |a| (a * 1e6).round() / 1e4),
+            ..JustificationOptions::default()
+        },
         ..ParaStyle::default()
     }
 }
 
-fn char_style(s: &Style, scale: f64, leading: Option<f64>) -> CharStyle {
+/// The character style of character attributes `s`: its font from the fonts the app has, its
+/// lengths (size, leading, baseline shift, stroke width) scaled by `scale`.
+fn char_style(s: &Style, scale: f64) -> CharStyle {
     let (family, style) = s.font.as_deref().map_or_else(|| (CharStyle::default().font_family, "Regular".to_string()), crate::family_style);
     let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
+    // Type without a stroke keeps the stroke's defaults, as its weight is 0.
+    let (stroke_cap, stroke_join, stroke_miter_limit) =
+        if s.stroke.is_some() { (s.stroke_cap, s.stroke_join, s.stroke_miter_limit) } else { (LineCap::Butt, LineJoin::Miter, 10.0) };
     CharStyle {
         font_family: family,
         font_style: style,
         size: s.size * scale,
-        leading: s.leading.map(|l| l * scale).or(leading),
+        // Auto leading stays auto: the layout gives each line the paragraph's share of the largest
+        // type on it, as the file's own layout does ("The largest leading value in a line of type
+        // determines the leading for that line": https://helpx.adobe.com/illustrator/using/line-character-spacing.html).
+        leading: s.leading.map(|l| l * scale),
         tracking: s.tracking,
         baseline_shift: s.baseline_shift * scale,
         h_scale: s.h_scale * 100.0,
@@ -1206,6 +1317,9 @@ fn char_style(s: &Style, scale: f64, leading: Option<f64>) -> CharStyle {
         fill: s.fill.map_or(Paint::None, Paint::solid),
         stroke: s.stroke.map_or(Paint::None, Paint::solid),
         stroke_width: if s.stroke.is_some() { s.stroke_width * scale } else { 0.0 },
+        stroke_cap,
+        stroke_join,
+        stroke_miter_limit,
         all_caps: s.caps == 2,
         // At the default Small Caps size of Document Setup: the file's own isn't read.
         small_caps: (s.caps == 1).then(|| vectorcraft_doc::DocSetup::default().small_caps_size),
@@ -1245,6 +1359,130 @@ mod tests {
         // Left to right keeps them.
         assert_eq!(justify(b"/0 0 /33 0"), Justify::Left);
         assert_eq!(justify(b"/0 1 /33 0"), Justify::Right);
+    }
+
+    /// Key 7 is the paragraph's auto leading, a share of the type size; one that can't be read
+    /// leaves the default, 120%.
+    #[test]
+    fn a_paragraph_keeps_its_auto_leading() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: read(b"/7 1.2").unwrap(),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let auto = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justification.auto_leading;
+        assert_eq!(auto(b""), JustificationOptions::default().auto_leading);
+        assert_eq!(auto(b"/7 1.5"), 150.0);
+        assert_eq!(auto(b"/7 1.15"), 115.0);
+        for unreadable in [b"/7 0".as_slice(), b"/7 -1", b"/7 1e9", b"/7 /nil"] {
+            assert!((auto(unreadable) - 120.0).abs() < 1e-9, "{}", String::from_utf8_lossy(unreadable));
+        }
+    }
+
+    /// Keys 10 to 15 are the paragraph's hyphenation options; one that can't be read, or is out of
+    /// its range, keeps the default. The zone is in points of the text document, scaled as sizes are.
+    #[test]
+    fn a_paragraph_keeps_its_hyphenation_options() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: read(b"/10 6 /11 2 /12 2 /13 0 /14 36.0 /15 true").unwrap(),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let options = |own: &[u8], scale: f64| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), scale).hyphenation;
+        let want = HyphenationOptions { words_longer_than: 6, after_first: 2, before_last: 2, hyphen_limit: 0, zone: 36.0, capitalized: true };
+        assert_eq!(options(b"", 1.0), want);
+        assert_eq!(
+            options(b"/10 8 /13 3 /15 false", 0.5),
+            HyphenationOptions { words_longer_than: 8, hyphen_limit: 3, zone: 18.0, capitalized: false, ..want.clone() }
+        );
+        let d = HyphenationOptions::default();
+        let bare = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let own = |own: &[u8]| para_style(&bare.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).hyphenation;
+        assert_eq!(own(b""), d);
+        assert_eq!(own(b"/10 0 /11 99 /12 2.5 /13 -1 /14 -3 /15 1"), d);
+    }
+
+    /// Key 30 holds the paragraph's tab stops: their positions (key 0), sorted, and alignments (key
+    /// 1: 0 left, 1 center, 2 right, 3 decimal), scaled as sizes are. A stop that can't be read is
+    /// left out. A user's price list keeps a right stop at 269.29 and a left one at 272.13.
+    #[test]
+    fn a_paragraph_keeps_its_tab_stops() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let tabs = |own: &[u8], scale: f64| {
+            para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), scale)
+                .tabs
+                .iter()
+                .map(|t| (t.position, t.align))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(tabs(b"", 1.0), []);
+        assert_eq!(
+            tabs(b"/30 << /0 [ << /0 272.12598 /1 0 >> << /0 269.29135 /1 2 >> ] >>", 1.0),
+            [(269.29135, TabAlign::Right), (272.12598, TabAlign::Left)]
+        );
+        assert_eq!(
+            tabs(b"/30 << /0 [ << /0 10 /1 1 >> << /0 20 /1 3 >> << /0 30 >> ] >>", 0.5),
+            [(5.0, TabAlign::Center), (10.0, TabAlign::Decimal), (15.0, TabAlign::Left)]
+        );
+        // Past MAX_TABS stops, the rest are left out, and the paragraph says so (the story's warning).
+        let many = |n: usize| {
+            let stops: String = (0..n).map(|i| format!("<< /0 {i} >> ")).collect();
+            texts.para(Some(&read(format!("/5 << /30 << /0 [ {stops}] >> >>").as_bytes()).unwrap()))
+        };
+        let p = many(MAX_TABS + 6);
+        assert!(p.tabs_truncated && p.tabs.len() == MAX_TABS);
+        let p = many(MAX_TABS);
+        assert!(!p.tabs_truncated && p.tabs.len() == MAX_TABS);
+        // Unreadable: a position out of range or not a number, an unknown alignment.
+        assert_eq!(
+            tabs(b"/30 << /0 [ << /0 -1 >> << /0 1e9 >> << /0 /nil >> << /0 5 /1 7 >> << /0 6 /1 /x >> << /0 7 /1 2 >> ] >>", 1.0),
+            [(7.0, TabAlign::Right)]
+        );
+    }
+
+    /// A story's paragraphs take at most [`MAX_STORY_TABS`] tab stops in all (a paragraph style's
+    /// are copied into each paragraph): those past it take the default stops, and the story says so.
+    #[test]
+    fn a_story_s_tab_stops_are_bounded() {
+        let mut budget = 3;
+        let mut tabs = vec![TabStop { position: 1.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }; 2];
+        assert!(!spend_tabs(&mut tabs, &mut budget) && tabs.len() == 2 && budget == 1);
+        assert!(spend_tabs(&mut tabs, &mut budget) && tabs.is_empty() && budget == 1);
+        // Paragraphs of a style with MAX_TABS stops each, more than the story takes.
+        let stop = TabStop { position: 1.0, align: TabAlign::Left, leader: String::new(), align_on: '.' };
+        let para = Para { tabs: vec![stop; MAX_TABS], ..Para::default() };
+        let count = MAX_STORY_TABS / MAX_TABS + 2;
+        let s = story(&"a\r".repeat(count), &[0.0], &para);
+        assert!(!s.tabs_left_out());
+        let styles = s.paragraph_styles(&format!("{}a", "a\n".repeat(count - 1)), 1.0);
+        assert_eq!(styles.len(), count);
+        assert!(s.tabs_left_out());
+        assert_eq!(styles.iter().map(|p| p.tabs.len()).sum::<usize>(), MAX_STORY_TABS);
+        assert!(styles.last().is_some_and(|p| p.tabs.is_empty()));
     }
 
     /// Where point type lies runs along its baseline: a label turned a quarter (as a vertical
@@ -1360,6 +1598,44 @@ mod tests {
             assert!(!roman(b"/0 0", other), "{}", String::from_utf8_lossy(other));
         }
         assert!(texts(b"/35 3").style(None).tate_chu_yoko && !texts(b"/35 3").style(None).standard_vertical_roman);
+    }
+
+    /// Keys 61, 62 and 64 of a character style are its stroke's cap (0 butt, 1 round, 2
+    /// projecting), join (0 miter, 1 round, 2 bevel) and miter limit, from the run, its character
+    /// style or the document's defaults. A value that isn't one of theirs keeps the default, a miter
+    /// limit past 500 is 500, and type without a stroke keeps the defaults.
+    #[test]
+    fn a_run_keeps_its_stroke_cap_join_and_miter_limit() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: read(b"/57 true /54 << /0 << /0 0 /1 [ 1.0 1.0 ] >> >> /64 4.0").unwrap(),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Rounded) /6 << /61 1 /62 1 >>").unwrap()],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let stroke = |run: &[u8]| {
+            let s = char_style(&texts.style(Some(&read(run).unwrap())), 1.0);
+            (s.stroke_cap, s.stroke_join, s.stroke_miter_limit)
+        };
+        assert_eq!(stroke(b"/6 << /61 2 /62 2 /64 2.5 >>"), (LineCap::Square, LineJoin::Bevel, 2.5), "the run's own");
+        assert_eq!(stroke(b"/5 1 /6 << >>"), (LineCap::Round, LineJoin::Round, 4.0), "its character style's and the defaults'");
+        assert_eq!(stroke(b"/5 1 /6 << /62 0 >>"), (LineCap::Round, LineJoin::Miter, 4.0), "the run's own wins over its style");
+        assert_eq!(stroke(b"/6 << >>"), (LineCap::Butt, LineJoin::Miter, 4.0), "the defaults'");
+        assert_eq!(stroke(b"/6 << /64 1 >>").2, 1.0);
+        assert_eq!(stroke(b"/6 << /64 1e9 >>").2, 500.0);
+        for bad in [
+            &b"/6 << /61 3 /62 3 /64 0.5 >>"[..],
+            b"/6 << /61 -1 /62 -1 /64 -4 >>",
+            b"/6 << /61 1.5 /62 0.5 /64 NaN >>",
+            b"/6 << /61 (1) /62 (1) /64 inf >>",
+            b"/6 << /61 true /62 [ 1 ] /64 (4) >>",
+            b"/6 << /61 1e308 /62 /Round /64 -inf >>",
+        ] {
+            assert_eq!(stroke(bad), (LineCap::Butt, LineJoin::Miter, 10.0), "{}", String::from_utf8_lossy(bad));
+        }
+        assert_eq!(stroke(b"/5 1 /6 << /57 false >>"), (LineCap::Butt, LineJoin::Miter, 10.0), "no stroke");
     }
 
     /// A right-to-left paragraph is laid out right to left even when it has no right-to-left
@@ -1629,6 +1905,9 @@ mod tests {
                     fill: Some(Color::BLACK),
                     stroke: None,
                     stroke_width: 1.0,
+                    stroke_cap: LineCap::Butt,
+                    stroke_join: LineJoin::Miter,
+                    stroke_miter_limit: 10.0,
                     caps: 0,
                     tate_chu_yoko: false,
                     standard_vertical_roman: false,
@@ -1636,6 +1915,7 @@ mod tests {
             )],
             path_spacing: 0.0,
             vertical: false,
+            tabs_left_out: false.into(),
         }
     }
 
@@ -1882,25 +2162,54 @@ mod tests {
         }
     }
 
+    /// The baselines of the text object `story` comes in as, laid out.
+    fn baselines_of(story: &Story) -> Vec<f64> {
+        let Some(node) = story.node(NodeId(1), 0, (0.0, 0.0), Affine::IDENTITY) else { return vec![] };
+        let NodeKind::Text(t) = &node.kind else { return vec![] };
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).baselines().iter().map(|b| b.0.y).collect()
+    }
+
+    /// Auto leading stays auto: each line takes the paragraph's share of the largest type on it, as
+    /// the file's own layout does, not the distance between the first two lines for every line. A
+    /// 15 pt heading over 10 pt type at 120%: 18 pt between the heading's lines, then 12 pt.
+    #[test]
+    fn auto_leading_follows_the_size_of_each_line() {
+        let mut s = story("Big\x03Bigger\rsmall\r", &[0.0, 18.0, 30.0], &Para::default());
+        let base = s.runs[0].1.clone();
+        s.runs = vec![(11, Style { size: 15.0, ..base.clone() }), (6, Style { size: 10.0, ..base })];
+        assert_eq!(leading_of(&s), None);
+        let ys = baselines_of(&s);
+        assert_eq!(ys.len(), 3, "{ys:?}");
+        assert!(((ys[1] - ys[0]).abs() - 18.0).abs() < 1e-6, "{ys:?}");
+        assert!(((ys[2] - ys[1]).abs() - 12.0).abs() < 1e-6, "{ys:?}");
+        // At a share the paragraph sets (key 7) of 150%: 22.5 pt, then 15 pt.
+        let share = Para { auto_leading: Some(1.5), ..Para::default() };
+        s.paras = s.paras.iter().map(|(n, _)| (*n, share.clone())).collect();
+        let ys = baselines_of(&s);
+        assert!(((ys[1] - ys[0]).abs() - 22.5).abs() < 1e-6, "{ys:?}");
+        assert!(((ys[2] - ys[1]).abs() - 15.0).abs() < 1e-6, "{ys:?}");
+    }
+
     #[test]
     fn leading_leaves_out_the_space_between_paragraphs_that_the_lines_already_have() {
         // Lines 10.6 apart that are three paragraphs with 5 less after each: auto leading (15.6) less 5.
         let para = Para { space_after: -5.0, ..Para::default() };
+        // The text object keeps auto leading and the spacing, so its lines are where the file's are.
         let s = story("one\rtwo\rthree\r", &[0.0, 10.6, 21.2], &para);
-        assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
-        assert!((leading_of(&s).unwrap() - 15.6).abs() < 1e-9);
-        // Space after and space before both count; the scale of the frame carries onto the leading.
+        assert_eq!(leading_of(&s), None);
+        let ys = baselines_of(&s);
+        assert!(ys.len() == 3 && ys.windows(2).all(|w| ((w[1] - w[0]).abs() - 10.6).abs() < 1e-6), "{ys:?}");
+        // Space after and space before both count.
         let para = Para { space_after: 4.0, space_before: 2.0, ..Para::default() };
-        let s = story("one\rtwo\r", &[0.0, 20.0], &para);
-        assert!((s.line_leading(1.0).unwrap() - 14.0).abs() < 1e-9);
-        assert!((s.line_leading(0.5).unwrap() - 7.0).abs() < 1e-9);
+        let ys = baselines_of(&story("one\rtwo\r", &[0.0, 21.6], &para));
+        assert!(((ys[1] - ys[0]).abs() - 21.6).abs() < 1e-6, "{ys:?}");
     }
 
     /// #2031: a Large Canvas editing copy measures its text document in its art's units, a tenth
     /// of the page's: the story's size and leading reach the page through `to_doc`'s scale.
     #[test]
     fn a_story_in_a_scaled_art_space_keeps_its_size_and_leading() {
-        let s = story("one\rtwo\r", &[0.0, 20.0], &Para::default());
+        let s = story("one\rtwo\r", &[0.0, 15.6], &Para::default());
         // A copy written at 1:10 (see `ai::read::ensure_space`): its art's units reach the
         // document, 100 points to the page, through `to_doc`'s scale.
         let to_doc = Affine::scale(10.0) * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 100.0]);
@@ -1909,24 +2218,18 @@ mod tests {
             _ => panic!("not text"),
         };
         assert_eq!(t.runs[0].style.size, 130.0, "13 pt at the page's scale");
-        assert_eq!(t.runs[0].style.leading, Some(200.0), "a 20-unit line pitch at the page's scale");
+        assert_eq!(t.runs[0].style.leading, None, "auto leading: 120% of its size at the page's scale");
+        assert_eq!(t.para.justification.auto_leading, 120.0);
     }
 
     #[test]
     fn leading_between_lines_of_a_paragraph_is_their_distance() {
         // A line break inside a paragraph has no paragraph spacing between its lines.
         let para = Para { space_after: -5.0, space_before: 3.0, ..Para::default() };
-        let s = story("one\x03two\x03three\r", &[0.0, 15.6, 31.2], &para);
-        assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
-        // Paragraphs without spacing: the distance as it was.
-        let s = story("one\rtwo\r", &[0.0, 15.6], &Para::default());
-        assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
-        // Area type whose paragraph wraps: lines and breaks don't pair up, so nothing is taken off.
-        let para = Para { space_after: -5.0, ..Para::default() };
-        let s = story("one two three\rfour\r", &[0.0, 15.6, 31.2, 41.8], &para);
-        assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
-        // One line has no distance to read.
-        assert_eq!(story("one\r", &[0.0], &Para::default()).line_leading(1.0), None);
+        let ys = baselines_of(&story("one\x03two\x03three\r", &[0.0, 15.6, 31.2], &para));
+        assert!(ys.len() == 3 && ys.windows(2).all(|w| ((w[1] - w[0]).abs() - 15.6).abs() < 1e-6), "{ys:?}");
+        // One line.
+        assert_eq!(baselines_of(&story("one\r", &[0.0], &Para::default())).len(), 1);
     }
 
     /// A `\x03` ends a line inside its paragraph: it comes in as a forced line break, and the
@@ -1968,6 +2271,32 @@ mod tests {
         assert!(!s.fit_first_line(&mut t) && height(&t).unwrap().3 == 40.0);
         let mut t = area(13.0);
         assert!(!story("Heading\r", &[], &Para::default()).fit_first_line(&mut t) && height(&t).unwrap().3 == 13.0);
+    }
+
+    /// The file sets three lines in a frame whose third line's descent passes its bottom: the frame
+    /// grows from its bottom so the third shows. Only when the story's one frame is area type.
+    #[test]
+    fn the_last_lines_the_file_sets_in_its_frame_show() {
+        let db = vectorcraft_text::FontDb::global();
+        let area = |height: f64| {
+            let mut t = TextObject::point(Point::ZERO, "one\ntwo\nthree", CharStyle { size: 13.0, ..CharStyle::default() });
+            t.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 20.0, 210.0, 20.0 + height)) };
+            t
+        };
+        let tall = vectorcraft_text::layout(db, &area(400.0));
+        let third = &tall.lines[2];
+        let mut t = area(third.baseline - 20.0 + third.descent / 2.0);
+        assert_eq!(vectorcraft_text::layout(db, &t).lines.len(), 2);
+        let mut s = story("one\rtwo\rthree\r", &[0.0, 15.6, 31.2], &Para::default());
+        // A point-type frame (the helper's) isn't fitted.
+        assert!(!s.fit_last_lines(&mut t));
+        s.frames = vec![FrameKind::Area(vec![], AreaFrame::default())];
+        assert!(s.fit_last_lines(&mut t));
+        assert_eq!(vectorcraft_text::layout(db, &t).lines.len(), 3);
+        // A story threaded through two frames: its lines are the first frame's alone.
+        let mut t = area(third.baseline - 20.0 + third.descent / 2.0);
+        s.frames.push(FrameKind::Area(vec![], AreaFrame::default()));
+        assert!(!s.fit_last_lines(&mut t));
     }
 
     #[test]

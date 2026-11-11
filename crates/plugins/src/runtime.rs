@@ -1,11 +1,11 @@
 //! The wasmi host: loading, instantiating and calling a plug-in under resource limits.
 
 use wasmi::{
-    Config, CustomFuelCosts, EnforcedLimits, Engine, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall, WasmParams,
-    WasmResults,
+    Config, CustomFuelCosts, EnforcedLimits, Engine, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall, Val,
+    WasmParams, WasmResults,
 };
 
-use crate::host::{self, Deadline, Host, Report, Run};
+use crate::host::{self, Bridge, Deadline, Host, Report, Run};
 use crate::manifest::{MAX_MANIFEST_BYTES, Manifest};
 use crate::permissions::Permission;
 use crate::{Error, Kind, Result};
@@ -29,8 +29,11 @@ const FUEL_COSTS: CustomFuelCosts = CustomFuelCosts { bytes_copied_per_fuel: 64,
 /// the host learns that only once the run has ended.
 pub const HEAVY_FUEL: u64 = 1_000_000_000;
 
-/// Wall-clock budget of a heavy filter's run, in milliseconds (native builds).
+/// Wall-clock budget of a heavy filter's run, in milliseconds.
 pub const HEAVY_WALL_TIME_MS: u64 = 300_000;
+
+/// The limit a run reports when its input and parameters together are past half its memory.
+pub(crate) const SELECTION_TOO_LARGE: &str = "memory budget (the selection is too large to hand over)";
 
 /// A heavy run's budget as people read it: (minutes it may take, times the instructions a light
 /// run gets).
@@ -53,8 +56,8 @@ pub struct Limits {
     pub fuel_per_byte: u64,
     /// Deepest call nesting.
     pub max_recursion_depth: usize,
-    /// Wall-clock budget for one run, in milliseconds. Native builds only: the web build has no
-    /// monotonic clock in `std`, so the fuel budget alone bounds it there.
+    /// Wall-clock budget for one run, in milliseconds. The web build measures it with the page's
+    /// `performance.now()`.
     pub wall_time_ms: u64,
     /// The most a heavy filter ([`crate::Budget::Heavy`]) is given instead of `fuel_base` and
     /// `wall_time_ms`: what the host allows, which the module's manifest can ask for but never
@@ -127,6 +130,18 @@ impl Live {
         let bytes = self.memory.data(&self.store).get(ptr..ptr.saturating_add(len));
         bytes.map(<[u8]>::to_vec).ok_or_else(|| Error::Abi(format!("{what} points outside memory")))
     }
+}
+
+/// Takes `cost` instructions from a run: from the budget still to hand out (`left`), then from what
+/// the store holds. A run that can't pay ends with its instruction budget.
+fn charge(live: &mut Live, left: &mut u64, cost: u64) -> Result<()> {
+    let held = live.store.get_fuel().map_err(wasm_err)?;
+    if held.saturating_add(*left) < cost {
+        return Err(Error::Limit("instruction budget".into()));
+    }
+    let from_left = cost.min(*left);
+    *left -= from_left;
+    live.store.set_fuel(held - (cost - from_left)).map_err(wasm_err)
 }
 
 fn wasm_err(e: wasmi::Error) -> Error {
@@ -254,6 +269,22 @@ impl Plugin {
     /// slice size, keeping that fuel, and a run ends with the instruction budget only when the
     /// store's fuel and the rest of the budget together can't pay for the next instruction.
     fn call<P: WasmParams, R: WasmResults>(&self, live: &mut Live, f: &TypedFunc<P, R>, params: P, fuel: u64, deadline: &Deadline) -> Result<R> {
+        self.call_with(live, f, params, fuel, deadline, None)
+    }
+
+    /// [`Plugin::call`], making each command call a `vc_call` pauses it for with `bridge`
+    /// ([`host::Run::pending`]) and resuming it with the code. Each call costs [`host::CALL_FUEL`]
+    /// instructions and one for every 64 bytes of its arguments and result; the deadline and the
+    /// caller's cancellation are checked before and after it.
+    fn call_with<P: WasmParams, R: WasmResults>(
+        &self,
+        live: &mut Live,
+        f: &TypedFunc<P, R>,
+        params: P,
+        fuel: u64,
+        deadline: &Deadline,
+        mut bridge: Option<&mut Bridge<'_>>,
+    ) -> Result<R> {
         let mut left = fuel;
         let give = left.min(FUEL_SLICE);
         left -= give;
@@ -262,7 +293,22 @@ impl Plugin {
         loop {
             match call {
                 TypedResumableCall::Finished(r) => return Ok(r),
-                TypedResumableCall::HostTrap(_) => return Err(Error::Trap("unexpected host trap".into())),
+                TypedResumableCall::HostTrap(inv) => {
+                    let pending = live.store.data_mut().run.pending.take();
+                    let (Some((id, args, size)), Some(bridge)) = (pending, bridge.as_deref_mut()) else {
+                        return Err(Error::Trap("unexpected host trap".into()));
+                    };
+                    charge(live, &mut left, host::CALL_FUEL.saturating_add(size as u64 / 64))?;
+                    deadline.check()?;
+                    vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
+                    let answer = bridge(&id, &args);
+                    let code = live.store.data_mut().run.call_answered(&id, answer);
+                    let returned = live.store.data().run.call_result.as_ref().map_or(0, Vec::len);
+                    charge(live, &mut left, returned as u64 / 64)?;
+                    deadline.check()?;
+                    vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
+                    call = inv.resume(&mut live.store, &[Val::I32(code)]).map_err(wasm_err)?;
+                }
                 TypedResumableCall::OutOfFuel(inv) => {
                     let need = inv.required_fuel();
                     let held = live.store.get_fuel().map_err(wasm_err)?;
@@ -299,30 +345,61 @@ impl Plugin {
     /// [`vectorcraft_doc::cancel::scope`] its progress goes to the scope's sink (a live effect's
     /// doesn't) and `vc_cancelled` sees the scope's Cancel.
     pub fn run_reporting(&self, input: &[u8], params: &[u8], limits: &Limits) -> (Result<Vec<u8>>, Report) {
+        self.run_guarded(input, params, limits, None)
+    }
+
+    /// [`Plugin::run_reporting`] for a filter whose manifest's `commandAllowlist` names commands:
+    /// each `vc_call` of one of them is made with `bridge`, on the caller's thread, while the run
+    /// waits. A failed call fails the run, also when the plug-in goes on and returns an output; the
+    /// error names the command.
+    pub fn run_calling(&self, input: &[u8], params: &[u8], limits: &Limits, bridge: &mut Bridge<'_>) -> (Result<Vec<u8>>, Report) {
+        self.run_guarded(input, params, limits, Some(bridge))
+    }
+
+    fn run_guarded(&self, input: &[u8], params: &[u8], limits: &Limits, bridge: Option<&mut Bridge<'_>>) -> (Result<Vec<u8>>, Report) {
         let mut report = Report::default();
         if let Err(e) = crate::safe_mode::check() {
             return (Err(e), report);
         }
         // wasmi reports misbehaving modules as errors; a panic would be a bug in it, and must
         // still not take the document down (native builds; wasm aborts on panic anyway).
-        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(input, params, limits, &mut report)));
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(input, params, limits, &mut report, bridge)));
         (run.map_err(|_| Error::Trap("the runtime panicked".into())).and_then(|r| r), report)
     }
 
-    fn run_inner(&self, input: &[u8], params: &[u8], limits: &Limits, report: &mut Report) -> Result<Vec<u8>> {
+    fn run_inner(&self, input: &[u8], params: &[u8], limits: &Limits, report: &mut Report, bridge: Option<&mut Bridge<'_>>) -> Result<Vec<u8>> {
         let total = input.len().checked_add(params.len()).filter(|b| *b <= i32::MAX as usize && *b <= self.limits.max_memory_bytes / 2);
-        total.ok_or_else(|| Error::Limit("memory budget (the selection is too large to hand over)".into()))?;
+        total.ok_or_else(|| Error::Limit(SELECTION_TOO_LARGE.into()))?;
         let deadline = Deadline::new(limits.wall_time_ms);
         let m = &self.manifest;
         let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
         let mut live = self.instantiate(run, &m.permissions(), report)?;
-        let out = self.run_live(&mut live, input, params, limits, &deadline);
-        *report = std::mem::take(&mut live.store.data_mut().run.report);
-        out
+        // Calls can be made from `vc_run` on, not from the start function.
+        if bridge.is_some() {
+            live.store.data_mut().run.allow_calls(m.command_allowlist.clone());
+        }
+        let out = self.run_live(&mut live, input, params, limits, &deadline, bridge);
+        let state = &mut live.store.data_mut().run;
+        *report = std::mem::take(&mut state.report);
+        // A failed call fails the run, whatever the plug-in did after it, unless the run was
+        // canceled.
+        match (state.call_failure.take(), out) {
+            (_, Err(Error::Cancelled)) => Err(Error::Cancelled),
+            (Some(e), _) => Err(e),
+            (None, out) => out,
+        }
     }
 
     /// Hands `input` and `params` to the instance `live` and runs `vc_run` → the output JSON bytes.
-    fn run_live(&self, live: &mut Live, input: &[u8], params: &[u8], limits: &Limits, deadline: &Deadline) -> Result<Vec<u8>> {
+    fn run_live(
+        &self,
+        live: &mut Live,
+        input: &[u8],
+        params: &[u8],
+        limits: &Limits,
+        deadline: &Deadline,
+        bridge: Option<&mut Bridge<'_>>,
+    ) -> Result<Vec<u8>> {
         let alloc: TypedFunc<i32, i32> = live.func("vc_alloc")?;
         let run: TypedFunc<RunArgs, i64> = live.func("vc_run")?;
         let place = |live: &mut Live, bytes: &[u8]| -> Result<usize> {
@@ -338,7 +415,7 @@ impl Plugin {
         let iptr = place(live, input)?;
         let pptr = place(live, params)?;
         let fuel = limits.fuel_base.saturating_add((input.len() as u64).saturating_mul(limits.fuel_per_byte));
-        let packed = self.call(live, &run, (iptr as i32, input.len() as i32, pptr as i32, params.len() as i32), fuel, deadline)?;
+        let packed = self.call_with(live, &run, (iptr as i32, input.len() as i32, pptr as i32, params.len() as i32), fuel, deadline, bridge)?;
         // A cancelled run, or one past its time budget, changes nothing, also when the plug-in saw
         // `vc_cancelled` and returned.
         vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;

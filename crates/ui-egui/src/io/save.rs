@@ -132,6 +132,7 @@ const FILE_TYPES: &[(&str, &[&str])] = &[
     ("Composite fonts", vectorcraft_engine::cmd::compositefonts::EXTS),
     ("CSS", &["css"]),
     ("PostScript", &["ps"]),
+    ("Preferences", &["json"]),
 ];
 
 /// The file type a save panel shows for a file with extension `ext`: its format's, else its

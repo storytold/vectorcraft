@@ -158,6 +158,9 @@ pub(crate) type NativeFn = fn(&mut crate::interp::Interp, Value, &[Value], bool)
 /// A function the embedding defines.
 pub(crate) type HostFn = dyn Fn(&[crate::JsValue]) -> Result<crate::JsValue, String>;
 
+/// A function the embedding defines that takes and gives structured values.
+pub(crate) type DataFn = crate::host::HostFunction;
+
 /// The built-ins the interpreter treats specially when it calls them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeKind {
@@ -172,11 +175,16 @@ pub(crate) enum NativeKind {
 
 /// What a function object runs. `Bound` is a function made by `Function.prototype.bind` (section
 /// 15.3.4.5): calling it calls `target` with `this` and `args` before the arguments it is given.
+/// `Data` is a host function given [`crate::Data`], its arguments read as `read` says. `Eval` is a
+/// host function that gives source to run as global code ([`crate::HostItem::Evaluator`]); `end`
+/// is called when that code ends.
 #[derive(Clone)]
 pub(crate) enum Func {
     Closure { code: Rc<Code>, env: EnvId },
     Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
+    Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
+    Eval { f: DataFn, end: Rc<dyn Fn()>, strict_writes: Rc<dyn Fn() -> Option<bool>>, name: Rc<str> },
     Bound { target: ObjId, this: Value, args: Rc<[Value]> },
 }
 

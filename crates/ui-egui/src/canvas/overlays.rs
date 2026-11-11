@@ -106,13 +106,15 @@ pub(super) fn mark_options(app: &VectorcraftApp, curve_points_from_tool: bool) -
     }
 }
 
+/// Draw selection marks and widgets, keeping the box but hiding dot marks during Halftone Preview.
 pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool, marks: &mut SelectionMarks) {
     // The Selection tool's bounding box (rotated with the objects after a rotation), also shown by
     // the shape tools that keep a shape just drawn ready to adjust while they draw none (#5477). It
     // hides while a drag moves or resizes the selection, so only the art is seen going with the
-    // pointer (#712).
+    // pointer (#712). A handle resize keeps it at the changing bounds (#3526).
     // With Real-time Drawing off the art waits for the release of a move drag, and the box moves
     // with the pointer instead.
+    let resizing = app.session.tool_resizing();
     let moved = app.session.deferred_move();
     let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
     // A shape tool drawing a shape shows none of this; adjusting a widget, it shows the widgets.
@@ -122,16 +124,25 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let held = super::drag::mods(p.ctx().input(|i| i.modifiers), false);
     let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
     let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && !app.session.tool_busy()))
-        && (!app.session.tool_transforming() || moved.is_some())
+        && (resizing || !app.session.tool_transforming() || moved.is_some())
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
-    let bbox = if show_box { app.selection_box() } else { None };
+    // With Real-time Drawing off the document stays at the drag's snapshot, so a resize measures the
+    // box from the pending preview; otherwise each step's revision measures it once (`selection_box`).
+    let bbox = if !show_box {
+        None
+    } else if let Some(b) = resizing.then(|| app.session.deferred_transform_box()).flatten() {
+        Some(b)
+    } else {
+        app.selection_box()
+    };
     let bbox = bbox.map(|b| match moved {
         Some(d) => vectorcraft_doc::OrientedBox { rect: b.rect + b.to_local(d.to_point()).to_vec2(), ..b },
         None => b,
     });
     let st = app.session.active();
-    let big = st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
+    let show_marks = !crate::dialogs::halftone::previewing(app);
+    let big = show_marks && st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
     let big_bounds = if big { app.selection_bounds() } else { None };
     let app = &*app;
     let Some(st) = app.session.active() else { return };
@@ -143,24 +154,27 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let options = mark_options(app, curve_points_from_tool);
     let grow = options.look.grow;
     let anchor = |direct: bool| grow + if direct { 5.0 } else { 4.0 };
-    // Too many paths to outline: the selection's bounds stand for them.
-    if let Some((b, id)) = big_bounds.zip(st.selection.objects.first()) {
-        stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(1.0, c32(st.doc.layer_color(*id))));
+    // The temporary halftone selects its dots; their marks obscure the art (#6369).
+    if show_marks {
+        // Too many paths to outline: the selection's bounds stand for them.
+        if let Some((b, id)) = big_bounds.zip(st.selection.objects.first()) {
+            stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(1.0, c32(st.doc.layer_color(*id))));
+        }
+        // The key object (Align to Key Object): its outline drawn thicker, or its bounds when it has
+        // too many paths to outline.
+        let key = st.selection.key.and_then(|k| Some((k, st.doc.node(k)?)));
+        let (key_bounds, key_outline) = match key {
+            Some((k, n)) if too_many_anchors([n]) => (Some((k, n)), None),
+            Some((k, _)) => (None, Some(k)),
+            None => (None, None),
+        };
+        if let Some((k, n)) = key_bounds
+            && let Some(b) = n.geometric_bounds_with(&symbols)
+        {
+            stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
+        }
+        marks.paint(st, p, xf, &options, key_outline, if big { &[] } else { &st.selection.objects });
     }
-    // The key object (Align to Key Object): its outline drawn thicker, or its bounds when it has
-    // too many paths to outline.
-    let key = st.selection.key.and_then(|k| Some((k, st.doc.node(k)?)));
-    let (key_bounds, key_outline) = match key {
-        Some((k, n)) if too_many_anchors([n]) => (Some((k, n)), None),
-        Some((k, _)) => (None, Some(k)),
-        None => (None, None),
-    };
-    if let Some((k, n)) = key_bounds
-        && let Some(b) = n.geometric_bounds_with(&symbols)
-    {
-        stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
-    }
-    marks.paint(st, p, xf, &options, key_outline, if big { &[] } else { &st.selection.objects });
     // The spine of each selected blend (or of the blend a selected key object belongs to).
     let mut spines = vec![];
     for id in &st.selection.objects {

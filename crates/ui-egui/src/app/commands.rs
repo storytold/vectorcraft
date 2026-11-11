@@ -1,5 +1,5 @@
 use super::fonts::MAX_RECENT_FONTS;
-use super::{Value, VectorcraftApp, dialogs, fileio, io, menus, panels, picks, toolbar};
+use super::{Value, VectorcraftApp, canvas, dialogs, fileio, io, menus, panels, picks, toolbar};
 use crate::placing;
 use crate::state::ReplaceFontWarning;
 
@@ -73,6 +73,7 @@ fn substitute_warnings_follow_current_font_inventory() {
 impl VectorcraftApp {
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        let touch_workspace = self.session.prefs.touch_workspace;
         // A file dialog it shows off the UI thread runs it again with the path picked.
         let result = if self.picks.is_entry_free() {
             let entry = picks::Entry::Command(id.to_string(), params.clone());
@@ -80,6 +81,9 @@ impl VectorcraftApp {
         } else {
             self.run_now(id, params)
         };
+        if id == "prefs.import" && result.is_ok() {
+            crate::prefs_dialog::imported(self, touch_workspace);
+        }
         placing::settle_swatch_paste(self);
         result
     }
@@ -94,6 +98,17 @@ impl VectorcraftApp {
         result
     }
 
+    /// A command that waits for the edit the tool computes on another thread and the input held
+    /// for it waits before the app adds the view's active artboard to its params: a held press
+    /// may change it. The app's own commands (its dialogs, panels and view) wait too.
+    fn wait_for_tool_edit(&mut self, id: &str) {
+        let ui_command = vectorcraft_engine::find_command(id).is_none();
+        if (ui_command || vectorcraft_engine::waits_for_tool_edit(id)) && self.session.tool_waiting() {
+            let r = self.session.finish_tool_edit();
+            canvas::apply_requests(self, r);
+        }
+    }
+
     /// [`Self::run`] it, inside what asks for file dialogs.
     fn run_now(&mut self, id: &str, params: Value) -> Result<Value, String> {
         crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
@@ -104,6 +119,7 @@ impl VectorcraftApp {
         if cfg!(debug_assertions) && !self.session.replaying() {
             menus::check_params(&self.session, id, &params)?;
         }
+        self.wait_for_tool_edit(id);
         // A `.ai` file a command writes (a save, an export, a timestamped copy, a batch's save) names
         // the view's active artboard.
         io::remember_active_artboard(self);
@@ -391,6 +407,10 @@ impl VectorcraftApp {
         let switched = if fresh { self.session.select_tool(id, v) } else { self.session.switch_tool(id, v) };
         if let Err(e) = switched {
             self.ui.status = e.to_string();
+        }
+        if before != self.session.tool_id() {
+            // A control gesture cannot resume after another tool has owned the pointer.
+            self.control_rotate_press = None;
         }
         // A newly chosen Artboard tool starts on the active artboard (the view's).
         if before != "artboard"

@@ -8,7 +8,7 @@ use unicode_bidi::Level;
 use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 
-use harfrust::{Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
+use harfrust::{BufferClusterLevel, Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
 use kurbo::Shape;
 use skrifa::MetadataProvider;
 use skrifa::charmap::Charmap;
@@ -355,6 +355,19 @@ pub(crate) fn cap_x_heights(face: Option<&FontFace>, st: &CharStyle) -> (f64, f6
     };
     let k = st.size / face.upem * vs;
     (face.cap_height * k, face.x_height * k)
+}
+
+/// The share of the em that tracking and manual kerning (thousandths of an em) of characters in
+/// style `st` are measured in. In horizontal type that is the Horizontal Scale: they are
+/// thousandths of the em as the scale draws it, so at 50% a tracking of 100 adds 0.05 em, half as
+/// much as at 100%, as the page of users' `.ai` files spaces such type (and as PDF scales its
+/// character and word spacing by its horizontal scaling, ISO 32000-1 §9.4.4). Baking a horizontal
+/// scale of the type's transform into the Horizontal Scale then keeps the spacing. In vertical
+/// type, whose advances down the column don't all take the Horizontal Scale, the em itself: 1. A
+/// scale that isn't a positive number counts as 100%.
+pub fn spacing_scale(st: &CharStyle, vertical: bool) -> f64 {
+    let hs = st.h_scale / 100.0;
+    if vertical || !(hs.is_finite() && hs > 0.0) { 1.0 } else { hs }
 }
 
 /// Shape `text[range]`, where `runs` gives each run's byte range in `text` and style, `inlines`
@@ -736,7 +749,8 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
         let right_y = right.dy - right.bshift;
         let Some(left_style) = runs.get(left.run).map(|(_, s)| *s) else { continue };
         let em = left.sx * left.face.upem / (left_style.h_scale / 100.0);
-        let tracking = left_style.tracking / 1000.0 * em;
+        // The tracking shaping added: thousandths of the em as its Horizontal Scale draws it.
+        let tracking = left_style.tracking / 1000.0 * em * spacing_scale(left_style, false);
         // A manual kerning value on the left glyph is part of its advance and, right to left, of
         // its offset too (it spaces the left glyph from its left neighbor): it is not taken off.
         let advance = glyphs[cluster_start..=cluster_end].iter().map(|g| g.adv).sum::<f64>() - tracking;
@@ -794,6 +808,23 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
     let source = runs.get(span.clone())?;
     let i = source.partition_point(|(range, _)| range.end <= byte);
     source.get(i).filter(|(range, _)| range.contains(&byte)).map(|_| span.start + i)
+}
+
+/// Can one glyph draw characters in styles `a` and `b`? Only when the styles are equal, except that
+/// horizontal type (`vertical` false) does not read Standard Vertical Roman Alignment or the
+/// tate-chu-yoko offsets, so styles that differ only in those are drawn alike there.
+fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
+    if a == b {
+        return true;
+    }
+    !vertical
+        && *a
+            == CharStyle {
+                standard_vertical_roman: a.standard_vertical_roman,
+                tcy_up_down: a.tcy_up_down,
+                tcy_left_right: a.tcy_left_right,
+                ..b.clone()
+            }
 }
 
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
@@ -914,8 +945,10 @@ fn shaping_script(c: char) -> Script {
 /// vertical centre on the middle of the cap height raised by the inline's shift (see
 /// [`InlineArt`]). Its advance is the scaled art width plus tracking and its character's manual
 /// kerning, which right to left in horizontal type also moves the art right by the value, as it
-/// moves a letter's glyph. The glyph's ascent and descent grow to the art's extent so a tall
-/// graphic opens up its line. A missing symbol takes a square of the same height and draws nothing.
+/// moves a letter's glyph. The art doesn't take the run's Horizontal Scale; the tracking and the
+/// kerning do, as after a letter ([`spacing_scale`]). The glyph's ascent and descent grow to the
+/// art's extent so a tall graphic opens up its line. A missing symbol takes a square of the same
+/// height and draws nothing.
 #[allow(clippy::too_many_arguments)]
 fn inline_glyph(
     face: &Arc<FontFace>,
@@ -942,8 +975,9 @@ fn inline_glyph(
         }
         _ => (kurbo::Affine::IDENTITY, h, None),
     };
-    let tracking = st.tracking / 1000.0 * size;
-    let manual_kern = st.kerning.map(|v| v / 1000.0 * size).filter(|k| k.is_finite()).unwrap_or(0.0);
+    let spacing_em = size * spacing_scale(st, vertical);
+    let tracking = st.tracking / 1000.0 * spacing_em;
+    let manual_kern = st.kerning.map(|v| v / 1000.0 * spacing_em).filter(|k| k.is_finite()).unwrap_or(0.0);
     let adv = width + if tracking.is_finite() { tracking } else { 0.0 } + manual_kern;
     SGlyph {
         face: face.clone(),
@@ -1007,6 +1041,10 @@ struct Shaped {
     raw: Vec<(u32, u32, i32, i32, i32)>,
     proportional: Vec<bool>,
     vpal: Vec<Option<VAdjust>>,
+    /// Each glyph's own character (cluster at character level), when harakat are styled apart
+    /// from their letters and the character-level pass matches ([`crate::harakat`]); empty
+    /// otherwise (glyphs keep their shaping-cluster start).
+    chars: Vec<u32>,
 }
 
 fn is_mark(c: char) -> bool {
@@ -1042,6 +1080,9 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let km = full / face.upem;
     let hs = st.h_scale / 100.0;
     let vs = st.v_scale / 100.0;
+    // The em the tracking and manual kerning are thousandths of: in horizontal type, as the
+    // Horizontal Scale draws it ([`spacing_scale`]; the runs shaped together share the scale).
+    let spacing_em = size * spacing_scale(st, feats.vertical);
     let ascent = face.ascent * km * vs;
     let descent = face.descent * km * vs;
     let cap = face.cap_height * km * vs;
@@ -1073,6 +1114,14 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     if !manual_ends.is_empty() {
         return shape_apart(manual_ends, out);
     }
+    // Harakat styled apart from their letters (paint only): shaped with them, each glyph then
+    // takes its own character's run ([`crate::harakat`]).
+    let mark_boundaries: Vec<usize> = boundaries()
+        .filter(|&b| run_at(b - 1).1 != run_at(b).1 && crate::harakat::paint_only_mark_boundary(text, b, run_at(b - 1).1, run_at(b).1))
+        .collect();
+    // Source run starts are sorted. Reuse their classification when checking cluster splits.
+    let styled_marks = !mark_boundaries.is_empty();
+    let char_level = std::cell::Cell::new(false);
 
     // Shape the segment as if all of it were in `st`, with the features `more` on top.
     let shape_in = |st: &CharStyle, more: &[Feature]| {
@@ -1083,12 +1132,15 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             .filter(|l| l.len() <= 35 && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
             .and_then(|l| l.parse::<harfrust::Language>().ok());
         let mut shaped = Shaped::default();
-        let Shaped { raw, proportional, vpal } = &mut shaped;
+        let Shaped { raw, proportional, vpal, chars } = &mut shaped;
         let hb_shaped = face.hb().map(|hb| {
             let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
+            // The baseline and character-level pass use exactly the same resolved features.
+            // Alternate positioning passes still resolve their own features, with `more` last.
+            let with_more = |resolved: Vec<Feature>| resolved.into_iter().chain(more.iter().cloned()).collect::<Vec<_>>();
+            let along_features = with_more(feats.resolve(st));
             // gid, cluster, x and y advance, x and y offset.
             let shape = |feats: &[Feature], direction: Direction| {
-                let feats: Vec<Feature> = feats.iter().chain(more).cloned().collect();
                 let mut buf = UnicodeBuffer::new();
                 for (i, c) in text_seg.char_indices() {
                     let cl = (range.start + i) as u32;
@@ -1103,6 +1155,9 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 }
                 buf.set_direction(direction);
                 buf.guess_segment_properties();
+                if char_level.get() {
+                    buf.set_cluster_level(BufferClusterLevel::Characters);
+                }
                 // The characters' language picks the font's forms for it (`locl`: Turkish keeps fi
                 // apart and the dot on its i).
                 if let Some(l) = &language {
@@ -1119,8 +1174,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 }
                 // A buffer whose characters name no script reads as `UNKNOWN`: its plan has none.
                 let script = Some(buf.script()).filter(|s| *s != harfrust::script::UNKNOWN);
-                let plan = face.shape_plan(&shaper, buf.direction(), script, language.as_ref(), &feats);
-                let gb = shaper.shape(buf, ShapeOptions::new().features(&feats).plan(Some(&plan)));
+                let plan = face.shape_plan(&shaper, buf.direction(), script, language.as_ref(), feats);
+                let gb = shaper.shape(buf, ShapeOptions::new().features(feats).plan(Some(&plan)));
                 gb.glyph_infos()
                     .iter()
                     .zip(gb.glyph_positions())
@@ -1128,13 +1183,25 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                     .collect::<Vec<_>>()
             };
             let along = if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight };
-            *raw = shape(&feats.resolve(st), along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
+            *raw = shape(&along_features, along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
             let raw = &*raw;
             let same_glyphs = |v: &[(u32, u32, i32, i32, i32, i32)]| v.len() == raw.len() && v.iter().zip(raw).all(|(a, b)| a.0 == b.0);
+            // The same shaping at character level names each glyph's own character (kept only when
+            // it sets the same glyphs alike, each character in its glyph's cluster).
+            if let Some(classes) = styled_marks.then(|| crate::harakat::mark_classes(face)).flatten()
+                // Without a mark glyph, no glyph can take a later character's paint. Avoid
+                // reshaping; the original clusters already give the conservative ownership.
+                && raw.iter().any(|g| classes.get(skrifa::GlyphId::new(g.0)) == 3)
+            {
+                char_level.set(true);
+                let by_char = shape(&along_features, along);
+                char_level.set(false);
+                *chars = crate::harakat::own_chars(raw, &by_char, range.end, text, |gid| classes.get(skrifa::GlyphId::new(gid)) == 3);
+            }
             if feats.proportional(st) {
                 // `palt` is positioning only: the same glyphs set on their full widths tell which
                 // advances it changed (kerning and the rest change both alike).
-                let full = shape(&feats.resolve_fixed_width(st), along);
+                let full = shape(&with_more(feats.resolve_fixed_width(st)), along);
                 if same_glyphs(&full) {
                     *proportional = full.iter().zip(raw).map(|(a, b)| a.2 != b.2).collect();
                 }
@@ -1145,7 +1212,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 // and without either tell how it moves each and changes its advance down the column
                 // (y up, advances negative). Which advances `vpal` itself changed comes from setting
                 // them with it alone.
-                let ttb = |proportional, kerning| shape(&feats.resolve_vertical(st, proportional, kerning), Direction::TopToBottom);
+                let ttb = |proportional, kerning| shape(&with_more(feats.resolve_vertical(st, proportional, kerning)), Direction::TopToBottom);
                 let (with, without, alone) = (ttb(true, true), ttb(false, false), ttb(true, false));
                 if same_glyphs(&with) && same_glyphs(&without) && same_glyphs(&alone) {
                     *vpal = with
@@ -1185,7 +1252,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         shaped
     };
     let first_optical = if optical(range.start) { Some(range.start) } else { boundaries().find(|&b| optical(b)) };
-    let Shaped { raw, proportional, vpal } = if let Some(first) = first_optical.filter(|_| !feats.vertical) {
+    let Shaped { raw, proportional, vpal, chars } = if let Some(first) = first_optical.filter(|_| !feats.vertical) {
         // The pair entering Optical keeps the left character's font kerning. Subsequent
         // Optical pairs use outline spacing, so font pair features stop at its second character.
         let optical_off = if first == range.start {
@@ -1245,7 +1312,12 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     cluster_starts.dedup();
     // A glyph is drawn in one style: where a cluster would take in characters of runs in different
     // styles, the runs are shaped apart, as runs that do not shape alike are.
-    let inside_clusters: Vec<usize> = boundaries().filter(|&b| cluster_starts.binary_search(&b).is_err() && run_at(b - 1).1 != run_at(b).1).collect();
+    // Except at harakat styled apart only in paint ([`crate::harakat`]), and, in horizontal type, where
+    // the runs differ only in settings that vertical type alone reads.
+    let inside_clusters: Vec<usize> = boundaries()
+        .filter(|&b| cluster_starts.binary_search(&b).is_err() && !drawn_alike(run_at(b - 1).1, run_at(b).1, feats.vertical))
+        .filter(|b| mark_boundaries.binary_search(b).is_err())
+        .collect();
     if !inside_clusters.is_empty() {
         return shape_apart(inside_clusters, out);
     }
@@ -1305,6 +1377,11 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     for (gi, &(gid, cl, xa, xo, yo)) in raw.iter().enumerate() {
         let cl = cl as usize;
         let (run, gst) = run_at(cl);
+        // A glyph of a harakat styled apart takes its own character's run (paint only).
+        let run = match chars.get(gi).map(|&c| run_at(c as usize)) {
+            Some((own, own_st)) if crate::harakat::paint_only(gst, own_st) => own,
+            _ => run,
+        };
         let end = cluster_end(cl);
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
@@ -1322,7 +1399,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         if ch == SOFT_HYPHEN || ch == '\u{2028}' {
             adv = 0.0;
         } else {
-            let manual_kern = gst.kerning.map(|v| v / 1000.0 * size).unwrap_or(0.0);
+            let manual_kern = gst.kerning.map(|v| v / 1000.0 * spacing_em).unwrap_or(0.0);
             // Manual kerning spaces a character from the next one in reading order. Right to left,
             // that one is drawn to its left: the cluster's glyphs move right along the baseline by
             // the value, so that the space its last glyph's advance gains is at the cluster's left.
@@ -1330,7 +1407,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 kern_shift = manual_kern;
             }
             if last_in_cluster {
-                let tracking = gst.tracking / 1000.0 * size;
+                let tracking = gst.tracking / 1000.0 * spacing_em;
                 adv += tracking + manual_kern;
             }
         }

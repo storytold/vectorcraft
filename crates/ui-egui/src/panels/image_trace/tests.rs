@@ -1,4 +1,6 @@
-use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll};
+use super::super::tests_long_popups::{
+    PopupWindow, assert_last_row_scrolls_into_view, assert_rows_stay_on_one_line, assert_short_list_does_not_scroll,
+};
 use super::*;
 use crate::panels::library_panel;
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
@@ -64,6 +66,20 @@ fn a_long_tracing_preset_list_scrolls_inside_a_short_window() {
         app.session.execute("imageTrace.presets.save", &json!({"name": format!("Saved {n}"), "preset": "Default"})).unwrap();
     }
     assert_last_row_scrolls_into_view(&mut app, 200.0, draw, tracing_presets_arrow, &first, "Saved 29");
+}
+
+/// The list of presets keeps each name on one line when it scrolls: the scroll bar's column widens
+/// the list instead of narrowing the rows.
+#[test]
+fn a_long_tracing_preset_list_keeps_its_rows_on_one_line() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| trace_button(app, ui, TRACE_BUTTON_W);
+    for n in 0..30 {
+        app.session.execute("imageTrace.presets.save", &json!({"name": format!("Saved {n}"), "preset": "Default"})).unwrap();
+    }
+    let presets = app.session.execute("imageTrace.presets", &json!({})).unwrap();
+    let names: Vec<String> = presets["presets"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap().to_string()).collect();
+    assert_rows_stay_on_one_line(&mut app, draw, tracing_presets_arrow, &names, "Black and White Logo", 120.0);
 }
 
 #[test]

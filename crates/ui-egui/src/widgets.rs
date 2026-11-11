@@ -20,6 +20,7 @@ mod numeric;
 mod panel_chrome;
 mod text;
 mod toggles;
+mod wheel_stream;
 
 pub use blend::{
     TransparencyEdit, angle_dial, blend_dropdown, blend_param, blend_param_dropdown, blend_separator_before, opacity_blend, reference_point,
@@ -33,24 +34,24 @@ pub(crate) use buttons::{button_width, icon_button_info, primary_button_width, s
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
-pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
 pub use color::{
-    Live, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh, color_slider,
-    color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, region_texture, segment_color,
-    segmented_wheel, stepped_area,
+    FieldAxis, Live, RingResponse, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh,
+    color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring,
+    region_texture, ring_square, segment_color, segmented_wheel, stepped_area,
 };
+pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
 pub use drag::{
     PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
-#[cfg(test)]
-pub(crate) use dropdowns::menu_floor;
-pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, popover_is_open};
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, field_focused_in, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
     panel_scroll, popover, set_menu_floor, strip_scroll,
 };
+#[cfg(test)]
+pub(crate) use dropdowns::{menu_floor, menu_room_either};
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
 pub(crate) use labels::{label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
@@ -62,6 +63,7 @@ pub use numeric::{
 };
 #[cfg(test)]
 use numeric::{decimal_point, field_number, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
+pub(crate) use panel_chrome::{PANEL_FOOTER, panel_footer, panel_footer_bottom, panel_footer_space, panel_list_height};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
 pub(crate) use text::{
     arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter,
@@ -72,6 +74,9 @@ pub use text::{
     text_presets_named,
 };
 pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
+#[cfg(test)]
+pub(crate) use wheel_stream::WHEEL_STREAM_GAP;
+pub(crate) use wheel_stream::{ArmedWheelField, WheelStream, WheelStreamOwner, taken_from_raw_id};
 
 /// A widget id salt that needs only [`std::hash::Hash`]. egui 0.37's [`egui::AsIdSalt`] also
 /// requires `Debug` for its debug-only id-source registry; VectorCraft's public field helpers do
@@ -651,6 +656,27 @@ mod menu_room_tests {
     #[test]
     fn a_window_shorter_than_the_minimum_limits_the_menu() {
         assert_eq!(menu_room(100.0, 24.0, 92.0), 92.0);
+    }
+
+    /// A popup opens below its button while that leaves the minimum height, even when the list
+    /// then scrolls.
+    #[test]
+    fn a_menu_opens_below_while_that_side_has_the_minimum() {
+        assert_eq!(menu_room_either(300.0, 800.0, 980.0), 288.0);
+        assert_eq!(menu_room_either(132.0, 800.0, 980.0), 120.0);
+    }
+
+    /// With less than the minimum below, the list takes the room above, up to the window's height.
+    #[test]
+    fn a_menu_opens_above_when_below_is_too_short() {
+        assert_eq!(menu_room_either(40.0, 500.0, 980.0), 488.0);
+        assert_eq!(menu_room_either(40.0, 500.0, 300.0), 300.0);
+    }
+
+    /// With little room on either side, the list keeps the minimum height.
+    #[test]
+    fn a_menu_keeps_the_minimum_with_little_room_either_side() {
+        assert_eq!(menu_room_either(40.0, 60.0, 980.0), 120.0);
     }
 
     /// The floor one window records does not reach a menu in another window of the same context.

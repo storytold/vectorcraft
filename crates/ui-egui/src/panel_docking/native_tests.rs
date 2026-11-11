@@ -25,6 +25,7 @@ struct Window {
     frames: usize,
     /// The texts its last frame drew, with their rects in the window.
     texts: Vec<(String, Rect)>,
+    accessibility: Vec<egui::accesskit::Node>,
 }
 
 struct Host {
@@ -82,7 +83,14 @@ impl Host {
             let mut host = host.borrow_mut();
             let builder = &viewport.builder;
             let rect = Rect::from_min_size(builder.position.unwrap_or_default(), builder.inner_size.unwrap_or(vec2(300.0, 200.0)));
-            host.windows.entry(id).or_insert_with(|| Window { rect, events: Vec::new(), dropped: Vec::new(), frames: 0, texts: Vec::new() });
+            host.windows.entry(id).or_insert_with(|| Window {
+                rect,
+                events: Vec::new(),
+                dropped: Vec::new(),
+                frames: 0,
+                texts: Vec::new(),
+                accessibility: Vec::new(),
+            });
             let viewports = host.infos();
             let (time, focused) = (host.time, host.focus == id);
             let Some(window) = host.windows.get_mut(&id) else { return };
@@ -171,10 +179,13 @@ impl Host {
         }
         let mut shown = Vec::new();
         full.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        let accessibility =
+            full.platform_output.accesskit_update.take().map(|update| update.nodes.into_iter().map(|(_, node)| node).collect()).unwrap_or_default();
         let mut host = host.borrow_mut();
         host.child_layer_order.insert(id, layer_order);
         if let Some(window) = host.windows.get_mut(&id) {
             window.texts = shown;
+            window.accessibility = accessibility;
         }
         host.apply(&full);
     }
@@ -349,6 +360,22 @@ fn open_button_menu(h: &mut Harness, viewport: ViewportId, side: f32, rank: impl
     menu
 }
 
+/// Click a named button, independent of other controls sharing its size or position.
+fn open_named_button_menu(h: &mut Harness, viewport: ViewportId, name: &str) -> Pos2 {
+    let buttons: Vec<Rect> = h.host.borrow().windows[&viewport]
+        .accessibility
+        .iter()
+        .filter(|node| node.role() == egui::accesskit::Role::Button && node.label() == Some(name))
+        .filter_map(|node| node.bounds())
+        .map(|bounds| Rect::from_min_max(pos2(bounds.x0 as f32, bounds.y0 as f32), pos2(bounds.x1 as f32, bounds.y1 as f32)))
+        .collect();
+    assert_eq!(buttons.len(), 1, "one visible button named {name}");
+    let at = buttons[0].center();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(at), button(at, true), button(at, false)]);
+    h.frames(8);
+    at
+}
+
 /// A click on the ≡ button in the OS window `viewport`, the 16 pt square at the right end of the
 /// panel's tab strip. Returns where the button is.
 fn open_panel_menu(h: &mut Harness, viewport: ViewportId) -> Pos2 {
@@ -421,14 +448,18 @@ fn the_library_submenu_scrolls_inside_a_short_native_window() {
     assert_submenu_reaches_its_end(&mut h, "swatches", 240.0, "Open Swatch Library", "Default Swatches", "Other Library…");
 }
 
-/// The Layers panel's Filter popup, under the topmost 24 pt button: the wheel brings its last row
+/// The Layers panel's named Filter button opens its popup: the wheel brings its last row
 /// into a short window.
 #[test]
 fn the_layers_filter_popup_scrolls_inside_a_short_native_window() {
     let mut h = Harness::new();
+    h.ctx.enable_accesskit();
     let viewport = h.float("layers");
     resize_window(&mut h, viewport, 160.0);
-    open_button_menu(&mut h, viewport, 24.0, |at| -at.y);
+    // The header's collapse control is also 24 pt square and sits above Filter.
+    assert!(text_rect(&h, viewport, "»").is_some(), "keep the competing header control in this regression");
+    open_named_button_menu(&mut h, viewport, "Filter");
+    assert!(floating_window(&layout_of(&h.app.ui), "layers").is_some(), "Filter must not collapse the panel");
     let over = text_rect(&h, viewport, "By Object").expect("the popup's By Object heading");
     assert!(text_rect(&h, viewport, "Hidden").is_none_or(|end| end.bottom() > 160.0), "the popup opens at the top of its list");
     wheel_down(&mut h, viewport, over.center(), 5000.0);
@@ -609,6 +640,33 @@ fn a_modal_blocks_native_windows_and_takes_the_keyboard_from_them() {
     h.frames(3);
     h.key_in(viewport, Key::P);
     assert_eq!(h.app.session.tool_id(), "pen", "the window takes keys again once the modal closes");
+}
+
+/// The update prompt and the result window of a check block a floating panel's OS window as any
+/// modal does.
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn the_update_dialogs_block_native_windows_and_take_the_keyboard_from_them() {
+    type Open = fn(&mut Harness);
+    let opens: [(&str, Open); 2] = [
+        ("the prompt", |h| crate::updates_ui::open_prompt_for_test(&mut h.app)),
+        ("the result window", |h| crate::updates_ui::open_result_window_for_test(&mut h.app, &h.ctx)),
+    ];
+    for (name, open) in opens {
+        let mut h = Harness::new();
+        let viewport = h.float("swatches");
+        open(&mut h);
+        h.frames(6);
+        let focus_commands = h.host.borrow().commands.iter().filter(|(id, c)| *id == ViewportId::ROOT && *c == ViewportCommand::Focus).count();
+        assert_eq!(focus_commands, 1, "{name}: the main window gets the keyboard");
+        h.key_in(viewport, Key::P);
+        assert_eq!(h.app.session.tool_id(), "selection", "{name}: a key typed in the blocked window does nothing");
+
+        crate::updates_ui::close_dialogs_for_test(&mut h.app);
+        h.frames(3);
+        h.key_in(viewport, Key::P);
+        assert_eq!(h.app.session.tool_id(), "pen", "{name}: the window takes keys again once the dialog closes");
+    }
 }
 
 /// The level and visibility a palette window takes under a dialog or a menu, and otherwise: a
@@ -996,8 +1054,9 @@ fn wheel_over_a_floating_character_font_field_changes_the_font() {
 
     h.host.borrow_mut().child_overlay = None;
     h.frame(vec![]);
+    h.host.borrow_mut().time += crate::widgets::WHEEL_STREAM_GAP;
     h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
-        Event::PointerMoved(pointer),
+        Event::PointerMoved(pointer + vec2(1.0, 0.0)),
         Event::MouseWheel {
             unit: egui::MouseWheelUnit::Line,
             delta: vec2(0.0, -1.0),
@@ -1029,8 +1088,9 @@ fn wheel_over_a_floating_character_font_field_changes_the_font() {
     h.host.borrow_mut().child_transparent_overlay = None;
     h.host.borrow_mut().child_pass_through_overlay = Some((viewport, field.expand(10.0)));
     h.frames(2);
+    h.host.borrow_mut().time += crate::widgets::WHEEL_STREAM_GAP;
     h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
-        Event::PointerMoved(pointer),
+        Event::PointerMoved(pointer + vec2(2.0, 0.0)),
         Event::MouseWheel {
             unit: egui::MouseWheelUnit::Line,
             delta: vec2(0.0, -1.0),
@@ -1396,6 +1456,75 @@ fn wheel_events_on_both_sides_of_an_overlay_are_checked_separately() {
 }
 
 #[test]
+fn a_wheel_stream_that_began_outside_a_floating_font_field_stays_outside() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let on = pos2(field.min.x + 4.0, field.center().y);
+    let off = pos2(field.min.x + 4.0, field.max.y + 60.0);
+    let turn = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(off), turn.clone(), Event::PointerMoved(on), turn]);
+    h.frames(3);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn a_wheel_stream_leaves_a_floating_font_field_that_an_overlay_covered_before_its_queued_turn() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    let turn = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    h.frames(2);
+    let field_layer = crate::font_menu::wheel_field_layer_for_test(&h.ctx, viewport, pointer).expect("the font field layer");
+    let raise_field = |h: &mut Harness| {
+        h.host.borrow_mut().child_raise_layer = Some((viewport, field_layer));
+        h.frame(vec![]);
+        h.host.borrow_mut().child_raise_layer = None;
+        h.frame(vec![]);
+    };
+    raise_field(&mut h);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), true));
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(pointer), turn.clone()]);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before, "the overlay covered the field before its queued turn");
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    raise_field(&mut h);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.push(turn);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before, "the stream left the field when the overlay covered it");
+}
+
+#[test]
 fn leaving_a_floating_font_field_resets_queued_fractional_wheel_input() {
     let mut h = Harness::new();
     h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
@@ -1541,4 +1670,32 @@ fn wheel_without_a_move_uses_the_floating_viewports_pointer() {
     h.frame(vec![]);
     h.frame(vec![]);
     assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn floating_collapse_arrow_in_a_native_window_moves_the_group_to_the_rail() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "layers", "group": true})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "layers"})).unwrap();
+    h.frames(3);
+    let viewport = h.viewport("layers");
+    h.host.borrow_mut().focus = viewport;
+    let arrow = h.host.borrow().windows[&viewport]
+        .texts
+        .iter()
+        .find(|(text, _)| text == "»")
+        .map(|(_, rect)| rect.center())
+        .expect("the native floating header paints a collapse arrow");
+    for pressed in [true, false] {
+        h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(arrow), button(arrow, pressed)]);
+        h.frames(1);
+    }
+    h.frames(3);
+    let layout = layout_of(&h.app.ui);
+    assert!(floating_window(&layout, "layers").is_none());
+    assert_eq!(group_of(&layout, &"layers".into()), ["properties", "layers", "libraries"]);
+    assert!(["properties", "layers", "libraries"].iter().all(|p| in_iconic_column(&layout, p)));
+    let frames = h.host.borrow().windows[&viewport].frames;
+    h.frames(3);
+    assert_eq!(h.host.borrow().windows[&viewport].frames, frames, "the emptied palette is no longer rendered");
 }

@@ -137,7 +137,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{folder?} Type › Find Font's Find in Folder…: asks for a folder (or takes folder), then opens Missing Fonts looking there for the files of the fonts the active document misses (text.findFontFiles). Disabled where there is no folder picker (the web)",
     ),
-    ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
+    ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first; under an automation read root, only the files inside it"),
     (
         "file.export.svg",
         "Export As SVG…",
@@ -162,6 +162,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("app.home", "Home", "", "{} shows the Home screen (new file presets, Open) over the open documents; choosing a document tab returns to it"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
     ("edit.keyboardShortcuts", "Keyboard Shortcuts…", "Cmd+Alt+Shift+K", "{}"),
+    (
+        "edit.autoSpellCheck",
+        "Auto Spell Check",
+        "",
+        "{} toggle a red underline under the words of the document's type its dictionaries don't know (text.spelling.check lists them), kept up to date as the type changes; type with effects isn't underlined → whether Auto Spell Check is on",
+    ),
     ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
     ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),
@@ -615,7 +621,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel.dock",
         "Dock Panel",
         "",
-        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window, or beside the canvas inside any left-side dock while window.toolsBesideCanvas is on. Returns {layout, closed, floating}",
+        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window, or beside the canvas inside any left-side dock while window.toolsBesideCanvas is on; with side: right (or End) on the right, between the canvas and the panels, as dropping it there or on the window's right edge does (default: the side it docked at last; left or Start docks it on the left), returning {panel, floating, pos, side}. Returns {layout, closed, floating}",
     ),
     (
         "window.collapseDock",
@@ -969,6 +975,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Flattener Preview",
         "",
         "{highlight?: none|rasterizedRegions|transparentObjects|allAffected|expandedPatterns|outlinedStrokes|outlinedText|allRasterized, overprints?: preserve|simulate|discard, preset?: name (loads its options), options?: {option keys, over the preset's}, showOptions?} set the Flattener Preview panel (ui.inspect: ui.flattener_preview), show it and refresh its snapshot → what flattener.preview answers for it",
+    ),
+    (
+        "ui.copyScriptConsole",
+        "Copy Script Console",
+        "",
+        "{first?, last?: numbers of lines the Script Console holds, both or neither} copy those lines of the Script Console to the clipboard as the panel shows them, each with its run's number and script name; without them every line, after a line counting the lines it dropped and cut when it dropped or cut any, which n does not count (Script Console panel: Copy Selected, Copy All; script.console gives the lines) → {lines: n}",
     ),
     (
         "window.graphicStyleLibrary",
@@ -1488,7 +1500,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.installPlugin",
         "Install Plug-in…",
         "",
-        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), allowHeavy?: bool (the user agreed to its heavy budget), grant?: [permission] (the permissions the user granted it), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing → plugin.install's result | {pending: \"confirm\"} while it asks",
+        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing. Only a person can press OK when it asks about permissions or a heavy budget: ui.dialog.confirm, answer_dialog and synthetic input are refused → plugin.install's result | {pending: \"pluginInstall\"} while it asks about permissions or a heavy budget | {pending: \"confirm\"} while it asks only about replacing",
     ),
     (
         "plugin.cancelRuns",
@@ -1513,6 +1525,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Continue in Background",
         "",
         "{} close the progress window of the Image Traces running in the background; they go on, shown in the status bar → {hidden: n}",
+    ),
+    (
+        "ui.runScript",
+        "Other Script…",
+        "Cmd+F12",
+        "{path? | source?, name?} run a .js or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `name`, `script`, `dontShow`); without a file pick one (the web opens the browser's file picker)",
+    ),
+    (
+        crate::scripts_menu::COMMAND,
+        "Run Script",
+        "",
+        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (the script is checked again, then script.run runs it by its path, so its #include lines and $.evalFile read beside it), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
     ),
     (
         "ui.checkScript",

@@ -92,6 +92,9 @@ fn run_steps(
         if id == "command.batch" {
             return Err(bad("command.batch", "batches cannot nest"));
         }
+        if id == "prefs.import" {
+            return Err(bad("command.batch", "`prefs.import` runs on its own, not as a batch step"));
+        }
         if s.active().is_some() {
             s.begin_interaction(label)?;
         }

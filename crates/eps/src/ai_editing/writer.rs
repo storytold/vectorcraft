@@ -7,7 +7,7 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::swatch::{REGISTRATION, Swatch};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LAYER_COLORS, LayerColor, Node, NodeId, NodeKind, OpacityMask, StrokeLayer};
+use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LayerColor, Node, NodeId, NodeKind, OpacityMask, StrokeLayer};
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, FillRule, PathData, Shape, SubPath};
 use vectorcraft_pathops::BoolOp;
@@ -449,14 +449,7 @@ impl<'a> Writer<'a> {
     /// (`Xy`, `0 0 Xd`, `7 () XW`) when it has any, `LB`, `%AI5_EndLayer--`.
     fn write_layer(&mut self, n: &Node, after: &[Arc<Node>]) {
         let NodeKind::Layer { color, template, printable, children, clip, preview, dim_images } = &n.kind else { return };
-        let [r, g, b] = match color {
-            LayerColor::Preset(i) => LAYER_COLORS.get(usize::from(*i)).map_or([79, 128, 255], |c| c.1),
-            LayerColor::Custom(rgb) => *rgb,
-        };
-        let index = match color {
-            LayerColor::Preset(i) if usize::from(*i) < LAYER_COLORS.len() => i64::from(*i),
-            _ => -1,
-        };
+        let (index, [r, g, b]) = ai_ops::layer_color(*color);
         if *template {
             self.warn(TEMPLATES);
         }

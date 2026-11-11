@@ -38,10 +38,12 @@ fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
 
 #[test]
 fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() {
-    let mut s = Session::new();
+    let mut s = session();
     let list = run(&mut s, "graphicStyle.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert!(libs.len() >= 6 && libs.iter().all(|l| l["category"] == "builtIn"), "{libs:?}");
+    assert!(libs.len() >= 8 && libs.iter().all(|l| l["category"] == "builtIn"), "{libs:?}");
+    assert!(libs.iter().any(|l| l["id"] == "game-hud" && l["name"] == "Game HUD"), "{libs:?}");
+    assert!(libs.iter().any(|l| l["id"] == "status-effects" && l["name"] == "Status Effects"), "{libs:?}");
     for l in libs {
         let id = l["id"].as_str().unwrap();
         let g = run(&mut s, "graphicStyle.library", json!({"library": id}));
@@ -56,6 +58,25 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
             }
         }
     }
+    let game = run(&mut s, "graphicStyle.library", json!({"library": "game-hud"}));
+    let game_names: Vec<&str> = game["styles"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(game_names, ["Health Fill", "Mana Glow", "Damage Flash", "Quest Outline", "Coin Shine", "Boss Alert"]);
+    let status = run(&mut s, "graphicStyle.library", json!({"library": "status-effects"}));
+    let status_names: Vec<&str> = status["styles"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(status_names, ["Poison Tint", "Freeze Edge", "Burn Aura", "Stun Pulse", "Stealth Fade", "Shield Buff"]);
+    let id = rect(&mut s, 10.0, 20.0, 40.0, 30.0);
+    let r = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "game-hud", "name": "Mana Glow", "apply": true, "ids": [id.0]}));
+    assert_eq!((names(&r["added"]), r["applied"].as_str()), (vec!["Mana Glow"], Some("Mana Glow")));
+    let node = doc(&s).node(id).unwrap();
+    assert_eq!(node.appearance.fill_paint(), Paint::solid(vectorcraft_color::Color::from_hex("#3498db").unwrap()));
+    assert_eq!(node.appearance.stroke_paint(), Paint::None);
+    assert_eq!(node.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.outerGlow"]);
+    let id2 = rect(&mut s, 60.0, 20.0, 40.0, 30.0);
+    let r2 = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "status-effects", "name": "Poison Tint", "apply": true, "ids": [id2.0]}));
+    assert_eq!((names(&r2["added"]), r2["applied"].as_str()), (vec!["Poison Tint"], Some("Poison Tint")));
+    let node2 = doc(&s).node(id2).unwrap();
+    assert_eq!(node2.appearance.fill_paint(), Paint::solid(vectorcraft_color::Color::from_hex("#2ecc71").unwrap()));
+    assert_eq!(node2.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.outerGlow"]);
     // By name in any case.
     assert_eq!(run(&mut s, "graphicStyle.library", json!({"library": "shadows and glows"}))["id"], "shadows-glows");
     assert!(s.execute("graphicStyle.library", &json!({"library": "nope"})).is_err());
@@ -251,11 +272,16 @@ fn every_builtin_style_paints_visibly_on_a_rectangle() {
         let (_, lib) = cmd::stylelib::library(&s, b.id).unwrap();
         for g in &lib.styles {
             run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+            // Art under the rectangle: a blend mode shows only against art, not the bare page.
+            let under = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            run(&mut s, "paint.setFill", json!({"color": "#336699", "ids": [under.0]}));
+            run(&mut s, "paint.setStroke", json!({"none": true, "ids": [under.0]}));
             let id = rect(&mut s, 25.0, 30.0, 50.0, 40.0);
             run(&mut s, "graphicStyle.addFromLibrary", json!({"library": b.id, "name": g.name, "apply": true}));
             assert_eq!(doc(&s).node(id).unwrap().extras().graphic_style, doc(&s).graphic_style(&g.name).map(|x| x.id), "{}", g.name);
             let img = renderer.render_region(doc(&s), Rect::new(0.0, 0.0, 100.0, 100.0), 0.5, true);
-            let painted = img.pixels.as_chunks::<4>().0.iter().filter(|p| p[..3] != [255, 255, 255]).count();
+            let bare = img.pixel(0, 0);
+            let painted = (0..img.height).flat_map(|y| (0..img.width).map(move |x| (x, y))).filter(|&(x, y)| img.pixel(x, y) != bare).count();
             assert!(painted > 40, "{} / {} paints {painted} pixels", b.id, g.name);
         }
     }

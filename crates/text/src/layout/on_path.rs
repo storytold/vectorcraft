@@ -174,6 +174,15 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         let s = style_metrics(cx.face_at(0).as_deref(), cx.style_at(0));
         (s.0, s.1)
     });
+    // Vertical type: the caret and the selection span the column, half its em on each side of the
+    // line Align to Path puts the baseline on.
+    let m = if cx.vertical {
+        let half = sg.iter().map(|g| g.face.units_per_em() * g.sx * 0.5).fold(f64::NAN, f64::max);
+        let half = if half.is_finite() { half } else { cx.style_at(0).size * 0.5 };
+        (half, half)
+    } else {
+        m
+    };
     if ap.is_empty() {
         cx.out.overflow = !sg.is_empty();
         cx.out.lines.push(LineInfo {

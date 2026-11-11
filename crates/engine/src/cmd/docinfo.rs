@@ -283,6 +283,7 @@ fn painted_runs<'a>(d: &Document, n: &'a Node) -> Option<(&'a vectorcraft_doc::T
 /// it) or of type whose layout draws nothing (`painted_runs`). An image's fills and strokes paint
 /// only where an effect gives them a shape.
 fn own_patterns<'a>(
+    d: &Document,
     n: &'a Node,
     members: &HashSet<*const Node>,
     painted_runs: Option<&(&vectorcraft_doc::TextObject, BTreeSet<usize>)>,
@@ -296,7 +297,7 @@ fn own_patterns<'a>(
     // The patterns an image's shaped fills and strokes paint (their effects can transform the
     // pattern, so they are matched by name).
     let shaped: Option<Vec<String>> = matches!(n.kind, NodeKind::Image(_)).then(|| {
-        vectorcraft_render::effects::image_paint(n)
+        vectorcraft_render::effects::image_paint(Some(d), n)
             .into_iter()
             .filter_map(|(_, _, item)| match item.paint() {
                 Paint::Pattern { pattern, .. } => Some(pattern.clone()),
@@ -415,7 +416,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             // The patterns this object's fills and strokes use, each once.
             let mut used_patterns: Vec<&str> = vec![];
             let painted_runs = painted_runs(d, n);
-            for pattern in own_patterns(n, &members, painted_runs.as_ref()) {
+            for pattern in own_patterns(d, n, &members, painted_runs.as_ref()) {
                 patterns.insert(pattern.to_string());
                 used_patterns.push(pattern);
             }
