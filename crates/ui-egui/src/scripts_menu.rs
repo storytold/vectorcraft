@@ -242,13 +242,14 @@ pub fn readable(p: &Value) -> bool {
 }
 
 /// `ui.runInstalledScript {path}`: run the listed script at `path`. A script that is no longer in
-/// the folder is not run, and the folder is read again.
+/// the folder is not run, and the folder is read again. The script runs from its file, so its
+/// `#include` lines and `$.evalFile` read beside it.
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let path = p.get("path").and_then(Value::as_str).ok_or("missing `path`")?;
-    let source = app.session.installed_script(path).map_err(|e| {
+    app.session.installed_script(path).map_err(|e| {
         let ctx = app.ui_ctx.clone();
         refresh(app, ctx.as_ref());
         e.to_string()
     })?;
-    app.run("script.run", json!({"source": source, "name": vectorcraft_engine::cmd::fileio::file_name(path)}))
+    app.run("script.run", json!({ "path": path }))
 }

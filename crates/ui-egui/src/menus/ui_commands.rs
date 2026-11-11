@@ -1536,7 +1536,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::scripts_menu::COMMAND,
         "Run Script",
         "",
-        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (script.run with the file's text, under the file's name), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
+        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (the script is checked again, then script.run runs it by its path, so its #include lines and $.evalFile read beside it), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
     ),
     (
         "ui.checkScript",
