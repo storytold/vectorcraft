@@ -321,29 +321,20 @@ pub struct Report {
 /// The limit a run past its wall-clock deadline exceeded ([`Error::Limit`]).
 pub(crate) const TIME_BUDGET: &str = "time budget";
 
-/// When a run must stop (native: a wall-clock deadline).
+/// When a run must stop: a deadline on the monotonic clock (`web_time::Instant`, the page's
+/// `performance.now()` in the web build).
 #[derive(Clone, Copy)]
 pub(crate) struct Deadline {
-    #[cfg(not(target_arch = "wasm32"))]
-    at: std::time::Instant,
+    at: web_time::Instant,
 }
 
 impl Deadline {
     pub(crate) fn new(wall_time_ms: u64) -> Self {
-        #[cfg(target_arch = "wasm32")]
-        let _ = wall_time_ms;
-        Self {
-            #[cfg(not(target_arch = "wasm32"))]
-            at: std::time::Instant::now() + std::time::Duration::from_millis(wall_time_ms),
-        }
+        Self { at: web_time::Instant::now() + std::time::Duration::from_millis(wall_time_ms) }
     }
 
     pub(crate) fn passed(&self) -> bool {
-        #[cfg(not(target_arch = "wasm32"))]
-        if std::time::Instant::now() >= self.at {
-            return true;
-        }
-        false
+        web_time::Instant::now() >= self.at
     }
 
     pub(crate) fn check(&self) -> Result<()> {
@@ -814,6 +805,15 @@ mod tests {
 
     fn run() -> Run {
         Run::new("test", true, false, Deadline::new(60_000))
+    }
+
+    /// A deadline reads the monotonic clock that the web build also reads: one of 0 ms has
+    /// passed, and one a day away has not.
+    #[test]
+    fn a_deadline_passes_on_the_monotonic_clock() {
+        assert!(Deadline::new(0).passed());
+        assert!(matches!(Deadline::new(0).check(), Err(Error::Limit(l)) if l == TIME_BUDGET));
+        assert!(!Deadline::new(86_400_000).passed());
     }
 
     /// Progress is clamped: negative counts are 0 and `done` never passes a known total.
