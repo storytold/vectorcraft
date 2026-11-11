@@ -186,3 +186,318 @@ fn pdfx_1a_flattening_keeps_the_inks_behind_an_image_in_a_cmyk_document() {
     let ink = image_inks_at(&back, vectorcraft_geom::Point::new(88.0, 50.0)).expect("a CMYK image behind the see-through pixels");
     assert!(ink.iter().zip(teal).all(|(a, b)| (a - b).abs() <= 1.5 / 255.0), "{ink:?} is not {teal:?}");
 }
+
+fn run(s: &mut Session, id: &str, p: Value) -> Value {
+    s.execute(id, &p).unwrap_or_else(|e| panic!("{id} {p}: {e}"))
+}
+
+/// The art a clip group crops in [`cropped`].
+#[derive(Clone, Copy)]
+pub(super) enum Art {
+    /// A 240 × 160 image, with see-through pixels or without.
+    Image { see_through: bool },
+    /// A rectangle with a gradient fill.
+    Gradient,
+    /// A rectangle with a drop shadow.
+    Shadow,
+}
+
+/// Where [`cropped`] puts the cropped art, [x, y, width, height].
+const FRAME: [f64; 4] = [40.0, 40.0, 240.0, 160.0];
+/// The part of [`FRAME`] the clipping path of [`cropped`] shows.
+pub(super) const CROP: [f64; 4] = [50.0, 50.0, 80.0, 60.0];
+
+/// A `mode` document whose first artboard is `width` wide, with a dark square and, over it, `art`
+/// filling [`FRAME`] in a clip group that shows [`CROP`] of it. The square lies inside the frame
+/// and outside the crop: only the hidden part of the art covers it. → the session with the clip
+/// group selected, and the group's id.
+pub(super) fn cropped(mode: &str, width: f64, art: Art) -> (Session, u64) {
+    cropped_by(mode, width, art, false)
+}
+
+/// [`cropped`], with the art and its clipping path in a clipping layer above the square's layer
+/// when `layer`. → the session and the clip group's or the layer's id.
+fn cropped_by(mode: &str, width: f64, art: Art, layer: bool) -> (Session, u64) {
+    let [x, y, w, h] = FRAME;
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": width, "height": 300, "colorMode": mode}));
+    run(&mut s, "shape.rectangle", json!({"x": 180, "y": 90, "width": 60, "height": 60}));
+    run(&mut s, "paint.setFill", json!({"color": "#203040"}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let layer = layer.then(|| run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap());
+    let art = match art {
+        Art::Image { see_through } => {
+            let mut png = vec![];
+            image::RgbaImage::from_fn(240, 160, |x, y| {
+                image::Rgba([200, (x % 256) as u8, (y % 256) as u8, if see_through && x < 60 { 128 } else { 255 }])
+            })
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+            let placed =
+                run(&mut s, "file.place", json!({"name": "photo.png", "dataBase64": vectorcraft_format::base64_encode(&png), "rect": FRAME}));
+            placed["ids"][0].clone()
+        }
+        Art::Gradient | Art::Shadow => {
+            let id = run(&mut s, "shape.rectangle", json!({"x": x, "y": y, "width": w, "height": h}))["id"].clone();
+            run(&mut s, "paint.setStroke", json!({"none": true}));
+            if matches!(art, Art::Gradient) {
+                let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+                run(&mut s, "paint.setFill", json!({"gradient": {"kind": "linear", "stops": stops}}));
+            } else {
+                run(&mut s, "paint.setFill", json!({"color": "#c04020"}));
+                run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "ids": [id]}));
+            }
+            id
+        }
+    };
+    let [x, y, w, h] = CROP;
+    let clip = run(&mut s, "shape.rectangle", json!({"x": x, "y": y, "width": w, "height": h}))["id"].clone();
+    if let Some(layer) = layer {
+        run(&mut s, "layer.clippingMask.toggle", json!({"id": layer}));
+        run(&mut s, "select.set", json!({"ids": [art]}));
+        return (s, layer);
+    }
+    run(&mut s, "select.set", json!({"ids": [art, clip]}));
+    let group = run(&mut s, "object.clippingMask.make", json!({}))["id"].as_u64().unwrap();
+    (s, group)
+}
+
+/// `document.exportPdf` with `p`, read back.
+fn read_back(s: &mut Session, p: &Value) -> vectorcraft_doc::Document {
+    let v = run(s, "document.exportPdf", p.clone());
+    vectorcraft_pdf::import(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap()
+}
+
+/// `doc`'s artboards drawn on white at 72 ppi.
+pub(super) fn drawn(doc: &vectorcraft_doc::Document) -> vectorcraft_render::Rendered {
+    let pages = doc.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b)).unwrap();
+    vectorcraft_render::Renderer::new().render_region(doc, pages, 1.0, true)
+}
+
+/// How many pixels show art in `reference` and are blank in `variant`.
+pub(super) fn lost(reference: &vectorcraft_render::Rendered, variant: &vectorcraft_render::Rendered) -> usize {
+    assert_eq!((reference.width, reference.height), (variant.width, variant.height));
+    let (reference, variant) = (reference.pixels.as_chunks::<4>().0, variant.pixels.as_chunks::<4>().0);
+    reference.iter().zip(variant).filter(|(r, v)| r[..3].iter().any(|c| *c < 200) && v[..3].iter().all(|c| *c >= 250)).count()
+}
+
+/// The width and height of what each of `doc`'s images shows: its frame inside the clipping
+/// paths around it.
+pub(super) fn shown_image_sizes(doc: &vectorcraft_doc::Document) -> Vec<(f64, f64)> {
+    use vectorcraft_geom::Rect;
+    fn visit(n: &vectorcraft_doc::Node, clip: Option<Rect>, out: &mut Vec<(f64, f64)>) {
+        let within = |r: Rect| clip.map_or(r, |c| c.intersect(r));
+        if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+            let frame = im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, im.width as f64, im.height as f64));
+            let shown = within(frame);
+            out.push((shown.width(), shown.height()));
+        }
+        let clip = if n.clips() { n.visual_bounds().map(within) } else { clip };
+        for c in n.children().into_iter().flatten() {
+            visit(c, clip, out);
+        }
+    }
+    let mut out = vec![];
+    for l in &doc.layers {
+        visit(l, None, &mut out);
+    }
+    out
+}
+
+/// Checks that the PDF/X-1a, PDF/X-3 and PDF 1.3 files of `s` (with `extra` options) show all the
+/// art the file with transparency shows, and that no image in them shows more than [`CROP`]. Adds
+/// what is wrong to `wrong`.
+fn check_flat_files(s: &mut Session, extra: &Value, what: &str, wrong: &mut Vec<String>) {
+    let reference = drawn(&read_back(s, extra));
+    for flat in [json!({"standard": "pdfX1a"}), json!({"standard": "pdfX3"}), json!({"compatibility": "1.3", "preserveEditing": false})] {
+        let mut p = flat.clone();
+        super::pdf::merge(&mut p, extra);
+        let back = read_back(s, &p);
+        let lost = lost(&reference, &drawn(&back));
+        if lost > 0 {
+            wrong.push(format!("{what}, {flat}: {lost} pixels of art went missing"));
+        }
+        let sizes = shown_image_sizes(&back);
+        // An image reaches a pixel past its regions, and a group rasterized whole a point past
+        // its visible bounds.
+        if sizes.is_empty() || sizes.iter().any(|(w, h)| *w > CROP[2] + 3.0 || *h > CROP[3] + 3.0) {
+            wrong.push(format!("{what}, {flat}: the images show {sizes:?}"));
+        }
+    }
+}
+
+/// Art cropped by a clipping path, in a PDF file without transparency: the part of the art the
+/// clipping path hides is not rasterized, so art that lies under the hidden part alone still
+/// shows. Each case is one way the cropped art comes to be flattened.
+#[test]
+fn flattening_cropped_art_for_pdfx_keeps_the_art_under_its_hidden_part() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let opaque = Art::Image { see_through: false };
+    type Change = fn(&mut Session, u64);
+    let cases: [(&str, Art, Change); 9] = [
+        ("an image with see-through pixels", Art::Image { see_through: true }, |_, _| {}),
+        ("a clip group with opacity", opaque, |s, _| {
+            run(s, "transparency.set", json!({"opacity": 80}));
+        }),
+        ("a clip group with a blend mode", opaque, |s, _| {
+            run(s, "transparency.set", json!({"blendMode": "multiply"}));
+        }),
+        ("a see-through object over the crop", opaque, |s, _| {
+            run(s, "shape.rectangle", json!({"x": 60, "y": 60, "width": 40, "height": 30}));
+            run(s, "paint.setFill", json!({"color": "#ffffff"}));
+            run(s, "transparency.set", json!({"opacity": 60}));
+        }),
+        ("a gradient", Art::Gradient, |s, _| {
+            run(s, "transparency.set", json!({"opacity": 80}));
+        }),
+        ("a raster effect", Art::Shadow, |_, _| {}),
+        ("a clip group inside a clip group", Art::Image { see_through: true }, |s, group| {
+            let outer = run(s, "shape.rectangle", json!({"x": 45, "y": 45, "width": 85, "height": 65}))["id"].clone();
+            run(s, "select.set", json!({"ids": [group, outer]}));
+            run(s, "object.clippingMask.make", json!({}));
+        }),
+        ("a clip group inside a group with opacity", opaque, |s, _| {
+            run(s, "object.group", json!({}));
+            run(s, "transparency.set", json!({"opacity": 80}));
+        }),
+        ("an even-odd compound clipping path", opaque, |s, group| {
+            run(s, "transparency.set", json!({"opacity": 80}));
+            let doc = s.doc_mut().unwrap();
+            let mut d = (*doc.doc).clone();
+            let clip = d.node(vectorcraft_doc::NodeId(group)).unwrap().children().unwrap()[0].id;
+            let mut ring = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(50.0, 50.0, 130.0, 110.0));
+            ring.subpaths.extend(vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(70.0, 65.0, 110.0, 95.0)).subpaths);
+            if let vectorcraft_doc::NodeKind::Path { path, rule, .. } = &mut d.node_mut(clip).unwrap().kind {
+                (*path, *rule) = (ring, vectorcraft_geom::FillRule::EvenOdd);
+            }
+            doc.doc = d.into();
+        }),
+    ];
+    let mut wrong = vec![];
+    for mode in ["cmyk", "rgb"] {
+        for (what, art, change) in cases {
+            let (mut s, group) = cropped(mode, 400.0, art);
+            change(&mut s, group);
+            check_flat_files(&mut s, &json!({}), &format!("{mode}: {what}"), &mut wrong);
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// The same with the Medium and Low Resolution presets, and with a balance of 0, which rasterizes
+/// the whole group of the cropped art over the group's visible bounds.
+#[test]
+fn flattening_cropped_art_for_pdfx_keeps_the_art_under_its_hidden_part_with_each_preset() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut wrong = vec![];
+    for extra in [json!({"flattenerPreset": "medium"}), json!({"flattenerPreset": "low"}), json!({"flattener": {"balance": 0}})] {
+        for (art, name) in [(Art::Image { see_through: true }, "image"), (Art::Gradient, "gradient")] {
+            let (mut s, _) = cropped("cmyk", 400.0, art);
+            run(&mut s, "transparency.set", json!({"opacity": 80}));
+            check_flat_files(&mut s, &extra, &format!("{name}, {extra}"), &mut wrong);
+        }
+    }
+    // A cropped rectangle with a solid fill, rasterized whole.
+    let (mut s, group) = cropped("cmyk", 400.0, Art::Gradient);
+    let art = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(group)).unwrap().children().unwrap()[1].id.0;
+    run(&mut s, "paint.setFill", json!({"ids": [art], "color": "#c04020"}));
+    run(&mut s, "transparency.set", json!({"ids": [group], "opacity": 80}));
+    check_flat_files(&mut s, &json!({"flattener": {"balance": 0}}), "solid fill, balance 0", &mut wrong);
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// The hidden part of cropped art on one artboard lies over the next artboard: that page keeps
+/// its art.
+#[test]
+fn flattening_cropped_art_for_pdfx_keeps_the_next_page_under_its_hidden_part() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    // The crop is on the first artboard, and the square on the second.
+    let (mut s, _) = cropped("cmyk", 150.0, Art::Image { see_through: true });
+    run(&mut s, "artboard.new", json!({"x": 170, "y": 0, "width": 230, "height": 300}));
+    assert_eq!(read_back(&mut s, &json!({"standard": "pdfX1a"})).artboards.len(), 2);
+    let mut wrong = vec![];
+    check_flat_files(&mut s, &json!({}), "two artboards", &mut wrong);
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Art cropped by a clipping layer, over a square in the layer below: the square keeps showing,
+/// also with a second square in that layer under both the crop and the hidden part, or with a
+/// see-through rectangle over both in a layer above.
+#[test]
+fn flattening_art_of_a_clipping_layer_for_pdfx_keeps_the_art_under_its_hidden_part() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    type Change = fn(&mut Session, u64);
+    let cases: [(&str, Change); 3] = [
+        ("alone", |_, _| {}),
+        ("over a square under the crop's edge", |s, _| {
+            let below = s.doc().unwrap().doc.layers[0].id.0;
+            run(s, "layer.setCurrent", json!({"id": below}));
+            run(s, "shape.rectangle", json!({"x": 110, "y": 60, "width": 50, "height": 30}));
+            run(s, "paint.setFill", json!({"color": "#406020"}));
+        }),
+        ("under a see-through rectangle over the crop's edge", |s, _| {
+            run(s, "layer.new", json!({}));
+            run(s, "shape.rectangle", json!({"x": 110, "y": 60, "width": 50, "height": 30}));
+            run(s, "paint.setFill", json!({"color": "#406020"}));
+            run(s, "transparency.set", json!({"opacity": 60}));
+        }),
+    ];
+    let mut wrong = vec![];
+    for mode in ["cmyk", "rgb"] {
+        for art in [Art::Image { see_through: true }, Art::Gradient] {
+            for (what, change) in cases {
+                let (mut s, layer) = cropped_by(mode, 400.0, art, true);
+                run(&mut s, "transparency.set", json!({"opacity": 80}));
+                change(&mut s, layer);
+                check_flat_files(&mut s, &json!({}), &format!("{mode}: a clipping layer {what}"), &mut wrong);
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Documents in which no clip group hides art export the same bytes as they did when the
+/// flattener rasterized hidden art too.
+#[test]
+fn flat_pdf_files_of_art_that_no_clip_group_hides_are_unchanged() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    use crate::cmd::flatten::with_clips_ignored as before;
+    // Written at one time, so two files differ only by what they draw.
+    let bytes = |s: &mut Session, p: &Value| super::pdf::encode_at("document.exportPdf", &s.doc().unwrap().doc, p, Some(1_700_000_000)).unwrap().0;
+    let files = [
+        json!({"standard": "pdfX1a"}),
+        json!({"standard": "pdfX3"}),
+        json!({"compatibility": "1.3", "preserveEditing": false}),
+        json!({"standard": "pdfX1a", "flattener": {"balance": 0}}),
+        json!({"standard": "pdfX1a", "flattenerPreset": "low"}),
+    ];
+    // Transparency without a clip group.
+    let mut plain = session();
+    // A clip group at 80% whose clipping path is as large as its art, over the edge of a square.
+    let mut fitted = Session::new();
+    run(&mut fitted, "file.new", json!({"width": 400, "height": 300, "colorMode": "cmyk"}));
+    run(&mut fitted, "shape.rectangle", json!({"x": 180, "y": 90, "width": 160, "height": 160}));
+    run(&mut fitted, "paint.setFill", json!({"color": "#203040"}));
+    let mut png = vec![];
+    image::RgbaImage::from_fn(240, 160, |x, y| image::Rgba([200, x as u8, y as u8, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let photo =
+        run(&mut fitted, "file.place", json!({"name": "photo.png", "dataBase64": vectorcraft_format::base64_encode(&png), "rect": FRAME}))["ids"][0]
+            .clone();
+    let [x, y, w, h] = FRAME;
+    let clip = run(&mut fitted, "shape.rectangle", json!({"x": x, "y": y, "width": w, "height": h}))["id"].clone();
+    run(&mut fitted, "select.set", json!({"ids": [photo, clip]}));
+    run(&mut fitted, "object.clippingMask.make", json!({}));
+    run(&mut fitted, "transparency.set", json!({"opacity": 80}));
+    // Cropped art that is not flattened: nothing on it is see-through.
+    let (mut opaque, _) = cropped("cmyk", 400.0, Art::Image { see_through: false });
+    for (what, s) in [("no clip group", &mut plain), ("a clipping path as large as its art", &mut fitted), ("opaque cropped art", &mut opaque)] {
+        for p in &files {
+            assert!(bytes(s, p) == before(|| bytes(s, p)), "{what}, {p}");
+        }
+    }
+    // Art that a clip group hides is what changes.
+    let (mut s, _) = cropped("cmyk", 400.0, Art::Image { see_through: true });
+    assert!(bytes(&mut s, &files[0]) != before(|| bytes(&mut s, &files[0])));
+}
