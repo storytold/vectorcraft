@@ -150,6 +150,28 @@ fn a_kept_eval_file_reads_in_the_calling_run_scope() {
     assert_eq!(kept.unwrap_err().split(": ").last(), direct.unwrap_err().split(": ").last(), "a run given as text reads no file beside a");
 }
 
+/// `File` and `Folder` objects an earlier run kept read in the folder of the run that calls them,
+/// `Folder.current` starts at each run's script, and a file an earlier run left open is not open.
+#[test]
+fn kept_file_objects_read_in_the_calling_run_folder() {
+    let base: PathBuf = std::env::temp_dir().join(format!("vc-script-engines-files-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    for dir in ["a", "b"] {
+        std::fs::create_dir_all(base.join(dir)).unwrap();
+        std::fs::write(base.join(dir).join("data.txt"), dir.to_uppercase()).unwrap();
+    }
+    let mut s = Session::new();
+    let a = base.join("a").join("main.jsx");
+    std::fs::write(&a, "#targetengine e\nvar keep = new File('data.txt');\nkeep.open('r');\nvc.log([Folder.current.name, keep.read(1)]);").unwrap();
+    assert_eq!(s.execute("script.run", &json!({"path": a.to_string_lossy()})).unwrap()["log"], json!([["a", "A"]]));
+    let b = base.join("b").join("main.jsx");
+    let text = "#targetengine e\nvar g = new File('data.txt');\ng.open('r');\nvc.log([Folder.current.name, g.read(), keep.read(), keep.error, keep.exists]);";
+    std::fs::write(&b, text).unwrap();
+    let log = s.execute("script.run", &json!({"path": b.to_string_lossy()})).unwrap()["log"].clone();
+    let _ = std::fs::remove_dir_all(base);
+    assert_eq!(log, json!([["b", "B", "", "Script file is not open", false]]));
+}
+
 #[test]
 fn a_failed_or_stopped_run_keeps_the_globals_it_set_and_puts_the_documents_back() {
     let mut s = one_doc();

@@ -16,6 +16,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             len,
             run: 0,
             adv,
+            tracking: 0.0,
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,

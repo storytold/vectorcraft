@@ -26,7 +26,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rectangle",
             [],
             None,
-            "{x, y, width, height, radius?: pt, radii?: [tl,tr,br,bl], startAngle?, endAngle?, arcMode?: whole|pie|chord|arc, rotation?: deg} → {id}",
+            "{x, y, width, height, radius?: pt, radii?: [tl,tr,br,bl], startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top-left corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             rectangle
         ),
@@ -35,7 +35,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Ellipse",
             [],
             None,
-            "{x, y, width, height, startAngle?, endAngle?, arcMode?: whole|pie|chord|arc, rotation?: deg} → {id}",
+            "{x, y, width, height, startAngle?, endAngle?: degrees (counter-clockwise from 3 o'clock, as object.setLiveShape's pieStart and pieEnd; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             ellipse
         ),
@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Polygon",
             [],
             None,
-            "{cx, cy, radius, sides=6, rounded=0, randomized=0, startAngle?, endAngle?, arcMode?: whole|pie|chord|arc, rotation?: deg} → {id}",
+            "{cx, cy, radius, sides=6, rounded=0, randomized=0, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a corner straight up)} → {id}",
             has_doc,
             polygon
         ),
@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Star",
             [],
             None,
-            "{cx, cy, radius1, radius2?, points=5, rounded=0, randomized=0, startAngle?, endAngle?, arcMode?: whole|pie|chord|arc, rotation?: deg} → {id}",
+            "{cx, cy, radius1, radius2?, points=5, rounded=0, randomized=0, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top point; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a point straight up)} → {id}",
             has_doc,
             star
         ),
@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "3D Box",
             [],
             None,
-            "{x, y, width, height, angleX=30, angleY=30, angleZ=0, parallelX=false, parallelY=true, parallelZ=false} → {id}",
+            "{x, y, width, height, angleX=30 (degrees about the level axis: positive tips the top away from you), angleY=30 (degrees about the upright axis: positive turns the right side away from you), angleZ=0 (degrees clockwise in the page), parallelX=false, parallelY=true, parallelZ=false} → {id}",
             has_doc,
             box3d
         ),
@@ -80,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Configure Shape",
             [],
             None,
-            "{ids?, radius?, radii?: [tl,tr,br,bl], startAngle?, endAngle?, arcMode?: whole|pie|chord|arc, sides?, isStar?, spokeRatio?, rounded?, randomized?, turns?, divergence?, innerRadius?, angleX?, angleY?, angleZ?, parallelX?, parallelY?, parallelZ?, reset?: bool} → {updated}",
+            "{ids?, radius?, radii?: [tl,tr,br,bl], startAngle?, endAngle?: degrees (as addon.shapes.rectangle, ellipse, polygon and star take them: an ellipse's counter-clockwise from 3 o'clock, the others' clockwise along the outline), arcMode?: whole|pie|chord|arc, sides?, isStar?, spokeRatio?, rounded?, randomized?, turns?, divergence?, innerRadius?, angleX?, angleY?: degrees (as addon.shapes.box3d: positive tips the top, or turns the right side, away from you), angleZ?: degrees clockwise in the page, parallelX?, parallelY?, parallelZ?, reset?: bool} → {updated}",
             has_selection,
             configure
         ),

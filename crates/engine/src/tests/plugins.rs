@@ -13,6 +13,11 @@ use crate::*;
 const DESATURATE: &[u8] = include_bytes!("../../../plugins/tests/fixtures/desaturate.wasm");
 const DESATURATE_ID: &str = "org.vectorcraft.example.desaturate";
 
+/// Held by the tests that set the Additional Plug-ins Folder preference or run `plugin.reload`:
+/// the folder last loaded and its report are kept for the whole process, so another test loading
+/// its own folder between two steps would change what the next step loads or lists.
+static PREFS_FOLDER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn run(s: &mut Session, cmd: &str, p: Value) -> Value {
     s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd}: {e}"))
 }
@@ -1278,6 +1283,7 @@ fn filters_keep_their_data_with_the_document() {
 
 #[test]
 fn plugin_management_commands() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     install(&mut s, DESATURATE);
     let list = run(&mut s, "plugin.list", json!({}));
@@ -1313,6 +1319,26 @@ fn plugin_management_commands() {
     assert_eq!(r["failed"].as_array().unwrap().len(), 1);
     assert_eq!(run(&mut s, "plugin.list", json!({}))["folder"]["loaded"], json!(["test.engine.folder"]));
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Clearing the Additional Plug-ins Folder forgets the folder: setting the same folder again
+/// installs what is in it, as setting any other folder does.
+#[test]
+fn plugins_folder_set_again_after_clearing_installs_its_plugins() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = crate::tests_links::Folder::new("plugin-folder-cleared");
+    let id = "test.engine.foldercleared";
+    let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+    std::fs::write(dir.0.join("cleared.wasm"), wat::parse_str(src).unwrap()).unwrap();
+    let mut s = session();
+    let folder = json!({"key": "pluginsFolder", "value": dir.0.display().to_string()});
+    run(&mut s, "prefs.set", folder.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed from the folder");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    run(&mut s, "prefs.set", json!({"key": "pluginsFolder", "value": ""}));
+    run(&mut s, "prefs.set", folder);
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again when the folder is set again");
+    run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
@@ -1979,6 +2005,7 @@ fn a_grants_file_that_cannot_be_deleted_keeps_the_stored_module() {
 /// the plug-in store stays, with the stored module it covers.
 #[test]
 fn a_plugin_folder_ends_the_process_grant_of_an_id_it_replaces() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     let id = "test.engine.permissions.folderstale";
     let empty = json!({"objects": []});
@@ -2156,6 +2183,7 @@ fn a_failed_store_write_keeps_the_stored_module_with_its_grant() {
 /// grants held by the process.
 #[test]
 fn a_plugin_folder_skips_a_changed_module_until_it_is_approved() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     let id = "test.engine.permissions.folderbytes";
     let plain = "test.engine.permissions.folderplain";
@@ -2384,6 +2412,7 @@ fn a_run_past_the_memory_budget_fails_before_the_plugin_starts() {
 /// until it is granted on its own.
 #[test]
 fn granted_permissions_are_kept_and_folders_skip_the_rest() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let folder = crate::tests_links::Folder::new("plugin-store-grants");
     let id = "test.engine.permissions.stored";
     let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
@@ -2472,6 +2501,7 @@ fn granted_permissions_are_kept_and_folders_skip_the_rest() {
 /// covers no module.
 #[test]
 fn a_grant_covers_only_the_module_it_was_given_to() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let folder = crate::tests_links::Folder::new("plugin-store-grant-hash");
     let id = "test.engine.granthash";
     let mut s = session();

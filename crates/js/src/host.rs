@@ -490,7 +490,7 @@ impl Interp {
         self.define(global, key(name), Prop::Data { value: Value::Object(o), flags: 0 })
     }
 
-    fn host_object(&mut self, path: &str, items: Vec<(String, HostItem)>) -> JsResult<ObjId> {
+    pub(crate) fn host_object(&mut self, path: &str, items: Vec<(String, HostItem)>) -> JsResult<ObjId> {
         let o = self.new_object();
         let mark = self.temp_roots.len();
         self.temp_roots.push(Value::Object(o));

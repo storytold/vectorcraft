@@ -1990,9 +1990,12 @@ fn real_time_drawing_off_still_shows_a_dragged_guide() {
     set_pref(&mut s, "realTimeDrawing", json!(false));
     s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 200.0), v).unwrap();
     s.pointer(&PointerEvent::new(PointerKind::Drag, 150.0, 200.0), v).unwrap();
-    assert_eq!(s.doc().unwrap().doc.guides[0].pos, 150.0, "the guide moves while dragged");
+    assert_eq!(s.doc().unwrap().doc.ruler_guides()[0].pos, 150.0, "the guide moves while dragged");
     s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 200.0), v).unwrap();
-    assert_eq!((s.doc().unwrap().doc.guides[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())), (150.0, Some("Move Guide")));
+    assert_eq!(
+        (s.doc().unwrap().doc.ruler_guides()[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())),
+        (150.0, Some("Move Guide"))
+    );
 }
 
 /// With Real-time Drawing off, a 9-slice guide of the edited symbol moved with the Selection tool

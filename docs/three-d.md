@@ -122,11 +122,12 @@ them all. The members stay editable: moving or editing one reshapes the solids. 
 - Each member's own geometry effects shape it first, then those of each group inside the 3D group that holds it,
   applied to that group's members together; the 3D group's geometry effects before the 3D effect reshape the
   members, and those after it bend the result as a whole. The members' other effects, and the group's own fills and
-  strokes, are not drawn. A member's opacity applies to its solids; its blending mode does not. An opacity mask on
+  strokes, are not drawn. A member's opacity and blending mode apply to its solids, and the blending mode of a group
+  inside the 3D group applies to the solids of that group's members together. An opacity mask on
   a member masks its solids, and one on a group inside the 3D group masks the solids of that group's members
   together. The mask stays where it is on the page; it does not turn with the solids. A disabled mask is ignored.
-- When a member, or a group inside the 3D group, has an opacity mask, each solid is drawn on its own, the backmost
-  member's first, as when a solid is transparent.
+- When a member, or a group inside the 3D group, has an opacity mask or a blending mode other than Normal, each
+  solid is drawn on its own, the backmost member's first, as when a solid is transparent.
 - When every solid is opaque, all members' faces are drawn in one back-to-front order; otherwise each solid is drawn
   on its own, the backmost member's first.
 - Hidden members and guides are left out. A group holding a live object other than a blend (an envelope, a mesh, a

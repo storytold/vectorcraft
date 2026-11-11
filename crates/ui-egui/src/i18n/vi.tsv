@@ -1950,6 +1950,7 @@ digits	Hindi	Hindi
 	Include Linked Files	Bao gồm tệp được liên kết
 	Include Metadata	Bao gồm siêu dữ liệu
 	Include non-printing layers	Bao gồm các lớp không in
+	Write pages longer than 200 in at full size in points	Ghi các trang dài hơn 200 in ở kích thước đầy đủ, theo điểm
 	Include SVG Code	Bao gồm mã SVG
 	Include Swatches for Tints	Bao gồm mẫu màu cho sắc pha
 	Increase Font Size	Tăng cỡ chữ
@@ -4877,6 +4878,8 @@ theme	Appearance	Giao diện
 @msg	invalid object id {value}: expected a non-negative integer	id đối tượng {value} không hợp lệ: cần một số nguyên không âm
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	mục {index} của `{key}` là {value}, không phải id đối tượng (số nguyên không âm)
 @msg	no such object id {value}	không có đối tượng nào có id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} là của đường căn, không phải của đối tượng
+@msg	a ruler guide goes only directly in a layer or sublayer	đường căn chỉ có thể nằm trực tiếp trong lớp hoặc lớp con
 @msg	id {value} is a layer, not an object	id {value} là một lớp, không phải đối tượng
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} là một lớp, không phải đối tượng; hãy di chuyển lớp bằng layer.move
 @msg	object {0} cannot have children	đối tượng {0} không thể có phần tử con
@@ -5726,6 +5729,12 @@ axis	Y Axis	Trục Y
 	Crosshair	Tâm ngắm
 	Checkpoint	Điểm kiểm tra
 	Inventory Icons	Biểu tượng túi đồ
+	Skill Icons	Biểu tượng kỹ năng
+	Attack	Tấn công
+	Defend	Phòng thủ
+	Heal	Hồi máu
+	Buff	Buff
+	Ult	Ult
 	Sword	Kiếm
 	Shield	Khiên
 	Potion	Thuốc
@@ -5790,6 +5799,11 @@ axis	Y Axis	Trục Y
 	Dash Trail	Vệt đứt đoạn
 	Speed Line	Đường tốc độ
 	Game Trails	Vệt game
+	Energy Beams	Chùm năng lượng
+	Laser Bolt	Tia laser
+	Plasma Arc	Cung plasma
+	Charge Wave	Sóng nạp
+	Spark Trail	Vệt tia lửa
 	Calligraphic Nibs	Ngòi bút thư pháp
 	Pattern Borders	Viền họa tiết
 	Scatter Shapes	Hình phân tán

@@ -1189,7 +1189,7 @@ fn target_contents(s: &mut Session, p: &Value) -> Result<Value> {
         .iter()
         .filter_map(|id| d.node(*id))
         .filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
-        .flat_map(|n| n.children().into_iter().flatten().filter(|c| c.visible && !c.locked).map(|c| c.id))
+        .flat_map(|n| n.children().into_iter().flatten().filter(|c| c.visible && !c.locked && !c.is_ruler_guide()).map(|c| c.id))
         .collect();
     if ids.is_empty() {
         return Err(bad("appearance.targetContents", "select a group or layer with visible, unlocked members"));

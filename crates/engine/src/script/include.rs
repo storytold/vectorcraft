@@ -324,6 +324,11 @@ impl Files {
         self.include_path.join(";")
     }
 
+    /// The folders the run's own files are read from.
+    pub(crate) fn scope(&self) -> &ScriptScope {
+        &self.scope
+    }
+
     /// The script's own text, `text`, with its preprocessor lines read.
     pub(crate) fn expand_script(&mut self, text: &str) -> Result<Expanded, Failure> {
         self.bytes = self.bytes.saturating_add(text.len());

@@ -12,27 +12,34 @@
 //! or locked layer, can't be picked.
 
 use serde_json::json;
+use vectorcraft_doc::{Guide, NodeId};
 use vectorcraft_geom::{Point, Rect};
 
 use crate::guides::Targets;
 use crate::{Action, Cursor, Overlay, PointerEvent, PointerKind, ToolContext};
 
-/// The ruler guide under `p`: the nearest within the selection tolerance (the newest of equals).
+/// The ruler guide under `p`, by its index in `guide.list`: the nearest within the selection
+/// tolerance (the newest of equals).
 pub fn guide_at(cx: &ToolContext, p: Point) -> Option<usize> {
+    guide_under(cx, p).map(|(i, _)| i)
+}
+
+/// [`guide_at`], with the guide.
+fn guide_under(cx: &ToolContext, p: Point) -> Option<(usize, Guide)> {
     if !cx.guides {
         return None;
     }
     let tol = cx.pick_tol();
     let off = |pos: f64, vertical: bool| (if vertical { p.x } else { p.y } - pos).abs();
     cx.doc
-        .guides
-        .iter()
+        .ruler_guides()
+        .into_iter()
         .enumerate()
         .filter(|(_, g)| cx.doc.guide_editable(g) && cx.doc.guide_passes(g, p, tol))
-        .map(|(i, g)| (i, off(g.pos, g.vertical)))
-        .filter(|(_, d)| *d <= tol)
+        .map(|(i, g)| (i, off(g.pos, g.vertical), g))
+        .filter(|(_, d, _)| *d <= tol)
         .min_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
-        .map(|(i, _)| i)
+        .map(|(i, _, g)| (i, g))
 }
 
 /// What a selection tool's marquee `r` does to the ruler guides, after its action selecting the
@@ -42,19 +49,20 @@ pub fn guide_at(cx: &ToolContext, p: Point) -> Option<usize> {
 pub fn marquee_select(cx: &ToolContext, r: Rect, enclosed: bool) -> Option<Action> {
     let mut guides = guides_in_rect(cx, r);
     if enclosed {
-        guides.retain(|i| cx.doc.guides.get(*i).is_some_and(|g| guide_inside(cx, r, g)));
+        guides.retain(|(_, g)| guide_inside(cx, r, g));
     }
+    let guides: Vec<usize> = guides.into_iter().map(|(i, _)| i).collect();
     (!guides.is_empty()).then(|| Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })))
 }
 
-/// The editable ruler guides intersecting marquee rectangle `r`.
-fn guides_in_rect(cx: &ToolContext, r: Rect) -> Vec<usize> {
+/// The editable ruler guides intersecting marquee rectangle `r`, with their `guide.list` indexes.
+fn guides_in_rect(cx: &ToolContext, r: Rect) -> Vec<(usize, Guide)> {
     if !cx.guides {
         return vec![];
     }
     cx.doc
-        .guides
-        .iter()
+        .ruler_guides()
+        .into_iter()
         .enumerate()
         .filter(|(_, g)| cx.doc.guide_editable(g))
         .filter(|(_, g)| {
@@ -64,14 +72,13 @@ fn guides_in_rect(cx: &ToolContext, r: Rect) -> Vec<usize> {
                 r.min_y() <= g.pos && g.pos <= r.max_y() && cx.doc.guide_span(g).is_none_or(|(x0, x1)| r.max_x() >= x0 && r.min_x() <= x1)
             }
         })
-        .map(|(i, _)| i)
         .collect()
 }
 
 /// Does ruler guide `g`, crossed by marquee `r`, run along its line within the marquee? An artboard
 /// guide does when the marquee spans its artboard; a canvas guide runs across the whole canvas and
 /// never does.
-fn guide_inside(cx: &ToolContext, r: Rect, g: &vectorcraft_doc::Guide) -> bool {
+fn guide_inside(cx: &ToolContext, r: Rect, g: &Guide) -> bool {
     let Some((a, b)) = cx.doc.guide_span(g) else { return false };
     let (lo, hi) = if g.vertical { (r.min_y(), r.max_y()) } else { (r.min_x(), r.max_x()) };
     lo <= a.min(b) && a.max(b) <= hi
@@ -85,6 +92,8 @@ fn guide_cursor(vertical: bool) -> Cursor {
 #[derive(Clone, Copy, Debug)]
 struct Drag {
     index: usize,
+    /// The guide's node.
+    id: NodeId,
     vertical: bool,
     /// Where the guide was, and where it is now (x of a vertical guide, y of a horizontal one).
     from: f64,
@@ -262,11 +271,12 @@ impl GuideEdit {
     /// A press `ev` on a ruler guide: it gets selected and the drag starts. None (and nothing
     /// done) when no guide is there.
     pub fn press(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
-        let index = guide_at(cx, ev.pos)?;
-        let g = cx.doc.guides.get(index)?;
-        let (shift, selected) = (ev.mods.shift, cx.selection.guides.contains(&index));
+        let (index, g) = guide_under(cx, ev.pos)?;
+        let id = g.id?;
+        let (shift, selected) = (ev.mods.shift, cx.selection.guides.contains(&id));
         self.drag = Some(Drag {
             index,
+            id,
             vertical: g.vertical,
             from: g.pos,
             at: g.pos,
@@ -307,7 +317,7 @@ impl GuideEdit {
                     vec![Action::Commit]
                 } else if d.deselect {
                     vec![Action::Exec("guide.select".into(), json!({ "indexes": [d.index], "toggle": true }))]
-                } else if d.key && cx.selection.key_guide == Some(d.index) {
+                } else if d.key && cx.selection.key_guide == Some(d.id) {
                     // A click on the key guide again: no key.
                     vec![Action::Exec("select.key".into(), json!({}))]
                 } else if d.key {
@@ -349,7 +359,7 @@ impl GuideEdit {
         if let Some(d) = &self.drag {
             return Some(guide_cursor(d.vertical).turned(cx.view_angle()));
         }
-        guide_at(cx, p).and_then(|i| cx.doc.guides.get(i)).map(|g| guide_cursor(g.vertical).turned(cx.view_angle()))
+        guide_under(cx, p).map(|(_, g)| guide_cursor(g.vertical).turned(cx.view_angle()))
     }
 
     /// While a guide is dragged: the smart guide it snapped to and its position by the pointer.

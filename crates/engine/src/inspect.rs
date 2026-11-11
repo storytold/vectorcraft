@@ -112,6 +112,8 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> 
         _ => {}
     }
     if let Some(ch) = n.children() {
+        // A layer's ruler guides are listed by `guide.list`, not as its objects.
+        let ch: Vec<&std::sync::Arc<Node>> = ch.iter().filter(|c| !c.is_ruler_guide()).collect();
         let total = ch.len();
         let take_n = opts.child_limit.map_or(total, |l| l.min(total as u64) as usize);
         if opts.depth.is_none_or(|d| d > 0) {
@@ -203,6 +205,10 @@ fn ancestors(d: &Document, id: vectorcraft_doc::NodeId) -> Vec<u64> {
 }
 
 fn collect_kind<'a>(n: &'a Node, kind: &str, path: &mut Vec<u64>, out: &mut Vec<Hit<'a>>) {
+    // Ruler guides are not objects (`guide.list` lists them).
+    if n.is_ruler_guide() {
+        return;
+    }
     if n.kind_label().eq_ignore_ascii_case(kind) {
         out.push((n, path.clone()));
     }
@@ -295,7 +301,7 @@ fn document_base(s: &Session) -> Value {
         // The key object Align aligns to and Distribute Spacing spaces from (`select.key`).
         "key": st.selection.key.map(|k| k.0),
         // The ruler guide that is the key instead (`select.key {guide}`): an index into `guide.list`.
-        "keyGuide": st.selection.key_guide,
+        "keyGuide": st.selection.key_guide.and_then(|id| crate::cmd::guide_indexes(d, &[id]).first().copied()),
         "history": st.history.undo.iter().map(|h| h.label.clone()).collect::<Vec<_>>(),
         "redo": st.history.redo.iter().rev().map(|h| h.label.clone()).collect::<Vec<_>>(),
         "objects": d.node_count(),
@@ -432,7 +438,8 @@ pub fn find_nodes(doc: &Document, filter: &FindFilter, limit: u64) -> (Vec<Value
         ids: Vec<NodeId>,
     }
     fn walk(nodes: &[Arc<Node>], w: &mut Walk) {
-        for n in nodes.iter().rev() {
+        // Ruler guides are not objects (`guide.list` lists them).
+        for n in nodes.iter().rev().filter(|n| !n.is_ruler_guide()) {
             if w.filter.hits(n, &w.symbols) {
                 w.ids.push(n.id);
                 if (w.out.len() as u64) < w.limit {

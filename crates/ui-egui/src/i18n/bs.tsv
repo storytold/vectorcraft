@@ -2878,6 +2878,7 @@ antiAlias	Sharp	Oštro
 	General › Thumbnails	Općenito › Sličice
 	Grayscale images	Slike u nijansama sive
 	Include non-printing layers	Uključi slojeve koji se ne štampaju
+	Write pages longer than 200 in at full size in points	Upiši stranice duže od 200 in u punoj veličini, u tačkama
 	Left:	Lijevo:
 	Mark as trapped	Označi kao zarobljeno
 	Marks and Bleeds	Oznake i napusti
@@ -5110,6 +5111,8 @@ imageTrace	Outline	Obris
 @msg	invalid object id {value}: expected a non-negative integer	nevažeći ID objekta {value}: očekuje se nenegativan cijeli broj
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	stavka {index} u `{key}` je {value}, a ne ID objekta (nenegativan cijeli broj)
 @msg	no such object id {value}	nema objekta s ID-om {value}
+@msg	id {value} is a ruler guide, not an object	ID {value} je vodilica, a ne objekat
+@msg	a ruler guide goes only directly in a layer or sublayer	vodilica može biti samo direktno u sloju ili podsloju
 @msg	id {value} is a layer, not an object	id {value} je sloj, a ne objekat
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} je sloj, a ne objekat; slojeve pomjerajte s layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	pristup datotečnom sistemu za automatizaciju nije odobren: nema ovlaštenja za čitanje: {path}
@@ -5944,6 +5947,12 @@ axis	Y Axis	Y osa
 	Crosshair	Nišan
 	Checkpoint	Kontrolna tačka
 	Inventory Icons	Ikone inventara
+	Skill Icons	Ikone vještina
+	Attack	Napad
+	Defend	Odbrana
+	Heal	Iscjeljenje
+	Buff	Pojačanje
+	Ult	Ult
 	Sword	Mač
 	Shield	Štit
 	Potion	Napitak
@@ -6008,6 +6017,11 @@ axis	Y Axis	Y osa
 	Dash Trail	Isprekidani trag
 	Speed Line	Linija brzine
 	Game Trails	Tragovi igre
+	Energy Beams	Energetski snopovi
+	Laser Bolt	Laserski metak
+	Plasma Arc	Plazma luk
+	Charge Wave	Talas naboja
+	Spark Trail	Trag iskri
 	Calligraphic Nibs	Kaligrafski vrhovi
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici

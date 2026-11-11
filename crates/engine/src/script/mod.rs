@@ -37,6 +37,8 @@
 //! `alert`, `confirm` and `prompt` open dialogs ([`dialogs`]): in the app the run waits for the
 //! person's answer, and a run with nobody to ask takes its answers from `script.run`'s `answers`.
 //!
+//! `File` and `Folder` read files inside the script's own folder ([`files`]).
+//!
 //! A script with `#targetengine name` runs in that named engine, which the session keeps with the
 //! globals its runs leave, at most [`MAX_ENGINES`] of them with [`ENGINE_HEAP_BYTES`] of heap each
 //! (VectorCraft's own limits). A script without the line, or with `main`, gets a new realm for each
@@ -65,6 +67,7 @@ use crate::{
     Clipboard, DocState, DrawMode, EngineError, Journal, NodeId, PaintDefaults, Result, Session, cmd, command_specs, guard, waits_for_tool_edit,
 };
 
+pub mod files;
 pub mod folder;
 
 /// The most bytes of source a run takes, as a file or as `source`.
@@ -653,6 +656,8 @@ struct Host {
     dialogs: dialogs::Dialogs,
     /// The files the run reads: its includes and `$.evalFile`'s.
     files: RefCell<include::Files>,
+    /// What `File` and `Folder` have open and have read.
+    disk: RefCell<files::Disk>,
     /// Where the lines of the script's expanded source came from.
     script_map: RefCell<include::SourceMap>,
     /// The same for each source `$.evalFile` gave, in order.
@@ -682,6 +687,10 @@ struct Counts {
     command_list_reads: Cell<u64>,
     vc_log: Cell<u64>,
     console_writes: Cell<u64>,
+    /// Calls of `File` and `Folder` that reach the host ([`files`]).
+    file_calls: Cell<u64>,
+    /// `execute` calls, which open nothing.
+    file_executes: Cell<u64>,
 }
 
 impl Counts {
@@ -692,6 +701,8 @@ impl Counts {
             "commandListReads": self.command_list_reads.get(),
             "vcLog": self.vc_log.get(),
             "consoleWrites": self.console_writes.get(),
+            "fileCalls": self.file_calls.get(),
+            "fileExecutes": self.file_executes.get(),
         })
     }
 }
@@ -1323,7 +1334,7 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 
 /// `message`, with what to do about a failure that comes from a script written for another program.
 fn explained(kind: &RunErrorKind, message: &str) -> String {
-    const HOST_OBJECTS: &[&str] = &["app", "File", "Folder", "Window", "BridgeTalk", "activeDocument", "documents"];
+    const HOST_OBJECTS: &[&str] = &["app", "Window", "BridgeTalk", "activeDocument", "documents"];
     let names_host_object =
         message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
     if *kind == RunErrorKind::Thrown && names_host_object {
@@ -1700,6 +1711,7 @@ impl Session {
             commands: RefCell::default(),
             run_nanos: Cell::new(0),
             dialogs: dialogs::Dialogs::new(self.script_frames, &realm, request.answers),
+            disk: RefCell::new(files::Disk::new(files.scope())),
             files: RefCell::new(files),
             script_map: RefCell::default(),
             eval_maps: RefCell::default(),
@@ -1739,6 +1751,7 @@ impl Session {
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
+                    .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| realm.start(&expanded.source))
                     .map_err(|e| located(&host, realm.error_source(), realm.error_mark(), &e))
             }

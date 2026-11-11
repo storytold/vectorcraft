@@ -584,6 +584,8 @@ impl<'a> NestedCount<'a> {
                 (NodeKind::Repeat(r), _) => r.in_all(self),
                 (NodeKind::SymbolInstance { symbol, .. }, _) => Cost { instances: self.symbol(symbol), copies: 1 },
                 (NodeKind::Path { path, .. }, _) => Cost { instances: 0, copies: path.anchor_count().saturating_add(1) },
+                // A ruler guide draws nothing, so a repeat makes no copies of it.
+                (NodeKind::RulerGuide { .. }, _) => Cost::default(),
                 (_, Some(c)) => self.nodes(c).plus(Cost { instances: 0, copies: 1 }),
                 _ => Cost { instances: 0, copies: 1 },
             };

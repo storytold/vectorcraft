@@ -318,6 +318,8 @@ impl Exporter<'_> {
                     self.node(s, c, page, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         self.knockout = enclosing;
         for _ in 0..pushes {

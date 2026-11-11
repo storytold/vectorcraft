@@ -214,7 +214,7 @@ fn attributes(s: &Session, p: &Value) -> Result<AttributesInfo> {
 /// Overprint Black on `n` and its descendants; returns the objects changed.
 fn overprint_black_tree(n: &mut Node, op: &OverprintBlack, spots: &[String]) -> usize {
     let mut changed = usize::from(op.apply(n, spots));
-    for c in n.children_mut().into_iter().flatten() {
+    for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
         changed += overprint_black_tree(Arc::make_mut(c), op, spots);
     }
     changed

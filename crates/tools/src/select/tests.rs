@@ -502,7 +502,7 @@ fn click_selects_object() {
 #[test]
 fn a_press_on_a_ruler_guide_picks_it_over_the_art() {
     let (mut d, _) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 150.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 150.0));
     let s = Selection::default();
     let p = paint();
     let cx = cx(&d, &s, &p);
@@ -524,7 +524,7 @@ fn a_press_on_a_ruler_guide_picks_it_over_the_art() {
 #[test]
 fn a_cmd_shift_double_click_releases_the_guide_under_the_pointer() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 300.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 300.0));
     let Some(vectorcraft_doc::NodeKind::Path { guide, .. }) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("the rectangle is a path") };
     *guide = true;
     let s = Selection::default();
@@ -679,7 +679,7 @@ fn box_cursors_turn_with_the_view() {
     let mut s = Selection::default();
     s.add(id);
     let p = paint();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 300.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 300.0));
     let mut c = cx(&d, &s, &p);
     c.screen = turned_view(90.0);
     assert!((c.view_angle() - 90.0).abs() < 1e-9);
@@ -752,7 +752,7 @@ fn escape_cancels_a_move_or_an_alt_drag_copy() {
 #[test]
 fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
     let (mut d, id) = doc_with_rect();
-    d.guides = vec![vectorcraft_doc::Guide::new(true, 173.4)];
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 173.4));
     let mut s = Selection::default();
     s.add(id);
     let p = paint();
@@ -775,7 +775,7 @@ fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
 #[test]
 fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
     let (mut d, id) = doc_with_rect();
-    d.guides = vec![vectorcraft_doc::Guide::new(true, 333.0)];
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 333.0));
     let mut s = Selection::default();
     s.add(id);
     let p = paint();
@@ -1118,7 +1118,7 @@ fn a_shift_move_snapped_by_its_grabbed_point_stays_on_its_line() {
     let other = d.alloc_id();
     let sq = vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 151.5, 350.0, 201.5));
     d.insert(Some(l), 1, vectorcraft_doc::Node::path(other, sq, vectorcraft_doc::Appearance::default_art())).unwrap();
-    d.guides = vec![vectorcraft_doc::Guide::new(true, 420.5)];
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 420.5));
     let mut s = Selection::default();
     s.add(id);
     let p = paint();
@@ -1132,7 +1132,7 @@ fn a_shift_move_snapped_by_its_grabbed_point_stays_on_its_line() {
     assert!(moved_by(m, (270.5, 270.5)), "{m:?}");
     // Smart Guides on, the selection alone with a ruler guide 1.5 below the grabbed point.
     let (mut d, id) = doc_with_rect();
-    d.guides = vec![vectorcraft_doc::Guide::new(false, 330.5)];
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 330.5));
     let mut s = Selection::default();
     s.add(id);
     let (m, _) = shift_moved(&cx(&d, &s, &p), (329.0, 329.0));
@@ -1259,7 +1259,7 @@ fn a_click_on_a_selected_object_makes_it_the_key() {
     let mut one = Selection::default();
     one.add(rect);
     assert!(click(&one, 150.0, 150.0).is_empty());
-    one.guides = vec![0];
+    one.guides = vec![vectorcraft_doc::NodeId(999)];
     assert_eq!(click(&one, 150.0, 150.0), vec![Action::Exec("select.key".into(), json!({"id": rect.0}))]);
 }
 
@@ -1482,8 +1482,8 @@ fn directional_marquee_uses_screen_direction_and_a_dead_zone() {
 fn e_during_a_marquee_takes_only_the_guides_inside() {
     let (mut d, id) = doc_with_rect();
     let board = d.artboards[0].id;
-    d.guides.push(vectorcraft_doc::Guide::new(true, 150.0));
-    d.guides.push(vectorcraft_doc::Guide { artboard: Some(board), ..vectorcraft_doc::Guide::new(false, 150.0) });
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 150.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide { artboard: Some(board), ..vectorcraft_doc::Guide::new(false, 150.0) });
     let s = Selection::default();
     let p = paint();
     let cx = cx(&d, &s, &p);
@@ -1506,7 +1506,7 @@ fn e_during_a_marquee_takes_only_the_guides_inside() {
 #[test]
 fn marquee_selects_ruler_guides() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 80.0));
     let s = Selection::default();
     let p = paint();
     let cx = cx(&d, &s, &p);
@@ -1523,7 +1523,7 @@ fn marquee_selects_ruler_guides() {
 #[test]
 fn marquee_selects_only_guide() {
     let (mut d, _) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(true, 20.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 20.0));
     let s = Selection::default();
     let p = paint();
     let cx = cx(&d, &s, &p);
@@ -1540,7 +1540,7 @@ fn marquee_selects_only_guide() {
 #[test]
 fn marquee_ignores_locked_guides() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 80.0));
     let s = Selection::default();
     let p = paint();
     let mut cx_locked = cx(&d, &s, &p);
@@ -1769,7 +1769,7 @@ fn handle_drag_snaps_to_anchors_and_ruler_guides_with_snap_to_point() {
     let other = d.alloc_id();
     let sq = vectorcraft_geom::shapes::rectangle(Rect::new(250.0, 250.0, 300.0, 300.0));
     d.insert(Some(l), 1, Node::path(other, sq, Appearance::default_art())).unwrap();
-    d.guides = vec![vectorcraft_doc::Guide::new(true, 230.5)];
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 230.5));
     let mut s = Selection::default();
     s.add(id);
     let p = paint();
@@ -2436,7 +2436,7 @@ fn a_thin_shapes_centre_point_gives_the_handles_the_pointer() {
 #[test]
 fn a_ruler_guide_under_the_centre_point_keeps_the_pointer() {
     let (mut d, id) = doc_with_live_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(true, 150.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 150.0));
     let mut s = Selection::default();
     s.add(id);
     let p = paint();
@@ -2449,4 +2449,31 @@ fn a_ruler_guide_under_the_centre_point_keeps_the_pointer() {
     let down = t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y));
     let drag = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 150.0));
     assert!(drag.iter().any(|a| matches!(a, Action::Preview(cmd, _) if cmd == "guide.move")), "the guide drags: {down:?} {drag:?}");
+}
+
+/// #6437: in Outline view, where an image is drawn as its frame, a click inside it on the edge of
+/// a path behind selects that path, with the image selected or not. In Preview the image takes
+/// the click.
+#[test]
+fn outline_view_click_through_an_image_selects_the_path_behind() {
+    use vectorcraft_doc::{Appearance, Document, ImageObject, Node, NodeKind};
+    let mut d = Document::new(500.0, 500.0);
+    let layer = d.layers[0].id;
+    let (back, image) = (d.alloc_id(), d.alloc_id());
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0));
+    d.insert(Some(layer), 0, Node::path(back, square, Appearance::default_art())).unwrap();
+    let xf = vectorcraft_geom::Affine::translate((150.0, 150.0));
+    let im = ImageObject { key: "k".into(), width: 100, height: 100, xf, link: None, placement: Default::default(), pixels: None };
+    d.insert(Some(layer), 1, Node::new(image, NodeKind::Image(Box::new(im)))).unwrap();
+    let selects = |a: &[Action], id: NodeId| a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([id.0])));
+    let p = paint();
+    for picked in [vec![], vec![image]] {
+        let mut s = Selection::default();
+        s.set(picked.clone());
+        let outline = ToolContext { outline: true, ..cx(&d, &s, &p) };
+        let a = SelectionTool::default().pointer(&outline, &ev(PointerKind::Down, 200.0, 180.0));
+        assert!(selects(&a, back), "outline, {picked:?} selected: {a:?}");
+        let a = SelectionTool::default().pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 200.0, 180.0));
+        assert!(!selects(&a, back), "preview, {picked:?} selected: {a:?}");
+    }
 }

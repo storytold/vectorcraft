@@ -45,7 +45,7 @@ pub(crate) fn doc_sane(d: &Document, sel: &Selection) -> bool {
         && d.ruler_origin.x.abs() <= MAX_COORD
         && d.ruler_origin.y.abs() <= MAX_COORD
         && d.artboards.iter().all(|a| rect_in_range(a.rect))
-        && d.guides.iter().all(|g| g.pos.is_finite() && g.pos.abs() <= MAX_COORD)
+        && d.ruler_guides().iter().all(|g| g.pos.is_finite() && g.pos.abs() <= MAX_COORD)
         && objects_in_range(d, &sel.objects)
 }
 

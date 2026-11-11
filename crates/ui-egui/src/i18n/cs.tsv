@@ -2908,6 +2908,7 @@ antiAlias	Sharp	Ostré
 	General › Thumbnails	Obecné › Miniatury
 	Grayscale images	Obrazy ve stupních šedi
 	Include non-printing layers	Zahrnout netisknutelné vrstvy
+	Write pages longer than 200 in at full size in points	Zapsat stránky delší než 200 in v plné velikosti v bodech
 	Left:	Vlevo:
 	Mark as trapped	Označit jako s přesahy barev
 	Marks and Bleeds	Značky a spadávky
@@ -5207,6 +5208,8 @@ imageTrace	Outline	Obrys
 @msg	invalid object id {value}: expected a non-negative integer	neplatné ID objektu {value}: očekává se nezáporné celé číslo
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	položka {index} v `{key}` je {value}, nikoli ID objektu (nezáporné celé číslo)
 @msg	no such object id {value}	objekt s ID {value} neexistuje
+@msg	id {value} is a ruler guide, not an object	ID {value} patří vodítku, ne objektu
+@msg	a ruler guide goes only directly in a layer or sublayer	vodítko může být jen přímo ve vrstvě nebo podvrstvě
 @msg	id {value} is a layer, not an object	ID {value} je vrstva, nikoli objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	ID {value} je vrstva, nikoli objekt; vrstvy přesunete pomocí layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	přístup automatizace k systému souborů není udělen: chybí oprávnění ke čtení: {path}
@@ -6128,6 +6131,12 @@ axis	Y Axis	osa Y
 	Crosshair	Zaměřovač
 	Checkpoint	Kontrolní bod
 	Inventory Icons	Ikony inventáře
+	Skill Icons	Ikony dovedností
+	Attack	Útok
+	Defend	Obrana
+	Heal	Léčení
+	Buff	Posílení
+	Ult	Ult
 	Sword	Meč
 	Shield	Štít
 	Potion	Lektvar
@@ -6192,6 +6201,11 @@ axis	Y Axis	osa Y
 	Dash Trail	Čárkovaná stopa
 	Speed Line	Rychlostní čára
 	Game Trails	Herní stopy
+	Energy Beams	Energetické paprsky
+	Laser Bolt	Laserový výstřel
+	Plasma Arc	Plazmový oblouk
+	Charge Wave	Nabíjecí vlna
+	Spark Trail	Jiskrová stopa
 	Calligraphic Nibs	Kaligrafická pera
 	Pattern Borders	Vzorkové okraje
 	Scatter Shapes	Rozptýlené tvary

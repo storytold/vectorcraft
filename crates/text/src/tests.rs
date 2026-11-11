@@ -252,6 +252,137 @@ fn tracking_and_manual_kerning_take_the_horizontal_scale() {
     }
 }
 
+/// A centred or right-aligned line is as wide as its characters without the tracking after the
+/// last one, as the page of users' `.ai` files aligns tracked lines: centred half that tracking
+/// right of a line measured with it, right-aligned the whole tracking right, so the last glyph's
+/// own advance ends on the anchor or the frame's edge. The tracking is still in the last glyph's
+/// advance (the caret after it, and a selection of it, keep it).
+#[test]
+fn an_aligned_line_leaves_its_last_characters_tracking_out_of_its_width() {
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    // 200/1000 of a 20 pt em: 4 pt after each character, also at 50% Horizontal Scale with 400.
+    for (tracking, h_scale, after) in [(200.0, 100.0, 4.0), (-100.0, 100.0, -2.0), (400.0, 50.0, 4.0)] {
+        let st = CharStyle { tracking, h_scale, ..style(20.0) };
+        let mut t = point("Wave", st.clone());
+        let w = width(&t);
+        let start = |t: &TextObject| layout(db(), t).glyphs[0].origin.x;
+        let end = |t: &TextObject| {
+            let l = layout(db(), t);
+            let last = l.glyphs.last().unwrap();
+            last.origin.x + last.advance
+        };
+        assert!(near(start(&t), 0.0), "left aligned point type starts at its anchor");
+        t.para.justify = Justify::Center;
+        assert!(near(start(&t), -(w - after) / 2.0), "{tracking} at {h_scale}%: centred from {}, not {}", -(w - after) / 2.0, start(&t));
+        t.para.justify = Justify::Right;
+        assert!(near(end(&t) - after, 0.0), "{tracking} at {h_scale}%: right aligned, the last glyph ends {} past the anchor", end(&t) - after);
+        let plain = layout(db(), &TextObject { runs: vec![TextRun::new("Wave", CharStyle { tracking: 0.0, ..st.clone() })], ..t.clone() });
+        let tracked = layout(db(), &t);
+        let last_advance = |l: &TextLayout| l.glyphs.last().unwrap().advance;
+        assert!(near(last_advance(&tracked) - last_advance(&plain), after), "{tracking}: the last glyph keeps its tracking");
+        // Area type: the same in its frame.
+        let frame = Rect::new(0.0, 0.0, 300.0, 100.0);
+        let centred = area("Wave", st.clone(), frame, Justify::Center);
+        assert!(near(start(&centred), (300.0 - (w - after)) / 2.0), "{tracking}: centred area type starts at {}", start(&centred));
+        let right = area("Wave", st.clone(), frame, Justify::Right);
+        assert!(near(end(&right) - after, 300.0), "{tracking}: right aligned area type ends {} past its edge", end(&right) - after - 300.0);
+        // A line that ends in a space keeps its last letter's tracking: the space comes after it.
+        let spaced = area("Wave ", st, frame, Justify::Right);
+        let l = layout(db(), &spaced);
+        let e = l.glyphs.iter().find(|g| g.byte == 3).unwrap();
+        assert!(near(e.origin.x + e.advance, 300.0), "{tracking}: before a space the line ends at {}", e.origin.x + e.advance);
+    }
+}
+
+/// Right-aligned area type with a tab sets the text after its last tab as it sets a right-aligned
+/// line: the last glyph's advance, less the tracking after it, ends on the frame's edge.
+#[test]
+fn the_text_after_the_last_tab_of_right_aligned_type_leaves_its_last_tracking_out() {
+    let frame = Rect::new(0.0, 0.0, 336.0, 100.0);
+    let lay = layout(db(), &area("Item\t24.00", CharStyle { tracking: 200.0, ..style(13.0) }, frame, Justify::Right));
+    assert!(lay.glyphs[0].origin.x.abs() < 1e-6, "the item starts at the left edge: {}", lay.glyphs[0].origin.x);
+    let last = lay.glyphs.last().unwrap();
+    let after = 200.0 / 1000.0 * 13.0;
+    let end = last.origin.x + last.advance - after;
+    assert!((end - 336.0).abs() < 1e-6, "the price ends at {end}, not on the edge");
+}
+
+/// Which lines leave the tracking after their last character out of their width
+/// (`LineInfo::trailing`): those a paragraph's end, a forced line break or a wrap ends, also a
+/// wrap at a space (the space hangs past the line). Spaces typed before a paragraph's end or a
+/// forced line break end the line themselves, and the letter before them keeps its tracking. So
+/// do a line a hyphen ends, one whose last character hangs (burasagari, Optical Margin
+/// Alignment), a justified line, right-to-left lines and lines ending in a right-to-left run,
+/// vertical type and type on a path.
+#[test]
+fn which_lines_leave_the_tracking_after_their_last_character_out() {
+    let st = CharStyle { tracking: 200.0, ..style(20.0) };
+    // 200/1000 of a 20 pt em.
+    let t = 4.0;
+    let trailing = |o: &TextObject| layout(db(), o).lines.iter().map(|l| l.trailing).collect::<Vec<_>>();
+    let centred = |text: &str| {
+        let mut o = point(text, st.clone());
+        o.para.justify = Justify::Center;
+        o
+    };
+    let narrow = Rect::new(0.0, 0.0, 90.0, 300.0);
+    assert_eq!(trailing(&area("Wave Wave", st.clone(), narrow, Justify::Center)), [t, t], "a wrap at a space");
+    assert_eq!(trailing(&area("Wave-Wave", st.clone(), narrow, Justify::Center)), [t, t], "a wrap after a hyphen");
+    assert_eq!(trailing(&centred("Wave\u{2028}Wave")), [t, t], "a forced line break");
+    assert_eq!(trailing(&centred("Wave \u{2028}Wave")), [0.0, t], "a space typed before a forced line break");
+    assert_eq!(trailing(&centred("Wave \nWave")), [0.0, t], "a space typed before a paragraph's end");
+    // Hyphenated: the hyphen ends the line, and has no tracking.
+    let mut hyphenated = area("internationalization", st.clone(), Rect::new(0.0, 0.0, 120.0, 300.0), Justify::Right);
+    hyphenated.para.hyphenate = true;
+    hyphenated.para.composer = vectorcraft_doc::Composer::SingleLine;
+    let lay = layout(db(), &hyphenated);
+    assert!(lay.lines.len() > 1 && lay.lines[0].end < "internationalization".len(), "the word is hyphenated: {:?}", lay.lines);
+    assert_eq!(lay.lines[0].trailing, 0.0, "a hyphenated line");
+    // Justified: justification counts it (only the paragraph's last line is aligned).
+    assert_eq!(trailing(&area("Wave Wave", st.clone(), narrow, Justify::JustifyLeft)), [0.0, t], "a justified line");
+    // A last character that hangs.
+    let mut hanging = area("あいう。", st.clone(), Rect::new(0.0, 0.0, 300.0, 100.0), Justify::Center);
+    hanging.para.burasagari = vectorcraft_doc::Burasagari::Forced;
+    assert_eq!(trailing(&hanging), [0.0], "a full stop burasagari hangs");
+    let mut optical = area("Wave.", st.clone(), Rect::new(0.0, 0.0, 300.0, 100.0), Justify::Right);
+    optical.optical_margin = true;
+    assert_eq!(trailing(&optical), [0.0], "a full stop Optical Margin Alignment hangs");
+    optical.runs = vec![TextRun::new("Wave", st.clone())];
+    assert_eq!(trailing(&optical), [t], "a letter that doesn't hang");
+    // Right to left: a right-to-left paragraph ending in Latin, a Latin one ending in Hebrew.
+    assert_eq!(trailing(&centred("שלום abc")), [0.0], "a right-to-left paragraph");
+    assert_eq!(trailing(&centred("abc שלום")), [0.0], "a right-to-left run ending the line");
+    // Vertical type.
+    let mut vertical = centred("Wave");
+    vertical.vertical = true;
+    assert_eq!(trailing(&vertical), [0.0], "vertical type");
+    // Type on a path, centred: as wide as all its advances.
+    let mut on_path = centred("Wave");
+    let w = width(&on_path);
+    let mut line = kurbo::BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let lay = layout(db(), &on_path);
+    assert_eq!(lay.lines[0].trailing, 0.0, "type on a path");
+    assert!((lay.glyphs[0].origin.x - (500.0 - w) / 2.0).abs() < 1e-6, "{}", lay.glyphs[0].origin.x);
+}
+
+/// Justification… Desired Glyph Scaling scales each glyph's advance with the tracking in it: an
+/// aligned line leaves out its last character's tracking as scaled.
+#[test]
+fn an_aligned_line_leaves_out_its_last_tracking_as_glyph_scaling_sets_it() {
+    let mut t = point("Wave", CharStyle { tracking: 400.0, ..style(20.0) });
+    t.para.justify = Justify::Center;
+    t.para.justification.glyph_scaling = [80.0, 90.0, 110.0];
+    let lay = layout(db(), &t);
+    let w: f64 = lay.glyphs.iter().map(|g| g.advance).sum();
+    // 400/1000 of a 20 pt em, at 90%.
+    let left_out = 8.0 * 0.9;
+    assert!((lay.lines[0].trailing - left_out).abs() < 1e-9, "{}", lay.lines[0].trailing);
+    assert!((lay.glyphs[0].origin.x + (w - left_out) / 2.0).abs() < 1e-6, "centred from {}", lay.glyphs[0].origin.x);
+}
+
 /// The factor tracking and manual kerning take from the Horizontal Scale: the scale in horizontal
 /// type, 1 in vertical type and for a scale that isn't a positive number.
 #[test]
