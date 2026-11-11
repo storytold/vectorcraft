@@ -135,7 +135,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             reshape
         ),
-        cmd!("path.insertAnchor", "Add Anchor Point", [], None, "{id, subpath?, segment, t: 0..1}", has_doc, insert_anchor),
+        cmd!(
+            "path.insertAnchor",
+            "Add Anchor Point",
+            [],
+            None,
+            "{id, subpath?, segment, t: 0..1} add an anchor at t on the segment → {anchor}; the direct-selected anchors and selected segments keep the same points (a selected segment it splits stays selected as its two halves), and a path that isn't selected becomes the selection with the new anchor direct-selected",
+            has_doc,
+            insert_anchor
+        ),
         cmd!(
             "path.cutAtAnchors",
             "Cut Path at Selected Anchor Points",
@@ -1526,7 +1534,7 @@ fn stretch_weights(anchors: &[Anchor], closed: bool, roles: &[Stretch]) -> Vec<[
 /// After an anchor is added at `(si, added)` of path `id`, number the direct-selected anchors and
 /// selected segments after it on that subpath one higher, so the selection keeps the same points.
 /// A selected segment that the new anchor splits stays selected as its two halves, and the new
-/// anchor joins its ends in the anchors that move with it.
+/// anchor is added to the direct-selected anchors.
 fn renumber_after_insert(sel: &mut Selection, id: NodeId, si: usize, added: usize) {
     if let Some(set) = sel.anchors.get_mut(&id) {
         // A selected anchor index can name no anchor (`select.anchors` takes any index), so the
@@ -1669,6 +1677,7 @@ fn insert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(EngineError::Other("no such segment".into()));
         }
         let idx = sp.insert_anchor(seg, t);
+        renumber_after_insert(sel, id, si, idx);
         // A path that wasn't selected becomes the selection, its new anchor direct-selected, so
         // the point added shows and can be edited at once (#4237).
         if !sel.contains(id) {
