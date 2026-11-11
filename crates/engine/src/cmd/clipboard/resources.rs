@@ -165,6 +165,23 @@ fn node_filters(n: &Node, out: &mut BTreeSet<(String, String)>) {
     });
 }
 
+/// The names the SVG filter effects of appearance `a` give (its own and its fills' and strokes').
+fn appearance_filter_names(a: &Appearance, out: &mut BTreeSet<String>) {
+    let items = a.items.iter().flat_map(|i| i.effects().iter());
+    let named = a.effects.iter().chain(items).filter(|e| e.id == Appearance::SVG_FILTER);
+    out.extend(named.filter_map(|e| e.params.get("name").and_then(Value::as_str)).map(str::to_string));
+}
+
+/// The names the SVG filter effects in the subtree of `n` give (opacity-mask art included).
+fn node_filter_names(n: &Node, out: &mut BTreeSet<String>) {
+    n.walk(&mut |m| {
+        appearance_filter_names(&m.appearance, out);
+        if let Some(mask) = &m.extras().mask {
+            node_filter_names(&mask.art, out);
+        }
+    });
+}
+
 /// A global or spot colour of its own (not a tint of another swatch): what colours link to.
 fn is_base(w: &Swatch) -> bool {
     (w.global || w.spot) && matches!(w.paint, Paint::Solid { swatch: None, .. })
@@ -1219,7 +1236,7 @@ impl Clipboard {
     /// How the pasted SVG filter effects relink ([`Relink::filters`]). Each names the document's
     /// filter of its name; one that draws another definition than that filter takes the document's
     /// filter when pasted back into the document it came from, and elsewhere keeps its own under a
-    /// free name, so editing or deleting the document's filter leaves it alone. When that name would
+    /// name no filter or effect of the document gives, so editing or deleting the document's filter leaves it alone. When that name would
     /// make the filter too long to draw, the free name is a shorter start of its name ("Shif"), else
     /// a free letter or digit; the filter's id is always its name.
     fn filter_links(&self, d: &Document, same_doc: bool) -> BTreeMap<(String, String), (String, String)> {
@@ -1240,12 +1257,25 @@ impl Clipboard {
             appearance_filters(&g.appearance, &mut found);
         }
         let mut taken: BTreeSet<String> = d.svg_filters.iter().map(|f| f.name.clone()).chain(found.iter().map(|(n, _)| n.clone())).collect();
+        let mut effects_read = false;
         let mut links = BTreeMap::new();
         for (name, xml) in found {
             let Some(held) = d.svg_filters.iter().find(|f| f.name == name).filter(|f| f.xml != xml.trim()) else { continue };
             let to = if same_doc {
                 (name.clone(), held.xml.clone())
             } else {
+                // The names the document's effects give are taken too, those whose filter was
+                // deleted included: defining a filter of that name later changes every effect that
+                // names it. They are read at the first rename only.
+                if !effects_read {
+                    effects_read = true;
+                    for root in d.art_roots() {
+                        node_filter_names(root, &mut taken);
+                    }
+                    for g in &d.graphic_styles {
+                        appearance_filter_names(&g.appearance, &mut taken);
+                    }
+                }
                 // Free names made from the starts of the name, longest first, then free letters and
                 // digits: the first under which the filter still draws.
                 let mut ends: Vec<usize> = name.char_indices().map(|(i, _)| i).skip(1).collect();
@@ -1255,7 +1285,7 @@ impl Clipboard {
                 let single = ('a'..='z').chain('0'..='9').map(String::from).filter(|n| !taken.contains(n));
                 let renamed = shorter.chain(single).find_map(|new| {
                     let drawn = vectorcraft_render::effects::svg_filter::with_id(&xml, &new)
-                        .filter(|x| vectorcraft_render::effects::svg_filter::check(x).is_ok())?;
+                        .filter(|x| vectorcraft_render::effects::svg_filter::check(x).is_ok_and(|id| id == new))?;
                     Some((new, drawn))
                 });
                 let Some((new, drawn)) = renamed else { continue };

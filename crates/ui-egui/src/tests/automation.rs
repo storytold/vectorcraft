@@ -304,12 +304,17 @@ fn frames_with_injected_input_are_confined() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// The enabled File › Open Recent Files rows `ui.menu.list` returns: (id, label).
+/// Every File › Open Recent Files row `ui.menu.list` returns, disabled ones included: (id, label),
+/// the label of a disabled row starting "(disabled) ".
 fn recent_rows(entries: &Value) -> Vec<(String, String)> {
     let rows = entries.as_array().map(Vec::as_slice).unwrap_or_default();
     rows.iter()
-        .filter(|e| e["command"].as_str().is_some_and(|c| c.starts_with("file.openRecent")) && e["enabled"] == true)
-        .map(|e| (e["command"].as_str().unwrap_or_default().to_string(), e["label"].as_str().unwrap_or_default().to_string()))
+        .filter(|e| e["command"].as_str().is_some_and(|c| c.starts_with("file.openRecent")))
+        .map(|e| {
+            let label = e["label"].as_str().unwrap_or_default();
+            let label = if e["enabled"] == true { label.to_string() } else { format!("(disabled) {label}") };
+            (e["command"].as_str().unwrap_or_default().to_string(), label)
+        })
         .collect()
 }
 

@@ -227,6 +227,24 @@ fn each_language_counts_with_its_plural_rule() {
     }
 }
 
+/// The Script Console's counted phrases have a row in every complete catalog, and a count picks
+/// the language's own form.
+#[test]
+fn script_console_counts_take_each_language_s_form() {
+    const COUNTED: [(&str, &str); 3] =
+        [("{n} host call", "{n} host calls"), ("{n} earlier line dropped", "{n} earlier lines dropped"), ("{n} line cut", "{n} lines cut")];
+    for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
+        for (one, other) in COUNTED {
+            assert!(l.catalog().plural(one, other, 0).is_some(), "{} is missing the row for {other}", l.code);
+        }
+    }
+    assert_eq!([1, 2].map(|n| trn(de(), n, COUNTED[0].0, COUNTED[0].1)), ["1 Host-Aufruf", "2 Host-Aufrufe"]);
+    let ru = Lang::from_code("ru").expect("registered");
+    assert_eq!([1, 3, 5].map(|n| trn(ru, n, COUNTED[2].0, COUNTED[2].1)), ["1 строка обрезана", "3 строки обрезаны", "5 строк обрезано"]);
+    let fr = Lang::from_code("fr").expect("registered");
+    assert_eq!([0, 1].map(|n| trn(fr, n, COUNTED[1].0, COUNTED[1].1)), ["0 ligne antérieure supprimée", "1 ligne antérieure supprimée"]);
+}
+
 #[test]
 fn candidates_walk_from_specific_to_general() {
     assert_eq!(candidates("pt_BR.UTF-8"), ["pt-br", "pt"]);

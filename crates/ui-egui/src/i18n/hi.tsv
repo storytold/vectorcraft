@@ -8236,8 +8236,14 @@ theme	Appearance	अपीयरेंस
 	Ended at a limit	सीमा पर समाप्त
 	Stopped	रोका गया
 	Ended by an internal fault	आंतरिक त्रुटि से समाप्त
-	{ms} ms, {calls} host calls	{ms} ms, {calls} होस्ट कॉल
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} पुरानी पंक्तियाँ हटाई गईं, {cut} पंक्तियाँ काटी गईं
+	time unavailable	समय उपलब्ध नहीं
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	सबसे धीमे: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} होस्ट कॉल|{n} होस्ट कॉल
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} पुरानी पंक्ति हटाई गई|{n} पुरानी पंक्तियाँ हटाई गईं
+@plural	{n} line cut|{n} lines cut	{n} पंक्ति काटी गई|{n} पंक्तियाँ काटी गईं
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में
 
 # Deferred plug-in effects
