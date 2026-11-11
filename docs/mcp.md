@@ -3681,8 +3681,8 @@ anchor there unless one lies within `tol` (3 by default), and moves that point b
 [Adjust path segments](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/adjust-path-segments.html)
 has the Reshape tool stretch part of a path from the dragged point without losing the path's general form, with every
 highlighted focal point pulling the path. Which anchors stay, how far the stretch reaches and the share of the drag each
-point takes are VectorCraft's own rule. The grabbed point and the anchors that `focal` lists as `[subpath, anchor]` pairs are focal
-points and move by the whole drag; a pair that names no anchor of the path is refused ("`focal` names [0, 7], which is
+point takes are VectorCraft's own rule. When `focal` is given (an empty list included), the grabbed point and the
+anchors that `focal` lists as `[subpath, anchor]` pairs are focal points and move by the whole drag; a pair that names no anchor of the path is refused ("`focal` names [0, 7], which is
 not an anchor of the path"). Anchors that are not direct-selected stay in place (on a path selected whole, or not
 selected, every anchor is selected), and so do the two ends of an open path unless they are focal points. A selected
 anchor between two focal points moves by the whole drag. A selected anchor between a focal point and an anchor that
@@ -3695,8 +3695,11 @@ point does not move. An anchor added on a segment of a partly selected path is s
 anchors stay selected. With `radius`, only the grabbed point's subpath changes, whatever the selection: the anchors
 within `radius` of the grabbed point along the path follow with a smooth falloff and the others stay; a negative
 `radius` is refused ("`radius` must be 0 or more"), and so is `radius` given with `focal` ("`focal` and `radius`
-cannot be used together"). A drag of no length on an anchor (`dx` and `dy` 0 or left out) leaves the path as it is
-and records no undo step.
+cannot be used together"). Without `focal` (or with `focal` null) and without `radius`, the earlier rule applies, so
+steps recorded before focal points play as they did: the selection does not matter, an open path stretches from the
+grabbed point to its two ends as above, and on a closed path the anchors within half the diagonal of the subpath's
+bounding box follow with the smooth falloff. The Reshape tool always sends `focal`. A drag of no length on an anchor
+(`dx` and `dy` 0 or left out) leaves the path as it is and records no undo step.
 
 With the Reshape tool, a click on an anchor of a selected path makes it the focal point, and a click on a segment adds
 an anchor there (one undo step) that becomes the focal point. Shift-click adds an anchor or a point on a segment to the
