@@ -1686,6 +1686,7 @@ file-filter	Templates	Modelli
 	Include Linked Files	Includi file collegati
 	Include Metadata	Includi metadati
 	Include non-printing layers	Includi livelli non stampabili
+	Write pages longer than 200 in at full size in points	Scrivi le pagine più lunghe di 200 in a grandezza reale, in punti
 	Include SVG Code	Includi codice SVG
 	Include Swatches for Tints	Includi campioni per tinte
 	Inflate…	Gonfia…
@@ -2364,6 +2365,8 @@ file-filter	Templates	Modelli
 	Open…	Apri…
 	Optical	Ottica
 	Optical Margin Alignment	Allineamento ottico dei margini
+	Dynamic Text	Testo dinamico
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	il testo su tracciato in un testo concatenato non può usare il testo dinamico: {frames}
 	Optimize for fast web view	Ottimizza per visualizzazione web veloce
 	Optimized	Ottimizzato
 	Options	Opzioni
@@ -4968,6 +4971,8 @@ axis	Both	Entrambi
 @msg	invalid object id {value}: expected a non-negative integer	ID oggetto {value} non valido: è richiesto un intero non negativo
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	la voce {index} di `{key}` è {value}, non un ID oggetto (intero non negativo)
 @msg	no such object id {value}	nessun oggetto con ID {value}
+@msg	id {value} is a ruler guide, not an object	l’ID {value} è di una guida, non di un oggetto
+@msg	a ruler guide goes only directly in a layer or sublayer	una guida può stare solo direttamente in un livello o sottolivello
 @msg	id {value} is a layer, not an object	l’ID {value} è un livello, non un oggetto
 @msg	id {value} is a layer, not an object; move layers with layer.move	l’ID {value} è un livello, non un oggetto; sposta i livelli con layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	l'automazione non ha accesso al file system: manca l'autorizzazione di lettura: {path}
@@ -5756,6 +5761,12 @@ axis	Y Axis	Asse Y
 	Crosshair	Mirino
 	Checkpoint	Punto di controllo
 	Inventory Icons	Icone inventario
+	Skill Icons	Icone abilità
+	Attack	Attacco
+	Defend	Difesa
+	Heal	Cura
+	Buff	Potenziamento
+	Ult	Ult
 	Sword	Spada
 	Shield	Scudo
 	Potion	Pozione
@@ -5820,6 +5831,11 @@ axis	Y Axis	Asse Y
 	Dash Trail	Scia tratteggiata
 	Speed Line	Linea di velocità
 	Game Trails	Scia di gioco
+	Energy Beams	Raggi di energia
+	Laser Bolt	Dardo laser
+	Plasma Arc	Arco al plasma
+	Charge Wave	Onda di carica
+	Spark Trail	Scia di scintille
 	Calligraphic Nibs	Pennini calligrafici
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione

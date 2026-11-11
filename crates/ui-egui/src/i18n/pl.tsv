@@ -365,6 +365,8 @@
 	Smart Punctuation…	Inteligentna interpunkcja…
 	Create Outlines	Utwórz kontury
 	Optical Margin Alignment	Optyczne wyrównanie marginesów
+	Dynamic Text	Tekst dynamiczny
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
 	Show Hidden Characters	Pokaż ukryte znaki
@@ -2798,6 +2800,7 @@ antiAlias	Sharp	Ostre
 	General › Thumbnails	Ogólne › Miniatury
 	Grayscale images	Obrazy w skali szarości
 	Include non-printing layers	Uwzględnij warstwy niedrukowane
+	Write pages longer than 200 in at full size in points	Zapisuj strony dłuższe niż 200 in w pełnym rozmiarze, w punktach
 	Left:	Lewy:
 	Mark as trapped	Oznacz jako z zalewkami
 	Marks and Bleeds	Znaczniki i spady
@@ -5033,6 +5036,8 @@ imageTrace	Outline	Kontur
 @msg	invalid object id {value}: expected a non-negative integer	nieprawidłowy identyfikator obiektu {value}: oczekiwano nieujemnej liczby całkowitej
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} w `{key}` to {value}, a nie identyfikator obiektu (nieujemna liczba całkowita)
 @msg	no such object id {value}	brak obiektu o identyfikatorze {value}
+@msg	id {value} is a ruler guide, not an object	identyfikator {value} należy do linii pomocniczej, a nie do obiektu
+@msg	a ruler guide goes only directly in a layer or sublayer	linia pomocnicza może się znajdować tylko bezpośrednio w warstwie lub podwarstwie
 @msg	id {value} is a layer, not an object	identyfikator {value} oznacza warstwę, a nie obiekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	identyfikator {value} oznacza warstwę, a nie obiekt; warstwy przenosi się za pomocą layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	nie przyznano dostępu automatyzacji do systemu plików: brak uprawnień do odczytu: {path}
@@ -5993,6 +5998,12 @@ axis	Y Axis	Oś Y
 	Crosshair	Celownik
 	Checkpoint	Punkt kontrolny
 	Inventory Icons	Ikony ekwipunku
+	Skill Icons	Ikony umiejętności
+	Attack	Atak
+	Defend	Obrona
+	Heal	Leczenie
+	Buff	Wzmocnienie
+	Ult	Ult
 	Sword	Miecz
 	Shield	Tarcza
 	Potion	Mikstura
@@ -6057,6 +6068,11 @@ axis	Y Axis	Oś Y
 	Dash Trail	Ślad kreskowany
 	Speed Line	Linia prędkości
 	Game Trails	Ślady gry
+	Energy Beams	Wiązki energii
+	Laser Bolt	Pocisk laserowy
+	Plasma Arc	Łuk plazmowy
+	Charge Wave	Fala ładunku
+	Spark Trail	Ślad iskier
 	Calligraphic Nibs	Stalówki kaligraficzne
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone

@@ -1651,6 +1651,7 @@ file-filter	Templates	範本
 	Include Linked Files	包含連結檔案
 	Include Metadata	包含中繼資料
 	Include non-printing layers	包含不列印的圖層
+	Write pages longer than 200 in at full size in points	以實際尺寸（點）寫入長於 200 in 的頁面
 	Include SVG Code	包含 SVG 程式碼
 	Include Swatches for Tints	包含色調的色票
 	Inflate…	膨脹…
@@ -3315,6 +3316,8 @@ file-filter	Templates	範本
 	Open…	開啟…
 	Optical	視覺
 	Optical Margin Alignment	視覺邊界對齊
+	Dynamic Text	動態文字
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	串連文字中的路徑文字無法使用動態文字：{frames}
 	Optimize for fast web view	最佳化以便快速網頁檢視
 	Optimized	最佳化
 	Options	選項
@@ -5569,6 +5572,8 @@ lighting	Light	光源
 @msg	invalid object id {value}: expected a non-negative integer	無效的物件 id {value}：應為非負整數
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` 中索引 {index} 處的項目為 {value}，不是非負整數物件 id
 @msg	no such object id {value}	沒有 id 為 {value} 的物件
+@msg	id {value} is a ruler guide, not an object	id {value} 是參考線，不是物件
+@msg	a ruler guide goes only directly in a layer or sublayer	參考線只能直接位於圖層或子圖層中
 @msg	id {value} is a layer, not an object	id {value} 是圖層，不是物件
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是圖層，不是物件；請使用 layer.move 移動圖層
 	Move Anchor Point	移動錨點
@@ -5774,6 +5779,12 @@ axis	Y Axis	Y 軸
 	Crosshair	準星
 	Checkpoint	檢查點
 	Inventory Icons	物品欄圖示
+	Skill Icons	技能圖示
+	Attack	攻擊
+	Defend	防禦
+	Heal	治療
+	Buff	增益
+	Ult	必殺
 	Sword	劍
 	Shield	盾
 	Potion	藥水
@@ -5838,6 +5849,11 @@ axis	Y Axis	Y 軸
 	Dash Trail	虛線軌跡
 	Speed Line	速度線
 	Game Trails	遊戲軌跡
+	Energy Beams	能量光束
+	Laser Bolt	雷射彈
+	Plasma Arc	電漿弧
+	Charge Wave	充能波
+	Spark Trail	火花尾跡
 	Calligraphic Nibs	書法筆尖
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀

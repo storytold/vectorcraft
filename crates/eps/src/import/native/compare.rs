@@ -122,7 +122,7 @@ pub(super) fn comparison_samples(doc: &Document) -> u32 {
     let (mut images, mut vector) = (false, false);
     doc.walk(|n| match n.kind {
         NodeKind::Image(_) => images = true,
-        NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Path { clipping: true, .. } => {}
+        NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Path { clipping: true, .. } | NodeKind::RulerGuide { .. } => {}
         _ => vector = true,
     });
     if images && !vector { 4 } else { 1 }

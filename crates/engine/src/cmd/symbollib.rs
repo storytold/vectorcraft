@@ -159,6 +159,7 @@ pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
     BuiltinSymbolLibrary { id: "ui-frames", name: "UI Frames", make: ui_frames },
     BuiltinSymbolLibrary { id: "map-markers", name: "Map Markers", make: map_markers },
     BuiltinSymbolLibrary { id: "inventory-icons", name: "Inventory Icons", make: inventory_icons },
+    BuiltinSymbolLibrary { id: "skill-icons", name: "Skill Icons", make: skill_icons },
 ];
 
 /// Built-in library `id`, made once.
@@ -310,6 +311,51 @@ fn inventory_icons() -> SymbolLibrary {
     }
     doc.title = "Inventory Icons".into();
     SymbolLibrary { name: "Inventory Icons".into(), doc }
+}
+
+/// Skill Icons: attack, defend, heal, buff and ult marks for RPG/UI art (original, no 9-slice).
+fn skill_icons() -> SymbolLibrary {
+    let c = Point::ZERO;
+    let attack = [(-18.0, 14.0), (-6.0, 2.0), (-2.0, 6.0), (18.0, -14.0), (14.0, -18.0), (-6.0, -2.0), (-10.0, 2.0), (-18.0, 6.0)];
+    let defend = [(0.0, -18.0), (14.0, -10.0), (12.0, 6.0), (0.0, 18.0), (-12.0, 6.0), (-14.0, -10.0)];
+    let heal = [
+        (-4.0, -18.0),
+        (4.0, -18.0),
+        (4.0, -4.0),
+        (18.0, -4.0),
+        (18.0, 4.0),
+        (4.0, 4.0),
+        (4.0, 18.0),
+        (-4.0, 18.0),
+        (-4.0, 4.0),
+        (-18.0, 4.0),
+        (-18.0, -4.0),
+        (-4.0, -4.0),
+    ];
+    let buff = [(0.0, -18.0), (10.0, -2.0), (4.0, -2.0), (4.0, 18.0), (-4.0, 18.0), (-4.0, -2.0), (-10.0, -2.0)];
+    let attack: Vec<Point> = attack.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let defend: Vec<Point> = defend.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let heal: Vec<Point> = heal.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let buff: Vec<Point> = buff.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let icons = [
+        ("Attack", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&attack, true)), "#e74c3c"),
+        ("Defend", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&defend, true)), "#3498db"),
+        ("Heal", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&heal, true)), "#2ecc71"),
+        ("Buff", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&buff, true)), "#f1c40f"),
+        ("Ult", shapes::star(c, 18.0, 7.0, 8, 0.0), "#9b59b6"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in icons {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Skill Icons".into();
+    SymbolLibrary { name: "Skill Icons".into(), doc }
 }
 
 /// An instance of symbol `name` (what the resource gathering follows).

@@ -367,6 +367,7 @@
 	Smart Punctuation…	Tanda baca cerdas…
 	Create Outlines	Buat garis luar
 	Optical Margin Alignment	Perataan margin optik
+	Dynamic Text	Teks dinamis
 	Fill with Placeholder Text	Isi dengan teks placeholder
 	Insert Inline Symbol	Sisipkan simbol sebaris
 	Show Hidden Characters	Tampilkan karakter tersembunyi
@@ -2698,6 +2699,7 @@ antiAlias	Sharp	Tajam
 	General › Thumbnails	Umum › Miniatur
 	Grayscale images	Gambar skala abu-abu
 	Include non-printing layers	Sertakan lapisan non-cetak
+	Write pages longer than 200 in at full size in points	Tulis halaman yang lebih panjang dari 200 in dalam ukuran penuh, dalam poin
 	Left:	Kiri:
 	Mark as trapped	Tandai sebagai ter-trap
 	Marks and Bleeds	Tanda dan bleed
@@ -4802,6 +4804,8 @@ imageTrace	Outline	Kontur
 @msg	invalid object id {value}: expected a non-negative integer	id objek {value} tidak valid: harus berupa bilangan bulat non-negatif
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	entri {index} dari `{key}` adalah {value}, bukan id objek (bilangan bulat non-negatif)
 @msg	no such object id {value}	tidak ada objek dengan id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} adalah panduan, bukan objek
+@msg	a ruler guide goes only directly in a layer or sublayer	panduan hanya dapat berada langsung di lapisan atau sublapisan
 @msg	automation filesystem access is not granted: read authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas baca tidak ada: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas tulis tidak ada: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	jalur otomatisasi ditolak: di luar akar baca {root}: {path}
@@ -5915,6 +5919,12 @@ axis	Y Axis	Sumbu Y
 	Crosshair	Bidik silang
 	Checkpoint	Pos pemeriksaan
 	Inventory Icons	Ikon Inventaris
+	Skill Icons	Ikon Keahlian
+	Attack	Serang
+	Defend	Bertahan
+	Heal	Pulihkan
+	Buff	Buff
+	Ult	Ult
 	Sword	Pedang
 	Shield	Perisai
 	Potion	Ramuan
@@ -5973,6 +5983,11 @@ axis	Y Axis	Sumbu Y
 	Dash Trail	Jejak putus-putus
 	Speed Line	Garis kecepatan
 	Game Trails	Jejak game
+	Energy Beams	Sinar Energi
+	Laser Bolt	Bolt Laser
+	Plasma Arc	Busur Plasma
+	Charge Wave	Gelombang Muatan
+	Spark Trail	Jejak Percikan
 	Calligraphic Nibs	Pena kaligrafi
 	Pattern Borders	Bingkai pola
 	Scatter Shapes	Bentuk sebar

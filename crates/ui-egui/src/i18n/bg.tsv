@@ -1604,6 +1604,7 @@ font-technology	Variable	Променливи
 	Include Linked Files	Включване на свързаните файлове
 	Include Metadata	Включване на метаданни
 	Include non-printing layers	Включване на слоеве, които не се печат
+	Write pages longer than 200 in at full size in points	Записване на страници, по-дълги от 200 in, в пълен размер в точки
 	Include SVG Code	Включване на SVG код
 	Include Swatches for Tints	Включване на образци за тонове
 	Inflate…	Издуване…
@@ -2262,6 +2263,7 @@ font-technology	Variable	Променливи
 	Open…	Отваряне…
 	Optical	Оптично
 	Optical Margin Alignment	Подравняване по оптично поле
+	Dynamic Text	Динамичен текст
 	Optimize for fast web view	Оптимизиране за бърз уеб преглед
 	Optimized	Оптимизирано
 	Options	Опции
@@ -4755,6 +4757,8 @@ axis	Both	И двете
 @msg	invalid object id {value}: expected a non-negative integer	невалиден идентификатор на обект {value}: очаква се неотрицателно цяло число
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} на `{key}` е {value}, а не идентификатор на обект (неотрицателно цяло число)
 @msg	no such object id {value}	няма обект с идентификатор {value}
+@msg	id {value} is a ruler guide, not an object	идентификатор {value} е на водач, а не на обект
+@msg	a ruler guide goes only directly in a layer or sublayer	водачът може да е само пряко в слой или подслой
 @msg	automation filesystem access is not granted: read authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за четене: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за запис: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	пътят за автоматизация е отхвърлен: извън корена за четене {root}: {path}
@@ -5900,6 +5904,12 @@ axis	Y Axis	Y ос
 	Crosshair	Мерник
 	Checkpoint	Контролна точка
 	Inventory Icons	Икони на инвентара
+	Skill Icons	Икони на умения
+	Attack	Атака
+	Defend	Защита
+	Heal	Лечение
+	Buff	Усилване
+	Ult	Улт
 	Sword	Меч
 	Shield	Щит
 	Potion	Отвара
@@ -5958,6 +5968,11 @@ axis	Y Axis	Y ос
 	Dash Trail	Пунктирна следа
 	Speed Line	Линия на скорост
 	Game Trails	Игрови следи
+	Energy Beams	Енергийни лъчи
+	Laser Bolt	Лазерен болт
+	Plasma Arc	Плазмена дъга
+	Charge Wave	Вълна на заряд
+	Spark Trail	Следа от искри
 	Calligraphic Nibs	Калиграфски писци
 	Pattern Borders	Бордюри с мостри
 	Scatter Shapes	Разсеяни фигури

@@ -80,11 +80,46 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         if crate::i18n::current() == crate::i18n::Lang::EN { shown.trim_end_matches(" Tool") } else { shown }
                     })
                     .unwrap_or("");
-                ui.label(egui::RichText::new(tool).size(11.5).color(t.text_dim));
+                // The tool name leaves the status message its least width and ends in an ellipsis first.
+                let room = (ui.available_width() - MESSAGE_MIN - ui.spacing().item_spacing.x).max(0.0);
+                ui.scope(|ui| {
+                    ui.set_max_width(room);
+                    clipped_label(ui, egui::RichText::new(tool).size(11.5).color(t.text_dim));
+                });
                 status_readouts(app, ui, &t);
             });
         });
     widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());
+}
+
+/// The least width the status message keeps when the window is narrow.
+const MESSAGE_MIN: f32 = 180.0;
+
+/// A label that ends in an ellipsis when it is wider than the room left in `ui`. Only a cut label
+/// shows its full text in a tooltip; screen readers always receive the full text.
+pub(super) fn clipped_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> egui::Response {
+    let galley = text.into().into_galley(ui, Some(egui::TextWrapMode::Truncate), ui.available_width(), egui::FontSelection::Default);
+    let full = galley.elided.then(|| egui::text::LayoutJob {
+        sections: galley.job.sections.clone(),
+        text: galley.job.text.clone(),
+        language: galley.job.language.clone(),
+        ..Default::default()
+    });
+    let response = ui.add(egui::Label::new(galley).show_tooltip_when_elided(false));
+    match full {
+        Some(job) => full_text_tooltip(response, job),
+        None => response,
+    }
+}
+
+/// Show `text` on hover in a tooltip that wraps to fit inside the window.
+fn full_text_tooltip(response: egui::Response, text: impl Into<egui::WidgetText>) -> egui::Response {
+    let text = text.into();
+    response.on_hover_ui(|ui| {
+        let margins = ui.spacing().menu_margin.sum().x + 2.0 * ui.spacing().item_spacing.x;
+        ui.set_max_width(ui.spacing().tooltip_width.min(ui.ctx().content_rect().width() - margins).max(0.0));
+        ui.add(egui::Label::new(text).wrap());
+    })
 }
 
 /// The most recently measured status widths, scoped to this UI and display settings.
@@ -125,7 +160,6 @@ fn status_readout_widths(ui: &Ui, lang: crate::i18n::Lang, unit: vectorcraft_doc
 /// Allocate the remaining row once, then paint each field inside its own bounded rectangle.
 /// Child UIs requested with a desired width can shrink to their contents; these rectangles cannot.
 pub(super) fn status_readouts(app: &VectorcraftApp, ui: &mut Ui, t: &Tokens) {
-    const MESSAGE_MIN: f32 = 180.0;
     let mono = theme::mono(10.5);
     let proportional = egui::FontId::proportional(10.5);
     let unit = app.session.general_unit();
@@ -229,7 +263,7 @@ fn status_field(ui: &mut Ui, id: &str, rect: egui::Rect, text: String, font: egu
     let response = ui.interact(rect, ui.scope_id().with(("status-field", id)), Sense::hover());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &text));
     if elided {
-        response.on_hover_text(text);
+        full_text_tooltip(response, text);
     }
 }
 

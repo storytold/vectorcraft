@@ -108,9 +108,11 @@ pub(crate) fn holds_instance(n: &Node) -> bool {
 }
 
 /// Is `a` left out of a frame `doc` draws with `opts`, before any culling: hidden, a template or
-/// guide the view hides, drawn hidden, or the instance its symbol is being edited from?
+/// guide the view hides, a ruler guide (the canvas draws those), drawn hidden, or the instance its
+/// symbol is being edited from?
 pub(crate) fn left_out(opts: &crate::RenderOptions, doc: &vectorcraft_doc::Document, a: &Node) -> bool {
-    let view_item = (opts.skip_templates || opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
+    let view_item = a.is_ruler_guide()
+        || (opts.skip_templates || opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
         || (opts.skip_templates || opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
     !a.visible || view_item || opts.hidden.contains(&a.id) || edited_instance(opts, doc, a.id)
 }

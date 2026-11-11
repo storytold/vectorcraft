@@ -310,10 +310,10 @@ pub(super) fn outlined_if_asked(mut doc: Document, warnings: Vec<String>, opts: 
     (doc, warnings)
 }
 
-/// Does `doc` hold no art: only layers, with nothing in them?
+/// Does `doc` hold no art: only layers, with nothing in them but ruler guides?
 fn draws_nothing(doc: &Document) -> bool {
     let mut art = false;
-    doc.walk(|n| art |= !n.is_layer());
+    doc.walk(|n| art |= !n.is_layer() && !n.is_ruler_guide());
     !art
 }
 

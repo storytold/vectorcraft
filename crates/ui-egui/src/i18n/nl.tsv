@@ -381,6 +381,7 @@
 	Smart Punctuation…	Slimme interpunctie…
 	Create Outlines	Omzetten in curven
 	Optical Margin Alignment	Optische marge-uitlijning
+	Dynamic Text	Dynamische tekst
 	Fill with Placeholder Text	Vullen met plaatshoudertekst
 	Insert Inline Symbol	Inline-symbool invoegen
 	Show Hidden Characters	Verborgen tekens tonen
@@ -2712,6 +2713,7 @@ antiAlias	Sharp	Scherp
 	General › Thumbnails	Algemeen › Miniaturen
 	Grayscale images	Grijswaardenafbeeldingen
 	Include non-printing layers	Niet-afdrukbare lagen opnemen
+	Write pages longer than 200 in at full size in points	Pagina's langer dan 200 in op ware grootte in punten schrijven
 	Left:	Links:
 	Mark as trapped	Markeren als getrapt
 	Marks and Bleeds	Steker en afloop
@@ -4814,6 +4816,8 @@ imageTrace	Outline	Contour
 @msg	invalid object id {value}: expected a non-negative integer	ongeldige object-id {value}: een niet-negatief geheel getal verwacht
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	item {index} van `{key}` is {value}, geen object-id (een niet-negatief geheel getal)
 @msg	no such object id {value}	er is geen object met id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} is van een hulplijn, niet van een object
+@msg	a ruler guide goes only directly in a layer or sublayer	een hulplijn kan alleen direct in een laag of sublaag staan
 @msg	automation filesystem access is not granted: read authority is absent: {path}	toegang tot het bestandssysteem voor automatisering is niet verleend: de leesbevoegdheid ontbreekt: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	toegang tot het bestandssysteem voor automatisering is niet verleend: de schrijfbevoegdheid ontbreekt: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automatiseringspad afgewezen: buiten de leesroot {root}: {path}
@@ -5966,6 +5970,12 @@ axis	Y Axis	Y-as
 	Crosshair	Vizier
 	Checkpoint	Controlepunt
 	Inventory Icons	Inventarisiconen
+	Skill Icons	Vaardigheidsiconen
+	Attack	Aanval
+	Defend	Verdediging
+	Heal	Genezen
+	Buff	Buff
+	Ult	Ult
 	Sword	Zwaard
 	Shield	Schild
 	Potion	Drank
@@ -6024,6 +6034,11 @@ axis	Y Axis	Y-as
 	Dash Trail	Streepspoor
 	Speed Line	Snelheidslijn
 	Game Trails	Spelsporen
+	Energy Beams	Energiestralen
+	Laser Bolt	Laserbout
+	Plasma Arc	Plasmaboog
+	Charge Wave	Laadgolf
+	Spark Trail	Vonkenspoor
 	Calligraphic Nibs	Kalligrafische penpunten
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen

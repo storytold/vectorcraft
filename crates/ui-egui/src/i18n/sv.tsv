@@ -1617,6 +1617,7 @@ font-technology	Variable	Variabla
 	Include Linked Files	Inkludera länkade filer
 	Include Metadata	Inkludera metadata
 	Include non-printing layers	Inkludera lager som inte skrivs ut
+	Write pages longer than 200 in at full size in points	Skriv sidor längre än 200 in i full storlek i punkter
 	Include SVG Code	Inkludera SVG-kod
 	Include Swatches for Tints	Inkludera färgrutor för nyanser
 	Inflate…	Blås upp…
@@ -2273,6 +2274,8 @@ font-technology	Variable	Variabla
 	Open…	Öppna…
 	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
+	Dynamic Text	Dynamisk text
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	text på bana i länkad text kan inte använda dynamisk text: {frames}
 	Optimize for fast web view	Optimera för snabb webbvisning
 	Optimized	Optimerad
 	Options	Alternativ
@@ -4841,6 +4844,8 @@ axis	Both	Båda
 @msg	invalid object id {value}: expected a non-negative integer	ogiltigt objekt-id {value}: ett icke-negativt heltal förväntades
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	post {index} i `{key}` är {value}, inte ett objekt-id (ett icke-negativt heltal)
 @msg	no such object id {value}	det finns inget objekt med id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} tillhör en stödlinje, inte ett objekt
+@msg	a ruler guide goes only directly in a layer or sublayer	en stödlinje kan bara ligga direkt i ett lager eller underlager
 @msg	id {value} is a layer, not an object	id {value} är ett lager, inte ett objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} är ett lager, inte ett objekt; flytta lager med layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automatiseringen har inte fått åtkomst till filsystemet: läsbehörighet saknas: {path}
@@ -6162,6 +6167,12 @@ axis	Y Axis	Y-axel
 	Crosshair	Hårkors
 	Checkpoint	Kontrollpunkt
 	Inventory Icons	Inventarieikoner
+	Skill Icons	Färdighetsikoner
+	Attack	Attack
+	Defend	Försvar
+	Heal	Läkning
+	Buff	Buff
+	Ult	Ult
 	Sword	Svärd
 	Shield	Sköld
 	Potion	Dryck
@@ -6226,6 +6237,11 @@ axis	Y Axis	Y-axel
 	Dash Trail	Streckat spår
 	Speed Line	Hastighetslinje
 	Game Trails	Spår från spel
+	Energy Beams	Energistrålar
+	Laser Bolt	Laserbult
+	Plasma Arc	Plasmabåge
+	Charge Wave	Laddningsvåg
+	Spark Trail	Gnistsvår
 	Calligraphic Nibs	Kalligrafiska pennspetsar
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer

@@ -322,7 +322,18 @@ impl Clipboard {
     /// Every object of `src` (each top-level layer's contents) with its resources, for Place and
     /// pasting outside SVG. Their layers don't count for Paste Remembers Layers.
     pub fn from_document(src: &Document) -> Self {
-        let nodes = src.layers.iter().flat_map(|l| l.children().into_iter().flatten()).map(|n| (**n).clone()).collect();
+        // Ruler guides are not objects: the ones of `src`'s layers and sublayers stay behind.
+        let nodes = src
+            .layers
+            .iter()
+            .flat_map(|l| l.children().into_iter().flatten())
+            .filter(|n| !n.is_ruler_guide())
+            .map(|n| {
+                let mut n = (**n).clone();
+                n.strip_ruler_guides();
+                n
+            })
+            .collect();
         Self::gather(src, nodes)
     }
 

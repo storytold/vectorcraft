@@ -47,6 +47,7 @@ mod docsetup;
 mod document_move;
 mod draw2;
 mod dynamic_symbols;
+mod dynamic_text;
 mod editcolors;
 mod effectedit;
 mod emptytype;
@@ -155,6 +156,7 @@ mod script_dialogs;
 mod script_dollar;
 mod script_folder;
 mod script_include;
+mod script_io;
 mod script_run;
 mod scripts;
 mod select_ids_first;
@@ -192,6 +194,7 @@ mod toolsettings;
 mod transformfx;
 mod transparencygrid;
 mod trap;
+mod turn_direction;
 mod typearea;
 mod typeglyphbounds;
 mod typescale;
@@ -213,6 +216,18 @@ fn session() -> Session {
 fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
     let r = s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap();
     NodeId(r["id"].as_u64().unwrap())
+}
+
+/// The active document's selected ruler guides, by their `guide.list` indexes.
+pub(crate) fn selected_guides(s: &Session) -> Vec<usize> {
+    let st = s.doc().unwrap();
+    crate::cmd::guide_indexes(&st.doc, &st.selection.guides)
+}
+
+/// The active document's key guide, by its `guide.list` index.
+pub(crate) fn key_guide(s: &Session) -> Option<usize> {
+    let st = s.doc().unwrap();
+    st.selection.key_guide.and_then(|k| crate::cmd::guide_indexes(&st.doc, &[k]).first().copied())
 }
 
 #[test]

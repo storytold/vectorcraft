@@ -243,7 +243,8 @@ pub(crate) fn accepts(d: &Document, parent: Option<NodeId>, n: &Node) -> bool {
         None => n.is_layer(),
         Some(p) => match d.node(p).map(|x| &x.kind) {
             Some(NodeKind::Layer { .. }) => true,
-            Some(NodeKind::Group { .. }) => !n.is_layer(),
+            // A ruler guide stays directly in a layer or sublayer.
+            Some(NodeKind::Group { .. }) => !n.is_layer() && !n.is_ruler_guide(),
             _ => false,
         },
     }
@@ -478,8 +479,12 @@ fn clip_toggle(s: &mut Session, p: &Value) -> Result<Value> {
             super::object::release_clip(d, id);
             return Ok(false);
         }
-        let top =
-            n.children().and_then(|c| c.last()).map(|c| c.id).ok_or_else(|| EngineError::Other("the layer has no objects to clip by".into()))?;
+        // The topmost object: a layer's ruler guides above its art do not clip.
+        let top = n
+            .children()
+            .and_then(|c| c.iter().rev().find(|c| !c.is_ruler_guide()))
+            .map(|c| c.id)
+            .ok_or_else(|| EngineError::Other("the layer has no objects to clip by".into()))?;
         super::object::make_clipping_path(d, top)?;
         d.move_node(top, Some(id), 0)?;
         if let Some(n) = d.node_mut(id) {
@@ -556,9 +561,8 @@ fn delete_rows(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other("a document needs at least one layer".into()));
     }
     s.edit("Delete Selection", |d, sel| {
-        d.remove_many(&ids)?;
         // The guides on the deleted layers go with them.
-        d.drop_guides_of_deleted_layers(sel);
+        d.remove_many(&ids)?;
         sel.prune(d);
         Ok(())
     })?;
@@ -577,10 +581,10 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("layer.duplicate", "no such rows"));
     }
     let copies = s.edit("Duplicate Selection", |d, _| {
-        super::edit::copy_above(d, &ids, |d, n, c| {
+        // A copied layer's ruler guides are copied with it.
+        super::edit::copy_above(d, &ids, |_, n, c| {
             if n.is_layer() {
                 c.name = Some(format!("{} copy", n.display_name()));
-                d.copy_layer_guides(n, c);
             }
         })
     })?;
@@ -706,6 +710,9 @@ fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
         vec![]
     } else if n.is_layer() {
         n.layer_art(true)
+    } else if n.is_ruler_guide() {
+        // A ruler guide row selects the guide through `guide.select`, not as art.
+        vec![]
     } else {
         vec![id]
     };
@@ -784,11 +791,8 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
             let mut nodes = vec![];
             for id in &ids {
                 let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
-                let c = d.reid(&n);
-                if n.is_layer() {
-                    d.copy_layer_guides(&n, &c);
-                }
-                nodes.push(Arc::new(c));
+                // A copied layer's ruler guides are copied with it.
+                nodes.push(Arc::new(d.reid(&n)));
             }
             nodes
         } else {
@@ -810,6 +814,8 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
         let ch = d.children_mut(parent)?;
         let index = index.min(ch.len());
         ch.splice(index..index, nodes);
+        // A layer's ruler guides stay above its art, each in the order it now has.
+        ch.sort_by_key(|c| c.is_ruler_guide());
         // Copied type whose layout caches `reid` dropped has them again.
         if copy {
             super::typecmd::refresh_bounds_of(d, &out);
@@ -972,7 +978,7 @@ fn remove_artboards(d: &mut Document, sel: &mut vectorcraft_doc::Selection, indi
     for &i in indices.iter().rev() {
         let id = d.artboards.remove(i).id;
         d.retire_artboard_id(id);
-        d.retain_guides(sel, |_, g| g.artboard != Some(id));
+        d.retain_guides(sel, |g| g.artboard != Some(id));
     }
     Ok(())
 }

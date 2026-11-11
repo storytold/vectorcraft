@@ -389,6 +389,8 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         if self.body.len() > MAX_BODY {
             self.body.truncate(was);

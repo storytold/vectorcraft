@@ -367,6 +367,7 @@
 	Smart Punctuation…	Smart tegnsætning…
 	Create Outlines	Opret konturer
 	Optical Margin Alignment	Optisk marginjustering
+	Dynamic Text	Dynamisk tekst
 	Fill with Placeholder Text	Udfyld med pladsholdertekst
 	Insert Inline Symbol	Indsæt indlejret symbol
 	Show Hidden Characters	Vis skjulte tegn
@@ -2698,6 +2699,7 @@ antiAlias	Sharp	Skarp
 	General › Thumbnails	Generelt › Miniaturer
 	Grayscale images	Gråtonebilleder
 	Include non-printing layers	Medtag lag, der ikke udskrives
+	Write pages longer than 200 in at full size in points	Skriv sider længere end 200 in i fuld størrelse i punkter
 	Left:	Venstre:
 	Mark as trapped	Markér som trappet
 	Marks and Bleeds	Mærker og udløb
@@ -4802,6 +4804,8 @@ imageTrace	Outline	Kontur
 @msg	invalid object id {value}: expected a non-negative integer	ugyldigt objekt-id {value}: et ikke-negativt heltal var forventet
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} i `{key}` er {value}, ikke et objekt-id (et ikke-negativt heltal)
 @msg	no such object id {value}	der findes intet objekt med id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} er en hjælpelinje, ikke et objekt
+@msg	a ruler guide goes only directly in a layer or sublayer	en hjælpelinje kan kun ligge direkte i et lag eller underlag
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: læserettighed mangler: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: skriverettighed mangler: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automatiseringssti afvist: uden for læseroden {root}: {path}
@@ -5915,6 +5919,12 @@ axis	Y Axis	Y-akse
 	Crosshair	Sigtekorn
 	Checkpoint	Kontrolpunkt
 	Inventory Icons	Inventarikoner
+	Skill Icons	Færdighedsikoner
+	Attack	Angreb
+	Defend	Forsvar
+	Heal	Helbredelse
+	Buff	Buff
+	Ult	Ult
 	Sword	Sværd
 	Shield	Skjold
 	Potion	Eliksir
@@ -5973,6 +5983,11 @@ axis	Y Axis	Y-akse
 	Dash Trail	Streget spor
 	Speed Line	Hastighedslinje
 	Game Trails	Spilspor
+	Energy Beams	Energistråler
+	Laser Bolt	Laserbolt
+	Plasma Arc	Plasmabue
+	Charge Wave	Opladningsbølge
+	Spark Trail	Gnistsvær
 	Calligraphic Nibs	Kalligrafiske penne
 	Pattern Borders	Mønsterborter
 	Scatter Shapes	Spredte former

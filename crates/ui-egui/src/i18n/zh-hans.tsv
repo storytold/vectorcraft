@@ -1613,6 +1613,7 @@ file-filter	Templates	模板
 	Include Linked Files	包含链接文件
 	Include Metadata	包含元数据
 	Include non-printing layers	包含非打印图层
+	Write pages longer than 200 in at full size in points	以实际尺寸（点）写入长于 200 in 的页面
 	Include SVG Code	包含 SVG 代码
 	Include Swatches for Tints	包含淡色色板
 	Inflate…	膨胀…
@@ -2232,6 +2233,8 @@ file-filter	Templates	模板
 	Open…	打开…
 	Optical	视觉
 	Optical Margin Alignment	视觉边界对齐
+	Dynamic Text	动态文本
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
 	Options	选项
@@ -4713,6 +4716,8 @@ imageTrace	Outline	轮廓
 @msg	invalid object id {value}: expected a non-negative integer	无效的对象 id {value}：应为非负整数
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` 中索引 {index} 处的项为 {value}，不是非负整数对象 id
 @msg	no such object id {value}	没有 id 为 {value} 的对象
+@msg	id {value} is a ruler guide, not an object	id {value} 是参考线，不是对象
+@msg	a ruler guide goes only directly in a layer or sublayer	参考线只能直接位于图层或子图层中
 @msg	id {value} is a layer, not an object	id {value} 是图层，不是对象
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是图层，不是对象；请使用 layer.move 移动图层
 @msg	automation filesystem access is not granted: read authority is absent: {path}	未授予自动化文件系统访问权限：缺少读取权限：{path}
@@ -5977,6 +5982,12 @@ axis	Y Axis	Y 轴
 	Crosshair	准星
 	Checkpoint	检查点
 	Inventory Icons	物品栏图标
+	Skill Icons	技能图标
+	Attack	攻击
+	Defend	防御
+	Heal	治疗
+	Buff	增益
+	Ult	终极技
 	Sword	剑
 	Shield	盾
 	Potion	药水
@@ -6041,6 +6052,11 @@ axis	Y Axis	Y 轴
 	Dash Trail	虚线轨迹
 	Speed Line	速度线
 	Game Trails	游戏轨迹
+	Energy Beams	能量光束
+	Laser Bolt	激光弹
+	Plasma Arc	等离子弧
+	Charge Wave	充能波
+	Spark Trail	火花尾迹
 	Calligraphic Nibs	书法笔尖
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状

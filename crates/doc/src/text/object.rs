@@ -89,6 +89,7 @@ impl TextObject {
             path_effect: PathEffect::default(),
             path_align: PathAlign::default(),
             path_spacing: 0.0,
+            dynamic_text: false,
             wrap: Vec::new(),
             optical_margin: false,
             anti_alias: TypeAntiAlias::Sharp,
