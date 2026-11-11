@@ -102,7 +102,9 @@ pub fn dash_kept(bp: &BezPath, d: &Dash, keep: &dyn Fn(&PathSeg) -> bool) -> Opt
     // so entries that fit down to nothing can't keep a subpath looping.
     let mut budget = MAX_STEPS as usize;
     for plan in &plans {
-        if !dash_subpath(&mut out, plan, &pat, phase, keep, &mut budget) {
+        // The walk budget counts entries crossed; this counts what they produce, so a pattern of
+        // many dots can't grow the output past the limit on dashes.
+        if !dash_subpath(&mut out, plan, &pat, phase, keep, &mut budget) || (out.spans.len() + out.dots.len()) as f64 > MAX_DASHES {
             return None;
         }
     }

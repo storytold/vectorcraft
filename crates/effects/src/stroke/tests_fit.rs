@@ -249,3 +249,18 @@ fn many_short_subpaths_inside_one_gap_are_not_drawn_solid() {
     let out = dash(&b, &d).expect("drawn dashed, not solid");
     assert!(out.spans.is_empty() && out.dots.is_empty());
 }
+
+#[test]
+fn a_pattern_of_many_dots_over_many_subpaths_draws_solid_once_the_dashes_pass_the_limit() {
+    // Alternating zero-length and tiny entries make a dot per pair on every subpath: far more
+    // than MAX_DASHES in all, although the walk stays within its budget.
+    let mut pattern: Vec<f64> = (0..2_500).map(|i| if i % 2 == 0 { 0.0 } else { 0.000002 }).collect();
+    pattern.extend(vec![1_000_000.0; 2_500]);
+    let mut b = BezPath::new();
+    for i in 0..4_001 {
+        b.move_to((i as f64 * 2.0, 0.0));
+        b.line_to((i as f64 * 2.0 + 1.0, 0.0));
+    }
+    let d = Dash { pattern, offset: 0.0, align_corners: false };
+    assert!(dash(&b, &d).is_none());
+}
