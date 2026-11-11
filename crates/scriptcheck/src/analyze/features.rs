@@ -156,8 +156,6 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 } else if n == catalog::DOLLAR_EVAL_FILE {
                     self.acc.feature(FeatureId::DollarEvalFile, line);
                     self.acc.outside(OutsideId::UnseenCode, line, None);
-                } else if n == catalog::LOCALIZE {
-                    self.acc.feature(FeatureId::Localize, line);
                 } else {
                     self.acc.feature(FeatureId::Dollar, line);
                 }

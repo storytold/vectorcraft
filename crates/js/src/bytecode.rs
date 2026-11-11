@@ -195,6 +195,8 @@ pub(crate) struct Code {
     pub(crate) strict: bool,
     /// A function expression's own name, bound inside it.
     pub(crate) self_name: Option<Key>,
+    /// A function declaration's name, which `$.stack` shows.
+    pub(crate) decl_name: Option<Key>,
     pub(crate) params: Vec<Key>,
     pub(crate) vars: Vec<Key>,
     /// Function declarations to instantiate on entry: their names and indices in `functions`.

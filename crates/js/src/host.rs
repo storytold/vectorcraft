@@ -109,6 +109,12 @@ pub enum HostItem {
     Converted(Vec<Arg>, HostFunction),
     /// A property whose value the function gives each time it is read.
     Getter(HostFunction),
+    /// A property whose value `get` gives each time it is read, and that `set` is given each value
+    /// assigned to it, as its one argument; an error from `set` is thrown to the script.
+    Property {
+        get: HostFunction,
+        set: HostFunction,
+    },
     /// A frozen object with these members.
     Object(Vec<(String, HostItem)>),
     /// A function whose host function gives JavaScript source as a string, which then runs as
@@ -123,6 +129,23 @@ pub enum HostItem {
         end: Rc<dyn Fn()>,
         strict_writes: Rc<dyn Fn() -> Option<bool>>,
     },
+    /// A read-only property that reads the interpreter's own state.
+    Script(ScriptItem),
+}
+
+/// The interpreter's own state a host object can show.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScriptItem {
+    /// The global object itself, with every global the script has made.
+    Global,
+    /// The last `Error` object thrown in the current run, caught or not, or `null` before one.
+    LastError,
+    /// The line of the script's code that reads it, counted from 1.
+    Line,
+    /// The running frames of the script's code, outermost first, one a line as `name:line`: the
+    /// global code is `[global]` and a function without a name `[anonymous]`. At most 64 frames
+    /// are listed, the innermost ones, after a line `…` when some are left out.
+    Stack,
 }
 
 enum Step {
@@ -484,6 +507,11 @@ impl Interp {
         let prop = match item {
             HostItem::Value(d) => Prop::Data { value: self.write_data(d, 0, true)?, flags: ENUMERABLE },
             HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, ArgRead::Data)), set: None, flags: ENUMERABLE },
+            HostItem::Property { get, set } => Prop::Accessor {
+                get: Some(self.host_function(get, &full, ArgRead::Data)),
+                set: Some(self.host_function(set, &full, ArgRead::Data)),
+                flags: ENUMERABLE,
+            },
             HostItem::Object(items) => Prop::Data { value: Value::Object(self.host_object(&full, items)?), flags: ENUMERABLE },
             HostItem::Function(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Data)), flags: ENUMERABLE },
             HostItem::TextFunction(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Text)), flags: ENUMERABLE },
@@ -496,6 +524,13 @@ impl Interp {
                 let f = self.heap.alloc_object(Object::new(Class::Function(func), Some(proto)));
                 Prop::Data { value: Value::Object(f), flags: ENUMERABLE }
             }
+            HostItem::Script(item) => match crate::builtins::extensions::getter(item) {
+                None => Prop::Data { value: Value::Object(self.global), flags: ENUMERABLE },
+                Some((name, f)) => {
+                    let get = crate::builtins::native(self, name, f, 0, crate::heap::NativeKind::Plain, false)?;
+                    Prop::Accessor { get: Some(get), set: None, flags: ENUMERABLE }
+                }
+            },
         };
         self.define(o, key(&name), prop)
     }
