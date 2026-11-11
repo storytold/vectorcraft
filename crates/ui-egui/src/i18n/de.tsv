@@ -5713,6 +5713,12 @@ axis	Y Axis	Y-Achse
 	Flag	Flagge
 	Crosshair	Fadenkreuz
 	Checkpoint	Kontrollpunkt
+	Inventory Icons	Inventar-Symbole
+	Sword	Schwert
+	Shield	Schild
+	Potion	Trank
+	Key	Schlüssel
+	Gem	Edelstein
 	Open Symbol Library	Symbol-Bibliothek öffnen
 	Save Symbol Library	Symbol-Bibliothek speichern
 	Save Symbol Library…	Symbol-Bibliothek speichern…

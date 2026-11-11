@@ -6113,6 +6113,12 @@ axis	Y Axis	Y tengely
 	Flag	Zászló
 	Crosshair	Célkereszt
 	Checkpoint	Ellenőrzőpont
+	Inventory Icons	Leltári ikonok
+	Sword	Kard
+	Shield	Pajzs
+	Potion	Bájital
+	Key	Kulcs
+	Gem	Drágakő
 	Open Symbol Library	Szimbólumkönyvtár megnyitása
 	Save Symbol Library	Szimbólumkönyvtár mentése
 	Save Symbol Library…	Szimbólumkönyvtár mentése…

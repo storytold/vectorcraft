@@ -5968,6 +5968,12 @@ axis	Y Axis	Y-as
 	Flag	Vlag
 	Crosshair	Vizier
 	Checkpoint	Controlepunt
+	Inventory Icons	Inventarisiconen
+	Sword	Zwaard
+	Shield	Schild
+	Potion	Drank
+	Key	Sleutel
+	Gem	Edelsteen
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…

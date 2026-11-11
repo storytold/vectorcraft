@@ -6125,6 +6125,12 @@ axis	Y Axis	Axe Y
 	Flag	Drapeau
 	Crosshair	Réticule
 	Checkpoint	Point de contrôle
+	Inventory Icons	Icônes d’inventaire
+	Sword	Épée
+	Shield	Bouclier
+	Potion	Potion
+	Key	Clé
+	Gem	Gemme
 	Open Symbol Library	Ouvrir une bibliothèque de symboles
 	Save Symbol Library	Enregistrer la bibliothèque de symboles
 	Save Symbol Library…	Enregistrer la bibliothèque de symboles…

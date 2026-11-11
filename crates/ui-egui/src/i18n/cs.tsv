@@ -6130,6 +6130,12 @@ axis	Y Axis	osa Y
 	Flag	Vlajka
 	Crosshair	Zaměřovač
 	Checkpoint	Kontrolní bod
+	Inventory Icons	Ikony inventáře
+	Sword	Meč
+	Shield	Štít
+	Potion	Lektvar
+	Key	Klíč
+	Gem	Drahokam
 	Open Symbol Library	Otevřít knihovnu symbolů
 	Save Symbol Library	Uložit knihovnu symbolů
 	Save Symbol Library…	Uložit knihovnu symbolů…

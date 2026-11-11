@@ -5765,6 +5765,12 @@ axis	Y Axis	Y 軸
 	Flag	旗幟
 	Crosshair	準星
 	Checkpoint	檢查點
+	Inventory Icons	物品欄圖示
+	Sword	劍
+	Shield	盾
+	Potion	藥水
+	Key	鑰匙
+	Gem	寶石
 	Open Symbol Library	開啟符號資料庫
 	Save Symbol Library	儲存符號資料庫
 	Save Symbol Library…	儲存符號資料庫…

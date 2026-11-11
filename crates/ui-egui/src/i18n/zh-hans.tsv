@@ -5968,6 +5968,12 @@ axis	Y Axis	Y 轴
 	Flag	旗帜
 	Crosshair	准星
 	Checkpoint	检查点
+	Inventory Icons	物品栏图标
+	Sword	剑
+	Shield	盾
+	Potion	药水
+	Key	钥匙
+	Gem	宝石
 	Open Symbol Library	打开符号库
 	Save Symbol Library	保存符号库
 	Save Symbol Library…	保存符号库…
