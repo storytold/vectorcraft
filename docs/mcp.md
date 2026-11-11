@@ -591,7 +591,7 @@ the stored fill, or the stored stroke when no fill is stored and that stroke has
 outline, so these commands do not store a stroke paint or weight for a series that draws a band. Except for
 `paint.swap`, they still store a stroke opacity and blend mode set on a band, and the band's outline takes them. Graph
 designs keep their own paint. A row that had no
-paint before the command and has none after it does not change what the graph stores. `paint.setFill`,
+paint before the command and has none after it does not change the paint the graph stores. `paint.setFill`,
 `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
 even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
 not store a series' paint. An `appearance.*` command or `graphicStyle.apply` given a series group's id, and
@@ -3266,7 +3266,9 @@ the group holds only the art inside the clipping layer, drawn over the fill and 
 layer as its own layers draw it (over nothing with `preserveAlpha`), and the art outside is flattened on its own.
 `preset` is `high`, `medium` (the default) or `low`; option keys (`balance` 0–100, `lineArtPpi`, `gradientPpi`,
 `textToOutlines`, `strokesToOutlines`, `clipComplexRegions`, `antiAlias`, `preserveAlpha`, `preserveOverprints`)
-override it, at the top level or in `options`. `balance: 0` rasterizes everything; lower balances rasterize groups
+override it, at the top level or in `options`. An image that would be larger than 64 million pixels or longer than
+32,768 pixels a side at `lineArtPpi` or `gradientPpi` is made at the highest resolution that fits, so a long area is
+rasterized whole. `balance: 0` rasterizes everything; lower balances rasterize groups
 that split into many regions. The result reports `{ids, vector, rasterized, options}`. When an image in the art
 can't be decoded, the image that replaces the art does not show it, and the result also carries `warning`: "an image
 couldn't be decoded and is missing from the picture", the note raster exports give.
