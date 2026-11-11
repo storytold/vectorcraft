@@ -10,6 +10,7 @@ use vectorcraft_doc::pattern::pattern_paint;
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, PatternDef, TileType};
 use vectorcraft_geom::{PathData, Point, Rect, SubPath, shapes};
 
+use super::Result;
 use super::clipboard::Clipboard;
 use super::clipboard::resources::SwatchChoices;
 use super::swatchlib::LibraryInfo;
@@ -84,11 +85,11 @@ pub fn swatch_source(w: &Swatch) -> Option<Arc<Document>> {
 /// Add pattern `name` of library `lib` to `d` with the resources its art uses, as pasting art
 /// painted with it does: the same pattern there already is used, and a name another pattern or
 /// swatch has gets a number → the pattern's name in `d`.
-pub(crate) fn import(d: &mut Document, lib: &Document, name: &str) -> String {
+pub(crate) fn import(d: &mut Document, lib: &Document, name: &str) -> Result<String> {
     let user = Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::basic(pattern_paint(name), Paint::None, 0.0));
-    let imported = Clipboard::gather(lib, vec![user]).import_into(d, &SwatchChoices::default(), false);
+    let imported = Clipboard::gather(lib, vec![user]).import_into(d, &SwatchChoices::default(), false)?;
     let renamed = imported.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name).and_then(|r| r["to"].as_str());
-    renamed.unwrap_or(name).to_string()
+    Ok(renamed.unwrap_or(name).to_string())
 }
 
 /// The pattern of `d` that is pattern `name` of library `lib`: the same tile options and art under

@@ -405,7 +405,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Where the symbols land, worked out on a copy: nothing to add and nothing to place is no edit.
     let mut probe = (*st.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let doc_names: Vec<String> = picked.iter().map(|n| target(&imported.renamed, n)).collect();
     let centre = st.doc.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
     let at = if place { Some(Point::new(number_or(p, "x", centre.x, C)?, number_or(p, "y", centre.y, C)?)) } else { None };
@@ -413,7 +413,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({ "library": info.id });
     if imported.added > 0 || place {
         let placed = s.edit("Add to Symbols", |d, sel| {
-            let imported = clip.import_into(d, &choices, false);
+            let imported = clip.import_into(d, &choices, false)?;
             // Every symbol brought in (nested ones too) takes its Symbol Options along.
             for sym in &clip.symbols {
                 let to = target(&imported.renamed, &sym.name);

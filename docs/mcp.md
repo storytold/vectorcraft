@@ -3810,7 +3810,8 @@ what every object that uses it draws, in the edit's one undo step, and an applic
 filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
 empty) until a filter of that name is defined or imported again. A pasted effect that names one of the document's
 filters but draws another definition keeps its own filter under a free name (`Soft 2`); pasted back into the document
-it was copied from, it takes the document's filter. Opened from such an effect, Apply SVG Filter shows the
+it was copied from, it takes the document's filter. The free name is one that no filter of the document and no effect in
+its art, brushes or graphic styles uses; when no such name keeps the filter within 64 KB, the paste is refused. Opened from such an effect, Apply SVG Filter shows the
 name above the list, not selectable. `effect.apply {effect: "svg.filter", params: {xml}}` takes a filter
 directly and names it by its `id`; an `xml` that isn't one such filter is an error. `ui.svgFilterDialog {}` opens Apply
 SVG Filter (New, Edit, Delete, Import…), and from the Appearance panel it edits which filter an applied effect runs;

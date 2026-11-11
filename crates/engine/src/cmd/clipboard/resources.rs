@@ -28,7 +28,7 @@ use vectorcraft_doc::{
 use super::super::brushsym::{set_natural_size, stored_natural_size};
 
 use super::super::patterncmds::add_pattern;
-use super::super::{Result, bad, unique_name};
+use super::super::{EngineError, Result, bad, unique_name};
 use super::Clipboard;
 
 /// A resource kind objects refer to (graphic styles by id, the others by name).
@@ -1055,8 +1055,9 @@ impl Clipboard {
     }
 
     /// Add the resources the objects use to `d` (inside the paste's undo step) and work out how
-    /// pasted copies relink to them.
-    pub(crate) fn import_into(&self, d: &mut Document, choices: &SwatchChoices, same_doc: bool) -> Imported {
+    /// pasted copies relink to them. An error, with `d` unchanged, when a pasted SVG filter finds no
+    /// free name ([`Self::filter_links`]).
+    pub(crate) fn import_into(&self, d: &mut Document, choices: &SwatchChoices, same_doc: bool) -> Result<Imported> {
         self.import_used(d, &self.used(), choices, same_doc, false)
     }
 
@@ -1065,9 +1066,9 @@ impl Clipboard {
     /// each style, symbol, pattern and brush comes after the styles, symbols, patterns and brushes it uses
     /// ([`use_order`]), so that it is compared and relinked with their names here, and each loop
     /// of definitions that use each other is matched on its own ([`loop_groups`]).
-    fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, in_use_order: bool) -> Imported {
+    fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, in_use_order: bool) -> Result<Imported> {
         let mut out = Imported::default();
-        out.relink.filters = self.filter_links(d, same_doc);
+        out.relink.filters = self.filter_links(d, same_doc)?;
         self.import_images(d, used, same_doc, &mut out);
         self.import_swatches(d, used, choices, same_doc, &mut out);
         // Brushes whose art shows no symbols or patterns, before the symbols and patterns whose art
@@ -1230,7 +1231,7 @@ impl Clipboard {
             && out.relink.styles.is_empty()
             && out.relink.colors.is_empty()
             && used.styles.is_empty());
-        out
+        Ok(out)
     }
 
     /// How the pasted SVG filter effects relink ([`Relink::filters`]). Each names the document's
@@ -1238,8 +1239,8 @@ impl Clipboard {
     /// filter when pasted back into the document it came from, and elsewhere keeps its own under a
     /// name no filter or effect of the document gives, so editing or deleting the document's filter leaves it alone. When that name would
     /// make the filter too long to draw, the free name is a shorter start of its name ("Shif"), else
-    /// a free letter or digit; the filter's id is always its name.
-    fn filter_links(&self, d: &Document, same_doc: bool) -> BTreeMap<(String, String), (String, String)> {
+    /// a free letter or digit; the filter's id is always its name. An error when no free name fits.
+    fn filter_links(&self, d: &Document, same_doc: bool) -> Result<BTreeMap<(String, String), (String, String)>> {
         let mut found = BTreeSet::new();
         for n in &self.nodes {
             node_filters(n, &mut found);
@@ -1272,6 +1273,9 @@ impl Clipboard {
                     for root in d.art_roots() {
                         node_filter_names(root, &mut taken);
                     }
+                    for a in vectorcraft_brush::library(d).iter().flat_map(Brush::art) {
+                        node_filter_names(a, &mut taken);
+                    }
                     for g in &d.graphic_styles {
                         appearance_filter_names(&g.appearance, &mut taken);
                     }
@@ -1288,13 +1292,17 @@ impl Clipboard {
                         .filter(|x| vectorcraft_render::effects::svg_filter::check(x).is_ok_and(|id| id == new))?;
                     Some((new, drawn))
                 });
-                let Some((new, drawn)) = renamed else { continue };
+                let Some((new, drawn)) = renamed else {
+                    return Err(EngineError::Other(format!(
+                        "the pasted SVG filter {name:?} draws differently from the document's filter of that name, and no free name fits it"
+                    )));
+                };
                 taken.insert(new.clone());
                 (new, drawn)
             };
             links.insert((name, xml), to);
         }
-        links
+        Ok(links)
     }
 
     /// Image blobs: a different blob under a key the document uses gets a new key.
@@ -1409,13 +1417,13 @@ pub(crate) struct LoadedStyle {
 /// a pattern added under a free name and a pattern follows a style renamed on the way in. A style
 /// `d` has under its name, or a numbered copy of it ("Body 2"), that is the same once relinked is
 /// used; any other is added under a free name. → each style of `src` placed, in order, character
-/// styles first.
-pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, paras: bool) -> Vec<LoadedStyle> {
+/// styles first. An error, as [`Clipboard::import_into`] gives.
+pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, paras: bool) -> Result<Vec<LoadedStyle>> {
     let library = OnceCell::new();
     let used = Used::of_text_styles(&Defs::of(src, &library), chars, paras);
     let clip = Clipboard::with_used(src, &used, &library, vec![]);
     let before = [&d.char_styles, &d.para_styles].map(|l| l.iter().map(|s| s.name.clone()).collect::<BTreeSet<_>>());
-    let out = clip.import_used(d, &used, &SwatchChoices::default(), false, true);
+    let out = clip.import_used(d, &used, &SwatchChoices::default(), false, true)?;
     let mut placed: Vec<LoadedStyle> = vec![];
     for (para, r, list) in [(false, Res::CharStyle, &clip.char_styles), (true, Res::ParaStyle, &clip.para_styles)] {
         for s in list {
@@ -1425,7 +1433,7 @@ pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, 
             placed.push(LoadedStyle { para, name, added });
         }
     }
-    placed
+    Ok(placed)
 }
 
 /// Swatch `w` in `d` ([`existing`]), else added under a free name (swatches and colour groups
