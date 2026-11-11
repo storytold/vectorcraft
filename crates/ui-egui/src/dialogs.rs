@@ -410,6 +410,7 @@ registry! {
     ScriptRun: [script_run::KIND] => script_run::SPEC,
     ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,
     ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
+    ScriptNotice: [script_run::NOTICE_KIND] => script_run::NOTICE_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
@@ -587,6 +588,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         // The growth question's Cancel button is its Stop button.
         if d.kind == script_run::GROWTH_KIND {
             app.session.script_request_stop();
+        }
+        if d.kind == script_run::NOTICE_KIND {
+            script_run::notice_cancel(app, &d);
         }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec

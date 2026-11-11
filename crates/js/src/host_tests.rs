@@ -277,6 +277,84 @@ fn advancing_without_a_run_is_an_error() {
     assert_eq!((e.kind, e.message.as_str()), (RunErrorKind::Internal, "no run to advance"));
 }
 
+/// A realm with the global `ask(question)`, which waits for its answer where it can and throws an
+/// `Error` where it cannot. → how many times it was called.
+fn with_ask(r: &mut Realm) -> Rc<Cell<u32>> {
+    let calls: Rc<Cell<u32>> = Rc::default();
+    let (count, can_wait) = (calls.clone(), r.wait_flag());
+    let f: HostFunction = Rc::new(move |_| {
+        count.set(count.get() + 1);
+        if can_wait.get() { Err(HostError::Wait) } else { Err(HostError::Error("cannot wait here".into())) }
+    });
+    r.define_host_function("ask", vec![Arg::Text], f).unwrap();
+    calls
+}
+
+#[test]
+fn a_waiting_call_pauses_at_the_call_and_takes_its_answer_once() {
+    let mut r = realm(1_000_000);
+    let calls = with_ask(&mut r);
+    r.start("var a = ask('first'); var b = ask('second'); a + '|' + b").unwrap();
+    assert_eq!(r.advance(1_000).unwrap(), Progress::Paused);
+    assert!(r.waits());
+    let fuel = r.fuel_left();
+    let e = r.advance(1_000).unwrap_err();
+    assert_eq!((e.kind, e.message.as_str()), (RunErrorKind::Internal, "the run waits for a host function's result"));
+    assert_eq!(r.fuel_left(), fuel, "no fuel is spent while the call waits");
+    r.answer(Data::String("one".into())).unwrap();
+    assert!(!r.waits());
+    assert_eq!(r.advance(1_000).unwrap(), Progress::Paused);
+    assert!(r.waits());
+    r.answer(Data::Null).unwrap();
+    assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::String("one|null".into()));
+    assert_eq!(calls.get(), 2, "each call ran once");
+    let e = r.answer(Data::Null).unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Internal);
+}
+
+#[test]
+fn only_the_scripts_own_code_in_a_resumable_run_can_wait() {
+    let mut r = realm(1_000_000);
+    with_ask(&mut r);
+    let caught = "var out = []; [1].forEach(function () { try { ask('x'); } catch (e) { out.push(e.message); } }); \
+                  var o = {}; Object.defineProperty(o, 'g', {get: function () { try { ask('y'); } catch (e) { out.push(e.message); } }}); o.g; \
+                  try { String({toString: function () { return ask('z'); }}); } catch (e) { out.push(e.message); } out.join()";
+    r.start(caught).unwrap();
+    assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::String("cannot wait here,cannot wait here,cannot wait here".into()));
+    let e = r.run("ask('q')").unwrap_err();
+    assert!(e.message.contains("cannot wait here"), "a run that cannot pause cannot wait: {}", e.message);
+    r.start("var f = ask; ask.call(null, 'q'); f.apply(null, ['r'])").unwrap();
+    assert_eq!(r.advance(1_000).unwrap(), Progress::Paused);
+    assert!(r.waits(), "call and apply from the script's own code wait");
+}
+
+#[test]
+fn a_host_function_that_waits_where_it_cannot_ends_the_run() {
+    let mut r = realm(1_000_000);
+    let f: HostFunction = Rc::new(|_| Err(HostError::Wait));
+    r.define_host_function("ask", vec![], f).unwrap();
+    let e = r.run("try { ask(); } catch (e) { 'caught' }").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Internal);
+}
+
+#[test]
+fn a_converted_function_reads_each_argument_as_its_list_says() {
+    let mut r = realm(1_000_000);
+    let seen: Rc<RefCell<Vec<Vec<Data>>>> = Rc::default();
+    let log = seen.clone();
+    let f: HostFunction = Rc::new(move |args| {
+        log.borrow_mut().push(args);
+        Ok(Data::Undefined)
+    });
+    r.define_host_function("conv", vec![Arg::Text, Arg::TextOrUndefined, Arg::Bool], f).unwrap();
+    r.run("conv(42, undefined, 'x', function () {}); conv(undefined, null, 0); conv({toString: function () { return 'own'; }}); conv()").unwrap();
+    let s = |t: &str| Data::String(t.into());
+    let want = vec![vec![s("42"), Data::Undefined, Data::Bool(true)], vec![s("undefined"), s("null"), Data::Bool(false)], vec![s("own")], vec![]];
+    assert_eq!(*seen.borrow(), want, "arguments past the list are not read");
+    let out = r.run("var a = typeof conv; conv = 1; a + ' ' + conv").unwrap();
+    assert_eq!(out, JsValue::String("function 1".into()), "a script may replace the function");
+}
+
 proptest::proptest! {
     /// A slice size does not change what a script computes.
     #[test]

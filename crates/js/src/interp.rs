@@ -181,6 +181,12 @@ pub(crate) struct Interp {
     pub(crate) held: Rc<HeldCount>,
     /// Set by the host to end the current slice of a resumable run at the next safe point.
     pub(crate) pause: Rc<std::cell::Cell<bool>>,
+    /// The outermost loop of a resumable run is running ([`crate::Realm::advance`]).
+    pub(crate) in_slice: bool,
+    /// True while a host function runs where it may wait ([`crate::HostError::Wait`]).
+    pub(crate) can_wait: Rc<std::cell::Cell<bool>>,
+    /// A host function's call waits for its result: the value on top of the stack stands in for it.
+    pub(crate) waiting: bool,
     /// The message of the uncatchable error a host function ended the run with.
     pub(crate) host_abort: Option<String>,
     /// How much a value passed to or from a host function may carry.
@@ -380,6 +386,9 @@ impl Interp {
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
             pause: Rc::default(),
+            in_slice: false,
+            can_wait: Rc::default(),
+            waiting: false,
             host_abort: None,
             data_limits: crate::DataLimits::default(),
             source_tag: crate::realm::UNKNOWN_SOURCE,
@@ -423,7 +432,7 @@ impl Interp {
 
     // ---- the operand stack ----
 
-    fn push(&mut self, v: Value) -> JsResult<()> {
+    pub(crate) fn push(&mut self, v: Value) -> JsResult<()> {
         self.stack.push(v);
         Ok(())
     }
@@ -1855,10 +1864,10 @@ impl Interp {
                     self.temp_roots.truncate(mark);
                     return Ok(Prepared::Done(r?));
                 }
-                Func::Data { f, name, text } => {
+                Func::Data { f, name, read } => {
                     // The arguments are read before the function runs, and a result being built
                     // keeps itself reachable.
-                    return Ok(Prepared::Done(self.call_data(&f, &name, &args, text)?));
+                    return Ok(Prepared::Done(self.call_data(&f, &name, &args, &read)?));
                 }
                 Func::Eval { f, end, name } => return Ok(Prepared::Done(self.call_evaluator(&f, &end, &name, &args)?)),
                 Func::Host { f: host, .. } => {

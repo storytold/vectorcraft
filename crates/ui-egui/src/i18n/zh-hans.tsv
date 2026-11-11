@@ -4571,6 +4571,7 @@ imageTrace	Outline	轮廓
 	Stop Script	停止脚本
 	Show External Script Warning	显示外部脚本警告
 	A Script Is Running	脚本正在运行
+	Script Alert	脚本提示
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告
 	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。

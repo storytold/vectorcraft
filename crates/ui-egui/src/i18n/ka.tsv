@@ -5179,6 +5179,7 @@ imageTrace	Outline	კონტური
 	Stop Script	სკრიპტის შეჩერება
 	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
 	A Script Is Running	სკრიპტი მუშაობს
+	Script Alert	სკრიპტის შეტყობინება
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
 	Stop the script and undo what it did? Then quit again.	შეჩერდეს სკრიპტი და გაუქმდეს მისი ცვლილებები? შემდეგ ხელახლა გამოდით.

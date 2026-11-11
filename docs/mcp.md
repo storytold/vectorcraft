@@ -1569,6 +1569,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   missing file and a refused path throw errors the script can catch.
 - `$.fileName` is the file being run, which is the file `$.evalFile` is running while it runs, and is empty for a
   script given as `source`. `$.includePath` is the current `#includepath` list, separated by `;`.
+- `alert(message[, title, errorIcon])`, `confirm(message[, noAsDflt, title])` and `prompt(message, preset[, title])`
+  open a dialog, described below. `vc.api.has("dialogs")` is true.
 - `vc.args` is the `args` object.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
@@ -1634,16 +1636,18 @@ VectorCraft sets these limits itself:
 | `args` as JSON | 1 MiB |
 | Log | 10,000 entries and 4 MiB |
 | Script Console | 2,048 lines and 1 MiB of text; 4,096 bytes a line; 256 bytes of a script's name |
+| A dialog's message, title and prompt preset | 16 KiB, 256 bytes and 16 KiB |
+| `answers` | 10,000 answers and 1 MiB as JSON |
+| `dialogs` in the report | 10,000 dialogs and 1 MiB as JSON |
 | Growth before a person is asked | 100,000 objects and 512 MiB of new document data |
 
 In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
 `ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
-runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console}`. In the app the reply is `{running: true,
-name}`, and the report appears later as `scriptReport` in `ui.inspect`. The report of a failed run has the same
-fields after `kind`, `message`, `line`, `column`, `file` (when the error is in another file than the script) and
-`fuelLeft`. `answers` takes only an empty object, since scripts
-have no prompts yet.
+runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`. In
+the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`. The
+report of a failed run has the same fields after `kind`, `message`, `line`, `column`, `file` (when the error is in
+another file than the script) and `fuelLeft`.
 
 - `runTimeMs` is the time the script ran, its commands included. Waits between frames and for a person's answer are
   left out. `timingAvailable` is false on the web, where `runTimeMs` is 0.
@@ -1651,6 +1655,11 @@ have no prompts yet.
 - `slowestCommands` lists at most 5 commands as `{id, calls, totalMs, maxMs}`, the longest in all first, then by id.
 - `console` is `{lines, droppedLines, truncatedLines}`: the run's own output, `vc.log` lines and uncaught error, as
   text.
+- `dialogs` lists the run's dialogs in the order they opened, as `{kind, message, title, errorIcon, answer}` for
+  `alert`, `{kind, message, title, noAsDefault, answer}` for `confirm` and `{kind, message, title, preset, answer}`
+  for `prompt`. `answer` is `"ok"`, `true`, `false`, the prompt's text, `null` for Cancel, `"stop"` for a dialog the
+  run ended at, or `"missing"` for a dialog `answers` had no answer for. `dialogCount` counts every dialog, and
+  `dialogsTruncated` is true when the list stopped at its limit.
 
 ```json
 {"name":"run_command","arguments":{"command":"script.run","params":{"source":"vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10});"}}}
@@ -1658,6 +1667,47 @@ have no prompts yet.
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"path": "Tidy Layers.js", "args": {"margin": 12}}'
+```
+
+The help page https://extendscript.docsforadobe.dev/extendscript-tools-features/user-notification-dialogs/
+describes the three dialog functions. A script calls them as globals:
+
+- `alert(message[, title, errorIcon])` shows the message with OK, and an error icon when `errorIcon` is true. It
+  returns `undefined`.
+- `confirm(message[, noAsDflt, title])` shows the message with Yes and No. Yes is the default button, and No is the
+  default when `noAsDflt` is true. It returns `true` for Yes and `false` for No.
+- `prompt(message, preset[, title])` shows the message and a text field that starts with `preset`, with OK and
+  Cancel. It returns the field's text for OK, an empty string included, and `null` for Cancel.
+
+The message, the preset and a given title are read as `String(value)` gives them, and `errorIcon` and `noAsDflt` as
+`Boolean(value)` gives them. A title that is left out or `undefined` is Script Alert. A call without a message, or a
+`prompt` without a preset, throws a `TypeError`. A message or a prompt's preset longer than 16 KiB, or a title longer than
+256 bytes, throws a `RangeError` and opens no dialog. The dialog shows line feeds, carriage returns and the two
+together as line breaks, and other control characters as their Unicode Control Pictures. The title stays on one
+line, with line breaks shown as Control Pictures too.
+
+In the app, the run waits at the call until the person answers, and spends no instructions while it waits. Enter
+gives the default button's answer. Escape gives Cancel for a prompt, No for a confirm and Stop for an alert. Every
+dialog also has Stop, which ends the run as `script.stop` does and puts back every document. A dialog can open only
+from the script's own code: called inside a callback of a built-in function such as `Array.prototype.forEach`, a
+getter, a `toString` conversion or a file `$.evalFile` runs, it throws an `Error`. The code of an `#include` file
+is part of the script's own code, and its dialogs open as the script's do. Quitting while a dialog waits asks whether to stop the
+script, and Cancel shows the dialog again with the text typed so far. In the app, `ui.dialog.confirm` answers the
+open dialog (kind `scriptDialog`) with its `answer` field (`ok`, `yes`, `no`, `cancel` or `stop`), or with the
+default button's answer when `answer` is left out. A prompt's `value` longer than 16 KiB is an error, and the
+dialog stays open.
+
+A run with nobody to ask takes its answers from `answers`, a list of `{kind: "alert", value: "ok"}`, `{kind:
+"confirm", value: true}` or `{kind: "confirm", value: false}`, and `{kind: "prompt", value: text}` or `{kind:
+"prompt", value: null}` for Cancel. Each dialog takes the next answer in order, callbacks of built-in functions
+included. The run ends with an error that the script cannot catch, and every document goes back, when no answer is
+left, when the next answer is for another kind of dialog, or when the script ends with answers it did not use.
+`script.run` refuses a list that is malformed, longer than 10,000 answers or larger than 1 MiB before the run starts,
+and refuses any answers for a run in the app, where the person answers. An omitted `answers`, an empty list and an
+empty object are the same.
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"source": "if (confirm(\"Add a frame?\")) vc.log(prompt(\"Name\", \"Frame\"));", "answers": [{"kind": "confirm", "value": true}, {"kind": "prompt", "value": "Border"}]}'
 ```
 
 Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
@@ -3607,7 +3657,10 @@ holds symbol instances that `object` expands, whether only their art holds it, w
 `object` on), and `object.mesh.create` on a gradient-filled object colours the
 mesh points as the gradient paints them, with the colors Object › Expand gives them.
 `object.expand`, `effect.expandAppearance`, `type.createOutlines` and `object.path.outlineStroke` turn a dimension whose
-art they change into a plain group of that art, in the same undo step (see [dimensions.md](dimensions.md)).
+art they change into a plain group of that art, in the same undo step. `object.expand`, `effect.expandAppearance` and
+`object.path.outlineStroke` leave a dimension selected with art it measures, directly or in groups without fills,
+strokes or effects of their own, as it is and change only the other art; if the new art no longer fits the dimension's
+link, the dimension stays where it was, no longer linked (see [dimensions.md](dimensions.md)).
 `object.expand` rejects a param of the wrong type, such as `"fill": "yes"`, `"gradient": 3` or `"steps": "16"`, and
 changes nothing. Omitting a param or giving null keeps its default.
 

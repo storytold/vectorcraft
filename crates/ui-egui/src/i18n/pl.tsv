@@ -4224,6 +4224,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Zatrzymaj skrypt
 	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
 	A Script Is Running	Skrypt jest uruchomiony
+	Script Alert	Komunikat skryptu
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
 	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.

@@ -4118,6 +4118,7 @@ axis	Both	Обидві
 	Stop Script	Зупинити скрипт
 	Show External Script Warning	Показувати попередження про зовнішні скрипти
 	A Script Is Running	Виконується скрипт
+	Script Alert	Повідомлення скрипту
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
 	Do not show this warning again	Більше не показувати це попередження
 	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.

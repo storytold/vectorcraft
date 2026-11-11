@@ -4537,6 +4537,7 @@ theme	Appearance	Giao diện
 	Stop Script	Dừng tập lệnh
 	Show External Script Warning	Hiện cảnh báo tập lệnh bên ngoài
 	A Script Is Running	Một tập lệnh đang chạy
+	Script Alert	Thông báo của tập lệnh
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
 	Do not show this warning again	Không hiện lại cảnh báo này
 	Stop the script and undo what it did? Then quit again.	Dừng tập lệnh và hoàn tác những gì nó đã làm? Sau đó hãy thoát lại.
