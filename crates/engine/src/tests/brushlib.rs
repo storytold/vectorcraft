@@ -104,7 +104,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     let list = run(&mut s, "brush.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
     let ids: Vec<&str> = libs.iter().map(|l| l["id"].as_str().unwrap()).collect();
-    assert_eq!(ids, ["art-ribbons", "calligraphic-nibs", "pattern-borders", "scatter-shapes", "game-trails"]);
+    assert_eq!(ids, ["art-ribbons", "calligraphic-nibs", "pattern-borders", "scatter-shapes", "game-trails", "energy-beams"]);
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
     let lib = run(&mut s, "brush.library", json!({"library": "art ribbons"}));
     assert_eq!(
@@ -118,6 +118,16 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ["Speed Line", "Dash Trail", "Burst Ray", "Zigzag"]
     );
     assert_eq!(libs[4]["count"].as_u64(), Some(4));
+    let beams = run(&mut s, "brush.library", json!({"library": "energy-beams"}));
+    assert_eq!(
+        beams["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
+        ["Laser Bolt", "Plasma Arc", "Charge Wave", "Spark Trail"]
+    );
+    assert_eq!(libs[5]["count"].as_u64(), Some(4));
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
+    let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
+    assert_eq!(strs(&added["added"]), ["Laser Bolt"]);
     // One kind of brush per library, every brush drawing something.
     for (id, kind) in [
         ("art-ribbons", "art"),
@@ -125,6 +135,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("pattern-borders", "pattern"),
         ("scatter-shapes", "scatter"),
         ("game-trails", "art"),
+        ("energy-beams", "art"),
     ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
