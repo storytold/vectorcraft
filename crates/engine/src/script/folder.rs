@@ -10,8 +10,8 @@
 //!
 //! The values here are VectorCraft's own limits: [`MAX_ENTRIES`], [`MAX_SCRIPTS`], [`MAX_FOLDERS`],
 //! [`MAX_DEPTH`], [`MAX_NAME_BYTES`], [`MAX_LABEL_CHARS`] and [`MAX_SCAN`]. A listing that reaches
-//! one of them, or that cannot read a subfolder, keeps what it found and says so
-//! ([`Listing::truncated`]).
+//! one of them, or that cannot read a subfolder or an entry of a folder, keeps what it found and
+//! says so ([`Listing::truncated`]).
 
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
@@ -157,7 +157,10 @@ impl Scan<'_> {
                 continue;
             };
             let Ok(name) = entry.file_name().into_string() else { continue };
-            let Ok(kind) = entry.file_type() else { continue };
+            let Ok(kind) = entry.file_type() else {
+                self.truncated = true;
+                continue;
+            };
             if name.len() > MAX_NAME_BYTES || name.starts_with('.') || kind.is_symlink() || hidden(&entry) {
                 continue;
             }
@@ -173,14 +176,26 @@ impl Scan<'_> {
                 found.push(Found { label: shown(stem), name, folder: false });
             }
         }
-        // A script whose label another row of this folder has shows its whole file name.
-        let mut count = std::collections::HashMap::<String, usize>::new();
-        for f in &found {
-            *count.entry(f.label.clone()).or_default() += 1;
-        }
-        for f in found.iter_mut().filter(|f| !f.folder) {
-            if count.get(&f.label).is_some_and(|n| *n > 1) {
-                f.label = shown(&f.name);
+        // A script whose label another row of this folder has shows its whole file name, until no
+        // label is shared. Each pass gives at least one more script its whole file name, and names
+        // are unique within a folder, so this ends within `found.len()` passes.
+        loop {
+            let mut count = std::collections::HashMap::<String, usize>::new();
+            for f in &found {
+                *count.entry(f.label.clone()).or_default() += 1;
+            }
+            let mut renamed = false;
+            for f in found.iter_mut().filter(|f| !f.folder) {
+                if count.get(&f.label).is_some_and(|n| *n > 1) {
+                    let whole = shown(&f.name);
+                    if f.label != whole {
+                        f.label = whole;
+                        renamed = true;
+                    }
+                }
+            }
+            if !renamed {
+                break;
             }
         }
         found.sort_by(|a, b| (a.label.to_lowercase(), &a.label, &a.name).cmp(&(b.label.to_lowercase(), &b.label, &b.name)));

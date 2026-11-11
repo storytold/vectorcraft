@@ -77,10 +77,11 @@ fn scripts_and_subfolders_are_listed_by_name_without_the_extension() {
 fn a_script_whose_label_another_row_has_shows_its_whole_file_name() {
     let dir = folder("same");
     let root = dir.join("Scripts");
-    for name in ["tidy.js", "tidy.jsx", "tidy/x.js", "alone.jsx"] {
+    for name in ["tidy.js", "tidy.jsx", "tidy.js.js", "tidy/x.js", "alone.jsx"] {
         touch(&root, name);
     }
-    assert_eq!(rows(&folder::list(&root).entries), "alone, tidy/[x], tidy.js, tidy.jsx");
+    // `tidy.js.js` is labeled `tidy.js` until `tidy.js` takes that label, then shows its whole name.
+    assert_eq!(rows(&folder::list(&root).entries), "alone, tidy/[x], tidy.js, tidy.js.js, tidy.jsx");
     let _ = std::fs::remove_dir_all(dir);
 }
 
