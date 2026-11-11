@@ -3109,8 +3109,8 @@ giving null keeps its default. In `pattern.options` and `object.repeat.options`,
 the pattern's or the repeat's current value, with two exceptions. A brick `tileType` in `pattern.options` or a brick
 `gridType` in `object.repeat.options` with `brickOffset` omitted or null sets the offset to 0.5. While `sizeTileToArt`
 is on, each `pattern.options` call sizes the tile to the art plus `hSpacing` and `vSpacing` again and ignores `width`
-and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` still rejects a `width` or `height` that
-is not a positive number, such as `"width": 0`, and changes nothing. Without a `name`,
+and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` still rejects a non-null `width` or
+`height` that is not a positive number, such as `"width": 0`, and changes nothing. Without a `name`,
 `object.pattern.edit` edits the pattern that fills or strokes a selected object, and `pattern.options` changes the
 pattern being edited; each returns an error when there is no such pattern. `pattern.delete` requires `name`.
 
