@@ -153,8 +153,9 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
         Escape,
         Focus,
         Document,
+        HideRulers,
     }
-    for cancel in [Cancel::Outside, Cancel::Escape, Cancel::Focus, Cancel::Document] {
+    for cancel in [Cancel::Outside, Cancel::Escape, Cancel::Focus, Cancel::Document, Cancel::HideRulers] {
         let mut app = app();
         app.run("document.setRulerOrigin", json!({"x": 25, "y": 30})).unwrap();
         let ctx = context();
@@ -177,6 +178,14 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
             }
             Cancel::Document => {
                 app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+                to
+            }
+            Cancel::HideRulers => {
+                assert!(!app.session.overlays(app.view_info()).is_empty(), "the snapping guides show");
+                app.ui.view.rulers = false;
+                frame(&mut app, &ctx, vec![], canvas::show);
+                assert!(app.session.overlays(app.view_info()).is_empty(), "the snapping guides go with the rulers");
+                assert!(!canvas::ruler_origin_dragging(&ctx));
                 to
             }
         };
