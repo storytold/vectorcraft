@@ -758,3 +758,26 @@ fn classic_parameters_are_checked() {
         assert!(err.starts_with(says), "{p}: {err}");
     }
 }
+
+#[test]
+fn the_fills_of_one_object_share_the_allowance_of_paint_copies() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let fill = |stops: usize| {
+        let stops = (0..stops).map(|i| GradientStop::new(i as f32 / stops as f32, RED)).collect();
+        let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+        let mut item = AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint));
+        item.effects_mut().push(fx(EXTRUDE, json!({})));
+        item
+    };
+    let with = |items: Vec<AppearanceItem>| {
+        let mut n = square_node();
+        n.appearance = Appearance { items, ..Default::default() }.into();
+        n
+    };
+    let solid_faces = |n: &Node| solid_art(n).map(|a| a.children().unwrap().iter().map(|s| s.children().unwrap().len()).sum::<usize>());
+    let faces = solid_faces(&with(vec![fill(1)])).expect("one solid");
+    // Each fill alone takes 60% of the allowance, so two of them together pass it.
+    let stops = crate::revolve::MAX_PAINT_COPIES * 6 / 10 / (faces * 2) / std::mem::size_of::<GradientStop>();
+    assert!(solid_faces(&with(vec![fill(stops)])).is_some());
+    assert_eq!(solid_faces(&with(vec![fill(stops), fill(stops)])), None, "past the allowance the source draws");
+}

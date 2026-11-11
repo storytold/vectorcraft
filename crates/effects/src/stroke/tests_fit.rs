@@ -236,3 +236,16 @@ fn a_long_pattern_restarted_on_many_short_subpaths_draws_solid() {
     let d = Dash { pattern, offset: 0.0, align_corners: false };
     assert!(dash(&b, &d).is_none());
 }
+
+#[test]
+fn many_short_subpaths_inside_one_gap_are_not_drawn_solid() {
+    // No subpath crosses an entry, so none is charged a period.
+    let mut b = BezPath::new();
+    for i in 0..4_001 {
+        b.move_to((i as f64 * 2.0, 0.0));
+        b.line_to((i as f64 * 2.0 + 1.0, 0.0));
+    }
+    let d = Dash { pattern: [vec![1000.0; 4999], vec![1000.0]].concat(), offset: 1001.0, align_corners: false };
+    let out = dash(&b, &d).expect("drawn dashed, not solid");
+    assert!(out.spans.is_empty() && out.dots.is_empty());
+}

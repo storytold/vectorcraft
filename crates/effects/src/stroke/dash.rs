@@ -84,8 +84,9 @@ pub fn dash_kept(bp: &BezPath, d: &Dash, keep: &dyn Fn(&PathSeg) -> bool) -> Opt
     if plans.iter().map(|p| p.periods).sum::<f64>() * pat.len() as f64 > MAX_DASHES {
         return None;
     }
+    // A subpath that crosses no entry costs nothing here; the walk below counts the entries it does cross.
     let restarts = |p: &Plan| p.restart.iter().filter(|r| **r).count() as f64;
-    if plans.iter().map(|p| (p.periods.ceil().max(1.0) + restarts(p)) * pat.len() as f64).sum::<f64>() > MAX_STEPS {
+    if plans.iter().map(|p| (p.periods + restarts(p)) * pat.len() as f64).sum::<f64>() > MAX_STEPS {
         return None;
     }
     // Where an exact pattern starts: `offset` into it.
