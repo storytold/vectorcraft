@@ -5632,6 +5632,7 @@ mark-style	Japanese	Japonesas
 	Preview (1 inch on the page)	Vista previa (1 pulgada en la página)
 	Set as Default	Establecer como predeterminado
 	 out from a highlighted edge to place its dimension  |  	 hacia fuera desde un borde resaltado para colocar su cota  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 en dos puntos, luego mueva y haga clic para colocar una cota alineada, horizontal o vertical  |  
 	 cancels  |  Double-click the tool for options	 cancela  |  Doble clic en la herramienta para ver las opciones
 	Angular	Angular
 	Away from the Line	Lejos de la línea
@@ -5655,12 +5656,14 @@ mark-style	Japanese	Japonesas
 @msg	Measured anchor no longer exists	El punto de ancla medido ya no existe
 @msg	Measured segment no longer exists	El segmento medido ya no existe
 @msg	Non-finite dimension	Cota no finita
+@msg	Only linear dimensions are horizontal or vertical	Solo las cotas lineales son horizontales o verticales
 @msg	Scale Text Attributes: selected type has no scale to bake	Escalar atributos de texto: el texto seleccionado no tiene escala que aplicar
 @msg	Scale must be drawing:real, for example 1:10	La escala debe ser dibujo:real, por ejemplo 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	La relación de escala debe estar entre 1:1000000 y 1000000:1
 @msg	Second measured segment no longer exists	El segundo segmento medido ya no existe
 @msg	Unknown dimension mode	Modo de cota desconocido
 @msg	Unknown dimension option {k}	Opción de cota desconocida {k}
+@msg	Unknown dimension orientation	Orientación de cota desconocida
 @msg	Unknown dimension style	Estilo de cota desconocido
 @msg	Unknown unit	Unidad desconocida
 # Revolve cap description

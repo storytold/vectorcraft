@@ -5343,6 +5343,7 @@ lighting	Light	ライト
 	Preview (1 inch on the page)	プレビュー（ページ上の 1 インチ）
 	Set as Default	デフォルトに設定
 	 out from a highlighted edge to place its dimension  |  	 でハイライトされた辺から外側へ寸法を配置  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 で 2 点を指定し、移動してクリックすると平行、水平または垂直の寸法を配置  |  
 	 cancels  |  Double-click the tool for options	 でキャンセル  |  ツールをダブルクリックしてオプション
 	Linear	直線
 	Angular	角度
@@ -5369,12 +5370,14 @@ lighting	Light	ライト
 @msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
 @msg	Measured segment no longer exists	測定したセグメントはもう存在しません
 @msg	Non-finite dimension	寸法が有限ではありません
+@msg	Only linear dimensions are horizontal or vertical	水平または垂直にできるのは直線寸法のみです
 @msg	Scale Text Attributes: selected type has no scale to bake	テキスト属性を拡大・縮小: 選択したテキストに取り込むスケールがありません
 @msg	Scale must be drawing:real, for example 1:10	縮尺は 図面:実寸 の形式にしてください (例: 1:10)
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	縮尺の比率は 1:1000000 から 1000000:1 の間にしてください
 @msg	Second measured segment no longer exists	2 番目の測定セグメントはもう存在しません
 @msg	Unknown dimension mode	寸法のモードが不明です
 @msg	Unknown dimension option {k}	不明な寸法オプション {k}
+@msg	Unknown dimension orientation	寸法の方向が不明です
 @msg	Unknown dimension style	寸法のスタイルが不明です
 @msg	Unknown unit	単位が不明です
 # Revolve cap description

@@ -5535,6 +5535,7 @@ mark-style	Japanese	Japońskie
 	Preview (1 inch on the page)	Podgląd (1 cal na stronie)
 	Set as Default	Ustaw jako domyślne
 	 out from a highlighted edge to place its dimension  |  	 od podświetlonej krawędzi na zewnątrz, aby umieścić jej wymiar  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 dwa punkty, potem przesuń i kliknij, aby umieścić wymiar wyrównany, poziomy lub pionowy  |  
 	 cancels  |  Double-click the tool for options	 anuluje  |  Kliknij dwukrotnie narzędzie, aby wyświetlić opcje
 	Angular	Kątowy
 	Away from the Line	Z dala od linii
@@ -5566,12 +5567,14 @@ mark-style	Japanese	Japońskie
 @msg	Measured anchor no longer exists	Mierzony punkt kontrolny już nie istnieje
 @msg	Measured segment no longer exists	Mierzony odcinek już nie istnieje
 @msg	Non-finite dimension	Wymiar nie jest liczbą skończoną
+@msg	Only linear dimensions are horizontal or vertical	Tylko wymiary liniowe są poziome lub pionowe
 @msg	Scale Text Attributes: selected type has no scale to bake	Skaluj atrybuty tekstu: wybrany tekst nie ma skali do zastosowania
 @msg	Scale must be drawing:real, for example 1:10	Skala musi mieć postać rysunek:rzeczywistość, na przykład 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Współczynnik skali musi mieścić się między 1:1000000 a 1000000:1
 @msg	Second measured segment no longer exists	Drugi mierzony odcinek już nie istnieje
 @msg	Unknown dimension mode	Nieznany tryb wymiaru
 @msg	Unknown dimension option {k}	Nieznana opcja wymiaru {k}
+@msg	Unknown dimension orientation	Nieznana orientacja wymiaru
 @msg	Unknown dimension style	Nieznany styl wymiaru
 @msg	Unknown unit	Nieznana jednostka
 # Revolve cap description

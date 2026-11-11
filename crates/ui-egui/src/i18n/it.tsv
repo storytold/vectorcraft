@@ -5292,6 +5292,7 @@ lighting	Light	Luce
 	Preview (1 inch on the page)	Anteprima (1 pollice sulla pagina)
 	Set as Default	Imposta come predefinito
 	 out from a highlighted edge to place its dimension  |  	 verso l'esterno da un bordo evidenziato per posizionarne la quota  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 su due punti, poi sposta e fai clic per posizionare una quota allineata, orizzontale o verticale  |  
 	 cancels  |  Double-click the tool for options	 annulla  |  Doppio clic sullo strumento per le opzioni
 	Linear	Lineare
 	Angular	Angolare
@@ -5326,12 +5327,14 @@ lighting	Light	Luce
 @msg	Measured anchor no longer exists	Il punto di ancoraggio misurato non esiste più
 @msg	Measured segment no longer exists	Il segmento misurato non esiste più
 @msg	Non-finite dimension	Quota non finita
+@msg	Only linear dimensions are horizontal or vertical	Solo le quote lineari sono orizzontali o verticali
 @msg	Scale Text Attributes: selected type has no scale to bake	Scala attributi di testo: il testo selezionato non ha una scala da incorporare
 @msg	Scale must be drawing:real, for example 1:10	La scala deve essere disegno:reale, ad esempio 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Il rapporto di scala deve essere compreso tra 1:1000000 e 1000000:1
 @msg	Second measured segment no longer exists	Il secondo segmento misurato non esiste più
 @msg	Unknown dimension mode	Modalità di quota sconosciuta
 @msg	Unknown dimension option {k}	Opzione di quota sconosciuta {k}
+@msg	Unknown dimension orientation	Orientamento della quota sconosciuto
 @msg	Unknown dimension style	Stile di quota sconosciuto
 @msg	Unknown unit	Unità sconosciuta
 # Revolve cap description

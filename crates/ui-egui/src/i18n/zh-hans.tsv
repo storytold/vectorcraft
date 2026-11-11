@@ -4758,12 +4758,14 @@ imageTrace	Outline	轮廓
 @msg	Measured anchor no longer exists	测量锚点已不存在
 @msg	Measured segment no longer exists	测量线段已不存在
 @msg	Non-finite dimension	尺寸标注不是有限值
+@msg	Only linear dimensions are horizontal or vertical	只有线性尺寸可以是水平或垂直的
 @msg	Scale Text Attributes: selected type has no scale to bake	缩放文本属性：所选文本没有可应用的缩放
 @msg	Scale must be drawing:real, for example 1:10	比例必须为 图纸:实际，例如 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	比例必须介于 1:1000000 和 1000000:1 之间
 @msg	Second measured segment no longer exists	第二条测量线段已不存在
 @msg	Unknown dimension mode	未知的尺寸标注模式
 @msg	Unknown dimension option {k}	未知的尺寸标注选项 {k}
+@msg	Unknown dimension orientation	未知的尺寸标注方向
 @msg	span must be "object" or "selection", got {v}	span 必须是 "object" 或 "selection"，实际为 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而不是色板
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 放置渐变：请给出 `gradient`
@@ -5560,6 +5562,7 @@ lighting	Light	光源
 	Preview (1 inch on the page)	预览（页面上 1 英寸）
 	Set as Default	设为默认
 	 out from a highlighted edge to place its dimension  |  	 从高亮的边向外拖动以放置其尺寸  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 两个点，然后移动并单击以放置对齐、水平或垂直尺寸  |  
 	 cancels  |  Double-click the tool for options	 取消  |  双击工具打开选项
 	Linear	线性
 	Angular	角度

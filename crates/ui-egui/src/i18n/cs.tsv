@@ -5684,6 +5684,7 @@ mark-style	Japanese	Japonské
 	Preview (1 inch on the page)	Náhled (1 palec na stránce)
 	Set as Default	Nastavit jako výchozí
 	 out from a highlighted edge to place its dimension  |  	 ze zvýrazněné hrany ven a umístíte její kótu  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 na dva body, pak posuňte ukazatel a klepnutím umístěte zarovnanou, vodorovnou nebo svislou kótu  |  
 	 cancels  |  Double-click the tool for options	 zruší  |  Dvojitým kliknutím na nástroj otevřete volby
 	Angular	Úhlová
 	Away from the Line	Dál od čáry
@@ -5714,12 +5715,14 @@ mark-style	Japanese	Japonské
 @msg	Measured anchor no longer exists	Měřený kotevní bod už neexistuje
 @msg	Measured segment no longer exists	Měřený segment už neexistuje
 @msg	Non-finite dimension	Kóta není konečné číslo
+@msg	Only linear dimensions are horizontal or vertical	Vodorovné nebo svislé jsou jen lineární kóty
 @msg	Scale Text Attributes: selected type has no scale to bake	Měnit velikost atributů textu: vybraný text nemá žádnou skalaci, kterou lze použít
 @msg	Scale must be drawing:real, for example 1:10	Měřítko musí mít tvar výkres:skutečnost, například 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Poměr měřítka musí být mezi 1:1000000 a 1000000:1
 @msg	Second measured segment no longer exists	Druhý měřený segment už neexistuje
 @msg	Unknown dimension mode	Neznámý režim kóty
 @msg	Unknown dimension option {k}	Neznámá volba kóty {k}
+@msg	Unknown dimension orientation	Neznámá orientace kóty
 @msg	Unknown dimension style	Neznámý styl kóty
 @msg	Unknown unit	Neznámá jednotka
 # Revolve cap description
