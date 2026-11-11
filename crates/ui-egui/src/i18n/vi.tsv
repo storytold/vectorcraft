@@ -312,6 +312,7 @@ font-technology	Variable	Biến thiên
 	Axis:	Trục:
 	Back	Sau
 	Background Color:	Màu nền:
+	Guide Label:	Nhãn đường căn:
 	Show Center Mark	Hiện dấu tâm
 	Show Cross Hairs	Hiện đường chữ thập
 	Show Video Safe Areas	Hiện vùng an toàn video
@@ -1475,6 +1476,7 @@ file-filter	Swatch libraries	Thư viện mẫu màu
 file-filter	Flattener presets	Thiết lập sẵn làm phẳng
 file-filter	PDF presets	Thiết lập sẵn PDF
 file-filter	Print presets	Thiết lập sẵn in
+file-filter	Preferences	Tùy chọn
 file-filter	Export presets	Cài đặt sẵn xuất
 file-filter	SVG Compressed	SVG nén
 file-filter	PDF-compatible .ai	.ai tương thích PDF
@@ -2203,6 +2205,7 @@ digits	Hindi	Hindi
 	Lock Grid	Khóa lưới
 	Lock Guides	Khóa đường căn
 	Lock Guides by Default	Khóa đường căn theo mặc định
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Đường căn bảng vẽ với Cmd/Ctrl + kéo từ thước
 	Lock Others	Khóa các mục khác
 	Lock Slices	Khóa lát cắt
 	Lock Station Point	Khóa điểm trạm
@@ -3125,6 +3128,12 @@ mark-style	Japanese	Kiểu Nhật
 	Reset OpenType Features	Đặt lại tính năng OpenType
 	Reset Panel	Đặt lại bảng
 	Reset Preferences	Đặt lại tùy chọn
+	Export Preferences…	Xuất tùy chọn…
+	Import Preferences…	Nhập tùy chọn…
+	Save the applied preferences to a JSON file	Lưu các tùy chọn đang áp dụng vào tệp JSON
+	Apply the preferences in a file Export Preferences saved	Áp dụng các tùy chọn trong tệp do Xuất tùy chọn lưu
+	Export Preferences	Xuất tùy chọn
+	Import Preferences	Nhập tùy chọn
 	Search Preferences	Tìm trong tùy chọn
 	No settings found	Không tìm thấy cài đặt
 	Reset Profiles	Đặt lại hồ sơ màu
@@ -3158,6 +3167,8 @@ mark-style	Japanese	Kiểu Nhật
 	Responsive	Đáp ứng
 	Restore	Khôi phục
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
+	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
 	Restored documents open unsaved: save them to keep them.	Tài liệu đã khôi phục mở ở trạng thái chưa lưu: hãy lưu để giữ lại.
 	Restrict printing, editing and other tasks	Hạn chế in, chỉnh sửa và các tác vụ khác
@@ -3506,6 +3517,13 @@ mark-style	Japanese	Kiểu Nhật
 	Quest Outline	Nhiệm vụ
 	Coin Shine	Xu
 	Boss Alert	Trùm
+	Status Effects	Hiệu ứng trạng thái
+	Poison Tint	Độc
+	Freeze Edge	Đóng băng
+	Burn Aura	Bỏng
+	Stun Pulse	Choáng
+	Stealth Fade	Ẩn thân
+	Shield Buff	Khiên
 	Shape	Hình dạng
 	Shape Builder	Tạo hình dạng
 	Shape Builder Regions	Vùng Tạo hình dạng
@@ -3941,6 +3959,8 @@ mark-style	Japanese	Kiểu Nhật
 	Copies per Sheet (as many as fit, in a grid)	Nhiều bản sao trên một tờ (xếp vừa bao nhiêu in bấy nhiêu, theo lưới)
 	Gutter:	Khoảng cách:
 	Tint	Tông màu
+	Fill Tint	Tông màu tô
+	Stroke Tint	Tông màu nét
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng
 	Tips	Mẹo
@@ -4472,6 +4492,7 @@ theme	Appearance	Giao diện
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis phải là "vertical", "horizontal" hoặc góc theo độ, không phải `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black hoặc màu như "#ff8800"
 @msg	bad color {v}	màu không hợp lệ {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` là null, tên một màu lớp hoặc #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio phải là một số từ 0,1 đến 10
 @msg	the Color Picker is not open	Bộ chọn màu chưa được mở
 @msg	the Simplify slider is not open	Thanh trượt Đơn giản hóa chưa được mở
@@ -4523,6 +4544,7 @@ theme	Appearance	Giao diện
 	Stop Script	Dừng tập lệnh
 	Show External Script Warning	Hiện cảnh báo tập lệnh bên ngoài
 	A Script Is Running	Một tập lệnh đang chạy
+	Script Alert	Thông báo của tập lệnh
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
 	Do not show this warning again	Không hiện lại cảnh báo này
 	Stop the script and undo what it did? Then quit again.	Dừng tập lệnh và hoàn tác những gì nó đã làm? Sau đó hãy thoát lại.
@@ -4536,6 +4558,9 @@ theme	Appearance	Giao diện
 @msg	the script is too large to run	tập lệnh quá lớn để chạy
 @msg	a drag or an undo group is open; finish it before running a script	đang có thao tác kéo hoặc nhóm hoàn tác; hãy hoàn thành trước khi chạy tập lệnh
 @msg	the script left a document that cannot be kept	tập lệnh để lại một tài liệu không thể giữ
+@msg	the script is no longer in the Scripts folder	tập lệnh không còn trong thư mục Scripts
+	Some scripts were not listed	Một số tập lệnh không được liệt kê
+	The Scripts folder cannot be read	Không thể đọc thư mục Scripts
 @msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	một lệnh thất bại đã thay đổi các bước hoàn tác không thể khôi phục, nên tập lệnh đã bị dừng
 @msg	a recovery copy could not be written, so the script was not run	không thể ghi bản sao khôi phục nên tập lệnh không được chạy
@@ -5159,6 +5184,20 @@ theme	Appearance	Giao diện
 @msg	missing `{path}`	thiếu `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` phải là {expected}, không phải {got}
 @msg	unknown preference `{key}`	tùy chọn không xác định `{key}`
+@msg	Preferences imported.	Đã nhập tùy chọn.
+@msg	not a preferences file: {e}	không phải tệp tùy chọn: {e}
+@msg	not a preferences file: no JSON object	không phải tệp tùy chọn: không có đối tượng JSON
+@msg	not a preferences file (format `{format}`)	không phải tệp tùy chọn (định dạng `{format}`)
+@msg	not a preferences file: no `format`	không phải tệp tùy chọn: thiếu `format`
+@msg	not a preferences file: no `version`	không phải tệp tùy chọn: thiếu `version`
+@msg	not a preferences file: no `prefs`	không phải tệp tùy chọn: thiếu `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	tệp được lưu bằng phiên bản VectorCraft mới hơn (phiên bản {v})
+@msg	the file holds no preferences	tệp không chứa tùy chọn nào
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` chỉ định một thư mục, và tệp tùy chọn không chứa thư mục
+@msg	the file is larger than 1 MB	tệp lớn hơn 1 MB
+@msg	give `path` or `data`	hãy cung cấp `path` hoặc `data`
+@msg	`{key}` must be an object	`{key}` phải là một đối tượng
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` chạy riêng, không phải là một bước trong lô
 @msg	unknown preset (one of {_1})	thiết lập sẵn không xác định (một trong {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (high, medium, low hoặc thiết lập đã lưu: xem flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (xem flattener.presets.list)
@@ -5273,6 +5312,7 @@ theme	Appearance	Giao diện
 	Preview (1 inch on the page)	Xem trước (1 inch trên trang)
 	Set as Default	Đặt làm mặc định
 	 out from a highlighted edge to place its dimension  |  	 ra ngoài từ một cạnh được tô sáng để đặt kích thước của nó  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 hai điểm, rồi di chuyển và bấm để đặt kích thước căn theo hai điểm, nằm ngang hoặc thẳng đứng  |  
 	 cancels  |  Double-click the tool for options	 để hủy  |  Nhấp đúp vào công cụ để mở tùy chọn
 	Linear	Tuyến tính
 	Angular	Góc
@@ -5303,14 +5343,17 @@ theme	Appearance	Giao diện
 @msg	Invalid drawing scale	Tỷ lệ bản vẽ không hợp lệ
 @msg	Invalid real scale	Tỷ lệ thực không hợp lệ
 @msg	Measured anchor no longer exists	Điểm neo được đo không còn tồn tại
+@msg	Invalid measured point	Điểm được đo không hợp lệ
 @msg	Measured segment no longer exists	Đoạn được đo không còn tồn tại
 @msg	Non-finite dimension	Kích thước không phải là số hữu hạn
+@msg	Only linear dimensions are horizontal or vertical	Chỉ kích thước tuyến tính mới nằm ngang hoặc thẳng đứng
 @msg	Scale Text Attributes: selected type has no scale to bake	Tỷ lệ thuộc tính văn bản: văn bản được chọn không có tỷ lệ để áp dụng
 @msg	Scale must be drawing:real, for example 1:10	Tỷ lệ phải có dạng bản vẽ:thực tế, ví dụ 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Tỷ lệ phải nằm trong khoảng 1:1000000 đến 1000000:1
 @msg	Second measured segment no longer exists	Đoạn được đo thứ hai không còn tồn tại
 @msg	Unknown dimension mode	Chế độ kích thước không xác định
 @msg	Unknown dimension option {k}	Tùy chọn kích thước không xác định {k}
+@msg	Unknown dimension orientation	Hướng kích thước không xác định
 @msg	Unknown dimension style	Kiểu kích thước không xác định
 @msg	Unknown unit	Đơn vị không xác định
 # Revolve cap description
@@ -5682,6 +5725,12 @@ axis	Y Axis	Trục Y
 	Flag	Cờ
 	Crosshair	Tâm ngắm
 	Checkpoint	Điểm kiểm tra
+	Inventory Icons	Biểu tượng túi đồ
+	Sword	Kiếm
+	Shield	Khiên
+	Potion	Thuốc
+	Key	Chìa khóa
+	Gem	Ngọc
 	Open Symbol Library	Mở thư viện ký hiệu
 	Save Symbol Library	Lưu thư viện ký hiệu
 	Save Symbol Library…	Lưu thư viện ký hiệu…
@@ -6335,3 +6384,31 @@ breakText	Glyphs	Glyph
 	No Suggestions	Không có gợi ý
 	Edit Custom Dictionary	Chỉnh sửa từ điển tùy chỉnh
 	Entry:	Mục nhập:
+# Script Console
+	Script Console	Bảng điều khiển tập lệnh
+	Clear Script Console	Xóa bảng điều khiển tập lệnh
+	Copy Script Console	Sao chép bảng điều khiển tập lệnh
+	Copy All	Sao chép tất cả
+	Copy Selected	Sao chép mục đã chọn
+	Finished	Đã xong
+	Ended with an error	Kết thúc do lỗi
+	Out of fuel	Đã hết giới hạn lệnh
+	Ended at a host limit	Kết thúc ở giới hạn của máy chủ
+	Ended at a limit	Kết thúc ở giới hạn
+	Stopped	Đã dừng
+	Ended by an internal fault	Kết thúc do lỗi nội bộ
+	time unavailable	không có thời gian
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	chậm nhất: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} lệnh gọi máy chủ
+@plural	{n} earlier line dropped|{n} earlier lines dropped	đã bỏ {n} dòng cũ
+@plural	{n} line cut|{n} lines cut	đã cắt {n} dòng
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` và `last` phải là số thứ tự của các dòng mà bảng điều khiển đang giữ, `first` đứng trước `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn
+	Deferred Effects	Hiệu ứng bị hoãn
+@msg	no plug-in effect is deferred	không có hiệu ứng plug-in nào bị hoãn
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Đã mở với {n} hiệu ứng plug-in bị hoãn. Hiệu ứng › Làm mới hiệu ứng bị hoãn sẽ chạy chúng.

@@ -209,7 +209,7 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             Some(area) => Some(reshaped(&area, n, doc)),
             None => {
                 let mut m = crate::reshape::outlined_members_with(None, doc, n, outline, nodes);
-                let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
+                let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
                 // The group's own fills and strokes follow the effects as its members do.
                 if carry.moves(&m.appearance) {
                     carry.apply(&mut m.appearance);
@@ -225,7 +225,7 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             let art = h(n).filter(|art| nodes.charge(art))?;
             let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
             crate::reshape::outline_nested_text(doc, &mut art, false);
-            let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, doc);
+            let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, &n.appearance.effects, doc);
             // The art's own fills and strokes follow the effects as its members do.
             if carry.moves(&art.appearance) {
                 carry.apply(&mut art.appearance);
@@ -738,7 +738,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     if !fx.is_empty() {
         m = crate::reshape::outlined_members(doc, &m);
-        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
+        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
         // The group's own fills and strokes paint the members as a whole: their gradients follow
         // the effects as the members' do.
         if paint && carry.moves(&m.appearance) {

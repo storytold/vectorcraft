@@ -75,6 +75,7 @@ impl Document {
             dimensions,
             retired_artboard_id: _,
             opened_artboard: _,
+            units_from_file: _,
             index: _,
         } = self;
         *version == other.version
@@ -208,6 +209,7 @@ impl Document {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             }],
             layers: vec![],
             swatches: swatches.into(),
@@ -256,6 +258,7 @@ impl Document {
             dimensions: false,
             retired_artboard_id: Default::default(),
             opened_artboard: None,
+            units_from_file: false,
             index: Default::default(),
         };
         let id = d.alloc_id();

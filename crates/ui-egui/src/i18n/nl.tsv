@@ -55,6 +55,8 @@
 	Scripts	Scripts
 	Check Script…	Script controleren…
 	Check Script	Script controleren
+	Some scripts were not listed	Sommige scripts zijn niet weergegeven
+	The Scripts folder cannot be read	De map Scripts kan niet worden gelezen
 	Other Script…	Ander script…
 	Document Setup…	Documentinstellingen…
 	Switch Units	Eenheden wisselen
@@ -574,6 +576,7 @@
 	Show Guides	Hulplijnen tonen
 	Lock Guides	Hulplijnen vergrendelen
 	Lock Guides by Default	Hulplijnen standaard vergrendelen
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Tekenbordhulplijnen met Cmd/Ctrl + slepen vanuit liniaal
 	Unlock Guides	Hulplijnen ontgrendelen
 	Make Guides	Hulplijnen maken
 	Release Guides	Hulplijnen vrijgeven
@@ -733,6 +736,13 @@
 	Quest Outline	Quest
 	Coin Shine	Munt
 	Boss Alert	Baas
+	Status Effects	Statuseffecten
+	Poison Tint	Gif
+	Freeze Edge	Bevriezing
+	Burn Aura	Brand
+	Stun Pulse	Verdoving
+	Stealth Fade	Sluipen
+	Shield Buff	Schild
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
 	Gradient Finishes	Verloopafwerkingen
@@ -2102,6 +2112,8 @@ digits	Malayalam	Malayalam
 	Green	Groen
 	Shifts the tints of global and spot colors; other colors stay.	Verschuift de tinten van globale kleuren en spotkleuren; andere kleuren blijven ongewijzigd.
 	Tint	Tint
+	Fill Tint	Vultint
+	Stroke Tint	Contourtint
 	Color Guide Options	Opties voor kleurengids
 	Less	Minder
 	Steps:	Stappen:
@@ -2455,6 +2467,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Bestandsafmetingen
 	Transforms	Transformaties
 	Background Color:	Achtergrondkleur:
+	Guide Label:	Hulplijnlabel:
 	Show Center Mark	Middenmarkering tonen
 	Show Cross Hairs	Dradenkruis tonen
 	Show Video Safe Areas	Veilige videogebieden tonen
@@ -3501,6 +3514,12 @@ theme	Appearance	Vormgeving
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
 	Render Threads (-1 = Automatic)	Renderthreads (-1 = automatisch)
 	Reset Preferences	Voorkeuren herstellen
+	Export Preferences…	Voorkeuren exporteren…
+	Import Preferences…	Voorkeuren importeren…
+	Save the applied preferences to a JSON file	De toegepaste voorkeuren in een JSON-bestand opslaan
+	Apply the preferences in a file Export Preferences saved	De voorkeuren toepassen uit een bestand dat Voorkeuren exporteren heeft opgeslagen
+	Export Preferences	Voorkeuren exporteren
+	Import Preferences	Voorkeuren importeren
 	Search Preferences	Voorkeuren doorzoeken
 	No settings found	Geen instellingen gevonden
 	Scale Corners	Hoeken schalen
@@ -3871,6 +3890,8 @@ font-technology	Variable	Variabel
 	Preferences	Voorkeuren
 	Previous	Vorige
 	Restore every preference to its default (applied on OK)	Elke voorkeur terugzetten naar de standaard (toegepast bij OK)
+	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	De standaardwaarden worden toegepast wanneer u in Voorkeuren op OK klikt. Annuleren daar behoudt uw huidige voorkeuren.
 	Smaller ↔ Larger	Kleiner ↔ Groter
 	Smart Guides (View → Smart Guides)	Slimme hulplijnen (Beeld → Slimme hulplijnen)
 	Couldn't save recovery data: {e}	Kon herstelgegevens niet opslaan: {e}
@@ -4099,6 +4120,7 @@ imageTrace	Outline	Contour
 	Stop Script	Script stoppen
 	Show External Script Warning	Waarschuwing voor externe scripts tonen
 	A Script Is Running	Er wordt een script uitgevoerd
+	Script Alert	Scriptmelding
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen
 	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
@@ -4614,6 +4636,20 @@ imageTrace	Outline	Contour
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (behouden, simuleren of verwerpen)
 @msg	unknown panel `{raw}`	onbekend paneel `{raw}`
 @msg	unknown preference `{key}`	onbekende voorkeur `{key}`
+@msg	Preferences imported.	Voorkeuren geïmporteerd.
+@msg	not a preferences file: {e}	geen voorkeurenbestand: {e}
+@msg	not a preferences file: no JSON object	geen voorkeurenbestand: geen JSON-object
+@msg	not a preferences file (format `{format}`)	geen voorkeurenbestand (indeling `{format}`)
+@msg	not a preferences file: no `format`	geen voorkeurenbestand: geen `format`
+@msg	not a preferences file: no `version`	geen voorkeurenbestand: geen `version`
+@msg	not a preferences file: no `prefs`	geen voorkeurenbestand: geen `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	het bestand is opgeslagen met een nieuwere versie van VectorCraft (versie {v})
+@msg	the file holds no preferences	het bestand bevat geen voorkeuren
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` geeft een map aan, en voorkeurenbestanden bevatten geen mappen
+@msg	the file is larger than 1 MB	het bestand is groter dan 1 MB
+@msg	give `path` or `data`	geef `path` of `data` op
+@msg	`{key}` must be an object	`{key}` moet een object zijn
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` wordt los uitgevoerd, niet als stap van een batch
 @msg	unknown preset (one of {_1})	onbekende voorinstelling (één van {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	onbekende voorinstelling `{name}` (hoog, middel, laag of een opgeslagen voorinstelling: zie flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	onbekende voorinstelling `{name}` (zie flattener.presets.list)
@@ -5110,6 +5146,7 @@ file-filter	Swatch libraries	Stalenbibliotheken
 file-filter	Flattener presets	Afvlakvoorinstellingen
 file-filter	PDF presets	PDF-voorinstellingen
 file-filter	Print presets	Afdrukvoorinstellingen
+file-filter	Preferences	Voorkeuren
 file-filter	Export presets	Exportvoorinstellingen
 file-filter	SVG Compressed	Gecomprimeerde SVG
 file-filter	PDF-compatible .ai	PDF-compatibel .ai
@@ -5284,6 +5321,7 @@ mark-style	Japanese	Japans
 	Preview (1 inch on the page)	Voorbeeld (1 inch op de pagina)
 	Set as Default	Als standaard instellen
 	 out from a highlighted edge to place its dimension  |  	 uit een gemarkeerde rand om de bijbehorende maatlijn te plaatsen  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 op twee punten, verplaats daarna en klik om een uitgelijnde, horizontale of verticale maatlijn te plaatsen  |  
 	 cancels  |  Double-click the tool for options	 annuleert  |  Dubbelklik op het gereedschap voor opties
 	Angular	Hoek
 	Away from the Line	Van de lijn af
@@ -5313,14 +5351,17 @@ mark-style	Japanese	Japans
 @msg	Invalid drawing scale	Ongeldige tekeningsschaal
 @msg	Invalid real scale	Ongeldige werkelijke schaal
 @msg	Measured anchor no longer exists	Gemeten ankerpunt bestaat niet meer
+@msg	Invalid measured point	Ongeldig gemeten punt
 @msg	Measured segment no longer exists	Gemeten segment bestaat niet meer
 @msg	Non-finite dimension	Niet-eindige maatlijn
+@msg	Only linear dimensions are horizontal or vertical	Alleen lineaire maatlijnen zijn horizontaal of verticaal
 @msg	Scale Text Attributes: selected type has no scale to bake	Tekstkenmerken schalen: de geselecteerde tekst heeft geen schaling om toe te passen
 @msg	Scale must be drawing:real, for example 1:10	Schaal moet tekening:werkelijk zijn, bijvoorbeeld 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Schaalverhouding moet tussen 1:1000000 en 1000000:1 liggen
 @msg	Second measured segment no longer exists	Tweede gemeten segment bestaat niet meer
 @msg	Unknown dimension mode	Onbekende maatlijnmodus
 @msg	Unknown dimension option {k}	Onbekende maatlijnoptie {k}
+@msg	Unknown dimension orientation	Onbekende maatlijnrichting
 @msg	Unknown dimension style	Onbekende maatlijnstijl
 @msg	Unknown unit	Onbekende eenheid
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sluit de ronde uiteinden van open profielen. Gedeeltelijke omwentelingen houden hun afgesneden zijden open.
@@ -5924,6 +5965,12 @@ axis	Y Axis	Y-as
 	Flag	Vlag
 	Crosshair	Vizier
 	Checkpoint	Controlepunt
+	Inventory Icons	Inventarisiconen
+	Sword	Zwaard
+	Shield	Schild
+	Potion	Drank
+	Key	Sleutel
+	Gem	Edelsteen
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…
@@ -6526,3 +6573,28 @@ breakText	Glyphs	Glyphs
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
 	Edit Custom Dictionary	Aangepast woordenboek bewerken
 	Entry:	Item:
+# Script Console
+	Script Console	Scriptconsole
+	Clear Script Console	Scriptconsole wissen
+	Copy Script Console	Scriptconsole kopiëren
+	Copy All	Alles kopiëren
+	Copy Selected	Selectie kopiëren
+	Finished	Voltooid
+	Ended with an error	Beëindigd met een fout
+	Out of fuel	Instructielimiet bereikt
+	Ended at a host limit	Beëindigd bij een hostlimiet
+	Ended at a limit	Beëindigd bij een limiet
+	Stopped	Gestopt
+	Ended by an internal fault	Beëindigd door een interne fout
+	time unavailable	tijd niet beschikbaar
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	traagste: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} host-aanroep|{n} host-aanroepen
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eerdere regel verwijderd|{n} eerdere regels verwijderd
+@plural	{n} line cut|{n} lines cut	{n} regel ingekort|{n} regels ingekort
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
+	Deferred Effects	Uitgestelde effecten

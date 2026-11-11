@@ -623,6 +623,7 @@ digits	Malayalam	말라얄람어
 	Hide Guides	안내선 숨기기
 	Lock Guides	안내선 잠그기
 	Lock Guides by Default	기본적으로 안내선 잠그기
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Cmd/Ctrl + 눈금자 드래그로 아트보드 안내선
 	Make Guides	안내선 만들기
 	Release Guides	안내선 해제
 	Clear Guides	안내선 지우기
@@ -799,6 +800,13 @@ digits	Malayalam	말라얄람어
 	Quest Outline	퀘스트
 	Coin Shine	코인
 	Boss Alert	보스
+	Status Effects	상태 효과
+	Poison Tint	독
+	Freeze Edge	빙결
+	Burn Aura	화상
+	Stun Pulse	기절
+	Stealth Fade	은신
+	Shield Buff	방패
 	Outlines and Rules	윤곽선과 괘선
 	Hand-Drawn	손그림
 	Gradient Finishes	그레이디언트 마감
@@ -1066,6 +1074,7 @@ antiAlias	Sharp	날카롭게
 	Average	평균
 	BLANK DOCUMENT PRESETS	빈 문서 프리셋
 	Background Color:	배경색:
+	Guide Label:	안내선 레이블:
 	Show Center Mark	중심 표시 보기
 	Show Cross Hairs	십자선 보기
 	Show Video Safe Areas	비디오 안전 영역 보기
@@ -2832,6 +2841,12 @@ mark-style	Japanese	일본식
 	Reset OpenType Features	OpenType 기능 재설정
 	Reset Panel	패널 재설정
 	Reset Preferences	환경 설정 재설정
+	Export Preferences…	환경 설정 내보내기…
+	Import Preferences…	환경 설정 가져오기…
+	Save the applied preferences to a JSON file	적용된 환경 설정을 JSON 파일로 저장
+	Apply the preferences in a file Export Preferences saved	환경 설정 내보내기로 저장한 파일의 환경 설정 적용
+	Export Preferences	환경 설정 내보내기
+	Import Preferences	환경 설정 가져오기
 	Search Preferences	환경 설정 검색
 	No settings found	설정을 찾을 수 없음
 	Reset Profiles	프로필 재설정
@@ -2848,6 +2863,8 @@ mark-style	Japanese	일본식
 	Restore	복원
 	Restore Recovered Documents	복구된 문서 복원
 	Restore every preference to its default (applied on OK)	모든 환경 설정을 기본값으로 복원(확인 시 적용)
+	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
 	Restrict printing, editing and other tasks	인쇄, 편집 등의 작업 제한
 	Reverse Gradient	그레이디언트 반전
@@ -3627,6 +3644,7 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Preferences	환경 설정
 file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG
 file-filter	PDF-compatible .ai	PDF 호환 .ai
@@ -3867,6 +3885,8 @@ file-filter	Templates	템플릿
 	Text Wrap Options	텍스트 감싸기 옵션
 	Tile Full Pages	전체 페이지 타일링
 	Tint	색조
+	Fill Tint	칠 색조
+	Stroke Tint	선 색조
 	Tip extends past the end point	끝이 끝점을 지나 연장됨
 	Tip on the end point	끝이 끝점에 위치
 	Top	위쪽
@@ -4354,6 +4374,20 @@ theme	Appearance	외관
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`은(는) {min}에서 {max} 사이여야 합니다({x} 입력됨)
 @msg	`{key}` must be one of {_1}	`{key}`은(는) {_1} 중 하나여야 합니다
 @msg	unknown preference `{key}`	알 수 없는 환경 설정 `{key}`
+@msg	Preferences imported.	환경 설정을 가져왔습니다.
+@msg	not a preferences file: {e}	환경 설정 파일이 아닙니다: {e}
+@msg	not a preferences file: no JSON object	환경 설정 파일이 아닙니다: JSON 개체가 없습니다
+@msg	not a preferences file (format `{format}`)	환경 설정 파일이 아닙니다(형식 `{format}`)
+@msg	not a preferences file: no `format`	환경 설정 파일이 아닙니다: `format`이 없습니다
+@msg	not a preferences file: no `version`	환경 설정 파일이 아닙니다: `version`이 없습니다
+@msg	not a preferences file: no `prefs`	환경 설정 파일이 아닙니다: `prefs`가 없습니다
+@msg	the file was saved by a newer version of VectorCraft (version {v})	더 새로운 버전의 VectorCraft에서 저장한 파일입니다(버전 {v})
+@msg	the file holds no preferences	파일에 환경 설정이 없습니다
+@msg	`{key}` names a folder, which preferences files leave out	`{key}`은(는) 폴더를 지정하며, 환경 설정 파일에는 폴더가 포함되지 않습니다
+@msg	the file is larger than 1 MB	파일이 1MB보다 큽니다
+@msg	give `path` or `data`	`path` 또는 `data`를 지정하세요
+@msg	`{key}` must be an object	`{key}`은(는) 개체여야 합니다
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import`은(는) 일괄 처리 단계가 아니라 단독으로 실행됩니다
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	데이터 복구에 복사본을 보관할 곳이 없습니다. 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
 @msg	Data Recovery can't keep copies in {path}: {e}	데이터 복구가 {path}에 복사본을 보관할 수 없습니다: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	{path}에서 플러그인을 불러올 수 없습니다: {e}
@@ -4587,6 +4621,7 @@ theme	Appearance	외관
 @msg	{label}…	{label}…
 @msg	no blend options	혼합 옵션이 없습니다
 @msg	bad color {v}	잘못된 색상 {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel`은 null, 레이어 색상 이름 또는 #rrggbb입니다
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio은(는) 0.1에서 10 사이의 숫자여야 합니다
 @msg	the Color Picker is not open	색상 피커가 열려 있지 않습니다
 @msg	the Simplify slider is not open	단순화 슬라이더가 열려 있지 않습니다
@@ -4763,6 +4798,7 @@ theme	Appearance	외관
 	Stop Script	스크립트 중지
 	Show External Script Warning	외부 스크립트 경고 표시
 	A Script Is Running	스크립트 실행 중
+	Script Alert	스크립트 알림
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
 	Do not show this warning again	이 경고를 다시 표시하지 않음
 	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
@@ -4776,6 +4812,9 @@ theme	Appearance	외관
 @msg	the script is too large to run	스크립트가 너무 커서 실행할 수 없습니다
 @msg	a drag or an undo group is open; finish it before running a script	드래그 또는 실행 취소 그룹이 열려 있습니다. 스크립트를 실행하기 전에 완료하세요
 @msg	the script left a document that cannot be kept	스크립트가 유지할 수 없는 문서를 남겼습니다
+@msg	the script is no longer in the Scripts folder	스크립트가 더 이상 Scripts 폴더에 없습니다
+	Some scripts were not listed	일부 스크립트가 나열되지 않았습니다
+	The Scripts folder cannot be read	Scripts 폴더를 읽을 수 없습니다
 @msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
 @msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다
@@ -5251,6 +5290,7 @@ lighting	Light	광원
 	Preview (1 inch on the page)	미리 보기 (페이지의 1인치)
 	Set as Default	기본값으로 설정
 	 out from a highlighted edge to place its dimension  |  	 강조된 가장자리에서 바깥쪽으로 끌어 치수 배치  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 으로 두 점을 지정한 다음 이동하고 클릭하여 정렬, 가로 또는 세로 치수 배치  |  
 	 cancels  |  Double-click the tool for options	 취소  |  도구를 두 번 클릭하면 옵션
 	Linear	선형
 	Angular	각도
@@ -5283,14 +5323,17 @@ lighting	Light	광원
 @msg	Invalid drawing scale	잘못된 도면 축척
 @msg	Invalid real scale	잘못된 실제 축척
 @msg	Measured anchor no longer exists	측정한 고정점이 더 이상 없습니다
+@msg	Invalid measured point	측정한 점이 잘못되었습니다
 @msg	Measured segment no longer exists	측정한 세그먼트가 더 이상 없습니다
 @msg	Non-finite dimension	유한하지 않은 치수
+@msg	Only linear dimensions are horizontal or vertical	선형 치수만 가로 또는 세로로 지정할 수 있습니다
 @msg	Scale Text Attributes: selected type has no scale to bake	텍스트 속성 크기 조절: 선택한 텍스트에 적용할 크기 조절이 없습니다
 @msg	Scale must be drawing:real, for example 1:10	축척은 도면:실제 형식이어야 합니다(예: 1:10)
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	축척 비율은 1:1000000에서 1000000:1 사이여야 합니다
 @msg	Second measured segment no longer exists	두 번째 측정 세그먼트가 더 이상 없습니다
 @msg	Unknown dimension mode	알 수 없는 치수 모드
 @msg	Unknown dimension option {k}	알 수 없는 치수 옵션 {k}
+@msg	Unknown dimension orientation	알 수 없는 치수 방향
 @msg	Unknown dimension style	알 수 없는 치수 스타일
 @msg	Unknown unit	알 수 없는 단위
 # Revolve cap description
@@ -5662,6 +5705,12 @@ axis	Y Axis	Y축
 	Flag	깃발
 	Crosshair	십자선
 	Checkpoint	체크포인트
+	Inventory Icons	인벤토리 아이콘
+	Sword	검
+	Shield	방패
+	Potion	포션
+	Key	열쇠
+	Gem	보석
 	Open Symbol Library	심볼 라이브러리 열기
 	Save Symbol Library	심볼 라이브러리 저장
 	Save Symbol Library…	심볼 라이브러리 저장…
@@ -6315,3 +6364,31 @@ breakText	Glyphs	글리프
 	No Suggestions	제안 없음
 	Edit Custom Dictionary	사용자 사전 편집
 	Entry:	항목:
+# Script Console
+	Script Console	스크립트 콘솔
+	Clear Script Console	스크립트 콘솔 지우기
+	Copy Script Console	스크립트 콘솔 복사
+	Copy All	모두 복사
+	Copy Selected	선택 항목 복사
+	Finished	완료됨
+	Ended with an error	오류로 종료됨
+	Out of fuel	명령 한도에 도달함
+	Ended at a host limit	호스트 한도에서 종료됨
+	Ended at a limit	한도에서 종료됨
+	Stopped	중지됨
+	Ended by an internal fault	내부 오류로 종료됨
+	time unavailable	시간 정보 없음
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	가장 느린 명령: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	호스트 호출 {n}회
+@plural	{n} earlier line dropped|{n} earlier lines dropped	이전 줄 {n}개 삭제됨
+@plural	{n} line cut|{n} lines cut	줄 {n}개 잘림
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	보류된 효과 새로 고침
+	Deferred Effects	보류된 효과
+@msg	no plug-in effect is deferred	보류된 플러그인 효과가 없습니다
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	플러그인 효과 {n}개를 보류하고 열었습니다. 효과 › 보류된 효과 새로 고침으로 실행합니다.

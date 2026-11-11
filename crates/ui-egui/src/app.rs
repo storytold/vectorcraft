@@ -88,6 +88,7 @@ impl VectorcraftApp {
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
+                plugin_keys: Default::default(),
                 cursors: Default::default(),
                 view_moved: None,
                 hover_cursor: None,
@@ -340,8 +341,13 @@ impl VectorcraftApp {
         screen_color::poll(self, ctx);
         self.poll_finished_work();
         crate::script_runs::poll(self);
-        if self.session.script_running() && !self.session.script_waiting() {
-            ctx.request_repaint();
+        crate::scripts_menu::poll(self, ctx);
+        if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
+            // A script in `$.sleep` goes on when its time is up; until then the app can idle.
+            match self.session.script_sleep_left() {
+                Some(left) => ctx.request_repaint_after(left),
+                None => ctx.request_repaint(),
+            }
         }
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
@@ -369,9 +375,7 @@ impl VectorcraftApp {
             unsaved::finish_pending(self);
             if self.session.script_running() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                if self.ui.dialog.is_none() {
-                    self.ui.dialog = Some(crate::state::Dialog::new(dialogs::script_run::CLOSE_KIND, serde_json::json!({})));
-                }
+                dialogs::script_run::ask_to_close(self);
             } else if self.file_sheet_open() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.status(picks::busy());

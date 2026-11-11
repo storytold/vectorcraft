@@ -3,9 +3,10 @@
 //! Flare: drag sets the center and its size and turns the rays as the pointer moves up or down
 //! (Shift holds their turn; click without dragging opens the Flare Tool Options), then a click
 //! sets the end point of the rings; Space held during either drag moves the flare. The rest comes
-//! from the tool's options (the Flare Tool Options, which last). Reshape: drag a point of a
-//! selected path; the engine's `path.reshape` adds an anchor there if needed and moves the
-//! neighbourhood smoothly.
+//! from the tool's options (the Flare Tool Options, which last). Reshape: a click on a selected
+//! path sets a focal point (adding an anchor on a segment), Shift-click adds or removes more, and
+//! a drag from a focal point moves them all; the engine's `path.reshape` stretches the selected
+//! anchors between them and the anchors that stay.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Vec2};
@@ -268,26 +269,141 @@ impl Tool for FlareTool {
     }
 }
 
-/// Reshape Tool: drag a point on a selected path.
+/// Where a Reshape press landed on a selected path.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ReshapeHit {
+    /// On an anchor: (subpath, anchor).
+    Anchor(usize, usize),
+    /// On a segment, away from its anchors: (subpath, the index of the anchor `path.reshape` adds
+    /// there).
+    Segment(usize, usize),
+}
+
+impl ReshapeHit {
+    /// The anchor the press grabs, as `(subpath, anchor)` once any anchor has been added.
+    fn anchor(self) -> (usize, usize) {
+        match self {
+            Self::Anchor(si, ai) | Self::Segment(si, ai) => (si, ai),
+        }
+    }
+
+    /// Where the anchor `r` is once the press has added its anchor: one further on after an
+    /// anchor added before it on its subpath.
+    fn renumber(self, r: (usize, usize)) -> (usize, usize) {
+        match self {
+            Self::Segment(si, added) if r.0 == si && r.1 >= added => (r.0, r.1.saturating_add(1)),
+            _ => r,
+        }
+    }
+}
+
+/// A Reshape press: the path, the point on it, what it landed on and whether Shift was held.
+#[derive(Clone, Debug)]
+struct ReshapePress {
+    id: vectorcraft_doc::NodeId,
+    at: Point,
+    hit: ReshapeHit,
+    shift: bool,
+    /// The drag so far.
+    d: Vec2,
+    /// The other focal points the drag moves, found when it starts, before the preview moves them.
+    others: Vec<((usize, usize), Point)>,
+}
+
+/// How near a focal point's stored position an anchor must be to be that focal point. An anchor
+/// added on a segment lies where the curve's point was found, to within rounding.
+const FOCAL_MATCH: f64 = 1e-6;
+
+/// A focal point: its `(subpath, anchor)` and where that anchor lies.
+type FocalPoint = ((usize, usize), Point);
+
+/// Reshape Tool: a click on a selected path makes the anchor or the point on a segment there the
+/// focal point (on a segment it adds an anchor), Shift-click adds or removes more, and a drag
+/// moves the focal points with the drag and stretches the selected anchors around them.
 #[derive(Default)]
 pub struct ReshapeTool {
-    /// (path, grab point) while dragging.
-    grab: Option<(vectorcraft_doc::NodeId, Point)>,
+    /// The press, until the button is released.
+    press: Option<ReshapePress>,
     began: bool,
     /// Pointer and offset readout while a reshape drag is in progress.
     measure: Option<(Point, String)>,
+    /// The focal points the tool highlighted: their path, and each one's `(subpath, anchor)` and
+    /// where that anchor lies. An anchor the tool adds before one renumbers it. A focal point
+    /// whose anchor no longer lies there (another edit moved or removed it) shows nothing and
+    /// moves nothing.
+    focal: Option<(vectorcraft_doc::NodeId, Vec<FocalPoint>)>,
 }
 
 impl ReshapeTool {
-    /// The selected path under `p` (Reshape works on selected paths only, like Illustrator).
-    fn hit(cx: &ToolContext, p: Point) -> Option<(vectorcraft_doc::NodeId, Point)> {
+    /// The selected path under `p` (Reshape works on selected paths only), the point on it and
+    /// what the point is.
+    fn hit(cx: &ToolContext, p: Point) -> Option<(vectorcraft_doc::NodeId, Point, ReshapeHit)> {
         let tol = cx.tol(4.0);
-        let editable = cx.doc.editable();
-        cx.selection.objects.iter().copied().filter(|id| editable(*id)).find_map(|id| {
+        Self::paths(cx).into_iter().find_map(|id| {
             let pd = cx.doc.node(id)?.path_data()?;
-            let (_, _, _, q, d) = pd.nearest(p)?;
-            (d <= tol).then_some((id, q))
+            let (si, seg, _, q, d) = pd.nearest(p)?;
+            if d > tol {
+                return None;
+            }
+            // `path.reshape` takes the anchor within `tol` of the point on the path.
+            let anchor = pd
+                .subpaths
+                .get(si)?
+                .anchors
+                .iter()
+                .enumerate()
+                .map(|(i, a)| (i, a.p.distance(q)))
+                .filter(|&(_, dist)| dist <= tol)
+                .min_by(|a, b| a.1.total_cmp(&b.1));
+            Some(match anchor {
+                Some((ai, _)) => (id, pd.subpaths.get(si)?.anchors.get(ai)?.p, ReshapeHit::Anchor(si, ai)),
+                // `SubPath::insert_anchor` puts the new anchor after the segment's first anchor.
+                None => (id, q, ReshapeHit::Segment(si, seg.saturating_add(1))),
+            })
         })
+    }
+
+    /// The paths Reshape works on: the selected paths that can be edited, in selection order.
+    fn paths(cx: &ToolContext) -> Vec<vectorcraft_doc::NodeId> {
+        let editable = cx.doc.editable();
+        cx.selection.objects.iter().copied().filter(|&id| editable(id) && cx.doc.node(id).is_some_and(|n| n.path_data().is_some())).collect()
+    }
+
+    /// The highlighted focal points of path `id` as `(subpath, anchor)`, with their positions: the
+    /// anchors of the path that lie where the tool stored them. None while Reshape does not work
+    /// on the path.
+    fn focal_points(&self, cx: &ToolContext, id: vectorcraft_doc::NodeId) -> Vec<((usize, usize), Point)> {
+        let Some((fid, points)) = &self.focal else { return vec![] };
+        if *fid != id || !Self::paths(cx).contains(&id) {
+            return vec![];
+        }
+        let Some(pd) = cx.doc.node(id).and_then(|n| n.path_data()) else { return vec![] };
+        let mut out: Vec<((usize, usize), Point)> = vec![];
+        for &((si, ai), p) in points {
+            let here = pd.subpaths.get(si).and_then(|sp| sp.anchors.get(ai)).map(|a| a.p);
+            if let Some(q) = here.filter(|q| q.distance(p) <= FOCAL_MATCH)
+                && !out.iter().any(|(o, _)| *o == (si, ai))
+            {
+                out.push(((si, ai), q));
+            }
+        }
+        out
+    }
+
+    /// The focal points other than the pressed point that a drag from `press` moves: all the
+    /// highlighted ones when the press is on one of them, else none (Shift only keeps the drag's
+    /// angle).
+    fn dragged_focal(&self, cx: &ToolContext, press: &ReshapePress) -> Vec<((usize, usize), Point)> {
+        let focal = self.focal_points(cx, press.id);
+        let pressed = |r: &(usize, usize)| matches!(press.hit, ReshapeHit::Anchor(si, ai) if (si, ai) == *r);
+        if focal.iter().any(|(r, _)| pressed(r)) { focal.into_iter().filter(|(r, _)| !pressed(r)).collect() } else { vec![] }
+    }
+
+    /// `path.reshape`'s params for `press` dragged by `d`.
+    fn params(cx: &ToolContext, press: &ReshapePress, d: Vec2) -> Value {
+        let others: Vec<[usize; 2]> = press.others.iter().map(|&((si, ai), _)| [si, ai]).collect();
+        // `focal` is sent when empty too: without it, `path.reshape` follows the earlier rule.
+        json!({ "id": press.id.0, "x": press.at.x, "y": press.at.y, "dx": d.x, "dy": d.y, "tol": cx.tol(4.0), "focal": others })
     }
 }
 
@@ -296,18 +412,19 @@ impl Tool for ReshapeTool {
         "reshape"
     }
     fn busy(&self) -> bool {
-        self.grab.is_some()
+        self.press.is_some()
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
             PointerKind::Down => {
-                self.grab = Self::hit(cx, ev.pos);
+                self.press =
+                    Self::hit(cx, ev.pos).map(|(id, at, hit)| ReshapePress { id, at, hit, shift: ev.mods.shift, d: Vec2::ZERO, others: vec![] });
                 self.began = false;
                 self.measure = None;
                 vec![]
             }
             PointerKind::Drag => {
-                let Some((id, at)) = self.grab else { return vec![] };
+                let Some(at) = self.press.as_ref().map(|p| p.at) else { return vec![] };
                 let mut d: Vec2 = ev.pos - at;
                 if ev.mods.shift {
                     d = vectorcraft_geom::constrain_angle_from(d, 45.0, cx.constrain_angle);
@@ -318,25 +435,58 @@ impl Tool for ReshapeTool {
                         return out;
                     }
                     self.began = true;
+                    let others = self.press.as_ref().map(|p| self.dragged_focal(cx, p)).unwrap_or_default();
+                    if let Some(p) = self.press.as_mut() {
+                        p.others = others;
+                    }
                     out.push(Action::Begin("Reshape".into()));
                 }
+                let Some(press) = self.press.as_mut() else { return out };
+                press.d = d;
                 self.measure = cx.measurement_labels.then(|| (ev.pos + Vec2::new(cx.tol(12.0), cx.tol(12.0)), cx.offset_label(d.x, d.y)));
-                out.push(Action::Preview(
-                    "path.reshape".into(),
-                    json!({ "id": id.0, "x": at.x, "y": at.y, "dx": d.x, "dy": d.y, "tol": cx.tol(4.0) }),
-                ));
+                out.push(Action::Preview("path.reshape".into(), Self::params(cx, press, d)));
                 out
             }
             PointerKind::Up => {
-                self.grab = None;
                 self.measure = None;
-                if std::mem::take(&mut self.began) { vec![Action::Commit] } else { vec![] }
+                let Some(press) = self.press.take() else { return vec![] };
+                if std::mem::take(&mut self.began) {
+                    // The focal points move with the whole drag, the grabbed point too, and are
+                    // renumbered after an anchor added on a segment.
+                    let mut points: Vec<((usize, usize), Point)> = press.others.iter().map(|&(r, p)| (press.hit.renumber(r), p + press.d)).collect();
+                    points.push((press.hit.anchor(), press.at + press.d));
+                    self.focal = Some((press.id, points));
+                    return vec![Action::Commit];
+                }
+                // A click: the point becomes the focal point, or with Shift is added to them or,
+                // when it is one already, removed.
+                let mut points: Vec<((usize, usize), Point)> = if press.shift { self.focal_points(cx, press.id) } else { vec![] };
+                let mut out = vec![];
+                match press.hit {
+                    ReshapeHit::Anchor(si, ai) => {
+                        let before = points.len();
+                        points.retain(|&(r, _)| r != (si, ai));
+                        if points.len() == before {
+                            points.push(((si, ai), press.at));
+                        }
+                    }
+                    ReshapeHit::Segment(..) => {
+                        // A reshape by no distance adds the anchor and keeps the selection as it is.
+                        out.push(Action::Exec("path.reshape".into(), Self::params(cx, &press, Vec2::ZERO)));
+                        for (r, _) in &mut points {
+                            *r = press.hit.renumber(*r);
+                        }
+                        points.push((press.hit.anchor(), press.at));
+                    }
+                }
+                self.focal = (!points.is_empty()).then_some((press.id, points));
+                out
             }
             _ => vec![],
         }
     }
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
-        if key == ToolKey::Escape && self.grab.take().is_some() {
+        if key == ToolKey::Escape && self.press.take().is_some() {
             self.measure = None;
             if std::mem::take(&mut self.began) {
                 return vec![Action::Cancel];
@@ -344,17 +494,30 @@ impl Tool for ReshapeTool {
         }
         vec![]
     }
+    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.focal = None;
+        self.measure = None;
+        if self.press.take().is_some() && std::mem::take(&mut self.began) { vec![Action::Cancel] } else { vec![] }
+    }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        let mut out = vec![];
+        // Each focal point: a filled anchor square inside a larger hollow one.
+        if let Some((id, _)) = &self.focal {
+            let color = cx.doc.layer_color(*id);
+            for (_, p) in self.focal_points(cx, *id) {
+                out.push(Overlay::Anchor { p, color, filled: false, size: 10.0 });
+                out.push(Overlay::Anchor { p, color, filled: true, size: 5.0 });
+            }
+        }
         if cx.measurement_labels
             && let Some((p, t)) = &self.measure
         {
-            vec![Overlay::Measure { p: *p, text: t.clone() }]
-        } else {
-            vec![]
+            out.push(Overlay::Measure { p: *p, text: t.clone() });
         }
+        out
     }
     fn cursor(&self, cx: &ToolContext, p: Point, _mods: Mods) -> Cursor {
-        if self.grab.is_some() || Self::hit(cx, p).is_some() { Cursor::Move } else { Cursor::Arrow }
+        if self.press.is_some() || Self::hit(cx, p).is_some() { Cursor::Move } else { Cursor::Arrow }
     }
 }
 

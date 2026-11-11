@@ -1,7 +1,7 @@
 use vectorcraft_color::BlendMode;
 
 use super::axis::radar_axis;
-use super::labels::{Role, filled_lines_on, label_style};
+use super::labels::{Role, filled_lines_on, label_para, label_style};
 use super::{Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Result, Session, Value, bad};
 
 // ---------- generation ----------
@@ -406,23 +406,34 @@ fn graph_labels(doc: &Document) -> HashMap<NodeId, (NodeId, Role)> {
     out
 }
 
-/// Keep a formatting change made to graph labels `ids` (Character or Appearance, on the whole graph or on labels
-/// picked with Group Selection) for every label of their kind: `change` is applied to the kind's kept style (or
-/// the default one), so the labels look the same when the graph is drawn again. Called inside the same edit, so
-/// they undo together. Returns whether a kept style changed.
-pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) -> bool {
-    if ids.is_empty() {
-        return false;
-    }
+/// Keep the anti-aliasing method `method` given to graph labels `ids` for every label of their kind, as
+/// [`capture_label_styles`] keeps a formatting change. Returns whether a kept method changed.
+pub(crate) fn capture_label_anti_alias(doc: &mut Document, ids: &[NodeId], method: vectorcraft_doc::text::TypeAntiAlias) -> bool {
     let labels = graph_labels(doc);
-    if labels.is_empty() {
-        return false;
-    }
     let mut kinds: Vec<(NodeId, Role)> = ids.iter().filter_map(|id| labels.get(id).copied()).collect();
     kinds.sort_by_key(|(g, r)| (g.0, *r as u8));
     kinds.dedup();
     let mut changed = false;
     for (graph, role) in kinds {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        let slot = match role {
+            Role::Value => &mut spec.label_styles.values_anti_alias,
+            Role::Category => &mut spec.label_styles.categories_anti_alias,
+            Role::Legend => &mut spec.label_styles.legend_anti_alias,
+        };
+        changed |= *slot != Some(method);
+        *slot = Some(method);
+    }
+    changed
+}
+
+/// Keep a formatting change made to graph labels `ids` (Character or Appearance, on the whole graph or on labels
+/// picked with Group Selection) for every label of their kind: `change` is applied to the kind's kept style (or
+/// the default one), so the labels look the same when the graph is drawn again. Called inside the same edit, so
+/// they undo together. Returns whether a kept style changed.
+pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) -> bool {
+    let mut changed = false;
+    for (graph, role) in label_kinds(doc, ids) {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let mut style = label_style(&spec.label_styles, role);
         change(&mut style);
@@ -435,6 +446,42 @@ pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &
         *slot = Some(style);
     }
     changed
+}
+
+/// Keep a paragraph change made to all of the text of graph labels `ids` (Paragraph, on the whole graph or on labels
+/// picked with Group Selection) for every label of their kind, as [`capture_label_styles`] does for character
+/// formats. Returns whether kept attributes changed, or the error `change` returns for the kept attributes.
+pub(crate) fn capture_label_paragraphs(
+    doc: &mut Document,
+    ids: &[NodeId],
+    change: &dyn Fn(&mut vectorcraft_doc::ParaStyle) -> Result<()>,
+) -> Result<bool> {
+    let mut changed = false;
+    for (graph, role) in label_kinds(doc, ids) {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        let mut para = label_para(&spec.label_styles, role);
+        change(&mut para)?;
+        let slot = match role {
+            Role::Value => &mut spec.label_styles.values_para,
+            Role::Category => &mut spec.label_styles.categories_para,
+            Role::Legend => &mut spec.label_styles.legend_para,
+        };
+        changed |= slot.as_ref() != Some(&para);
+        *slot = Some(para);
+    }
+    Ok(changed)
+}
+
+/// The graphs and kinds of label among `ids`, each once.
+fn label_kinds(doc: &Document, ids: &[NodeId]) -> Vec<(NodeId, Role)> {
+    if ids.is_empty() {
+        return vec![];
+    }
+    let labels = graph_labels(doc);
+    let mut kinds: Vec<(NodeId, Role)> = ids.iter().filter_map(|id| labels.get(id).copied()).collect();
+    kinds.sort_by_key(|(g, r)| (g.0, *r as u8));
+    kinds.dedup();
+    kinds
 }
 
 /// The series a command on graph `id` (of `count` series) applies to: `seriesIndexes`, else, with no `id` param, a

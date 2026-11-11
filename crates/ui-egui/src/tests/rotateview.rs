@@ -535,6 +535,23 @@ fn escape_that_ends_a_path_being_drawn_keeps_the_rotation() {
     }
 }
 
+/// A path that is no longer selected is not being drawn: the next Escape resets the view.
+#[test]
+fn escape_after_deselecting_the_path_resets_the_view() {
+    for tool in ["pen", "smartPen", "curvature"] {
+        let mut w = Window::new();
+        w.app.select_tool(tool);
+        let c = w.app.canvas_rect.unwrap().center();
+        w.click(0.0, egui::PointerButton::Primary, c);
+        w.click(0.1, egui::PointerButton::Primary, c + egui::vec2(60.0, 10.0));
+        assert!(w.app.session.tool_ends_on_escape(w.app.view_info()), "{tool}: a path is being drawn");
+        w.app.run("select.none", json!({})).unwrap();
+        assert!(!w.app.session.tool_ends_on_escape(w.app.view_info()), "{tool}: the path is not selected");
+        w.escape(0.2);
+        assert_eq!(w.rotation(), 0.0, "{tool}: one Escape resets the view");
+    }
+}
+
 /// In isolation mode, an Escape that ends the Pen's path ends only the path: the next Escape leaves
 /// isolation mode, and the one after it resets the view.
 #[test]

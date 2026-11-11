@@ -462,6 +462,67 @@ fn empty_sources_and_sources_inside_sources_build_or_refuse_cleanly() {
     assert!(close(bounds(&solid_art_in(Some(&d), &placed).unwrap()), bounds(&solid_art(&cut).unwrap()), 0.01));
 }
 
+/// The id of the art of [`masked_by`]'s opacity masks.
+const MASK_ART: NodeId = NodeId(900);
+
+/// `n` with an opacity mask of white art covering `r`.
+fn masked_by(mut n: Node, r: Rect) -> Node {
+    let art = Node::path(MASK_ART, shapes::rectangle(r), Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
+    n.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+    n
+}
+
+/// The faces (paths) of `art`, and how many of them are inside an object [`masked_by`] masks with
+/// a mask that is not disabled.
+fn masked_faces(art: &Node) -> (usize, usize) {
+    fn walk(n: &Node, masked: bool, out: &mut (usize, usize)) {
+        let masked = masked || n.extras().mask.as_ref().is_some_and(|m| m.art.id == MASK_ART && !m.disabled);
+        match n.children() {
+            Some(children) => children.iter().for_each(|c| walk(c, masked, out)),
+            None => {
+                out.0 += 1;
+                out.1 += usize::from(masked);
+            }
+        }
+    }
+    let mut out = (0, 0);
+    walk(art, false, &mut out);
+    out
+}
+
+#[test]
+fn an_opacity_mask_on_a_member_or_a_group_in_a_three_d_group_masks_its_solids() {
+    let d = document();
+    let mask = Rect::new(0.0, 0.0, 400.0, 400.0);
+    let mut members = vec![("a path", rect(1, 100.0, 100.0, 150.0, 200.0, 2.0))];
+    members.extend(sources());
+    for (what, member) in members {
+        let other = || Arc::new(rect(91, 600.0, 600.0, 650.0, 650.0, 0.0));
+        let in_group = Node::group(NodeId(80), vec![Arc::new(member.clone())]);
+        let cases = [
+            ("masked", Node::group(NodeId(90), vec![Arc::new(masked_by(member.clone(), mask)), other()])),
+            ("in a masked group", Node::group(NodeId(90), vec![Arc::new(masked_by(in_group, mask)), other()])),
+        ];
+        for (how, g) in cases {
+            for id in TYPES {
+                let g = with(g.clone(), id, json!({}));
+                let (faces, masked) = masked_faces(&art(&d, &g, id).expect("drawn"));
+                assert!(masked > 0, "{id}: the faces of {what} {how} are masked");
+                assert!(masked < faces, "{id}: the other member's faces are not ({masked} of {faces})");
+            }
+        }
+        // A disabled mask masks nothing.
+        let mut off = masked_by(member.clone(), mask);
+        if let Some(m) = off.extras_mut().mask.as_mut() {
+            m.disabled = true;
+        }
+        for id in TYPES {
+            let g = with(Node::group(NodeId(90), vec![Arc::new(off.clone()), other()]), id, json!({}));
+            assert_eq!(masked_faces(&art(&d, &g, id).expect("drawn")).1, 0, "{id}: {what} with a disabled mask");
+        }
+    }
+}
+
 #[test]
 fn resolved_objects_and_groups_in_a_three_d_group_keep_their_geometry_effects() {
     let mut d = document();

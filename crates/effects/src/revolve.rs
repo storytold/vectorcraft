@@ -25,17 +25,33 @@ const MAX_OVERLAP_TESTS: usize = 1 << 22;
 /// The width of the stroke around each face that covers the seams between faces.
 const SEAM_WIDTH: f64 = 0.75;
 
-/// About the bytes one copy of `paint` takes.
+/// About the bytes one copy of `paint` takes, with the strings it owns (swatch and pattern names).
 fn paint_bytes(paint: &Paint) -> usize {
     use std::mem::size_of;
     use vectorcraft_doc::color::{FreeformPoint, GradientStop};
     let own = size_of::<Paint>();
-    let Paint::Gradient(g) = paint else { return own };
-    let freeform = g
-        .freeform
-        .as_ref()
-        .map_or(0, |f| f.points.len() * size_of::<FreeformPoint>() + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>());
-    own + size_of::<vectorcraft_doc::color::GradientPaint>() + g.gradient.stops.len() * size_of::<GradientStop>() + freeform
+    let name = |s: &Option<String>| s.as_ref().map_or(0, String::len);
+    let g = match paint {
+        Paint::Solid { swatch, .. } => return own + name(swatch),
+        Paint::Pattern { pattern, .. } => return own + pattern.len(),
+        Paint::Gradient(g) => g,
+        _ => return own,
+    };
+    let freeform = g.freeform.as_ref().map_or(0, |f| {
+        // Each line is a Vec: its header too, not only its indices.
+        f.points.len() * size_of::<FreeformPoint>()
+            + f.lines.len() * size_of::<Vec<usize>>()
+            + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>()
+    });
+    let stops: usize = g.gradient.stops.iter().map(|s| size_of::<GradientStop>() + name(&s.swatch)).sum();
+    own + size_of::<vectorcraft_doc::color::GradientPaint>() + name(&g.swatch) + stops + freeform
+}
+
+/// Add `copies` copies of `paint` to the running byte total `used`; whether it still fits within
+/// [`MAX_PAINT_COPIES`] (for the solid surfaces, whose items' copies count together).
+pub(crate) fn paint_copies_add(used: &mut usize, copies: usize, paint: &Paint) -> bool {
+    *used = used.saturating_add(copies.saturating_mul(paint_bytes(paint)));
+    *used <= MAX_PAINT_COPIES
 }
 
 fn visible(fx: &[Effect]) -> bool {
@@ -463,22 +479,19 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
 
 /// The members' `surfaces`, or runs of their faces, in order, from the [`Scope`] at `level` of each
 /// one's `Profile::scopes` inward: consecutive surfaces that share a scope go in one group with its
-/// opacity and blending mode, so each applies once, to the faces it holds together.
-fn scoped(id: NodeId, surfaces: Vec<(&[Scope], Arc<Node>)>, level: usize) -> Vec<Arc<Node>> {
-    fn close(id: NodeId, run: &mut Vec<(&[Scope], Arc<Node>)>, scope: Option<Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
+/// opacity, blending mode and opacity mask, so each applies once, to the faces it holds together.
+pub(crate) fn scoped<'a>(id: NodeId, surfaces: Vec<(&'a [Scope], Arc<Node>)>, level: usize) -> Vec<Arc<Node>> {
+    fn close(id: NodeId, run: &mut Vec<(&[Scope], Arc<Node>)>, scope: Option<&Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
         if let Some(scope) = scope {
-            let mut group = Node::group(id, scoped(id, std::mem::take(run), level + 1));
-            group.opacity = scope.opacity;
-            group.blend = scope.blend;
-            out.push(Arc::new(group));
+            out.push(Arc::new(scope.group(id, scoped(id, std::mem::take(run), level + 1))));
         }
     }
     let mut out = vec![];
     let mut run = vec![];
-    let mut scope = None;
+    let mut scope: Option<&'a Scope> = None;
     for (scopes, s) in surfaces {
-        let at = scopes.get(level).copied();
-        if at.map(|a| a.key) != scope.map(|s: Scope| s.key) {
+        let at = scopes.get(level);
+        if at.map(|a| a.key) != scope.map(|s| s.key) {
             close(id, &mut run, scope, level, &mut out);
             scope = at;
         }

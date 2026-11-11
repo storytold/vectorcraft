@@ -158,6 +158,7 @@ pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
     BuiltinSymbolLibrary { id: "basic-shapes", name: "Basic Shapes", make: basic_shapes },
     BuiltinSymbolLibrary { id: "ui-frames", name: "UI Frames", make: ui_frames },
     BuiltinSymbolLibrary { id: "map-markers", name: "Map Markers", make: map_markers },
+    BuiltinSymbolLibrary { id: "inventory-icons", name: "Inventory Icons", make: inventory_icons },
 ];
 
 /// Built-in library `id`, made once.
@@ -247,6 +248,68 @@ fn map_markers() -> SymbolLibrary {
     }
     doc.title = "Map Markers".into();
     SymbolLibrary { name: "Map Markers".into(), doc }
+}
+
+/// Inventory Icons: sword, shield, potion, key and gem for loot/RPG art (original, no 9-slice).
+fn inventory_icons() -> SymbolLibrary {
+    let c = Point::ZERO;
+    let sword = [
+        (0.0, -22.0),
+        (3.0, -10.0),
+        (3.0, 6.0),
+        (8.0, 8.0),
+        (8.0, 12.0),
+        (3.0, 12.0),
+        (3.0, 20.0),
+        (-3.0, 20.0),
+        (-3.0, 12.0),
+        (-8.0, 12.0),
+        (-8.0, 8.0),
+        (-3.0, 6.0),
+        (-3.0, -10.0),
+    ];
+    let shield = [(0.0, -20.0), (16.0, -12.0), (14.0, 8.0), (0.0, 20.0), (-14.0, 8.0), (-16.0, -12.0)];
+    let potion =
+        [(-4.0, -20.0), (4.0, -20.0), (4.0, -12.0), (10.0, -6.0), (12.0, 6.0), (8.0, 18.0), (-8.0, 18.0), (-12.0, 6.0), (-10.0, -6.0), (-4.0, -12.0)];
+    let key = [
+        (-4.0, -18.0),
+        (4.0, -18.0),
+        (6.0, -14.0),
+        (6.0, -8.0),
+        (4.0, -6.0),
+        (4.0, 16.0),
+        (8.0, 16.0),
+        (8.0, 20.0),
+        (-2.0, 20.0),
+        (-2.0, 12.0),
+        (0.0, 12.0),
+        (0.0, -6.0),
+        (-4.0, -8.0),
+        (-6.0, -14.0),
+    ];
+    let sword: Vec<Point> = sword.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let shield: Vec<Point> = shield.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let potion: Vec<Point> = potion.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let key: Vec<Point> = key.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let icons = [
+        ("Sword", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&sword, true)), "#95a5a6"),
+        ("Shield", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&shield, true)), "#3498db"),
+        ("Potion", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&potion, true)), "#9b59b6"),
+        ("Key", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&key, true)), "#f1c40f"),
+        ("Gem", shapes::polygon(c, 16.0, 6, 0.0), "#1abc9c"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in icons {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Inventory Icons".into();
+    SymbolLibrary { name: "Inventory Icons".into(), doc }
 }
 
 /// An instance of symbol `name` (what the resource gathering follows).
@@ -342,7 +405,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Where the symbols land, worked out on a copy: nothing to add and nothing to place is no edit.
     let mut probe = (*st.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let doc_names: Vec<String> = picked.iter().map(|n| target(&imported.renamed, n)).collect();
     let centre = st.doc.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
     let at = if place { Some(Point::new(number_or(p, "x", centre.x, C)?, number_or(p, "y", centre.y, C)?)) } else { None };
@@ -350,7 +413,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({ "library": info.id });
     if imported.added > 0 || place {
         let placed = s.edit("Add to Symbols", |d, sel| {
-            let imported = clip.import_into(d, &choices, false);
+            let imported = clip.import_into(d, &choices, false)?;
             // Every symbol brought in (nested ones too) takes its Symbol Options along.
             for sym in &clip.symbols {
                 let to = target(&imported.renamed, &sym.name);

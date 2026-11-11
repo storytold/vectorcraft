@@ -55,6 +55,8 @@
 	Scripts	Skrip
 	Check Script…	Periksa skrip…
 	Check Script	Periksa skrip
+	Some scripts were not listed	Beberapa skrip tidak dicantumkan
+	The Scripts folder cannot be read	Folder Scripts tidak dapat dibaca
 	Other Script…	Skrip lain…
 	Document Setup…	Pengaturan dokumen…
 	Switch Units	Ganti satuan
@@ -560,6 +562,7 @@
 	Show Guides	Tampilkan panduan
 	Lock Guides	Kunci panduan
 	Lock Guides by Default	Kunci panduan secara default
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Panduan artboard dengan Cmd/Ctrl + seret dari penggaris
 	Unlock Guides	Buka kunci panduan
 	Make Guides	Buat panduan
 	Release Guides	Lepaskan panduan
@@ -719,6 +722,13 @@
 	Quest Outline	Quest
 	Coin Shine	Koin
 	Boss Alert	Boss
+	Status Effects	Efek Status
+	Poison Tint	Racun
+	Freeze Edge	Beku
+	Burn Aura	Bakar
+	Stun Pulse	Pingsan
+	Stealth Fade	Menghilang
+	Shield Buff	Perisai
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
 	Gradient Finishes	Finishing gradien
@@ -2088,6 +2098,8 @@ digits	Malayalam	Malayalam
 	Green	Hijau
 	Shifts the tints of global and spot colors; other colors stay.	Menggeser tint warna global dan warna spot; warna lainnya tetap.
 	Tint	Tint
+	Fill Tint	Tint isian
+	Stroke Tint	Tint stroke
 	Color Guide Options	Opsi panduan warna
 	Less	Lebih sedikit
 	Steps:	Langkah:
@@ -2441,6 +2453,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Dimensi file
 	Transforms	Transformasi
 	Background Color:	Warna latar belakang:
+	Guide Label:	Label panduan:
 	Show Center Mark	Tampilkan tanda tengah
 	Show Cross Hairs	Tampilkan garis silang
 	Show Video Safe Areas	Tampilkan area aman video
@@ -3487,6 +3500,12 @@ theme	Appearance	Tampilan
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
 	Render Threads (-1 = Automatic)	Utas render (-1 = Otomatis)
 	Reset Preferences	Atur ulang preferensi
+	Export Preferences…	Ekspor preferensi…
+	Import Preferences…	Impor preferensi…
+	Save the applied preferences to a JSON file	Simpan preferensi yang diterapkan ke file JSON
+	Apply the preferences in a file Export Preferences saved	Terapkan preferensi dari file yang disimpan oleh Ekspor preferensi
+	Export Preferences	Ekspor preferensi
+	Import Preferences	Impor preferensi
 	Search Preferences	Cari preferensi
 	No settings found	Tidak ada pengaturan yang ditemukan
 	Scale Corners	Skalakan sudut
@@ -3857,6 +3876,8 @@ font-technology	Variable	Variabel
 	Preferences	Preferensi
 	Previous	Sebelumnya
 	Restore every preference to its default (applied on OK)	Kembalikan semua preferensi ke defaultnya (diterapkan saat OK)
+	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
 	Smart Guides (View → Smart Guides)	Panduan pintar (Tampilan → Panduan pintar)
 	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}
@@ -4085,6 +4106,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Hentikan Skrip
 	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
 	A Script Is Running	Skrip Sedang Berjalan
+	Script Alert	Peringatan Skrip
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
@@ -4602,6 +4624,20 @@ imageTrace	Outline	Kontur
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	overprint `{o}` tidak dikenal (pertahankan, simulasikan, atau buang)
 @msg	unknown panel `{raw}`	panel `{raw}` tidak dikenal
 @msg	unknown preference `{key}`	preferensi `{key}` tidak dikenal
+@msg	Preferences imported.	Preferensi diimpor.
+@msg	not a preferences file: {e}	bukan file preferensi: {e}
+@msg	not a preferences file: no JSON object	bukan file preferensi: tidak ada objek JSON
+@msg	not a preferences file (format `{format}`)	bukan file preferensi (format `{format}`)
+@msg	not a preferences file: no `format`	bukan file preferensi: tidak ada `format`
+@msg	not a preferences file: no `version`	bukan file preferensi: tidak ada `version`
+@msg	not a preferences file: no `prefs`	bukan file preferensi: tidak ada `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	file disimpan oleh versi VectorCraft yang lebih baru (versi {v})
+@msg	the file holds no preferences	file tidak berisi preferensi
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` menunjuk folder, dan file preferensi tidak menyertakan folder
+@msg	the file is larger than 1 MB	file lebih besar dari 1 MB
+@msg	give `path` or `data`	berikan `path` atau `data`
+@msg	`{key}` must be an object	`{key}` harus berupa objek
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` dijalankan sendiri, bukan sebagai langkah batch
 @msg	unknown preset (one of {_1})	preset tidak dikenal (salah satu dari {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preset `{name}` tidak dikenal (tinggi, sedang, rendah, atau yang tersimpan: lihat flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preset `{name}` tidak dikenal (lihat flattener.presets.list)
@@ -5098,6 +5134,7 @@ file-filter	Swatch libraries	Pustaka swatch
 file-filter	Flattener presets	Preset perata
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset cetak
+file-filter	Preferences	Preferensi
 file-filter	Export presets	Preset ekspor
 file-filter	SVG Compressed	SVG terkompresi
 file-filter	PDF-compatible .ai	.ai kompatibel PDF
@@ -5272,6 +5309,7 @@ mark-style	Japanese	Jepang
 	Preview (1 inch on the page)	Pratinjau (1 inci di halaman)
 	Set as Default	Atur sebagai default
 	 out from a highlighted edge to place its dimension  |  	 keluar dari tepi yang disorot untuk menempatkan dimensinya  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 dua titik, lalu gerakkan dan klik untuk menempatkan dimensi sejajar, horizontal, atau vertikal  |  
 	 cancels  |  Double-click the tool for options	 membatalkan  |  Klik dua kali alat untuk opsi
 	Angular	Sudut
 	Away from the Line	Menjauhi garis
@@ -5301,14 +5339,17 @@ mark-style	Japanese	Jepang
 @msg	Invalid drawing scale	Skala gambar tidak valid
 @msg	Invalid real scale	Skala sebenarnya tidak valid
 @msg	Measured anchor no longer exists	Titik jangkar yang diukur sudah tidak ada
+@msg	Invalid measured point	Titik yang diukur tidak valid
 @msg	Measured segment no longer exists	Segmen yang diukur sudah tidak ada
 @msg	Non-finite dimension	Dimensi bukan bilangan berhingga
+@msg	Only linear dimensions are horizontal or vertical	Hanya dimensi linear yang horizontal atau vertikal
 @msg	Scale Text Attributes: selected type has no scale to bake	Skalakan atribut teks: teks yang dipilih tidak memiliki skala untuk diterapkan
 @msg	Scale must be drawing:real, for example 1:10	Skala harus dalam format gambar:sebenarnya, misalnya 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Rasio skala harus antara 1:1000000 dan 1000000:1
 @msg	Second measured segment no longer exists	Segmen yang diukur kedua sudah tidak ada
 @msg	Unknown dimension mode	Mode dimensi tidak dikenal
 @msg	Unknown dimension option {k}	Opsi dimensi {k} tidak dikenal
+@msg	Unknown dimension orientation	Orientasi dimensi tidak dikenal
 @msg	Unknown dimension style	Gaya dimensi tidak dikenal
 @msg	Unknown unit	Satuan tidak dikenal
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Menutup ujung melingkar profil terbuka. Sapuan parsial mempertahankan sisi potongannya tetap terbuka.
@@ -5873,6 +5914,12 @@ axis	Y Axis	Sumbu Y
 	Flag	Bendera
 	Crosshair	Bidik silang
 	Checkpoint	Pos pemeriksaan
+	Inventory Icons	Ikon Inventaris
+	Sword	Pedang
+	Shield	Perisai
+	Potion	Ramuan
+	Key	Kunci
+	Gem	Permata
 	Open Symbol Library	Buka pustaka simbol
 	Save Symbol Library	Simpan pustaka simbol
 	Save Symbol Library…	Simpan pustaka simbol…
@@ -6475,3 +6522,28 @@ breakText	Glyphs	Glif
 @msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
 	Edit Custom Dictionary	Edit kamus kustom
 	Entry:	Entri:
+# Script Console
+	Script Console	Konsol Skrip
+	Clear Script Console	Bersihkan Konsol Skrip
+	Copy Script Console	Salin Konsol Skrip
+	Copy All	Salin Semua
+	Copy Selected	Salin yang Dipilih
+	Finished	Selesai
+	Ended with an error	Berakhir dengan galat
+	Out of fuel	Batas instruksi tercapai
+	Ended at a host limit	Berakhir pada batas host
+	Ended at a limit	Berakhir pada batas
+	Stopped	Dihentikan
+	Ended by an internal fault	Berakhir karena galat internal
+	time unavailable	waktu tidak tersedia
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	paling lambat: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} panggilan host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} baris lama dibuang
+@plural	{n} line cut|{n} lines cut	{n} baris dipotong
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Segarkan efek yang ditunda
+	Deferred Effects	Efek yang ditunda

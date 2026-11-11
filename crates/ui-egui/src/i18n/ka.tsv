@@ -522,6 +522,7 @@
 	Show Guides	დამხმარე ხაზების ჩვენება
 	Lock Guides	დამხმარე ხაზების ჩაკეტვა
 	Lock Guides by Default	დამხმარე ხაზების ნაგულისხმევად ჩაკეტვა
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	სამუშაო დაფის დამხმარე ხაზები Cmd/Ctrl + სახაზავიდან გადათრევით
 	Unlock Guides	დამხმარე ხაზების განბლოკვა
 	Make Guides	დამხმარე ხაზების შექმნა
 	Release Guides	დამხმარე ხაზების მოხსნა
@@ -669,6 +670,13 @@
 	Quest Outline	ქვესტი
 	Coin Shine	მონეტა
 	Boss Alert	ბოსი
+	Status Effects	სტატუსის ეფექტები
+	Poison Tint	შხამი
+	Freeze Edge	გაყინვა
+	Burn Aura	დაწვა
+	Stun Pulse	დაბნეულობა
+	Stealth Fade	შენიღბვა
+	Shield Buff	ფარი
 	Outlines and Rules	კონტურები და ხაზები
 	Hand-Drawn	ხელით დახატული
 	Gradient Finishes	გრადიენტული ზედაპირები
@@ -1994,6 +2002,8 @@ digits	Malayalam	მალაიალამური
 	Green	მწვანე
 	Shifts the tints of global and spot colors; other colors stay.	ცვლის გლობალური და სპოტ-ფერების ტონირებებს; სხვა ფერები უცვლელი რჩება.
 	Tint	ტონირება
+	Fill Tint	შევსების ტონირება
+	Stroke Tint	კონტურის ტონირება
 	Color Guide Options	ფერის გზამკვლევის პარამეტრები
 	Less	ნაკლები
 	Steps:	ბიჯები:
@@ -2342,6 +2352,7 @@ digits	Malayalam	მალაიალამური
 	File Dimensions	ფაილის ზომები
 	Transforms	გარდაქმნები
 	Background Color:	ფონის ფერი:
+	Guide Label:	დამხმარე ხაზების იარლიყი:
 	Show Center Mark	ცენტრის ნიშნის ჩვენება
 	Show Cross Hairs	ჯვარედინი ხაზების ჩვენება
 	Show Video Safe Areas	ვიდეოს უსაფრთხო არეების ჩვენება
@@ -3307,6 +3318,12 @@ theme	Appearance	იერსახე
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
 	Render Threads (-1 = Automatic)	ნაკადები (-1 = ავტომატური)
 	Reset Preferences	პარამეტრების ჩამოყრა
+	Export Preferences…	პარამეტრების ექსპორტირება…
+	Import Preferences…	პარამეტრების იმპორტირება…
+	Save the applied preferences to a JSON file	გამოყენებული პარამეტრების შენახვა JSON ფაილში
+	Apply the preferences in a file Export Preferences saved	პარამეტრების გამოყენება ფაილიდან, რომელიც „პარამეტრების ექსპორტირებამ“ შეინახა
+	Export Preferences	პარამეტრების ექსპორტირება
+	Import Preferences	პარამეტრების იმპორტირება
 	Search Preferences	პარამეტრებში ძიება
 	No settings found	პარამეტრები ვერ მოიძებნა
 	Scale Corners	კუთხეების მასშტაბირება
@@ -3648,6 +3665,8 @@ font-technology	Variable	ცვლადი
 	Preferences	პარამეტრები
 	Previous	წინა
 	Restore every preference to its default (applied on OK)	ყველა პარამეტრის ნაგულისხმევ მნიშვნელობაზე დაბრუნება (გამოიყენება OK-ზე დაჭერისას)
+	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი
 	Smart Guides (View → Smart Guides)	ჭკვიანი დამხმარე ხაზები (ხედი → ჭკვიანი დამხმარე ხაზები)
 	Couldn't save recovery data: {e}	აღდგენის მონაცემები ვერ შეინახა: {e}
@@ -4033,6 +4052,7 @@ font-technology	Variable	ცვლადი
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis უნდა იყოს "vertical", "horizontal" ან კუთხე გრადუსებში და არა `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	ფონი {other}: transparent, white, black ან ფერი, მაგალითად "#ff8800"
 @msg	bad color {v}	არასწორი ფერი {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` არის null, ფენის ფერის სახელი ან #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio უნდა იყოს რიცხვი 0,1-დან 10-მდე
 @msg	bad colour `{hex}` (#rrggbb)	არასწორი ფერი `{hex}` (#rrggbb)
 @msg	bad page tree	გვერდების არასწორი ხე
@@ -4405,6 +4425,20 @@ font-technology	Variable	ცვლადი
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
 @msg	unknown panel `{raw}`	უცნობი პანელი `{raw}`
 @msg	unknown preference `{key}`	უცნობი პარამეტრი `{key}`
+@msg	Preferences imported.	პარამეტრები იმპორტირებულია.
+@msg	not a preferences file: {e}	ეს არ არის პარამეტრების ფაილი: {e}
+@msg	not a preferences file: no JSON object	ეს არ არის პარამეტრების ფაილი: JSON ობიექტი არ არის
+@msg	not a preferences file (format `{format}`)	ეს არ არის პარამეტრების ფაილი (ფორმატი `{format}`)
+@msg	not a preferences file: no `format`	ეს არ არის პარამეტრების ფაილი: `format` არ არის
+@msg	not a preferences file: no `version`	ეს არ არის პარამეტრების ფაილი: `version` არ არის
+@msg	not a preferences file: no `prefs`	ეს არ არის პარამეტრების ფაილი: `prefs` არ არის
+@msg	the file was saved by a newer version of VectorCraft (version {v})	ფაილი შენახულია VectorCraft-ის უფრო ახალი ვერსიით (ვერსია {v})
+@msg	the file holds no preferences	ფაილში პარამეტრები არ არის
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` საქაღალდეს მიუთითებს, პარამეტრების ფაილები კი საქაღალდეებს არ შეიცავს
+@msg	the file is larger than 1 MB	ფაილი 1 MB-ზე დიდია
+@msg	give `path` or `data`	მიუთითეთ `path` ან `data`
+@msg	`{key}` must be an object	`{key}` უნდა იყოს ობიექტი
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` ცალკე სრულდება და არა პაკეტის ნაბიჯად
 @msg	unknown preset (one of {_1})	უცნობი პრესეტი (ერთ-ერთი: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	უცნობი პრესეტი `{name}` (high, medium, low ან შენახული: იხ. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	უცნობი პრესეტი `{name}` (იხ. flattener.presets.list)
@@ -4991,6 +5025,7 @@ file-filter	Swatch libraries	ფერის ნიმუშების ბი�
 file-filter	Flattener presets	გაბრტყელების პრესეტები
 file-filter	PDF presets	PDF-ის პრესეტები
 file-filter	Print presets	ბეჭდვის პრესეტები
+file-filter	Preferences	პარამეტრები
 file-filter	Export presets	ექსპორტის პრესეტები
 file-filter	SVG Compressed	შეკუმშული SVG
 file-filter	PDF-compatible .ai	PDF-თან თავსებადი .ai
@@ -5151,6 +5186,7 @@ imageTrace	Outline	კონტური
 	Stop Script	სკრიპტის შეჩერება
 	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
 	A Script Is Running	სკრიპტი მუშაობს
+	Script Alert	სკრიპტის შეტყობინება
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
 	Stop the script and undo what it did? Then quit again.	შეჩერდეს სკრიპტი და გაუქმდეს მისი ცვლილებები? შემდეგ ხელახლა გამოდით.
@@ -5164,6 +5200,9 @@ imageTrace	Outline	კონტური
 @msg	the script is too large to run	სკრიპტი გასაშვებად ძალიან დიდია
 @msg	a drag or an undo group is open; finish it before running a script	ღიაა გადათრევა ან გაუქმების ჯგუფი; დაასრულეთ სკრიპტის გაშვებამდე
 @msg	the script left a document that cannot be kept	სკრიპტმა დატოვა დოკუმენტი, რომლის შენახვა შეუძლებელია
+@msg	the script is no longer in the Scripts folder	სკრიპტი აღარ არის Scripts საქაღალდეში
+	Some scripts were not listed	ზოგიერთი სკრიპტი არ არის ჩამოთვლილი
+	The Scripts folder cannot be read	Scripts საქაღალდის წაკითხვა შეუძლებელია
 @msg	the script's run is no longer available	სკრიპტის გაშვება აღარ არის ხელმისაწვდომი
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	წარუმატებელმა ბრძანებამ შეცვალა გაუქმების ნაბიჯები, რომელთა აღდგენა ვერ მოხერხდა, ამიტომ სკრიპტი შეჩერდა
 @msg	a recovery copy could not be written, so the script was not run	აღდგენის ასლის ჩაწერა ვერ მოხერხდა, ამიტომ სკრიპტი არ გაეშვა
@@ -5287,6 +5326,7 @@ imageTrace	Outline	კონტური
 	Preview (1 inch on the page)	წინასწარი ნახვა (1 დუიმი გვერდზე)
 	Set as Default	ნაგულისხმევად დაყენება
 	 out from a highlighted edge to place its dimension  |  	 — გამოკვეთილი კიდიდან გარეთ, მისი ზომის დასასმელად  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 — ორ წერტილზე, შემდეგ გადაადგილეთ და დააწკაპუნეთ გასწორებული, ჰორიზონტალური ან ვერტიკალური ზომის დასასმელად  |  
 	 cancels  |  Double-click the tool for options	 — გაუქმება  |  პარამეტრებისთვის ორჯერ დაწკაპეთ ხელსაწყოზე
 	Angular	კუთხური
 	Away from the Line	ხაზისგან მოშორებით
@@ -5316,14 +5356,17 @@ imageTrace	Outline	კონტური
 @msg	Invalid drawing scale	ნახაზის არასწორი მასშტაბი
 @msg	Invalid real scale	რეალური ზომის არასწორი მასშტაბი
 @msg	Measured anchor no longer exists	გაზომილი საყრდენი წერტილი აღარ არსებობს
+@msg	Invalid measured point	გაზომილი წერტილი არასწორია
 @msg	Measured segment no longer exists	გაზომილი სეგმენტი აღარ არსებობს
 @msg	Non-finite dimension	ზომა სასრული რიცხვი არ არის
+@msg	Only linear dimensions are horizontal or vertical	მხოლოდ ხაზოვანი ზომებია ჰორიზონტალური ან ვერტიკალური
 @msg	Scale Text Attributes: selected type has no scale to bake	ტექსტის ატრიბუტების მასშტაბირება: არჩეულ ტექსტს არ აქვს გადასაყვანი მასშტაბი
 @msg	Scale must be drawing:real, for example 1:10	მასშტაბი უნდა იყოს ნახაზი:რეალური, მაგალითად 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	მასშტაბის შეფარდება 1:1000000-სა და 1000000:1-ს შორის უნდა იყოს
 @msg	Second measured segment no longer exists	მეორე გაზომილი სეგმენტი აღარ არსებობს
 @msg	Unknown dimension mode	ზომის უცნობი რეჟიმი
 @msg	Unknown dimension option {k}	ზომის უცნობი პარამეტრი {k}
+@msg	Unknown dimension orientation	ზომის უცნობი ორიენტაცია
 @msg	Unknown dimension style	ზომის უცნობი სტილი
 @msg	Unknown unit	უცნობი ერთეული
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეები ღია რჩება.
@@ -6007,6 +6050,12 @@ axis	Y Axis	Y ღერძი
 	Flag	დროშა
 	Crosshair	სამიზნე
 	Checkpoint	საკონტროლო წერტილი
+	Inventory Icons	ინვენტარის ხატულები
+	Sword	მახვილი
+	Shield	ფარი
+	Potion	წამალი
+	Key	გასაღები
+	Gem	ძვირფასი ქვა
 	Open Symbol Library	სიმბოლოების ბიბლიოთეკის გახსნა
 	Save Symbol Library	სიმბოლოების ბიბლიოთეკის შენახვა
 	Save Symbol Library…	სიმბოლოების ბიბლიოთეკის შენახვა…
@@ -6794,3 +6843,31 @@ font-script	Japanese	იაპონური
 	No Suggestions	შემოთავაზებები არ არის
 	Edit Custom Dictionary	მომხმარებლის ლექსიკონის რედაქტირება
 	Entry:	ჩანაწერი:
+# Script Console
+	Script Console	სკრიპტების კონსოლი
+	Clear Script Console	სკრიპტების კონსოლის გასუფთავება
+	Copy Script Console	სკრიპტების კონსოლის კოპირება
+	Copy All	ყველაფრის კოპირება
+	Copy Selected	მონიშნულის კოპირება
+	Finished	დასრულდა
+	Ended with an error	დასრულდა შეცდომით
+	Out of fuel	ინსტრუქციების ლიმიტი ამოიწურა
+	Ended at a host limit	დასრულდა ჰოსტის ლიმიტზე
+	Ended at a limit	დასრულდა ლიმიტზე
+	Stopped	შეჩერდა
+	Ended by an internal fault	დასრულდა შიდა შეცდომის გამო
+	time unavailable	დრო მიუწვდომელია
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	ყველაზე ნელი: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	ჰოსტის {n} გამოძახება
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ძველი სტრიქონი წაიშალა
+@plural	{n} line cut|{n} lines cut	{n} სტრიქონი შემოკლდა
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	გადადებული ეფექტების განახლება
+	Deferred Effects	გადადებული ეფექტები
+@msg	no plug-in effect is deferred	პლაგინის ეფექტი არ არის გადადებული
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.

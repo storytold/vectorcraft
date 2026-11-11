@@ -5,6 +5,52 @@ mod lookups;
 mod slices;
 mod units;
 
+/// A guide label's text is a layer color's name or `#rrggbb`, and reads back as the same color;
+/// other spellings, an alpha part and a short form are not labels.
+#[test]
+fn guide_label_text_names_a_layer_color_or_rgb() {
+    for (i, (name, _)) in LAYER_COLORS.iter().enumerate() {
+        let c = LayerColor::Preset(u8::try_from(i).unwrap());
+        assert_eq!(c.label_text(), *name);
+        assert_eq!(LayerColor::from_label_text(name), Some(c));
+    }
+    let custom = LayerColor::Custom([0x0a, 0xbc, 0xff]);
+    assert_eq!(custom.label_text(), "#0abcff");
+    assert_eq!(LayerColor::from_label_text("#0ABCff"), Some(custom));
+    // A preset past the layer colors has no name: its text is the color it draws in.
+    let [r, g, b] = LayerColor::Preset(200).rgb();
+    assert_eq!(LayerColor::Preset(200).label_text(), format!("#{r:02x}{g:02x}{b:02x}"));
+    for bad in ["red", "Red ", "", "#", "#fff", "#0abcff00", "0abcff", "#0abcfg", "#０abcff"] {
+        assert_eq!(LayerColor::from_label_text(bad), None, "{bad:?}");
+    }
+}
+
+/// An artboard's guide label: none unless set, left out of the JSON when none, and a preset past
+/// the layer colors reading as none.
+#[test]
+fn artboard_guide_label_defaults_and_skips_in_json() {
+    let mut a = Document::new(100.0, 100.0).artboards[0].clone();
+    assert_eq!(a.guide_label, None);
+    let plain = serde_json::to_value(&a).unwrap();
+    assert!(plain.get("guide_label").is_none(), "{plain}");
+    a.guide_label = Some(LayerColor::Custom([1, 2, 3]));
+    let v = serde_json::to_value(&a).unwrap();
+    assert_eq!(v["guide_label"], serde_json::json!({"Custom": [1, 2, 3]}));
+    assert_eq!(serde_json::from_value::<Artboard>(v).unwrap(), a);
+    let read = |label: serde_json::Value| {
+        let mut v = plain.clone();
+        v["guide_label"] = label;
+        serde_json::from_value::<Artboard>(v).map(|a| a.guide_label)
+    };
+    assert_eq!(read(serde_json::json!({"Preset": 26})).unwrap(), Some(LayerColor::Preset(26)));
+    assert_eq!(read(serde_json::json!({"Preset": 27})).unwrap(), None);
+    assert_eq!(read(serde_json::json!({"Preset": 255})).unwrap(), None);
+    assert_eq!(read(serde_json::Value::Null).unwrap(), None);
+    assert!(read(serde_json::json!({"Preset": -1})).is_err());
+    assert!(read(serde_json::json!({"Tint": 1})).is_err());
+    assert_eq!(serde_json::from_value::<Artboard>(plain).unwrap().guide_label, None, "older files have none");
+}
+
 /// Zooming in on an inch ruler divided the inch into tenths (#2827). Its steps below an inch
 /// are binary fractions now, and the minor ticks between them stay binary too; every other
 /// unit is still read in tenths.
@@ -146,6 +192,7 @@ fn art_on_a_locked_artboard_cannot_be_selected_or_edited() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     let rect = |d: &mut Document, r: Rect, appearance: Appearance| {
         let id = d.alloc_id();

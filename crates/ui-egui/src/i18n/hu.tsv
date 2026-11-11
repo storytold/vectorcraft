@@ -385,6 +385,7 @@ font-technology	Variable	Változó
 	B4	B4
 	B5	B5
 	Background Color:	Háttérszín:
+	Guide Label:	Segédvonalak címkéje:
 	Show Center Mark	Középjel megjelenítése
 	Show Cross Hairs	Szálkereszt megjelenítése
 	Show Video Safe Areas	Biztonságos videoterületek megjelenítése
@@ -1572,6 +1573,7 @@ file-filter	Swatch libraries	Színminta-könyvtárak
 file-filter	Flattener presets	Lapítási előbeállítások
 file-filter	PDF presets	PDF-előbeállítások
 file-filter	Print presets	Nyomtatási előbeállítások
+file-filter	Preferences	Beállítások
 file-filter	Export presets	Exportálási előbeállítások
 file-filter	SVG Compressed	Tömörített SVG
 file-filter	PDF-compatible .ai	PDF-kompatibilis .ai
@@ -2377,6 +2379,7 @@ file-filter	Templates	Sablonok
 	Lock Grid	Rács zárolása
 	Lock Guides	Segédvonalak zárolása
 	Lock Guides by Default	Segédvonalak zárolása alapértelmezetten
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Rajztábla-segédvonalak Cmd/Ctrl + húzással a vonalzóból
 	Lock Others	Többi zárolása
 	Lock Slices	Szeletek zárolása
 	Lock Station Point	Nézőpont zárolása
@@ -3361,6 +3364,12 @@ mark-style	Japanese	Japán
 	Reset Painting	Painting visszaállítása
 	Reset Panel	Panel visszaállítása
 	Reset Preferences	Beállítások visszaállítása
+	Export Preferences…	Beállítások exportálása…
+	Import Preferences…	Beállítások importálása…
+	Save the applied preferences to a JSON file	Az alkalmazott beállítások mentése JSON-fájlba
+	Apply the preferences in a file Export Preferences saved	A Beállítások exportálása paranccsal mentett fájl beállításainak alkalmazása
+	Export Preferences	Beállítások exportálása
+	Import Preferences	Beállítások importálása
 	Search Preferences	Keresés a beállításokban
 	No settings found	Nincs ilyen beállítás
 	Reset Printing and Proofing	Printing and Proofing visszaállítása
@@ -3397,6 +3406,8 @@ mark-style	Japanese	Japán
 	Responsive	Reszponzív
 	Restore	Visszaállít
 	Restore every preference to its default (applied on OK)	Minden beállítás visszaállítása az alapértékre (az OK gombbal lép életbe)
+	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
 	Restored documents open unsaved: save them to keep them.	A visszaállított dokumentumok mentetlenül nyílnak meg: mentsd őket, ha meg akarod tartani.
 	Restrict printing, editing and other tasks	Nyomtatás, szerkesztés és más műveletek korlátozása
@@ -3760,6 +3771,13 @@ mark-style	Japanese	Japán
 	Quest Outline	Küldetés
 	Coin Shine	Érme
 	Boss Alert	Főellenség
+	Status Effects	Állapot hatások
+	Poison Tint	Méreg
+	Freeze Edge	Fagy
+	Burn Aura	Égés
+	Stun Pulse	Kábítás
+	Stealth Fade	Lopakodás
+	Shield Buff	Pajzs
 	Shape	Alakzat
 	Shape Builder	Alakzatépítő
 	Shape Builder Regions	Alakzatépítő területei
@@ -4238,6 +4256,8 @@ mark-style	Japanese	Japán
 	Tilt	Dőlés
 	Copies per Sheet (as many as fit, in a grid)	Példány laponként (ahány elfér, rácsban)
 	Tint	Tónus
+	Fill Tint	Kitöltés tónusa
+	Stroke Tint	Körvonal tónusa
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok
 	Tips	Tippek
@@ -4823,6 +4843,7 @@ imageTrace	Outline	Körvonal
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	az axis értéke "vertical", "horizontal" vagy fokban megadott szög lehet, ez nem az: `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black vagy egy szín, például "#ff8800"
 @msg	bad color {v}	hibás szín: {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	a `guideLabel` értéke null, egy rétegszín neve vagy #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio: 0,1 és 10 közötti szám kell
 @msg	the Color Picker is not open	a Színválasztó nincs megnyitva
 @msg	the Simplify slider is not open	az Egyszerűsítés csúszka nincs megnyitva
@@ -4874,6 +4895,7 @@ imageTrace	Outline	Körvonal
 	Stop Script	Parancsfájl leállítása
 	Show External Script Warning	Figyelmeztetés külső parancsfájlok előtt
 	A Script Is Running	Egy parancsfájl fut
+	Script Alert	Parancsfájl-értesítés
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
 	Stop the script and undo what it did? Then quit again.	Leállítja a parancsfájlt, és visszavonja a módosításait? Ezután lépjen ki újra.
@@ -4887,6 +4909,9 @@ imageTrace	Outline	Körvonal
 @msg	the script is too large to run	a parancsfájl túl nagy a futtatáshoz
 @msg	a drag or an undo group is open; finish it before running a script	húzás vagy visszavonási csoport van folyamatban; fejezze be a parancsfájl futtatása előtt
 @msg	the script left a document that cannot be kept	a parancsfájl olyan dokumentumot hagyott hátra, amely nem tartható meg
+@msg	the script is no longer in the Scripts folder	a parancsfájl már nincs a Scripts mappában
+	Some scripts were not listed	Néhány szkript nem szerepel a listában
+	The Scripts folder cannot be read	A Scripts mappa nem olvasható
 @msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
 @msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
@@ -5491,6 +5516,20 @@ imageTrace	Outline	Körvonal
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
 @msg	unknown panel `{raw}`	ismeretlen panel: `{raw}`
 @msg	unknown preference `{key}`	ismeretlen beállítás: `{key}`
+@msg	Preferences imported.	A beállítások importálva.
+@msg	not a preferences file: {e}	nem beállításfájl: {e}
+@msg	not a preferences file: no JSON object	nem beállításfájl: nincs JSON-objektum
+@msg	not a preferences file (format `{format}`)	nem beállításfájl (formátum: `{format}`)
+@msg	not a preferences file: no `format`	nem beállításfájl: nincs `format`
+@msg	not a preferences file: no `version`	nem beállításfájl: nincs `version`
+@msg	not a preferences file: no `prefs`	nem beállításfájl: nincs `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	a fájlt a VectorCraft újabb verziója mentette (verzió: {v})
+@msg	the file holds no preferences	a fájl nem tartalmaz beállításokat
+@msg	`{key}` names a folder, which preferences files leave out	a(z) `{key}` mappát ad meg, a beállításfájlok pedig nem tartalmaznak mappákat
+@msg	the file is larger than 1 MB	a fájl nagyobb 1 MB-nál
+@msg	give `path` or `data`	adja meg a `path` vagy a `data` értékét
+@msg	`{key}` must be an object	a(z) `{key}` értékének objektumnak kell lennie
+@msg	`prefs.import` runs on its own, not as a batch step	a `prefs.import` önállóan fut, nem kötegelt lépésként
 @msg	unknown preset (one of {_1})	ismeretlen előbeállítás (ezek egyike lehet: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (high, medium, low vagy egy mentett; lásd: flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (lásd: flattener.presets.list)
@@ -5663,6 +5702,7 @@ imageTrace	Outline	Körvonal
 	Preview (1 inch on the page)	Előnézet (1 hüvelyk az oldalon)
 	Set as Default	Beállítás alapértelmezettként
 	 out from a highlighted edge to place its dimension  |  	 egy kiemelt élről kifelé a méret elhelyezéséhez  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 két pontra, majd mozgasd a mutatót, és kattints az igazított, vízszintes vagy függőleges méret elhelyezéséhez  |  
 	 cancels  |  Double-click the tool for options	 megszakítja  |  Dupla kattintás az eszközre a beállításokhoz
 	Angular	Szög
 	Away from the Line	A vonaltól távol
@@ -5692,14 +5732,17 @@ imageTrace	Outline	Körvonal
 @msg	Invalid drawing scale	Érvénytelen rajzlépték
 @msg	Invalid real scale	Érvénytelen valós lépték
 @msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
+@msg	Invalid measured point	Érvénytelen mért pont
 @msg	Measured segment no longer exists	A mért szakasz már nem létezik
 @msg	Non-finite dimension	Nem véges méret
+@msg	Only linear dimensions are horizontal or vertical	Csak a lineáris méretek lehetnek vízszintesek vagy függőlegesek
 @msg	Scale Text Attributes: selected type has no scale to bake	Szövegattribútumok méretezése: a kijelölt szövegnek nincs alkalmazható méretezése
 @msg	Scale must be drawing:real, for example 1:10	A léptéknek rajz:valós alakúnak kell lennie, például 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	A lépték aránya 1:1000000 és 1000000:1 között lehet
 @msg	Second measured segment no longer exists	A második mért szakasz már nem létezik
 @msg	Unknown dimension mode	Ismeretlen méretezési mód
 @msg	Unknown dimension option {k}	Ismeretlen méretezési beállítás: {k}
+@msg	Unknown dimension orientation	Ismeretlen méretezési tájolás
 @msg	Unknown dimension style	Ismeretlen méretezési stílus
 @msg	Unknown unit	Ismeretlen mértékegység
 # Revolve cap description
@@ -6067,6 +6110,12 @@ axis	Y Axis	Y tengely
 	Flag	Zászló
 	Crosshair	Célkereszt
 	Checkpoint	Ellenőrzőpont
+	Inventory Icons	Leltári ikonok
+	Sword	Kard
+	Shield	Pajzs
+	Potion	Bájital
+	Key	Kulcs
+	Gem	Drágakő
 	Open Symbol Library	Szimbólumkönyvtár megnyitása
 	Save Symbol Library	Szimbólumkönyvtár mentése
 	Save Symbol Library…	Szimbólumkönyvtár mentése…
@@ -6717,3 +6766,31 @@ breakText	Glyphs	Glifák
 	No Suggestions	Nincs javaslat
 	Edit Custom Dictionary	Egyéni szótár szerkesztése
 	Entry:	Bejegyzés:
+# Script Console
+	Script Console	Parancsfájlkonzol
+	Clear Script Console	Parancsfájlkonzol törlése
+	Copy Script Console	Parancsfájlkonzol másolása
+	Copy All	Összes másolása
+	Copy Selected	Kijelölés másolása
+	Finished	Befejeződött
+	Ended with an error	Hibával ért véget
+	Out of fuel	Elfogyott az utasításkeret
+	Ended at a host limit	Gazdakorlátnál ért véget
+	Ended at a limit	Korlátnál ért véget
+	Stopped	Leállítva
+	Ended by an internal fault	Belső hiba miatt ért véget
+	time unavailable	az idő nem érhető el
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	leglassabbak: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} gazdahívás
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} korábbi sor elvetve
+@plural	{n} line cut|{n} lines cut	{n} sor levágva
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Elhalasztott effektusok frissítése
+	Deferred Effects	Elhalasztott effektusok
+@msg	no plug-in effect is deferred	nincs elhalasztott bővítményeffektus
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.

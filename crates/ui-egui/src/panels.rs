@@ -37,6 +37,7 @@ pub mod paragraph;
 pub mod pathfinder;
 pub mod pattern_options;
 pub mod properties;
+pub mod script_console;
 pub mod separations;
 pub mod stroke;
 pub mod svg_interactivity;
@@ -183,6 +184,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),
         three_d::ID => three_d::show(app, ui),
+        script_console::ID => script_console::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
@@ -238,6 +240,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         asset_export::ID => asset_export::menu(app, ui),
         css_properties::ID => css_properties::menu(app, ui),
         variables::ID => variables::menu(app, ui),
+        script_console::ID => script_console::menu(app, ui),
         "actions" => actions::menu(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::menu(app, ui, id),
         _ => return false,
@@ -674,6 +677,8 @@ mod tests_links;
 mod tests_long_popups;
 #[cfg(test)]
 mod tests_maskview;
+#[cfg(test)]
+mod tests_script_console;
 #[cfg(test)]
 mod tests_stroke;
 #[cfg(test)]

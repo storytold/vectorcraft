@@ -610,6 +610,7 @@
 	Show Guides	Zobrazit vodítka
 	Lock Guides	Zamknout vodítka
 	Lock Guides by Default	Ve výchozím stavu zamknout vodítka
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Vodítka pracovní plochy tažením z pravítka s Cmd/Ctrl
 	Unlock Guides	Odemknout vodítka
 	Make Guides	Vytvořit vodítka
 	Release Guides	Uvolnit vodítka
@@ -782,6 +783,13 @@
 	Quest Outline	Úkol
 	Coin Shine	Mince
 	Boss Alert	Boss
+	Status Effects	Stavové efekty
+	Poison Tint	Jed
+	Freeze Edge	Zmrazení
+	Burn Aura	Spálení
+	Stun Pulse	Omráčení
+	Stealth Fade	Plížení
+	Shield Buff	Štít
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
 	Gradient Finishes	Přechodové povrchy
@@ -2284,6 +2292,8 @@ digits	Malayalam	Malajálamské
 	Green	Zelená
 	Shifts the tints of global and spot colors; other colors stay.	Posune tóny globálních a přímých barev; ostatní barvy zůstanou.
 	Tint	Tón
+	Fill Tint	Tón výplně
+	Stroke Tint	Tón tahu
 	Color Guide Options	Možnosti průvodce barvami
 	Less	Méně
 	Steps:	Kroky:
@@ -2653,6 +2663,7 @@ digits	Malayalam	Malajálamské
 	File Dimensions	Rozměry souboru
 	Transforms	Transformace
 	Background Color:	Barva pozadí:
+	Guide Label:	Štítek vodítek:
 	Show Center Mark	Zobrazit středovou značku
 	Show Cross Hairs	Zobrazit nitkový kříž
 	Show Video Safe Areas	Zobrazit bezpečné oblasti videa
@@ -3764,6 +3775,12 @@ theme	Appearance	Motiv
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
+	Export Preferences…	Exportovat předvolby…
+	Import Preferences…	Importovat předvolby…
+	Save the applied preferences to a JSON file	Uložit použité předvolby do souboru JSON
+	Apply the preferences in a file Export Preferences saved	Použít předvolby ze souboru uloženého příkazem Exportovat předvolby
+	Export Preferences	Exportovat předvolby
+	Import Preferences	Importovat předvolby
 	Search Preferences	Hledat v předvolbách
 	No settings found	Nenalezena žádná nastavení
 	Scale Corners	Měnit velikost rohů
@@ -4143,6 +4160,8 @@ font-technology	Variable	Variabilní
 	Preferences	Předvolby
 	Previous	Předchozí
 	Restore every preference to its default (applied on OK)	Obnovit všechny předvolby na výchozí hodnoty (použije se po OK)
+	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší
 	Smart Guides (View → Smart Guides)	Chytrá vodítka (Zobrazení → Chytrá vodítka)
 	Couldn't save recovery data: {e}	Data pro obnovení nelze uložit: {e}
@@ -4389,6 +4408,7 @@ imageTrace	Outline	Obrys
 	Stop Script	Zastavit skript
 	Show External Script Warning	Zobrazit upozornění u externích skriptů
 	A Script Is Running	Běží skript
+	Script Alert	Upozornění skriptu
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skript může měnit otevřené dokumenty a prostřednictvím příkazů, které spouští, zapisovat soubory. Spouštějte jen skripty, kterým důvěřujete.
 	Do not show this warning again	Toto upozornění již nezobrazovat
 	Stop the script and undo what it did? Then quit again.	Zastavit skript a vrátit jeho změny? Potom aplikaci ukončete znovu.
@@ -4402,6 +4422,9 @@ imageTrace	Outline	Obrys
 @msg	the script is too large to run	skript je příliš velký na spuštění
 @msg	a drag or an undo group is open; finish it before running a script	je otevřené tažení nebo skupina kroků zpět; před spuštěním skriptu ji dokončete
 @msg	the script left a document that cannot be kept	skript zanechal dokument, který nelze zachovat
+@msg	the script is no longer in the Scripts folder	skript už není ve složce Scripts
+	Some scripts were not listed	Některé skripty nebyly uvedeny
+	The Scripts folder cannot be read	Složku Scripts nelze přečíst
 @msg	the script's run is no longer available	běh skriptu již není k dispozici
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	neúspěšný příkaz změnil kroky zpět, které nebylo možné obnovit, proto byl skript zastaven
 @msg	a recovery copy could not be written, so the script was not run	záložní kopii se nepodařilo zapsat, proto skript nebyl spuštěn
@@ -4585,6 +4608,7 @@ imageTrace	Outline	Obrys
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musí být "vertical", "horizontal" nebo úhel ve stupních, ne `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	pozadí {other}: transparent, white, black nebo barva jako "#ff8800"
 @msg	bad color {v}	chybná barva {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` je null, název barvy vrstvy nebo #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musí být číslo od 0,1 do 10
 @msg	the Color Picker is not open	Výběr barvy není otevřený
 @msg	the Simplify slider is not open	Posuvník Zjednodušit není otevřený
@@ -4989,6 +5013,20 @@ imageTrace	Outline	Obrys
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
 @msg	unknown panel `{raw}`	neznámý panel `{raw}`
 @msg	unknown preference `{key}`	neznámá předvolba `{key}`
+@msg	Preferences imported.	Předvolby byly importovány.
+@msg	not a preferences file: {e}	nejde o soubor předvoleb: {e}
+@msg	not a preferences file: no JSON object	nejde o soubor předvoleb: chybí objekt JSON
+@msg	not a preferences file (format `{format}`)	nejde o soubor předvoleb (formát `{format}`)
+@msg	not a preferences file: no `format`	nejde o soubor předvoleb: chybí `format`
+@msg	not a preferences file: no `version`	nejde o soubor předvoleb: chybí `version`
+@msg	not a preferences file: no `prefs`	nejde o soubor předvoleb: chybí `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	soubor byl uložen novější verzí aplikace VectorCraft (verze {v})
+@msg	the file holds no preferences	soubor neobsahuje žádné předvolby
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` určuje složku a soubory předvoleb složky neobsahují
+@msg	the file is larger than 1 MB	soubor je větší než 1 MB
+@msg	give `path` or `data`	zadejte `path` nebo `data`
+@msg	`{key}` must be an object	`{key}` musí být objekt
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` se spouští samostatně, ne jako krok dávky
 @msg	unknown preset (one of {_1})	neznámé přednastavení (jedno z {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	neznámé přednastavení `{name}` (high, medium, low nebo uložené: viz flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	neznámé přednastavení `{name}` (viz flattener.presets.list)
@@ -5560,6 +5598,7 @@ file-filter	Swatch libraries	Knihovny vzorníků
 file-filter	Flattener presets	Přednastavení sloučení průhlednosti
 file-filter	PDF presets	Přednastavení PDF
 file-filter	Print presets	Přednastavení tisku
+file-filter	Preferences	Předvolby
 file-filter	Export presets	Přednastavení exportu
 file-filter	SVG Compressed	Komprimované SVG
 file-filter	PDF-compatible .ai	.ai kompatibilní s PDF
@@ -5682,6 +5721,7 @@ mark-style	Japanese	Japonské
 	Preview (1 inch on the page)	Náhled (1 palec na stránce)
 	Set as Default	Nastavit jako výchozí
 	 out from a highlighted edge to place its dimension  |  	 ze zvýrazněné hrany ven a umístíte její kótu  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 na dva body, pak posuňte ukazatel a klepnutím umístěte zarovnanou, vodorovnou nebo svislou kótu  |  
 	 cancels  |  Double-click the tool for options	 zruší  |  Dvojitým kliknutím na nástroj otevřete volby
 	Angular	Úhlová
 	Away from the Line	Dál od čáry
@@ -5710,14 +5750,17 @@ mark-style	Japanese	Japonské
 @msg	Invalid drawing scale	Neplatné měřítko výkresu
 @msg	Invalid real scale	Neplatné skutečné měřítko
 @msg	Measured anchor no longer exists	Měřený kotevní bod už neexistuje
+@msg	Invalid measured point	Neplatný měřený bod
 @msg	Measured segment no longer exists	Měřený segment už neexistuje
 @msg	Non-finite dimension	Kóta není konečné číslo
+@msg	Only linear dimensions are horizontal or vertical	Vodorovné nebo svislé jsou jen lineární kóty
 @msg	Scale Text Attributes: selected type has no scale to bake	Měnit velikost atributů textu: vybraný text nemá žádnou skalaci, kterou lze použít
 @msg	Scale must be drawing:real, for example 1:10	Měřítko musí mít tvar výkres:skutečnost, například 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Poměr měřítka musí být mezi 1:1000000 a 1000000:1
 @msg	Second measured segment no longer exists	Druhý měřený segment už neexistuje
 @msg	Unknown dimension mode	Neznámý režim kóty
 @msg	Unknown dimension option {k}	Neznámá volba kóty {k}
+@msg	Unknown dimension orientation	Neznámá orientace kóty
 @msg	Unknown dimension style	Neznámý styl kóty
 @msg	Unknown unit	Neznámá jednotka
 # Revolve cap description
@@ -6084,6 +6127,12 @@ axis	Y Axis	osa Y
 	Flag	Vlajka
 	Crosshair	Zaměřovač
 	Checkpoint	Kontrolní bod
+	Inventory Icons	Ikony inventáře
+	Sword	Meč
+	Shield	Štít
+	Potion	Lektvar
+	Key	Klíč
+	Gem	Drahokam
 	Open Symbol Library	Otevřít knihovnu symbolů
 	Save Symbol Library	Uložit knihovnu symbolů
 	Save Symbol Library…	Uložit knihovnu symbolů…
@@ -6733,3 +6782,31 @@ breakText	Glyphs	Glyfy
 	No Suggestions	Žádné návrhy
 	Edit Custom Dictionary	Upravit vlastní slovník
 	Entry:	Položka:
+# Script Console
+	Script Console	Konzole skriptů
+	Clear Script Console	Vymazat konzoli skriptů
+	Copy Script Console	Kopírovat konzoli skriptů
+	Copy All	Kopírovat vše
+	Copy Selected	Kopírovat vybrané
+	Finished	Dokončeno
+	Ended with an error	Ukončeno s chybou
+	Out of fuel	Vyčerpán limit instrukcí
+	Ended at a host limit	Ukončeno na limitu hostitele
+	Ended at a limit	Ukončeno na limitu
+	Stopped	Zastaveno
+	Ended by an internal fault	Ukončeno vnitřní chybou
+	time unavailable	čas není k dispozici
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	nejpomalejší: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} volání hostitele|{n} volání hostitele|{n} volání hostitele
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} starší řádek zahozen|{n} starší řádky zahozeny|{n} starších řádků zahozeno
+@plural	{n} line cut|{n} lines cut	{n} řádek zkrácen|{n} řádky zkráceny|{n} řádků zkráceno
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` a `last` musí být čísla řádků, které konzole uchovává, `first` před `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Obnovit odložené efekty
+	Deferred Effects	Odložené efekty
+@msg	no plug-in effect is deferred	žádný efekt zásuvného modulu není odložen
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otevřeno s {n} odloženým efektem zásuvného modulu. Efekt › Obnovit odložené efekty jej spustí.|Otevřeno s {n} odloženými efekty zásuvných modulů. Efekt › Obnovit odložené efekty je spustí.|Otevřeno s {n} odloženými efekty zásuvných modulů. Efekt › Obnovit odložené efekty je spustí.

@@ -166,7 +166,7 @@ fn an_error_names_the_script_its_place_and_kind() {
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
     assert!(run(&mut s, "app.activeDocument;").unwrap_err().to_string().contains("`vc`"));
-    assert!(run(&mut s, "#target x\n1").unwrap_err().to_string().contains("#target"));
+    assert!(run(&mut s, "#targetengine x\n1").unwrap_err().to_string().contains("unsupported script directive: #targetengine"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
 
@@ -989,6 +989,15 @@ fn source_text() -> impl proptest::strategy::Strategy<Value = String> {
         Just("{".to_string()),
         Just("try {".to_string()),
         Just("} catch (e) {}".to_string()),
+        Just("\n#include \"x.jsxinc\"\n".to_string()),
+        Just("\n//@include 'x\n".to_string()),
+        Just("\n#includepath \";;..;\"\n".to_string()),
+        Just("\n#script \"\"\n".to_string()),
+        Just("\n#target\n".to_string()),
+        Just("\n#strict on\n".to_string()),
+        Just("\n#\u{0}\n".to_string()),
+        Just("try { $.evalFile('x.jsx', NaN); } catch (e) {}".to_string()),
+        "\n#[a-z]{0,12}[ -~]{0,20}\n",
         "[ -~]{0,30}",
         "\\PC{0,10}",
     ];

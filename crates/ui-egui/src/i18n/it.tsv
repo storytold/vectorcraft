@@ -289,6 +289,7 @@ font-technology	Variable	Variabili
 	Average…	Media…
 	Axis:	Asse:
 	Background Color:	Colore di sfondo:
+	Guide Label:	Etichetta delle guide:
 	Show Center Mark	Mostra segno centrale
 	Show Cross Hairs	Mostra mirino
 	Show Video Safe Areas	Mostra aree sicure video
@@ -1278,6 +1279,7 @@ file-filter	Swatch libraries	Librerie campioni
 file-filter	Flattener presets	Preset di appiattimento
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset di stampa
+file-filter	Preferences	Preferenze
 file-filter	Export presets	Predefiniti di esportazione
 file-filter	SVG Compressed	SVG compresso
 file-filter	PDF-compatible .ai	.ai compatibile con PDF
@@ -1925,6 +1927,7 @@ file-filter	Templates	Modelli
 	Lock Grid	Blocca griglia
 	Lock Guides	Blocca guide
 	Lock Guides by Default	Blocca guide per impostazione predefinita
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Guide della tavola da disegno con Cmd/Ctrl + trascinamento dal righello
 	Lock Others	Blocca altri
 	Lock Slices	Blocca sezioni
 	Lock Station Point	Blocca punto di osservazione
@@ -2852,6 +2855,12 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Reimposta funzioni OpenType
 	Reset Panel	Reimposta pannello
 	Reset Preferences	Reimposta preferenze
+	Export Preferences…	Esporta preferenze…
+	Import Preferences…	Importa preferenze…
+	Save the applied preferences to a JSON file	Salva le preferenze applicate in un file JSON
+	Apply the preferences in a file Export Preferences saved	Applica le preferenze di un file salvato con Esporta preferenze
+	Export Preferences	Esporta preferenze
+	Import Preferences	Importa preferenze
 	Search Preferences	Cerca nelle preferenze
 	No settings found	Nessuna impostazione trovata
 	Reset Profiles	Reimposta profili
@@ -2875,6 +2884,8 @@ digits	Malayalam	Malayalam
 	Responsive	Adattivo
 	Restore	Ripristina
 	Restore every preference to its default (applied on OK)	Ripristina tutte le preferenze ai valori predefiniti (applicato con OK)
+	Reset all preferences to their defaults?	Ripristinare tutte le preferenze ai valori predefiniti?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	I valori predefiniti vengono applicati quando fai clic su OK in Preferenze. Annulla lì mantiene le preferenze attuali.
 	Restore Recovered Documents	Ripristina documenti recuperati
 	Restored documents open unsaved: save them to keep them.	I documenti ripristinati si aprono senza essere salvati: salvali per conservarli.
 	Restrict printing, editing and other tasks	Limita la stampa, la modifica e altre operazioni
@@ -3182,6 +3193,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Missione
 	Coin Shine	Moneta
 	Boss Alert	Boss
+	Status Effects	Effetti di stato
+	Poison Tint	Veleno
+	Freeze Edge	Gelo
+	Burn Aura	Bruciatura
+	Stun Pulse	Stordimento
+	Stealth Fade	Furtività
+	Shield Buff	Scudo
 	Shape	Forma
 	Shape Builder	Generatore forme
 	Shape Builder Regions	Aree del Generatore forme
@@ -3601,6 +3619,8 @@ digits	Malayalam	Malayalam
 	Copies per Sheet (as many as fit, in a grid)	Copie per foglio (quante ne entrano, in griglia)
 	Gutter:	Spazio intermedio:
 	Tint	Tinta
+	Fill Tint	Tinta riempimento
+	Stroke Tint	Tinta traccia
 	Tip extends past the end point	La punta si estende oltre il punto finale
 	Tip on the end point	Punta sul punto finale
 	Title Case	Iniziali maiuscole
@@ -4121,6 +4141,7 @@ axis	Both	Entrambi
 	Stop Script	Interrompi script
 	Show External Script Warning	Mostra avviso per gli script esterni
 	A Script Is Running	È in esecuzione uno script
+	Script Alert	Avviso dello script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Uno script può modificare i documenti aperti e scrivere file tramite i comandi che esegue. Esegui solo script di cui ti fidi.
 	Do not show this warning again	Non mostrare più questo avviso
 	Stop the script and undo what it did? Then quit again.	Interrompere lo script e annullare ciò che ha fatto? Poi esci di nuovo.
@@ -4134,6 +4155,9 @@ axis	Both	Entrambi
 @msg	the script is too large to run	lo script è troppo grande per essere eseguito
 @msg	a drag or an undo group is open; finish it before running a script	è aperto un trascinamento o un gruppo di annullamento; completalo prima di eseguire uno script
 @msg	the script left a document that cannot be kept	lo script ha lasciato un documento che non può essere conservato
+@msg	the script is no longer in the Scripts folder	lo script non è più nella cartella Scripts
+	Some scripts were not listed	Alcuni script non sono stati elencati
+	The Scripts folder cannot be read	Impossibile leggere la cartella Scripts
 @msg	the script's run is no longer available	l'esecuzione dello script non è più disponibile
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando non riuscito ha modificato passaggi di annullamento che non è stato possibile ripristinare, quindi lo script è stato interrotto
 @msg	a recovery copy could not be written, so the script was not run	non è stato possibile scrivere una copia di recupero, quindi lo script non è stato eseguito
@@ -4318,6 +4342,7 @@ axis	Both	Entrambi
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis deve essere "vertical", "horizontal" o un angolo in gradi, non `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	sfondo {other}: transparent, white, black o un colore come "#ff8800"
 @msg	bad color {v}	colore non valido {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` è null, il nome di un colore di livello o #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio deve essere un numero da 0,1 a 10
 @msg	the Color Picker is not open	il Selettore colore non è aperto
 @msg	the Simplify slider is not open	il cursore Semplifica non è aperto
@@ -4723,6 +4748,20 @@ axis	Both	Entrambi
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	valore di sovrastampa sconosciuto `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	pannello sconosciuto `{raw}`
 @msg	unknown preference `{key}`	preferenza sconosciuta `{key}`
+@msg	Preferences imported.	Preferenze importate.
+@msg	not a preferences file: {e}	non è un file di preferenze: {e}
+@msg	not a preferences file: no JSON object	non è un file di preferenze: nessun oggetto JSON
+@msg	not a preferences file (format `{format}`)	non è un file di preferenze (formato `{format}`)
+@msg	not a preferences file: no `format`	non è un file di preferenze: manca `format`
+@msg	not a preferences file: no `version`	non è un file di preferenze: manca `version`
+@msg	not a preferences file: no `prefs`	non è un file di preferenze: manca `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	il file è stato salvato da una versione più recente di VectorCraft (versione {v})
+@msg	the file holds no preferences	il file non contiene preferenze
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` indica una cartella, e i file di preferenze non includono cartelle
+@msg	the file is larger than 1 MB	il file supera 1 MB
+@msg	give `path` or `data`	specifica `path` o `data`
+@msg	`{key}` must be an object	`{key}` deve essere un oggetto
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` viene eseguito da solo, non come passo di un batch
 @msg	unknown preset (one of {_1})	preset sconosciuto (uno dei seguenti: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preset sconosciuto `{name}` (high, medium, low o uno salvato: vedi flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preset sconosciuto `{name}` (vedi flattener.presets.list)
@@ -5290,6 +5329,7 @@ lighting	Light	Luce
 	Preview (1 inch on the page)	Anteprima (1 pollice sulla pagina)
 	Set as Default	Imposta come predefinito
 	 out from a highlighted edge to place its dimension  |  	 verso l'esterno da un bordo evidenziato per posizionarne la quota  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 su due punti, poi sposta e fai clic per posizionare una quota allineata, orizzontale o verticale  |  
 	 cancels  |  Double-click the tool for options	 annulla  |  Doppio clic sullo strumento per le opzioni
 	Linear	Lineare
 	Angular	Angolare
@@ -5322,14 +5362,17 @@ lighting	Light	Luce
 @msg	Invalid drawing scale	Scala del disegno non valida
 @msg	Invalid real scale	Scala reale non valida
 @msg	Measured anchor no longer exists	Il punto di ancoraggio misurato non esiste più
+@msg	Invalid measured point	Punto misurato non valido
 @msg	Measured segment no longer exists	Il segmento misurato non esiste più
 @msg	Non-finite dimension	Quota non finita
+@msg	Only linear dimensions are horizontal or vertical	Solo le quote lineari sono orizzontali o verticali
 @msg	Scale Text Attributes: selected type has no scale to bake	Scala attributi di testo: il testo selezionato non ha una scala da incorporare
 @msg	Scale must be drawing:real, for example 1:10	La scala deve essere disegno:reale, ad esempio 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Il rapporto di scala deve essere compreso tra 1:1000000 e 1000000:1
 @msg	Second measured segment no longer exists	Il secondo segmento misurato non esiste più
 @msg	Unknown dimension mode	Modalità di quota sconosciuta
 @msg	Unknown dimension option {k}	Opzione di quota sconosciuta {k}
+@msg	Unknown dimension orientation	Orientamento della quota sconosciuto
 @msg	Unknown dimension style	Stile di quota sconosciuto
 @msg	Unknown unit	Unità sconosciuta
 # Revolve cap description
@@ -5701,6 +5744,12 @@ axis	Y Axis	Asse Y
 	Flag	Bandiera
 	Crosshair	Mirino
 	Checkpoint	Punto di controllo
+	Inventory Icons	Icone inventario
+	Sword	Spada
+	Shield	Scudo
+	Potion	Pozione
+	Key	Chiave
+	Gem	Gemma
 	Open Symbol Library	Apri libreria simboli
 	Save Symbol Library	Salva libreria simboli
 	Save Symbol Library…	Salva libreria simboli…
@@ -6354,3 +6403,31 @@ breakText	Glyphs	Glifi
 	No Suggestions	Nessun suggerimento
 	Edit Custom Dictionary	Modifica dizionario personalizzato
 	Entry:	Voce:
+# Script Console
+	Script Console	Console script
+	Clear Script Console	Cancella console script
+	Copy Script Console	Copia console script
+	Copy All	Copia tutto
+	Copy Selected	Copia selezione
+	Finished	Terminato
+	Ended with an error	Terminato con un errore
+	Out of fuel	Limite di istruzioni esaurito
+	Ended at a host limit	Terminato a un limite dell'host
+	Ended at a limit	Terminato a un limite
+	Stopped	Interrotto
+	Ended by an internal fault	Terminato per un errore interno
+	time unavailable	tempo non disponibile
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	più lenti: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} chiamata all'host|{n} chiamate all'host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} riga precedente scartata|{n} righe precedenti scartate
+@plural	{n} line cut|{n} lines cut	{n} riga tagliata|{n} righe tagliate
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Aggiorna effetti rimandati
+	Deferred Effects	Effetti rimandati
+@msg	no plug-in effect is deferred	nessun effetto plug-in è rimandato
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aperto con {n} effetto plug-in rimandato. Effetto › Aggiorna effetti rimandati lo esegue.|Aperto con {n} effetti plug-in rimandati. Effetto › Aggiorna effetti rimandati li esegue.

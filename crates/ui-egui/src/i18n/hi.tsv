@@ -27,6 +27,7 @@
 	 on the canvas to create one	 बनाने के लिए कैनवास पर
 	 on the canvas to create one (	 बनाने के लिए कैनवास पर (
 	 out from a highlighted edge to place its dimension  |  	 माप रखने के लिए हाइलाइट किए किनारे से बाहर की ओर  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 दो बिंदुओं पर, फिर संरेखित, क्षैतिज या ऊर्ध्वाधर आयाम रखने के लिए पॉइंटर ले जाएँ और क्लिक करें  |  
 	 over paths to roughen their outlines  |  	 आउटलाइन खुरदरी करने के लिए पाथ पर  |  
 	 over paths, and hold still to keep going  |  	 पाथ पर, और जारी रखने के लिए स्थिर रखें  |  
 	 right or left to zoom in or out  |  	 ज़ूम इन या आउट करने के लिए दाएँ या बाएँ  |  
@@ -496,6 +497,7 @@ antiAlias	Sharp	शार्प
 	B5	B5
 	Back	वापस
 	Background Color:	बैकग्राउंड रंग:
+	Guide Label:	गाइड लेबल:
 	Background Contents	बैकग्राउंड सामग्री
 	Background Level	बैकग्राउंड स्तर
 	Background:	बैकग्राउंड:
@@ -524,6 +526,12 @@ antiAlias	Sharp	शार्प
 	Flag	झंडा
 	Crosshair	क्रॉसहेयर
 	Checkpoint	चेकपॉइंट
+	Inventory Icons	इन्वेंटरी आइकन
+	Sword	तलवार
+	Shield	ढाल
+	Potion	औषधि
+	Key	कुंजी
+	Gem	रत्न
 	Batch	बैच
 	Batch Trace Folder	फ़ोल्डर बैच ट्रेस करें
 	Batch…	बैच…
@@ -2566,6 +2574,7 @@ antiAlias	Sharp	शार्प
 	Lock Grid	लॉक ग्रिड
 	Lock Guides	गाइड्स लॉक करें
 	Lock Guides by Default	गाइड्स डिफ़ॉल्ट रूप से लॉक करें
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Cmd/Ctrl + रूलर से ड्रैग करके आर्टबोर्ड गाइड्स
 	Lock Others	लॉक अन्य
 	Lock Selected	लॉक सिलेक्टेड
 	Lock Slices	स्लाइस लॉक करें
@@ -3778,6 +3787,12 @@ antiAlias	Sharp	शार्प
 	Reset Painting	पेंटिंग रीसेट करें
 	Reset Panel	पैनल रीसेट करें
 	Reset Preferences	प्रेफ़रेंसेज़ रीसेट करें
+	Export Preferences…	प्रेफ़रेंसेज़ निर्यात करें…
+	Import Preferences…	प्रेफ़रेंसेज़ आयात करें…
+	Save the applied preferences to a JSON file	लागू प्रेफ़रेंसेज़ को JSON फ़ाइल में सहेजें
+	Apply the preferences in a file Export Preferences saved	प्रेफ़रेंसेज़ निर्यात करें से सहेजी गई फ़ाइल की प्रेफ़रेंसेज़ लागू करें
+	Export Preferences	प्रेफ़रेंसेज़ निर्यात करें
+	Import Preferences	प्रेफ़रेंसेज़ आयात करें
 	Search Preferences	प्रेफ़रेंसेज़ में खोजें
 	No settings found	कोई सेटिंग नहीं मिली
 	Reset Printing and Proofing	मुद्रण और प्रूफिंग रीसेट करें
@@ -3820,6 +3835,8 @@ antiAlias	Sharp	शार्प
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें
 	Restore every preference to its default (applied on OK)	प्रत्येक वरीयता को उसके डिफ़ॉल्ट में पुनर्स्थापित करें ( OK पर लागू)
+	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट
 	Restored documents open unsaved: save them to keep them.	रिकवर किए डॉक्यूमेंट बिना सेव किए ओपन होते हैं। रखने के लिए उन्हें सेव करें।
 	Restrict printing, editing and other tasks	प्रिंटिंग, एडिटिंग और बाकी कामों पर पाबंदी लगाएँ
@@ -4250,6 +4267,13 @@ antiAlias	Sharp	शार्प
 	Quest Outline	क्वेस्ट
 	Coin Shine	सिक्का
 	Boss Alert	बॉस
+	Status Effects	स्थिति प्रभाव
+	Poison Tint	ज़हर
+	Freeze Edge	ठंड
+	Burn Aura	जलन
+	Stun Pulse	स्तब्ध
+	Stealth Fade	छिपना
+	Shield Buff	ढाल
 	Shaft:	दस्ता:
 	Shape	शेप
 	Shape Builder	शेप बिल्डर
@@ -4842,6 +4866,8 @@ antiAlias	Sharp	शार्प
 	Tilt	झुकाव
 	Time (hhmmss)	समय (hhmms)
 	Tint	टिंट
+	Fill Tint	फ़िल टिंट
+	Stroke Tint	स्ट्रोक टिंट
 	Tint Reduction	टिंट में कमी
 	Tints	टिंट्स
 	Tints and Shades	टिंट्स और शेड्स
@@ -6030,6 +6056,7 @@ antiAlias	Sharp	शार्प
 @msg	bad base64	बुरा आधार64
 @msg	bad color {c}	बुरा रंग {c}
 @msg	bad color {v}	बुरा रंग {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` null, किसी लेयर रंग का नाम या #rrggbb होता है
 @msg	bad colour	बुरा रंग
 @msg	bad colour {v}	बुरा रंग {v}
 @msg	bad colour {v} in groupColors	groupColors में अमान्य रंग {v}
@@ -6166,6 +6193,7 @@ antiAlias	Sharp	शार्प
 	Stop Script	स्क्रिप्ट रोकें
 	Show External Script Warning	बाहरी स्क्रिप्ट की चेतावनी दिखाएँ
 	A Script Is Running	एक स्क्रिप्ट चल रही है
+	Script Alert	स्क्रिप्ट सूचना
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	स्क्रिप्ट खुले दस्तावेज़ बदल सकती है और अपने चलाए कमांड से फ़ाइलें लिख सकती है। केवल भरोसेमंद स्क्रिप्ट चलाएँ।
 	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
 	Stop the script and undo what it did? Then quit again.	स्क्रिप्ट रोककर उसके बदलाव पूर्ववत करें? फिर दोबारा बाहर निकलें।
@@ -6179,6 +6207,9 @@ antiAlias	Sharp	शार्प
 @msg	the script is too large to run	स्क्रिप्ट चलाने के लिए बहुत बड़ी है
 @msg	a drag or an undo group is open; finish it before running a script	कोई ड्रैग या पूर्ववत समूह खुला है; स्क्रिप्ट चलाने से पहले उसे पूरा करें
 @msg	the script left a document that cannot be kept	स्क्रिप्ट ने ऐसा दस्तावेज़ छोड़ा है जिसे रखा नहीं जा सकता
+@msg	the script is no longer in the Scripts folder	स्क्रिप्ट अब Scripts फ़ोल्डर में नहीं है
+	Some scripts were not listed	कुछ स्क्रिप्ट सूचीबद्ध नहीं की गईं
+	The Scripts folder cannot be read	Scripts फ़ोल्डर पढ़ा नहीं जा सकता
 @msg	the script's run is no longer available	स्क्रिप्ट का रन अब उपलब्ध नहीं है
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	एक विफल कमांड ने पूर्ववत चरण बदल दिए जिन्हें वापस नहीं रखा जा सका, इसलिए स्क्रिप्ट रोक दी गई
 @msg	a recovery copy could not be written, so the script was not run	रिकवरी प्रति नहीं लिखी जा सकी, इसलिए स्क्रिप्ट नहीं चलाई गई
@@ -6608,6 +6639,7 @@ antiAlias	Sharp	शार्प
 @msg	matrix must be finite and invertible, depth finite	matrix: मैट्रिक्स को परिमित और उलटा, गहराई परिमित होना चाहिए
 @msg	matte: {e}	मैट: {e}
 @msg	Measured anchor no longer exists	मापने वाला एंकर अब मौजूद नहीं है
+@msg	Invalid measured point	मापा गया बिंदु अमान्य है
 @msg	Measured segment no longer exists	मापदंड अब मौजूद नहीं है
 @msg	member is for order front, forward, backward or back	member केवल order front, forward, backward या back के लिए है
 @msg	memory budget (the selection is too large to hand over)	स्मृति बजट (चुनाव बहुत बड़ा है)
@@ -6963,6 +6995,7 @@ antiAlias	Sharp	शार्प
 @msg	node {_1} is not type	नोड {_1} टाइप नहीं है
 @msg	node {_1} is on a locked artboard	नोड {_1} एक लॉक्ड आर्टबोर्ड पर है
 @msg	Non-finite dimension	गैर-परिष्कृत आयाम
+@msg	Only linear dimensions are horizontal or vertical	केवल रैखिक आयाम क्षैतिज या ऊर्ध्वाधर होते हैं
 @msg	None of these issues are left: check again	इन मुद्दों में से कोई भी छोड़ दिया जाता है: फिर से जांच करें
 @msg	not a blend	मिश्रण नहीं
 @msg	not a closed path	एक बंद पाथ नहीं
@@ -7809,6 +7842,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	अज्ञात नियंत्रण `{name}`: fillStroke, रंग, drawMode या screenMode
 @msg	Unknown dimension mode	अज्ञात आयाम मोड
 @msg	Unknown dimension option {k}	अज्ञात आयाम ऑप्शन {k}
+@msg	Unknown dimension orientation	अज्ञात आयाम अभिविन्यास
 @msg	Unknown dimension style	अज्ञात आयाम स्टाइल
 @msg	unknown effect `{e}`	अज्ञात इफ़ेक्ट `{e}`
 @msg	unknown effect `{id}`	अज्ञात इफ़ेक्ट `{id}`
@@ -7866,6 +7900,20 @@ antiAlias	Sharp	शार्प
 @msg	unknown plate `{n}`	अज्ञात प्लेट `{n}`
 @msg	unknown preference `{k}`	अज्ञात वरीयता `{k}`
 @msg	unknown preference `{key}`	अज्ञात वरीयता `{key}`
+@msg	Preferences imported.	प्रेफ़रेंसेज़ आयात की गईं।
+@msg	not a preferences file: {e}	प्रेफ़रेंसेज़ फ़ाइल नहीं: {e}
+@msg	not a preferences file: no JSON object	प्रेफ़रेंसेज़ फ़ाइल नहीं: कोई JSON ऑब्जेक्ट नहीं
+@msg	not a preferences file (format `{format}`)	प्रेफ़रेंसेज़ फ़ाइल नहीं (फ़ॉर्मैट `{format}`)
+@msg	not a preferences file: no `format`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `format` नहीं है
+@msg	not a preferences file: no `version`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `version` नहीं है
+@msg	not a preferences file: no `prefs`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `prefs` नहीं है
+@msg	the file was saved by a newer version of VectorCraft (version {v})	फ़ाइल VectorCraft के नए संस्करण से सहेजी गई थी (संस्करण {v})
+@msg	the file holds no preferences	फ़ाइल में कोई प्रेफ़रेंस नहीं है
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` एक फ़ोल्डर बताता है, और प्रेफ़रेंसेज़ फ़ाइलों में फ़ोल्डर नहीं होते
+@msg	the file is larger than 1 MB	फ़ाइल 1 MB से बड़ी है
+@msg	give `path` or `data`	`path` या `data` दें
+@msg	`{key}` must be an object	`{key}` एक ऑब्जेक्ट होना चाहिए
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` अकेले चलता है, बैच के चरण के रूप में नहीं
 @msg	unknown preset (one of {_1})	अज्ञात प्रीसेट ({_1} में से एक)
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	अज्ञात प्रीसेट `{name}` (उच्च, मध्यम, निम्न या एक बचाया: flattener.presets.list देखें)
 @msg	unknown preset `{name}` (see flattener.presets.list)	अज्ञात प्रीसेट `{name}` (देखें flattener.presets.list)
@@ -8065,6 +8113,7 @@ file-filter	Flattener presets	फ़्लैटनर प्रीसेट्�
 file-filter	PDF presets	PDF प्रीसेट्स
 file-filter	PDF-compatible .ai	PDF-संगत .ai
 file-filter	Print presets	प्रिंट प्रीसेट्स
+file-filter	Preferences	प्रेफ़रेंसेज़
 file-filter	SVG Compressed	SVG संपीड़ित
 file-filter	Swatch libraries	स्वॉच लाइब्रेरीज़
 file-filter	Templates	टेम्पलेट्स
@@ -8174,3 +8223,31 @@ theme	Appearance	अपीयरेंस
 	No Suggestions	कोई सुझाव नहीं
 	Edit Custom Dictionary	कस्टम शब्दकोश संपादित करें
 	Entry:	प्रविष्टि:
+# Script Console
+	Script Console	स्क्रिप्ट कंसोल
+	Clear Script Console	स्क्रिप्ट कंसोल साफ़ करें
+	Copy Script Console	स्क्रिप्ट कंसोल कॉपी करें
+	Copy All	सब कॉपी करें
+	Copy Selected	चयनित कॉपी करें
+	Finished	पूरा हुआ
+	Ended with an error	त्रुटि के साथ समाप्त
+	Out of fuel	निर्देश सीमा समाप्त
+	Ended at a host limit	होस्ट सीमा पर समाप्त
+	Ended at a limit	सीमा पर समाप्त
+	Stopped	रोका गया
+	Ended by an internal fault	आंतरिक त्रुटि से समाप्त
+	time unavailable	समय उपलब्ध नहीं
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	सबसे धीमे: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} होस्ट कॉल|{n} होस्ट कॉल
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} पुरानी पंक्ति हटाई गई|{n} पुरानी पंक्तियाँ हटाई गईं
+@plural	{n} line cut|{n} lines cut	{n} पंक्ति काटी गई|{n} पंक्तियाँ काटी गईं
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	स्थगित इफ़ेक्ट्स रिफ्रेश करें
+	Deferred Effects	स्थगित इफ़ेक्ट्स
+@msg	no plug-in effect is deferred	कोई प्लग-इन इफ़ेक्ट स्थगित नहीं है
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} प्लग-इन इफ़ेक्ट स्थगित रखकर खोला गया। इफ़ेक्ट › स्थगित इफ़ेक्ट्स रिफ्रेश करें इसे चलाता है।|{n} प्लग-इन इफ़ेक्ट्स स्थगित रखकर खोला गया। इफ़ेक्ट › स्थगित इफ़ेक्ट्स रिफ्रेश करें इन्हें चलाता है।

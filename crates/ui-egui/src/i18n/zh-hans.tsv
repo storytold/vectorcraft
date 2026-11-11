@@ -235,6 +235,7 @@ antiAlias	Sharp	锐利
 	Average…	平均…
 	Axis:	轴：
 	Background Color:	背景颜色：
+	Guide Label:	参考线标签：
 	Show Center Mark	显示中心标记
 	Show Cross Hairs	显示十字线
 	Show Video Safe Areas	显示视频安全区域
@@ -1216,6 +1217,7 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Preferences	首选项
 file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG
 file-filter	PDF-compatible .ai	PDF 兼容 .ai
@@ -1806,6 +1808,7 @@ file-filter	Templates	模板
 	Lock Grid	锁定网格
 	Lock Guides	锁定参考线
 	Lock Guides by Default	默认锁定参考线
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	按住 Cmd/Ctrl 从标尺拖动创建画板参考线
 	Lock Slices	锁定切片
 	Lock Station Point	锁定基准点
 	Lossless (lossy WebP isn't available yet)	无失真 (尚未提供有失真的 WebP)
@@ -2718,6 +2721,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset OpenType Features	重置 OpenType 特性
 	Reset Panel	重置面板
 	Reset Preferences	重置首选项
+	Export Preferences…	导出首选项…
+	Import Preferences…	导入首选项…
+	Save the applied preferences to a JSON file	将已应用的首选项保存到 JSON 文件
+	Apply the preferences in a file Export Preferences saved	应用“导出首选项”所保存文件中的首选项
+	Export Preferences	导出首选项
+	Import Preferences	导入首选项
 	Search Preferences	搜索首选项
 	No settings found	未找到设置
 	Reset Profiles	重置配置文件
@@ -2740,6 +2749,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Responsive	响应式
 	Restore	恢复
 	Restore every preference to its default (applied on OK)	把所有首选项恢复为默认值 (点击确定后应用)
+	Reset all preferences to their defaults?	将所有首选项重置为默认值？
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
 	Restored documents open unsaved: save them to keep them.	恢复的文档处于未存储状态：请存储以保留。
 	Restrict printing, editing and other tasks	限制打印、编辑及其他操作
@@ -3012,6 +3023,13 @@ digits	Malayalam	马拉雅拉姆数字
 	Quest Outline	任务
 	Coin Shine	金币
 	Boss Alert	首领
+	Status Effects	状态效果
+	Poison Tint	中毒
+	Freeze Edge	冰冻
+	Burn Aura	灼烧
+	Stun Pulse	眩晕
+	Stealth Fade	隐身
+	Shield Buff	护盾
 	Shape	形状
 	Shape Builder	形状生成器
 	Shape Builder Regions	形状生成器区域
@@ -3427,6 +3445,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Tiles are numbered across, then down; leave the range empty for every tile.	拼贴先由左至右再由上至下编号；范围留空表示全部拼贴。
 	Copies per Sheet (as many as fit, in a grid)	每张纸印多份 (尽量排满，按网格排列)
 	Tint	色调
+	Fill Tint	填色色调
+	Stroke Tint	描边色调
 	Tip extends past the end point	箭头超出端点
 	Tip on the end point	箭头位于端点
 	Title Case	词首大写
@@ -4148,6 +4168,20 @@ imageTrace	Outline	轮廓
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必须介于 {min} 和 {max} 之间 (实际为 {x})
 @msg	`{key}` must be one of {_1}	`{key}` 必须是 {_1} 之一
 @msg	unknown preference `{key}`	未知首选项 `{key}`
+@msg	Preferences imported.	已导入首选项。
+@msg	not a preferences file: {e}	不是首选项文件：{e}
+@msg	not a preferences file: no JSON object	不是首选项文件：没有 JSON 对象
+@msg	not a preferences file (format `{format}`)	不是首选项文件（格式 `{format}`）
+@msg	not a preferences file: no `format`	不是首选项文件：没有 `format`
+@msg	not a preferences file: no `version`	不是首选项文件：没有 `version`
+@msg	not a preferences file: no `prefs`	不是首选项文件：没有 `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	该文件由更新版本的 VectorCraft 保存（版本 {v}）
+@msg	the file holds no preferences	该文件不包含首选项
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` 指定的是文件夹，首选项文件不包含文件夹
+@msg	the file is larger than 1 MB	文件大于 1 MB
+@msg	give `path` or `data`	请提供 `path` 或 `data`
+@msg	`{key}` must be an object	`{key}` 必须是对象
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` 需单独运行，不能作为批处理步骤
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	数据恢复没有可保存副本的位置：请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	数据恢复无法将副本保存到 {path}：{e}
 @msg	Plug-ins can't be loaded from {path}: {e}	无法从 {path} 载入增效工具：{e}
@@ -4372,6 +4406,7 @@ imageTrace	Outline	轮廓
 @msg	{label}…	{label}…
 @msg	no blend options	没有混合选项
 @msg	bad color {v}	颜色 {v} 无效
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` 应为 null、图层颜色名称或 #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必须是 0.1 到 10 之间的数字
 @msg	the Color Picker is not open	拾色器未打开
 @msg	the Simplify slider is not open	简化滑块未打开
@@ -4543,6 +4578,7 @@ imageTrace	Outline	轮廓
 	Stop Script	停止脚本
 	Show External Script Warning	显示外部脚本警告
 	A Script Is Running	脚本正在运行
+	Script Alert	脚本提示
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告
 	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
@@ -4556,6 +4592,9 @@ imageTrace	Outline	轮廓
 @msg	the script is too large to run	脚本过大，无法运行
 @msg	a drag or an undo group is open; finish it before running a script	拖动或撤销组尚未结束；请在运行脚本前完成
 @msg	the script left a document that cannot be kept	脚本留下了无法保留的文档
+@msg	the script is no longer in the Scripts folder	脚本已不在 Scripts 文件夹中
+	Some scripts were not listed	部分脚本未列出
+	The Scripts folder cannot be read	无法读取 Scripts 文件夹
 @msg	the script's run is no longer available	脚本运行已不可用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
 @msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
@@ -4754,14 +4793,17 @@ imageTrace	Outline	轮廓
 @msg	Invalid drawing scale	图纸比例无效
 @msg	Invalid real scale	实际比例无效
 @msg	Measured anchor no longer exists	测量锚点已不存在
+@msg	Invalid measured point	测量点无效
 @msg	Measured segment no longer exists	测量线段已不存在
 @msg	Non-finite dimension	尺寸标注不是有限值
+@msg	Only linear dimensions are horizontal or vertical	只有线性尺寸可以是水平或垂直的
 @msg	Scale Text Attributes: selected type has no scale to bake	缩放文本属性：所选文本没有可应用的缩放
 @msg	Scale must be drawing:real, for example 1:10	比例必须为 图纸:实际，例如 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	比例必须介于 1:1000000 和 1000000:1 之间
 @msg	Second measured segment no longer exists	第二条测量线段已不存在
 @msg	Unknown dimension mode	未知的尺寸标注模式
 @msg	Unknown dimension option {k}	未知的尺寸标注选项 {k}
+@msg	Unknown dimension orientation	未知的尺寸标注方向
 @msg	span must be "object" or "selection", got {v}	span 必须是 "object" 或 "selection"，实际为 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而不是色板
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 放置渐变：请给出 `gradient`
@@ -5558,6 +5600,7 @@ lighting	Light	光源
 	Preview (1 inch on the page)	预览（页面上 1 英寸）
 	Set as Default	设为默认
 	 out from a highlighted edge to place its dimension  |  	 从高亮的边向外拖动以放置其尺寸  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 两个点，然后移动并单击以放置对齐、水平或垂直尺寸  |  
 	 cancels  |  Double-click the tool for options	 取消  |  双击工具打开选项
 	Linear	线性
 	Angular	角度
@@ -5922,6 +5965,12 @@ axis	Y Axis	Y 轴
 	Flag	旗帜
 	Crosshair	准星
 	Checkpoint	检查点
+	Inventory Icons	物品栏图标
+	Sword	剑
+	Shield	盾
+	Potion	药水
+	Key	钥匙
+	Gem	宝石
 	Open Symbol Library	打开符号库
 	Save Symbol Library	保存符号库
 	Save Symbol Library…	保存符号库…
@@ -6571,3 +6620,31 @@ breakText	Glyphs	字形
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`
 	Edit Custom Dictionary	编辑自定义词典
 	Entry:	条目：
+# Script Console
+	Script Console	脚本控制台
+	Clear Script Console	清除脚本控制台
+	Copy Script Console	复制脚本控制台
+	Copy All	全部复制
+	Copy Selected	复制所选内容
+	Finished	已完成
+	Ended with an error	因错误结束
+	Out of fuel	已用尽指令上限
+	Ended at a host limit	在宿主限制处结束
+	Ended at a limit	在限制处结束
+	Stopped	已停止
+	Ended by an internal fault	因内部错误结束
+	time unavailable	时间不可用
+	{ms} ms	{ms} 毫秒
+	{time}, {calls}	{time}，{calls}
+	slowest: {commands}	最慢的命令：{commands}
+	{dropped}, {cut}	{dropped}，{cut}
+@plural	{n} host call|{n} host calls	宿主调用 {n} 次
+@plural	{n} earlier line dropped|{n} earlier lines dropped	已丢弃 {n} 行较早内容
+@plural	{n} line cut|{n} lines cut	已截断 {n} 行
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必须是控制台保留的行号，且 `first` 不能在 `last` 之后
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	刷新延迟的效果
+	Deferred Effects	延迟的效果
+@msg	no plug-in effect is deferred	没有延迟的增效工具效果
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	打开时延迟了 {n} 个增效工具效果。效果 › 刷新延迟的效果可运行它们。

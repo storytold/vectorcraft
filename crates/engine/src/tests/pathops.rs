@@ -863,6 +863,8 @@ fn path_commands_refuse_a_param_of_the_wrong_type() {
     for (cmd, p, want) in [
         ("object.path.offsetPath", json!({"offset": true}), number("offset", "true")),
         ("object.path.offsetPath", json!({"offset": "wide"}), number("offset", "\"wide\"")),
+        ("object.path.offsetPath", json!({"offset": "10abc"}), number("offset", "\"10abc\"")),
+        ("object.path.offsetPath", json!({"offset": 5, "miterLimit": "4x"}), number("miterLimit", "\"4x\"")),
         ("object.path.offsetPath", json!({"offset": 5, "joins": 3}), "`joins` must be a string".to_string()),
         ("object.path.offsetPath", json!({"offset": 5, "joins": "pointy"}), "`joins` must be one of miter, round, bevel".to_string()),
         ("object.path.offsetPath", json!({"offset": 5, "miterLimit": [4]}), number("miterLimit", "[4]")),
