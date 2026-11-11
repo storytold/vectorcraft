@@ -471,8 +471,9 @@ impl<'a> Reader<'a> {
         a.dim = flag(4, false).then_some(dim_pct.round() as u8);
         let index = n.get(at).copied().unwrap_or(0.0);
         let rgb = |i: usize| n.get(at + i).map_or(0, |v| v.clamp(0.0, 255.0) as u8);
+        // The file numbers some presets differently from `LAYER_COLORS` (#6502).
         a.color = Some(if (0.0..vectorcraft_doc::LAYER_COLORS.len() as f64).contains(&index) && index.fract() == 0.0 {
-            LayerColor::Preset(index as u8)
+            LayerColor::Preset(crate::ai_ops::preset_of_ai_layer_index(index as u8))
         } else {
             LayerColor::Custom([rgb(1), rgb(2), rgb(3)])
         });
