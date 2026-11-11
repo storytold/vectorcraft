@@ -35,6 +35,9 @@ pub struct CurvatureTool {
     id: Option<NodeId>,
     /// The point being dragged, the pointer at the press, and whether the drag began.
     drag: Option<(Grab, Point, bool)>,
+    /// Where the point of the path being drawn that the press grabbed was at the press, and the
+    /// current point before the press.
+    grabbed: Option<(Point, Option<usize>)>,
     /// Last touched point of the path being drawn (Backspace removes it).
     current: Option<usize>,
     hover: Option<Point>,
@@ -564,7 +567,7 @@ impl Tool for CurvatureTool {
             PointerKind::Down => {
                 if let Some(id) = active {
                     if let Some(i) = self.hit_point(cx, p) {
-                        self.current = Some(i);
+                        let was_current = self.current.replace(i);
                         if ev.mods.alt {
                             self.pts[i].1 = !self.pts[i].1;
                             return vec![Action::Exec("path.curvature".into(), self.params())];
@@ -576,6 +579,7 @@ impl Tool for CurvatureTool {
                         // The point dragged and the curve through it move: the rest pull.
                         hold_targets(&mut self.snap, cx, id, 0, &[i]);
                         self.drag = Some((Grab::Drawn(i), p, false));
+                        self.grabbed = self.pts.get(i).map(|pt| (pt.0, was_current));
                         return vec![];
                     }
                     if !self.closed {
@@ -645,10 +649,26 @@ impl Tool for CurvatureTool {
             self.id = Some(cx.selection.objects[0]);
         }
     }
+    /// A path being drawn: Escape ends it.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.active(cx).is_some()
+    }
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         matches!(key, ToolKey::Backspace | ToolKey::Delete)
             && self.drag.is_none()
             && if self.active(cx).is_some() { self.pts.len() > 1 } else { current_point(cx).is_some() }
+    }
+    /// A dropped press does not end the path being drawn, as Escape would: a point it grabbed
+    /// goes back to where it was at the press, and the current point to the one before the press.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        if let (Some((Grab::Drawn(i), _, _)), Some((at, current))) = (self.drag.take(), self.grabbed.take())
+            && let Some(pt) = self.pts.get_mut(i)
+        {
+            pt.0 = at;
+            self.current = current;
+        }
+        self.snap.clear();
+        vec![]
     }
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _m: Mods) -> Vec<Action> {
         match key {

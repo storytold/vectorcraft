@@ -1,6 +1,6 @@
 use super::save::{
-    ask_before_losing, export_path, is_web, report_saved, report_write_error, saved_status, target_path, target_path_keeping, view_file,
-    write_encoded, write_named, write_reporting,
+    ask_before_losing, export_path, is_web, remember_active_artboard, report_saved, report_write_error, saved_status, target_path,
+    target_path_keeping, view_file, write_encoded, write_named, write_reporting,
 };
 use super::{EngineError, Progress, Value, VectorcraftApp, Writer, background, cancel, fileio, json, progress};
 
@@ -33,8 +33,13 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // encoder (an exporter plug-in is told the file it writes).
     let params = &if params.is_object() { params.clone() } else { json!({}) };
     let f = fileio::writable_format(format, path.as_deref())?;
+    // A Shape Builder merge still being computed for a click is exported with the document.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
+    // A `.ai` file names the view's active artboard.
+    remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;
-    let doc = match fileio::export_source(st, params).map_err(|e| e.to_string())? {
+    let doc = match fileio::export_doc(st, f, params).map_err(|e| e.to_string())? {
         std::borrow::Cow::Borrowed(_) => st.doc.clone(),
         std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
     };
@@ -91,7 +96,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         };
         let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
         app.status(match warnings.first() {
-            Some(first) => format!("Exported {what} with {} note(s): {first}", warnings.len()),
+            Some(first) => exported_with_notes(&what, warnings.len(), first),
             None => format!("Exported {what}"),
         });
         Ok(r)
@@ -100,6 +105,12 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         r["path"] = json!(target);
     }
     Ok(r)
+}
+
+/// The status bar's line for an export of `what` with `n` notes, the first of them `first`.
+pub(crate) fn exported_with_notes(what: &str, n: usize, first: &str) -> String {
+    let (one, other) = ("Exported {what} with {n} note: {first}", "Exported {what} with {n} notes: {first}");
+    crate::i18n::msg_n(n as u64, one, other, &[("what", what), ("first", first)])
 }
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path
@@ -211,16 +222,33 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
     app.services.open_file.as_mut().ok_or("no app to open files here")?(path)
 }
 
+/// Edit Original: open `path` in the system's default app for it, or with Preferences › File
+/// Handling › Use System Defaults for Edit Original off, in the app that made it (#5236): PhotoCraft
+/// for a raster image where it is installed. Any other file, or no PhotoCraft, uses the system's app.
+pub(crate) fn open_original(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
+    let ext = std::path::Path::new(path).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+    let raster = vectorcraft_engine::cmd::fileio::readable_format(&ext).is_some_and(|f| f.raster);
+    if !app.session.prefs.edit_original_system_defaults
+        && raster
+        && let Some(open) = app.services.open_in_photocraft.as_mut()
+        && open(path)?
+    {
+        return Ok(());
+    }
+    open_in_app(app, path)
+}
+
 /// File → Export for Screens with `document.exportForScreens` params: the files go into `folder`;
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
 /// back as base64. With `openLocation`, the file manager shows the first file written. When an
 /// export into a folder or a download has warnings, the status bar shows the first as
-/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n note(s): …".
+/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n notes: …".
 pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     export_files(app, "document.exportForScreens", params)
 }
 
-/// [`export_for_screens`] through command `id` (`document.exportForScreens` or `assets.export`).
+/// [`export_for_screens`] through command `id` (`document.exportForScreens` or `assets.export`; or
+/// `assets.export3D`, whose reply takes the same form and which always runs at once).
 /// On the desktop with Background Export on, an export into a folder is checked, journaled and
 /// prepared from the document as it is now, and the files are encoded and written on the
 /// background thread ([`background`]): this returns `{background: true, status}` at once, with the
@@ -229,7 +257,8 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
     let open_location = params.get("openLocation").and_then(Value::as_bool).unwrap_or(false);
     let folder = params.get("folder").and_then(Value::as_str).unwrap_or_default().to_string();
     // Without a folder the files come back in the reply, which the caller waits for.
-    let in_background = app.session.prefs.background_export && app.services.write_shared.is_some() && !is_web(app) && !folder.is_empty();
+    let in_background =
+        app.session.prefs.background_export && app.services.write_shared.is_some() && !is_web(app) && !folder.is_empty() && id != "assets.export3D";
     if !in_background {
         // Made at once, after the exports and saves started before it.
         background::wait_all(app);
@@ -273,7 +302,7 @@ fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, open_locati
     };
     if returned.is_empty() {
         let first = r["path"].as_str().or_else(|| r["files"][0].as_str());
-        let mut status = format!("Exported {count} file(s) to {folder}");
+        let mut status = crate::i18n::msg_n(count as u64, "Exported {n} file to {folder}", "Exported {n} files to {folder}", &[("folder", folder)]);
         if warned {
             status = saved_status(r["path"].as_str().unwrap_or(folder), &r);
         }
@@ -285,6 +314,8 @@ fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, open_locati
         }
         app.status(status);
     } else if let Some(download) = app.services.download.as_mut() {
+        // A browser download has no folders: a file from a sub-folder (`2x/Logo@2x.png`) is named alone.
+        let returned: Vec<(&str, &str)> = returned.iter().map(|(name, data)| (name.rsplit('/').next().unwrap_or(name), *data)).collect();
         for (name, data) in &returned {
             let bytes = vectorcraft_format::base64_decode(data).ok_or("the export returned unreadable data")?;
             download(name, &bytes)?;

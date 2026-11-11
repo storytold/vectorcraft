@@ -1,14 +1,16 @@
 //! File → New: category tabs (Recent, Saved and the built-in categories of `file.newPresets`)
 //! over a grid of preset cards, and a Preset Details column (name and Save Preset, size and
 //! units, orientation, artboards, bleed, background contents, Advanced Options, More Settings);
-//! Close and Create. More Settings is the classic form of the same fields (artboard layout,
-//! spacing and columns, profile and size lists), so both share one set of fields and widgets.
+//! Close and Create. More Settings opens a pop-up over the dialog with the artboard layout, spacing
+//! and columns, editing the same fields. Save Preset turns the top of Preset Details into the
+//! preset's name, Cancel and Save, and hides Close and Create until the preset is saved or canceled;
+//! the rows under it stay editable and are what the preset stores.
 //!
 //! Fields: `file.new`'s params (`preset`, `name`, `width`, `height` (pt), `units`, `artboards`,
 //! `artboardLayout`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi`,
-//! `previewMode`), plus `category` (the tab, also More Settings' Profile), `advanced` (Advanced
-//! Options open), `bleedLinked` and `presetName` (Save Preset's name). Setting `preset` fills the
-//! fields from that preset; changing any of them afterwards makes the settings custom.
+//! `previewMode`), plus `category` (the tab), `advanced` (Advanced Options open), `bleedLinked` and
+//! `presetName` (Save Preset's name). Setting `preset` fills the fields from that preset; changing
+//! any of them afterwards makes the settings custom.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
@@ -20,11 +22,11 @@ use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, widgets};
 
 pub(super) const KIND: &str = "newDocument";
-/// More Settings.
+/// New Document with its More Settings pop-up open.
 pub(super) const MORE: &str = "newDocumentMore";
 
 pub(super) const SPEC: DialogSpec = DialogSpec { inputs: |_| &["presetName"], ..DialogSpec::window(show, confirm) };
-pub(super) const MORE_SPEC: DialogSpec = DialogSpec { inputs: |_| &["presetName"], ..DialogSpec::window(show_more, confirm) };
+pub(super) const MORE_SPEC: DialogSpec = SPEC;
 
 /// The fields `file.new` takes.
 const PARAMS: [&str; 12] = [
@@ -41,10 +43,14 @@ const PARAMS: [&str; 12] = [
     "rasterEffectsPpi",
     "previewMode",
 ];
-/// The preset the fields were last filled from (its fields as `apply` set them).
+/// The preset the fields were last filled from, as `apply` set them; a Recent or Saved card keeps
+/// its own units here, which the units chosen in Preset Details don't change.
 const APPLIED: &str = "__applied";
-/// Save Preset's name field is showing.
+/// Preset Details is saving a preset (Save Preset's name, Cancel and Save are showing).
 const SAVING: &str = "__saving";
+/// Preset Details has drawn the saving top: set from the mode's second frame, so the first one fills
+/// in the default name and focuses it.
+const SAVING_SHOWN: &str = "__savingShown";
 /// The units New Document offers (all ten).
 const UNITS: [Unit; 10] = [
     Unit::Pixels,
@@ -64,6 +70,10 @@ const COLOR_MODES: [(&str, &str); 2] = [("rgb", "RGB Color"), ("cmyk", "CMYK Col
 const DETAILS: f32 = 292.0;
 /// Height of the dialog's content.
 const HEIGHT: f32 = 600.0;
+/// Height of the top of Preset Details in either state: the rows under it don't move.
+const HEADER: f32 = 100.0;
+/// Width of the More Settings pop-up's rows.
+const MORE_WIDTH: f32 = 310.0;
 
 /// Open New Document on the most recent settings (or Letter), named after the next untitled
 /// document.
@@ -115,8 +125,17 @@ fn sync(app: &VectorcraftApp, d: &mut Dialog) {
     }
 }
 
-/// Create the document; the dialog stays open when that fails (bad size, …).
+/// Create the document; the dialog stays open when that fails (bad size, …). While a preset is being
+/// saved this is its Save, and no document is created.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.bool(SAVING) {
+        let mut d = d.clone();
+        let r = save_preset(app, &mut d);
+        if r.is_ok() {
+            app.ui.dialog = Some(d);
+        }
+        return r;
+    }
     let p = params(app, d);
     let r = app.run("file.new", Value::Object(p));
     if r.is_ok() {
@@ -174,17 +193,45 @@ fn window(ctx: &egui::Context, id: &str, margin: i8, add: impl FnOnce(&mut egui:
     super::modal::show(ctx, id, egui::Id::unique(("dialog", id)), -20.0, margin, add);
 }
 
+/// Whether More Settings' pop-up is open over New Document.
+pub(crate) fn popup_open(d: &Dialog) -> bool {
+    d.kind == MORE
+}
+
+/// Close New Document's More Settings pop-up, or else leave its Save Preset, keeping the fields.
+/// False when neither is showing, or `d` is another dialog.
+pub(super) fn close_popup(d: &mut Dialog) -> bool {
+    if d.kind != KIND && d.kind != MORE {
+        return false;
+    }
+    if popup_open(d) {
+        d.kind = KIND.into();
+        return true;
+    }
+    let saving = d.bool(SAVING);
+    if saving {
+        d.fields.insert(SAVING.into(), json!(false));
+        d.fields.remove(SAVING_SHOWN);
+    }
+    saving
+}
+
 /// What the buttons of a window asked for.
 #[derive(Default)]
 struct Buttons {
     create: bool,
     close: bool,
+    /// More Settings' pop-up was open as the frame began: Enter is the pop-up's.
+    popup: bool,
+    /// A preset was being saved as the frame began: nothing creates the document this frame.
+    saving: bool,
 }
 
 impl Buttons {
     /// Act on the buttons (Enter also creates) once the window is drawn.
     fn finish(self, app: &mut VectorcraftApp, ctx: &egui::Context, d: Dialog) {
-        let create = self.create || ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !ctx.memory(|m| m.focused().is_some());
+        let enter = !self.popup && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) && !ctx.memory(|m| m.focused().is_some());
+        let create = !self.saving && !d.bool(SAVING) && (self.create || enter);
         app.ui.dialog = Some(d);
         if self.close {
             app.ui.dialog = None;
@@ -198,7 +245,7 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     sync(app, &mut d);
     let t = Tokens::get(ctx);
-    let mut b = Buttons::default();
+    let mut b = Buttons { popup: popup_open(&d), saving: d.bool(SAVING), ..Default::default() };
     window(ctx, KIND, 0, |ui| {
         // No heading: the top margin (14) and the empty part of the category tabs' row (30) move the
         // window.
@@ -219,6 +266,10 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 });
             });
         });
+        // While More Settings' pop-up is open, a click outside it only closes it.
+        if b.popup {
+            ui.interact(ui.min_rect(), ui.scope_id().with("newdoc-popup-shield"), egui::Sense::CLICK | egui::Sense::DRAG);
+        }
     });
     b.finish(app, ctx, d);
 }
@@ -257,21 +308,50 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(12.0, 12.0);
             let (w, h, preset, units) = (d.f64("width", 0.0), d.f64("height", 0.0), d.str("preset"), unit(d));
+            // The fields were last filled from this preset's card; Recent keeps one entry per size
+            // and units, so the units tell two entries of one size apart.
+            let chosen = d
+                .fields
+                .get(APPLIED)
+                .filter(|a| a.get("preset").and_then(Value::as_str) == Some(preset.as_str()))
+                .and_then(Value::as_object)
+                .cloned();
             for s in &list {
-                // The built-in presets' cards show the chosen orientation (square sizes have none)
-                // and the units chosen in Preset Details; choosing one keeps both. Recent and Saved
-                // show each entry as it was made, so a portrait and a landscape A3 are two cards
-                // (#2860).
-                let mut s = DocSettings { units, ..s.clone() };
-                if cat > 1 && ((w > h && s.height > s.width) || (h > w && s.width > s.height)) {
-                    std::mem::swap(&mut s.width, &mut s.height);
+                // The built-in presets' cards show the chosen orientation (square sizes have none);
+                // Recent and Saved show each entry as it was made, so a portrait and a landscape A3
+                // are two cards (#2860).
+                let mut card = s.clone();
+                if cat > 1 && ((w > h && card.height > card.width) || (h > w && card.width > card.height)) {
+                    std::mem::swap(&mut card.width, &mut card.height);
                 }
-                let selected = d.fields.contains_key(APPLIED) && s.name == preset && s.width == w && s.height == h;
-                let card = preset_card(ui, &s, selected);
-                if card.clicked() || card.double_clicked() {
-                    apply(d, &s);
+                // The built-in presets all share the units chosen in Preset Details.
+                if cat > 1 {
+                    card.units = units;
                 }
-                create |= card.double_clicked();
+                let selected = chosen.as_ref().is_some_and(|a| {
+                    a.get("preset").and_then(Value::as_str) == Some(card.name.as_str())
+                        && a.get("width").and_then(Value::as_f64) == Some(card.width)
+                        && a.get("height").and_then(Value::as_f64) == Some(card.height)
+                        && (cat > 1 || a.get("units").and_then(Value::as_str) == Some(s.units.label()))
+                });
+                // The chosen card shows the units chosen in Preset Details, which the new document
+                // will have (#2078); the others keep their own, so choosing one document's units
+                // doesn't restyle the whole tab.
+                if selected {
+                    card.units = units;
+                }
+                let resp = preset_card(ui, &card, selected);
+                if resp.clicked() || resp.double_clicked() {
+                    apply(d, &card);
+                    // The card is still the entry it was, whatever units it shows: its own units say
+                    // which entry it is, so a chosen card stays chosen after a units change.
+                    if cat < 2
+                        && let Some(Value::Object(a)) = d.fields.get_mut(APPLIED)
+                    {
+                        a.insert("units".into(), json!(s.units.label()));
+                    }
+                }
+                create |= resp.double_clicked();
             }
         });
     });
@@ -326,35 +406,35 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     let t = Tokens::get(ui.ctx());
     ui.spacing_mut().item_spacing = egui::vec2(6.0, 4.0);
     let top = ui.cursor().top();
-    ui.label(egui::RichText::new(tl!("PRESET DETAILS")).font(theme::semibold(11.0)).color(t.text_dim));
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        form::text(ui, d, "name", DETAILS - 50.0);
-        if widgets::icon_button(ui, "save", tl!("Save Preset"), d.bool(SAVING), 26.0).clicked() {
-            let saving = !d.bool(SAVING);
-            d.fields.insert(SAVING.into(), json!(saving));
-            if saving && d.str("presetName").is_empty() {
-                let template = "Preset {number}";
-                let name = crate::i18n::fmt(tl!(template), &[("number", &(app.session.prefs.new_doc_presets.len() + 1).to_string())]);
-                d.fields.insert("presetName".into(), json!(name));
+    let saving = d.bool(SAVING);
+    if saving {
+        let opening = !d.bool(SAVING_SHOWN);
+        d.fields.insert(SAVING_SHOWN.into(), json!(true));
+        save_header(app, ui, d, opening);
+    } else {
+        d.fields.remove(SAVING_SHOWN);
+        ui.label(egui::RichText::new(tl!("PRESET DETAILS")).font(theme::semibold(11.0)).color(t.text_dim));
+        ui.add_space(8.0);
+        let caption = form::caption(ui, tl!("Document Name"));
+        ui.horizontal(|ui| {
+            ui.label_inputs_by(caption.id, |ui| form::text(ui, d, "name", DETAILS - 50.0));
+            if widgets::icon_button(ui, "save", tl!("Save Preset"), false, 26.0).clicked() {
+                d.fields.insert(SAVING.into(), json!(true));
             }
-        }
-    });
-    if d.bool(SAVING) {
-        save_row(app, ui, d);
+        });
     }
-    ui.add_space(8.0);
+    ui.add_space((HEADER - (ui.cursor().top() - top)).max(0.0));
     let unit = unit(d);
-    form::caption(ui, tl!("Width"));
+    let caption = form::caption(ui, tl!("Width"));
     ui.horizontal(|ui| {
-        form::length(ui, d, "width", unit, DETAILS - 124.0);
-        units_dropdown(ui, d, 112.0);
+        ui.label_inputs_by(caption.id, |ui| form::length(ui, d, "width", unit, DETAILS - 124.0));
+        ui.name_inputs(tl!("Units"), |ui| units_dropdown(ui, d, 112.0));
     });
     ui.add_space(4.0);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            form::caption(ui, tl!("Height"));
-            form::length(ui, d, "height", unit, 104.0);
+            let caption = form::caption(ui, tl!("Height"));
+            ui.label_inputs_by(caption.id, |ui| form::length(ui, d, "height", unit, 104.0));
         });
         ui.add_space(6.0);
         ui.vertical(|ui| {
@@ -363,21 +443,22 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
         });
         ui.add_space(6.0);
         ui.vertical(|ui| {
-            form::caption(ui, tl!("Artboards"));
-            artboards(ui, d, 76.0);
+            let caption = form::caption(ui, tl!("Artboards"));
+            ui.label_inputs_by(caption.id, |ui| artboards(ui, d, "newdoc-artboards", 76.0));
         });
     });
     ui.add_space(8.0);
     form::caption(ui, tl!("Bleed"));
     form::bleed(ui, d, unit, 52.0);
     ui.add_space(8.0);
-    form::caption(ui, tl!("Background Contents"));
-    background(ui, d, DETAILS - 34.0);
+    let caption = form::caption(ui, tl!("Background Contents"));
+    ui.label_inputs_by(caption.id, |ui| background(ui, d, DETAILS - 34.0));
     ui.add_space(8.0);
     advanced(ui, d, 110.0, DETAILS - 116.0);
     ui.add_space(12.0);
-    if widgets::flat_button(ui, tl!("More Settings"), DETAILS).clicked() {
-        d.kind = MORE.into();
+    more_settings(ui, d);
+    if saving {
+        return;
     }
     // Close and Create at the bottom right.
     ui.add_space((HEIGHT - (ui.cursor().top() - top) - 28.0).max(12.0));
@@ -388,30 +469,159 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     });
 }
 
-/// Save Preset: the preset's name, Save and Cancel.
-fn save_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+/// The key under which a layer remembers that its first field should take the keyboard focus.
+fn pending_focus(ui: &egui::Ui) -> egui::Id {
+    ui.layer_id().id.with("newdoc-focus")
+}
+
+/// Draw `add`; its first enabled field takes the keyboard focus, with its text selected, when
+/// `opening` says so or a failed Save asked for it.
+fn focus_first<R>(ui: &mut egui::Ui, opening: bool, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let pending = pending_focus(ui);
+    if opening {
+        ui.data_mut(|m| m.insert_temp(pending, true));
+    }
+    // The first frame of a new window only measures it: no field can take the focus until the next.
+    let focus = !ui.is_sizing_pass() && ui.data(|m| m.get_temp::<bool>(pending)).unwrap_or(false);
+    if focus {
+        ui.data_mut(|m| m.insert_temp(widgets::dialog_focus_flag(), true));
+    }
+    let r = add(ui);
+    if focus && ui.data_mut(|m| m.remove_temp::<bool>(widgets::dialog_focus_flag())).is_none() {
+        ui.data_mut(|m| m.remove::<bool>(pending));
+    }
+    r
+}
+
+/// The top of Preset Details while a preset is being saved: the heading, the preset's name, Cancel
+/// and Save. Enter in the name is Save. `opening` on the mode's first frame.
+fn save_header(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, opening: bool) {
+    let t = Tokens::get(ui.ctx());
+    if opening && d.str("presetName").is_empty() {
+        d.fields.insert("presetName".into(), json!(new_preset_name(app)));
+    }
+    ui.label(egui::RichText::new(tl!("Save Document Preset")).font(theme::semibold(13.0)).color(t.text));
+    ui.add_space(5.0);
+    let name = focus_first(ui, opening, |ui| form::text_edit_named(ui, d, "presetName", tl!("Preset Name"), DETAILS - 14.0));
+    let enter = name.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
     ui.add_space(4.0);
-    form::caption(ui, tl!("Preset Name"));
-    ui.horizontal(|ui| {
-        let enter = form::text_edit(ui, d, "presetName", DETAILS - 140.0).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        if widgets::flat_button(ui, tl!("Save"), 54.0).clicked() || enter {
-            let mut p: Map<String, Value> = PARAMS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
-            p.insert("name".into(), json!(d.str("presetName")));
-            p.remove("preset");
-            match app.run("file.newPresets.save", Value::Object(p)) {
-                Ok(r) => {
-                    d.fields.insert(SAVING.into(), json!(false));
-                    d.fields.insert("category".into(), json!("Saved"));
-                    d.fields.insert("preset".into(), r["name"].clone());
-                    d.fields.remove(APPLIED);
-                }
-                Err(e) => app.status(e),
-            }
-        }
-        if widgets::flat_button(ui, tl!("Cancel"), 60.0).clicked() {
-            d.fields.insert(SAVING.into(), json!(false));
-        }
+    let (mut save, mut cancel) = (enter, false);
+    ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 28.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        save |= widgets::primary_button(ui, tl!("Save")).clicked();
+        ui.add_space(8.0);
+        cancel = widgets::secondary_button(ui, tl!("Cancel")).clicked();
     });
+    if cancel {
+        d.fields.insert(SAVING.into(), json!(false));
+        d.fields.remove(SAVING_SHOWN);
+    } else if save && let Err(e) = save_preset(app, d) {
+        app.status(e);
+        let pending = pending_focus(ui);
+        ui.data_mut(|m| m.insert_temp(pending, true));
+    }
+}
+
+/// Save Preset's default name: the first "Preset N" no saved preset has (`file.newPresets.save`
+/// replaces a preset of the same name).
+fn new_preset_name(app: &VectorcraftApp) -> String {
+    let saved = &app.session.prefs.new_doc_presets;
+    let template = "Preset {number}";
+    (1..=saved.len() + 1)
+        .map(|n| crate::i18n::fmt(tl!(template), &[("number", &n.to_string())]))
+        .find(|name| !saved.iter().any(|p| p.name.trim().eq_ignore_ascii_case(name.trim())))
+        .unwrap_or_default()
+}
+
+/// Save the fields as the preset named `presetName` and leave saving, on the saved preset.
+fn save_preset(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<Value, String> {
+    let mut p: Map<String, Value> = PARAMS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
+    p.insert("name".into(), json!(d.str("presetName")));
+    p.remove("preset");
+    let r = app.run("file.newPresets.save", Value::Object(p))?;
+    d.fields.insert(SAVING.into(), json!(false));
+    d.fields.remove(SAVING_SHOWN);
+    // The next Save Preset offers a new default name instead of this preset's.
+    d.fields.remove("presetName");
+    d.fields.insert("category".into(), json!("Saved"));
+    d.fields.insert("preset".into(), r["name"].clone());
+    d.fields.remove(APPLIED);
+    Ok(r)
+}
+
+/// The More Settings button and its pop-up, which holds what Preset Details doesn't: the artboard
+/// layout, spacing and columns. Done, a click outside it and Escape close it; the fields it edited
+/// stay as they are.
+fn more_settings(ui: &mut egui::Ui, d: &mut Dialog) {
+    let button = widgets::flat_button(ui, tl!("More Settings"), DETAILS);
+    let mut open = (d.kind == MORE) != button.clicked();
+    let mut done = false;
+    let opening = button.ctx.read_response(egui::Popup::default_response_id(&button)).is_none();
+    egui::Popup::from_response(&button)
+        .open_bool(&mut open)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .align(egui::RectAlign::TOP_END)
+        .accessible_name(tl!("More Settings"))
+        .show(|ui| done = more_settings_popup(ui, opening, d));
+    d.kind = if open && !done { MORE } else { KIND }.into();
+}
+
+/// More Settings' pop-up. True when Done (or Enter) finished with it.
+fn more_settings_popup(ui: &mut egui::Ui, opening: bool, d: &mut Dialog) -> bool {
+    const L: f32 = 150.0;
+    let t = Tokens::get(ui.ctx());
+    let (lay, cols, spacing, rtl) = layout(d);
+    let n = d.f64("artboards", 1.0);
+    let several = n > 1.0;
+    let room = ui.ctx().content_rect().size() - egui::Vec2::splat(4.0 * super::EDGE_GAP) - egui::vec2(0.0, 44.0);
+    focus_first(ui, opening, |ui| {
+        egui::ScrollArea::both().id_salt("newdoc-popup-rows").max_width(room.x.max(0.0)).max_height(room.y.max(0.0)).show(ui, |ui| {
+            ui.set_width(MORE_WIDTH);
+            ui.label(egui::RichText::new(tl!("More Settings")).font(theme::semibold(13.0)).color(t.text));
+            ui.add_space(6.0);
+            widgets::label_row(ui, tl!("Number of Artboards:"), L, |ui| artboards(ui, d, "newdoc-popup-artboards", 76.0));
+            widgets::label_row(ui, "", L, |ui| {
+                for (l, icon) in [
+                    (ArtboardLayout::GridByRow, "dc-grid-view"),
+                    (ArtboardLayout::GridByColumn, "grid-3x3"),
+                    (ArtboardLayout::Row, "arrow-left-right"),
+                    (ArtboardLayout::Column, "arrow-up-down"),
+                ] {
+                    if widgets::icon_button_enabled(ui, icon, l.label(), lay == l, several, 26.0).clicked() {
+                        set_layout(d, "layout", json!(l.id()));
+                    }
+                }
+                ui.add_space(6.0);
+                if widgets::icon_button_enabled(ui, "chevrons-left", tl!("Change to Right-to-Left Layout"), rtl, several, 26.0).clicked() {
+                    set_layout(d, "rightToLeft", json!(!rtl));
+                }
+            });
+            ui.add_enabled_ui(several, |ui| {
+                widgets::label_row(ui, tl!("Spacing:"), L, |ui| {
+                    if let Some(v) = widgets::num_field(ui, "newdoc-spacing", Some(spacing), unit(d), 100.0) {
+                        set_layout(d, "spacing", json!(v.max(0.0)));
+                    }
+                });
+                let grid = matches!(lay, ArtboardLayout::GridByRow | ArtboardLayout::GridByColumn);
+                ui.add_enabled_ui(grid, |ui| {
+                    widgets::label_row(ui, tl!("Columns:"), L, |ui| {
+                        if let Some(v) = widgets::spin_plain(ui, "newdoc-columns", cols as f64, "", 0, 76.0, 1.0, 1.0, &[]) {
+                            set_layout(d, "columns", json!(v.round().clamp(1.0, n) as u64));
+                        }
+                    });
+                });
+            });
+        });
+    });
+    ui.add_space(8.0);
+    // A bad value in a field keeps the pop-up open, as it keeps a dialog open.
+    let rejected = ui.data_mut(|m| m.remove_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
+    let enter = !rejected && ui.input(|i| i.key_pressed(egui::Key::Enter)) && ui.memory(|m| m.focused().is_none());
+    let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+    let mut done = false;
+    ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        done = widgets::primary_button(ui, tl!("Done")).clicked() || enter;
+    });
+    done
 }
 
 fn units_dropdown(ui: &mut egui::Ui, d: &mut Dialog, width: f32) {
@@ -444,10 +654,10 @@ fn orientation(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-fn artboards(ui: &mut egui::Ui, d: &mut Dialog, width: f32) {
+fn artboards(ui: &mut egui::Ui, d: &mut Dialog, id: &str, width: f32) {
     let n = d.f64("artboards", 1.0);
     ui.horizontal(|ui| {
-        if let Some(v) = widgets::spin_plain(ui, "newdoc-artboards", n, "", 0, width, 1.0, 1.0, &[]) {
+        if let Some(v) = widgets::spin_plain(ui, id, n, "", 0, width, 1.0, 1.0, &[]) {
             d.fields.insert("artboards".into(), json!(v.round().clamp(1.0, MAX_ARTBOARDS as f64) as u64));
         }
     });
@@ -506,124 +716,10 @@ fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
     }
 }
 
-/// More Settings: the classic form of the same fields.
-fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(mut d) = app.ui.dialog.clone() else { return };
-    sync(app, &mut d);
-    let t = Tokens::get(ctx);
-    let mut b = Buttons::default();
-    let mut templates = false;
-    const L: f32 = 150.0;
-    window(ctx, MORE, 22, |ui| {
-        ui.set_width(560.0);
-        super::modal::heading(ui, tl!("More Settings"));
-        ui.add_space(12.0);
-        widgets::label_row(ui, tl!("Name:"), L, |ui| {
-            form::text(ui, &mut d, "name", 300.0);
-        });
-        // Profile: the preset categories (the tabs); Size: the profile's presets.
-        let profiles: Vec<&str> = newdoc::CATEGORIES.iter().map(|c| c.0).collect();
-        let profile = profiles.iter().find(|p| p.eq_ignore_ascii_case(&d.str("category"))).copied().unwrap_or("[Custom]");
-        widgets::label_row(ui, tl!("Profile:"), L, |ui| {
-            if let Some(p) = widgets::dropdown(ui, "newdoc-profile", profile, &profiles, 220.0).and_then(|i| profiles.get(i)) {
-                d.fields.insert("category".into(), json!(p));
-                if let Some(first) = newdoc::category(&app.session, p).and_then(|v| v.into_iter().next()) {
-                    apply(&mut d, &first);
-                }
-            }
-        });
-        ui.add_space(6.0);
-        let (lay, cols, spacing, rtl) = layout(&d);
-        let n = d.f64("artboards", 1.0);
-        let several = n > 1.0;
-        widgets::label_row(ui, tl!("Number of Artboards:"), L, |ui| {
-            artboards(ui, &mut d, 76.0);
-            ui.add_space(10.0);
-            for (l, icon) in [
-                (ArtboardLayout::GridByRow, "dc-grid-view"),
-                (ArtboardLayout::GridByColumn, "grid-3x3"),
-                (ArtboardLayout::Row, "arrow-left-right"),
-                (ArtboardLayout::Column, "arrow-up-down"),
-            ] {
-                if widgets::icon_button_enabled(ui, icon, l.label(), lay == l, several, 26.0).clicked() {
-                    set_layout(&mut d, "layout", json!(l.id()));
-                }
-            }
-            ui.add_space(6.0);
-            if widgets::icon_button_enabled(ui, "chevrons-left", tl!("Change to Right-to-Left Layout"), rtl, several, 26.0).clicked() {
-                set_layout(&mut d, "rightToLeft", json!(!rtl));
-            }
-        });
-        ui.add_enabled_ui(several, |ui| {
-            widgets::label_row(ui, tl!("Spacing:"), L, |ui| {
-                if let Some(v) = widgets::num_field(ui, "newdoc-spacing", Some(spacing), unit(&d), 100.0) {
-                    set_layout(&mut d, "spacing", json!(v.max(0.0)));
-                }
-                ui.add_space(20.0);
-                widgets::field_label(ui, egui::RichText::new(tl!("Columns:")).color(t.text));
-                let grid = matches!(lay, ArtboardLayout::GridByRow | ArtboardLayout::GridByColumn);
-                ui.add_enabled_ui(grid, |ui| {
-                    if let Some(v) = widgets::spin_plain(ui, "newdoc-columns", cols as f64, "", 0, 76.0, 1.0, 1.0, &[]) {
-                        set_layout(&mut d, "columns", json!(v.round().clamp(1.0, n) as u64));
-                    }
-                });
-            });
-        });
-        ui.add_space(6.0);
-        let sizes = newdoc::category(&app.session, profile).unwrap_or_default();
-        let size_names: Vec<&str> = sizes.iter().map(|s| s.name.as_str()).collect();
-        let preset = d.str("preset");
-        widgets::label_row(ui, tl!("Size:"), L, |ui| {
-            // The profile's sizes are built in; the preset may be one the user saved.
-            let shown = if preset.is_empty() { tl!("Custom") } else { preset_name(&preset) };
-            if let Some(s) = super::mixed_dropdown(ui, "newdoc-size", shown, &size_names, 220.0, |_| true).and_then(|i| sizes.get(i)) {
-                apply(&mut d, s);
-            }
-        });
-        let unit = unit(&d);
-        widgets::label_row(ui, tl!("Width:"), L, |ui| {
-            form::length(ui, &mut d, "width", unit, 120.0);
-            ui.add_space(20.0);
-            ui.label(egui::RichText::new(tl!("Units:")).color(t.text));
-            units_dropdown(ui, &mut d, 120.0);
-        });
-        widgets::label_row(ui, tl!("Height:"), L, |ui| {
-            form::length(ui, &mut d, "height", unit, 120.0);
-            ui.add_space(20.0);
-            ui.label(egui::RichText::new(tl!("Orientation:")).color(t.text));
-            orientation(ui, &mut d);
-        });
-        ui.add_space(4.0);
-        widgets::label_row(ui, tl!("Bleed:"), L, |ui| form::bleed(ui, &mut d, unit, 64.0));
-        ui.add_space(4.0);
-        widgets::label_row(ui, tl!("Background Contents:"), L, |ui| background(ui, &mut d, 220.0));
-        ui.add_space(8.0);
-        advanced(ui, &mut d, L, 220.0);
-        ui.add_space(16.0);
-        ui.horizontal(|ui| {
-            templates = widgets::secondary_button(ui, tl!("Templates…")).on_hover_text(tl!("New from Template")).clicked();
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                b.create |= widgets::primary_button(ui, tl!("Create Document")).clicked();
-                ui.add_space(8.0);
-                // Cancel goes back to New Document.
-                if widgets::secondary_button(ui, tl!("Cancel")).clicked() {
-                    d.kind = KIND.into();
-                }
-            });
-        });
-    });
-    if templates {
-        app.ui.dialog = None;
-        if let Err(e) = app.run("file.newFromTemplate", json!({})) {
-            app.status(e);
-        }
-        return;
-    }
-    b.finish(app, ctx, d);
-}
-
 #[cfg(test)]
 mod tests {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::{NodeT, Queryable};
     use serde_json::json;
     use vectorcraft_engine::Session;
 
@@ -748,6 +844,26 @@ mod tests {
         run(&mut app, vec![press(false)]);
         assert!(app.ui.dialog.is_none(), "the double-click created it: {:?}", app.ui.status);
         assert_eq!(app.session.documents().len(), 1);
+
+        // While a preset is being saved, a click fills the fields and a double-click creates nothing.
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "category", json!("Mobile"));
+        set(&mut app, "preset", json!("Letter"));
+        set(&mut app, super::SAVING, json!(true));
+        // Far enough from the clicks above that the next two count as a click and a double-click.
+        for _ in 0..12 {
+            run(&mut app, vec![]);
+        }
+        let at = card(&mut app, &mut run);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+        run(&mut app, vec![press(false)]);
+        assert!(field(&app, "preset").as_str().is_some_and(|p| p == "Phone 393×852"), "a click fills the fields: {:?}", field(&app, "preset"));
+        run(&mut app, vec![press(true)]);
+        run(&mut app, vec![press(false)]);
+        run(&mut app, vec![]);
+        assert_eq!(app.session.documents().len(), 1, "nothing was created while saving");
+        assert_eq!(field(&app, super::SAVING), json!(true));
     }
 
     /// A category tab opens on its first preset, so Orientation matches its (landscape) cards, and
@@ -834,6 +950,62 @@ mod tests {
         assert!(selected(&out), "the turned preset stays chosen: {:?}", field(&app, "preset"));
     }
 
+    /// The document's name field has a caption of its own under the Preset Details heading, the
+    /// column stays inside the dialog's height with Advanced Options open in both states, and saving
+    /// a preset replaces only the top of the column: the rows under it do not move.
+    #[test]
+    fn the_name_field_is_captioned_and_the_column_fits() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "advanced", json!(true));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut time = 0.0;
+        let mut run = |app: &mut VectorcraftApp| {
+            time += 0.5;
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0)));
+            let raw = egui::RawInput { screen_rect, time: Some(time), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out
+        };
+        fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts_of = |app: &mut VectorcraftApp| {
+            run(app);
+            let out = run(app);
+            let mut texts = vec![];
+            out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+            texts
+        };
+        let texts = texts_of(&mut app);
+        let at = |texts: &[(String, egui::Rect)], name: &str| {
+            texts.iter().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("{name} is missing: {texts:?}"))
+        };
+        let (heading, caption, value) = (at(&texts, "PRESET DETAILS"), at(&texts, "Document Name"), at(&texts, "Untitled-1"));
+        assert!(heading.bottom() <= caption.top() && caption.bottom() <= value.top(), "{heading:?} {caption:?} {value:?}");
+        let used = at(&texts, "Create").bottom() - heading.top();
+        assert!(used <= super::HEIGHT, "the column used {used}");
+        let width = at(&texts, "Width").top();
+
+        set(&mut app, super::SAVING, json!(true));
+        let saving = texts_of(&mut app);
+        for gone in ["PRESET DETAILS", "Document Name", "Close", "Create"] {
+            assert!(saving.iter().all(|(t, _)| t != gone), "{gone} shows while saving");
+        }
+        let (heading, cancel) = (at(&saving, "Save Document Preset"), at(&saving, "Cancel"));
+        assert!(heading.bottom() <= cancel.top());
+        assert!(cancel.bottom() <= at(&saving, "Width").top(), "Cancel and Save are above the rows");
+        assert_eq!(at(&saving, "Width").top(), width, "the rows stay where they were");
+        let used = at(&saving, "More Settings").bottom() - heading.top();
+        assert!(used <= super::HEIGHT, "the column used {used}");
+    }
+
     #[test]
     fn a_preset_fills_the_details_and_create_makes_the_document() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -875,7 +1047,7 @@ mod tests {
             let out = frame(&mut app);
             assert!(!out.shapes.is_empty());
         }
-        // More Settings shares the fields; Cancel goes back.
+        // More Settings edits the same fields.
         app.ui.dialog.as_mut().unwrap().kind = super::MORE.into();
         set(&mut app, "artboards", json!(3));
         frame(&mut app);
@@ -893,5 +1065,382 @@ mod tests {
         assert!((field(&app, "width").as_f64().unwrap() - 148.0 * 72.0 / 25.4).abs() < 1e-6, "A5 wide");
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(app.session.prefs.recent_new_docs[0].name, "Zine");
+    }
+
+    type Harness = egui_kittest::Harness<'static, VectorcraftApp>;
+
+    /// New Document open in a harness of `size`, with the app's key handling and the dialogs drawn.
+    fn harness(size: egui::Vec2) -> Harness {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(size).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                crate::shortcuts::handle(app, ui.ctx());
+                crate::dialogs::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(5);
+        h
+    }
+
+    fn big() -> Harness {
+        harness(egui::vec2(1400.0, 1000.0))
+    }
+
+    /// Open a pop-up as a control client would, with `artboards` set, and let it draw.
+    fn open_more(h: &mut Harness, artboards: u64) {
+        set(h.state_mut(), "artboards", json!(artboards));
+        h.state_mut().ui.dialog.as_mut().unwrap().kind = super::MORE.into();
+        h.run_steps(4);
+    }
+
+    fn kind(h: &Harness) -> String {
+        h.state().ui.dialog.as_ref().unwrap().kind.clone()
+    }
+
+    /// A primary click at `at`, as a pointer makes it.
+    fn click_at(h: &mut Harness, at: egui::Pos2) {
+        h.event(egui::Event::PointerMoved(at));
+        h.run_steps(1);
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() });
+        h.run_steps(1);
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() });
+        h.run_steps(3);
+    }
+
+    /// Press Save Preset, leaving the preset's name focused.
+    fn start_saving(h: &mut Harness) {
+        h.get_by_label("Save Preset").click();
+        h.run_steps(4);
+    }
+
+    /// Replace the text of field `label` with `text` and press Enter.
+    fn enter_in(h: &mut Harness, label: &str, text: &str) {
+        let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
+        h.get_by_role_and_label(Role::TextInput, label).focus();
+        h.run_steps(2);
+        h.key_press_modifiers(all, egui::Key::A);
+        h.get_by_role_and_label(Role::TextInput, label).type_text(text);
+        h.run_steps(2);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+    }
+
+    /// More Settings opens over New Document with only what Preset Details lacks, its first field
+    /// takes the keyboard focus, and Done leaves New Document open with what the pop-up set.
+    #[test]
+    fn more_settings_is_a_popup_holding_only_the_artboard_layout() {
+        let mut h = big();
+        h.get_by_label("More Settings").click();
+        h.run_steps(4);
+        assert_eq!(kind(&h), super::MORE);
+        assert!(h.get_by_role_and_label(Role::TextInput, "Number of Artboards:").is_focused(), "the pop-up's first field has the focus");
+        for shown in ["Number of Artboards:", "Spacing:", "Columns:", "Create", "Close"] {
+            let _ = h.get_by_label(shown);
+        }
+        for gone in [
+            "Name:",
+            "Profile:",
+            "Size:",
+            "Width:",
+            "Height:",
+            "Units:",
+            "Orientation:",
+            "Bleed:",
+            "Background Contents:",
+            "Create Document",
+            "Templates…",
+        ] {
+            assert!(h.query_by_label(gone).is_none(), "{gone} is in the pop-up");
+        }
+        h.get_by_label("Done").click();
+        h.run_steps(3);
+        assert_eq!(kind(&h), super::KIND, "Done goes back to New Document");
+        assert!(h.query_by_label("Spacing:").is_none());
+        assert!(h.state().session.documents().is_empty());
+    }
+
+    /// Escape, a click outside and `ui.dialog.cancel` each close only the pop-up, and the fields it
+    /// edited stay set. Escape on New Document itself then closes the dialog.
+    #[test]
+    fn a_popup_closes_on_its_own_and_keeps_the_values() {
+        let mut h = big();
+        open_more(&mut h, 4);
+        h.get_by_label(super::ArtboardLayout::Column.label()).click();
+        h.run_steps(3);
+        assert_eq!(kind(&h), super::MORE, "a click inside keeps it open");
+        h.key_press(egui::Key::Escape);
+        h.run_steps(3);
+        assert_eq!(kind(&h), super::KIND, "Escape closes only the pop-up");
+        assert_eq!(field(h.state(), "artboardLayout")["layout"], json!("column"));
+        h.key_press(egui::Key::Escape);
+        h.run_steps(3);
+        assert!(h.state().ui.dialog.is_none(), "the next Escape closes New Document");
+
+        let mut h = big();
+        open_more(&mut h, 4);
+        let outside = h.get_by_label("PRESET DETAILS").rect().center();
+        click_at(&mut h, outside);
+        assert_eq!(kind(&h), super::KIND, "a click outside closes the pop-up");
+        assert_eq!(field(h.state(), "artboards"), json!(4));
+
+        open_more(&mut h, 4);
+        crate::dialogs::cancel(h.state_mut());
+        assert_eq!(kind(&h), super::KIND, "ui.dialog.cancel closes only the pop-up");
+        set(h.state_mut(), super::SAVING, json!(true));
+        crate::dialogs::cancel(h.state_mut());
+        assert_eq!((kind(&h), field(h.state(), super::SAVING)), (super::KIND.to_string(), json!(false)), "and Save Preset's");
+        crate::dialogs::cancel(h.state_mut());
+        assert!(h.state().ui.dialog.is_none(), "with no pop-up it cancels New Document");
+    }
+
+    /// A click that lands on Create, Close, a preset card or a category tab while the pop-up is open
+    /// only closes the pop-up: New Document stays open with the values the pop-up set.
+    #[test]
+    fn a_click_outside_the_popup_does_not_reach_the_dialog() {
+        let mut reached = vec![];
+        for target in ["Create", "Close", "card", "Web"] {
+            let mut h = big();
+            open_more(&mut h, 4);
+            let (category, preset) = (field(h.state(), "category"), field(h.state(), "preset"));
+            let at = if target == "card" {
+                // The Print tab's second card: the first is the chosen one.
+                let tab = h.get_by_label("Print").rect();
+                egui::pos2(tab.left() + 146.0 + 12.0 + 73.0, tab.bottom() + 120.0)
+            } else {
+                h.get_by_label(target).rect().center()
+            };
+            click_at(&mut h, at);
+            let kept = h.state().ui.dialog.is_some()
+                && kind(&h) == super::KIND
+                && h.state().session.documents().is_empty()
+                && field(h.state(), "artboards") == json!(4)
+                && (field(h.state(), "category"), field(h.state(), "preset")) == (category, preset);
+            if !kept {
+                reached.push(target);
+            }
+        }
+        assert!(reached.is_empty(), "the click reached {reached:?}");
+    }
+
+    /// Enter applies the field and closes the pop-up. It does not create the document.
+    #[test]
+    fn enter_in_a_popup_does_not_create_the_document() {
+        let mut h = big();
+        open_more(&mut h, 3);
+        enter_in(&mut h, "Spacing:", "25");
+        assert_eq!(kind(&h), super::KIND, "Enter closes the pop-up");
+        assert_eq!(field(h.state(), "artboardLayout")["spacing"], json!(25.0));
+        assert!(h.state().session.documents().is_empty(), "no document was made");
+    }
+
+    /// One artboard disables the layout, Spacing and Columns; Columns stays within the artboards
+    /// and Spacing is not negative.
+    #[test]
+    fn the_popup_keeps_the_layout_rules() {
+        let mut h = big();
+        open_more(&mut h, 1);
+        for name in [super::ArtboardLayout::Row.label(), "Change to Right-to-Left Layout"] {
+            assert!(h.get_by_label(name).accesskit_node().is_disabled(), "{name}");
+        }
+        for name in ["Spacing:", "Columns:"] {
+            assert!(h.get_by_role_and_label(Role::TextInput, name).accesskit_node().is_disabled(), "{name}");
+        }
+        open_more(&mut h, 3);
+        assert!(!h.get_by_role_and_label(Role::TextInput, "Spacing:").accesskit_node().is_disabled());
+        enter_in(&mut h, "Columns:", "99");
+        assert_eq!(field(h.state(), "artboardLayout")["columns"], json!(3));
+        open_more(&mut h, 3);
+        enter_in(&mut h, "Spacing:", "-5");
+        assert_eq!(field(h.state(), "artboardLayout")["spacing"], json!(0.0));
+    }
+
+    /// Saving swaps the top of Preset Details for the heading, the preset's name, Cancel and Save, and
+    /// hides Close and Create; the rows under it stay editable, and Enter in one of them neither saves
+    /// nor creates.
+    #[test]
+    fn save_preset_is_a_mode_of_the_panel() {
+        let mut h = big();
+        start_saving(&mut h);
+        let _ = (h.get_by_label("Save Document Preset"), h.get_by_label("Cancel"), h.get_by_label("Save"));
+        for gone in ["PRESET DETAILS", "Create", "Close"] {
+            assert!(h.query_by_label(gone).is_none(), "{gone} shows while saving");
+        }
+        assert!(h.query_by_role_and_label(Role::TextInput, "Document Name").is_none(), "the document's name is hidden");
+        let _ = (h.get_by_label("Advanced Options"), h.get_by_label("More Settings"));
+        enter_in(&mut h, "Artboards", "2");
+        assert_eq!(field(h.state(), "artboards"), json!(2), "the rows stay editable");
+        assert_eq!(field(h.state(), super::SAVING), json!(true), "Enter in a row does not save");
+        assert!(h.state().session.documents().is_empty() && h.state().session.prefs.new_doc_presets.is_empty());
+        h.get_by_label("More Settings").click();
+        h.run_steps(4);
+        assert_eq!(kind(&h), super::MORE, "More Settings opens while saving");
+    }
+
+    /// Save Preset focuses the default name with its text selected, Enter in it is Save, and the
+    /// saved preset keeps the fields.
+    #[test]
+    fn enter_in_the_preset_name_saves() {
+        let mut h = big();
+        set(h.state_mut(), "artboards", json!(3));
+        h.run_steps(2);
+        start_saving(&mut h);
+        assert_eq!(field(h.state(), "presetName"), json!("Preset 1"));
+        assert!(h.get_by_role_and_label(Role::TextInput, "Preset Name").is_focused());
+        h.event(egui::Event::Text("Trio".into()));
+        h.run_steps(2);
+        assert_eq!(field(h.state(), "presetName"), json!("Trio"), "typing replaced the selected text");
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        let saved = h.state().session.prefs.new_doc_presets.iter().find(|p| p.name == "Trio").expect("Enter saved it");
+        assert_eq!(saved.artboards, 3);
+        assert_eq!((field(h.state(), super::SAVING), field(h.state(), "artboards")), (json!(false), json!(3)), "the fields stay");
+        assert_eq!(field(h.state(), "name"), json!("Untitled-1"));
+        assert!(h.state().session.documents().is_empty() && h.state().ui.dialog.is_some());
+    }
+
+    /// Save Preset's default name is the first "Preset N" no saved preset has, after a save as well.
+    #[test]
+    fn the_next_save_offers_a_new_name() {
+        let mut h = big();
+        start_saving(&mut h);
+        assert_eq!(field(h.state(), "presetName"), json!("Preset 1"));
+        h.get_by_label("Save").click();
+        h.run_steps(3);
+        start_saving(&mut h);
+        assert_eq!(field(h.state(), "presetName"), json!("Preset 2"), "not the saved preset's name");
+        set(h.state_mut(), "presetName", json!("preset 3"));
+        h.run_steps(2);
+        h.get_by_label("Save").click();
+        h.run_steps(3);
+        start_saving(&mut h);
+        assert_eq!(field(h.state(), "presetName"), json!("Preset 2"), "not a name a saved preset has");
+    }
+
+    /// A New Document that opens already saving (as a control client can set it) fills in and focuses
+    /// the default name, also after the last one was closed while saving.
+    #[test]
+    fn a_dialog_that_opens_saving_fills_in_the_name() {
+        let mut h = big();
+        start_saving(&mut h);
+        h.state_mut().ui.dialog = None;
+        h.run_steps(2);
+        h.state_mut().run("file.newDialog", json!({})).unwrap();
+        set(h.state_mut(), super::SAVING, json!(true));
+        h.run_steps(4);
+        assert_eq!(field(h.state(), "presetName"), json!("Preset 1"));
+        assert!(h.get_by_role_and_label(Role::TextInput, "Preset Name").is_focused());
+    }
+
+    /// Enter that is still held after Enter saved a preset does not create the document.
+    #[test]
+    fn a_held_enter_after_a_save_does_not_create() {
+        let mut h = big();
+        start_saving(&mut h);
+        let enter = |repeat| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat, modifiers: Default::default() };
+        // Pressed and not released: the next presses are the key's repeats.
+        h.event(enter(false));
+        h.run_steps(1);
+        assert_eq!(field(h.state(), super::SAVING), json!(false), "Enter saved");
+        for _ in 0..3 {
+            h.event(enter(true));
+            h.run_steps(1);
+        }
+        assert!(h.state().session.documents().is_empty() && h.state().ui.dialog.is_some());
+    }
+
+    /// Escape in the mode is Cancel: it saves nothing, keeps edits made to the fields, and New Document
+    /// stays open. The Cancel button does the same.
+    #[test]
+    fn escape_and_cancel_leave_saving_and_keep_the_edits() {
+        let mut h = big();
+        start_saving(&mut h);
+        set(h.state_mut(), "artboards", json!(5));
+        h.run_steps(2);
+        h.key_press(egui::Key::Escape);
+        h.run_steps(3);
+        assert_eq!((field(h.state(), super::SAVING), field(h.state(), "artboards")), (json!(false), json!(5)), "Escape keeps the edits");
+        assert!(h.state().session.prefs.new_doc_presets.is_empty(), "and saves nothing");
+        assert!(h.state().ui.dialog.is_some(), "and New Document stays open");
+
+        start_saving(&mut h);
+        h.get_by_label("Cancel").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), super::SAVING), json!(false));
+        let _ = h.get_by_label("Create");
+    }
+
+    /// `ui.dialog.confirm` while saving is Save: it stores the preset and creates no document.
+    #[test]
+    fn confirm_while_saving_does_not_create_a_document() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        frame(&mut app);
+        set(&mut app, super::SAVING, json!(true));
+        set(&mut app, "presetName", json!("Zed"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.session.documents().is_empty() && app.session.prefs.new_doc_presets.iter().any(|p| p.name == "Zed"));
+        assert_eq!((field(&app, super::SAVING), field(&app, "category")), (json!(false), json!("Saved")));
+        set(&mut app, super::SAVING, json!(true));
+        set(&mut app, "presetName", json!(""));
+        assert!(crate::dialogs::confirm(&mut app).is_err(), "an empty name is refused");
+        assert_eq!(field(&app, super::SAVING), json!(true));
+        assert!(app.session.documents().is_empty());
+    }
+
+    /// The preset keeps the artboard layout, spacing and columns set in More Settings' pop-up
+    /// (#4893), and New Document stays open on it. An empty name stays in the mode.
+    #[test]
+    fn save_preset_saves_what_more_settings_set() {
+        let mut h = big();
+        open_more(&mut h, 4);
+        enter_in(&mut h, "Spacing:", "30");
+        open_more(&mut h, 4);
+        h.get_by_label(super::ArtboardLayout::Column.label()).click();
+        h.run_steps(3);
+        h.get_by_label("Change to Right-to-Left Layout").click();
+        h.run_steps(3);
+        h.get_by_label("Done").click();
+        h.run_steps(3);
+        h.get_by_label("Save Preset").click();
+        h.run_steps(4);
+        assert!(field(h.state(), super::SAVING) == json!(true) && h.get_by_role_and_label(Role::TextInput, "Preset Name").is_focused());
+        let _ = (h.get_by_label("Save"), h.get_by_label("Cancel"));
+        set(h.state_mut(), "presetName", json!("   "));
+        h.run_steps(2);
+        h.get_by_label("Save").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), super::SAVING), json!(true), "an empty name stays in the mode");
+        set(h.state_mut(), "presetName", json!("Strip"));
+        h.run_steps(2);
+        h.get_by_label("Save").click();
+        h.run_steps(3);
+        let saved = h.state().session.prefs.new_doc_presets.iter().find(|p| p.name == "Strip").expect("saved");
+        assert_eq!(saved.artboards, 4);
+        assert!(saved.right_to_left);
+        assert_eq!((saved.layout, saved.spacing), (super::ArtboardLayout::Column, 30.0));
+        assert_eq!(
+            (field(h.state(), "category"), field(h.state(), "preset"), field(h.state(), super::SAVING)),
+            (json!("Saved"), json!("Strip"), json!(false))
+        );
+        assert_eq!(kind(&h), super::KIND, "New Document stays open");
+        assert!(h.state().session.documents().is_empty());
+    }
+
+    /// In a small window the pop-up stays on screen, and its button stays in view under rows that scroll.
+    #[test]
+    fn the_popup_stays_inside_a_small_window() {
+        let mut h = harness(egui::vec2(480.0, 260.0));
+        open_more(&mut h, 3);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(480.0, 260.0));
+        for label in ["Number of Artboards:", "Done"] {
+            assert!(screen.contains_rect(h.get_by_label(label).rect()), "{label} is off screen");
+        }
     }
 }

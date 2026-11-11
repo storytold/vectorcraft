@@ -376,13 +376,18 @@ fn queue_files(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value,
 /// read off the UI thread where the files the user places are ([`crate::placing::start`]), else at
 /// once. An error shows in the status bar.
 pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
-    if crate::placing::available(app) {
-        if let Err(e) = crate::placing::start(app, p, false) {
-            app.status(e);
+    // Read within the automation roots of whoever loaded the cursor, even on a click of the person
+    // at the keyboard: an agent's queue reaches no file it wasn't given.
+    let roots = app.session.place_queue_roots();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        if crate::placing::available(app) {
+            if let Err(e) = crate::placing::start(app, p, false) {
+                app.status(e);
+            }
+        } else {
+            let _ = engine(app, "file.place", p);
         }
-    } else {
-        let _ = engine(app, "file.place", p);
-    }
+    });
 }
 
 /// The cursor's thumbnails from `file.place.queue`'s reply `r`.
@@ -439,12 +444,12 @@ impl VectorcraftApp {
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
     /// own and a picture or text is placed in the middle of the view. A library, a presets file, a
-    /// plug-in, a shortcut set or a script opens wherever it is dropped, as File → Open opens it
-    /// ([`io::opens_as`]).
+    /// plug-in, a shortcut set, a script or a file only an importer plug-in reads opens wherever it
+    /// is dropped, as File → Open opens it ([`io::opens_as`], [`fileio::opens_with_importer`]).
     pub fn drop_target(&self, name: &str, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
         let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else { return DropTarget::Open };
         let at = match pos {
-            _ if io::opens_as(name).is_some() => return DropTarget::Open,
+            _ if io::opens_as(name).is_some() || fileio::opens_with_importer(name) => return DropTarget::Open,
             Some(p) if !rect.contains(p) => return DropTarget::Open,
             Some(p) => crate::canvas::Xf::new(rect, v).to_doc(p),
             None if is_document(name) => return DropTarget::Open,
@@ -615,7 +620,7 @@ fn link_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool)
     }
     if widgets::menu_item(ui, tl!("Update Link"), linked, false) {
         let msg = match app.run("links.update", json!({ "ids": [id] })) {
-            Ok(v) => format!("Updated {} image(s)", v["updated"].as_array().map_or(0, Vec::len)),
+            Ok(v) => crate::panels::links::updated_status(v["updated"].as_array().map_or(0, Vec::len)),
             Err(e) => e,
         };
         app.status(msg);

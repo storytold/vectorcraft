@@ -6,7 +6,7 @@
 
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
-use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind};
+use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind, folder_check};
 
 use crate::state::Dialog;
 use crate::theme::{self, Accent, Brightness, Scheme, Tokens};
@@ -18,6 +18,13 @@ pub const UI_FIELDS: &[(&str, &str, &str)] = &[
     ("__snapToGrid", "Guides & Grid", "Snap to Grid"),
     ("__taskBar", "General", "Enable Contextual Task Bar"),
 ];
+
+/// The Units ▸ General value Reset Preferences put in the dialog, while it is still the field's value.
+const RESET_UNITS: &str = "__resetUnits";
+
+/// Whether User Interface shows VectorCraft Title Bar on Every Desktop (`appTitleBar`): Linux and the
+/// BSDs, where the desktop may draw the window's frame. macOS and Windows never read it.
+const APP_TITLE_BAR_SHOWN: bool = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
 
 pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     // One field per preference key or group (the flattener presets have commands of their own).
@@ -32,7 +39,170 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     fields.insert("__smartGuides".into(), json!(app.ui.view.smart_guides));
     fields.insert("__snapToGrid".into(), json!(app.ui.view.snap_to_grid));
     fields.insert("__taskBar".into(), json!(app.ui.task_bar));
+    // Read-only: whether VECTORCRAFT_TITLEBAR chose this window's frame (System Title Bar's dimmed
+    // row and VectorCraft Title Bar on Every Desktop's note).
+    fields.insert("__titlebarFromEnv".into(), json!(app.titlebar_from_env));
+    fields.insert("__search".into(), json!(""));
+    fields.insert("__focusSearch".into(), json!(true));
     app.ui.dialog = Some(Dialog { kind: "preferences".into(), fields });
+}
+
+/// A setting the dialog shows, by its key, category, section ("" for none) and label, in English.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Setting {
+    pub key: &'static str,
+    pub category: &'static str,
+    pub section: &'static str,
+    pub label: &'static str,
+}
+
+/// Every setting the dialog shows on this platform: the UI-only fields, then the engine's
+/// preferences, each category's in the order the dialog lists them.
+fn settings() -> impl Iterator<Item = Setting> {
+    let ui_fields = UI_FIELDS.iter().map(|&(key, category, label)| Setting { key, category, section: "", label });
+    const SYSTEM_TITLE_BAR: bool = cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos")));
+    const DISPLAY_SERVER_CHOICE: bool = cfg!(target_os = "linux");
+    let shown = |key: &str| match key {
+        "systemTitleBar" => SYSTEM_TITLE_BAR,
+        "appTitleBar" => APP_TITLE_BAR_SHOWN,
+        "linuxDisplayServer" => DISPLAY_SERVER_CHOICE,
+        _ => true,
+    };
+    let prefs =
+        PREF_SPECS.iter().filter(move |s| shown(s.key)).map(|s| Setting { key: s.key, category: s.category, section: s.section, label: s.label });
+    ui_fields.chain(prefs)
+}
+
+/// The settings whose label, section or category contains `query`, ignoring case, in the language
+/// the dialog is drawn in or in English, grouped by category in the dialog's order. An empty
+/// `query` finds none.
+pub(crate) fn search(query: &str) -> Vec<Setting> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() {
+        return vec![];
+    }
+    let hit = |s: &str| !s.is_empty() && (tl!(s).to_lowercase().contains(&q) || s.to_lowercase().contains(&q));
+    let mut found: Vec<Setting> = settings().filter(|s| hit(s.label) || hit(s.section) || hit(s.category)).collect();
+    found.sort_by_key(|s| PREF_CATEGORIES.iter().position(|c| *c == s.category).unwrap_or(usize::MAX));
+    found
+}
+
+/// Goes to the setting `s` a search found: its category is shown, the list scrolls to it and its
+/// row is highlighted. The search field is cleared.
+fn go_to(d: &mut Dialog, s: &Setting) {
+    d.fields.insert("__category".into(), json!(s.category));
+    d.fields.insert("__found".into(), json!(s.key));
+    d.fields.insert("__scrollTo".into(), json!(true));
+    d.fields.insert("__search".into(), json!(""));
+}
+
+/// The search field's memory key ([`widgets::search_field`]).
+fn search_id() -> egui::Id {
+    egui::Id::unique("prefs-search")
+}
+
+/// The search field's text edit, which takes the keyboard focus.
+pub(crate) fn search_edit_id() -> egui::Id {
+    search_id().with("edit")
+}
+
+/// Whether the search field had the keyboard focus when the dialog was last drawn.
+fn search_focused_id() -> egui::Id {
+    egui::Id::unique("prefs-search-focused")
+}
+
+/// Escape while the Preferences dialog's search field has text and the keyboard focus: the field is
+/// cleared and keeps the focus, and the Escape goes no further. → Whether it did; otherwise Escape
+/// does what it does in any dialog.
+pub(crate) fn clear_search_on_escape(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
+    let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "preferences") else { return false };
+    // egui takes the focus from the field when the frame with Escape begins: the field's focus is
+    // the one recorded when the dialog was last drawn.
+    if d.str("__search").is_empty() || !ctx.data(|m| m.get_temp::<bool>(search_focused_id()).unwrap_or(false)) {
+        return false;
+    }
+    d.fields.insert("__search".into(), json!(""));
+    d.fields.insert("__focusSearch".into(), json!(true));
+    ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { key: egui::Key::Escape, pressed: true, .. })));
+    true
+}
+
+/// The search field above the category list. It takes the keyboard focus when the dialog opens and
+/// on Cmd/Ctrl+F. → Its text.
+fn search_box(ui: &mut egui::Ui, d: &mut Dialog) -> String {
+    let refocus = ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F));
+    if refocus {
+        d.fields.insert("__focusSearch".into(), json!(true));
+    }
+    ui.data_mut(|m| m.insert_temp(search_id(), d.str("__search")));
+    let query = widgets::search_field(ui, search_id(), tl!("Search Preferences"));
+    if d.bool("__focusSearch") {
+        // Not on the window's measuring frame, nor in the frame of the click that opened the
+        // dialog: egui takes the focus from a field such a click missed.
+        if ui.is_sizing_pass() || ui.input(|i| i.pointer.any_click()) {
+            ui.ctx().request_repaint();
+        } else {
+            widgets::focus_field(ui, search_edit_id(), &query);
+            d.fields.remove("__focusSearch");
+        }
+    }
+    let focused = ui.memory(|m| m.has_focus(search_edit_id()));
+    ui.data_mut(|m| m.insert_temp(search_focused_id(), focused));
+    d.fields.insert("__search".into(), json!(query));
+    query
+}
+
+/// The settings `query` finds, in place of the category list: choosing one goes to it.
+fn search_results(ui: &mut egui::Ui, d: &mut Dialog, query: &str) {
+    let t = Tokens::get(ui.ctx());
+    let found = search(query);
+    if found.is_empty() {
+        ui.label(egui::RichText::new(tl!("No settings found")).color(t.text_dim).size(12.0));
+        return;
+    }
+    egui::ScrollArea::vertical().id_salt("prefs-search-results").max_height(380.0).auto_shrink([false, true]).show(ui, |ui| {
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+        for s in &found {
+            let text = egui::RichText::new(tl!(s.label)).size(12.5).color(t.text);
+            let place = if s.section.is_empty() { tl!(s.category).to_string() } else { format!("{} › {}", tl!(s.category), tl!(s.section)) };
+            let b = egui::Button::selectable(false, text).min_size(egui::vec2(180.0, 22.0));
+            if ui.add(b).on_hover_text(&place).clicked() {
+                go_to(d, s);
+            }
+            ui.label(egui::RichText::new(place).color(t.text_dim).size(11.0));
+            ui.add_space(3.0);
+        }
+    });
+}
+
+/// Before a setting's row: where to paint the highlight behind it, when it is the setting a search
+/// went to ([`go_to`]).
+fn found_mark(ui: &mut egui::Ui, d: &Dialog, key: &str) -> Option<(egui::layers::ShapeIdx, f32)> {
+    (d.str("__found") == key).then(|| (ui.painter().add(egui::Shape::Noop), ui.cursor().top()))
+}
+
+/// After the row [`found_mark`] marked: highlights it, and scrolls the list to it once.
+fn found_paint(ui: &mut egui::Ui, d: &mut Dialog, mark: Option<(egui::layers::ShapeIdx, f32)>) {
+    let Some((idx, top)) = mark else { return };
+    let bottom = ui.min_rect().bottom();
+    if bottom <= top {
+        return;
+    }
+    let rect = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=bottom).expand2(egui::vec2(0.0, 2.0));
+    let t = Tokens::get(ui.ctx());
+    ui.painter().set(idx, egui::epaint::RectShape::filled(rect, 3.0, t.accent.gamma_multiply(0.22)));
+    if d.bool("__scrollTo") && !ui.is_sizing_pass() {
+        ui.scroll_to_rect(rect, Some(egui::Align::Center));
+        d.fields.remove("__scrollTo");
+    }
+}
+
+/// `field` of the Preferences dialog `d` is about to be `value` (a frame's edit or `ui.dialog.set`):
+/// choosing another General unit after Reset Preferences makes OK set the document's units again.
+pub(crate) fn note_set(d: &mut Dialog, field: &str, value: &Value) {
+    if field == "unitsGeneral" && d.fields.get(RESET_UNITS).is_some_and(|v| v != value) {
+        d.fields.remove(RESET_UNITS);
+    }
 }
 
 /// OK: validate and apply every preference in the dialog (nothing changes on error).
@@ -40,7 +210,8 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     let values: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
-    app.run("prefs.set", json!({ "values": values }))?;
+    let document_units = d.fields.get(RESET_UNITS).is_none_or(|v| values.get("unitsGeneral") != Some(v));
+    app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
     if touch_ws.is_some() {
         crate::workspaces::sync_touch_workspace(app, app.touch_screen);
     }
@@ -109,6 +280,12 @@ fn canvas_color(key: &str) -> Option<egui::Color32> {
 
 /// Per frame: push UI-side preferences into egui / the renderer when they change.
 pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    apply(app, ctx, false);
+}
+
+/// [`apply_runtime`]; with `force`, the preferences are pushed into `ctx` even when nothing changed
+/// since the last push.
+fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, force: bool) {
     let p = &app.session.prefs;
     if let Some(b) = Brightness::parse(&p.ui_brightness)
         && b != app.ui.brightness
@@ -125,9 +302,9 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         scrub: p.scrub_numeric_fields,
         bare_points: p.numbers_without_units_are_points,
     };
-    let id = egui::Id::unique("dc-applied-prefs");
+    let id = applied_id();
     let prev: Option<Applied> = ctx.data(|d| d.get_temp::<Option<Applied>>(id)).flatten();
-    if prev != Some(want) {
+    if force || prev != Some(want) {
         theme::apply_with(ctx, want.brightness, want.accent, want.scheme);
         // General › Show Tool Tips: off, no button or field shows its tool tip (they never come
         // due), whichever widget asks for one.
@@ -160,6 +337,18 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
+/// Where [`apply_runtime`] keeps the preferences it last pushed into `ctx`.
+fn applied_id() -> egui::Id {
+    egui::Id::unique("dc-applied-prefs")
+}
+
+/// [`apply_runtime`] even when nothing changed, so the theme (brightness, accent, color scheme and
+/// canvas color) and the other UI-side preferences are pushed into `ctx` again. The record of what
+/// was last applied stays, so a Render Threads change since then still restarts the renderer.
+pub(crate) fn reapply(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    apply(app, ctx, true);
+}
+
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     let t = Tokens::get(ctx);
@@ -171,20 +360,32 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         crate::dialogs::modal::heading(ui, tl!("Preferences"));
         ui.add_space(12.0);
         ui.horizontal_top(|ui| {
-            // Category list.
-            egui::Frame::NONE.fill(t.panel_darker).corner_radius(egui::CornerRadius::same(4)).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
-                ui.set_width(196.0);
-                ui.set_min_height(430.0);
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 1.0;
-                    for c in PREF_CATEGORIES {
-                        let sel = *c == cat;
-                        let text = egui::RichText::new(tl!(*c)).size(12.5).color(if sel { t.text_strong } else { t.text });
-                        let b = egui::Button::selectable(sel, text).min_size(egui::vec2(184.0, 24.0));
-                        if ui.add(b).clicked() {
-                            d.fields.insert("__category".into(), json!(c));
+            ui.vertical(|ui| {
+                ui.set_width(208.0);
+                // Search, above the category list; while it has text, the settings it finds show
+                // in place of the list.
+                let query = search_box(ui, &mut d);
+                ui.add_space(6.0);
+                // Category list.
+                let list = egui::Frame::NONE.fill(t.panel_darker).corner_radius(egui::CornerRadius::same(4)).inner_margin(egui::Margin::same(6));
+                list.show(ui, |ui| {
+                    ui.set_width(196.0);
+                    ui.set_min_height(396.0);
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 1.0;
+                        if !query.trim().is_empty() {
+                            search_results(ui, &mut d, &query);
+                            return;
                         }
-                    }
+                        for c in PREF_CATEGORIES {
+                            let sel = *c == cat;
+                            let text = egui::RichText::new(tl!(*c)).size(12.5).color(if sel { t.text_strong } else { t.text });
+                            let b = egui::Button::selectable(sel, text).min_size(egui::vec2(184.0, 24.0));
+                            if ui.add(b).clicked() {
+                                d.fields.insert("__category".into(), json!(c));
+                            }
+                        }
+                    });
                 });
             });
             ui.add_space(14.0);
@@ -194,11 +395,26 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ui.label(egui::RichText::new(tl!(cat)).font(theme::semibold(14.0)).color(t.text_strong));
                 ui.add_space(8.0);
                 egui::ScrollArea::vertical().id_salt(("prefs", cat)).max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
-                    category_fields(ui, &mut d, cat);
+                    category_fields(ui, app, &mut d, cat);
                 });
             });
         });
         ui.add_space(14.0);
+        ui.horizontal(|ui| {
+            if widgets::secondary_button(ui, tl!("Export Preferences…")).on_hover_text(tl!("Save the applied preferences to a JSON file")).clicked()
+            {
+                export_preferences(app, &mut d);
+            }
+            // Not on the web, which has no open dialog that returns a file here.
+            if crate::picks::can(app, &crate::picks::PickRequest::Open(crate::FilePick::default()))
+                && widgets::secondary_button(ui, tl!("Import Preferences…"))
+                    .on_hover_text(tl!("Apply the preferences in a file Export Preferences saved"))
+                    .clicked()
+            {
+                import_preferences(app, &mut d);
+            }
+        });
+        ui.add_space(8.0);
         ui.horizontal(|ui| {
             if widgets::secondary_button(ui, tl!("Reset Preferences"))
                 .on_hover_text(tl!("Restore every preference to its default (applied on OK)"))
@@ -225,31 +441,53 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
     });
-    if reset {
-        for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
-            d.fields.insert(k, v);
-        }
+    if let Some(v) = d.fields.get("unitsGeneral").cloned() {
+        note_set(&mut d, "unitsGeneral", &v);
+    }
+    // The setting a search went to stays highlighted until another category is shown.
+    let found = d.str("__found");
+    if !found.is_empty() && settings().find(|s| s.key == found).is_none_or(|s| s.category != d.str("__category")) {
+        d.fields.remove("__found");
+        d.fields.remove("__scrollTo");
     }
     app.ui.dialog = Some(d);
     if cancel {
         app.ui.dialog = None;
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
+    } else if reset && !ok {
+        crate::dialogs::confirm::ask_reset_prefs(app);
     }
 }
 
-fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
+/// Reset Preferences, once its question is confirmed: every preference in the Preferences dialog
+/// `d` takes its default value. The category, the search and the UI-only rows stay as they were;
+/// nothing is applied until OK, which leaves the open document's units alone unless Units ›
+/// General is changed after the reset.
+pub(crate) fn reset_fields(d: &mut Dialog) {
+    for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
+        d.fields.insert(k, v);
+    }
+    // OK resets the Units ▸ General preference and leaves the open document's units alone.
+    d.fields.insert(RESET_UNITS.into(), d.fields.get("unitsGeneral").cloned().unwrap_or(Value::Null));
+}
+
+fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, cat: &str) {
     let t = Tokens::get(ui.ctx());
     let mut section = "";
     let mut first = true;
     let specs: Vec<_> = PREF_SPECS.iter().filter(|s| s.category == cat).collect();
     for (key, c, label) in UI_FIELDS {
         if *c == cat && cat != "Smart Guides" {
+            let mark = found_mark(ui, d, key);
             bool_row(ui, d, key, label);
+            found_paint(ui, d, mark);
         }
     }
     if cat == "Smart Guides" {
+        let mark = found_mark(ui, d, "__smartGuides");
         bool_row(ui, d, "__smartGuides", UI_FIELDS[0].2);
+        found_paint(ui, d, mark);
         ui.add_space(4.0);
     }
     for sp in specs {
@@ -265,7 +503,13 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
         }
         first = false;
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
+        let mark = found_mark(ui, d, sp.key);
         match sp.kind {
+            // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
+            // is off: dimmed while it is on.
+            PrefKind::Bool if sp.key == "ctrlWheelScrollsSideways" => {
+                ui.add_enabled_ui(!d.bool("zoomWithMouseWheel"), |ui| bool_row(ui, d, sp.key, sp.label));
+            }
             // Units › Numbers Without Units Are Points only tells points from picas: dimmed
             // unless a unit is Picas.
             PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {
@@ -278,17 +522,45 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
             // Windows and Linux only: macOS always has the system's title bar, the web has none.
             PrefKind::Bool if sp.key == "systemTitleBar" => {
                 if cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))) {
-                    bool_row(ui, d, sp.key, sp.label);
-                    // The window's decorations are chosen once, when the app starts.
-                    ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
+                    // VECTORCRAFT_TITLEBAR chooses the frame while it is set: the checkbox is dimmed.
+                    ui.add_enabled_ui(!d.bool("__titlebarFromEnv"), |ui| bool_row(ui, d, sp.key, sp.label));
+                    // The window's decorations are chosen once, when the app starts. On Linux and the
+                    // BSDs the note goes under the next row, which also applies at the next start.
+                    if !APP_TITLE_BAR_SHOWN {
+                        ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
+                    }
+                }
+            }
+            // Linux and the BSDs only, where the desktop may draw the frame: dimmed while System
+            // Title Bar is on or VECTORCRAFT_TITLEBAR is set to `app`, `system` or `desktop`, which
+            // take precedence over it. A note
+            // names each one that is in effect.
+            PrefKind::Bool if sp.key == "appTitleBar" => {
+                if APP_TITLE_BAR_SHOWN {
+                    let from_env = d.bool("__titlebarFromEnv");
+                    let system = d.bool("systemTitleBar");
+                    ui.add_enabled_ui(!from_env && !system, |ui| bool_row(ui, d, sp.key, sp.label));
+                    if system && !from_env {
+                        let note = tl!("System Title Bar takes precedence over this option while it is on.");
+                        ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
+                    }
+                    let note = if from_env {
+                        tl!("The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.")
+                    } else {
+                        tl!("Applies the next time VectorCraft starts.")
+                    };
+                    ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                 }
             }
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
             PrefKind::Num { min, max, unit } => {
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, label_id| {
                     let mut x = v.as_f64().unwrap_or(min);
                     let new = if sp.key == "uiScaling" {
-                        widgets::slider(ui, egui::Slider::new(&mut x, min..=max).step_by(0.05).text(tl!("Smaller ↔ Larger"))).changed().then_some(x)
+                        // Without internal text, both slider controls inherit the row's name across focus changes.
+                        let response = widgets::slider(ui, egui::Slider::new(&mut x, min..=max).step_by(0.05)).labelled_by(label_id);
+                        ui.add(egui::Label::new(tl!("Smaller ↔ Larger")).wrap_mode(egui::TextWrapMode::Extend));
+                        response.changed().then_some(x)
                     } else {
                         widgets::range_field(ui, sp.key, x, min..=max, &format!(" {unit}"), 3, 110.0)
                     };
@@ -301,17 +573,19 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 // In the dialog's own Units choice, so a change there shows right away.
                 let unit = vectorcraft_doc::Unit::named(&d.str(measure.pref_key())).unwrap_or_default();
                 let x = d.f64(sp.key, min);
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, _| {
                     if let Some(x) = widgets::num_field(ui, sp.key, Some(x), unit, 110.0) {
                         d.fields.insert(sp.key.into(), json!(x.clamp(min, max)));
                     }
                 });
             }
             PrefKind::Int { min, max } => {
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, label_id| {
                     let mut x = v.as_i64().unwrap_or(min);
                     let new = if sp.key == "anchorSize" {
-                        widgets::slider(ui, egui::Slider::new(&mut x, min..=max).show_value(false).text(tl!("Size"))).changed().then_some(x)
+                        let response = widgets::slider(ui, egui::Slider::new(&mut x, min..=max).show_value(false)).labelled_by(label_id);
+                        ui.add(egui::Label::new(tl!("Size")).wrap_mode(egui::TextWrapMode::Extend));
+                        response.changed().then_some(x)
                     } else {
                         widgets::range_field(ui, sp.key, x as f64, min as f64..=max as f64, "", 0, 110.0).map(|x| x as i64)
                     };
@@ -343,11 +617,11 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 }
             }
             PrefKind::Color => {
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, label_id| {
                     let hex = v.as_str().unwrap_or("#000000");
                     let c = vectorcraft_color::Color::from_hex(hex).map(|c| c.to_rgba8(1.0)).unwrap_or([0, 0, 0, 255]);
                     let mut rgb = [c[0], c[1], c[2]];
-                    if ui.color_edit_button_srgb(&mut rgb).changed() {
+                    if ui.color_edit_button_srgb(&mut rgb).labelled_by(label_id).changed() {
                         d.fields.insert(sp.key.into(), json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
                     }
                     ui.label(egui::RichText::new(hex).color(t.text_dim).size(11.0));
@@ -355,7 +629,7 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
             }
             PrefKind::Text if sp.key == "interfaceLanguage" => {
                 // `auto` plus every registered language, by its own name.
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, _| {
                     let cur = v.as_str().unwrap_or("auto");
                     let codes: Vec<&str> = std::iter::once("auto").chain(crate::i18n::Lang::for_picker().into_iter().map(|l| l.code())).collect();
                     let labels: Vec<&str> =
@@ -368,8 +642,22 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                     }
                 });
             }
+            // File Handling › Data Recovery › Folder and Plug-ins & Scratch Disks › Additional
+            // Plug-ins Folder: typed, or picked with Choose… where the host has a folder picker
+            // (not on the web).
+            PrefKind::Text if folder_check(sp.key).is_some() => {
+                labeled(ui, sp.label, |ui, _| {
+                    let mut s = v.as_str().unwrap_or("").to_string();
+                    if ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(200.0)).changed() {
+                        d.fields.insert(sp.key.into(), json!(s));
+                    }
+                    if app.services.pick_folder.is_some() && ui.button(tl!("Choose…")).clicked() {
+                        choose_folder(app, d, sp.key);
+                    }
+                });
+            }
             PrefKind::Text => {
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, _| {
                     let mut s = v.as_str().unwrap_or("").to_string();
                     if ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(260.0)).changed() {
                         d.fields.insert(sp.key.into(), json!(s));
@@ -377,6 +665,85 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 });
             }
         }
+        found_paint(ui, d, mark);
+    }
+}
+
+/// Choose… beside the folder preference `key`: the folder picked becomes the field's value when it
+/// passes the preference's [`folder_check`]. Otherwise the status bar says why and the field keeps
+/// its value, as it does when the picker is canceled. The answer fills the field even when the
+/// active document closed while the picker was open.
+fn choose_folder(app: &mut VectorcraftApp, d: &mut Dialog, key: &'static str) {
+    let Some(check) = folder_check(key) else { return };
+    let r = crate::picks::in_app_dialog(app, d, move |app, d| {
+        let Some(path) = crate::picks::folder(app) else { return Ok(()) };
+        check(&path)?;
+        d.fields.insert(key.into(), json!(path));
+        Ok(())
+    });
+    if let Err(e) = r {
+        app.status(e);
+    }
+}
+
+/// The file name Export Preferences… suggests.
+const PREFS_FILE_NAME: &str = "VectorCraft Preferences.json";
+
+/// Export Preferences…: the applied preferences (`prefs.export`) go to a file picked in a save
+/// dialog (the web downloads it). Changes in the dialog not yet applied with OK are not in it.
+fn export_preferences(app: &mut VectorcraftApp, d: &mut Dialog) {
+    let r =
+        crate::picks::in_app_dialog(app, d, |app, _| crate::io::save_command_output_named(app, "prefs.export", PREFS_FILE_NAME, json!({})).map(drop));
+    if let Err(e) = r
+        && e != "cancelled"
+    {
+        app.status(e);
+    }
+}
+
+/// Import Preferences…: the preferences in a file picked in an open dialog are applied
+/// (`prefs.import`), and the dialog shows them. On an error nothing changes and the status bar
+/// says why.
+fn import_preferences(app: &mut VectorcraftApp, d: &mut Dialog) {
+    let r = crate::picks::in_app_dialog(app, d, |app, d| {
+        let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Preferences", &["json"])], ..Default::default() };
+        let Some(path) = crate::picks::open(app, &pick) else { return Ok(()) };
+        app.run("prefs.import", json!({ "path": path }))?;
+        show_prefs(d, &app.session.prefs.to_json());
+        app.status("Preferences imported.");
+        Ok(())
+    });
+    if let Err(e) = r {
+        app.status(e);
+    }
+}
+
+/// After `prefs.import`: the preferences are saved with the UI state, Enable Touch Workspace takes
+/// effect when the import changed it from `touch_workspace`, and an open Preferences dialog shows
+/// the imported values.
+pub(crate) fn imported(app: &mut VectorcraftApp, touch_workspace: bool) {
+    snapshot(app);
+    app.prefs_changed = true;
+    if app.session.prefs.touch_workspace != touch_workspace {
+        crate::workspaces::sync_touch_workspace(app, app.touch_screen);
+    }
+    let prefs = app.session.prefs.to_json();
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "preferences") {
+        show_prefs(d, &prefs);
+    }
+}
+
+/// The Preferences dialog `d` shows the preferences `prefs` in place of its working copy. Units ›
+/// General shows the preference, and OK then leaves the open document's units alone unless the
+/// field is changed.
+fn show_prefs(d: &mut Dialog, prefs: &Value) {
+    for (k, v) in prefs.as_object().into_iter().flatten() {
+        if d.fields.contains_key(k) {
+            d.fields.insert(k.clone(), v.clone());
+        }
+    }
+    if let Some(v) = d.fields.get("unitsGeneral").cloned() {
+        d.fields.insert(RESET_UNITS.into(), v);
     }
 }
 
@@ -386,7 +753,7 @@ fn picas_in_use(d: &Dialog) -> bool {
 }
 
 fn choice_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, opts: &[(&str, &str)], v: &Value) {
-    labeled(ui, label, |ui| {
+    labeled(ui, label, |ui, _| {
         let cur = v.as_str().unwrap_or("");
         let cur_label = opts.iter().find(|o| o.0 == cur).map(|o| o.1).unwrap_or(cur);
         let labels: Vec<&str> = opts.iter().map(|o| o.1).collect();
@@ -406,14 +773,16 @@ fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     }
 }
 
-fn labeled(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
+fn labeled(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui, egui::Id)) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
-        ui.allocate_ui_with_layout(egui::vec2(210.0, 22.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.set_min_width(210.0);
-            ui.add(egui::Label::new(egui::RichText::new(format!("{}{}", tl!(label), tl!(":"))).color(t.text)).truncate());
-        });
-        add(ui);
+        let label = ui
+            .allocate_ui_with_layout(egui::vec2(210.0, 22.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.set_min_width(210.0);
+                ui.add(egui::Label::new(egui::RichText::new(format!("{}{}", tl!(label), tl!(":"))).color(t.text)).truncate())
+            })
+            .inner;
+        ui.label_inputs_by(label.id, |ui| add(ui, label.id));
     });
 }
 

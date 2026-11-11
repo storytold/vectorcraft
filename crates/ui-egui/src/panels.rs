@@ -15,6 +15,7 @@ pub mod character;
 pub mod color;
 pub mod color_guide;
 pub mod color_themes;
+pub mod color_wheel;
 pub mod css_properties;
 pub mod doc_info;
 pub mod flattener_preview;
@@ -36,6 +37,7 @@ pub mod paragraph;
 pub mod pathfinder;
 pub mod pattern_options;
 pub mod properties;
+pub mod script_console;
 pub mod separations;
 pub mod stroke;
 pub mod svg_interactivity;
@@ -43,6 +45,7 @@ pub mod swatches;
 pub mod symbols;
 pub mod tabs;
 pub mod text_styles;
+pub mod three_d;
 pub mod transform;
 pub mod transparency;
 pub mod variables;
@@ -176,9 +179,12 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         svg_interactivity::ID => svg_interactivity::show(app, ui),
         variables::ID => variables::show(app, ui),
         "colorThemes" => color_themes::show(app, ui),
+        color_wheel::ID => color_wheel::show(app, ui),
         links::ID => links::show(app, ui),
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),
+        three_d::ID => three_d::show(app, ui),
+        script_console::ID => script_console::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
@@ -234,6 +240,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         asset_export::ID => asset_export::menu(app, ui),
         css_properties::ID => css_properties::menu(app, ui),
         variables::ID => variables::menu(app, ui),
+        script_console::ID => script_console::menu(app, ui),
         "actions" => actions::menu(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::menu(app, ui, id),
         _ => return false,
@@ -242,7 +249,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
 }
 
 /// The ≡ button drawn into `rect` that opens a panel menu.
-fn menu_button(ui: &mut Ui, id: &str, rect: Rect) -> egui::Response {
+pub(crate) fn menu_button(ui: &mut Ui, id: &str, rect: Rect) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let resp = ui.interact(rect, ui.scope_id().with(("panel-menu", id)), Sense::click());
     icons::paint(ui, "menu", rect.shrink(1.0), if resp.hovered() { t.text_strong } else { t.text_dim });
@@ -492,24 +499,48 @@ pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, 
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(("panel-state", key)), v));
 }
 
+/// Whether the panel whose state is `key` has the keyboard for its rows (Delete and Backspace
+/// remove its highlighted rows): it took it with a click on a row ([`set_row_keys`]) and kept it in
+/// every frame since, so it lapses when the panel isn't drawn.
+pub(crate) fn has_row_keys(ctx: &egui::Context, key: &str) -> bool {
+    pstate::<Option<u64>>(ctx, key).is_some_and(|pass| pass + 1 >= ctx.cumulative_pass_nr())
+}
+
+/// Take (`on`) or give up the keyboard for the rows of the panel whose state is `key`, for this
+/// frame and the next ([`has_row_keys`]).
+pub(crate) fn set_row_keys(ctx: &egui::Context, key: &str, on: bool) {
+    set_pstate(ctx, key, on.then(|| ctx.cumulative_pass_nr()));
+}
+
+/// Whether a plain Delete or Backspace belongs to a panel's rows this frame, the Layers or the
+/// Appearance panel's after a click on one of them, so [`crate::shortcuts::handle`] leaves it to the
+/// panel instead of running Edit › Clear on the selected art.
+pub(crate) fn rows_take_delete(ctx: &egui::Context) -> bool {
+    has_row_keys(ctx, layers::ROW_KEYS) || has_row_keys(ctx, appearance::ROW_KEYS)
+}
+
 /// [`crate::i18n::label_or_name`] in the UI language.
 pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
     crate::i18n::label_or_name(crate::i18n::current(), s, built_in)
 }
 
-/// "Recent Colors" header + a row of chips (the Session's recent colours, which every paint
-/// command feeds); returns the one clicked, for the caller to apply.
+/// "Recent Colors" header + rows of chips (the Session's recent colours, which every paint
+/// command feeds), wrapped onto as many rows as the panel's width needs; returns the one clicked,
+/// for the caller to apply.
 pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
     crate::widgets::subheader(ui, tl!("Recent Colors"));
-    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
+    let width = ui.available_width();
+    let colors = &app.session.recent_colors;
+    // Chips are 16 px on a 19 px pitch, inset 3 px, with 2 px kept clear of the right edge.
+    let per_row = (((width - 21.0) / 19.0).floor() as usize + 1).max(1);
+    let rows = colors.len().div_ceil(per_row).max(1);
+    let (r, _) = ui.allocate_exact_size(vec2(width, 3.0 + rows as f32 * 19.0), Sense::hover());
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
     let mut chosen = None;
-    for (i, c) in app.session.recent_colors.iter().enumerate() {
-        let cell = Rect::from_min_size(r.min + vec2(3.0 + i as f32 * 19.0, 3.0), vec2(16.0, 16.0));
-        if cell.right() > r.right() - 2.0 {
-            break;
-        }
+    for (i, c) in colors.iter().enumerate() {
+        let (row, col) = (i / per_row, i % per_row);
+        let cell = Rect::from_min_size(r.min + vec2(3.0 + col as f32 * 19.0, 3.0 + row as f32 * 19.0), vec2(16.0, 16.0));
         let resp = ui.interact(cell, ui.scope_id().with(("recent", i)), Sense::click());
         crate::widgets::swatch_tile(ui, cell, &Paint::solid(*c), false, resp.hovered());
         if resp.on_hover_text(c.to_hex()).clicked() {
@@ -629,6 +660,8 @@ mod tests_blend;
 #[cfg(test)]
 mod tests_brush_libraries;
 #[cfg(test)]
+mod tests_color_wheel;
+#[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]
 mod tests_css_properties;
@@ -641,7 +674,11 @@ mod tests_freeform;
 #[cfg(test)]
 mod tests_links;
 #[cfg(test)]
+mod tests_long_popups;
+#[cfg(test)]
 mod tests_maskview;
+#[cfg(test)]
+mod tests_script_console;
 #[cfg(test)]
 mod tests_stroke;
 #[cfg(test)]

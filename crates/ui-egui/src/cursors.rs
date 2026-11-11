@@ -5,6 +5,10 @@
 //! The desktop app shows them as OS cursors ([`Images`]): the system moves those itself, at once,
 //! while a cursor painted into the window follows the pointer a few frames late (#444).
 
+/// Platform-neutral bitmap requests for the interim macOS host adapter.
+#[cfg(any(target_os = "macos", test))]
+pub mod native_request;
+
 use egui::epaint::{Mesh, TessellationOptions, Tessellator, Vertex};
 use egui::{Color32, CustomCursorImage, Painter, Pos2, Shape, Stroke, Vec2, pos2, vec2};
 use vectorcraft_tools::Cursor;
@@ -366,6 +370,42 @@ fn ibeam(p: &mut Ink, o: Pos2) {
     line(p, o + vec2(-2.0, 3.0), o + vec2(2.0, 3.0));
 }
 
+/// A type tool over a path: the Text I-beam (turned a quarter turn for vertical type) with a badge
+/// below right of it, as the Pen and the Blend tool mark what a click does: a small frame with
+/// lines of type in it for area type inside a closed path, a smooth curve with a point on it for
+/// type along a path.
+fn type_in_path(p: &mut Ink, o: Pos2, vertical: bool, on_path: bool) {
+    let at = |x: f32, y: f32| if vertical { o + vec2(-y, x) } else { o + vec2(x, y) };
+    line(p, at(0.0, -8.0), at(0.0, 8.0));
+    line(p, at(-3.0, -8.0), at(3.0, -8.0));
+    line(p, at(-3.0, 8.0), at(3.0, 8.0));
+    line(p, at(-2.0, 3.0), at(2.0, 3.0));
+    let b = o + if vertical { vec2(2.0, 6.0) } else { vec2(6.0, 2.0) };
+    if on_path {
+        // A quarter-wave rising to the right, smooth at this size.
+        let curve: Vec<Pos2> = (0..=16)
+            .map(|i| {
+                let t = i as f32 / 16.0;
+                b + vec2(10.0 * t, 8.0 - 8.0 * (t * std::f32::consts::FRAC_PI_2).sin().powf(1.6))
+            })
+            .collect();
+        strokes(p, &[curve]);
+        let dot = b + vec2(4.0, 8.0 - 8.0 * (0.4 * std::f32::consts::FRAC_PI_2).sin().powf(1.6));
+        p.circle_filled(dot, 2.4, HALO);
+        p.circle_filled(dot, 1.5, INK);
+    } else {
+        poly(p, vec![b, b + vec2(9.0, 0.0), b + vec2(9.0, 9.0), b + vec2(0.0, 9.0)], HALO, INK);
+        let rows: Vec<Vec<Pos2>> = if vertical {
+            [6.5, 4.5, 2.5].iter().map(|&x| vec![b + vec2(x, 2.5), b + vec2(x, 6.5)]).collect()
+        } else {
+            [2.5, 4.5, 6.5].iter().map(|&y| vec![b + vec2(2.5, y), b + vec2(6.5, y)]).collect()
+        };
+        for r in rows {
+            p.add(Shape::line(r, Stroke::new(1.0, INK)));
+        }
+    }
+}
+
 /// The Blend tool: a crosshair with a square below right of the hotspot, hollow away from art,
 /// filled over an object; over an anchor point a ringed dot (the blend starts there).
 fn blend(p: &mut Ink, o: Pos2, badge: Cursor) {
@@ -440,7 +480,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 86] = [
+const GLYPHS: [Cursor; 93] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -519,6 +559,10 @@ const GLYPHS: [Cursor; 86] = [
     Cursor::SymbolScreener,
     Cursor::SymbolStyler,
     Cursor::TypeVertical,
+    Cursor::TypeArea,
+    Cursor::TypeAreaVertical,
+    Cursor::TypeOnPath,
+    Cursor::TypeOnPathVertical,
     Cursor::Scissors,
     Cursor::MeshAdd,
     Cursor::PuppetPin,
@@ -526,6 +570,9 @@ const GLYPHS: [Cursor; 86] = [
     Cursor::ExtendPath,
     Cursor::MeasureInspect,
     Cursor::ParametricShape,
+    Cursor::CornerTool,
+    Cursor::SlideAnchor,
+    Cursor::SharedEdge,
     Cursor::SmartPen,
 ];
 
@@ -551,6 +598,11 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
             double_arrow(ink, p + vec2(15.0, 18.0), vec2(1.0, 0.0));
         }
         Cursor::Crosshair => crosshair(ink, p),
+        // Only the centre: the tool draws the tip's outline round it, at the zoom.
+        Cursor::BlobBrush | Cursor::Eraser => {
+            ink.circle_filled(p, 2.5, HALO);
+            ink.circle_filled(p, 1.25, INK);
+        }
         // The Pencil's crosshair with the Pen's star where the closing ring goes.
         Cursor::PencilNew => {
             crosshair(ink, p);
@@ -597,6 +649,10 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PenJoin => pen(ink, p, "j"),
         Cursor::PenConvert => pen(ink, p, "^"),
         Cursor::Text => ibeam(ink, p),
+        Cursor::TypeArea => type_in_path(ink, p, false, false),
+        Cursor::TypeAreaVertical => type_in_path(ink, p, true, false),
+        Cursor::TypeOnPath => type_in_path(ink, p, false, true),
+        Cursor::TypeOnPathVertical => type_in_path(ink, p, true, true),
         Cursor::AddStop => stop_badge(ink, p, true),
         Cursor::RemoveStop => stop_badge(ink, p, false),
         Cursor::Slice => slice(ink, p),
@@ -639,7 +695,8 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2, scale: f32) -> bool {
 
 /// Does the window show the glyphs as OS cursors ([`Images`])? Not on macOS, which sizes a cursor
 /// bitmap in points (a Retina one would show twice as big, or blurred), nor on the web (eframe has no
-/// bitmap cursors there): those paint them into the window ([`paint`]).
+/// bitmap cursors there): the web paints them into the window ([`paint`]); the macOS desktop host
+/// uses its native request adapter instead.
 pub const OS_CURSORS: bool = !cfg!(any(target_os = "macos", target_arch = "wasm32"));
 
 /// Does this window show the glyphs as OS cursors, on a build that can ([`OS_CURSORS`])? Not on
@@ -650,23 +707,17 @@ pub fn os_cursors(build: bool, wayland: bool) -> bool {
     build && !wayland
 }
 
-/// Does the canvas hide the system pointer to show a painted tool glyph alone? Not when there is no
-/// cursor theme on Wayland ([`crate::Services::no_cursor_theme`]): winit sets no pointer then, and a
-/// hidden one would not come back over the panels (#2450). The system pointer stays beside the glyph.
-pub fn hide_system_pointer(no_cursor_theme: bool) -> bool {
-    !no_cursor_theme
-}
-
 /// Does the window hide the pointer only while it is the key window? macOS does: winit hides it with
 /// a cursor rect holding a transparent cursor, and macOS applies the rect only in the key window.
 /// Over a window behind another app or under a sheet, the system pointer shows (#2020).
 pub const HIDES_ONLY_WHEN_KEY: bool = cfg!(target_os = "macos");
 
-/// Does the window paint the glyphs over a hidden pointer, `focused` or not? Not where the system
-/// shows its pointer over a window without the focus ([`HIDES_ONLY_WHEN_KEY`]): the system pointer
-/// shows alone there.
-pub fn paint_glyphs(hides_only_when_key: bool, focused: bool) -> bool {
-    focused || !hides_only_when_key
+/// Does the window paint a glyph over a hidden pointer? Not where it cannot hide the system pointer
+/// (no cursor theme on Wayland, [`crate::Services::no_cursor_theme`]: winit sets no pointer then,
+/// and a hidden one would not come back over the panels, #2450), or where the system shows its pointer without the focus
+/// ([`HIDES_ONLY_WHEN_KEY`]): the system pointer shows alone there.
+pub fn paint_glyphs(hides_only_when_key: bool, focused: bool, no_cursor_theme: bool) -> bool {
+    !no_cursor_theme && (focused || !hides_only_when_key)
 }
 
 /// The cursor bitmaps handed to the OS, by (cursor, pixels per point): each glyph is rasterized

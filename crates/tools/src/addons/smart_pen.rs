@@ -534,8 +534,22 @@ impl Tool for SmartPenTool {
         }
     }
 
+    /// A dropped press does not end the path being drawn, as Escape would: the press and its
+    /// marquee are forgotten, so the release does nothing.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.press = None;
+        self.marquee = None;
+        self.snap.clear();
+        vec![]
+    }
+
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Tab && (self.press.is_some() || self.active(cx).is_some())
+    }
+
+    /// A path being drawn: Escape ends it.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.active(cx).is_some()
     }
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {

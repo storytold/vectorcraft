@@ -69,7 +69,6 @@ pub(super) struct Saved {
     pub(super) blend: BlendMode,
     pub(super) mask: Option<Arc<MaskSpec>>,
     pub(super) page: Rect,
-    pub(super) pending: bool,
 }
 
 pub(super) struct Builder<'p> {
@@ -83,10 +82,14 @@ pub(super) struct Builder<'p> {
     pub(super) glyphs: Option<GlyphRun>,
     pub(super) text: Option<TextLine>,
     pub(super) text_as: TextAs,
+    pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,
     pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
     pub(super) cmyk_keys: HashSet<u128>,
+    /// Images in a Separation space, by key: the paint of their ink, or `None` when they open in
+    /// RGB (an ink that can't be told, tints that can't be read).
+    pub(super) separation_paints: HashMap<u128, Option<Paint>>,
     /// Mask keys of CMYK images whose mask turned out to hide nothing.
     pub(super) opaque: HashSet<u128>,
     pub(super) warnings: Vec<String>,
@@ -129,7 +132,6 @@ pub(super) struct Builder<'p> {
     /// The page as walked by [`scan_page`], and how far the interpreter is through it.
     pub(super) scan: Scan,
     pub(super) tag_at: usize,
-    pub(super) group_at: usize,
     /// The fills and strokes of paths drawn so far ([`Scan::paints`]).
     pub(super) paint_at: usize,
     pub(super) aligned: bool,
@@ -138,10 +140,9 @@ pub(super) struct Builder<'p> {
     /// Some groups are hidden or don't print: art in marked content whose group can't be told
     /// (once the scan and the interpreter part) is [`UNSORTED`] rather than the page's.
     pub(super) unsure: bool,
-    /// The marked-content sequences open: the group each marks.
-    pub(super) marked: Vec<Option<usize>>,
-    /// A transparency group was just pushed: a form's (whose flags come next) or an image's.
-    pub(super) pending: bool,
+    /// The marked-content sequences open: the group each marks, and the innermost group marked
+    /// at or around it (kept per level, so art drawn deep in sequences finds its group at once).
+    pub(super) marked: Vec<(Option<usize>, Option<usize>)>,
     pub(super) nested: u32,
     /// Reading an alpha soft mask's art: images are read white with their own alpha, so the
     /// mask's luminance is their alpha, as whitened vector art's is (cairo, and so Inkscape,
@@ -276,11 +277,15 @@ pub(crate) fn round3(v: f32) -> f32 {
     (v * 1000.0).round() / 1000.0
 }
 
-/// The paints of `nodes`' leaves, in order: what tells two readings of a pattern cell apart.
+/// The paints of `nodes`' leaves, in order, colorized images' colors included: what tells two
+/// readings of a pattern cell apart.
 pub(super) fn paints(nodes: &[Arc<Node>]) -> Vec<Paint> {
     let mut out = vec![];
     for n in nodes {
-        n.walk(&mut |c| out.extend(c.appearance.items.iter().map(|i| i.paint().clone())));
+        n.walk(&mut |c| {
+            out.extend(c.appearance.items.iter().map(|i| i.paint().clone()));
+            out.extend(c.extras().colorize.as_deref().cloned());
+        });
     }
     out
 }
@@ -292,6 +297,13 @@ pub(super) fn bounds(nodes: &[Arc<Node>]) -> Option<Rect> {
 
 pub(super) fn rgba_png(rgba: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
     let img = image::RgbaImage::from_raw(w, h, rgba)?;
+    let mut out = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
+    Some(out)
+}
+
+pub(super) fn gray_png(gray: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
+    let img = image::GrayImage::from_raw(w, h, gray)?;
     let mut out = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
     Some(out)

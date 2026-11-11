@@ -18,18 +18,21 @@ mod open;
 mod save;
 
 pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, export_pdf, hide_exports, reveal, save_command_output};
-pub(crate) use export::{export_files, file_url, open_in_app, reveal_path, run_to_file, save_command_output_named};
-#[cfg(test)]
-pub(crate) use open::open_file;
-pub(crate) use open::opened;
+pub(crate) use export::{
+    export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
+};
+pub(crate) use open::report_installed;
+pub(crate) use open::{EXPORT_PRESETS, import_presets, open_with_on, opened};
 pub use open::{
     MAX_RECENT_FILES, OpensAs, ask_revert, install_module, install_plugin, new_from_template, note_recent, open_bytes, open_dialog, open_document,
-    open_path, open_recent_reporting, open_reporting, opens_as, place_bytes, recent_files, report_open_error,
+    open_path, open_path_with, open_reporting, open_with, opens_as, place_bytes, recent_files, report_open_error,
 };
 #[cfg(test)]
-pub(crate) use save::report_write_error;
-pub use save::{ask_format_options, ask_pdf_options, remember_view, save, save_pdf};
+pub(crate) use open::{open_file, opened_with_notes};
+pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
 pub(crate) use save::{export_path, is_web, report_saved, target_path, write_named, write_reporting, write_to};
+#[cfg(test)]
+pub(crate) use save::{report_write_error, saved_status};
 
 #[cfg(test)]
 mod tests {
@@ -162,6 +165,76 @@ mod tests {
         assert!(!app.session.doc().unwrap().is_dirty());
     }
 
+    /// A `.ai` file saved from the app names the view's active artboard as its active one, in
+    /// the editing copy other apps read.
+    #[test]
+    fn a_saved_ai_file_names_the_views_active_artboard() {
+        let (mut app, written) = app();
+        app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        app.sync_views();
+        let opts = fileio::LoadOptions { native: false, ..Default::default() };
+        for artboard in [2, 0] {
+            if let Some(v) = app.view_mut() {
+                v.artboard = artboard;
+            }
+            save(&mut app, SaveMode::Copy, &json!({"path": "Art.ai"}), false).unwrap();
+            let bytes = written.borrow_mut().pop().map(|(_, b)| b).unwrap();
+            let l = fileio::load_with("Art.ai", &bytes, &opts).unwrap();
+            assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+            let active = l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
+            assert_eq!(active, artboard);
+        }
+    }
+
+    /// A `.ai` file a command exports names the view's active artboard as its active one: an
+    /// index past the last artboard names the last, as the Artboards panel shows it.
+    #[test]
+    fn an_exported_ai_file_names_the_views_active_artboard() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        app.sync_views();
+        let opts = fileio::LoadOptions { native: false, ..Default::default() };
+        for (artboard, active) in [(1, 1), (99, 2)] {
+            if let Some(v) = app.view_mut() {
+                v.artboard = artboard;
+            }
+            let out = app.run("document.serialize", json!({"format": "ai"})).unwrap();
+            let bytes = vectorcraft_format::base64_decode(out["dataBase64"].as_str().unwrap()).unwrap();
+            let l = fileio::load_with("Art.ai", &bytes, &opts).unwrap();
+            assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+            assert_eq!(l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)), Some(active), "{artboard}");
+        }
+    }
+
+    /// A `.ai` file exported to a path (File › Export As, its dialog, a control request) names the
+    /// view's active artboard as its active one, and the open document is unchanged.
+    #[test]
+    fn an_ai_file_exported_to_a_path_names_the_views_active_artboard() {
+        let (mut app, written) = app();
+        app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+        app.sync_views();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        let opts = fileio::LoadOptions { native: false, ..Default::default() };
+        let active = |app: &VectorcraftApp| {
+            let bytes = written.borrow_mut().pop().map(|(_, b)| b).unwrap();
+            let l = fileio::load_with("Art.ai", &bytes, &opts).unwrap();
+            assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+            assert_eq!(app.session.doc().unwrap().doc.opened_artboard, None, "the document is unchanged");
+            l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id))
+        };
+        for artboard in [2, 1] {
+            if let Some(v) = app.view_mut() {
+                v.artboard = artboard;
+            }
+            app.run("file.exportAs", json!({"format": "ai", "path": "Art.ai"})).unwrap();
+            assert_eq!(active(&app), Some(artboard), "File › Export As");
+            export(&mut app, Some("ai"), Some("Art.ai".into()), &json!({})).unwrap();
+            assert_eq!(active(&app), Some(artboard), "the Export As dialog");
+        }
+    }
+
     fn bytes_of(app: &mut VectorcraftApp, cmd: &str, p: Value) -> Vec<u8> {
         let v = app.session.execute(cmd, &p).unwrap();
         vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()
@@ -261,5 +334,28 @@ mod tests {
         let png = vectorcraft_format::base64_decode(r["result"]["dataBase64"].as_str().unwrap()).unwrap();
         assert_eq!(&png[16..20], 60u32.to_be_bytes(), "30 pt at scale 2");
         assert!(written.borrow().is_empty(), "no file and no save dialog");
+    }
+
+    /// A presets file, a Libraries panel file or a graphic style library that is opened or dropped
+    /// goes to its importer as the file's bytes: a byte that is not UTF-8 is refused instead of
+    /// read as a replacement character.
+    #[test]
+    fn opened_preset_and_library_files_keep_their_bytes() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 60, "height": 40})).unwrap();
+        app.run("document.exportPresets.save", json!({"name": "Pack", "settings": {"formats": [{"format": "svg"}]}})).unwrap();
+        let presets = app.run("document.exportPresets.export", json!({"names": ["Pack"]})).unwrap()["data"].as_str().unwrap().to_string();
+        let lib = app.run("library.create", json!({"name": "Brand"})).unwrap()["id"].as_str().unwrap().to_string();
+        let library = app.run("library.export", json!({ "library": lib })).unwrap()["data"].as_str().unwrap().to_string();
+        let styles = app.run("graphicStyle.saveLibrary", json!({"name": "Kit"})).unwrap()["data"].as_str().unwrap().to_string();
+        for (file, text, name) in [("pack.vcexportpresets", presets, "Pack"), ("brand.vclibrary", library, "Brand"), ("kit.vcstyles", styles, "Kit")]
+        {
+            let mut bytes = text.as_bytes().to_vec();
+            bytes.insert(text.find(name).unwrap() + 2, 0xFF);
+            assert!(open_bytes(&mut app, file, &bytes, None).is_err(), "{file}: {}", app.ui.status);
+            // The file as it was still opens.
+            open_bytes(&mut app, file, text.as_bytes(), None).unwrap();
+        }
+        assert_eq!(app.session.prefs.screen_export_presets.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Pack", "Pack 2"]);
     }
 }

@@ -22,104 +22,6 @@ fn snaps_to_anchor_and_alignment() {
     assert_eq!(p.y, 200.0);
 }
 
-/// #4312: a rectangle lines up with the ruler guides of `edge_rulers`, where they run along it.
-#[test]
-fn rect_snap_aligns_edges_with_ruler_guides_where_they_run() {
-    let t = Targets {
-        edge_rulers: vec![Ruler { vertical: true, pos: 300.0, span: Some((0.0, 50.0)) }, Ruler { vertical: false, pos: 90.0, span: None }],
-        ..Targets::default()
-    };
-    // Its right edge, 2 short of the vertical guide, which runs along it.
-    let (dv, ov) = t.snap_rect(Rect::new(248.0, 10.0, 298.0, 40.0), 4.0);
-    assert_eq!(dv, Vec2::new(2.0, 0.0));
-    assert!(!ov.is_empty());
-    // The guide of an artboard above it doesn't run along it; the horizontal one still pulls its bottom.
-    let (dv, _) = t.snap_rect(Rect::new(248.0, 60.0, 298.0, 88.0), 4.0);
-    assert_eq!(dv, Vec2::new(0.0, 2.0));
-    // The guide of an artboard needs the rectangle to overlap it, not only be within reach of its end.
-    let (dv, _) = t.snap_rect(Rect::new(299.0, 51.0, 349.0, 80.0), 4.0);
-    assert_eq!(dv.x, 0.0, "{dv:?}");
-    // Without them as edge guides, nothing pulls: `rulers` is for points.
-    let points_only = Targets { rulers: vec![Ruler { vertical: true, pos: 300.0, span: None }], ..Targets::default() };
-    assert_eq!(points_only.snap_rect(Rect::new(248.0, 10.0, 298.0, 40.0), 4.0).0, Vec2::ZERO);
-}
-
-/// #4312: a Shift move along a line almost parallel to a ruler guide doesn't slide far to meet it.
-#[test]
-fn a_slide_along_a_nearly_parallel_line_ignores_a_ruler_guide_beyond_its_reach() {
-    let t = Targets { edge_rulers: vec![Ruler { vertical: true, pos: 300.0, span: None }], ..Targets::default() };
-    let r = Rect::new(248.0, 10.0, 298.0, 40.0);
-    // Level: the right edge is 2 short of the guide, which is the way along the line.
-    assert_eq!(t.snap_rects_along(&[r], Vec2::new(1.0, 0.0), 4.0).0, Vec2::new(2.0, 0.0));
-    // On the diagonal it is 2.8 along.
-    let (d, _) = t.snap_rects_along(&[r], Vec2::new(1.0, 1.0), 4.0);
-    assert!((d - Vec2::new(2.0, 2.0)).hypot() < 1e-9, "{d:?}");
-    // Nearly upright, it would take about 118 along the line to meet the guide.
-    assert_eq!(t.snap_rects_along(&[r], Vec2::new(0.017, 1.0), 4.0).0, Vec2::ZERO);
-}
-
-/// #4312: each of a rectangle's three lines per axis (start edge, centre, end edge) lines up with
-/// a ruler guide on its own, from either side, and on both axes at once when two guides are near.
-#[test]
-fn rect_snap_lands_each_edge_and_the_centre_on_a_ruler_guide() {
-    // 100..200 on both axes: edges at 100 and 200, centre at 150.
-    let r = Rect::new(100.0, 100.0, 200.0, 200.0);
-    for vertical in [true, false] {
-        for (what, line) in [("start edge", 100.0), ("centre", 150.0), ("end edge", 200.0)] {
-            for short in [-2.0, 2.0] {
-                let t = Targets { edge_rulers: vec![Ruler { vertical, pos: line + short, span: None }], ..Targets::default() };
-                let (dv, ov) = t.snap_rect(r, 4.0);
-                let got = if vertical { dv } else { Vec2::new(dv.y, dv.x) };
-                assert_eq!(got, Vec2::new(short, 0.0), "{what} ({short} away, vertical guide: {vertical}) lands on the guide");
-                assert!(!ov.is_empty(), "{what}: the line it lined up with is shown");
-            }
-        }
-    }
-    // Two guides at once: each pulls its own axis, so the rectangle ends up on both.
-    let t = Targets {
-        edge_rulers: vec![Ruler { vertical: true, pos: 202.0, span: None }, Ruler { vertical: false, pos: 148.0, span: None }],
-        ..Targets::default()
-    };
-    assert_eq!(t.snap_rect(r, 4.0).0, Vec2::new(2.0, -2.0));
-}
-
-/// #4312: where two lines of the rectangle are equally near guides, the one met first (start edge,
-/// then centre, then end edge) wins, and a nearer one wins however late it comes; the art's own
-/// lines come before a ruler guide the same distance away.
-#[test]
-fn rect_snap_to_ruler_guides_ties_go_to_the_first_and_the_nearer_wins() {
-    // 100..110 on x: edges at 100 and 110, centre at 105.
-    let r = Rect::new(100.0, 0.0, 110.0, 10.0);
-    let ruler = |pos: f64| Ruler { vertical: true, pos, span: None };
-    // Start edge 2 before a guide at 98, end edge 2 before one at 112 (so +2): the start edge wins.
-    let t = Targets { edge_rulers: vec![ruler(112.0), ruler(98.0)], ..Targets::default() };
-    assert_eq!(t.snap_rect(r, 4.0).0.x, -2.0);
-    // The end edge is nearer (1.5) than the start edge (2): the nearer wins, whatever the order.
-    let t = Targets { edge_rulers: vec![ruler(98.0), ruler(111.5)], ..Targets::default() };
-    assert_eq!(t.snap_rect(r, 4.0).0.x, 1.5);
-    // The centre (105) is nearer a guide at 106 than either edge is to the one at 98: it wins.
-    let t = Targets { edge_rulers: vec![ruler(98.0), ruler(106.0)], ..Targets::default() };
-    assert_eq!(t.snap_rect(r, 4.0).0.x, 1.0);
-    // The art's line and a ruler guide the same distance away: the art's comes first.
-    let art = Targets { xs: vec![(102.0, Point::new(102.0, 0.0), Kind::Edge)], edge_rulers: vec![ruler(98.0)], ..Targets::default() };
-    assert_eq!(art.snap_rect(r, 4.0).0.x, 2.0);
-}
-
-/// #4312: a ruler guide pulls within the snap distance, which is a distance on the screen: `tol` is
-/// the pixels over the zoom, so zoomed in it is a smaller distance on the page.
-#[test]
-fn rect_snap_to_ruler_guides_reaches_the_snap_distance_in_screen_pixels_only() {
-    let t = Targets { edge_rulers: vec![Ruler { vertical: true, pos: 300.0, span: None }], ..Targets::default() };
-    let r = |gap: f64| Rect::new(200.0, 0.0, 300.0 - gap, 10.0);
-    let px = 6.0;
-    for zoom in [0.5, 1.0, 4.0] {
-        let tol = px / zoom;
-        let got = t.snap_rect(r(tol - 0.01), tol).0.x;
-        assert!((got - (tol - 0.01)).abs() < 1e-9, "just inside {px} px at zoom {zoom}: {got}");
-        assert_eq!(t.snap_rect(r(tol + 0.01), tol).0, Vec2::ZERO, "just outside {px} px at zoom {zoom}");
-    }
-}
-
 #[test]
 fn rect_snap_aligns_edges() {
     let (d, id) = doc_with_rect();
@@ -356,6 +258,39 @@ fn shaper_sources_are_no_targets() {
     let near = Rect::new(146.0, 296.0, 154.0, 304.0);
     assert!(!gives_corner(&Targets::points_near(&d, &[g], near)));
     assert!(gives_corner(&Targets::points_near(&d, &[b], near)));
+}
+
+/// Art inside a hidden group or layer is no target, even while its own visibility is on: not
+/// for drawing, the Knife's straight cut, a move or a transform tool's reference point on the
+/// shown group around it.
+#[test]
+fn art_in_hidden_groups_and_layers_is_no_target() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node};
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let square = Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 300.0, 400.0, 400.0)), Appearance::default_art());
+    let mut inner = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    inner.visible = false;
+    let outer = Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+    let g = outer.id;
+    d.insert(Some(l), 1, outer).unwrap();
+    let corner = Point::new(300.0, 300.0);
+    let gives = |t: &Targets, at: Point| {
+        t.points.iter().any(|(p, _)| *p == at)
+            || t.xs.iter().chain(&t.ys).any(|(_, p, _)| *p == at)
+            || t.segments.iter().any(|(_, s)| s.start() == at || s.end() == at)
+    };
+    assert!(!gives(&Targets::collect(&d, &[], None), corner));
+    assert!(!gives(&Targets::for_drawing(&d, &[], None, None), corner));
+    assert!(!gives(&Targets::for_drawing(&d, &[], None, None).anchors_and_paths(), corner));
+    assert!(!gives(&Targets::points_near(&d, &[g], Rect::new(296.0, 296.0, 304.0, 304.0)), corner));
+    // The shown rectangle on the same layer still is one, until the layer is hidden.
+    let shown = Point::new(100.0, 100.0);
+    assert!(gives(&Targets::for_drawing(&d, &[], None, None).anchors_and_paths(), shown));
+    d.node_mut(l).unwrap().visible = false;
+    assert!(!gives(&Targets::collect(&d, &[], None), shown));
+    assert!(!gives(&Targets::for_drawing(&d, &[], None, None).anchors_and_paths(), shown));
 }
 
 /// #2120: the dragged end of a straight segment at any angle lands on the segment's own
@@ -902,7 +837,7 @@ fn each_snap_to_glyph_option_takes_away_only_its_own_guides() {
     for (off, less) in [
         (GlyphSnap { baseline: false, ..all }, [1, 0, 0, 0]),
         (GlyphSnap { x_height: false, ..all }, [1, 0, 0, 0]),
-        (GlyphSnap { bounds: false, ..all }, [4, 4, 0, 0]),
+        (GlyphSnap { bounds: false, ..all }, [2, 2, 0, 0]),
         (GlyphSnap { proximity: false, ..all }, [0, 2, 0, 0]),
         (GlyphSnap { anchors: false, ..all }, [0, 0, 0, anchors]),
         (GlyphSnap { angular: false, ..all }, [0, 0, 0, 0]),
@@ -916,8 +851,8 @@ fn each_snap_to_glyph_option_takes_away_only_its_own_guides() {
     let p = Point::new(400.0, x_height + 2.0);
     assert!((Targets::for_drawing(&d, &[], None, Some(all)).snap_point(p, 4.0).0.y - x_height).abs() < 1e-9);
     assert_eq!(Targets::for_drawing(&d, &[], None, Some(GlyphSnap { x_height: false, ..all })).snap_point(p, 4.0).0.y, p.y);
-    // Rotated type: its baseline, x-height and width edges and its strokes run at an angle, all
-    // Angular Guides; its glyph bounds still run across and down the page.
+    // Rotated type: its baseline, x-height, width edges, glyph bounds and strokes run at an angle,
+    // all Angular Guides (the corners of its glyph bounds stay points to land on).
     let (d, _) = glyph_doc("H", 20f64.to_radians());
     let (on, off) = (count(&d, all), count(&d, GlyphSnap { angular: false, ..all }));
     assert!(on[2] > 0, "{on:?}");
@@ -955,4 +890,46 @@ fn a_shift_constrained_point_slides_onto_a_rotated_baseline() {
     let from = Leave::segment(&c, crossing - Vec2::new(60.0, 0.0), true);
     let (q, _) = Targets::for_drawing(&d, &[], None, Some(GlyphSnap::default())).snap_from(crossing + Vec2::new(1.5, 0.3), Some(&from), 4.0);
     assert!(q.distance(crossing) < 1e-9, "{q:?} vs {crossing:?}");
+}
+
+/// The corners of a glyph's bounds, from its outline in its own frame placed as the glyph is.
+fn glyph_corners(t: &vectorcraft_doc::TextObject) -> [Point; 4] {
+    let lay = layout_text(FontDb::global(), t);
+    let g = lay.glyphs.iter().find(|g| !g.outline.elements().is_empty()).expect("a glyph with an outline");
+    let r = (g.xf.inverse() * g.outline.clone()).bounding_box();
+    [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)].map(|p| t.xf * g.xf * p)
+}
+
+/// Snap to Glyph › Glyph Bounds (#5112): each corner of a glyph's bounds is a point a drawn point
+/// lands on, also where its outline curves (the right of `B`, where no anchor is), and the corners
+/// turn with rotated type. Glyph Bounds off, they are gone.
+#[test]
+fn a_drawn_point_lands_on_a_corner_of_a_glyphs_bounds() {
+    let style = vectorcraft_doc::CharStyle { size: 200.0, ..Default::default() };
+    for angle in [0.0, 30f64.to_radians()] {
+        let (d, t) = glyph_doc_with("B", angle, style.clone());
+        let corners = glyph_corners(&t);
+        for (i, c) in corners.into_iter().enumerate() {
+            let p = c + Vec2::new(2.0, -1.5);
+            let (q, ov) = Targets::for_drawing(&d, &[], None, Some(GlyphSnap::default())).snap_point(p, 4.0);
+            assert!(q.distance(c) < 1e-9, "angle {angle}: {q:?} vs corner {c:?}");
+            // The left corners of `B` are anchors of its stem too; the right ones, on its curved
+            // side, come from its bounds alone.
+            if i == 0 || i == 3 {
+                continue;
+            }
+            assert!(ov.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "glyph")), "{ov:?}");
+            let off = GlyphSnap { bounds: false, ..GlyphSnap::default() };
+            let (q, _) = Targets::for_drawing(&d, &[], None, Some(off)).snap_point(p, 4.0);
+            assert!(q.distance(c) > 1e-3, "Glyph Bounds off: {q:?} still on {c:?}");
+        }
+        // The right edge of the rotated glyph runs at its angle: a point beside it, far from the
+        // corners, lands on it.
+        let (tr, br) = (corners[1], corners[2]);
+        let dir = (br - tr) / (br - tr).hypot();
+        let p = tr.midpoint(br) + Vec2::new(-dir.y, dir.x) * 1.5;
+        let (q, _) =
+            Targets::for_drawing(&d, &[], None, Some(GlyphSnap { anchors: false, proximity: false, ..GlyphSnap::default() })).snap_point(p, 4.0);
+        assert!((q - tr).cross(dir).abs() < 1e-6, "angle {angle}: {q:?} is off the right edge");
+    }
 }

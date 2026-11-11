@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::channel;
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::clipboard::{AI, BITMAP, EMF, EPS, Flavour, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture};
+use vectorcraft_engine::cmd::clipboard::{AI, BITMAP, EMF, EPS, Flavour, ImageRead, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture};
 
 use crate::VectorcraftApp;
 use crate::background::{self, Writer};
@@ -27,6 +27,57 @@ pub trait SystemClipboard {
     fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour>;
     /// Does the clipboard hold one of `mimes`? Cheap enough to ask a few times a second.
     fn has(&mut self, mimes: &[&'static str]) -> bool;
+    /// [`Self::read`], except that a bitmap the host converts to PNG (Windows' device-independent
+    /// bitmap, the image Linux gives) comes back as the work that converts it
+    /// ([`ClipboardRead::Later`]), for a paste that runs it off the UI thread. By default every
+    /// flavour is read at once.
+    fn read_deferred(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
+        self.read(mimes).map(ClipboardRead::Now)
+    }
+    /// A number that changes each time any app copies something, read without opening the
+    /// clipboard; `None` where the platform has none (the default).
+    fn change_count(&mut self) -> Option<u64> {
+        None
+    }
+}
+
+/// What the system clipboard held when the formats of a Copy or Cut could not be written.
+#[derive(PartialEq)]
+enum Held {
+    /// Its [`SystemClipboard::change_count`].
+    Count(u64),
+    /// Its text, where the platform has no change count.
+    Text(Option<Vec<u8>>),
+}
+
+impl Held {
+    fn now(cb: &mut (dyn SystemClipboard + 'static)) -> Self {
+        match cb.change_count() {
+            Some(n) => Self::Count(n),
+            None => Self::Text(cb.read(&[TEXT]).map(|f| f.data)),
+        }
+    }
+}
+
+/// What [`SystemClipboard::read_deferred`] read.
+pub enum ClipboardRead {
+    /// The flavour.
+    Now(Flavour),
+    /// The work that makes the flavour from the bytes read (a bitmap decoded and encoded as PNG).
+    Later(MakeFlavour),
+}
+
+/// Makes a flavour from bytes read off the clipboard, on any thread; `None` when it can't be made.
+pub type MakeFlavour = Box<dyn FnOnce() -> Option<Flavour> + Send>;
+
+impl ClipboardRead {
+    /// The flavour, made at once when it is work.
+    pub fn flavour(self) -> Option<Flavour> {
+        match self {
+            Self::Now(f) => Some(f),
+            Self::Later(make) => make(),
+        }
+    }
 }
 
 /// Makes a second system-clipboard handle, to check off the UI thread whether Paste has something
@@ -43,6 +94,9 @@ pub(crate) struct Publishing {
     latest: Arc<AtomicU64>,
     /// The latest one's formats wait to be written.
     pending: bool,
+    /// The latest one's formats could not be written: what the system clipboard held when the
+    /// write failed, and the text of those formats.
+    unwritten: Option<(Held, String)>,
 }
 
 impl Publishing {
@@ -50,6 +104,17 @@ impl Publishing {
     pub(crate) fn is_pending(&self) -> bool {
         self.pending
     }
+
+    /// The number of the latest Copy or Cut: it changes with each Copy or Cut, and with each copy
+    /// through egui that drops the formats not written yet.
+    pub(crate) fn latest(&self) -> u64 {
+        self.latest.load(Ordering::SeqCst)
+    }
+}
+
+/// Does a flavour of type `mime` load with `clipboard.importImage` ([`import_command`])?
+pub(crate) fn imports_as_image(mime: &str) -> bool {
+    ![TEXT, SVG, PDF, AI, EPS, EMF].contains(&mime)
 }
 
 /// The command (and its params) that loads `f` into the internal clipboard, centred on `center`.
@@ -74,6 +139,25 @@ pub(crate) fn import_command(f: &Flavour, center: Option<[f64; 2]>) -> (&'static
 }
 
 impl VectorcraftApp {
+    /// A Type paste may reuse its saved styled runs only while our desktop copy still owns the
+    /// clipboard. Pending formats also belong to that copy; web hosts have no ownership service.
+    pub(crate) fn type_paste_has_our_clipboard(&mut self) -> bool {
+        self.clipboard_publishing.pending
+            || self.unwritten_clipboard_text().is_some()
+            || self.services.system_clipboard.as_mut().is_none_or(|cb| cb.holds_ours())
+    }
+
+    /// The text of the latest Copy or Cut whose formats could not be written to the system
+    /// clipboard, while nothing has been copied since that Copy or Cut. A paste into type or a text
+    /// field takes this text until another app copies something. Where the platform has no change
+    /// count, a copy is noticed only when it changes the clipboard's text, so the copy is kept only
+    /// when the clipboard held text when the write failed.
+    pub(crate) fn unwritten_clipboard_text(&mut self) -> Option<String> {
+        let cb = self.services.system_clipboard.as_deref_mut()?;
+        let (held, text) = self.clipboard_publishing.unwritten.as_ref()?;
+        (Held::now(cb) == *held).then(|| text.clone())
+    }
+
     /// After Copy or Cut: offer the copied objects to other apps. With the system clipboard
     /// service, the background worker makes the formats from a copy of the clipboard
     /// ([`background::run`]) and they are written when they are ready. While the worker has a
@@ -85,6 +169,13 @@ impl VectorcraftApp {
     /// ([`Self::write_formats_before_text_input`]). Once they are written, the status bar shows
     /// the first of the PNG's and PDF's warnings.
     pub(crate) fn publish_clipboard(&mut self) {
+        // Ruler guides copied alone stay in VectorCraft, but the Copy still replaces what the
+        // system clipboard held: it is emptied, so the next Paste takes the guides rather than
+        // what another app copied before, and what another app copies after still wins (#3226).
+        if !self.session.clipboard.has_art() {
+            self.clear_system_clipboard();
+            return;
+        }
         if self.services.system_clipboard.is_none() {
             if self.session.prefs.copy_as_svg {
                 self.clipboard_out = self.session.clipboard_svg();
@@ -96,6 +187,9 @@ impl VectorcraftApp {
         let latest = self.clipboard_publishing.latest.clone();
         let n = latest.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
         self.clipboard_publishing.pending = true;
+        self.clipboard_publishing.unwritten = None;
+        // What the clipboard holds at the Copy or Cut: a copy made elsewhere before the write is newer.
+        let before = self.services.system_clipboard.as_deref_mut().map(Held::now);
         let (tx, made) = channel();
         let work = move |_: Writer| {
             // These formats are not made when a later Copy or Cut, or a copy through egui, dropped them.
@@ -113,7 +207,31 @@ impl VectorcraftApp {
             publishing.pending = false;
             let formats = r.and_then(|_| made.try_recv().map_err(|e| e.to_string()));
             let written = formats.and_then(|(f, warnings)| {
-                app.services.system_clipboard.as_mut().map_or(Ok(()), |cb| cb.write(&f))?;
+                let Some(cb) = app.services.system_clipboard.as_mut() else { return Ok(warnings) };
+                let before_write = Held::now(cb.as_mut());
+                // Nothing copied elsewhere since the Copy or Cut.
+                let current = before.as_ref() == Some(&before_write);
+                if let Err(e) = cb.write(&f) {
+                    // Another app may hold the clipboard open. It keeps what it held (or what the
+                    // failed write left), and a paste into text takes this copy's text until
+                    // something else is copied.
+                    let held = Held::now(cb.as_mut());
+                    let text = f.iter().find(|t| t.mime == TEXT).map(|t| String::from_utf8_lossy(&t.data).into_owned());
+                    // A change during the write is the failed write emptying the clipboard and
+                    // writing some of the formats, or another app's copy: the clipboard then holds
+                    // nothing to paste, this copy's text, or no text and one of this copy's
+                    // formats only after the former.
+                    let left_by_write = held == before_write
+                        || match cb.read(&[TEXT]) {
+                            Some(now) => text.as_deref().is_some_and(|ours| now.data == ours.as_bytes()),
+                            None => !cb.has(&PASTE_ORDER) || f.iter().any(|ours| cb.read(&[ours.mime]).is_some_and(|now| now.data == ours.data)),
+                        };
+                    // Without a change count, a clipboard with no text can't show a later copy of
+                    // a picture, or tell an empty clipboard from one that couldn't be read.
+                    let trackable = held != Held::Text(None);
+                    app.clipboard_publishing.unwritten = text.filter(|_| current && left_by_write && trackable).map(|text| (held, text));
+                    return Err(e);
+                }
                 Ok(warnings)
             });
             match written {
@@ -137,12 +255,38 @@ impl VectorcraftApp {
         }
     }
 
+    /// A Copy with nothing for other apps (ruler guides alone): the formats of an earlier Copy or
+    /// Cut not written yet are dropped and the system clipboard is emptied. On the web, empty text
+    /// goes through egui when Copy As SVG is on, in place of the SVG objects would put there.
+    fn clear_system_clipboard(&mut self) {
+        let publishing = &mut self.clipboard_publishing;
+        publishing.latest.fetch_add(1, Ordering::SeqCst);
+        publishing.pending = false;
+        publishing.unwritten = None;
+        match self.services.system_clipboard.as_mut() {
+            Some(cb) => {
+                if let Err(e) = cb.write(&[]) {
+                    self.ui.status = format!("Couldn't copy to the system clipboard: {e}");
+                }
+            }
+            None => {
+                if self.session.prefs.copy_as_svg {
+                    self.clipboard_out = Some(String::new());
+                    self.clipboard_published = None;
+                }
+            }
+        }
+    }
+
     /// End of a frame: when something copied text or a picture through egui this frame (a text
     /// field, the Type tool), the formats of an earlier Copy or Cut that are not written yet are
     /// dropped, and the system clipboard keeps that copy.
     pub(crate) fn drop_formats_after_egui_copy(&mut self, ctx: &egui::Context) {
         let copied = ctx.output(|o| o.commands.iter().any(|c| matches!(c, egui::OutputCommand::CopyText(_) | egui::OutputCommand::CopyImage(_))));
         let publishing = &mut self.clipboard_publishing;
+        if copied {
+            publishing.unwritten = None;
+        }
         if copied && publishing.pending {
             publishing.latest.fetch_add(1, Ordering::SeqCst);
             publishing.pending = false;
@@ -167,6 +311,22 @@ impl VectorcraftApp {
         let waited = ctx.data(|d| d.get_temp::<bool>(egui::Id::unique("clipboard.pending-at-tick"))).unwrap_or(false);
         ctx.data_mut(|d| d.remove::<bool>(egui::Id::unique("clipboard.pending-at-tick")));
         if !(self.clipboard_publishing.pending || waited) {
+            // A copy whose formats could not be written: a paste takes its text, not the text the
+            // clipboard kept ([`Self::unwritten_clipboard_text`]).
+            let pasting = textless || ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Paste(_))));
+            if pasting && let Some(text) = self.unwritten_clipboard_text() {
+                ctx.input_mut(|i| {
+                    for e in &mut i.events {
+                        if let egui::Event::Paste(t) = e {
+                            t.clone_from(&text);
+                        }
+                    }
+                    if textless {
+                        i.events.insert(0, egui::Event::Paste(text));
+                    }
+                });
+                return;
+            }
             // The formats the clipboard still holds were written after the chord's key went down.
             if textless
                 && self.services.system_clipboard.as_mut().is_some_and(|cb| cb.holds_ours())
@@ -208,50 +368,98 @@ impl VectorcraftApp {
     /// copy, and so does what we are still making the formats of. An error means nothing should be
     /// pasted.
     pub(crate) fn adopt_system_clipboard(&mut self) -> Result<(), String> {
+        self.adopt_system_clipboard_or_defer(false).map(drop)
+    }
+
+    /// [`Self::adopt_system_clipboard`]. With `defer`, a bitmap is not loaded here: the work that
+    /// makes its flavour comes back (a bitmap the host converts to PNG is converted by it,
+    /// [`SystemClipboard::read_deferred`]; text that names the picture is the flavour when the
+    /// picture can't be made), and the internal clipboard is left as it is.
+    pub(crate) fn adopt_system_clipboard_or_defer(&mut self, defer: bool) -> Result<Option<MakeFlavour>, String> {
         // A paste command may run before the next tick consumes an image signal: this is that
         // paste, so a queued `PasteImage` must not read the clipboard a second time.
         self.clipboard_image_request = None;
         let pasted = self.clipboard_in.take();
         let center = self.view().map(|v| [v.center.x, v.center.y]);
         let (cmd, params) = match (pasted, self.services.system_clipboard.as_mut()) {
+            (Some(f), _) if defer && imports_as_image(f.mime) => return Ok(Some(Box::new(move || Some(f)))),
             // A picture or file the host read from the paste.
             (Some(f), _) if f.mime != TEXT => import_command(&f, center),
             (_, Some(cb)) => {
                 if self.clipboard_publishing.pending || cb.holds_ours() {
-                    return Ok(());
+                    return Ok(None);
                 }
-                let Some(f) = cb.read(&PASTE_ORDER) else { return Ok(()) };
+                let mut read = |mimes: &[&'static str]| if defer { cb.read_deferred(mimes) } else { cb.read(mimes).map(ClipboardRead::Now) };
+                let f = match read(&PASTE_ORDER) {
+                    Some(ClipboardRead::Now(f)) => f,
+                    Some(ClipboardRead::Later(make)) => return Ok(Some(make)),
+                    None => return Ok(None),
+                };
                 // Text that only names a picture (its address, or its image markup) goes with a
                 // browser's copied picture: the picture.
                 let text = String::from_utf8_lossy(&f.data);
                 // Blank text is what some hosts put beside a copied picture. It is not the paste.
-                let f = if f.mime == TEXT && (text.trim().is_empty() || names_a_picture(&text)) { cb.read(&[BITMAP]).unwrap_or(f) } else { f };
+                let f = if f.mime == TEXT && (text.trim().is_empty() || names_a_picture(&text)) {
+                    match read(&[BITMAP]) {
+                        Some(ClipboardRead::Now(picture)) => picture,
+                        // The text, when the picture can't be made.
+                        Some(ClipboardRead::Later(make)) => return Ok(Some(Box::new(move || make().or(Some(f))))),
+                        None => f,
+                    }
+                } else {
+                    f
+                };
+                if defer && imports_as_image(f.mime) {
+                    return Ok(Some(Box::new(move || Some(f))));
+                }
                 import_command(&f, center)
             }
             // Text only: SVG markup is art, other text is left alone.
             (pasted, None) => {
                 let text =
                     pasted.map(|f| String::from_utf8_lossy(&f.data).into_owned()).or_else(|| self.services.clipboard_read.as_mut().and_then(|f| f()));
-                let Some(text) = text.filter(|t| looks_like_svg(t)) else { return Ok(()) };
+                let Some(text) = text.filter(|t| looks_like_svg(t)) else { return Ok(None) };
                 if self.clipboard_published.as_deref() == Some(text.as_str()) {
-                    return Ok(());
+                    return Ok(None);
                 }
                 self.clipboard_published = Some(text.clone());
                 ("clipboard.importSvg", json!({ "svg": text, "center": center }))
             }
         };
+        self.session.execute(cmd, &params).map(|_| None).map_err(|e| {
+            self.clipboard_published = None;
+            format!("Couldn't paste from the clipboard: {e}")
+        })
+    }
+
+    /// Before a paste whose flavour was made off the UI thread ([`crate::placing::adopt_for_paste`]):
+    /// `f` replaces the internal clipboard, centered on `center`, as
+    /// [`Self::adopt_system_clipboard`] loads it. An error means nothing should be pasted.
+    pub(crate) fn adopt_flavour(&mut self, f: &Flavour, center: Option<[f64; 2]>) -> Result<(), String> {
+        let (cmd, params) = import_command(f, center);
         self.session.execute(cmd, &params).map(drop).map_err(|e| {
             self.clipboard_published = None;
             format!("Couldn't paste from the clipboard: {e}")
         })
     }
 
+    /// [`Self::adopt_flavour`] for a bitmap of type `mime` decoded off the UI thread: the image `read`
+    /// replaces the internal clipboard, centered on `center`.
+    pub(crate) fn adopt_image_read(&mut self, mime: &str, center: Option<[f64; 2]>, read: Result<ImageRead, String>) -> Result<(), String> {
+        let params = json!({ "mime": mime, "center": center });
+        read.and_then(|read| self.session.import_image_read(read, &params).map(drop).map_err(|e| e.to_string())).map_err(|e| {
+            self.clipboard_published = None;
+            format!("Couldn't paste from the clipboard: {e}")
+        })
+    }
+
     /// The text on the system clipboard once the formats a Copy or Cut is making are written, for a
-    /// paste into a text field or type.
+    /// paste into a text field or type. When they could not be written, their text
+    /// ([`Self::unwritten_clipboard_text`]).
     pub(crate) fn written_clipboard_text(&mut self) -> Option<String> {
         // Only other copies' formats are ahead of them on the worker ([`Self::publish_clipboard`]).
         background::wait_until(self, |app| !app.clipboard_publishing.pending);
-        self.system_clipboard_text()
+        self.unwritten_clipboard_text().or_else(|| self.system_clipboard_text())
     }
 
     /// The text on the system clipboard, if any.

@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color?, keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -706,6 +706,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     super::paint::check_keep_model(p, "text.create")?;
     check_numbers(p, &["size"], "text.create")?;
     check_switches(p, &["vertical", "placeholder"], "text.create")?;
+    super::color_param(p, "color", "text.create")?;
     if let Some(a) = p.get("area") {
         check_numbers(a, &["width", "height"], "text.create")?;
     }
@@ -720,7 +721,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     if rotation != 0.0 {
         t.xf *= vectorcraft_geom::rotate_deg(rotation);
     }
-    t.vertical = p.get("vertical").and_then(Value::as_bool).unwrap_or(false);
+    t.vertical = switch_or(p, "vertical", false, "text.create")?;
     t.para = new_type_para();
     new_type_alignment(s, p, "text.create", &mut t)?;
     if let Some(a) = p.get("area") {
@@ -739,7 +740,17 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let made = insert_look_turned(s, "Type", NodeKind::Text(Box::new(t)), NewArt::plain(Appearance::default()), None, true, bbox_turn(rotation))?;
     let id = made.get("id").and_then(Value::as_u64).map(NodeId);
     let made = super::typecmd::with_bounds(s, id, made);
-    Ok(super::typecmd::with_overflow(s, id.as_slice(), made))
+    let mut made = super::typecmd::with_overflow(s, id.as_slice(), made);
+    if p.get("font").is_some() || p.get("style").is_some() {
+        let runs = match id.and_then(|i| s.doc().ok()?.doc.node(i)).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => t.runs.iter().flat_map(super::fonts::run_fonts).collect(),
+            _ => Default::default(),
+        };
+        if let Some(w) = super::fonts::set_font_warning(runs) {
+            made["warning"] = json!(w);
+        }
+    }
+    Ok(made)
 }
 
 /// The paragraph attributes new type gets (the Type tools, `text.create`): aligned to the start of
@@ -801,7 +812,8 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str) -> Result<vectorcraf
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
 /// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
-/// filled with the current fill unless that is None or white (black then).
+/// filled with the current fill unless that is None or white (black then), in the document's
+/// language.
 pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
     let mut style = CharStyle::default();
     if let Some(sz) = p.get("size").and_then(Value::as_f64) {
@@ -821,5 +833,10 @@ pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
         None if !s.paint.fill.is_none() && s.paint.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE) => s.paint.fill.clone(),
         None => vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
     };
+    // In the language Document Setup chose, else Preferences › Hyphenation › Default Language; none
+    // for the default. Type already in a document keeps its own.
+    let chosen = |name: &str| vectorcraft_doc::setup::char_language(name).ok().flatten();
+    let document = s.doc().ok().and_then(|d| chosen(&d.doc.setup.language));
+    style.language = document.or_else(|| chosen(&s.prefs.hyphenation_language)).map(str::to_string);
     style
 }

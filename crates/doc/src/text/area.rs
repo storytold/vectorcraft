@@ -29,6 +29,19 @@ impl VerticalAlign {
     }
 }
 
+/// Area Type Options › Text Flow: the order text fills the cells of area type with several rows
+/// and columns.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TextFlow {
+    /// Down each column's rows, then on to the next column (the default, and what a document
+    /// from before the option reads as).
+    #[default]
+    Columns,
+    /// Across each row's columns, then on to the next row.
+    Rows,
+}
+
 /// Text Wrap Options of a wrap object (Object → Text Wrap).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -88,15 +101,24 @@ impl PathEffect {
     }
 }
 
-/// Type on a Path Options › Align to Path: which height of the type runs along the path.
+/// Type on a Path Options › Align to Path: which height of the type runs along the path. Each
+/// character is measured by its own font, size and vertical scale, and in vertical type by its own
+/// size and horizontal scale. An inline graphic moves as a character of its run would, by its
+/// run's vertical scale in vertical type too. These distances are VectorCraft's own values.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PathAlign {
-    /// The font's top edge: the type hangs below the path.
+    /// The top of the font's em box: the type hangs below the path. The em box is the font's
+    /// ideographic em box (from its `BASE` table, its typographic or `hhea` box, or its
+    /// ideographs), else an em box centered on the cap height, else a box whose top is 0.88 em
+    /// above the baseline. In vertical type the characters move half an em.
     Ascender,
-    /// The font's bottom edge: the type stands above the path.
+    /// The bottom of the font's bounding box, else the font's descent: the type stands above the
+    /// path. In vertical type the characters move half an em the other way.
     Descender,
-    /// Halfway between the ascender and the descender.
+    /// A line at half the height of the top of the font's H above the baseline, else at half its
+    /// cap height, else at the middle of its em box. In vertical type the characters stay on the
+    /// path.
     Center,
     /// The baseline (the default).
     #[default]
@@ -128,6 +150,10 @@ pub struct AreaOptions {
     pub columns: usize,
     /// Gutter between rows/columns in points.
     pub gutter: f64,
+    /// Gutter between rows in points when it differs from [`Self::gutter`], which is then the
+    /// gutter between columns (left out when saved while unset).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row_gutter: Option<f64>,
     /// Inset from the frame edges in points.
     pub inset: f64,
     pub first_baseline: FirstBaseline,
@@ -135,6 +161,9 @@ pub struct AreaOptions {
     pub first_baseline_min: f64,
     /// Vertical alignment of the lines in each row/column.
     pub vertical_align: VerticalAlign,
+    /// Text Flow: by columns (the default, left out when saved) or by rows.
+    #[serde(skip_serializing_if = "crate::skip::is_default")]
+    pub flow: TextFlow,
     /// How the frame and its text fit each other (Auto Size, Shrink Text to Fit).
     #[serde(skip_serializing_if = "crate::skip::is_default")]
     pub fit: AreaFit,
@@ -146,10 +175,12 @@ impl Default for AreaOptions {
             rows: 1,
             columns: 1,
             gutter: 18.0,
+            row_gutter: None,
             inset: 0.0,
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
             vertical_align: VerticalAlign::Top,
+            flow: TextFlow::Columns,
             fit: AreaFit::None,
         }
     }

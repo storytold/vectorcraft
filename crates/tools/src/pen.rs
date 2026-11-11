@@ -242,6 +242,10 @@ impl Tool for PenTool {
     fn busy(&self) -> bool {
         self.drag.is_some() || self.handle.is_some() || self.convert.is_some()
     }
+    /// A path being drawn: Escape ends it.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.active(cx).is_some()
+    }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let tol = cx.tol(5.0).max(cx.point_tol());
         // The path a press began is the selected one by the next event.
@@ -444,6 +448,15 @@ impl Tool for PenTool {
             ToolKey::Enter | ToolKey::Escape => self.deactivate(cx),
             _ => vec![],
         }
+    }
+    /// A dropped press drops only the anchor it was placing, a handle it was dragging or the
+    /// close it was making: the path being drawn goes on with the next click.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.drag = None;
+        self.handle = None;
+        self.convert = None;
+        self.snap.clear();
+        vec![]
     }
     /// Deactivate the pen tool, committing in-flight operations and restoring compound path selection.
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {

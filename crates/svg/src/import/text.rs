@@ -10,6 +10,13 @@
 //! gradients and patterns in the text's user space; the importer swaps each placeholder for the
 //! [`PendingText`] it stands for.
 //!
+//! usvg accepts only shapes, `<text>` and `<use>` as the children of a `<clipPath>`, so a `<text>`
+//! there (and a `<use>` there that shows one) becomes a placeholder path instead, which the importer
+//! finds by its id (`{prefix}{i}-…`). The importer clips by the text's glyph outlines, or uses the
+//! text itself as live type. A `<text>` in a clip path that has an id also gets the usual
+//! placeholder group after its path, and a `<use>` there with an id keeps a copy in a `<defs>`
+//! after its path, for `<use>` elements outside the clip path.
+//!
 //! Characters keep SVG's per-character `x`/`y`/`dx`/`dy`/`rotate` lists: a character with an
 //! absolute `x` that moves down by at least half a line starts a new line (the leading becomes the
 //! line spacing), other vertical moves become baseline shift, horizontal moves become kerning (an
@@ -166,14 +173,21 @@ pub(super) struct PendingText {
 pub(super) struct TextSlots {
     prefix: String,
     pub texts: Vec<PendingText>,
+    /// The transform between a clip placeholder path's user space and its text's, by placeholder
+    /// id, where the placeholder leaves it out (see [`clip_uses`]).
+    inner: HashMap<String, Affine>,
+    /// The glyph outlines of each text laid out so far, in text space, by index.
+    outlines: RefCell<HashMap<usize, Rc<BezPath>>>,
 }
 
 impl TextSlots {
-    /// The text a placeholder's main path stands for: by its id, or inside `<use>` instances
-    /// (where usvg drops ids) by its colour (the index) and its rectangle.
+    /// The text a placeholder's main path stands for: by its id (`{prefix}{index}`, or
+    /// `{prefix}{index}-{k}` for the clip placeholders), or inside `<use>` instances (where usvg
+    /// drops ids) by its colour (the index) and its rectangle.
     pub fn find(&self, p: &usvg::Path) -> Option<usize> {
         if !p.id().is_empty() {
-            return p.id().strip_prefix(&self.prefix)?.parse().ok();
+            let rest = p.id().strip_prefix(&self.prefix)?;
+            return rest.split_once('-').map_or(rest, |(i, _)| i).parse().ok();
         }
         let Some(usvg::Paint::Color(c)) = p.fill().map(|f| f.paint()) else { return None };
         if p.stroke().is_some() || p.data().segments().count() != 5 {
@@ -185,71 +199,277 @@ impl TextSlots {
         let near = |a: f32, b: f64| (a as f64 - b).abs() <= 1e-3 * b.abs().max(1.0);
         (near(b.left(), m.x0) && near(b.top(), m.y0) && near(b.right(), m.x1) && near(b.bottom(), m.y1)).then_some(i)
     }
+
+    /// The transform from the user space of clip placeholder path `p` to the space of the text it
+    /// stands for (the identity unless [`clip_uses`] left the text's transform out of it).
+    pub fn inner(&self, p: &usvg::Path) -> Affine {
+        self.inner.get(p.id()).copied().unwrap_or(Affine::IDENTITY)
+    }
+
+    /// The glyph outlines of text `i` in text space, laid out once however many clips use it.
+    pub fn outlines(&self, i: usize) -> Option<Rc<BezPath>> {
+        if let Some(bp) = self.outlines.borrow().get(&i) {
+            return Some(bp.clone());
+        }
+        let t = self.texts.get(i)?;
+        let bp = Rc::new(vectorcraft_text::layout(FontDb::global(), &t.obj).to_bezpath());
+        self.outlines.borrow_mut().insert(i, bp.clone());
+        Some(bp)
+    }
 }
 
 /// Replace every `<text>` usvg would draw by a placeholder group (see the module docs).
-pub(super) fn prepare<'s>(svg: &'s str, xml: &roxmltree::Document, dpi: f64, warnings: &mut Vec<String>) -> (Cow<'s, str>, TextSlots) {
+/// `original_xml` supplies text styles; `xml` supplies placeholder positions and tracking IDs.
+pub(super) fn prepare<'s>(
+    svg: &'s str,
+    xml: &roxmltree::Document,
+    original_xml: Option<&roxmltree::Document>,
+    dpi: f64,
+    warnings: &mut Vec<String>,
+) -> (Cow<'s, str>, TextSlots) {
     let mut prefix = String::from("vectorcraft-text-");
     while xml.descendants().any(|n| n.attribute("id").is_some_and(|id| id.starts_with(&prefix))) {
         prefix.insert(0, '_');
     }
-    let mut slots = TextSlots { prefix, texts: vec![] };
-    let cx = Ctx::new(xml, dpi);
-    let mut out = String::new();
+    let mut slots = TextSlots { prefix, ..TextSlots::default() };
+    let style_xml = original_xml.unwrap_or(xml);
+    let cx = Ctx::new(style_xml, dpi);
+    // The replacements, in source order: each element's range and what takes its place.
+    let mut edits: Vec<(Range<usize>, String)> = vec![];
     let mut copied = 0;
-    let is_text = |n: &XNode| n.is_element() && matches!(n.tag_name().name(), "text" | "flowRoot") && n.tag_name().namespace() == Some(SVG_NS);
-    for t in xml.descendants().filter(is_text) {
+    let is_text = |n: &XNode| {
+        n.is_element()
+            && matches!(n.tag_name().name(), "text" | "flowRoot")
+            && n.tag_name().namespace() == Some(SVG_NS)
+            && !n.ancestors().any(|a| a.has_tag_name("style"))
+    };
+    // The slot of each text, by element, for the `<use>` elements in clip paths below.
+    let mut slot_of = HashMap::new();
+    for (t, style_t) in xml.descendants().filter(is_text).zip(style_xml.descendants().filter(is_text)) {
         let label = t.attribute("id").map_or_else(|| "a text".to_string(), |id| format!("text '{id}'"));
-        if t.ancestors().skip(1).any(|a| a.is_element() && a.tag_name().name() == "clipPath") {
+        // CSS Masking Module Level 1 §6.1 (https://www.w3.org/TR/css-masking-1/#ClipPathElement):
+        // text is clip path content only as a child of the `<clipPath>`.
+        let clip_child = in_clip_path(t);
+        if !clip_child && t.ancestors().skip(1).any(|a| a.is_element() && a.tag_name().name() == "clipPath") {
             warnings.push(format!("{label} in a clip path ignored"));
             continue;
         }
         let r = t.range();
-        // The element's qualified name (`text` or `svg:text`), so the placeholder lands in the same
-        // namespace; skip anything whose source range isn't the element itself (entity expansions).
-        let Some(qname) = svg
-            .get(r.start..r.end)
-            .and_then(|s| s.strip_prefix('<'))
-            .map(|s| s.split(|c: char| c.is_whitespace() || c == '>' || c == '/').next().unwrap_or(""))
-        else {
-            continue;
-        };
+        let Some(q) = qualifier(svg, t) else { continue };
         let flowed = t.tag_name().name() == "flowRoot";
-        let Some(q) = qname.strip_suffix(t.tag_name().name()).filter(|q| q.is_empty() || q.ends_with(':')) else { continue };
-        if cx.css.own(t, "display").as_deref() == Some("none") || r.start < copied {
+        if cx.css.own(style_t, "display").as_deref() == Some("none") || r.start < copied {
             continue;
         }
-        let built = if flowed { cx.build_flow(t, &label, warnings) } else { cx.build(xml, t, &label, warnings) };
+        let built = if flowed { cx.build_flow(style_t, &label, warnings) } else { cx.build(style_xml, style_t, &label, warnings) };
         let Some((text, paints)) = built else { continue };
-        out.push_str(&svg[copied..r.start]);
-        placeholder(&mut out, q, &cx.css, t, &slots.prefix, slots.texts.len(), text.marker, &paints);
+        let mut out = String::new();
+        let index = slots.texts.len();
+        if clip_child {
+            let id = format!("{}{index}-c", slots.prefix);
+            let props = clip_props(&cx.css, Some(style_t), None);
+            clip_placeholder(&mut out, q, &id, &own_transform(&cx.css, style_t), &props, t, text.marker);
+            // A `<use>` elsewhere can still show the text by its id: the clip path leaves out this
+            // group (a group isn't clip path content), but the `<use>` finds it.
+            if t.attribute("id").is_some() {
+                placeholder(&mut out, q, &cx.css, t, style_t, &slots.prefix, index, text.marker, &paints);
+            }
+        } else {
+            placeholder(&mut out, q, &cx.css, t, style_t, &slots.prefix, index, text.marker, &paints);
+        }
         copied = r.end;
+        edits.push((r, out));
+        slot_of.insert(t.id(), index);
         slots.texts.push(text);
     }
     if slots.texts.is_empty() {
         return (Cow::Borrowed(svg), slots);
     }
-    out.push_str(&svg[copied..]);
+    clip_uses(svg, xml, style_xml, &cx, &slot_of, &mut slots, &mut edits, warnings);
+    edits.sort_by_key(|(r, _)| r.start);
+    let mut out = String::with_capacity(svg.len());
+    let mut copied = 0;
+    for (r, s) in edits {
+        if r.start < copied {
+            continue;
+        }
+        out.push_str(svg.get(copied..r.start).unwrap_or(""));
+        out.push_str(&s);
+        copied = r.end;
+    }
+    out.push_str(svg.get(copied..).unwrap_or(""));
     (Cow::Owned(out), slots)
+}
+
+/// Is `n` a child of a `<clipPath>`?
+fn in_clip_path(n: XNode) -> bool {
+    n.parent_element().is_some_and(|p| p.tag_name().name() == "clipPath" && p.tag_name().namespace() == Some(SVG_NS))
+}
+
+/// The namespace prefix of element `n` as the source writes it (empty, or `svg:` and the like), so
+/// what replaces it lands in the same namespace. `None` when its source range isn't the element
+/// itself (entity expansions).
+fn qualifier<'s>(svg: &'s str, n: XNode) -> Option<&'s str> {
+    let r = n.range();
+    let qname = svg
+        .get(r.start..r.end)
+        .and_then(|s| s.strip_prefix('<'))
+        .map(|s| s.split(|c: char| c.is_whitespace() || c == '>' || c == '/').next().unwrap_or(""))?;
+    qname.strip_suffix(n.tag_name().name()).filter(|q| q.is_empty() || q.ends_with(':'))
+}
+
+/// Replace each `<use>` in a clip path that shows a text by the clip placeholder of that text,
+/// placed by the `<use>` (usvg drops ids and paints clip path content black, so the text a
+/// placeholder group stands for couldn't be found again inside one).
+#[allow(clippy::too_many_arguments)]
+fn clip_uses(
+    svg: &str,
+    xml: &roxmltree::Document,
+    style_xml: &roxmltree::Document,
+    cx: &Ctx,
+    slot_of: &HashMap<roxmltree::NodeId, usize>,
+    slots: &mut TextSlots,
+    edits: &mut Vec<(Range<usize>, String)>,
+    warnings: &mut Vec<String>,
+) {
+    let is_use = |n: &XNode| n.is_element() && n.tag_name().name() == "use" && n.tag_name().namespace() == Some(SVG_NS) && in_clip_path(*n);
+    if !xml.descendants().any(|n| is_use(&n)) {
+        return;
+    }
+    let (ids, style_ids) = (first_ids(xml), first_ids(style_xml));
+    for (k, (u, style_u)) in xml.descendants().filter(is_use).zip(style_xml.descendants().filter(is_use)).enumerate() {
+        let Some(id) = href(u).and_then(|h| h.strip_prefix('#')) else { continue };
+        let Some(t) = ids.get(id) else { continue };
+        let Some(&i) = slot_of.get(&t.id()) else { continue };
+        let Some(marker) = slots.texts.get(i).map(|text| text.marker) else { continue };
+        let Some(q) = qualifier(svg, u) else { continue };
+        // An undisplayed `<use>` adds nothing to the clip (usvg leaves it out as it is).
+        if cx.css.own(style_u, "display").is_some_and(|d| d.trim() == "none") {
+            continue;
+        }
+        let style_t = style_ids.get(id).copied().filter(|s| s.tag_name() == t.tag_name());
+        let em = cx.font_size(style_u);
+        let length = |a: &str, pct: f64| u.attribute(a).and_then(|v| cx.length(v, em, pct)).unwrap_or(0.0);
+        let (x, y) = (length("x", cx.viewport.0), length("y", cx.viewport.1));
+        let placed = format!("{} translate({x} {y})", own_transform(&cx.css, style_u));
+        let text_xf = match style_t {
+            Some(s) => own_transform(&cx.css, s),
+            None => t.attribute("transform").unwrap_or("").to_string(),
+        };
+        // One element can carry one clip path. The text's own clip path is in the text's user space
+        // and wins; a clip path of the `<use>` is in the `<use>`'s, so the text's transform moves
+        // to the importer instead.
+        let clipped = |n: XNode| cx.css.own(n, "clip-path").is_some_and(|v| v.trim() != "none");
+        let id = format!("{}{i}-{k}", slots.prefix);
+        let transform = if style_t.is_some_and(clipped) {
+            if clipped(style_u) {
+                let label = u.attribute("id").map_or_else(|| "a use of a text".to_string(), |id| format!("'{id}'"));
+                warnings.push(format!("clip path of {label} in a clip path ignored: the text's own applies"));
+            }
+            format!("{placed} {text_xf}")
+        } else {
+            slots.inner.insert(id.clone(), parse_transform(Some(&text_xf)));
+            placed
+        };
+        let props = clip_props(&cx.css, style_t, Some(style_u));
+        let mut out = String::new();
+        clip_placeholder(&mut out, q, &id, &transform, &props, u, marker);
+        // Another `<use>` can still show this one by its id: a copy of it stays in a `<defs>`, which
+        // the clip path leaves out, with the properties style rules gave it written out.
+        if u.attribute("id").is_some() {
+            use_copy(&mut out, q, &cx.css, u, style_u);
+        }
+        edits.push((u.range(), out));
+    }
+}
+
+/// Write a copy of `<use>` `u` in a `<defs>`: its attributes in no namespace, its link as `href`,
+/// and the properties set on it by rules and its `style` (from `style_u`) as its `style`.
+fn use_copy(out: &mut String, q: &str, css: &Styles, u: XNode, style_u: XNode) {
+    let _ = write!(out, "<{q}defs><{q}use");
+    for a in u.attributes().filter(|a| a.namespace().is_none() && !matches!(a.name(), "style" | "href")) {
+        let _ = write!(out, " {}=\"{}\"", a.name(), xml_escape(a.value()));
+    }
+    if let Some(h) = href(u) {
+        let _ = write!(out, " href=\"{}\"", xml_escape(h));
+    }
+    let declared = css.declared(style_u);
+    let mut props: Vec<_> = declared.iter().collect();
+    props.sort();
+    let style: String = props.into_iter().map(|(k, v)| format!("{k}:{v};")).collect();
+    let _ = write!(out, " style=\"{}\"/></{q}defs>", xml_escape(&style));
+}
+
+/// The identity transform, as a `transform` value usvg reads.
+const IDENTITY: &str = "matrix(1 0 0 1 0 0)";
+
+/// The transform of element `n`: a `transform` declaration in a rule or its `style` (which the
+/// prepass has written in SVG syntax), else its `transform` attribute; empty when it has none.
+fn own_transform(css: &Styles, n: XNode) -> String {
+    css.own(n, "transform").filter(|v| !v.eq_ignore_ascii_case("none")).unwrap_or_default()
+}
+
+/// Each id of `doc` with the first element that has it (a reference goes to that one, as in usvg).
+fn first_ids<'a, 'i>(doc: &'a roxmltree::Document<'i>) -> HashMap<&'a str, XNode<'a, 'i>> {
+    let mut ids = HashMap::new();
+    for n in doc.descendants() {
+        if let Some(id) = n.attribute("id") {
+            ids.entry(id).or_insert(n);
+        }
+    }
+    ids
+}
+
+/// The properties of clip path content that the placeholder of text `t` keeps, as a `style` value:
+/// its `clip-path` (or that of the `<use>` `u` showing it, when the text has none), and its
+/// computed `clip-rule` and `visibility`, inherited from `u` when there is one. Every value is
+/// written out, so no style rule that matches the placeholder path applies to it.
+fn clip_props(css: &Styles, t: Option<XNode>, u: Option<XNode>) -> String {
+    let set = |n: XNode, p: &str| css.own(n, p).filter(|v| v.trim() != "inherit");
+    let clip = |n: XNode| css.own(n, "clip-path").filter(|v| v.trim() != "none");
+    let mut style = format!("clip-path:{};", t.and_then(clip).or_else(|| u.and_then(clip)).unwrap_or_else(|| "none".into()));
+    for (p, initial) in [("clip-rule", "nonzero"), ("visibility", "visible")] {
+        let v = t.and_then(|t| set(t, p)).or_else(|| u.or(t).and_then(|n| css.prop(n, p))).unwrap_or_else(|| initial.into());
+        let _ = write!(style, "{p}:{v};");
+    }
+    style
+}
+
+/// Write the placeholder of a text in a clip path: a path over the text's bounds `b` with id `id`,
+/// transform `transform`, properties `props` ([`clip_props`]) and the conditions of element `n`.
+/// usvg drops a group in a clip path and paints clip path content black whatever its fill, so the
+/// placeholder is a path, and the importer finds it by its id ([`TextSlots::find`]).
+fn clip_placeholder(out: &mut String, q: &str, id: &str, transform: &str, props: &str, n: XNode, b: Rect) {
+    let _ = write!(out, "<{q}path id=\"{}\"", xml_escape(id));
+    for a in ["systemLanguage", "requiredFeatures", "requiredExtensions"] {
+        if let Some(v) = n.attribute(a) {
+            let _ = write!(out, " {a}=\"{}\"", xml_escape(v));
+        }
+    }
+    // In `style`, so no rule that matches the path moves it.
+    let transform = if transform.trim().is_empty() { IDENTITY } else { transform };
+    let _ = write!(out, " style=\"transform:{};{}display:inline\"", xml_escape(transform), xml_escape(props));
+    let _ = write!(out, " d=\"M{} {}H{}V{}H{}Z\"/>", b.x0, b.y0, b.x1, b.y1, b.x0);
 }
 
 /// Write the placeholder group for text `t` (namespace prefix `q`), slot `index`.
 #[allow(clippy::too_many_arguments)]
-fn placeholder(out: &mut String, q: &str, css: &Styles, t: XNode, prefix: &str, index: usize, b: Rect, paints: &[String]) {
+fn placeholder(out: &mut String, q: &str, css: &Styles, t: XNode, style_t: XNode, prefix: &str, index: usize, b: Rect, paints: &[String]) {
     let _ = write!(out, "<{q}g");
-    for a in ["id", "transform", "systemLanguage", "requiredFeatures", "requiredExtensions"] {
+    for a in ["id", "systemLanguage", "requiredFeatures", "requiredExtensions"] {
         if let Some(v) = t.attribute(a) {
             let _ = write!(out, " {a}=\"{}\"", xml_escape(v));
         }
     }
-    // The text's own non-inherited properties, overriding any rule that matches the `<g>`.
-    let mut style = String::new();
+    // The text's own non-inherited properties, overriding any rule that matches the `<g>`. The
+    // transform too: a `transform` declaration in a rule or `style` beats the attribute.
+    let transform = own_transform(css, style_t);
+    let mut style = format!("transform:{};", if transform.is_empty() { IDENTITY } else { &transform });
     for (p, initial) in
         [("opacity", "1"), ("clip-path", "none"), ("mask", "none"), ("filter", "none"), ("mix-blend-mode", "normal"), ("isolation", "auto")]
     {
-        let _ = write!(style, "{p}:{};", css.own(t, p).as_deref().unwrap_or(initial));
+        let _ = write!(style, "{p}:{};", css.own(style_t, p).as_deref().unwrap_or(initial));
     }
-    if let Some(v) = css.own(t, "visibility") {
+    if let Some(v) = css.own(style_t, "visibility") {
         let _ = write!(style, "visibility:{v};");
     }
     let _ = write!(out, " style=\"{}display:inline\">", xml_escape(&style));
@@ -490,6 +710,53 @@ impl Ctx {
         out.spans[slot].1 = start..out.chars.len();
     }
 
+    /// `textLength` and `lengthAdjust` (SVG 1.1 §10.9.1,
+    /// https://www.w3.org/TR/SVG11/text.html#TextElementTextLengthAttribute): the characters of
+    /// each element with a `textLength` are fitted to that advance, by adding the difference evenly
+    /// between them (`spacing`, the default; it becomes kerning) or by stretching them
+    /// (`spacingAndGlyphs`; it becomes horizontal scale, kept within 1–10000%). Innermost elements
+    /// first, so an element's length takes in its children's. Vertical type is spaced out only.
+    fn fit_lengths(&self, spans: &[(XNode, Range<usize>)], cells: &mut [Cell], vertical: bool, label: &str, warnings: &mut Vec<String>) {
+        let n = cells.len();
+        for (el, r) in spans.iter().rev() {
+            let Some(want) = el.attribute("textLength").and_then(|v| self.length(v, self.font_size(*el), self.viewport.0)).filter(|w| *w >= 0.0)
+            else {
+                continue;
+            };
+            // Past the largest coordinate, the characters would only be out of reach.
+            let want = want.min(vectorcraft_doc::MAX_COORD);
+            let Some(part) = cells.get_mut(r.start.min(n)..r.end.min(n)) else { continue };
+            let Some(gaps) = part.len().checked_sub(1) else { continue };
+            let stretch = el.attribute("lengthAdjust").map(str::trim) == Some("spacingAndGlyphs");
+            if stretch && vertical {
+                warnings.push(format!("{label}: lengthAdjust=\"spacingAndGlyphs\" on vertical text spaces the characters out instead"));
+            }
+            // Kerning and scale change shaping (manual kerning turns pair kerning off): measure again.
+            for _ in 0..4 {
+                let have = advance(&point_text(part));
+                if !have.is_finite() || (want - have).abs() < 0.01 {
+                    break;
+                }
+                if stretch && !vertical {
+                    let k = want / have;
+                    if !k.is_finite() || k <= 0.0 {
+                        break;
+                    }
+                    for c in part.iter_mut() {
+                        c.style.h_scale = (c.style.h_scale * k).clamp(1.0, 10_000.0);
+                    }
+                } else if gaps > 0 {
+                    let d = (want - have) / gaps as f64;
+                    for c in part.iter_mut().take(gaps) {
+                        c.kern += d;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
     /// The path a `<textPath>` follows, in the text's user space.
     fn text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<BezPath> {
         let mut bp = match tp.attribute("path") {
@@ -717,6 +984,7 @@ impl Ctx {
             }
         });
         let vertical = self.css.prop(t, "writing-mode").is_some_and(|m| m.starts_with("tb") || m.starts_with("vertical"));
+        self.fit_lengths(&cs.spans, &mut cells, vertical, label, warnings);
         let mut obj = TextObject::point(Point::ZERO, "", CharStyle::default());
         let mut breaks: Vec<Break> = vec![];
         let mut para_styles: Vec<ParaStyle> = vec![];

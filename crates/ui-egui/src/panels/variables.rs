@@ -97,6 +97,7 @@ pub(crate) fn delete_active_dataset(app: &mut VectorcraftApp) {
     app.run("dataset.delete", json!({})).ok();
 }
 
+/// Draw document variables, data sets and their two-row footer of capture and binding controls.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else {
         widgets::dim_label(ui, tl!("No document"));
@@ -173,6 +174,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 VariableKind::Visibility => "eye",
                 VariableKind::Image => "image",
                 VariableKind::Graph => "chart-column",
+                VariableKind::Unknown => "square-dashed",
             };
             ui.add(egui::Image::new(crate::icons::source(icon)).fit_to_exact_size(egui::vec2(14.0, 14.0)));
             // The object a variable drives is named beside it, as the reference panel does.
@@ -208,46 +210,49 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     // The bottom bar: make the selection dynamic, define and delete what the lists show, and
     // lock the variables.
-    ui.separator();
-    ui.horizontal(|ui| {
-        if widgets::icon_button_enabled(ui, "type", tl!("Make Text Dynamic"), false, single_type && !locked, 24.0).clicked() {
-            app.run("variable.makeTextDynamic", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "eye", tl!("Make Visibility Dynamic"), false, has_selection && !locked, 24.0).clicked() {
-            app.run("variable.makeVisibilityDynamic", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "image", tl!("Make Image Dynamic"), false, single_image && !locked, 24.0).clicked() {
-            app.run("variable.makeImageDynamic", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "chart-column", tl!("Make Graph Dynamic"), false, selection_graph && !locked, 24.0).clicked() {
-            app.run("variable.makeGraphDynamic", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "plus", tl!("New Variable…"), false, !locked, 24.0).clicked() {
-            crate::menus::invoke(app, "variable.define", json!({}));
-        }
-        if widgets::icon_button_enabled(ui, "link-2-off", tl!("Unbind Variable"), false, selection_bound, 24.0).clicked() {
-            app.run("variable.unbind", json!({"ids": selected})).ok();
-        }
-        // The bin deletes the highlighted variable only, as the reference panel's does.
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Variable"), false, highlighted.is_some() && !locked, 24.0).clicked() {
-            delete_highlighted(app);
-        }
-        // The lock button is drawn pressed while the variables are locked.
-        let tip = if locked { tl!("Unlock Variables") } else { tl!("Lock Variables") };
-        if widgets::icon_button(ui, "lock", tip, locked, 24.0).clicked() {
-            app.run("variable.lock", json!({})).ok();
-        }
-    });
-    ui.horizontal(|ui| {
-        // Capture records what the art holds now as a new row (paste: take it in); Update
-        // writes the art back into the row that is active (save: write it out).
-        if widgets::icon_button(ui, "clipboard-paste", tl!("Capture Data Set"), false, 24.0).clicked() {
-            app.run("dataset.capture", json!({})).ok();
-        }
-        let can_update = active.is_some();
-        if widgets::icon_button_enabled(ui, "save", tl!("Update Data Set"), false, can_update, 24.0).clicked() {
-            app.run("dataset.update", json!({})).ok();
-        }
+    let footer_height = 48.0 + 2.0 * ui.spacing().item_spacing.y + 1.0;
+    widgets::panel_footer(ui, footer_height, |ui| {
+        ui.add(egui::Separator::default().spacing(1.0));
+        ui.horizontal(|ui| {
+            if widgets::icon_button_enabled(ui, "type", tl!("Make Text Dynamic"), false, single_type && !locked, 24.0).clicked() {
+                app.run("variable.makeTextDynamic", json!({})).ok();
+            }
+            if widgets::icon_button_enabled(ui, "eye", tl!("Make Visibility Dynamic"), false, has_selection && !locked, 24.0).clicked() {
+                app.run("variable.makeVisibilityDynamic", json!({})).ok();
+            }
+            if widgets::icon_button_enabled(ui, "image", tl!("Make Image Dynamic"), false, single_image && !locked, 24.0).clicked() {
+                app.run("variable.makeImageDynamic", json!({})).ok();
+            }
+            if widgets::icon_button_enabled(ui, "chart-column", tl!("Make Graph Dynamic"), false, selection_graph && !locked, 24.0).clicked() {
+                app.run("variable.makeGraphDynamic", json!({})).ok();
+            }
+            if widgets::icon_button_enabled(ui, "plus", tl!("New Variable…"), false, !locked, 24.0).clicked() {
+                crate::menus::invoke(app, "variable.define", json!({}));
+            }
+            if widgets::icon_button_enabled(ui, "link-2-off", tl!("Unbind Variable"), false, selection_bound, 24.0).clicked() {
+                app.run("variable.unbind", json!({"ids": selected})).ok();
+            }
+            // The bin deletes the highlighted variable only, as the reference panel's does.
+            if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Variable"), false, highlighted.is_some() && !locked, 24.0).clicked() {
+                delete_highlighted(app);
+            }
+            // The lock button is drawn pressed while the variables are locked.
+            let tip = if locked { tl!("Unlock Variables") } else { tl!("Lock Variables") };
+            if widgets::icon_button(ui, "lock", tip, locked, 24.0).clicked() {
+                app.run("variable.lock", json!({})).ok();
+            }
+        });
+        ui.horizontal(|ui| {
+            // Capture records what the art holds now as a new row (paste: take it in); Update
+            // writes the art back into the row that is active (save: write it out).
+            if widgets::icon_button(ui, "clipboard-paste", tl!("Capture Data Set"), false, 24.0).clicked() {
+                app.run("dataset.capture", json!({})).ok();
+            }
+            let can_update = active.is_some();
+            if widgets::icon_button_enabled(ui, "save", tl!("Update Data Set"), false, can_update, 24.0).clicked() {
+                app.run("dataset.update", json!({})).ok();
+            }
+        });
     });
 }
 
@@ -263,6 +268,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let highlighted_bound: Vec<u64> = highlighted.as_ref().map(|h| bound_objects(st, h)).unwrap_or_default();
     let Picked { selected, has_selection, selection_bound, single_type, single_image, selection_graph } = picked(st);
     let locked = st.doc.variables.locked;
+    // Save Variable Library writes text variables only.
+    let has_text = st.doc.variables.variables.iter().any(|v| v.kind == VariableKind::Text);
 
     if widgets::menu_item(ui, tl!("New Variable…"), !locked, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
@@ -326,6 +333,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::menu_item(ui, tl!("Load Variable Library…"), true, false) {
         crate::picks::button(app, load_library);
     }
+    if widgets::menu_item(ui, tl!("Save Variable Library…"), has_text, false) {
+        crate::picks::button(app, save_library);
+    }
     ui.separator();
     // What the highlighted variable drives, selected — its bindings are left alone.
     if widgets::menu_item(ui, tl!("Select Bound Object"), !highlighted_bound.is_empty(), false) {
@@ -360,6 +370,16 @@ fn load_library(app: &mut VectorcraftApp) {
     let pick = crate::FilePick { filters: vec![crate::FilePick::filter("XML", &["xml"])], ..Default::default() };
     let Some(path) = crate::picks::open(app, &pick) else { return };
     if let Err(e) = app.run("variable.loadLibrary", json!({"path": path})) {
+        app.status(e);
+    }
+}
+
+/// Variables panel: Save Variable Library… opens a save dialog for an XML file and runs
+/// `variable.saveLibrary` with the chosen path.
+fn save_library(app: &mut VectorcraftApp) {
+    let pick = crate::FilePick { name: "variables.xml".into(), filters: vec![crate::FilePick::filter("XML", &["xml"])], ..Default::default() };
+    let Some(path) = crate::picks::save(app, &pick) else { return };
+    if let Err(e) = app.run("variable.saveLibrary", json!({"path": path})) {
         app.status(e);
     }
 }
@@ -413,23 +433,24 @@ mod tests {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
         let t = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "x"})).unwrap()["id"].as_u64().unwrap();
-        app.run("dataset.import", json!({"csv": "name,Name\nA,Ann\nB,Bob\n"})).unwrap();
+        app.run("dataset.import", json!({"csv": "Name\nAnn\nBob\n"})).unwrap();
+        let (a, b) = ("Data Set 1", "Data Set 2");
         let message = |row: &str| format!("nothing in data set {row} was applied: no object is bound to a variable it has a value for");
-        app.run("dataset.select", json!({"name": "A"})).unwrap();
-        assert_eq!(app.ui.status, message("A"));
+        app.run("dataset.select", json!({"name": a})).unwrap();
+        assert_eq!(app.ui.status, message(a));
         app.run("dataset.next", json!({})).unwrap();
-        assert_eq!(app.ui.status, message("B"));
+        assert_eq!(app.ui.status, message(b));
         app.run("dataset.prev", json!({})).unwrap();
-        assert_eq!(app.ui.status, message("A"));
+        assert_eq!(app.ui.status, message(a));
 
         app.run("variable.bind", json!({"variable": "Name", "ids": [t]})).unwrap();
-        app.run("dataset.select", json!({"name": "B"})).unwrap();
+        app.run("dataset.select", json!({"name": b})).unwrap();
         assert_eq!(app.ui.status, "");
         // Stepping to a data set that applies clears the message as well.
         for step in ["dataset.next", "dataset.prev"] {
             app.run("variable.unbind", json!({"variable": "Name", "ids": [t]})).unwrap();
-            app.run("dataset.select", json!({"name": "A"})).unwrap();
-            assert_eq!(app.ui.status, message("A"));
+            app.run("dataset.select", json!({"name": a})).unwrap();
+            assert_eq!(app.ui.status, message(a));
             app.run("variable.bind", json!({"variable": "Name", "ids": [t]})).unwrap();
             app.run(step, json!({})).unwrap();
             assert_eq!(app.ui.status, "", "{step}");
@@ -451,6 +472,7 @@ mod tests {
             "Rename Data Set…",
             "Delete Data Set",
             "Load Variable Library…",
+            "Save Variable Library…",
             "Select Bound Object",
             "Select All Bound Objects",
         ] {
@@ -486,6 +508,61 @@ mod tests {
         for l in langs {
             let shown = message(l, &app.ui.status);
             assert!(!shown.contains("left out") && shown.contains("other") && shown.contains('1'), "{}: {shown}", l.code());
+        }
+    }
+
+    /// Export Data Sets…'s warnings about variables a new document doesn't read back with their
+    /// kind and about variables that make it refuse the file show in the status bar, and so does
+    /// its refusal of a header that is another variable's name; all three are translated in every
+    /// language but English.
+    #[test]
+    fn the_export_data_sets_warning_shows_in_the_status_bar() {
+        use crate::i18n::{Lang, message};
+        let mut app = app_with_data();
+        let dir = std::env::temp_dir().join(format!("vc-export-warning-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("sets.csv");
+        app.run("variable.define", json!({"name": "#Tag", "kind": "text"})).unwrap();
+        app.run("dataset.export", json!({"path": path})).unwrap();
+        assert_eq!(app.ui.status, "a new document won't read these variables back with their kind: `#Tag`");
+        let warning = app.ui.status.clone();
+        app.run("variable.define", json!({"name": "%Rate", "kind": "text"})).unwrap();
+        app.run("dataset.export", json!({"path": path})).unwrap();
+        assert_eq!(app.ui.status, "a new document refuses this file because of these variables: `%Rate`");
+        let refuses = app.ui.status.clone();
+        app.run("variable.delete", json!({"names": ["%Rate"]})).unwrap();
+        app.run("variable.define", json!({"name": "Tag", "kind": "visibility"})).unwrap();
+        assert!(app.run("dataset.export", json!({"path": path})).is_err());
+        let refused = app.ui.status.clone();
+        assert!(refused.contains("would read back as the variable `#Tag`"), "{refused}");
+        let _ = std::fs::remove_dir_all(&dir);
+        let langs: Vec<Lang> = Lang::all().filter(|l| l.code() != "en").collect();
+        assert!(langs.len() >= 23, "{} languages", langs.len());
+        for l in langs {
+            let shown = message(l, &warning);
+            assert!(!shown.contains("won't read") && shown.contains("`#Tag`"), "{}: {shown}", l.code());
+            let shown = message(l, &refuses);
+            assert!(!shown.contains("refuses") && shown.contains("`%Rate`"), "{}: {shown}", l.code());
+            let shown = message(l, &refused);
+            assert!(!shown.contains("would read back") && shown.contains("`#Tag`") && shown.contains("`Tag`"), "{}: {shown}", l.code());
+        }
+    }
+
+    /// The notes of a `.ai` whose variable library was read in part, or couldn't be read, are
+    /// translated in every language that translated the note they replace.
+    #[test]
+    fn the_notes_of_an_ai_variable_library_are_translated() {
+        use crate::i18n::{Lang, message};
+        let partly = "the file's variable library was partly read (entries skipped: 7): the Variables panel lists the rest";
+        let unread = "the file's variable library couldn't be read: the Variables panel doesn't list it";
+        let codes = [
+            "bg", "bs", "ca", "cs", "da", "de", "el", "es", "fi", "fr", "hu", "id", "it", "ja", "ka", "ko", "nl", "pl", "pt-br", "ru", "sv", "tr",
+            "uk", "vi", "zh-hans", "zh-hant",
+        ];
+        for l in codes.iter().map(|c| Lang::from_code(c).expect("registered")) {
+            let shown = message(l, partly);
+            assert!(shown != partly && shown.contains('7'), "{}: {shown}", l.code());
+            assert_ne!(message(l, unread), unread, "{}", l.code());
         }
     }
 

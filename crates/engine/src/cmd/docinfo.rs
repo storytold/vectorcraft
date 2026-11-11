@@ -1,7 +1,7 @@
 //! Document Info panel data, its categories and the text report (Document Info › Save…, File →
 //! Package), and Object → Make Pixel Perfect.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
             has_doc,
             info
         ),
@@ -130,13 +130,15 @@ fn repeat_entry(d: &Document, n: &Node, spec: &RepeatSpec) -> (Value, (String, S
 }
 
 /// The Document Info categories of `d` (only `category` when given) from `info` (what
-/// `document.info` reports), its fonts, its image objects and the rows of its Repeat objects.
+/// `document.info` reports), its fonts, its image objects, the rows of its Repeat objects and the
+/// rows of its objects filled or stroked with a pattern.
 fn sections(
     d: &Document,
     info: &Value,
     fonts: &BTreeSet<super::fonts::UsedFont>,
     images: &[ImageRow],
     repeats: &[(String, String)],
+    pattern_objects: &[(String, String)],
     category: Option<&str>,
 ) -> Vec<Section> {
     let names = |k: &str| -> Vec<(String, String)> {
@@ -180,7 +182,7 @@ fn sections(
                 "graphicStyles" => names("graphicStyleNames"),
                 "brushes" => names("brushNames"),
                 "spotColors" => names("spotColors"),
-                "patterns" => names("patternNames"),
+                "patterns" => pattern_objects.to_vec(),
                 "gradients" => d.swatches_iter().filter(|s| matches!(s.paint, Paint::Gradient(_))).map(|s| (s.name.clone(), String::new())).collect(),
                 "symbols" => names("symbols"),
                 "fonts" => fonts.iter().map(|f| (super::fonts::font_label(f), String::new())).collect(),
@@ -252,12 +254,68 @@ pub fn report(s: &mut Session, selection_only: bool) -> Result<String> {
     Ok(v["text"].as_str().unwrap_or_default().to_string())
 }
 
-fn paint_kind(p: &Paint) -> Option<&'static str> {
-    match p {
-        Paint::Gradient(_) => Some("gradients"),
-        Paint::Pattern { .. } => Some("patterns"),
-        _ => None,
+/// The type object `n` holds and the runs its layout draws, when it uses a pattern: the runs with a
+/// glyph outline (list markers and ruby included) or an underline or strikethrough bar. Spaces and
+/// line breaks draw no outline. A type object's characters carry their own fill and stroke, and the
+/// type object's own fills and strokes paint on its characters, so only those runs paint. The type
+/// is laid out with its inline graphics' bounds resolved from `d`'s symbols, as the renderer lays it out.
+fn painted_runs<'a>(d: &Document, n: &'a Node) -> Option<(&'a vectorcraft_doc::TextObject, BTreeSet<usize>)> {
+    let NodeKind::Text(t) = &n.kind else { return None };
+    let is_pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
+    let own = n.appearance.items.iter().any(|i| match i {
+        vectorcraft_doc::AppearanceItem::Fill(f) => is_pattern(&f.paint),
+        vectorcraft_doc::AppearanceItem::Stroke(s) => is_pattern(&s.paint),
+    });
+    if !own && !t.runs.iter().any(|r| is_pattern(&r.style.fill) || is_pattern(&r.style.stroke)) {
+        return None;
     }
+    let db = vectorcraft_text::FontDb::global();
+    let resolved = d.inline_resolved(t);
+    let lay = vectorcraft_text::layout(db, &resolved);
+    let mut painted: BTreeSet<usize> = lay.glyphs.iter().chain(&lay.ruby).filter(|g| !g.outline.elements().is_empty()).map(|g| g.run).collect();
+    painted.extend(vectorcraft_text::decorations(&lay, db, &resolved).into_iter().map(|(run, _)| run));
+    Some((t, painted))
+}
+
+/// The patterns `n`'s own fills and strokes paint, each once. A hidden fill or stroke and a stroke
+/// with no width paint nothing, and neither does any fill or stroke of a guide (drawn in the guide
+/// color), of a compound path's member (`members`: the compound path's own fills and strokes paint
+/// it) or of type whose layout draws nothing (`painted_runs`). An image's fills and strokes paint
+/// only where an effect gives them a shape.
+fn own_patterns<'a>(
+    d: &Document,
+    n: &'a Node,
+    members: &HashSet<*const Node>,
+    painted_runs: Option<&(&vectorcraft_doc::TextObject, BTreeSet<usize>)>,
+) -> Vec<&'a str> {
+    if matches!(n.kind, NodeKind::Path { guide: true, .. })
+        || members.contains(&std::ptr::from_ref(n))
+        || painted_runs.is_some_and(|(_, r)| r.is_empty())
+    {
+        return vec![];
+    }
+    // The patterns an image's shaped fills and strokes paint (their effects can transform the
+    // pattern, so they are matched by name).
+    let shaped: Option<Vec<String>> = matches!(n.kind, NodeKind::Image(_)).then(|| {
+        vectorcraft_render::effects::image_paint(Some(d), n)
+            .into_iter()
+            .filter_map(|(_, _, item)| match item.paint() {
+                Paint::Pattern { pattern, .. } => Some(pattern.clone()),
+                _ => None,
+            })
+            .collect()
+    });
+    let mut out: Vec<&str> = vec![];
+    for item in &n.appearance.items {
+        let Paint::Pattern { pattern, .. } = item.paint() else { continue };
+        let paints = item.visible()
+            && !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0)
+            && shaped.as_ref().is_none_or(|s| s.contains(pattern));
+        if paints && !out.contains(&pattern.as_str()) {
+            out.push(pattern);
+        }
+    }
+    out
 }
 
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
@@ -293,8 +351,24 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // `repeats` and `repeat_rows` hold the `repeatObjects` entries and the rows of the Repeat objects that the walk visits, in walk order.
     let mut repeats: Vec<Value> = vec![];
     let mut repeat_rows: Vec<(String, String)> = vec![];
+    // `pattern_objects` and `pattern_rows` hold the `patternObjects` entries and the rows of the objects filled or stroked with a pattern, in walk order.
+    let mut pattern_objects: Vec<Value> = vec![];
+    let mut pattern_rows: Vec<(String, String)> = vec![];
+    // The objects the walk has visited: a selection can hold a group and objects inside it, and each object counts once.
+    // The set holds each object's address, so two objects that share an id (as a damaged file can hold) count as two.
+    let mut seen: HashSet<*const Node> = HashSet::new();
+    // The members of the document's compound paths: the compound path's own fills and strokes paint them.
+    let mut members: HashSet<*const Node> = HashSet::new();
+    d.walk(|n| {
+        if let NodeKind::Compound { children, .. } = &n.kind {
+            members.extend(children.iter().map(|c| std::ptr::from_ref(&**c)));
+        }
+    });
     for r in roots {
         r.walk(&mut |n| {
+            if !seen.insert(std::ptr::from_ref(n)) {
+                return;
+            }
             let k = match &n.kind {
                 NodeKind::Layer { .. } => None,
                 NodeKind::Group { clip: true, .. } => Some("clipGroups"),
@@ -337,22 +411,51 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(k) = k {
                 *counts.entry(k).or_default() += 1;
             }
+            // The paint kinds this object's fills and strokes use, each once.
+            let mut kinds = BTreeSet::new();
+            // The patterns this object's fills and strokes use, each once.
+            let mut used_patterns: Vec<&str> = vec![];
+            let painted_runs = painted_runs(d, n);
+            for pattern in own_patterns(d, n, &members, painted_runs.as_ref()) {
+                patterns.insert(pattern.to_string());
+                used_patterns.push(pattern);
+            }
             for item in &n.appearance.items {
-                let paint = match item {
-                    vectorcraft_doc::AppearanceItem::Fill(f) => &f.paint,
-                    vectorcraft_doc::AppearanceItem::Stroke(s) => &s.paint,
-                };
-                if let Some(k) = paint_kind(paint) {
-                    *counts.entry(k).or_default() += 1;
-                }
-                if let Paint::Pattern { pattern, .. } = paint {
-                    patterns.insert(pattern.clone());
+                let paint = item.paint();
+                // Objects counts an object with a pattern when Pattern Objects lists it, below.
+                if let Paint::Gradient(_) = paint {
+                    kinds.insert("gradients");
                 }
                 if let Paint::Solid { swatch: Some(name), .. } = paint
                     && d.swatch(name).is_some_and(|s| s.spot)
                 {
                     spot.insert(name.clone());
                 }
+            }
+            // The characters' own paints: an inline graphic draws no outline and does not take its
+            // run's paint (a list marker set in its run does), and a stroke with no width paints
+            // nothing.
+            if let Some((t, painted)) = &painted_runs {
+                for run in painted.iter().filter_map(|i| t.runs.get(*i)) {
+                    let stroke = (run.style.stroke_width > 0.0).then_some(&run.style.stroke);
+                    for paint in std::iter::once(&run.style.fill).chain(stroke) {
+                        if let Paint::Pattern { pattern, .. } = paint {
+                            patterns.insert(pattern.clone());
+                            if !used_patterns.contains(&pattern.as_str()) {
+                                used_patterns.push(pattern);
+                            }
+                        }
+                    }
+                }
+            }
+            if !used_patterns.is_empty() {
+                let name = n.display_name();
+                pattern_objects.push(json!({ "id": n.id.0, "name": name, "patterns": used_patterns }));
+                pattern_rows.push((name, used_patterns.join(", ")));
+                kinds.insert("patterns");
+            }
+            for k in kinds {
+                *counts.entry(k).or_default() += 1;
             }
             if n.extras().mask.is_some() {
                 *counts.entry("opacityMasks").or_default() += 1;
@@ -401,10 +504,11 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "paragraphStyles": d.para_styles.len(),
         "patterns": d.patterns.len(),
         "patternNames": patterns,
+        "patternObjects": pattern_objects,
     });
     // The document's name: its file's, else its title.
     out["document"]["name"] = json!(st.title());
-    let sections = sections(d, &out, &fonts, &image_rows, &repeat_rows, category);
+    let sections = sections(d, &out, &fonts, &image_rows, &repeat_rows, &pattern_rows, category);
     if text {
         return Ok(json!({ "text": report_text(&st.title(), selection_only, &sections) }));
     }
@@ -552,7 +656,7 @@ mod tests {
     /// Document Info › Repeat Objects lists each Repeat object by name with its kind and the number
     /// of instances it makes (for a grid, its rows and columns, followed by the number it draws when
     /// that is fewer), one in a group included. With Selection Only it lists the Repeat objects in
-    /// the selection.
+    /// the selection, each once when the selection holds a group and a Repeat object inside it.
     #[test]
     fn info_lists_the_repeat_objects() {
         let mut s = Session::new();
@@ -590,6 +694,11 @@ mod tests {
         };
         s.execute("select.set", &json!({"ids": [grid, group]})).unwrap();
         assert_eq!(names(&mut s), ["Tiles", "<Mirror Repeat>"]);
+        // A selection that holds the group and the Repeat object inside it lists that object once.
+        for ids in [json!([group, mirror]), json!([mirror, group])] {
+            s.execute("select.set", &json!({"ids": ids})).unwrap();
+            assert_eq!(names(&mut s), ["<Mirror Repeat>"], "{ids}");
+        }
         s.execute("select.set", &json!({"ids": [radial]})).unwrap();
         assert_eq!(names(&mut s), ["<Radial Repeat>"]);
         s.execute("select.set", &json!({"ids": [d]})).unwrap();
@@ -616,6 +725,178 @@ mod tests {
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "repeats"})).unwrap();
         assert_eq!((i["repeatObjects"][0]["id"].clone(), i["repeatObjects"][0]["instances"].clone()), (tiles, json!(125_000)));
         assert_eq!(i["sections"][0]["rows"][0], json!(["<Grid Repeat>", "Grid Repeat, 500 rows × 500 columns, 125000 instances"]));
+    }
+
+    /// Document Info › Pattern Objects lists each object filled or stroked with a pattern once,
+    /// with the patterns it uses, one in a group and a type object whose characters use a pattern
+    /// included; a pattern no art uses adds no row, and Objects counts the listed objects. With
+    /// Selection Only it lists the patterned objects in the selection, and the report writes the
+    /// same rows.
+    #[test]
+    fn info_lists_the_pattern_objects() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let square =
+            |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let tile = square(&mut s, 0.0);
+        s.execute("object.pattern.make", &json!({"ids": [tile], "name": "Dots", "edit": false})).unwrap();
+        let spare = square(&mut s, 20.0);
+        s.execute("object.pattern.make", &json!({"ids": [spare], "name": "Unused", "edit": false})).unwrap();
+        let (a, b, c) = (square(&mut s, 100.0), square(&mut s, 200.0), square(&mut s, 300.0));
+        s.execute("paint.setFill", &json!({"ids": [a], "swatch": "Dots"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [a], "swatch": "Dots"})).unwrap();
+        s.execute("layer.setProps", &json!({"id": a, "name": "Both"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [b], "swatch": "Dots"})).unwrap();
+        s.execute("select.set", &json!({"ids": [b, c]})).unwrap();
+        s.execute("object.group", &json!({})).unwrap();
+        // A type object whose characters are filled with the pattern.
+        let t = s.execute("text.create", &json!({"x": 0, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [t], "swatch": "Dots"})).unwrap();
+        s.execute("layer.setProps", &json!({"id": t, "name": "Type"})).unwrap();
+        // A hidden pattern fill and a pattern stroke with no width paint nothing, so neither object is listed.
+        let (d, e) = (square(&mut s, 100.0), square(&mut s, 200.0));
+        s.execute("paint.setStroke", &json!({"ids": [d], "none": true})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [d], "swatch": "Dots"})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [d], "index": 0, "visible": false})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [e], "none": true})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [e], "swatch": "Dots"})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [e], "index": 1, "weight": 0})).unwrap();
+        // A type object with no characters paints nothing either.
+        let empty = s.execute("text.create", &json!({"x": 0, "y": 300, "text": ""})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [empty], "swatch": "Dots"})).unwrap();
+        // Its own fill (a copy of its characters' pattern fill) paints on its characters, so it paints nothing.
+        s.execute("appearance.addFill", &json!({"ids": [empty]})).unwrap();
+        // Nor does type of only spaces and a line break, or a guide made from a patterned path.
+        let blank = s.execute("text.create", &json!({"x": 0, "y": 320, "text": " \n"})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [blank], "swatch": "Dots"})).unwrap();
+        let guide = square(&mut s, 300.0);
+        s.execute("paint.setFill", &json!({"ids": [guide], "swatch": "Dots"})).unwrap();
+        s.execute("select.set", &json!({"ids": [guide]})).unwrap();
+        s.execute("view.guides.make", &json!({})).unwrap();
+        // Nor does a compound path's member's own pattern fill: the compound path's own fill paints it.
+        let (m1, m2) = (square(&mut s, 320.0), square(&mut s, 340.0));
+        s.execute("select.set", &json!({"ids": [m1, m2]})).unwrap();
+        let compound = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [compound], "color": "#000000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [compound], "none": true})).unwrap();
+        let node = |s: &Session, id: &Value| s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().clone();
+        let (member, paint) = (node(&s, &compound).children().unwrap()[0].id, node(&s, &a).appearance);
+        // Nor does an image's pattern fill without an effect that gives it a shape.
+        let pic = square(&mut s, 360.0);
+        s.execute("select.set", &json!({"ids": [pic]})).unwrap();
+        s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+        let image = s.doc().unwrap().selection.objects[0];
+        s.edit("own paint", |d, _| {
+            d.node_mut(member).unwrap().appearance = paint.clone();
+            d.node_mut(image).unwrap().appearance = paint;
+            Ok(())
+        })
+        .unwrap();
+        // Underlined spaces draw a bar in the pattern, so that type object is listed.
+        let bar = s.execute("text.create", &json!({"x": 0, "y": 340, "text": "  "})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [bar], "swatch": "Dots"})).unwrap();
+        s.execute("select.set", &json!({"ids": [bar]})).unwrap();
+        s.execute("text.setFormat", &json!({"underline": true})).unwrap();
+        s.execute("layer.setProps", &json!({"id": bar, "name": "Bar"})).unwrap();
+        // A list marker set in an inline graphic's run draws in that run's pattern, so that type object is listed.
+        s.execute("shape.ellipse", &json!({"x": 300, "y": 300, "width": 10, "height": 10})).unwrap();
+        s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let listed = s.execute("text.create", &json!({"x": 0, "y": 360, "text": ""})).unwrap()["id"].clone();
+        s.execute("text.insertInline", &json!({"id": listed, "at": 0, "symbol": "Mark"})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [listed], "list": "bullet"})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [listed], "swatch": "Dots"})).unwrap();
+        s.execute("layer.setProps", &json!({"id": listed, "name": "Listed"})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(
+            i["patternObjects"],
+            json!([
+                {"id": a, "name": "Both", "patterns": ["Dots"]},
+                {"id": b, "name": "<Rectangle>", "patterns": ["Dots"]},
+                {"id": t, "name": "Type", "patterns": ["Dots"]},
+                {"id": bar, "name": "Bar", "patterns": ["Dots"]},
+                {"id": listed, "name": "Listed", "patterns": ["Dots"]},
+            ])
+        );
+        assert_eq!(i["patternNames"], json!(["Dots"]));
+        // Objects counts the objects that Pattern Objects lists.
+        assert_eq!(i["objects"]["patterns"].as_u64(), Some(5), "{}", i["objects"]);
+        s.execute("select.set", &json!({"ids": [d, e, empty, blank, guide, compound, image.0]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
+        assert!(i["objects"]["patterns"].is_null() && i["patternObjects"] == json!([]), "{}", i["objects"]);
+        let i = s.execute("document.info", &json!({"category": "patterns"})).unwrap();
+        assert_eq!((i["sections"][0]["id"].as_str(), i["sections"][0]["title"].as_str()), (Some("patterns"), Some("Pattern Objects")));
+        assert_eq!(
+            i["sections"][0]["rows"],
+            json!([["Both", "Dots"], ["<Rectangle>", "Dots"], ["Type", "Dots"], ["Bar", "Dots"], ["Listed", "Dots"]])
+        );
+        s.execute("select.set", &json!({"ids": [b]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
+        assert_eq!(i["sections"][0]["rows"], json!([["<Rectangle>", "Dots"]]));
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
+        assert_eq!((i["sections"][0]["rows"].clone(), i["patternNames"].clone()), (json!([["Type", "Dots"]]), json!(["Dots"])));
+        let text = s.execute("document.info", &json!({"category": "patterns", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(text.contains("\nPATTERN OBJECTS\nBoth: Dots\n<Rectangle>: Dots\nType: Dots\nBar: Dots\nListed: Dots\n"), "{text}");
+        assert!(!text.contains("Unused"), "{text}");
+    }
+
+    /// Document Info › Objects counts an object with a gradient or a pattern on both its fill and
+    /// its stroke once, and with Selection Only a selection that holds a group and an object inside
+    /// it counts that object once.
+    #[test]
+    fn info_counts_each_object_once() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let square =
+            |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let tile = square(&mut s, 0.0);
+        s.execute("object.pattern.make", &json!({"ids": [tile], "name": "Dots", "edit": false})).unwrap();
+        let (g, p) = (square(&mut s, 100.0), square(&mut s, 200.0));
+        let gradient = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        s.execute("paint.setFill", &json!({"ids": [g], "gradient": gradient})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [g], "gradient": gradient})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [p], "swatch": "Dots"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [p], "swatch": "Dots"})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!((i["objects"]["gradients"].as_u64(), i["objects"]["patterns"].as_u64()), (Some(1), Some(1)), "{}", i["objects"]);
+        // A group of the two squares, selected together with one of them.
+        s.execute("select.set", &json!({"ids": [g, p]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+        for ids in [json!([group, p]), json!([p, group])] {
+            s.execute("select.set", &json!({"ids": ids})).unwrap();
+            let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
+            let o = &i["objects"];
+            assert_eq!(
+                (o["paths"].as_u64(), o["groups"].as_u64(), o["gradients"].as_u64(), o["patterns"].as_u64()),
+                (Some(2), Some(1), Some(1), Some(1)),
+                "{ids}: {o}"
+            );
+            assert!((i["pathLength"].as_f64().unwrap() - 80.0).abs() < 1e-6, "{ids}: {}", i["pathLength"]);
+        }
+    }
+
+    /// Document Info › Objects counts two objects that share an id (as a damaged file can hold) as
+    /// two, in the whole document and in a selected group that holds both.
+    #[test]
+    fn info_counts_objects_that_share_an_id() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let square = |s: &mut Session, x: f64| {
+            s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap()
+        };
+        let (a, b) = (square(&mut s, 0.0), square(&mut s, 100.0));
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [group]})).unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        d.node_mut(NodeId(b)).unwrap().id = NodeId(a);
+        for p in [json!({}), json!({"selectionOnly": true})] {
+            let i = s.execute("document.info", &p).unwrap();
+            let o = &i["objects"];
+            assert_eq!((o["paths"].as_u64(), o["groups"].as_u64()), (Some(2), Some(1)), "{p}: {o}");
+            assert!((i["pathLength"].as_f64().unwrap() - 80.0).abs() < 1e-6, "{p}: {}", i["pathLength"]);
+        }
     }
 
     #[test]

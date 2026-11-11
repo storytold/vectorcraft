@@ -5,6 +5,52 @@ mod lookups;
 mod slices;
 mod units;
 
+/// A guide label's text is a layer color's name or `#rrggbb`, and reads back as the same color;
+/// other spellings, an alpha part and a short form are not labels.
+#[test]
+fn guide_label_text_names_a_layer_color_or_rgb() {
+    for (i, (name, _)) in LAYER_COLORS.iter().enumerate() {
+        let c = LayerColor::Preset(u8::try_from(i).unwrap());
+        assert_eq!(c.label_text(), *name);
+        assert_eq!(LayerColor::from_label_text(name), Some(c));
+    }
+    let custom = LayerColor::Custom([0x0a, 0xbc, 0xff]);
+    assert_eq!(custom.label_text(), "#0abcff");
+    assert_eq!(LayerColor::from_label_text("#0ABCff"), Some(custom));
+    // A preset past the layer colors has no name: its text is the color it draws in.
+    let [r, g, b] = LayerColor::Preset(200).rgb();
+    assert_eq!(LayerColor::Preset(200).label_text(), format!("#{r:02x}{g:02x}{b:02x}"));
+    for bad in ["red", "Red ", "", "#", "#fff", "#0abcff00", "0abcff", "#0abcfg", "#０abcff"] {
+        assert_eq!(LayerColor::from_label_text(bad), None, "{bad:?}");
+    }
+}
+
+/// An artboard's guide label: none unless set, left out of the JSON when none, and a preset past
+/// the layer colors reading as none.
+#[test]
+fn artboard_guide_label_defaults_and_skips_in_json() {
+    let mut a = Document::new(100.0, 100.0).artboards[0].clone();
+    assert_eq!(a.guide_label, None);
+    let plain = serde_json::to_value(&a).unwrap();
+    assert!(plain.get("guide_label").is_none(), "{plain}");
+    a.guide_label = Some(LayerColor::Custom([1, 2, 3]));
+    let v = serde_json::to_value(&a).unwrap();
+    assert_eq!(v["guide_label"], serde_json::json!({"Custom": [1, 2, 3]}));
+    assert_eq!(serde_json::from_value::<Artboard>(v).unwrap(), a);
+    let read = |label: serde_json::Value| {
+        let mut v = plain.clone();
+        v["guide_label"] = label;
+        serde_json::from_value::<Artboard>(v).map(|a| a.guide_label)
+    };
+    assert_eq!(read(serde_json::json!({"Preset": 26})).unwrap(), Some(LayerColor::Preset(26)));
+    assert_eq!(read(serde_json::json!({"Preset": 27})).unwrap(), None);
+    assert_eq!(read(serde_json::json!({"Preset": 255})).unwrap(), None);
+    assert_eq!(read(serde_json::Value::Null).unwrap(), None);
+    assert!(read(serde_json::json!({"Preset": -1})).is_err());
+    assert!(read(serde_json::json!({"Tint": 1})).is_err());
+    assert_eq!(serde_json::from_value::<Artboard>(plain).unwrap().guide_label, None, "older files have none");
+}
+
 /// Zooming in on an inch ruler divided the inch into tenths (#2827). Its steps below an inch
 /// are binary fractions now, and the minor ticks between them stay binary too; every other
 /// unit is still read in tenths.
@@ -53,6 +99,29 @@ fn doc_with_rects() -> (Document, NodeId, NodeId) {
     let b = d.alloc_id();
     d.insert(Some(layer), usize::MAX, Node::path(b, shapes::rectangle(Rect::new(20.0, 0.0, 30.0, 10.0)), Appearance::default_art())).unwrap();
     (d, a, b)
+}
+
+/// Output draws the background colors of the artboards asked for, and only theirs, as rectangles
+/// of those artboards on a layer below the art; without a color there is nothing to draw.
+#[test]
+fn artboard_fills_go_below_the_art() {
+    let (mut d, a, _) = doc_with_rects();
+    assert!(d.with_artboard_fills([0]).is_none(), "no color, no fill");
+    let second = Rect::new(700.0, 0.0, 800.0, 100.0);
+    d.artboards.push(Artboard { id: 2, rect: second, ..d.artboards[0].clone() });
+    let blue = vectorcraft_color::Color::cmyk(1.0, 0.5, 0.0, 0.0);
+    d.artboards[1].color = Some(blue);
+    assert!(d.with_artboard_fills([0]).is_none(), "only the artboards asked for");
+    let out = d.with_artboard_fills([0, 1]).unwrap();
+    assert_eq!(out.layers.len(), d.layers.len() + 1);
+    assert_eq!(out.layers[1..], d.layers[..], "the art stays as it was, above the fills");
+    let fills = out.layers[0].children().unwrap();
+    assert_eq!(out.layers[0].display_name(), "Artboard Fill");
+    assert_eq!(fills.len(), 1);
+    assert_eq!(fills[0].geometric_bounds(), Some(second));
+    assert_eq!(fills[0].appearance.fill_paint(), vectorcraft_color::Paint::solid(blue), "in the color's own model");
+    assert!(out.node(a).is_some() && out.node(fills[0].id).is_some() && fills[0].id != a);
+    assert_eq!(d.artboards, out.artboards);
 }
 
 #[test]
@@ -123,6 +192,7 @@ fn art_on_a_locked_artboard_cannot_be_selected_or_edited() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     let rect = |d: &mut Document, r: Rect, appearance: Appearance| {
         let id = d.alloc_id();
@@ -202,7 +272,7 @@ fn art_on_a_locked_artboard_cannot_be_selected_or_edited() {
 fn art_on_artboard_measures_a_symbol_instance_by_its_art() {
     let mut d = Document::new(612.0, 792.0);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
-    d.symbols.push(Symbol { name: "Box".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: Arc::new(art) });
     let (layer, id) = (d.layers[0].id, d.alloc_id());
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((2.0, 2.0)) })).unwrap();
     // The art, (2, 2) to (12, 12), lies inside; the 20 × 20 square, (-8, -8) to (12, 12), doesn't.
@@ -389,6 +459,18 @@ fn char_position_round_trips() {
 }
 
 #[test]
+fn optical_kerning_round_trips_and_old_style_defaults_to_auto() {
+    let st = CharStyle { optical_kerning: true, kerning: Some(120.0), ..CharStyle::default() };
+    let value = serde_json::to_value(&st).unwrap();
+    assert_eq!(value["opticalKerning"], true);
+    assert_eq!(serde_json::from_value::<CharStyle>(value.clone()).unwrap(), st);
+    let mut old = value;
+    old.as_object_mut().unwrap().remove("opticalKerning");
+    assert!(!serde_json::from_value::<CharStyle>(old).unwrap().optical_kerning);
+    assert!(serde_json::to_value(CharStyle::default()).unwrap().get("opticalKerning").is_none());
+}
+
+#[test]
 fn units() {
     assert_eq!(Unit::Inches.parse("1"), Some(72.0));
     assert_eq!(Unit::Points.parse("1in"), Some(72.0));
@@ -415,4 +497,65 @@ fn pica_form_rejects_exponent_notation() {
     for s in ["1e5p", "infp", "nanp", "infp3", "1p1e2"] {
         assert_eq!(Unit::Points.parse(s), None, "{s}");
     }
+}
+
+/// Symbol editing of symbol "S" on `layer`.
+fn symbol_edit_on(layer: NodeId) -> SymbolEdit {
+    SymbolEdit {
+        symbol: "S".into(),
+        layer,
+        instance: None,
+        xf: Affine::IDENTITY,
+        group: false,
+        changed: false,
+        back_isolation: None,
+        back_layer: None,
+    }
+}
+
+/// The opacity-mask and symbol editing layers are left out of the saved document wherever they
+/// are, also when `layer.move` made them sublayers of another layer.
+#[test]
+fn edit_mode_layers_are_dropped_as_sublayers_too() {
+    let mut d = Document::new(612.0, 792.0);
+    let host = d.layers[0].id;
+    let mask = d.add_layer(Some("Mask"));
+    let symbol = d.add_layer(Some("Symbol"));
+    d.move_node(mask, Some(host), 0).unwrap();
+    d.move_node(symbol, Some(host), usize::MAX).unwrap();
+    let object = d.alloc_id();
+    d.mask_edit = Some(MaskEdit { object, layer: mask });
+    d.symbol_edit = Some(symbol_edit_on(symbol));
+    let saved = d.without_edit_modes();
+    assert!(saved.node(mask).is_none(), "the mask editing layer is left out");
+    assert!(saved.node(symbol).is_none(), "the symbol editing layer is left out");
+    assert!(saved.node(host).is_some_and(|l| l.children().is_some_and(|c| c.is_empty())));
+    assert!(saved.mask_edit.is_none() && saved.symbol_edit.is_none());
+}
+
+/// Symbol editing is never read from a file, so a layer that file data names as the editing layer
+/// loads and stays in the document, and saving does not write the value again.
+#[test]
+fn symbol_edit_is_not_read_from_a_file() {
+    let mut d = Document::new(612.0, 792.0);
+    let layer = d.layers[0].id;
+    let mut v = serde_json::to_value(&d).unwrap();
+    v["symbol_edit"] = serde_json::to_value(symbol_edit_on(layer)).unwrap();
+    d = serde_json::from_value(v).unwrap();
+    assert_eq!(d.symbol_edit, None);
+    assert!(d.extra.is_empty(), "not kept as an unknown key");
+    d.drop_edit_modes();
+    assert!(d.node(layer).is_some(), "the layer is kept");
+    assert!(serde_json::to_value(&d).unwrap().get("symbol_edit").is_none(), "not saved again");
+}
+
+/// An opacity-mask editing id in file data that names art inside a layer, not a layer, leaves the
+/// art in place.
+#[test]
+fn mask_edit_naming_art_leaves_it() {
+    let (mut d, a, b) = doc_with_rects();
+    d.mask_edit = Some(MaskEdit { object: b, layer: a });
+    d.drop_edit_modes();
+    assert!(d.node(a).is_some() && d.node(b).is_some());
+    assert_eq!(d.mask_edit, None);
 }

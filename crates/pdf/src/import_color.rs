@@ -239,6 +239,18 @@ impl<'p> Colors<'p> {
         }
     }
 
+    /// The space of colour space array `a` (`[/Separation name alt tint]` or `[/DeviceN …]`, such
+    /// as an image's) among the file's: matched by its kind, its colorant names and its tint
+    /// transform, not by the page's walk. `None` for another array.
+    pub fn array_space(&mut self, a: &Array<'_>) -> Option<Space> {
+        self.scan();
+        let mut it = a.flex_iter();
+        let (device_n, names) = ink_names(&mut it)?;
+        it.next::<Object<'_>>()?;
+        let key = debug_text(&Function::new(&it.next::<Object<'_>>()?)?)?;
+        self.spaces.iter().position(|s| s.device_n == device_n && s.names == names && s.key == key).map(Space::Inks)
+    }
+
     /// Whether a space of inks `names` has the kind, colorant count and tint transform of a space
     /// of other inks. [`Colors::space_of`] tells such spaces apart only by the names from the
     /// page's walk.
@@ -321,6 +333,41 @@ impl<'p> Colors<'p> {
             }
             _ => Some(Native { color: Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(t), link: Some((REGISTRATION.to_string(), t)) }),
         }
+    }
+
+    /// A gradient stop's colour that paints one spot ink together with process plates (a
+    /// DeviceN colour of an ink and process colorants): the ink's swatch (marked used), its tint
+    /// and the process plates (C, M, Y, K). `None` for any other colour ([`Colors::native`] takes
+    /// it).
+    pub fn ink_with_plates(&mut self, space: Space, comps: &[f32]) -> Option<(String, f32, [f32; 4])> {
+        let Space::Inks(i) = space else { return None };
+        let colorants = &self.spaces.get(i)?.colorants;
+        let mut cmyk = [0.0f32; 4];
+        let mut ink = None;
+        for (c, t) in colorants.iter().zip(comps) {
+            let t = round3(t.clamp(0.0, 1.0));
+            match *c {
+                Colorant::Unknown => return None,
+                Colorant::None => {}
+                Colorant::Process(ch) => {
+                    if let Some(v) = cmyk.get_mut(ch) {
+                        *v = v.max(t);
+                    }
+                }
+                // A second ink (or every plate) painting too can't be one stop.
+                Colorant::Ink(_) | Colorant::All if t > 0.0 && ink.is_some() => return None,
+                Colorant::All if t > 0.0 => return None,
+                Colorant::Ink(k) if t > 0.0 => ink = Some((k, t)),
+                Colorant::Ink(_) | Colorant::All => {}
+            }
+        }
+        let (k, t) = ink?;
+        if cmyk.iter().all(|v| *v <= 0.0) {
+            return None;
+        }
+        let ink = self.inks.get_mut(k)?;
+        ink.used = true;
+        Some((ink.name.clone(), t, cmyk))
     }
 
     /// Mark each ink that components `comps` of `space` paint with (a tint above 0) as used, so it

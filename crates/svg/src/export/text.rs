@@ -1,4 +1,4 @@
-use super::output::xml_text;
+use super::output::{xml_attr_escape, xml_attr_valid, xml_text};
 use super::{
     Affine, AppearanceItem, Arc, BTreeSet, BezPath, BlendMode, CharStyle, FillRule, FontDb, FontFace, GradientKind, HashMap, Justify, Node, NodeId,
     NodeKind, Paint, PathData, Props, Rect, StrokeAlign, Styling, TextKind, TextObject, Writer, base64_encode, css, css_string, fmt_num,
@@ -73,16 +73,25 @@ impl Writer<'_> {
     /// instances of their symbols (a `<use>` of the symbol's def where it can be shared), all in
     /// one group carrying the object's transparency. The live text skips their characters and
     /// places the text after each one; type on a path with inline graphics is written as outlines
-    /// (a `<textPath>` couldn't leave room for the art).
+    /// (a `<textPath>` couldn't leave room for the art). A run whose font size measures a height
+    /// other than the em box is written at the em size it is drawn at
+    /// ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     pub(super) fn text_node(&mut self, n: &Node, t: &TextObject) {
         let doc = self.doc;
         let resolved = doc.inline_resolved(t);
-        let t = &*resolved;
+        let heights = vectorcraft_text::FontDb::global().font_heights_resolved(&resolved);
+        let t = &*heights;
         let inline = t.runs.iter().any(|r| r.inline.is_some());
         // Ruby is written as outlines with its base text: a reader's <text> can't place it. So are
-        // small capitals, superscript and subscript and tab leaders, which SVG text doesn't draw (#3869).
-        let unwritable = t.runs.iter().any(|r| r.style.small_caps.is_some() || r.style.position != vectorcraft_doc::CharPosition::Normal)
-            || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
+        // small capitals, superscript and subscript and tab leaders, which SVG text doesn't draw (#3869),
+        // and a glyph chosen for a character, which a reader's <text> draws with the default glyph. So
+        // is type in one of the document's composite fonts, which a reader can't find by its name.
+        let unwritable = t.runs.iter().any(|r| {
+            r.style.small_caps.is_some()
+                || r.style.position != vectorcraft_doc::CharPosition::Normal
+                || r.style.glyph_alternate.is_some()
+                || vectorcraft_doc::CompositeFont::named(&doc.composite_fonts, &r.style.font_family).is_some()
+        }) || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
         let outlined =
             self.opts.outline_text || t.vertical || !t.ruby.is_empty() || (inline && matches!(t.kind, TextKind::OnPath { .. })) || unwritable;
         let chars = |w: &mut Self, n: &Node| if outlined { w.text_outlines(n, t) } else { w.text(n, t) };
@@ -125,7 +134,9 @@ impl Writer<'_> {
                 NodeId(u64::MAX),
                 NodeKind::SymbolInstance { symbol: art.symbol.clone(), xf: t.xf * ig.xf * doc.symbol_natural_xf(&art.symbol) },
             );
+            let inline = std::mem::replace(&mut self.inline_graphic, true);
             self.node(&inst);
+            self.inline_graphic = inline;
         }
         glyphs(self, above);
         self.anonymous = anonymous;
@@ -155,10 +166,19 @@ impl Writer<'_> {
         }
         let id = self.id_attr(n);
         let a = self.attrs(&css::transparency(n));
-        // Glyphs bent along a path (joined scripts on a curve) can only be outlines: the group
-        // names its text for screen readers and search.
-        let label = if lay.glyphs.iter().any(|g| g.bend.is_some()) {
-            format!(" role=\"img\" aria-label=\"{}\"", xml_escape(&t.plain_text()))
+        // Text outlined because SVG text can't draw it (bent glyphs, vertical type, ruby, effects on
+        // a path and the like) names its text for screen readers and search; Convert to Outlines
+        // leaves only the paths, except for bent glyphs. Inline graphics are written apart from the
+        // glyphs, so their placeholder characters stay out of the name; empty text has none.
+        let text: String = t.plain_text().chars().filter(|&c| c != vectorcraft_doc::text::INLINE_CHAR).collect();
+        let label = if !text.trim().is_empty() && (!self.opts.outline_text || lay.glyphs.iter().any(|g| g.bend.is_some())) {
+            // SVG import names an object by its `aria-label` before its id, so an id that stands for
+            // the name is written as `data-name` too, and the object keeps its name.
+            let name = match self.names.get(&n.id) {
+                Some(named) if !id.is_empty() && !id.contains(" data-name=\"") => format!(" data-name=\"{}\"", xml_attr_escape(named)),
+                _ => String::new(),
+            };
+            format!("{name} role=\"img\" aria-label=\"{}\"", xml_attr_valid(&text))
         } else {
             String::new()
         };
@@ -225,6 +245,12 @@ impl Writer<'_> {
             // keep their look as outlines.
             if end.is_some() || t.path_align != vectorcraft_doc::PathAlign::Baseline || t.path_spacing != 0.0 {
                 self.warn("type on a path with an end bracket, Align to Path or Spacing is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
+            // A reader turns each `<textPath>` glyph with the path, as Rainbow does: Skew, 3D
+            // Ribbon, Stair Step and Gravity keep their look as outlines.
+            if t.path_effect != vectorcraft_doc::PathEffect::Rainbow {
+                self.warn("type on a path with an effect other than Rainbow is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
             // It cannot hang glyphs outside the start bracket either.
@@ -511,14 +537,24 @@ impl Writer<'_> {
         let space = (lay.bounds, self.xf * t.xf);
         let base = self.char_props(&t.first_style(), space);
         let mut props = base.clone();
-        match t.para_at(0).justify {
-            Justify::Center | Justify::JustifyCenter => props.push(("text-anchor", "middle".into())),
-            Justify::Right | Justify::JustifyRight => props.push(("text-anchor", "end".into())),
-            _ => {}
-        }
+        let (from, to) = t.kind.path_span().unwrap_or((start, 1.0));
+        // The anchor sits where the layout aligns the line within its span.
+        let at = match t.para_at(0).justify {
+            Justify::Center | Justify::JustifyCenter => {
+                props.push(("text-anchor", "middle".into()));
+                (from + to) / 2.0
+            }
+            Justify::Right | Justify::JustifyRight => {
+                props.push(("text-anchor", "end".into()));
+                to
+            }
+            _ => from,
+        };
+        // A closed path's span runs past its start point; `startOffset` can't, so wrap it.
+        let at = if at > 1.0 { at - 1.0 } else { at };
         props.extend(css::transparency(n));
         let a = self.attrs(&props);
-        let offset = fmt_num(start * 100.0, 3);
+        let offset = fmt_num(at * 100.0, 3);
         let mut s = format!("<text{id} xml:space=\"preserve\"{a}><textPath xlink:href=\"#{pid}\" startOffset=\"{offset}%\">");
         for run in &t.runs {
             let mut diff = run_diff(&base, self.char_props(&run.style, space));
@@ -776,15 +812,26 @@ fn end_segment(
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`reader_advances`] laid out type again on this thread.
+    static READER_LAYOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The advance a reader of live SVG text gives each character cluster of `t` and how far from
 /// its pen it draws the cluster's first glyph, keyed by the cluster's byte offset: `t` laid out
 /// as point type (which isn't justified) without Mojikumi, scaled as `t`'s layout `lay` is by
 /// Shrink Text to Fit. Without `kerning`, the font's pair kerning is left out (as manual
-/// kerning leaves it out).
+/// kerning leaves it out). When that leaves `t` as it is, its glyphs are read from `lay`, which
+/// is `t`'s layout, instead of laying it out again.
 fn reader_advances(t: &TextObject, lay: &vectorcraft_text::TextLayout, kerning: bool) -> HashMap<usize, (f64, f64)> {
+    // Mojikumi that spaces none of the characters sets them as Mojikumi None does.
+    let mojikumi = lay.mojikumi_applies(&t.plain_text());
     let mut set = TextObject { kind: TextKind::Point, ..t.clone() };
     for p in std::iter::once(&mut set.para).chain(set.paras.iter_mut()) {
-        p.mojikumi = vectorcraft_doc::Mojikumi::None;
+        if mojikumi {
+            p.mojikumi = vectorcraft_doc::Mojikumi::None;
+        }
         // A reader spaces words and letters as the font does.
         p.justification = vectorcraft_doc::JustificationOptions::default();
     }
@@ -793,8 +840,17 @@ fn reader_advances(t: &TextObject, lay: &vectorcraft_text::TextLayout, kerning: 
             r.style.kerning.get_or_insert(0.0);
         }
     }
+    let relaid;
+    let glyphs = if set == *t {
+        &lay.glyphs
+    } else {
+        #[cfg(test)]
+        READER_LAYOUTS.with(|n| n.set(n.get() + 1));
+        relaid = vectorcraft_text::layout(FontDb::global(), &set);
+        &relaid.glyphs
+    };
     let mut out: HashMap<usize, (f64, f64)> = HashMap::new();
-    for g in vectorcraft_text::layout(FontDb::global(), &set).glyphs.iter().filter(|g| g.len > 0) {
+    for g in glyphs.iter().filter(|g| g.len > 0) {
         let (advance, _) = out.entry(g.byte).or_insert((0.0, (g.xf.translation().x - g.origin.x) * lay.fit_scale));
         *advance += g.advance * lay.fit_scale;
     }
@@ -811,3 +867,6 @@ fn line_start(line: &[Segment], anchor: Option<f64>) -> Option<(f64, f64)> {
     };
     Some((x, first.y))
 }
+
+#[cfg(test)]
+mod tests;

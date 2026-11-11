@@ -1,6 +1,6 @@
-//! Color Effects (a built-in add-on): live Exposure, Desaturate and Invert Colors, in Effect › Color
-//! Effects. They are colour adjustments ([`crate::is_adjustment`]): they recolour what an object
-//! paints as the others do, in stack order with them.
+//! Color Effects (a built-in add-on): live Exposure, Desaturate, Duotone and Invert Colors, in
+//! Effect › Color Effects. They are colour adjustments ([`crate::is_adjustment`]): they recolour what
+//! an object paints as the others do, in stack order with them.
 
 use serde_json::{Value, json};
 
@@ -13,9 +13,10 @@ pub const EXPOSURE: &str = "addon.color.exposure";
 pub const DESATURATE: &str = "addon.color.desaturate";
 /// Invert Colors: every colour to its RGB inverse.
 pub const INVERT: &str = "addon.color.invert";
+pub use super::duotone::DUOTONE;
 
 /// The add-on's effects, in menu order.
-pub const EFFECTS: [&str; 3] = [DESATURATE, EXPOSURE, INVERT];
+pub const EFFECTS: [&str; 4] = [DESATURATE, DUOTONE, EXPOSURE, INVERT];
 
 /// Is `id` one of the add-on's effects?
 pub fn is_color_effect(id: &str) -> bool {
@@ -28,6 +29,7 @@ pub(crate) fn catalog() -> Vec<EffectInfo> {
     let e = |id, label, params, defaults| EffectInfo { id, label, menu: MENU, params, defaults, raster: false, lengths: Lengths::default() };
     vec![
         e(DESATURATE, "Desaturate", "{} turns every colour the object paints to the grey of its lightness (each colour keeps its model)", json!({})),
+        e(DUOTONE, "Duotone…", super::duotone::PARAMS, super::duotone::defaults()),
         e(
             EXPOSURE,
             "Exposure…",
@@ -49,6 +51,8 @@ pub(crate) enum Adjust {
     },
     Desaturate,
     Invert,
+    /// Duotone ([`super::duotone`]).
+    Duotone(super::duotone::Duotone),
 }
 
 impl Adjust {
@@ -61,6 +65,7 @@ impl Adjust {
             },
             DESATURATE => Adjust::Desaturate,
             INVERT => Adjust::Invert,
+            DUOTONE => Adjust::Duotone(super::duotone::Duotone::parse(p)?),
             _ => return None,
         })
     }
@@ -73,6 +78,7 @@ impl Adjust {
                 [(r.max(g).max(b) + r.min(g).min(b)) / 2.0; 3]
             }
             Adjust::Invert => rgb.map(|v| 1.0 - v),
+            Adjust::Duotone(d) => d.apply_rgb(rgb),
         }
     }
 }

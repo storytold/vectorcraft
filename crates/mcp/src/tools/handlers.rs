@@ -334,9 +334,10 @@ pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> 
 /// Most fields one `answer_dialog` call may set.
 pub(super) const MAX_DIALOG_FIELDS: usize = 256;
 
-/// Sets the open dialog's fields in order with one `ui.dialog.set {fields}`, which stores all of
-/// them or none, then confirms or cancels it. Every argument is checked before anything is sent to
-/// the app.
+/// Sets the open dialog's fields in order with one `ui.dialog.set {fields, action?}`, which stores
+/// all of them or none and then confirms or cancels that same dialog, so a dialog another
+/// connection opens in between is not answered in its place. Every argument is checked before
+/// anything is sent to the app.
 pub(super) fn answer_dialog(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let set = match a.get("set") {
         None => &[][..],
@@ -355,21 +356,37 @@ pub(super) fn answer_dialog(b: &mut dyn Backend, a: &Args) -> Result<Value, Stri
         let field = item.get("field").and_then(Value::as_str).ok_or_else(|| format!("set {i}: missing string `field`"))?;
         fields.push(json!({"field": field, "value": item.get("value").cloned().unwrap_or(Value::Null)}));
     }
-    let then = match a.get("action") {
-        None => None,
-        Some(v) if v == "confirm" => Some("ui.dialog.confirm"),
-        Some(v) if v == "cancel" => Some("ui.dialog.cancel"),
+    let (action, then) = match a.get("action") {
+        None => (None, None),
+        Some(v) if v == "confirm" => (Some("confirm"), Some("ui.dialog.confirm")),
+        Some(v) if v == "cancel" => (Some("cancel"), Some("ui.dialog.cancel")),
         Some(_) => return Err("`action` must be confirm or cancel".into()),
     };
     if fields.is_empty() && then.is_none() {
         return Err("give `set` and/or `action`".into());
     }
-    let dialog = if fields.is_empty() { Value::Null } else { b.call("ui.dialog.set", json!({"fields": fields}))? };
-    let result = match then {
-        Some(method) => b.call(method, json!({}))?,
-        None => Value::Null,
-    };
-    Ok(json!({"dialog": dialog, "result": result}))
+    if fields.is_empty() {
+        let result = match then {
+            Some(method) => b.call(method, json!({}))?,
+            None => Value::Null,
+        };
+        return Ok(json!({"dialog": Value::Null, "result": result}));
+    }
+    let mut params = json!({"fields": fields});
+    if let Some(action) = action {
+        params["action"] = json!(action);
+    }
+    let reply = b.call("ui.dialog.set", params)?;
+    match then {
+        None => Ok(json!({"dialog": reply, "result": Value::Null})),
+        // The app answered the dialog in the same request.
+        Some(_) if reply.get("dialog").is_some() => Ok(reply),
+        // An app that predates `action` replied with the dialog alone and did not answer it.
+        Some(method) => {
+            let result = b.call(method, json!({}))?;
+            Ok(json!({"dialog": reply, "result": result}))
+        }
+    }
 }
 
 pub(super) fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
@@ -442,12 +459,27 @@ pub(super) fn max_side(a: &Args) -> Result<Option<u32>, String> {
     }
 }
 
+/// The longest side of a window capture that is decoded (a screen is never wider).
+const MAX_CAPTURE_SIDE: u32 = 16_384;
+
+/// `png` decoded, refused when a side is longer than `side` or the decode needs more than 256 MiB:
+/// the picture is the app's reply, and its header names the size it is decoded at.
+pub(super) fn decode_png(png: &[u8], side: u32) -> Result<image::DynamicImage, image::ImageError> {
+    let mut reader = image::ImageReader::with_format(std::io::Cursor::new(png), image::ImageFormat::Png);
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(side);
+    limits.max_image_height = Some(side);
+    limits.max_alloc = Some(256 << 20);
+    reader.limits(limits);
+    reader.decode()
+}
+
 /// A window capture with `max_side`: scaled down when its longer side is larger, with its own size
 /// in `capturedWidth` / `capturedHeight` and the returned image's in `width` / `height`. Without
 /// `max_side` the capture and `info` stay as they are.
 fn fit_capture(png: Vec<u8>, max: Option<u32>, info: &mut Value) -> Result<Vec<u8>, String> {
     let Some(max) = max else { return Ok(png) };
-    let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| format!("read capture: {e}"))?;
+    let img = decode_png(&png, MAX_CAPTURE_SIDE).map_err(|e| format!("read capture: {e}"))?;
     info["capturedWidth"] = json!(img.width());
     info["capturedHeight"] = json!(img.height());
     if img.width().max(img.height()) <= max {
@@ -470,5 +502,19 @@ pub(super) fn image_result(png: &[u8], info: Value) -> ToolResult {
             json!({"type": "text", "text": info.to_string()}),
         ],
         is_error: false,
+    }
+}
+
+#[cfg(test)]
+mod decode_tests {
+    use super::decode_png;
+
+    #[test]
+    fn a_picture_with_a_side_past_the_limit_is_not_decoded() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::new(200, 10).write_to(&mut png, image::ImageFormat::Png).unwrap();
+        let png = png.into_inner();
+        assert!(decode_png(&png, 100).is_err());
+        assert_eq!(decode_png(&png, 200).unwrap().width(), 200);
     }
 }

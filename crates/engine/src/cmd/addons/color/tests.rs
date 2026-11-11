@@ -238,3 +238,79 @@ fn a_halftone_past_the_caps_leaves_the_object_as_it_is() {
     let n = s.doc().unwrap().doc.node(id).cloned().unwrap();
     assert!(n.children().is_none_or(|c| c.len() < 5), "no dots");
 }
+
+/// Duotone, the live effect.
+const DUOTONE: &str = "addon.color.duotone";
+
+/// A document with spot swatch "Ink" and a selected grey (50 %) rectangle, unstroked.
+fn grey_rect() -> (Session, NodeId) {
+    let (mut s, id) = red_rect();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": {"model": "cmyk", "c": 0.0, "m": 0.6, "y": 1.0, "k": 0.0}, "spot": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": {"gray": 0.5}})).unwrap();
+    (s, id)
+}
+
+fn ink_tone(curve: &str) -> serde_json::Value {
+    json!({"tones": [{"color": {"model": "cmyk", "c": 0.0, "m": 0.6, "y": 1.0, "k": 0.0}, "swatch": "Ink", "curve": curve}]})
+}
+
+fn fill_paint(s: &Session, id: NodeId) -> vectorcraft_color::Paint {
+    s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint().clone()
+}
+
+#[test]
+fn duotone_draws_a_tint_of_its_spot_tone_and_expands_to_it() {
+    let (mut s, id) = grey_rect();
+    let grey = pixel(&s);
+    s.execute("effect.apply", &json!({"effect": DUOTONE, "params": ink_tone("0,0 100,100")})).unwrap();
+    assert_eq!(fill_paint(&s, id).color().unwrap(), vectorcraft_color::Color::gray(0.5), "the colours stay");
+    let drawn = pixel(&s);
+    assert!(drawn != grey && drawn[0] > drawn[2], "drawn in the ink: {drawn:?}");
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    let vectorcraft_color::Paint::Solid { swatch, tint, .. } = fill_paint(&s, id) else { panic!("a solid fill") };
+    assert_eq!(swatch.as_deref(), Some("Ink"), "linked to the spot swatch, so it separates on its plate");
+    assert!((tint - 0.5).abs() < 0.01, "{tint}");
+}
+
+#[test]
+fn duotone_as_a_filter_equals_the_live_effect_expanded() {
+    for params in [
+        ink_tone("0,0 100,100"),
+        ink_tone("0,0 40,70 100,100"),
+        json!({"tones": [{"color": "#00ffff", "swatch": "Ink"}, {"color": {"model": "cmyk", "c": 0.0, "m": 0.0, "y": 0.0, "k": 1.0}, "curve": "0,0 100,40"}]}),
+        json!({"tones": [{"color": "#000000"}], "skipSpot": true}),
+    ] {
+        let (mut live, id) = grey_rect();
+        live.execute("effect.apply", &json!({"effect": DUOTONE, "params": params})).unwrap();
+        live.execute("effect.expandAppearance", &json!({})).unwrap();
+        let (mut filtered, _) = grey_rect();
+        let undo = filtered.doc().unwrap().history.undo.len();
+        assert_eq!(filtered.execute("addon.color.filter", &json!({"effect": DUOTONE, "params": params})).unwrap()["changed"], 1);
+        assert_eq!(filtered.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        assert_eq!(fill_paint(&filtered, id), fill_paint(&live, id), "{params}");
+    }
+    // The params round-trip: the effect keeps what it was given, and the filter reads the same.
+    let (mut s, id) = grey_rect();
+    let params = ink_tone("0,0 40,70 100,100");
+    s.execute("effect.apply", &json!({"effect": DUOTONE, "params": params})).unwrap();
+    let kept = s.doc().unwrap().doc.node(id).unwrap().appearance.effects[0].params.clone();
+    assert_eq!(kept["tones"], params["tones"]);
+    s.execute("addon.color.filter", &json!({"effect": DUOTONE, "params": kept})).unwrap();
+    let vectorcraft_color::Paint::Solid { swatch, tint, .. } = fill_paint(&s, id) else { panic!("a solid fill") };
+    assert_eq!(swatch.as_deref(), Some("Ink"));
+    let fx = vectorcraft_render::effects::addons::duotone::tone_curve_points(Some(&json!("0,0 40,70 100,100")));
+    let want = vectorcraft_render::effects::curve_at(&fx, 0.5);
+    assert!(want > 0.7 && (tint - want).abs() < 0.01, "the curve lifts the mid tone: {tint}, {want}");
+}
+
+#[test]
+fn duotone_skips_spot_colours_when_asked() {
+    let (mut s, id) = grey_rect();
+    s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+    let spot = fill_paint(&s, id);
+    s.execute("addon.color.filter", &json!({"effect": DUOTONE, "params": {"tones": [{"color": "#000000"}], "skipSpot": true}})).unwrap();
+    assert_eq!(fill_paint(&s, id), spot);
+    s.execute("addon.color.filter", &json!({"effect": DUOTONE, "params": {"tones": [{"color": "#000000"}]}})).unwrap();
+    assert_ne!(fill_paint(&s, id), spot);
+}

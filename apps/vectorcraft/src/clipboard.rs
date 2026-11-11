@@ -20,7 +20,7 @@ use std::io::{Cursor, Read};
 use std::path::PathBuf;
 
 use vectorcraft_engine::cmd::clipboard::{BITMAP, EPS, FILE_HEAD, Flavour, PDF, PNG, SVG, TEXT, file_flavour};
-use vectorcraft_ui_egui::SystemClipboard;
+use vectorcraft_ui_egui::{ClipboardRead, SystemClipboard};
 
 /// This platform's system clipboard. On Linux, `window`'s Wayland connection carries text where
 /// arboard can't open (GNOME has no data-control protocol, a Flatpak there no X11).
@@ -157,6 +157,10 @@ fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
             None if vectorcraft_engine::file_access::current().is_none() => {}
             None => return None,
         }
+        // A device or pipe may never end: only a regular file is read whole.
+        if !std::fs::metadata(&path).ok()?.is_file() {
+            return None;
+        }
         let mut head = Vec::with_capacity(FILE_HEAD);
         std::fs::File::open(&path).ok()?.take(FILE_HEAD as u64).read_to_end(&mut head).ok()?;
         let mime = file_flavour(&path.to_string_lossy(), &head, mimes)?;
@@ -172,7 +176,7 @@ mod win {
     use clipboard_win::{formats, options::NoClear, raw};
 
     use super::{
-        BITMAP, Cursor, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, dib_image, png_flavour, text_of, windows_formats,
+        BITMAP, ClipboardRead, Cursor, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, dib_image, png_flavour, windows_formats,
     };
 
     /// The device-independent bitmaps, the one that carries alpha first. Each is there whenever the
@@ -206,8 +210,6 @@ mod win {
     pub struct Clipboard {
         /// The clipboard's sequence number right after our last write.
         seq: Option<NonZeroU32>,
-        /// The text of our last write.
-        text: Option<String>,
     }
 
     impl SystemClipboard for Clipboard {
@@ -238,21 +240,26 @@ mod win {
                 }
             }
             self.seq = raw::seq_num();
-            self.text = text_of(flavours);
             result
         }
 
         fn holds_ours(&mut self) -> bool {
-            if self.seq.is_some() && raw::seq_num() == self.seq {
-                return true;
-            }
-            // A clipboard manager may have copied our data again as its own.
-            let Some(ours) = self.text.as_deref() else { return false };
-            let Ok(_open) = clipboard_win::Clipboard::new_attempts(10) else { return false };
-            read_one(TEXT).is_some_and(|f| f.data == ours.as_bytes())
+            // The same text copied later by another app is a different clipboard entry. A
+            // clipboard manager that republishes our data is also a new entry.
+            self.seq.is_some() && raw::seq_num() == self.seq
+        }
+
+        fn change_count(&mut self) -> Option<u64> {
+            raw::seq_num().map(|n| u64::from(n.get()))
         }
 
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
+            self.read_deferred(mimes)?.flavour()
+        }
+
+        /// A device-independent bitmap is copied off the clipboard here and decoded and encoded
+        /// as PNG by the work that comes back.
+        fn read_deferred(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
             let mut files = vec![];
             {
                 let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
@@ -260,7 +267,7 @@ mod win {
                 let _ = raw::get_file_list_path(&mut files);
             }
             // The files are read with the clipboard closed again, not keeping other apps waiting.
-            copied_file(files, mimes).or_else(|| {
+            copied_file(files, mimes).map(ClipboardRead::Now).or_else(|| {
                 let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
                 mimes.iter().find_map(|m| read_one(m))
             })
@@ -284,16 +291,28 @@ mod win {
         })
     }
 
-    /// One flavour, while the clipboard is open.
-    fn read_one(mime: &'static str) -> Option<Flavour> {
+    /// A device-independent bitmap as a PNG flavour.
+    fn dib_png(dib: &[u8]) -> Option<Flavour> {
+        png_flavour(&dib_image(dib)?)
+    }
+
+    /// Copy both bitmap formats while the clipboard is open, then decode them in preference order.
+    pub(super) fn read_dibs(mut get: impl FnMut(u32) -> Option<Vec<u8>>) -> Option<ClipboardRead> {
+        let dibs: Vec<_> = DIBS.into_iter().filter_map(&mut get).collect();
+        (!dibs.is_empty()).then_some(ClipboardRead::Later(Box::new(move || dibs.iter().find_map(|dib| dib_png(dib)))))
+    }
+
+    /// One flavour, while the clipboard is open. A device-independent bitmap is copied here, and
+    /// the work that comes back decodes each captured format in preference order.
+    fn read_one(mime: &'static str) -> Option<ClipboardRead> {
         let mut data = vec![];
         let mime = match mime {
             BITMAP if read_registered(PNG, &mut data) => PNG,
             BITMAP => {
-                return DIBS.into_iter().find_map(|id| {
-                    data.clear();
-                    raw::get_vec(id, &mut data).ok()?;
-                    png_flavour(&dib_image(&data)?)
+                return read_dibs(|id| {
+                    let mut dib = vec![];
+                    raw::get_vec(id, &mut dib).ok()?;
+                    Some(dib)
                 });
             }
             TEXT => {
@@ -309,7 +328,7 @@ mod win {
         {
             data.truncate(end);
         }
-        (!data.is_empty()).then_some(Flavour { mime, data })
+        (!data.is_empty()).then_some(ClipboardRead::Now(Flavour { mime, data }))
     }
 }
 
@@ -322,7 +341,7 @@ mod portable {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{BITMAP, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, text_of};
+    use super::{BITMAP, ClipboardRead, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, text_of};
 
     /// What our last write put on the clipboard.
     enum Ours {
@@ -339,6 +358,7 @@ mod portable {
     }
 
     /// What a write of a picture says where the clipboard carries text only.
+    #[cfg(target_os = "linux")]
     const TEXT_ONLY: &str = "this clipboard carries text only";
 
     impl Backend {
@@ -579,22 +599,27 @@ mod portable {
         }
 
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
+            self.read_deferred(mimes)?.flavour()
+        }
+
+        /// arboard's image is read here and encoded as PNG by the work that comes back.
+        fn read_deferred(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
             let cb = self.cb(Asker::User).ok()?;
             if let Some(f) = copied_file(cb.file_list(), mimes) {
-                return Some(f);
+                return Some(ClipboardRead::Now(f));
             }
             mimes.iter().find_map(|m| {
                 #[cfg(target_os = "macos")]
                 if let Some(f) = super::mac::read(m) {
-                    return Some(f);
+                    return Some(ClipboardRead::Now(f));
                 }
                 match *m {
-                    TEXT => cb.get_text().ok().filter(|t| !t.is_empty()).map(|t| Flavour { mime: TEXT, data: t.into_bytes() }),
+                    TEXT => cb.get_text().ok().filter(|t| !t.is_empty()).map(|t| ClipboardRead::Now(Flavour { mime: TEXT, data: t.into_bytes() })),
                     BITMAP => {
                         let img = cb.get_image().ok()?;
-                        let rgba =
-                            image::RgbaImage::from_raw(u32::try_from(img.width).ok()?, u32::try_from(img.height).ok()?, img.bytes.into_owned())?;
-                        png_flavour(&rgba)
+                        let (width, height) = (u32::try_from(img.width).ok()?, u32::try_from(img.height).ok()?);
+                        let bytes = img.bytes.into_owned();
+                        Some(ClipboardRead::Later(Box::new(move || png_flavour(&image::RgbaImage::from_raw(width, height, bytes)?))))
                     }
                     _ => None,
                 }
@@ -953,10 +978,17 @@ mod tests {
 
     use super::*;
 
-    fn dir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("vectorcraft-clipboard-{name}-{}", std::process::id()));
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn dir(name: &str) -> tempfile::TempDir {
+        tempfile::Builder::new().prefix(&format!("vectorcraft-clipboard-{name}-")).tempdir().unwrap()
+    }
+
+    #[test]
+    fn test_directory_is_removed_when_its_handle_is_dropped() {
+        let dir = dir("cleanup");
+        let path = dir.path().to_path_buf();
+        assert!(path.exists());
+        drop(dir);
+        assert!(!path.exists());
     }
 
     fn png(w: u32, h: u32) -> Vec<u8> {
@@ -968,12 +1000,12 @@ mod tests {
     #[test]
     fn the_first_copied_file_that_is_art_pastes() {
         let d = dir("art");
-        let (notes, red, art) = (d.join("notes.txt"), d.join("red image.png"), d.join("art.svg"));
+        let (notes, red, art) = (d.path().join("notes.txt"), d.path().join("red image.png"), d.path().join("art.svg"));
         std::fs::write(&notes, "not art").unwrap();
         std::fs::write(&red, png(3, 2)).unwrap();
         std::fs::write(&art, "<svg xmlns=\"http://www.w3.org/2000/svg\"/>").unwrap();
         // Missing files, folders and text are skipped.
-        let f = copied_file(vec![d.join("gone.png"), d.clone(), notes.clone(), red.clone(), art.clone()], &PASTE_ORDER).unwrap();
+        let f = copied_file(vec![d.path().join("gone.png"), d.path().to_path_buf(), notes.clone(), red.clone(), art.clone()], &PASTE_ORDER).unwrap();
         assert_eq!((f.mime, f.data), (PNG, png(3, 2)));
         assert_eq!(copied_file(vec![art.clone(), red.clone()], &PASTE_ORDER).map(|f| f.mime), Some(SVG));
         // Only what Paste asks for.
@@ -1007,7 +1039,8 @@ mod tests {
     /// An .eps file copied in a file manager pastes as EPS.
     #[test]
     fn a_copied_eps_file_pastes() {
-        let eps = dir("eps").join("equation.eps");
+        let d = dir("eps");
+        let eps = d.path().join("equation.eps");
         std::fs::write(&eps, "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n0 0 10 10 rectfill\n").unwrap();
         assert_eq!(copied_file(vec![eps.clone()], &PASTE_ORDER).map(|f| f.mime), Some(EPS));
         assert!(copied_file(vec![eps], &[BITMAP, TEXT]).is_none());
@@ -1015,7 +1048,8 @@ mod tests {
 
     #[test]
     fn a_crlf_left_by_the_uri_list_is_ignored() {
-        let red = dir("crlf").join("red.png");
+        let d = dir("crlf");
+        let red = d.path().join("red.png");
         std::fs::write(&red, png(2, 2)).unwrap();
         let with_cr = PathBuf::from(format!("{}\r", red.display()));
         assert_eq!(copied_file(vec![with_cr], &PASTE_ORDER).map(|f| f.mime), Some(PNG));
@@ -1054,6 +1088,28 @@ mod tests {
 
     fn pixels(img: &image::RgbaImage) -> Vec<[u8; 4]> {
         img.pixels().map(|p| p.0).collect()
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn dib_fallback_captures_both_formats_before_decoding() {
+        use clipboard_win::formats::{CF_DIB, CF_DIBV5};
+
+        let valid = dib(40, 1, 1, 32, 0, &[], &bgra(&[RED]));
+        let mut captured = Vec::new();
+        let read = win::read_dibs(|id| {
+            captured.push(id);
+            match id {
+                CF_DIBV5 => Some(vec![40, 0, 0]),
+                CF_DIB => Some(valid.clone()),
+                _ => None,
+            }
+        })
+        .unwrap();
+        assert_eq!(captured, [CF_DIBV5, CF_DIB]);
+        let flavour = read.flavour().unwrap();
+        assert_eq!(flavour.mime, PNG);
+        assert_eq!(pixels(&decode_png(&flavour.data).unwrap()), [RED]);
     }
 
     #[test]

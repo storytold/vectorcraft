@@ -6,16 +6,23 @@ use super::{
 use vectorcraft_doc::{NodeKind, TextKind};
 
 impl Session {
-    /// The bounds of `ids` the Transform panel, the bounding box, Align and Distribute measure:
-    /// with Use Preview Bounds on, visual bounds as drawn (strokes and geometry effects included,
-    /// see [`effects::preview`]), else geometric bounds.
+    /// The bounds of `ids` the Transform panel and the bounding box measure: with Use Preview
+    /// Bounds on, visual bounds as drawn (strokes and geometry effects included, see
+    /// [`effects::preview`]), else geometric bounds; with Measure Type by Glyph Bounds on, point
+    /// type by the ink of its glyphs ([`Session::bounds_measure`]).
     pub fn transform_bounds(&self, ids: &[NodeId]) -> Option<Rect> {
-        effects::preview::bounds_of(&self.doc().ok()?.doc, ids, self.prefs.use_preview_bounds)
+        effects::preview::bounds_of_with(&self.doc().ok()?.doc, ids, self.bounds_measure())
     }
     /// [`Session::transform_bounds`] square to the objects' own angle (their rotated bounding
     /// box, see [`Document::oriented_bounds`]).
     pub fn transform_box(&self, ids: &[NodeId]) -> Option<OrientedBox> {
-        effects::preview::oriented_bounds(&self.doc().ok()?.doc, ids, self.prefs.use_preview_bounds)
+        effects::preview::oriented_bounds_with(&self.doc().ok()?.doc, ids, self.bounds_measure())
+    }
+    /// How the bounding box, the Transform panel and `object.setBounds` measure objects: Use
+    /// Preview Bounds, and point type by its glyphs with Measure Type by Glyph Bounds
+    /// (`typeGlyphBounds`).
+    pub fn bounds_measure(&self) -> effects::preview::Measure {
+        effects::preview::Measure { preview: self.prefs.use_preview_bounds, glyphs: self.prefs.type_glyph_bounds }
     }
 }
 
@@ -66,7 +73,7 @@ fn measure(s: &Session, p: &Value, cmd: &str) -> Result<Measure> {
     Ok(Measure { preview, point: s.prefs.align_glyph_bounds_point, area: s.prefs.align_glyph_bounds_area })
 }
 
-/// Param `key` of the Align commands, Shear, Unlock All, Show All and `text.setFormat`'s lists: one
+/// Param `key` of the Align commands, Shear, Unlock All, Show All, a warp's `orientation` and `text.setFormat`'s lists: one
 /// of `values`, or `None` when it is missing or null. Any other value is an error that lists `values`.
 pub(crate) fn choice<'a>(p: &'a Value, cmd: &str, key: &str, values: &[&str]) -> Result<Option<&'a str>> {
     let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
@@ -112,7 +119,9 @@ fn apply_moves(s: &mut Session, label: &str, p: &Value, ids: &[NodeId], moves: &
         for (id, dv) in moves {
             if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(*dv), sc);
+                super::pixelgrid::keep_pixel_aligned(n, sc);
             }
+            super::pixelgrid::keep_compound_aligned(d, *id, sc);
         }
         for &(i, pos) in &guides {
             if let Some(g) = d.guides.get_mut(i) {
@@ -330,6 +339,7 @@ fn align_anchors(s: &mut Session, p: &Value, ids: &[NodeId], (h, v): (Option<&st
                     a.translate(target(a.p) - a.p);
                 }
             }
+            snap_anchor_path(d, *id);
         }
         Ok(())
     })?;
@@ -434,9 +444,21 @@ fn distribute_anchors(s: &mut Session, label: &str, horiz: bool, gap: Option<f64
                 a.translate(if horiz { Vec2::new(delta, 0.0) } else { Vec2::new(0.0, delta) });
             }
         }
+        for (id, _) in &targets {
+            snap_anchor_path(d, *id);
+        }
         Ok(())
     })?;
     ok()
+}
+
+/// After anchors of path `id` moved: snap the path, or the compound path that holds it, to the
+/// pixel grid again when it is pixel-aligned.
+fn snap_anchor_path(d: &mut Document, id: NodeId) {
+    let top = crate::cmd::path::compound_or_self(d, id);
+    if let Some(n) = d.node_mut(top) {
+        super::pixelgrid::snap_if_aligned(n);
+    }
 }
 
 pub(super) fn distribute(s: &mut Session, p: &Value) -> Result<Value> {

@@ -230,6 +230,14 @@ impl Leave {
         self
     }
 
+    /// The straight segment from the anchor `at` to a point being dragged (an open path's end
+    /// moved with Direct Selection): the point may land square to a segment or grazing a curve,
+    /// but is not held to Shift's angles or the construction guides, which a moved anchor
+    /// does not follow.
+    pub fn contact(at: Point) -> Self {
+        Self { at, shift: None, angles: &[], contact: true }
+    }
+
     /// A box dragged from its corner or centre `at` (Rectangle, Ellipse, Arc, the grids, and
     /// Artboard, which passes no Shift): Shift keeps the dragged corner on a diagonal, the box a
     /// square.
@@ -280,6 +288,11 @@ pub fn square(d: Vec2) -> Vec2 {
 /// state: hovering gathers them again only after the document, the selection, what is left out,
 /// the window or the snapping options changed; a press always gathers them afresh, and the drag
 /// it starts keeps them, the document then showing the drag's own previews.
+///
+/// The Measure and Measure & Inspect tools keep one too, for the ends of a drag only. They do not
+/// ask it while hovering. [`Self::measure`] gathers [`Targets::for_measure`] instead, and a press
+/// reuses those targets while nothing they depend on changed. It has guides to show only while
+/// Snap to Glyph gives guides.
 #[derive(Default)]
 pub struct DrawSnap {
     /// The targets, and what they were gathered for (none: for one drag only).
@@ -340,6 +353,31 @@ impl DrawSnap {
         self.snap(cx, p, from)
     }
 
+    /// Snap an end of a measurement at `p` ([`Targets::for_measure`]), reusing the targets while
+    /// nothing they depend on changed, so a drag lays out the type once. With Snap to Glyph giving
+    /// no guides, [`Self::guides`] stays empty.
+    pub fn measure(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> Point {
+        let key = SnapKey::of(cx, &[]);
+        let glyphs = key.snap_to_glyph.is_some();
+        if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
+            let snap = PointSnap::new(cx, || Targets::for_measure(cx.doc, visible(cx), key.snap_to_glyph));
+            self.targets = Some((Some(key), snap));
+        }
+        let q = self.snap(cx, p, from);
+        if !glyphs {
+            self.guides.clear();
+        }
+        q
+    }
+
+    /// Snap the point pressed at `p` onto the art's anchors and paths alone, within the Smart
+    /// Guides snapping tolerance (the Knife's straight cut). The targets serve this press only.
+    pub fn press_on_paths(&mut self, cx: &ToolContext, p: Point) -> Point {
+        let targets = Targets::for_drawing(cx.doc, &[], visible(cx), None).styled(cx).anchors_and_paths();
+        self.targets = Some((None, PointSnap { targets: Some((targets, cx.snapping_tolerance)) }));
+        self.snap(cx, p, None)
+    }
+
     /// Gather `targets` other than the art for the drag a press starts (a point being dragged
     /// leaves itself out); the next hover gathers its own again.
     pub fn hold(&mut self, cx: &ToolContext, targets: impl FnOnce() -> Targets) {
@@ -390,8 +428,12 @@ impl HandleSnap {
     /// Where the handle of anchor `ai` of subpath `si` of path `id` goes with the pointer at `p`,
     /// and the guides showing why.
     pub fn snap(&mut self, cx: &ToolContext, (id, si, ai): (NodeId, usize, usize), p: Point, shift: bool) -> (Point, Vec<Overlay>) {
-        let path = cx.doc.node(id).and_then(|n| n.path_data());
-        if shift && let Some(a) = path.and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai)) {
+        // A path's anchor, or one of type on a path's path (#3565), in document space.
+        let anchor = cx.doc.node(id).and_then(|n| match &n.kind {
+            vectorcraft_doc::NodeKind::Text(t) => t.type_path()?.subpaths.get(si)?.anchors.get(ai).copied(),
+            _ => n.path_data()?.subpaths.get(si)?.anchors.get(ai).copied(),
+        });
+        if shift && let Some(a) = anchor {
             return (a.p + constrain_angle_from(p - a.p, 45.0, cx.constrain_angle), vec![]);
         }
         if self.0.targets.is_none() {

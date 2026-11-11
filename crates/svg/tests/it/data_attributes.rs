@@ -230,7 +230,7 @@ fn symbol_document(name: &str) -> Document {
     let mut doc = import(&svg(r#"<rect id="instance" width="20" height="20"/>"#)).unwrap();
     let id = named(&doc, "instance").id;
     let art = doc.node(id).unwrap().clone();
-    doc.symbols.push(vectorcraft_doc::Symbol { name: name.into(), art: std::sync::Arc::new(art) });
+    doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art) });
     let instance = doc.node_mut(id).unwrap();
     instance.appearance = vectorcraft_doc::Appearance::default().into();
     instance.kind = vectorcraft_doc::NodeKind::SymbolInstance { symbol: name.into(), xf: vectorcraft_geom::Affine::IDENTITY };
@@ -275,5 +275,19 @@ fn invalid_symbol_name_alias_does_not_break_xml() {
                 assert_eq!(import(&out.svg).unwrap().symbols.len(), 1);
             }
         }
+    }
+}
+
+#[test]
+fn link_url_with_invalid_xml_characters_does_not_break_export() {
+    let mut doc = import(&svg(r#"<rect id="shape" width="20" height="20"/>"#)).unwrap();
+    let id = named(&doc, "shape").id;
+    doc.node_mut(id).unwrap().edit_attrs(|a| a.url = "http://a/\u{1}b\u{ffff}".into());
+    for styling in styles() {
+        let out = export_full(&doc, &ExportOptions { styling, ..Default::default() }, None);
+        let parsed = xml(&out.svg);
+        let a = parsed.descendants().find(|n| n.has_tag_name("a")).unwrap();
+        assert_eq!(a.attribute(("http://www.w3.org/1999/xlink", "href")), Some("http://a/b"));
+        assert!(out.warnings.iter().any(|w| w.contains("invalid XML characters")));
     }
 }

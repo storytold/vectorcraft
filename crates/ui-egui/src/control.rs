@@ -9,15 +9,17 @@
 //! - `ui.menu.list`: flattened menu tree
 //! - `ui.contextMenu.list`: the canvas context menu for the current selection, flattened
 //! - `ui.tool.select {tool}`, `ui.tool.list`
-//! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick, x, y, space?: "doc"|"screen"}], mods?}`:
-//!   drive the active tool through the same path as the mouse
+//! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
+//!   drive the active tool through the same path as the mouse, after the synthetic input sent
+//!   before it was applied
 //! - `ui.key {key, shift?, alt?, cmd?}` / `ui.text {text}`: synthetic keyboard input
 //! - `ui.move {x, y}` / `ui.click {x, y, button?, count?, shift?…}` / `ui.drag {x, y, toX, toY, steps?}`:
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
 //! - `ui.dialog.set {field, value}` or `{fields: [{field, value}…]}` (all or none; setting a field
-//!   the dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`]) /
-//!   `ui.dialog.confirm` / `ui.dialog.cancel`
+//!   the dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`];
+//!   `action: confirm | cancel` then confirms or cancels that dialog in the same request and replies
+//!   `{dialog, result}`) / `ui.dialog.confirm` / `ui.dialog.cancel`
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
 //!   comes back as `pngBase64` as well)
 //! - `ui.render {path?, scale?, artboard?, data?, traceViews?}`: render an artboard headlessly
@@ -33,7 +35,7 @@
 //!   Background Save or Background Export on. A `wait` other than true, false or null is refused
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
@@ -86,6 +88,22 @@ fn dialog_fields(p: &Value) -> Result<Vec<(String, Value)>, String> {
         .collect()
 }
 
+/// What `ui.dialog.set {action}` does with the dialog once its fields are set.
+enum DialogAnswer {
+    Confirm,
+    Cancel,
+}
+
+/// The `action` of a `ui.dialog.set`: none, `confirm` or `cancel`. It is checked before any field is set.
+fn dialog_action(p: &Value) -> Result<Option<DialogAnswer>, String> {
+    match p.get("action") {
+        None => Ok(None),
+        Some(v) if v == "confirm" => Ok(Some(DialogAnswer::Confirm)),
+        Some(v) if v == "cancel" => Ok(Some(DialogAnswer::Cancel)),
+        Some(_) => Err("`action` must be confirm or cancel".into()),
+    }
+}
+
 fn reserve_synthetic(app: &mut VectorcraftApp, additional: usize) -> Result<(), String> {
     if additional > MAX_SYNTHETIC_EVENTS.saturating_sub(app.synthetic.len()) {
         return Err(format!("synthetic input queue limit ({MAX_SYNTHETIC_EVENTS} events); retry after pending input drains"));
@@ -95,12 +113,24 @@ fn reserve_synthetic(app: &mut VectorcraftApp, additional: usize) -> Result<(), 
 
 pub type ControlResponse = Value;
 
+pub(crate) struct PendingPointerReply {
+    pub from: u64,
+    pub to: u64,
+    pub document: Option<u64>,
+    pub reply: Sender<ControlResponse>,
+}
+
 pub struct ControlRequest {
     pub method: String,
     pub params: Value,
     pub reply: Sender<ControlResponse>,
     state: Arc<AtomicU8>,
+    /// Its place in the order requests were made ([`ControlRequest::next_seq`]).
+    seq: u64,
 }
+
+/// The sequence number of the next request made.
+static NEXT_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// A request's state: waiting to run, taken by the app ([`ControlRequest::claim`]), or given up
 /// by its caller before that ([`Ticket::give_up`]). It leaves `QUEUED` once, one way or the other.
@@ -123,12 +153,28 @@ impl Ticket {
 impl ControlRequest {
     pub fn new(method: impl Into<String>, params: Value) -> (Self, std::sync::mpsc::Receiver<ControlResponse>) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)) }, rx)
+        let seq = NEXT_SEQ.fetch_add(1, Ordering::SeqCst);
+        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)), seq }, rx)
+    }
+
+    /// The sequence number the next request made gets: every request made so far is before it.
+    pub fn next_seq() -> u64 {
+        NEXT_SEQ.load(Ordering::SeqCst)
+    }
+
+    /// Whether this request was made before the one numbered `seq`.
+    pub fn made_before(&self, seq: u64) -> bool {
+        self.seq < seq
     }
 
     /// The caller's handle on this request, to give it up with.
     pub fn ticket(&self) -> Ticket {
         Ticket(self.state.clone())
+    }
+
+    /// Whether its caller gave it up (it never runs), without taking it.
+    pub fn given_up(&self) -> bool {
+        self.state.load(Ordering::SeqCst) == GIVEN_UP
     }
 
     /// Take the request to run it → `false` when its caller gave it up meanwhile (don't run it).
@@ -145,6 +191,34 @@ pub enum Outcome {
         path: Option<String>,
         data: bool,
     },
+    /// A `ui.pointer` reply ([`pointer_reply`]), sent once the events numbered `from..to`
+    /// ([`vectorcraft_engine::Session::input_applied`]) have been made and the edit they started
+    /// on another thread is applied, so it shows the selection after the edit.
+    AfterToolEdit {
+        from: u64,
+        to: u64,
+        document: Option<u64>,
+    },
+}
+
+/// The reply to `ui.pointer`: the selection, the key object and the active tool.
+pub(crate) fn pointer_reply(app: &mut VectorcraftApp) -> Value {
+    pointer_reply_for(app, app.session.active().map(|d| d.uid))
+}
+
+pub(crate) fn pointer_reply_for(app: &VectorcraftApp, document: Option<u64>) -> Value {
+    let state = document.and_then(|uid| app.session.documents().iter().find(|d| d.uid == uid));
+    match state {
+        Some(state) => json!({
+            "ok": true,
+            "result": {
+                "selection": state.selection.objects.iter().map(|id| id.0).collect::<Vec<_>>(),
+                "key": state.selection.key.map(|id| id.0),
+                "tool": app.session.tool_id(),
+            }
+        }),
+        None => json!({"ok": false, "error": "the gesture's document is no longer open"}),
+    }
 }
 
 fn ok(v: Value) -> Outcome {
@@ -177,6 +251,8 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         fields.remove("floating_panels");
     }
     json!({
+        "scriptRunning": app.session.script_running(),
+        "scriptReport": app.session.script_report(),
         "tool": app.session.tool_id(),
         "toolOptions": app.session.tool_options(),
         "ui": ui,
@@ -191,6 +267,24 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
         "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
+        // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
+        // each one's document index, view number (Window › New Window) and rect. Canvas
+        // coordinates map to the current window's pane, inside its rulers and scroll bars
+        // (`canvasRect`).
+        "tiled": app.ui.tiled,
+        "panes": app.canvas.panes.last.iter().map(|(w, c)| json!({
+            "document": w.0,
+            "view": w.1,
+            "rect": [c.left(), c.top(), c.width(), c.height()],
+            "active": crate::doc_windows::current(app) == Some(*w),
+        })).collect::<Vec<_>>(),
+        // Window › Arrange › Float in Window: the floating windows' documents, by index. While the
+        // current one floats, `canvasRect` is in its window's coordinates.
+        "floating": crate::doc_windows::floating_windows(app).iter().map(|w| w.0).collect::<Vec<_>>(),
+        // Window › New Window: every window, as [document index, view number], in tab order, and
+        // the current one.
+        "windows": crate::doc_windows::windows(app),
+        "currentWindow": crate::doc_windows::current(app),
         "window": [r.width(), r.height()],
         "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),
@@ -258,7 +352,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),
         "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),
-        "ui.tool.list" => ok(serde_json::to_value(vectorcraft_tools::TOOL_GROUPS).unwrap_or_default()),
+        "ui.tool.list" => {
+            let groups: Vec<_> = vectorcraft_tools::TOOL_GROUPS.iter().chain(vectorcraft_tools::addons::GROUPS).copied().collect();
+            ok(serde_json::to_value(groups).unwrap_or_default())
+        }
         "ui.pointer" => pointer_events(app, ctx, req),
         "ui.key" => {
             let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };
@@ -321,15 +418,41 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                     Ok(fields) => fields,
                     Err(e) => return err(e),
                 };
+                let action = match dialog_action(p) {
+                    Ok(action) => action,
+                    Err(e) => return err(e),
+                };
                 // Every field is checked before any is set, so a request sets all of them or none.
                 if let Some((f, _)) = fields.iter().find(|(f, _)| !crate::dialogs::accepts_field(d, f)) {
                     let names = crate::dialogs::field_names(d).join(", ");
                     return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
                 }
+                // In order: a field that sets others (an export preset) goes before the fields after it.
+                // A field that fails leaves the dialog as it was before the request.
+                let before = app.ui.dialog.clone();
                 for (f, value) in fields {
-                    crate::dialogs::set_field(d, f, value);
+                    let old = app.ui.dialog.as_ref().and_then(|d| d.fields.get(&f).cloned());
+                    if let Some(d) = app.ui.dialog.as_mut() {
+                        crate::dialogs::set_field(d, f.clone(), value);
+                    }
+                    if let Err(e) = crate::dialogs::field_set(app, &f, old.as_ref()) {
+                        app.ui.dialog = before;
+                        return err(e);
+                    }
                 }
-                ok(serde_json::to_value(&*d).unwrap_or_default())
+                let dialog = app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default();
+                // `action` answers the dialog the fields were just set in, within this request.
+                match action {
+                    None => ok(dialog),
+                    Some(DialogAnswer::Confirm) => match crate::dialogs::confirm(app) {
+                        Ok(result) => ok(json!({"dialog": dialog, "result": result})),
+                        Err(e) => err(e),
+                    },
+                    Some(DialogAnswer::Cancel) => {
+                        crate::dialogs::cancel(app);
+                        ok(json!({"dialog": dialog, "result": null}))
+                    }
+                }
             }
             None => err("no dialog open"),
         },
@@ -390,7 +513,21 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 None => ok(with_data(json!({"width": img.width, "height": img.height}), Some(&png))),
             }
         }
-        "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
+        "app.open" => match p.get("importer").filter(|v| !v.is_null()) {
+            // The importer's parameters, else their defaults: automation gets no dialog asking for them.
+            Some(importer) => {
+                let params = p.get("params").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| json!({}));
+                wrap(app.run("file.openWith", json!({"path": s("path"), "importer": importer, "params": params})))
+            }
+            // `params` go to the importer File › Open picks for the file, as in `document.open`.
+            None => {
+                let mut open = json!({"path": s("path")});
+                if let Some(params) = p.get("params").filter(|v| !v.is_null()) {
+                    open["params"] = params.clone();
+                }
+                wrap(app.run("file.open", open))
+            }
+        },
         "app.save" | "app.export" => {
             let mut p = if p.is_object() { p.clone() } else { json!({}) };
             // `wait: true`: the file is written before the reply, whatever Background Save and
@@ -403,6 +540,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 o.remove("wait");
             }
             let method = req.method.as_str();
+            // The key check of `document.export` or `document.save` runs before the file is written.
+            let checked = if method == "app.export" { "document.export" } else { "document.save" };
+            if let Err(e) = crate::menus::check_params(&app.session, checked, &p) {
+                return err(e);
+            }
             wrap(if wait { crate::background::in_foreground(app, |app| save_or_export(app, method, &p)) } else { save_or_export(app, method, &p) })
         }
         // As the menu's Quit: `{"pending": "saveChanges"}` while a modified document is asked
@@ -501,14 +643,127 @@ pub(crate) fn save_screenshot_with_limit(
 #[cfg(test)]
 mod tests;
 
+/// The window and coordinate mapping where a control-channel Rotate View drag began.
+#[derive(Clone, Copy)]
+pub(crate) struct RotateViewPress {
+    window: (u64, u32),
+    document_resets: u64,
+    xf: Xf,
+    start_angle: f64,
+    start_rotation: f64,
+}
+
+/// Rotate View belongs to the canvas, not the engine's placeholder tool. Keep its press mapping
+/// across requests so document-coordinate drags do not move again as the view turns underneath.
+fn rotate_view_pointer(
+    app: &mut VectorcraftApp,
+    kind: PointerKind,
+    position: vectorcraft_geom::Point,
+    screen: bool,
+    shift: bool,
+) -> Result<(), String> {
+    let window = app.session.active().zip(crate::doc_windows::current(app)).map(|(d, w)| (d.uid, w.1)).ok_or("no document")?;
+    let document_resets = app.session.tool_resets();
+    let stored = if kind == PointerKind::Down { None } else { app.control_rotate_press };
+    if kind == PointerKind::Drag && stored.is_none() {
+        return Err("Rotate View needs a down event before a drag".into());
+    }
+    let mut press = match stored {
+        Some(press) => press,
+        None => {
+            let rect = app.canvas_rect.ok_or("no canvas yet")?;
+            let view = app.view().ok_or("no document")?;
+            RotateViewPress { window, document_resets, xf: Xf::new(rect, view), start_angle: 0.0, start_rotation: view.rotation }
+        }
+    };
+    // A gesture cannot turn a different document/view or resume after its document was reset.
+    if (press.window, press.document_resets) != (window, document_resets) {
+        return Err("the Rotate View gesture's window or document changed".into());
+    }
+    let point = if screen { egui::pos2(position.x as f32, position.y as f32) } else { press.xf.to_screen(position) };
+    let center = press.xf.rect.center();
+    if !point.is_finite() || !center.is_finite() {
+        return Err("Rotate View needs finite canvas coordinates".into());
+    }
+    match kind {
+        PointerKind::Down => {
+            press.start_angle = (point.y - center.y).atan2(point.x - center.x) as f64;
+            app.control_rotate_press = Some(press);
+        }
+        PointerKind::Drag => {
+            app.view_mut().ok_or("no document")?.rotation =
+                crate::canvas::drag_rotation(center, point, press.start_angle, press.start_rotation, shift);
+        }
+        PointerKind::Up => {
+            app.control_rotate_press = None;
+        }
+        PointerKind::Move | PointerKind::DoubleClick => {}
+    }
+    Ok(())
+}
+
+/// A Rotate View packet accepts only the documented boolean modifier fields.
+fn validate_rotate_view_mods(value: Option<&Value>) -> Result<(), String> {
+    let Some(value) = value else { return Ok(()) };
+    let Some(fields) = value.as_object() else { return Err("Rotate View `mods` must be an object of booleans".into()) };
+    if fields.iter().any(|(key, value)| !matches!(key.as_str(), "shift" | "alt" | "cmd" | "ctrl" | "space") || !value.is_boolean()) {
+        return Err("Rotate View `mods` accepts only boolean shift, alt, cmd, ctrl and space".into());
+    }
+    Ok(())
+}
+
+/// Reject malformed coordinates and modifiers before any event can change the angle or press.
+fn validate_rotate_view_events(params: &Value, events: &[Value]) -> Result<(), String> {
+    validate_rotate_view_mods(params.get("mods"))?;
+    for event in events {
+        for axis in ["x", "y"] {
+            if event.get(axis).and_then(Value::as_f64).filter(|value| value.is_finite()).is_none() {
+                return Err(format!("Rotate View `{axis}` must be a finite number"));
+            }
+        }
+        validate_rotate_view_mods(event.get("mods"))?;
+        if event.get("space").is_some_and(|space| !matches!(space.as_str(), Some("doc" | "screen"))) {
+            return Err("Rotate View `space` must be doc or screen".into());
+        }
+    }
+    Ok(())
+}
+
 /// `ui.pointer`: pointer events through the tools.
 fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    let rotating = app.session.tool_id() == "rotateView";
+    let before = if rotating { app.view().map(|view| view.rotation) } else { None };
+    let outcome = pointer_events_inner(app, ctx, req);
+    if rotating && matches!(&outcome, Outcome::Done(reply) if reply.get("ok").and_then(Value::as_bool) == Some(false)) {
+        // A failed packet must neither leave a partial turn nor allow a later drag to resume it.
+        app.control_rotate_press = None;
+        if let (Some(before), Some(view)) = (before, app.view_mut()) {
+            view.rotation = before;
+        }
+        ctx.request_repaint();
+    }
+    outcome
+}
+
+/// Apply a pointer packet after Rotate View validation; other tools retain their existing routing.
+fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let Some(events) = p.get("events").and_then(Value::as_array) else { return err("missing `events`") };
+    let rotating = app.session.tool_id() == "rotateView";
+    if rotating && let Err(error) = validate_rotate_view_events(p, events) {
+        return err(error);
+    }
     let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
     let view = app.view_info();
     let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
-    for e in events {
+    let from = app.session.input_count();
+    let held =
+        PointerEvent::json_backquote(p, false).and_then(|d| events.iter().map(|e| PointerEvent::json_backquote(e, d)).collect::<Result<Vec<_>, _>>());
+    let held = match held {
+        Ok(held) => held,
+        Err(e) => return err(e),
+    };
+    for (e, backquote) in events.iter().zip(held) {
         let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
             "down" => PointerKind::Down,
             "drag" => PointerKind::Drag,
@@ -519,7 +774,15 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         };
         let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
         let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
-        let pos = if e.get("space").and_then(Value::as_str) == Some("screen") {
+        let screen = e.get("space").and_then(Value::as_str) == Some("screen");
+        let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
+        if rotating {
+            if let Err(e) = rotate_view_pointer(app, kind, vectorcraft_geom::Point::new(x, y), screen, mods.shift) {
+                return err(e);
+            }
+            continue;
+        }
+        let pos = if screen {
             match xf {
                 Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
                 None => return err("no canvas yet"),
@@ -527,8 +790,12 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         } else {
             vectorcraft_geom::Point::new(x, y)
         };
-        let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
-        crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, pressure: PointerEvent::json_pressure(e) }, view);
+        // A tilt given in screen axes leans the same way on the page as on the screen.
+        let pen = PointerEvent::json_pen(e).map(|q| match xf {
+            Some(xf) if screen => crate::canvas::pose_on_page(q, &xf),
+            _ => q,
+        });
+        crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e), pen }, view);
         let hold = PointerEvent::json_hold(e);
         if hold > 0.0 {
             let r = app.session.tool_tick(hold, view);
@@ -536,7 +803,15 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         }
     }
     ctx.request_repaint();
-    wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "key": d["key"], "tool": app.session.tool_id()})))
+    // A Shape Builder merge of a large selection is computed on another thread, and the
+    // reply to the events that started it waits for it without holding the frames up. A
+    // gesture sent while it is computed is made after it, and its reply waits until then;
+    // a hover is answered at once.
+    let to = app.session.input_count();
+    if !app.session.input_applied(from, to) {
+        return Outcome::AfterToolEdit { from, to, document: app.session.active().map(|d| d.uid) };
+    }
+    Outcome::Done(pointer_reply(app))
 }
 
 /// `ui.click` and `ui.drag`: pointer input through egui itself.
@@ -592,6 +867,10 @@ fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlR
 fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let s = |k: &str| p.get(k).and_then(Value::as_str);
+    // Outline is a setting of the active document's view: without one, nothing is set.
+    if p.get("outline").is_some_and(Value::is_boolean) && app.session.active().is_none() {
+        return err("no document");
+    }
     let mut r = Ok(Value::Null);
     if let Some(b) = s("brightness") {
         r = app.run("window.brightness", json!({"brightness": b}));
@@ -612,7 +891,7 @@ fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
         if let Some(want) = p.get(k).and_then(Value::as_bool) {
             let cur = match k {
                 "rulers" => app.ui.view.rulers,
-                "outline" => app.ui.view.outline,
+                "outline" => app.outline_view(),
                 "grid" => app.ui.view.grid,
                 "smartGuides" => app.ui.view.smart_guides,
                 _ => app.ui.view.bounding_box,

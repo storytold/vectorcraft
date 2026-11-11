@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Freeform Point",
             [],
             None,
-            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it → {index}",
+            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it → {index}",
             has_doc,
             add_point
         ),
@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Freeform Point",
             [],
             None,
-            "{index? (default: the selected point), at?: [x,y] (document coordinates), color?, keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient → {index}",
+            "{index? (default: the selected point), at?: [x,y] (document coordinates), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient → {index}",
             has_doc,
             set_point
         ),
@@ -92,8 +92,12 @@ impl Session {
 
     /// The freeform gradient behind the Fill (`stroke` false) or Stroke proxy, its points in
     /// document coordinates, and the length its spreads are fractions of there (see
-    /// [`Node::proxy_freeform`]).
+    /// [`Node::proxy_freeform`]). `None` while an object of a symbol instance is selected
+    /// ([`vectorcraft_doc::Selection::symbol_part`]): its points are in the symbol's coordinates.
     pub fn proxy_freeform(&self, stroke: bool) -> Option<(Freeform, f64)> {
+        if self.active()?.selection.symbol_part.is_some() {
+            return None;
+        }
         let (n, item) = self.proxy_source(stroke)?;
         n.proxy_freeform(stroke, item)
     }

@@ -304,7 +304,7 @@ fn headless_end_to_end() {
 
     // Resources.
     let v = rpc(&mut s, 10, "resources/list", json!({}));
-    assert_eq!(v["result"]["resources"].as_array().unwrap().len(), 3);
+    assert_eq!(v["result"]["resources"].as_array().unwrap().len(), 4);
     let v = rpc(&mut s, 11, "resources/read", json!({"uri": "vectorcraft://document"}));
     let text = v["result"]["contents"][0]["text"].as_str().unwrap();
     assert!(serde_json::from_str::<Value>(text).unwrap()["layers"].is_array());
@@ -498,6 +498,15 @@ fn headless_hover_waits_for_the_shape_builder_map() {
     assert!(!r.is_error, "{r:?}");
     assert!(!h.session.tool_waiting());
     assert!(!h.session.overlays(h.view).is_empty(), "the region under the pointer is highlighted");
+    // A click's reply comes once the merge the tool computes on another thread is applied, with
+    // the selection after it.
+    let click = json!({"events": [{"kind": "down", "x": 115, "y": 110}, {"kind": "up", "x": 115, "y": 110}]});
+    let r = crate::call_tool(&mut h, "pointer_gesture", &click);
+    assert!(!r.is_error, "{r:?}");
+    assert!(!h.session.tool_waiting() && !h.session.tool_editing());
+    let text: String = r.content.iter().filter_map(|c| c["text"].as_str()).collect();
+    let reply: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(reply["selection"].as_array().map(Vec::len), Some(41), "the overlap and the 40 squares, two of them cut: {reply}");
 }
 
 /// inspect_document reads back the paint type's characters show, as add_text and set_paint give it.
@@ -709,6 +718,18 @@ fn errors_are_tool_results_not_crashes() {
 
 /// A fake control server: answers `document.inspect`, echoes `engine.execute`, errors otherwise.
 fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
+    fake_app_refusing_confirm(None)
+}
+
+/// [`fake_app`], answering `ui.dialog.confirm` with the error `refusal` when one is given.
+fn fake_app_refusing_confirm(refusal: Option<&'static str>) -> (String, std::thread::JoinHandle<Vec<Value>>) {
+    fake_app_with(refusal, true)
+}
+
+/// [`fake_app_refusing_confirm`]. With `answers_in_set`, `ui.dialog.set {action}` also confirms or
+/// cancels the dialog and replies `{dialog, result}`, as the app does; without it the set ignores
+/// `action`, as an app that predates it does.
+fn fake_app_with(refusal: Option<&'static str>, answers_in_set: bool) -> (String, std::thread::JoinHandle<Vec<Value>>) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let h = std::thread::spawn(move || {
@@ -724,6 +745,18 @@ fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
                 "engine.execute" => json!({"ok": true, "result": {"echo": msg["params"]}}),
                 "ui.inspect" => json!({"ok": true, "result": {"tool": "selection"}}),
                 "ui.dialog.set" if !dialog_open => json!({"ok": false, "error": "no dialog open"}),
+                "ui.dialog.set" if answers_in_set && msg["params"].get("action").is_some() => {
+                    let dialog = json!({"echo": {"fields": msg["params"]["fields"]}});
+                    match msg["params"]["action"].as_str() {
+                        Some("confirm") if refusal.is_some() => json!({"ok": false, "error": refusal}),
+                        Some("confirm") => json!({"ok": true, "result": {"dialog": dialog, "result": {"echo": {}}}}),
+                        _ => {
+                            dialog_open = false;
+                            json!({"ok": true, "result": {"dialog": dialog, "result": null}})
+                        }
+                    }
+                }
+                "ui.dialog.confirm" if refusal.is_some() => json!({"ok": false, "error": refusal}),
                 m if m.starts_with("ui.dialog.") => {
                     dialog_open &= m != "ui.dialog.cancel";
                     json!({"ok": true, "result": {"echo": msg["params"]}})
@@ -760,8 +793,10 @@ fn remote_forwards_methods() {
     assert_eq!(seen[1]["params"], json!({"command": "object.group", "params": {}}));
 }
 
+/// Fields and `action` go to the app in one `ui.dialog.set`, so the dialog the fields are set in is
+/// the one confirmed or canceled.
 #[test]
-fn answer_dialog_sets_fields_in_order_then_confirms() {
+fn answer_dialog_sets_fields_in_order_and_confirms_in_one_request() {
     let (addr, h) = fake_app();
     let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
     let set = json!([{"field": "discard", "value": true}, {"field": "note"}]);
@@ -770,7 +805,11 @@ fn answer_dialog_sets_fields_in_order_then_confirms() {
     let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
     let fields = json!([{"field": "discard", "value": true}, {"field": "note", "value": null}]);
     assert_eq!(reply, json!({"dialog": {"echo": {"fields": fields}}, "result": {"echo": {}}}));
-    let r = call(&mut s, 2, "answer_dialog", json!({"action": "cancel"}));
+    let r = call(&mut s, 2, "answer_dialog", json!({"set": set}));
+    assert_eq!(r["isError"], false, "{r}");
+    let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(reply, json!({"dialog": {"echo": {"fields": fields}}, "result": null}));
+    let r = call(&mut s, 3, "answer_dialog", json!({"action": "cancel"}));
     assert_eq!(r["isError"], false, "{r}");
     // Bad arguments are refused before anything reaches the app.
     for (i, args) in [
@@ -792,8 +831,26 @@ fn answer_dialog_sets_fields_in_order_then_confirms() {
     drop(s);
     let seen = h.join().unwrap();
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
-    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm", "ui.dialog.cancel"]);
-    assert_eq!(seen[0]["params"], json!({"fields": fields}));
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.set", "ui.dialog.cancel"]);
+    assert_eq!(seen[0]["params"], json!({"fields": fields, "action": "confirm"}));
+    assert_eq!(seen[1]["params"], json!({"fields": fields}));
+}
+
+/// An app whose `ui.dialog.set` predates `action` replies with the dialog alone; the dialog is
+/// then confirmed with its own `ui.dialog.confirm`.
+#[test]
+fn answer_dialog_confirms_separately_when_the_app_set_did_not_answer() {
+    let (addr, h) = fake_app_with(None, false);
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let set = json!([{"field": "copy", "value": true}]);
+    let r = call(&mut s, 1, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(reply, json!({"dialog": {"echo": {"fields": set, "action": "confirm"}}, "result": {"echo": {}}}));
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm"]);
 }
 
 /// When the app refuses the `ui.dialog.set`, the call is an error and nothing is confirmed.
@@ -811,7 +868,24 @@ fn answer_dialog_does_not_confirm_when_the_app_refuses_the_set() {
     let seen = h.join().unwrap();
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
     assert_eq!(methods, ["ui.dialog.cancel", "ui.dialog.set"], "one set call, refused, and no confirm");
-    assert_eq!(seen[1]["params"], json!({"fields": set}));
+    assert_eq!(seen[1]["params"], json!({"fields": set, "action": "confirm"}));
+}
+
+/// The app refuses to confirm a plug-in's install approval for automation: the call is an error
+/// with the app's reason, and nothing else is sent that could install the module.
+#[test]
+fn answer_dialog_reports_that_the_app_refuses_to_approve_a_plugin_install() {
+    let refusal = "Only the person at the keyboard can approve installing a plug-in";
+    let (addr, h) = fake_app_refusing_confirm(Some(refusal));
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let set = json!([{"field": "__params", "value": {"dataBase64": "AAAA"}}]);
+    let r = call(&mut s, 1, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains(refusal), "{r}");
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.set"]);
 }
 
 #[test]
@@ -1297,7 +1371,16 @@ fn headless_backend_methods() {
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(600), Some(400)));
     let cmds = h.call("engine.commands", json!({})).unwrap();
     assert!(cmds.as_array().unwrap().iter().any(|c| c["id"] == "file.export"));
-    assert!(h.call("ui.tool.list", json!({})).unwrap().is_array());
+    let listed = h.call("ui.tool.list", json!({})).unwrap();
+    let groups = listed.as_array().unwrap();
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+        assert_eq!(matching.len(), 1, "{}", tool.id);
+        assert_eq!(matching[0]["label"], tool.label);
+        assert!(matching[0]["shortcut"].is_null());
+        let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
+        assert_eq!(selected["tool"], tool.id);
+    }
     assert!(h.call("ui.resize", json!({})).is_err());
 }
 
@@ -1398,6 +1481,112 @@ fn selection_preferences_apply_to_pointer_gestures() {
     assert_eq!(click(&mut s, 7, 250.0, json!({})), json!([front]), "the path does");
 }
 
+#[test]
+fn pointer_gesture_forwards_backquote_on_each_event() {
+    let mut s = server();
+    let made = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+    let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].as_u64().unwrap();
+    let selected = call(&mut s, 2, "run_command", json!({"command": "select.set", "params": {"ids": [id]}}));
+    assert_eq!(selected["isError"], false, "{selected}");
+    let drag = call(
+        &mut s,
+        3,
+        "pointer_gesture",
+        json!({"tool": "selection", "backquote": true, "events": [
+            {"kind": "down", "x": 125, "y": 125},
+            {"kind": "drag", "x": 145, "y": 125},
+            {"kind": "up", "x": 145, "y": 125}
+        ]}),
+    );
+    assert_eq!(drag["isError"], false, "{drag}");
+    let inspected = call(&mut s, 4, "inspect_document", json!({}));
+    let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
+    let rect = doc["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == id).unwrap();
+    assert_eq!(rect["bounds"]["x"], 100.0, "{doc}");
+}
+
+/// The documented Rotate View calls reach the desktop control methods, preserving document
+/// coordinates and modifiers, and a successful null reset remains a successful MCP response.
+#[test]
+fn rotate_view_calls_forward_to_desktop_control() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    struct Recording(Rc<RefCell<Vec<(String, Value)>>>);
+    impl Backend for Recording {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            self.0.borrow_mut().push((method.into(), params));
+            Ok(Value::Null)
+        }
+        fn has_ui(&self) -> bool {
+            true
+        }
+        fn describe(&self) -> String {
+            "desktop control contract".into()
+        }
+    }
+
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let mut s = Server::new(Box::new(Recording(seen.clone())));
+    let selected = call(&mut s, 1, "select_tool", json!({"tool": "rotateView"}));
+    let turned = call(
+        &mut s,
+        2,
+        "pointer_gesture",
+        json!({"events": [
+        {"kind": "down", "x": 300, "y": 150}, {"kind": "drag", "x": 200, "y": 250}, {"kind": "up", "x": 200, "y": 250}
+    ], "mods": {"shift": true}}),
+    );
+    let reset = call(&mut s, 3, "command_run", json!({"id": "view.rotateReset", "params": {}}));
+    for reply in [&selected, &turned, &reset] {
+        assert_eq!(reply["isError"], false, "{reply}");
+    }
+    assert_eq!(text_of(&reset), "null");
+    assert_eq!(
+        *seen.borrow(),
+        vec![
+            ("ui.tool.select".into(), json!({"tool": "rotateView"})),
+            (
+                "ui.pointer".into(),
+                json!({"events": [
+            {"kind": "down", "x": 300, "y": 150, "space": "doc"},
+            {"kind": "drag", "x": 200, "y": 250, "space": "doc"},
+            {"kind": "up", "x": 200, "y": 250, "space": "doc"}
+        ], "mods": {"shift": true}})
+            ),
+            ("engine.execute".into(), json!({"command": "view.rotateReset", "params": {}}))
+        ]
+    );
+}
+
+/// A `backquote` that is not a boolean is an error, and none of the gesture's events runs.
+#[test]
+fn pointer_gesture_rejects_a_backquote_that_is_not_a_boolean() {
+    let mut s = server();
+    let made = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+    let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].as_u64().unwrap();
+    let drag = |top: Option<Value>, first: Option<Value>| {
+        let mut down = json!({"kind": "down", "x": 300, "y": 300});
+        if let Some(b) = first {
+            down["backquote"] = b;
+        }
+        let mut a = json!({"tool": "rectangle", "events": [down, {"kind": "drag", "x": 350, "y": 350}, {"kind": "up", "x": 350, "y": 350}]});
+        if let Some(b) = top {
+            a["backquote"] = b;
+        }
+        a
+    };
+    for (n, args) in [drag(Some(json!("true")), None), drag(None, Some(json!(1)))].into_iter().enumerate() {
+        let r = call(&mut s, 2 + n as u64, "pointer_gesture", args);
+        assert_eq!(r["isError"], true, "{r}");
+        assert!(text_of(&r).contains("`backquote` must be a boolean"), "{r}");
+    }
+    let inspected = call(&mut s, 4, "inspect_document", json!({}));
+    let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
+    let children = doc["layers"][0]["children"].as_array().unwrap();
+    assert_eq!(children.iter().map(|n| n["id"].as_u64()).collect::<Vec<_>>(), vec![Some(id)], "{doc}");
+}
+
 /// A Shift-drag marquee reaches agents (#483): `pointer_gesture` with `mods.shift` toggles the
 /// objects it reaches, so a selected one leaves the selection and an unselected one joins it.
 #[test]
@@ -1466,6 +1655,56 @@ fn c_and_f_during_an_arc_gesture_go_to_the_arc_tool() {
     assert_eq!(count(&mut s, 6), before + 1);
     let r = call(&mut s, 7, "press_key", json!({"key": "c"}));
     assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{r}");
+}
+
+/// `press_key` with `f`, `v`, `x` and `c` while a rectangular or polar grid is being dragged goes
+/// to the grid tool, and the release draws one grid. With nothing dragged, V is a shortcut again.
+#[test]
+fn f_v_x_and_c_during_a_grid_gesture_go_to_the_grid_tool() {
+    let count = |s: &mut Server, id: u64| {
+        let r = call(s, id, "inspect_document", json!({"depth": 0}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["layers"][0]["childCount"].as_u64().unwrap()
+    };
+    for tool in ["rectangularGrid", "polarGrid"] {
+        let mut s = server();
+        let before = count(&mut s, 1);
+        let begin = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]);
+        let r = call(&mut s, 2, "pointer_gesture", json!({"tool": tool, "events": begin}));
+        assert_eq!(r["isError"], false, "{r}");
+        for (id, key) in [(3, "f"), (4, "v"), (5, "x"), (6, "c")] {
+            let r = call(&mut s, id, "press_key", json!({"key": key}));
+            assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool} {key}: {r}");
+        }
+        let r = call(&mut s, 7, "pointer_gesture", json!({"tool": tool, "events": [{"kind": "up", "x": 200, "y": 180}]}));
+        assert_eq!(r["isError"], false, "{r}");
+        assert_eq!(count(&mut s, 8), before + 1, "{tool}");
+        let r = call(&mut s, 9, "press_key", json!({"key": "v"}));
+        assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool}: {r}");
+    }
+}
+
+/// Grid letters with Shift reach the grid tool during a drag; with Ctrl, Cmd or Alt they do not.
+#[test]
+fn shifted_grid_letters_during_a_drag_go_to_the_grid_tool() {
+    let mut s = server();
+    let r = call(
+        &mut s,
+        1,
+        "pointer_gesture",
+        json!({"tool": "polarGrid", "events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    for (id, key, mods, tool) in [
+        (2, "v", json!({"shift": true}), true),
+        (3, "f", json!({"ctrl": true}), false),
+        (4, "x", json!({"cmd": true}), false),
+        (5, "c", json!({"cmd": true}), false),
+        (6, "v", json!({"alt": true}), false),
+    ] {
+        let r = call(&mut s, id, "press_key", json!({"key": key, "mods": mods}));
+        let handled = serde_json::from_str::<Value>(&text_of(&r)).ok().is_some_and(|v| v["handledBy"] == "tool");
+        assert_eq!(handled, tool, "{key} {mods}: {r}");
+    }
 }
 
 /// A click on one of two selected objects makes it the key object: `pointer_gesture` replies

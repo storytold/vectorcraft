@@ -13,6 +13,7 @@ use crate::{VectorcraftApp, dialogs, plugin_runs, theme};
 /// An app with a new 200 × 200 pt document.
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.allow_plugin_grants_from_requests();
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app
 }
@@ -71,10 +72,10 @@ fn installing_a_heavy_filter_asks_first() {
     let id = "test.ui.heavy.install";
     let bytes = heavy(id, 1, "{}");
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "route.wasm"})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.str("message"), format!("Install “Test {id}”, which asks for a heavy budget?"));
-    assert!(d.str("detail").contains("up to 5 minutes and do 20 times the work"), "{}", d.str("detail"));
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    let pending = app.pending_plugin_install.as_ref().unwrap();
+    assert_eq!(pending.message, format!("Install “Test {id}”, which asks for a heavy budget?"));
+    assert!(pending.detail.contains("up to 5 minutes and do 20 times the work"), "{}", pending.detail);
     assert!(registry::get(id).is_none(), "not before the user agrees");
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(registry::get(id).map(|p| p.manifest().name.clone()), Some(format!("Test {id}")));
@@ -82,7 +83,7 @@ fn installing_a_heavy_filter_asks_first() {
     // File › Open of the .wasm asks too, and Cancel installs nothing.
     registry::remove(id);
     crate::io::open_bytes(&mut app, "route.wasm", &bytes, None).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND));
     dialogs::cancel(&mut app);
     assert!(registry::get(id).is_none());
 }
@@ -170,6 +171,46 @@ fn continue_in_background_hides_the_progress_window() {
     assert!(app.plugin_runs.running.first().is_some_and(|r| r.hidden), "still running");
     assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap(), json!({"cancelled": 1}));
     wait(&mut app);
+    assert_eq!(app.ui.status, vectorcraft_engine::EngineError::Cancelled.to_string());
+}
+
+/// A heavy filter of plug-in API level 2 that reports its progress gets a bar in its progress window,
+/// with the share it reported, clamped; Cancel makes its `vc_cancelled` return 1 and it stops,
+/// changing nothing.
+#[test]
+fn a_filter_that_reports_progress_shows_a_bar_and_sees_cancel() {
+    let mut app = app();
+    let id = "test.ui.heavy.progress";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","budget":"heavy","api":2,"permissions":["doc.read","doc.write","progress"]}}"#);
+    let first = "(call $vc_progress (i64.const 5000) (i64.const 1000)) (call $vc_progress (i64.const 250) (i64.const 1000))
+        (block $stop (loop $l (br_if $stop (call $vc_cancelled)) (br $l)))";
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::reporting(&manifest, first, r#"{"objects":[]}"#)).unwrap());
+    app.run("plugin.install", json!({"dataBase64": data, "allowHeavy": true, "grant": ["doc.read", "doc.write", "progress"]})).unwrap();
+    let doc = app.session.doc().unwrap().doc.clone();
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    // Waits for the run's thread to report the share (a handshake: the thread never stops before
+    // it is cancelled, and a run that ended leaves the loop).
+    loop {
+        plugin_runs::poll(&mut app);
+        match app.plugin_runs.running.first() {
+            Some(r) if r.progress.counts() != (250, 1000) => std::thread::yield_now(),
+            _ => break,
+        }
+    }
+    assert_eq!(app.plugin_runs.running.first().map(|r| r.progress.counts()), Some((250, 1000)), "the second report, after the first was clamped");
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    progress(&mut app, &ctx, 0.0);
+    progress(&mut app, &ctx, 1.0);
+    let shown = progress(&mut app, &ctx, 1.1);
+    assert!(shown.contains("The plug-in is computing…") && shown.contains("25 %"), "{shown}");
+    assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap()["cancelled"], 1);
+    while !app.plugin_runs.running.is_empty() {
+        plugin_runs::poll(&mut app);
+        std::thread::yield_now();
+    }
+    assert_eq!(app.session.doc().unwrap().doc, doc);
     assert_eq!(app.ui.status, vectorcraft_engine::EngineError::Cancelled.to_string());
 }
 

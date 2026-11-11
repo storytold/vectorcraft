@@ -125,11 +125,50 @@ fn pressure_profile_extends_and_reverses() {
     assert_eq!(old.reversed().points, vec![(0.0, 1.0), (1.0, 0.0)]);
 }
 
+/// #764: a pen's bearing or barrel rotation is kept the shorter way round between samples, so
+/// 170° then −170° turns through 180°, not through 0°.
+#[test]
+fn angle_profiles_join_samples_the_shorter_way_round() {
+    let across = AngleProfile::from_samples([(0.0, 170.0), (1.0, -170.0)]).unwrap();
+    assert_eq!(across.points, vec![(0.0, 170.0), (1.0, 190.0)]);
+    assert_eq!(across.at(0.5), 180.0);
+    assert!((across.at(0.75) + 175.0).abs() < 1e-9, "{}", across.at(0.75));
+    // Turns past a whole turn keep counting, and read back within −180..180°.
+    let spin = AngleProfile::from_samples((0..=40).map(|i| (f64::from(i) / 40.0, f64::from(i * 30) - 180.0))).unwrap();
+    assert!((spin.points.last().unwrap().1 - 1380.0).abs() < 1e-9, "{spin:?}");
+    assert!((spin.at(1.0) + 60.0).abs() < 1e-9 && spin.points.len() == 2, "{spin:?}");
+    // Junk is dropped; nothing at all is no profile, and no profile reads 0°.
+    let junk = AngleProfile::from_samples([(f64::NAN, 5.0), (0.5, f64::INFINITY), (0.2, 400.0)]).unwrap();
+    assert_eq!(junk.points, vec![(0.2, 40.0)]);
+    assert!(AngleProfile::from_samples([(0.5, f64::NAN)]).is_none());
+    assert_eq!(AngleProfile::default().at(0.3), 0.0);
+    let noisy = AngleProfile::from_samples((0..1_000_000).map(|i| (f64::from(i) / 1e6, f64::from(i % 2) * 90.0))).unwrap();
+    assert!(noisy.points.len() <= PressureProfile::MAX_POINTS);
+    // Continued: the old part, then the new one; a side without an angle is 0°. Reversed, the
+    // angles stay what they were.
+    let old = AngleProfile { points: vec![(0.0, 90.0), (1.0, 90.0)] };
+    let joined = AngleProfile::extended(Some(&old), 30.0, None, 10.0).unwrap();
+    assert!((joined.at(0.5) - 90.0).abs() < 1e-9 && joined.at(1.0) == 0.0, "{joined:?}");
+    assert!(AngleProfile::extended(None, 10.0, None, 10.0).is_none());
+    assert_eq!(AngleProfile::extended(Some(&old), 0.0, None, 0.0), Some(old.clone()));
+    assert_eq!(across.reversed().points, vec![(0.0, 190.0), (1.0, 170.0)]);
+    // A part that turned more than half a turn between two of its samples keeps that turn when
+    // the path is continued, and so does the new part.
+    let quarter_turns = AngleProfile::from_samples([(0.0, 0.0), (1.0 / 3.0, 90.0), (2.0 / 3.0, 180.0), (1.0, 270.0)]).unwrap();
+    assert_eq!(quarter_turns.points, vec![(0.0, 0.0), (1.0, 270.0)]);
+    let added = AngleProfile { points: vec![(0.0, -80.0), (1.0, 280.0)] };
+    let joined = AngleProfile::extended(Some(&quarter_turns), 10.0, Some(&added), 10.0).unwrap();
+    assert!((joined.at(0.25) - 135.0).abs() < 1e-9, "{joined:?}");
+    assert!((joined.at(0.75) - 100.0).abs() < 1e-9, "{joined:?}");
+}
+
 /// Strokes saved before pen pressure load as they were, and are written without it.
 #[test]
 fn strokes_without_pressure_round_trip_unchanged() {
     let json = serde_json::to_value(StrokeLayer::new(Paint::None, 2.0)).unwrap();
-    assert!(json.get("pressure").is_none());
+    for key in ["pressure", "tilt", "bearing", "rotation"] {
+        assert!(json.get(key).is_none(), "{key}");
+    }
     let st: StrokeLayer = serde_json::from_value(json).unwrap();
     assert_eq!(st.pressure, None);
     let pressed = StrokeLayer { pressure: Some(PressureProfile::sample()), ..st };
@@ -138,13 +177,29 @@ fn strokes_without_pressure_round_trip_unchanged() {
     let mut ap = Appearance::basic(Paint::None, Paint::None, 1.0);
     ap.stroke_mut().unwrap().pressure = Some(PressureProfile::sample());
     assert_eq!(ap.without_pressure().stroke().unwrap().pressure, None);
+    // The pen's tilt, bearing and rotation load, save and stay behind the same way.
+    let posed = StrokeLayer {
+        tilt: Some(PressureProfile::sample()),
+        bearing: Some(AngleProfile::sample()),
+        rotation: Some(AngleProfile { points: vec![(0.0, -45.0)] }),
+        ..back
+    };
+    let again: StrokeLayer = serde_json::from_value(serde_json::to_value(&posed).unwrap()).unwrap();
+    assert_eq!(again, posed);
+    let mut ap = Appearance::basic(Paint::None, Paint::None, 1.0);
+    *ap.stroke_mut().unwrap() = posed;
+    let st = ap.without_pressure().stroke().cloned().unwrap();
+    assert_eq!((st.pressure, st.tilt, st.bearing, st.rotation), (None, None, None, None));
 }
 
+/// The Lens profile's widths at its middle, a quarter of the way along and past its end.
 #[test]
 fn profile_interp() {
     let p = WidthProfile::lens();
     assert_eq!(p.at(0.5), (1.0, 1.0));
-    assert_eq!(p.at(0.25), (0.5, 0.5));
+    // Half way up the lens the width curves above the straight ramp (0.5), flattening into its
+    // widest point (#5714).
+    assert_eq!(p.at(0.25), (0.625, 0.625));
     assert_eq!(p.at(2.0), (0.0, 0.0));
 }
 
@@ -164,7 +219,7 @@ fn profile_presets_round_trip_their_ids() {
 #[test]
 fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
     // Saved files store these names: they may only ever be appended to.
-    const SAVED: [&str; 40] = [
+    const SAVED: [&str; 41] = [
         "Triangle",
         "TriangleOpen",
         "Circle",
@@ -205,6 +260,7 @@ fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
         "Kite",
         "TriangleBar",
         "Oval",
+        "LineArrow",
     ];
     for name in SAVED {
         let a: Arrowhead = serde_json::from_value(serde_json::json!(name)).unwrap();
@@ -238,9 +294,15 @@ fn outset_covers_arrowheads() {
     st.arrow_scale = (100.0, 200.0);
     assert_eq!(st.arrow_weight(false), 4.0);
     assert_eq!(st.arrow_weight(true), 8.0);
-    assert_eq!((st.head_reach(false), st.head_reach(true)), (0.0, HEAD_REACH * 8.0 + 2.0));
+    let reach = Arrowhead::Triangle.reach();
+    assert_eq!((st.head_reach(false), st.head_reach(true)), (0.0, reach * 8.0 + 2.0));
     // A 32 pt head whose tip sits up to its length (plus the cap) past the end point.
-    assert_eq!(a.outset(), HEAD_REACH * 8.0 + 2.0);
+    assert_eq!(a.outset(), reach * 8.0 + 2.0);
+    // The line arrow's arms spread twice as wide, so it reaches further from its tip.
+    a.stroke_mut().unwrap().end_arrow = Some(Arrowhead::LineArrow);
+    assert!(Arrowhead::LineArrow.reach() > reach);
+    assert_eq!(a.outset(), Arrowhead::LineArrow.reach() * 8.0 + 2.0);
+    a.stroke_mut().unwrap().end_arrow = Some(Arrowhead::Triangle);
     a.stroke_mut().unwrap().width = 0.01;
     assert_eq!(a.stroke().unwrap().arrow_weight(true), 0.25, "heads keep a minimum size");
 }

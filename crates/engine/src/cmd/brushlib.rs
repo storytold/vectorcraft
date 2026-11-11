@@ -107,10 +107,14 @@ impl BrushLibrary {
     /// `name`: the brushes and every resource their art uses.
     pub fn from_document(src: &Document, names: &[String], name: String) -> std::result::Result<Self, String> {
         let all = brush::library(src);
-        if let Some(n) = names.iter().find(|n| !all.iter().any(|b| b.name == **n)) {
+        // Names looked up in sets: scanning the lists for each brush made a library of N brushes
+        // cost N² comparisons.
+        let have: HashSet<&str> = all.iter().map(|b| b.name.as_str()).collect();
+        if let Some(n) = names.iter().find(|n| !have.contains(n.as_str())) {
             return Err(format!("no brush `{n}`"));
         }
-        let picked = all.iter().filter(|b| names.is_empty() || names.contains(&b.name));
+        let wanted: HashSet<&str> = names.iter().map(String::as_str).collect();
+        let picked = all.iter().filter(|b| names.is_empty() || wanted.contains(b.name.as_str()));
         let clip = Clipboard::gather(src, picked.map(|b| stroke(&b.name)).collect());
         let mut doc = clip.to_document();
         for l in &mut doc.layers {
@@ -120,7 +124,8 @@ impl BrushLibrary {
         }
         // The brushes picked and those their art paints with, in the panel order of the document
         // they came from.
-        let brushes: Vec<Brush> = all.into_iter().filter(|b| clip.brushes.iter().any(|c| c.name == b.name)).collect();
+        let kept: HashSet<&str> = clip.brushes.iter().map(|c| c.name.as_str()).collect();
+        let brushes: Vec<Brush> = all.iter().filter(|b| kept.contains(b.name.as_str())).cloned().collect();
         brush::store(&mut doc, &brushes);
         doc.title = name.clone();
         Ok(Self { name, brushes, doc })
@@ -160,13 +165,13 @@ pub struct BuiltinBrushLibrary {
     make: fn() -> BrushLibrary,
 }
 
-/// The built-in brush libraries, in menu order: original brushes generated in code, one library
-/// per kind of brush.
+/// The built-in brush libraries, in menu order: original brushes generated in code.
 pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "art-ribbons", name: "Art Ribbons", make: art_ribbons },
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
+    BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
 ];
 
 /// Built-in library `id`, made once.
@@ -335,7 +340,7 @@ fn scatter_shapes() -> BrushLibrary {
         a.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(gold))));
         a
     });
-    doc.symbols.push(Symbol { name: "Sparkle".into(), art: Arc::new(sparkle) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Sparkle".into(), art: Arc::new(sparkle) });
     let instance = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Sparkle".into(), xf: Affine::scale(0.3) });
     let random = |a: f64, b: f64| (a, b);
     let base = Scatter { colorization: Colorization::Tints, ..Default::default() };
@@ -371,6 +376,44 @@ fn scatter_shapes() -> BrushLibrary {
         ),
     ];
     built("Scatter Shapes", doc, brushes)
+}
+
+/// Game Trails: art brushes for motion lines and impact streaks (original game HUD / VFX art).
+fn game_trails() -> BrushLibrary {
+    let speed = {
+        let n = 32;
+        let half = |x: f64| 2.2 * (1.0 - x / 100.0).powf(1.2).max(0.08);
+        let xs = |i: usize| 100.0 * i as f64 / n as f64;
+        let mut pts: Vec<Point> = (0..=n).map(xs).map(|x| Point::new(x, -half(x))).collect();
+        pts.extend((0..n).rev().map(xs).map(|x| Point::new(x, half(x))));
+        PathData::single(SubPath::polyline(&pts, true))
+    };
+    let dash = group(vec![
+        black(shapes::rounded_rectangle(Rect::new(0.0, -1.0, 14.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(22.0, -1.0, 36.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(44.0, -1.0, 58.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(66.0, -1.0, 80.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(88.0, -1.0, 100.0, 1.0), 1.0)),
+    ]);
+    let burst = {
+        // A wedge that flares from a tip at x=0 to a wide end at x=100.
+        let tip = Point::new(0.0, 0.0);
+        let top = Point::new(100.0, -6.0);
+        let bot = Point::new(100.0, 6.0);
+        PathData::single(SubPath::polyline(&[tip, top, bot], true))
+    };
+    let zigzag = band(100.0, 1.8, 40, |x| {
+        let t = (x / 12.5).floor();
+        let local = (x / 12.5) - t;
+        if (t as i32) % 2 == 0 { -3.0 + 6.0 * local } else { 3.0 - 6.0 * local }
+    });
+    let brushes = vec![
+        art("Speed Line", black(speed), Colorization::Tints),
+        art("Dash Trail", dash, Colorization::Tints),
+        art("Burst Ray", black(burst), Colorization::Tints),
+        art("Zigzag", black(zigzag), Colorization::Tints),
+    ];
+    built("Game Trails", Document::new(100.0, 100.0), brushes)
 }
 
 // ---------- commands ----------

@@ -33,6 +33,7 @@ fn picked_artboards_bounds(app: &VectorcraftApp) -> Option<Rect> {
 /// The Contextual Task Bar: a floating pill under the selection with the most likely next actions.
 /// With the Artboard tool it sits under the selected artboards and offers Resize (Artboard
 /// Options), Duplicate, Rearrange All (with two or more artboards) and Export (Export for Screens).
+/// A basic shape selected with the Selection tool shows a Shape Properties button in place of Lock.
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
 pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
@@ -47,7 +48,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let Some(b) = (if on_artboards { picked_artboards_bounds(app) } else { app.selection_bounds() }) else { return };
     let Some(st) = app.session.active() else { return };
     let n = st.selection.len();
-    let first = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned();
+    let first = st.selection.objects.first().and_then(|id| st.doc.node(*id));
     let is_group = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Group { .. }));
     let is_image = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Image(_)));
     let is_clip_group = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Group { clip: true, .. }));
@@ -67,6 +68,19 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         && first.as_ref().is_some_and(|f| {
             f.name.as_deref() == Some("Image Trace") && f.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
         });
+    // A basic shape (a live rectangle, rounded rectangle, ellipse or polygon) selected whole with the
+    // Selection tool: its properties take the place of Lock, as in the reference app
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
+    use vectorcraft_doc::LiveShape;
+    let shape = first
+        .filter(|f| {
+            n == 1
+                && st.selection.anchors.is_empty()
+                && app.session.tool_id() == "selection"
+                && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
+                    if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
+        })
+        .cloned();
     let mut items: Vec<(&str, &str, &str, serde_json::Value)> = vec![]; // (label, icon, command, params)
     let none = || json!({});
     if on_artboards {
@@ -105,8 +119,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
         }
         // As in the reference app, open paths offer Join and Edit Path, compound paths and clipping
-        // masks their Release, images selected with vector art Make Clipping Mask, and type converts
-        // between point and area type (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
+        // masks their Release, images selected with vector art Make Clipping Mask, type converts
+        // between point and area type, and type on a path offers its options (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
         if n > 1 {
             items.push((tl!("Group"), "group", "object.group", none()));
             if mixed {
@@ -132,11 +146,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Release Compound Path"), "ungroup", "object.compoundPath.release", none()));
         } else if let Some(kind) = text {
             items.push((tl!("Create Outlines"), "type", "type.createOutlines", none()));
-            // Point type converts to area type and back; type on a path doesn't.
+            // Point type converts to area type and back. The overview above gives type on a path an item to add
+            // an effect and rearrange the text; here it opens Type on a Path Options.
             match kind {
                 TextKind::Area { .. } => items.push((tl!("Convert To Point Type"), "type", "type.convertToPointType", none())),
                 TextKind::Point => items.push((tl!("Convert To Area Type"), "dc-type-area", "type.convertToAreaType", none())),
-                TextKind::OnPath { .. } => {}
+                TextKind::OnPath { .. } => items.push((tl!("Type on a Path Options"), "dc-type-path", "type.pathOptions", none())),
             }
         } else if is_image {
             // Offset Path and Simplify don't apply to an image.
@@ -218,6 +233,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     for (label, icon, cmd, params) in &items {
                         let galley = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(13.0), t.text_strong);
                         let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 38.0, 30.0), Sense::click());
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, *label));
                         if resp.hovered() {
                             ui.painter().rect_filled(r, CornerRadius::same(3), t.hover);
                         }
@@ -228,7 +244,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             run = Some((*cmd, params.clone()));
                         }
                     }
-                    // The selected objects' Fill, Stroke, Recolor Artwork and Lock, left out with the Artboard tool.
+                    // The selected objects' Fill, Stroke, Recolor Artwork and Lock (a basic shape's
+                    // properties instead), left out with the Artboard tool.
                     if !on_artboards {
                         let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
                         let chip = egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0));
@@ -251,10 +268,22 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                         if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 30.0).clicked() {
                             run = Some(("ui.recolorDialog", json!({})));
                         }
-                        // The Lock button is off in isolation mode, as Object › Lock › Selection is.
-                        let lockable = crate::menus::enabled(app, "object.lock");
-                        if widgets::icon_button_enabled(ui, "lock", tl!("Lock (⌘2)"), false, lockable, 30.0).clicked() {
-                            run = Some(("object.lock", json!({})));
+                        if let Some(shape) = &shape
+                            && let NodeKind::Path { live: Some(live), .. } = &shape.kind
+                        {
+                            // The shape's properties in a popover that stays open while its fields and
+                            // its Corner dropdown are used.
+                            let props = widgets::icon_button(ui, "shapes", tl!("Shape Properties"), false, 30.0);
+                            widgets::popover(&props, props.clicked(), |ui| {
+                                ui.set_min_width(250.0);
+                                crate::panels::transform::live_shape_rows(app, ui, shape, live, "task-bar-shape", true);
+                            });
+                        } else {
+                            // The Lock button is off in isolation mode, as Object › Lock › Selection is.
+                            let lockable = crate::menus::enabled(app, "object.lock");
+                            if widgets::icon_button_enabled(ui, "lock", tl!("Lock (⌘2)"), false, lockable, 30.0).clicked() {
+                                run = Some(("object.lock", json!({})));
+                            }
                         }
                     }
                     let more = widgets::icon_button(ui, "ellipsis", tl!("More Options"), false, 30.0);

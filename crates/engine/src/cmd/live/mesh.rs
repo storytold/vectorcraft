@@ -4,7 +4,7 @@ use super::common::{fix_ids, ids_json, is_mesh, replace_with, roots_param, selec
 use super::envelope::{outline_of, rows_cols};
 use super::{
     Color, Document, EngineError, EnvelopeKind, GradientMesh, MeshAppearance, Node, NodeId, NodeKind, Paint, Point, Result, Session, Value, bad,
-    check_numbers, color_value, f64_or, f64_req, finite_numbers, gradient_sampler, id_param, json, live, ok, str_param,
+    check_numbers, color_param, f64_or, f64_req, finite_numbers, gradient_sampler, id_param, json, live, ok, str_param,
 };
 
 // ---------- Gradient mesh ----------
@@ -16,8 +16,9 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
         Some(a) => MeshAppearance::parse(a).ok_or_else(|| bad(C, "appearance must be flat|center|edge"))?,
         None => MeshAppearance::Flat,
     };
-    check_numbers(p, &["highlight"], C)?;
+    check_numbers(p, &["highlight", "tolerance"], C)?;
     let highlight = f64_or(p, "highlight", 100.0).clamp(0.0, 100.0);
+    let tol = f64_or(p, "tolerance", 0.0).max(0.0);
     let at = match p.get("at") {
         None | Some(Value::Null) => None,
         Some(v) => Some(finite_numbers(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(C, "`at` must be [x, y]"))?),
@@ -48,17 +49,21 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
                 match n.appearance.fill_paint() {
                     // The points take the colours the gradient paints there.
                     Paint::Gradient(g) => {
-                        path.bounds().and_then(|b| GradientMesh::for_path_with(&path, rows, cols, &*gradient_sampler(&g, b, model))).map(|mut m| {
-                            m.highlight(app, highlight);
-                            m
-                        })
+                        path.bounds().and_then(|b| GradientMesh::for_path_shaded(&path, rows, cols, &*gradient_sampler(&g, b, model), app, highlight))
                     }
                     p => GradientMesh::for_path(&path, rows, cols, p.color().unwrap_or(Color::WHITE), app, highlight),
                 }
             };
             let Some(mut m) = m else { continue };
             if let Some(q) = at {
-                index = m.add_lines_at(q);
+                // A point the new mesh can't place its lines at leaves the object as it is.
+                match m.add_lines_at(q, tol) {
+                    Some(i) => index = Some(i),
+                    None => {
+                        refused.get_or_insert("point is outside the object");
+                        continue;
+                    }
+                }
             }
             let mut mn = Node::new(n.id, NodeKind::Mesh(m));
             mn.name = n.name.clone();
@@ -224,7 +229,7 @@ pub(super) fn mesh_set_color(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["opacity"], C)?;
     crate::cmd::paint::check_keep_model(p, C)?;
     let items = point_items(p, C)?;
-    let color = p.get("color").and_then(color_value).map(|c| crate::cmd::paint::new_color(s, p, c));
+    let color = color_param(p, "color", C)?.map(|c| crate::cmd::paint::new_color(s, p, c));
     let opacity = p.get("opacity").and_then(Value::as_f64);
     if color.is_none() && opacity.is_none() {
         return Err(bad(C, "missing `color` or `opacity`"));
@@ -273,9 +278,11 @@ pub(super) fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.mesh.addLine";
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     crate::cmd::paint::check_keep_model(p, C)?;
-    let color = p.get("color").and_then(color_value).map(|c| crate::cmd::paint::new_color(s, p, c));
+    check_numbers(p, &["tolerance"], C)?;
+    let tol = f64_or(p, "tolerance", 0.0).max(0.0);
+    let color = color_param(p, "color", C)?.map(|c| crate::cmd::paint::new_color(s, p, c));
     let index = with_mesh(s, p, C, "Add Mesh Line", true, |m| {
-        let i = m.add_lines_at(q).ok_or_else(|| bad(C, "point is outside the mesh"))?;
+        let i = m.add_lines_at(q, tol).ok_or_else(|| bad(C, "point is outside the mesh"))?;
         if let Some(c) = color {
             m.points[i].color = c;
         }

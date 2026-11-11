@@ -4,6 +4,7 @@
 //! testing need nothing special; after an edit the engine joins the slices and re-distributes them
 //! with [`distribute`].
 
+use vectorcraft_doc::text::ListCounts;
 use vectorcraft_doc::{ParaStyle, TextObject, TextRun};
 
 use crate::edit::{normalize, runs_len, slice_runs, style_at};
@@ -20,21 +21,31 @@ pub fn story(frames: &[&TextObject]) -> Vec<TextRun> {
 /// paragraph shares that paragraph with the next frame (its first one): the earlier frame's style
 /// wins unless `later_wins[k]` says frame `k`'s first paragraph should (it was just restyled), or
 /// the earlier frame's part of the paragraph is empty (its slice ends with a paragraph break).
+/// An empty frame that was just restyled keeps its style against unedited empty frames after it.
 pub fn story_paras(frames: &[&TextObject], later_wins: &[bool]) -> Vec<ParaStyle> {
     let mut out: Vec<ParaStyle> = vec![];
     let mut prev_empty_tail = true;
+    let mut empty_tail_restyled = false;
     for (k, f) in frames.iter().enumerate() {
+        let text = f.plain_text();
+        let restyled = later_wins.get(k).copied().unwrap_or(false);
         let mut styles = f.paragraph_styles().into_iter();
         if k > 0
             && let Some(first) = styles.next()
-            && (prev_empty_tail || later_wins.get(k).copied().unwrap_or(false))
+            && (restyled || (prev_empty_tail && !(text.is_empty() && empty_tail_restyled)))
             && let Some(last) = out.last_mut()
         {
             *last = first;
         }
         out.extend(styles);
-        let text = f.plain_text();
-        prev_empty_tail = text.is_empty() || text.ends_with('\n') || out.is_empty();
+        // An empty frame has no paragraph boundary of its own. Keep the preceding frame's
+        // boundary state so another empty frame cannot replace a paragraph's edited style.
+        if !text.is_empty() {
+            prev_empty_tail = text.ends_with('\n') || out.is_empty();
+            empty_tail_restyled = false;
+        } else if restyled {
+            empty_tail_restyled = true;
+        }
     }
     out
 }
@@ -72,29 +83,38 @@ fn fit(db: &FontDb, frame: &TextObject, runs: &[TextRun]) -> usize {
 }
 
 /// A frame's share of a story: its runs, its paragraphs' styles (one per paragraph) and the
-/// numbered list paragraphs counted before its first one ([`TextObject::list_count`]).
+/// numbered list paragraphs counted before its first one, at level 1 and at the levels past it
+/// ([`TextObject::list_count`], [`TextObject::list_level_counts`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Slice {
     pub runs: Vec<TextRun>,
     pub paras: Vec<ParaStyle>,
     pub list_count: u32,
+    pub list_level_counts: Vec<u32>,
     /// The first paragraph continues from the frame before
     /// ([`TextObject::first_para_continues`]).
     pub continues: bool,
 }
 
-/// The count of numbered list paragraphs after the paragraphs of `runs` (styles `paras`, one per
-/// paragraph) but the last one, counted on from `count` as the layout counts them
+impl Slice {
+    /// The list counts the slice's frame starts from ([`TextObject::list_counts`]).
+    pub fn list_counts(&self) -> ListCounts {
+        ListCounts::from_parts(self.list_count, &self.list_level_counts)
+    }
+}
+
+/// The counts of numbered list paragraphs at each level after the paragraphs of `runs` (styles
+/// `paras`, one per paragraph) but the last one, counted on from `counts` as the layout counts them
 /// ([`vectorcraft_doc::text::ParaList::next_marker`]). A slice's last paragraph also starts the
 /// next frame, which counts it.
-fn count_list_paragraphs(runs: &[TextRun], paras: &[ParaStyle], mut count: u32) -> u32 {
+fn count_list_paragraphs(runs: &[TextRun], paras: &[ParaStyle], mut counts: ListCounts) -> ListCounts {
     let text: String = runs.iter().map(|r| r.text.as_str()).collect();
     let mut pieces: Vec<&str> = text.split('\n').collect();
     pieces.pop();
     for (piece, para) in pieces.iter().zip(paras) {
-        vectorcraft_doc::text::ParaList::next_marker(para.list, piece.is_empty(), &mut count);
+        vectorcraft_doc::text::ParaList::next_marker(para.list, piece.is_empty(), &mut counts);
     }
-    count
+    counts
 }
 
 /// Whether the frame after one whose share ends with byte `before` starts inside a paragraph: it
@@ -124,21 +144,36 @@ pub fn continued(frames: &[&TextObject]) -> Vec<bool> {
 /// keep one empty run carrying the style at the split, so typing there has a style. A paragraph
 /// split between frames has its style in both, and each slice that starts inside a paragraph is
 /// marked as continuing it ([`Slice::continues`]). Each frame's numbered list paragraphs are counted
-/// on from the frames before it. Each frame's share is measured with that mark and that count.
+/// on from the frames before it, at each level. Each frame's share is measured with that mark and
+/// those counts.
 pub fn distribute(db: &FontDb, frames: &[&TextObject], runs: &[TextRun], paras: &[ParaStyle]) -> Vec<Slice> {
-    distribute_continuing(db, frames, runs, paras, false, 0)
+    distribute_continuing_levels(db, frames, runs, paras, false, ListCounts::default())
 }
 
 /// [`distribute`] for `runs` that follow text before them: the first frame's share is measured,
 /// and marked, as continuing a paragraph when `continued` is set, and its numbered list paragraphs
-/// are counted on from `list_count`.
+/// at level 1 are counted on from `list_count` ([`distribute_continuing_levels`] takes the counts
+/// of every level).
 pub fn distribute_continuing(
     db: &FontDb,
     frames: &[&TextObject],
     runs: &[TextRun],
     paras: &[ParaStyle],
     continued: bool,
-    mut list_count: u32,
+    list_count: u32,
+) -> Vec<Slice> {
+    distribute_continuing_levels(db, frames, runs, paras, continued, ListCounts::from_parts(list_count, &[]))
+}
+
+/// [`distribute_continuing`] with the first frame's numbered list paragraphs counted on from
+/// `counts` at each level.
+pub fn distribute_continuing_levels(
+    db: &FontDb,
+    frames: &[&TextObject],
+    runs: &[TextRun],
+    paras: &[ParaStyle],
+    continued: bool,
+    mut counts: ListCounts,
 ) -> Vec<Slice> {
     let mut rest = runs.to_vec();
     let mut out = Vec::with_capacity(frames.len());
@@ -155,7 +190,7 @@ pub fn distribute_continuing(
             let mut probe = (*f).clone();
             probe.runs = rest.clone();
             probe.set_paragraph_styles(slice_paras(paras, first_para, &rest));
-            probe.list_count = list_count;
+            probe.set_list_counts(counts);
             probe.first_para_continues = continues;
             fit(db, &probe, &rest)
         };
@@ -167,11 +202,12 @@ pub fn distribute_continuing(
         rest = if tail.is_empty() { vec![TextRun { text: String::new(), style: style_at(&rest, len), inline: None }] } else { tail };
         let head_paras = slice_paras(paras, first_para, &head);
         next_para += head_paras.len().saturating_sub(1);
-        let next_count = count_list_paragraphs(&head, &head_paras, list_count);
+        let next_counts = count_list_paragraphs(&head, &head_paras, counts);
         let starts_continued = continues;
         continues = continues_after(head.iter().rev().find_map(|r| r.text.bytes().last()), continues);
-        out.push(Slice { runs: head, paras: head_paras, list_count, continues: starts_continued });
-        list_count = next_count;
+        let (list_count, list_level_counts) = counts.parts();
+        out.push(Slice { runs: head, paras: head_paras, list_count, list_level_counts, continues: starts_continued });
+        counts = next_counts;
     }
     out
 }

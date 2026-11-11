@@ -272,6 +272,62 @@ fn balance_trades_vector_regions_for_an_image() {
     assert_eq!(flatten(&mut s, json!({"ids": [a, b], "balance": 5})).2, 1);
 }
 
+/// The balance's region limit, `10^(balance/20)` rounded down, is the most regions a group keeps.
+#[test]
+fn the_region_limit_is_the_most_regions_the_balance_keeps() {
+    use crate::cmd::FlattenOptions;
+    for balance in [0.0, 1.0, 5.0, 16.0, 17.0, 20.0, 40.0, 60.0, 75.0, 99.0, 99.99, 100.0] {
+        for clip in [false, true] {
+            let o = FlattenOptions::from_params(&json!({"balance": balance, "clipComplexRegions": clip})).unwrap();
+            match o.region_limit() {
+                Some(n) => {
+                    assert!(!o.rasterize_all(n) && o.rasterize_all(n + 1), "balance {balance}: limit {n}");
+                    assert!(!clip, "balance {balance}: a limit with Clip Complex Regions");
+                }
+                None => assert!(clip || balance <= 0.0 || balance >= 100.0, "balance {balance}: no limit"),
+            }
+        }
+    }
+}
+
+/// A row of four half-transparent rectangles splits into 7 regions. Under the balance's region
+/// limit (10), at it (7), just over it (6) and far over it (1), Flatten Transparency, the flattened
+/// document and the EPS file come out as they do when every region is built.
+#[test]
+fn groups_over_the_region_limit_flatten_as_with_every_region_built() {
+    use crate::cmd::FlattenOptions;
+    use crate::cmd::flatten::{flatten_document, with_every_region as every};
+    let _settings = settings_lock();
+    let setup = || {
+        let mut s = session();
+        let ids: Vec<u64> = (0..4).map(|k| rect(&mut s, 10.0 + 30.0 * f64::from(k), 10.0, 40.0, 60.0, "#ff8000")).collect();
+        run(&mut s, "transparency.set", json!({"ids": ids, "opacity": 50}));
+        (s, ids)
+    };
+    let eps = |s: &mut Session, balance: u32| {
+        let r = run(s, "document.exportEps", json!({"flattener": {"balance": balance}, "previewFormat": "none", "thumbnails": false}));
+        let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+        String::from_utf8_lossy(&bytes).lines().filter(|l| !l.contains("CreationDate")).collect::<Vec<_>>().join("\n")
+    };
+    for (balance, vector, rasterized) in [(20, 7, 0), (17, 7, 0), (16, 0, 1), (5, 0, 1)] {
+        let (mut s, _) = setup();
+        let o = FlattenOptions::from_params(&json!({"balance": balance})).unwrap();
+        let src = s.doc().unwrap().doc.clone();
+        let flat = flatten_document(&src, &o).unwrap();
+        assert!(flat == every(|| flatten_document(&src, &o).unwrap()), "balance {balance}: flattened document");
+        assert_eq!(eps(&mut s, balance), every(|| eps(&mut s, balance)), "balance {balance}: EPS");
+        let (mut s, ids) = setup();
+        let got = flatten(&mut s, json!({"ids": ids, "balance": balance}));
+        assert_eq!((got.1, got.2), (vector, rasterized), "balance {balance}");
+        let (mut t, ids) = setup();
+        let want = every(|| flatten(&mut t, json!({"ids": ids, "balance": balance})));
+        assert_eq!(got, want, "balance {balance}");
+        // The two documents were made apart, so their creation times can differ.
+        let (a, b) = (&s.doc().unwrap().doc, &t.doc().unwrap().doc);
+        assert!(a.layers == b.layers && a.images == b.images, "balance {balance}: Flatten Transparency");
+    }
+}
+
 #[test]
 fn gradients_rasterize_and_flat_areas_stay_vector() {
     let _settings = settings_lock();
@@ -292,6 +348,31 @@ fn gradients_rasterize_and_flat_areas_stay_vector() {
         assert_regions_match(&s, &before, ids[0], 1, "gradient");
         assert!(changed(&before, &picture(&s)) < 0.02, "clip {clip}");
     }
+}
+
+#[test]
+fn a_long_rasterized_area_is_placed_whole() {
+    let _settings = settings_lock();
+    let mut s = session();
+    // 5569 pt long: more than the renderer's 32,768 pixels a side at the 64 Mpx limit's scale.
+    let g = rect(&mut s, 10.0, 10.0, 100.0, 5569.0, "#000000");
+    run(
+        &mut s,
+        "paint.setFill",
+        json!({"ids": [g], "gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}}),
+    );
+    run(&mut s, "transparency.set", json!({"ids": [g], "opacity": 40}));
+    let (ids, _, rasterized) = flatten(&mut s, json!({"ids": [g], "lineArtPpi": 1200, "gradientPpi": 1200}));
+    assert_eq!(rasterized, 1);
+    let mut placed = vec![];
+    node(&s, ids[0]).walk(&mut |c| {
+        if let NodeKind::Image(im) = &c.kind {
+            placed.push((im.height, im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)))));
+        }
+    });
+    let [(height, b)] = placed[..] else { panic!("one image: {placed:?}") };
+    assert!(height <= vectorcraft_render::MAX_RASTER_SIDE, "{height} pixels");
+    assert!(b.y0 <= 10.0 && b.y1 >= 5579.0, "the image covers the strip: {b:?}");
 }
 
 #[test]
@@ -379,6 +460,33 @@ fn outlined_type_keeps_its_underline() {
     // "Hi" has no ink below its baseline (y 150): the outlines reach the bar under it.
     let b = node(&s, ids[0]).geometric_bounds().unwrap();
     assert!(b.y1 > 151.0, "{b:?}");
+}
+
+/// Flattening transparent type that runs over several lines gives a group per line, each holding
+/// that line's regions (#5252).
+#[test]
+fn flattening_multiline_transparent_text_gives_one_group_per_line() {
+    let _settings = settings_lock();
+    let mut s = session();
+    let text =
+        run(&mut s, "text.create", json!({"x": 10, "y": 40, "text": "First line\nSecond line\nThird line", "size": 24}))["id"].as_u64().unwrap();
+    run(&mut s, "transparency.set", json!({"ids": [text], "opacity": 50}));
+    let NodeKind::Text(t) = &node(&s, text).kind else { panic!("type") };
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let baselines: Vec<f64> = layout.baselines().iter().map(|(a, _)| (t.xf * *a).y).collect();
+    assert_eq!(baselines.len(), 3, "{baselines:?}");
+    let before = picture(&s);
+    let (ids, vector, _) = flatten(&mut s, json!({"ids": [text]}));
+    assert_eq!(ids.len(), 1);
+    assert!(vector > 0);
+    let g = node(&s, ids[0]);
+    let lines: Vec<&std::sync::Arc<Node>> = g.children().unwrap().iter().filter(|c| matches!(c.kind, NodeKind::Group { .. })).collect();
+    assert_eq!(lines.len(), 3, "expected one group per line, got {} children", g.children().unwrap().len());
+    for (line, y) in lines.iter().zip(&baselines) {
+        let b = line.geometric_bounds().unwrap();
+        assert!(b.y0 > y - 24.0 && b.y1 < y + 10.0, "line at baseline {y} has bounds {b:?}");
+        assert_regions_match(&s, &before, line.id.0, 2, "line");
+    }
 }
 
 #[test]

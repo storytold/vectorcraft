@@ -1,9 +1,9 @@
-use super::nodes::{MASK, doc_path};
+use super::nodes::{MASK, UNDECODED, doc_path};
 use super::output::sanitize_id;
 use super::{
     Affine, BezPath, BlendMode, Color, FillLayer, FillRule, GradientKind, GradientPaint, HashMap, ImageBlob, ImageMode, LineCap, LineJoin,
-    LinkedImage, Node, NodeKind, Paint, PathData, Point, Props, Rect, StrokeAlign, StrokeLayer, Writer, Written, base64_encode, blend_css, fmt_num,
-    stroke, xml_escape,
+    LinkedImage, Node, NodeKind, Paint, PathData, Point, Props, Rect, StrokeAlign, StrokeLayer, Writer, Written, base64_encode, blend_css, css,
+    fmt_num, stroke, xml_escape,
 };
 
 /// Image `b` as SVG viewers show it: PNG, JPEG, GIF, WebP and SVG as they are, other formats (a
@@ -38,6 +38,125 @@ pub(super) enum StrokePlan {
 }
 
 impl Writer<'_> {
+    pub(super) fn count_colorized_images(&mut self, art: &Node) {
+        art.walk(&mut |n| {
+            let NodeKind::Image(im) = &n.kind else { return };
+            let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref() else { return };
+            if self.doc.image_blob(im).is_none_or(|blob| blob.gray_source().is_none()) {
+                return;
+            }
+            let key = self.colorized_key(im, *color);
+            *self.colorized_counts.entry(key).or_default() += 1;
+        });
+    }
+
+    fn colorized_key(&self, im: &vectorcraft_doc::ImageObject, color: Color) -> super::ColorizedKey {
+        let rgb = color.to_rgb().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+        (im.key.clone(), im.width, im.height, self.tiny().then_some(rgb))
+    }
+
+    /// Colorize the decoded gray pixels without changing the source blob. The white pixels of the
+    /// coverage image contribute their alpha to an alpha mask; Tiny uses the same alpha in RGBA.
+    pub(super) fn colorized_image(&mut self, n: &Node, im: &vectorcraft_doc::ImageObject, color: Color, blob: &ImageBlob) {
+        let key = self.colorized_key(im, color);
+        let rgb = color.to_rgb().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+        let href = if let Some(href) = self.colorized_hrefs.get(&key) {
+            href.clone()
+        } else {
+            let Some((width, height, coverage)) = blob.coverage() else {
+                self.warn(UNDECODED);
+                return;
+            };
+            if u64::from(width)
+                .checked_mul(u64::from(height))
+                .and_then(|pixels| pixels.checked_mul(4))
+                .is_none_or(|bytes| bytes > vectorcraft_doc::MAX_RASTER_ALLOC)
+            {
+                self.warn(UNDECODED);
+                return;
+            }
+            let mut rgba = Vec::with_capacity(coverage.len().saturating_mul(4));
+            for alpha in coverage {
+                rgba.extend_from_slice(&if self.tiny() { [rgb[0], rgb[1], rgb[2], alpha] } else { [255, 255, 255, alpha] });
+            }
+            let Some(pixels) = image::RgbaImage::from_raw(width, height, rgba) else {
+                self.warn(UNDECODED);
+                return;
+            };
+            let mut png = Vec::new();
+            if pixels.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+                self.warn(UNDECODED);
+                return;
+            }
+            let href = self.blob_href(&ImageBlob::png(png));
+            self.colorized_hrefs.insert(key.clone(), href.clone());
+            href
+        };
+        let shared = if self.opts.images == ImageMode::Embed && self.colorized_counts.get(&key).is_some_and(|count| *count > 1) {
+            if let Some(id) = self.shared_colorized.get(&key) {
+                Some(id.clone())
+            } else {
+                let id = self.fresh_id("colorize-image");
+                self.def(
+                    0,
+                    &format!(
+                        "<image id=\"{id}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
+                        im.width,
+                        im.height,
+                        xml_escape(&href)
+                    ),
+                );
+                self.shared_colorized.insert(key, id.clone());
+                Some(id)
+            }
+        } else {
+            None
+        };
+        let id = self.id_attr(n);
+        let transform = self.matrix(self.xf * im.xf);
+        let outer = self.attrs(&css::transparency(n));
+        let sampling = if n.extras().pixelated { " image-rendering=\"pixelated\"" } else { "" };
+        if self.tiny() {
+            if let Some(shared) = shared {
+                self.line(&format!("<use{id} transform=\"{transform}\"{outer}{sampling} xlink:href=\"#{shared}\"/>"));
+            } else {
+                self.line(&format!(
+                    "<image{id} width=\"{}\" height=\"{}\" transform=\"{transform}\" preserveAspectRatio=\"none\"{outer}{sampling} xlink:href=\"{}\"/>",
+                    im.width, im.height, xml_escape(&href)
+                ));
+            }
+            return;
+        }
+        let mask = self.fresh_id("colorize-mask");
+        let size = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height));
+        let b = (self.xf * im.xf).transform_rect_bbox(size).inflate(1.0, 1.0);
+        let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
+        self.def(1, &format!("<mask id=\"{mask}\" {MASK} mask-type=\"alpha\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\">"));
+        if let Some(shared) = shared {
+            self.def(2, &format!("<use transform=\"{transform}\"{sampling} xlink:href=\"#{shared}\"/>"));
+        } else {
+            self.def(
+                2,
+                &format!(
+                    "<image width=\"{}\" height=\"{}\" transform=\"{transform}\" preserveAspectRatio=\"none\"{sampling} xlink:href=\"{}\"/>",
+                    im.width,
+                    im.height,
+                    xml_escape(&href)
+                ),
+            );
+        }
+        self.def(1, "</mask>");
+        self.line(&format!("<g{id} mask=\"url(#{mask})\"{outer}>"));
+        self.depth += 1;
+        self.line(&format!("<g transform=\"{transform}\">"));
+        self.depth += 1;
+        self.line(&format!("<rect width=\"{}\" height=\"{}\" fill=\"{}\"{sampling}/>", im.width, im.height, color.to_hex()));
+        self.depth -= 1;
+        self.line("</g>");
+        self.depth -= 1;
+        self.line("</g>");
+    }
+
     /// The `href` of image `im`: its file with [`ImageMode::Link`] (or when its pixels are
     /// missing), else its bytes. `None` when it has neither.
     pub(super) fn image_href(&mut self, im: &vectorcraft_doc::ImageObject) -> Option<String> {
@@ -52,10 +171,16 @@ impl Writer<'_> {
     /// Images drawn more than once in `art` (the pieces of a distorted image) go into the defs
     /// once; each piece then draws them with `<use>`.
     pub(super) fn share_images(&mut self, art: &Node) {
+        self.count_colorized_images(art);
         // Each image's count and its first piece, which shows what they all show.
         let mut seen: HashMap<(String, u32, u32), (usize, vectorcraft_doc::ImageObject)> = HashMap::new();
         art.walk(&mut |c| {
             if let NodeKind::Image(im) = &c.kind {
+                if matches!(c.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
+                    && self.doc.image_blob(im).is_none_or(|b| b.gray_source().is_some())
+                {
+                    return;
+                }
                 seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, (**im).clone())).0 += 1;
             }
         });
@@ -315,9 +440,9 @@ impl Writer<'_> {
         let freeform = g.gradient.kind == GradientKind::Freeform;
         let (rgba, cols, rows): (Vec<u8>, u16, u16) = if freeform {
             let (cols, rows) = grid_size(b, 2.0 * b.width().max(b.height()));
-            let field = g.freeform_on(b).field(spread_scale(b));
+            let field = g.freeform_on(b).model_field(spread_scale(b));
             let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-            (field.grid(b, cols, rows).flat_map(|([r, g, bl], a)| [q(r), q(g), q(bl), q(a)]).collect(), cols, rows)
+            (field.display_grid(b, cols, rows).flat_map(|([r, g, bl], a)| [q(r), q(g), q(bl), q(a)]).collect(), cols, rows)
         } else {
             let k = self.doc.raster_effects_ppi / 72.0;
             let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_GRADIENT_PX) as u16;
@@ -372,13 +497,30 @@ impl Writer<'_> {
     /// gradients require rendered-effect preparation by the caller to preserve their appearance.
     /// Photoshop-style
     /// filters have no SVG equivalent: they are left out with a warning (exports from the app turn
-    /// such objects into images first).
+    /// such objects into images first). An SVG filter (Effect › SVG Filters) that is the last
+    /// effect is written as its own `<filter>` element; elsewhere in the stack it is left out
+    /// like them.
     pub(super) fn filtered(&mut self, n: &Node) {
         let mut inner = n.clone();
         inner.appearance.effects.retain(|e| !vectorcraft_effects::is_raster(&e.id));
+        // An SVG filter's user-space coordinates are the document's from the effect's origin: the
+        // object is written in them, in a group that moves it where the rest of the art goes.
+        let xf = self.xf;
+        let origin = live_svg_filter(&n.appearance.effects).map(|f| Affine::translate(f.origin()));
+        let moved = origin.is_some_and(|o| xf * o != Affine::IDENTITY);
+        if let Some(o) = origin.filter(|_| moved) {
+            self.line(&format!("<g transform=\"{}\">", self.matrix(xf * o)));
+            self.depth += 1;
+            self.xf = o.inverse();
+        }
         let opened = self.open_filters(n, &n.appearance.effects);
         self.node_body(&inner);
         self.close_filters(opened);
+        if moved {
+            self.xf = xf;
+            self.depth -= 1;
+            self.line("</g>");
+        }
     }
 
     /// Open one `<g filter>` per visible raster effect of `effects` (an object's, or one fill or
@@ -400,7 +542,27 @@ impl Writer<'_> {
                 + 2.0;
         let region = bounds.map(|b| self.xf.transform_rect_bbox(b).inflate(reach, reach));
         let mut opened = 0;
-        for f in fx.iter().rev() {
+        // An SVG filter that is the object's last effect is written as it is ([`Self::filtered`]).
+        let live = if std::ptr::eq(effects, n.appearance.effects.as_slice()) { live_svg_filter(effects) } else { None };
+        for (k, f) in fx.iter().enumerate().rev() {
+            if let RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(sf)) = f
+                && live.is_some()
+                && k + 1 == fx.len()
+            {
+                let fid = self.fresh_id("filter");
+                // The filter as it is drawn: a region given against the object's box is measured
+                // against the object alone, which is all it runs on ([`live_svg_filter`]).
+                let mut input = n.clone();
+                input.appearance.effects.clear();
+                let input_bounds = input.visual_bounds_with(&self.doc.symbol_boxes()).unwrap_or_default();
+                if let Some(def) = sf.written_xml(input_bounds).and_then(|xml| vectorcraft_effects::svg_filter::with_id(&xml, &fid)) {
+                    self.def(1, &def);
+                    self.line(&format!("<g filter=\"url(#{fid})\">"));
+                    self.depth += 1;
+                    opened += 1;
+                    continue;
+                }
+            }
             if matches!(f, RasterFx::Pixel(_) | RasterFx::Rasterize(_)) {
                 self.warn("SVG has no pixel effects such as Radial Blur, Smart Blur or Unsharp Mask: they are left out");
                 continue;
@@ -476,7 +638,10 @@ impl Writer<'_> {
                     "<feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"{}\" result=\"soft\"/><feComposite in=\"SourceGraphic\" in2=\"soft\" operator=\"in\" result=\"f\"/><feComposite in=\"f\" in2=\"SourceAlpha\" operator=\"in\"/>",
                     sd(*radius)
                 ),
-                RasterFx::GaussianBlur { radius } => format!("<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"/>", sd(*radius)),
+                RasterFx::GaussianBlur { radius, linear } => {
+                    let space = if *linear { " color-interpolation-filters=\"linearRGB\"" } else { "" };
+                    format!("<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"{space}/>", sd(*radius))
+                }
                 RasterFx::Pixel(_) | RasterFx::Rasterize(_) => continue,
             };
             // Filters composite normally: a shadow's or glow's other blend mode is recorded for import.
@@ -512,6 +677,25 @@ const MAX_GRADIENT_PX: f64 = 4096.0;
 pub(super) fn pixel_gradient(p: &Paint, fill: bool) -> Option<&GradientPaint> {
     match p {
         Paint::Gradient(g) if g.draws_as_pixels(fill) => Some(g),
+        _ => None,
+    }
+}
+
+/// The SVG filter (Effect › SVG Filters) of an object's `effects` that SVG keeps as a `<filter>`:
+/// its last visible effect, measured in points.
+fn live_svg_filter(effects: &[vectorcraft_doc::Effect]) -> Option<vectorcraft_effects::svg_filter::SvgFilterFx> {
+    if !vectorcraft_effects::svg_filter::writes_live(effects) {
+        return None;
+    }
+    let mut fx = vectorcraft_effects::raster_effects(effects);
+    // A region measured against the object's box is kept only when the filter runs on the object itself.
+    let alone = fx.len() == 1;
+    match fx.pop() {
+        Some(vectorcraft_effects::RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(f)))
+            if f.in_points() && (alone || !f.measured()) && f.writes_as_svg11() =>
+        {
+            Some(f)
+        }
         _ => None,
     }
 }

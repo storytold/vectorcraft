@@ -144,12 +144,14 @@ fn cut_compound_member_keeps_copy_and_delete_targets_consistent() {
     let (mut s, a, b, c) = compound();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     s.execute("edit.cut", &json!({})).unwrap();
+    // Cut takes the member it copies, and the other member stays in the compound.
     assert_eq!(s.clipboard.nodes.len(), 1);
-    assert_eq!(s.clipboard.nodes[0].id, c);
-    assert!(s.active().unwrap().doc.node(c).is_none());
+    assert_eq!(s.clipboard.nodes[0].id, a);
+    assert!(s.active().unwrap().doc.node(a).is_none());
+    assert_eq!(s.active().unwrap().doc.parent_of(b), Some(c));
     s.execute("edit.pasteInPlace", &json!({})).unwrap();
     let pasted = s.active().unwrap().selection.objects[0];
-    assert_eq!(s.active().unwrap().doc.node(pasted).unwrap().children().unwrap().len(), 2);
+    assert!(s.active().unwrap().doc.node(pasted).unwrap().path_data().is_some(), "an ordinary path is pasted");
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(s.active().unwrap().doc.parent_of(a), Some(c));
@@ -201,4 +203,25 @@ fn cut_direct_selected_anchors_retains_anchor_deletion() {
     s.execute("edit.cut", &json!({})).unwrap();
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().path_data().unwrap().anchor_count(), 3);
     assert_eq!(s.active().unwrap().doc.parent_of(b), Some(c));
+}
+
+#[test]
+fn clear_explicit_ids_preserves_unrelated_selection() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let r1 = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap());
+    let r2 = NodeId(s.execute("shape.rectangle", &json!({"x": 50, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [r1.0, r2.0]})).unwrap();
+    assert_eq!(s.active().unwrap().selection.objects, vec![r1, r2]);
+
+    // Clearing r1 explicitly should remove r1 from doc and from selection, keeping r2 selected.
+    s.execute("edit.clear", &json!({"ids": [r1.0]})).unwrap();
+    assert!(s.active().unwrap().doc.node(r1).is_none());
+    assert!(s.active().unwrap().doc.node(r2).is_some());
+    assert_eq!(s.active().unwrap().selection.objects, vec![r2]);
+
+    // Parameterless clear clears the rest of the selection.
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert!(s.active().unwrap().doc.node(r2).is_none());
+    assert!(s.active().unwrap().selection.is_empty());
 }

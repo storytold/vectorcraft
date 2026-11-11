@@ -24,10 +24,16 @@ impl VectorcraftApp {
     /// control or MCP request, or a frame of synthetic input): the automation roots don't confine
     /// what that app does.
     pub(crate) fn refuse_automation(&self, id: &str) -> Result<(), String> {
-        if self.ui.answering_control || self.synthetic_frame {
+        if self.automation_is_acting() {
             return Err(format!("{id} opens another app: only the person at the keyboard can run it"));
         }
         Ok(())
+    }
+
+    /// Did automation send what is being handled now: a control or MCP request, or a frame of
+    /// synthetic input?
+    pub(crate) fn automation_is_acting(&self) -> bool {
+        self.ui.answering_control || self.synthetic_frame
     }
 
     /// Run a Help link command and open the URL it returns.
@@ -52,13 +58,18 @@ impl VectorcraftApp {
                 Ok(r) => {
                     let n = |k: &str| r[k].as_array().map_or(0, Vec::len);
                     if n("updated") > 0 {
-                        self.status(format!("Updated {} linked file(s) changed on disk", n("updated")));
+                        self.status(crate::i18n::msg_n(
+                            n("updated") as u64,
+                            "Updated {n} linked file changed on disk",
+                            "Updated {n} linked files changed on disk",
+                            &[],
+                        ));
                     }
                     if n("ask") > 0 {
                         dialogs::missing_links::ask_update_changed(self, r["ask"].as_array().cloned().unwrap_or_default());
                     }
                     if n("modified") > 0 {
-                        self.status(format!("{} linked image(s) changed on disk: Update Links shows the new versions", n("modified")));
+                        self.status(dialogs::missing_links::changed_on_disk_status(n("modified")));
                     }
                 }
                 Err(e) => self.status(e.to_string()),
