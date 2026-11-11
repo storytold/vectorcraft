@@ -501,6 +501,13 @@ impl FontDb {
                 return true;
             }
         }
+        {
+            let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+            if sys.file_searches >= super::names::MAX_FILE_SEARCHES {
+                return false;
+            }
+            sys.file_searches += 1;
+        }
         let mut paths: Vec<PathBuf> = self.read_catalog().values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
         paths.sort();
         paths.dedup();
