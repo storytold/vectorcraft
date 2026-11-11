@@ -1461,6 +1461,26 @@ fn rasterize_replaces_selection_with_image() {
     assert_eq!(selected(&s), vec![img]);
 }
 
+/// Rasterize refuses art that would be longer than the renderer draws (32,768 pixels a side), and
+/// the art stays as it was; at a resolution that fits, the image covers all of it.
+#[test]
+fn rasterize_refuses_an_image_longer_than_the_renderer_draws() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 100.0, 5569.0);
+    sel(&mut s, &[a]);
+    let vb = s.doc().unwrap().doc.bounds_of(&[a], true).unwrap();
+    let before = (undo_len(&s), node(&s, a));
+    let e = s.execute("object.rasterize", &json!({"ppi": 600, "padding": 0})).unwrap_err().to_string();
+    assert!(e.contains("too large"), "{e}");
+    assert_eq!((undo_len(&s), node(&s, a)), before);
+    let img = id_of(&s.execute("object.rasterize", &json!({"ppi": 400, "padding": 0})).unwrap());
+    let n = node(&s, img);
+    let NodeKind::Image(im) = &n.kind else { panic!() };
+    assert!(im.height <= vectorcraft_render::MAX_RASTER_SIDE, "{} pixels", im.height);
+    let b = n.geometric_bounds().unwrap();
+    assert!(close(b.y0, vb.y0) && b.y1 >= vb.y1, "{b:?} covers {vb:?}");
+}
+
 /// Rasterize refuses a resolution given as text or as another value that is not a number, and the
 /// selected art stays as it was.
 #[test]

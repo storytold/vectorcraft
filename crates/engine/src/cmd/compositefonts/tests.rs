@@ -478,6 +478,32 @@ fn an_opened_file_measures_its_type_in_its_own_composite_fonts() {
     assert_eq!(actual.cached_bounds, Some(expected));
 }
 
+/// Threaded type read from a file flows through its frames in the file's own composite fonts, when
+/// no open document defines them.
+#[test]
+fn an_opened_file_flows_its_threads_in_its_own_composite_fonts() {
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Threaded")]})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running. ".repeat(4);
+    let a = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 20, "font": "CF Threaded", "area": {"width": 150, "height": 60}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 300})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let first = text(&s, a).plain_text();
+    assert!(!first.is_empty() && first.len() < story.len());
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    // A new front document without the font: the font database no longer holds it.
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    assert!(vectorcraft_text::FontDb::global().composite_font("CF Threaded").is_none());
+    let file = crate::cmd::fileio::read_for_open("threaded.vectorcraft", &bytes, None, &json!({}), false, false).unwrap();
+    crate::cmd::fileio::open_read(&mut s, file).unwrap();
+    assert_eq!(text(&s, a).plain_text(), first);
+}
+
 /// A document replaced while in the back (File › Revert) is measured in its own composite fonts
 /// when it comes to the front, not in the front document's.
 #[test]
