@@ -579,7 +579,7 @@ fn units_and_ruler_guides_survive_save_and_reopen() {
         s.execute("file.close", &json!({})).unwrap();
         s.execute("document.open", &json!({"path": p})).unwrap();
         let doc = &s.doc().unwrap().doc;
-        let guides: Vec<_> = doc.guides.iter().map(|g| (g.vertical, g.pos)).collect();
+        let guides: Vec<_> = doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect();
         assert_eq!((doc.units, guides), (vectorcraft_doc::Unit::Millimeters, vec![(true, 50.0), (false, 30.0)]), "{ext}");
     }
     let _ = std::fs::remove_dir_all(d);

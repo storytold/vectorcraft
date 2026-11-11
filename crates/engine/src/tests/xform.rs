@@ -766,7 +766,7 @@ fn stroke_width(s: &Session, id: NodeId) -> f64 {
 }
 
 fn guide_positions(s: &Session) -> Vec<f64> {
-    s.doc().unwrap().doc.guides.iter().map(|g| g.pos).collect()
+    s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.pos).collect()
 }
 
 /// Scale Artwork with Artboard (#602): `artboard.setProps {scaleArt}` takes the art fully inside the

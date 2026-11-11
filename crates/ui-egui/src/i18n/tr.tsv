@@ -5672,6 +5672,8 @@ theme	Appearance	Görünüm
 @msg	invalid object id {value}: expected a non-negative integer	geçersiz nesne kimliği {value}: negatif olmayan bir tam sayı bekleniyordu
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` içindeki {index} dizinli öğe {value}, negatif olmayan tam sayı bir nesne kimliği değil
 @msg	no such object id {value}	böyle bir nesne kimliği yok: {value}
+@msg	id {value} is a ruler guide, not an object	bu kimlik bir nesneye değil, bir kılavuza ait: {value}
+@msg	a ruler guide goes only directly in a layer or sublayer	bir kılavuz yalnızca doğrudan bir katmanda veya alt katmanda bulunabilir
 @msg	id {value} is a layer, not an object	{value} kimliği bir katmana ait, bir nesneye değil
 @msg	id {value} is a layer, not an object; move layers with layer.move	{value} kimliği bir katmana ait, bir nesneye değil; katmanları layer.move ile taşıyın
 @msg	{key} must be Unix seconds (an integer) or null	{key}, Unix saniyesi (bir tam sayı) veya null olmalıdır

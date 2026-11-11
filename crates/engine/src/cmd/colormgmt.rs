@@ -582,7 +582,7 @@ fn map_more_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proo
         }
     }
     if let Some(ch) = n.children_mut() {
-        for c in ch.iter_mut() {
+        for c in ch.iter_mut().filter(|c| !c.is_ruler_guide()) {
             map_more_colors(Arc::make_mut(c), f);
         }
     }

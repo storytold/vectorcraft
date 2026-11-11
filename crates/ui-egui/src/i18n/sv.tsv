@@ -4841,6 +4841,8 @@ axis	Both	Båda
 @msg	invalid object id {value}: expected a non-negative integer	ogiltigt objekt-id {value}: ett icke-negativt heltal förväntades
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	post {index} i `{key}` är {value}, inte ett objekt-id (ett icke-negativt heltal)
 @msg	no such object id {value}	det finns inget objekt med id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} tillhör en stödlinje, inte ett objekt
+@msg	a ruler guide goes only directly in a layer or sublayer	en stödlinje kan bara ligga direkt i ett lager eller underlager
 @msg	id {value} is a layer, not an object	id {value} är ett lager, inte ett objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} är ett lager, inte ett objekt; flytta lager med layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automatiseringen har inte fått åtkomst till filsystemet: läsbehörighet saknas: {path}

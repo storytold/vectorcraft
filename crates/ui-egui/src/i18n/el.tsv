@@ -4886,6 +4886,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	invalid object id {value}: expected a non-negative integer	μη έγκυρο αναγνωριστικό αντικειμένου {value}: αναμένεται μη αρνητικός ακέραιος
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	το στοιχείο {index} του `{key}` είναι {value}, όχι αναγνωριστικό αντικειμένου (μη αρνητικός ακέραιος)
 @msg	no such object id {value}	δεν υπάρχει αντικείμενο με αναγνωριστικό {value}
+@msg	id {value} is a ruler guide, not an object	το αναγνωριστικό {value} ανήκει σε οδηγό, όχι σε αντικείμενο
+@msg	a ruler guide goes only directly in a layer or sublayer	ένας οδηγός μπορεί να βρίσκεται μόνο απευθείας σε επίπεδο ή υποεπίπεδο
 @msg	id {value} is a layer, not an object	το αναγνωριστικό {value} είναι επίπεδο, όχι αντικείμενο
 @msg	id {value} is a layer, not an object; move layers with layer.move	το αναγνωριστικό {value} είναι επίπεδο, όχι αντικείμενο· μετακινήστε τα επίπεδα με το layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	δεν έχει επιτραπεί πρόσβαση αυτοματισμού στο σύστημα αρχείων: δεν υπάρχει δικαίωμα ανάγνωσης: {path}

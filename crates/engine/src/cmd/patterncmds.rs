@@ -271,8 +271,9 @@ fn enter_edit(d: &mut Document, sel: &mut Selection, name: &str, original: Optio
 /// Leave editing mode: drop the layer, return the edit record.
 fn leave_edit(d: &mut Document, sel: &mut Selection) -> Result<(PatternEdit, Vec<Arc<Node>>)> {
     let pe = d.pattern_edit.take().ok_or_else(|| EngineError::Other("not in pattern editing mode".into()))?;
-    let art = match d.remove(pe.layer) {
-        Ok(l) => l.children().cloned().unwrap_or_default(),
+    // The tile art: ruler guides on the edit layer are not part of it and stay in the document.
+    let art = match d.remove_edit_layer(pe.layer) {
+        Ok(l) => l.children().into_iter().flatten().cloned().collect(),
         Err(_) => vec![],
     };
     sel.clear();
@@ -427,7 +428,8 @@ fn pattern_save_copy(s: &mut Session, p: &Value) -> Result<Value> {
     let name = s.edit("Save a Copy", |d, _| {
         let pe = d.pattern_edit.clone().ok_or_else(|| EngineError::Other("not in pattern editing mode".into()))?;
         let mut def = d.pattern(&pe.pattern).cloned().ok_or_else(|| EngineError::Other("pattern missing".into()))?;
-        let art: Vec<Arc<Node>> = d.node(pe.layer).and_then(|l| l.children().cloned()).unwrap_or_default();
+        let art: Vec<Arc<Node>> =
+            d.node(pe.layer).into_iter().flat_map(|l| l.children().into_iter().flatten()).filter(|c| !c.is_ruler_guide()).cloned().collect();
         let name = unique_pattern_name(d, wanted.as_deref().unwrap_or(&format!("{} copy", pe.pattern.trim())));
         def.name = name.clone();
         def.art = copies(d, &art).into_iter().map(Arc::new).collect();
@@ -481,7 +483,8 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
     let out_name = new_name.clone().unwrap_or(name.clone());
     s.edit("Pattern Options", |d, _| {
         // While editing, the tile art is the edit layer's.
-        let live_art: Option<Vec<Arc<Node>>> = edit_layer.and_then(|l| d.node(l)).and_then(|l| l.children().cloned());
+        let live_art: Option<Vec<Arc<Node>>> =
+            edit_layer.and_then(|l| d.node(l)).and_then(|l| l.children()).map(|ch| ch.iter().filter(|c| !c.is_ruler_guide()).cloned().collect());
         let def = d.pattern_mut(&name).ok_or_else(|| EngineError::Other("pattern missing".into()))?;
         def.tile_type = tt;
         def.overlap = overlap;

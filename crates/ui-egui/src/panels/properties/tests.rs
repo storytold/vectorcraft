@@ -1733,7 +1733,7 @@ fn selected_guides_show_their_position_in_a_transform_section() {
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     let v = app.run("guide.add", json!({"vertical": true, "pos": 30})).unwrap()["index"].as_u64().unwrap();
     let h = app.run("guide.add", json!({"vertical": false, "pos": 20})).unwrap()["index"].as_u64().unwrap();
-    let pos = |app: &VectorcraftApp, i: u64| app.session.doc().unwrap().doc.guides[i as usize].pos;
+    let pos = |app: &VectorcraftApp, i: u64| app.session.doc().unwrap().doc.ruler_guides()[i as usize].pos;
     let ctx = egui::Context::default();
     // Steps the field labelled `label` up by one with ↑.
     let step = |app: &mut VectorcraftApp, label: &str| {

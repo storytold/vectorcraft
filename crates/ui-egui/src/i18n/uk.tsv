@@ -4952,6 +4952,8 @@ axis	Both	Обидві
 @msg	invalid object id {value}: expected a non-negative integer	неприпустимий ідентифікатор об’єкта {value}: очікується невід’ємне ціле число
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} у `{key}` дорівнює {value}, а не ідентифікатору об’єкта (невід’ємному цілому числу)
 @msg	no such object id {value}	об’єкт з ідентифікатором {value} не існує
+@msg	id {value} is a ruler guide, not an object	ідентифікатор {value} належить напрямній, а не об’єкту
+@msg	a ruler guide goes only directly in a layer or sublayer	напрямна може бути лише безпосередньо в шарі або підшарі
 @msg	id {value} is a layer, not an object	ідентифікатор {value} належить шару, а не об’єкту
 @msg	id {value} is a layer, not an object; move layers with layer.move	ідентифікатор {value} належить шару, а не об’єкту; переміщуйте шари за допомогою layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	автоматизація не має доступу до файлової системи: немає права на читання: {path}

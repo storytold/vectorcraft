@@ -92,7 +92,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let links = !set.standard.is_pdfx();
     let mut linked = false;
     for layer in doc.layers.iter().filter(|_| !links) {
-        layer.walk(&mut |n| linked |= n.url().is_some());
+        layer.walk(&mut |n| linked |= !n.is_ruler_guide() && n.url().is_some());
     }
     if linked {
         warnings.push(format!("{} files have no links: the objects' URLs aren't clickable", set.standard.label()));

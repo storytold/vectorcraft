@@ -442,15 +442,16 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
         if id.is_some() {
             return Err(bad("select.key", "give `id` or `guide`, not both"));
         }
-        if !sel.guides.contains(&g) {
+        let gid = super::docmenu::guide_ids(&s.doc()?.doc).get(g).copied();
+        let Some(gid) = gid.filter(|id| sel.guides.contains(id)) else {
             return Err(bad("select.key", format!("guide {g} is not selected")));
-        }
+        };
         if sel.is_empty() {
             return Err(bad("select.key", "select objects to align to the guide"));
         }
         s.select(|_, sel| {
             sel.key = None;
-            sel.key_guide = Some(g);
+            sel.key_guide = Some(gid);
         })?;
         return key_result(s);
     }
@@ -472,9 +473,9 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// `{key}`, with `guide` when a guide is the key.
 fn key_result(s: &Session) -> Result<Value> {
-    let sel = &s.doc()?.selection;
-    let mut out = json!({ "key": sel.key });
-    if let Some(g) = sel.key_guide {
+    let st = s.doc()?;
+    let mut out = json!({ "key": st.selection.key });
+    if let Some(g) = st.selection.key_guide.and_then(|id| super::docmenu::guide_indexes(&st.doc, &[id]).first().copied()) {
         out["guide"] = json!(g);
     }
     Ok(out)
