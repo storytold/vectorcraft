@@ -275,23 +275,30 @@ impl Scope {
     }
 }
 
+/// Does `scope` draw its members' faces other than plainly: does it have an opacity mask or a
+/// blending mode other than Normal?
+fn composites(scope: &Scope) -> bool {
+    scope.mask.is_some() || scope.blend != BlendMode::Normal
+}
+
 /// `surfaces`, each with the scopes of the member it was built from, in groups with the opacity
-/// masks of those scopes, so each mask applies to the faces of the members it holds. The members'
-/// opacity is already in their paint ([`Profile::opacity`]), so these groups are opaque.
+/// masks and blending modes of those scopes, so each applies to the faces of the members it holds.
+/// The members' opacity is already in their paint ([`Profile::opacity`]), so these groups are
+/// opaque.
 fn masked(id: NodeId, surfaces: Vec<(&[Scope], Arc<Node>)>) -> Vec<Arc<Node>> {
     let masks: Vec<(Vec<Scope>, Arc<Node>)> = surfaces
         .into_iter()
         .map(|(scopes, s)| {
-            let masks = scopes.iter().filter(|s| s.mask.is_some()).map(|s| Scope { opacity: 1.0, blend: BlendMode::Normal, ..s.clone() }).collect();
+            let masks = scopes.iter().filter(|s| composites(s)).map(|s| Scope { opacity: 1.0, ..s.clone() }).collect();
             (masks, s)
         })
         .collect();
     crate::revolve::scoped(id, masks.iter().map(|(scopes, s)| (scopes.as_slice(), s.clone())).collect(), 0)
 }
 
-/// Does any of `shapes` sit in a scope with an opacity mask?
+/// Does any of `shapes` sit in a scope with an opacity mask or a blending mode other than Normal?
 fn has_masks(shapes: &[Profile]) -> bool {
-    shapes.iter().any(|s| s.scopes.iter().any(|s| s.mask.is_some()))
+    shapes.iter().any(|s| s.scopes.iter().any(composites))
 }
 
 /// One shape a solid is built from: its outline and fill rule, the fills and strokes that paint
@@ -550,8 +557,9 @@ pub(crate) fn reshape_members(n: &Node, before: &[Effect], shapes: &mut [Profile
 /// each in its own paint. When every one is opaque with normal blending and no colored light makes
 /// a surface one composite or masks it, their faces are drawn in one back-to-front order (where
 /// depths tie, as for the caps turned toward the viewer, in the order of the appearance);
-/// otherwise each solid is a surface of its own, in that order. A member's opacity mask, or that of
-/// a group it is in, masks the surfaces of the members it holds ([`masked`]).
+/// otherwise each solid is a surface of its own, in that order. A member's opacity mask and
+/// blending mode, and those of a group it is in, apply to the surfaces of the members it holds
+/// ([`masked`]).
 fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> {
     let b = union_bounds(shapes)?;
     let p = crate::merged_params(&fx.id, &fx.params);
