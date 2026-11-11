@@ -305,13 +305,16 @@ fn index_keys_bytes(len: usize) -> usize {
     total
 }
 
-/// A seed for `Math.random` that differs from realm to realm, from the standard library's
-/// randomly keyed hasher; never zero.
+/// A seed for `Math.random` that differs from realm to realm and from run to run, from the OS
+/// random source (the browser's crypto on the web), or the standard library's randomly keyed
+/// hasher when that fails; never zero.
 fn random_seed() -> u64 {
     use std::hash::{BuildHasher, Hasher};
-    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-    h.write_u64(0x9e37_79b9_7f4a_7c15);
-    h.finish() | 1
+    getrandom::u64().unwrap_or_else(|_| {
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u64(0x9e37_79b9_7f4a_7c15);
+        h.finish()
+    }) | 1
 }
 
 /// The estimated bytes of a binding or property named by `len` code units.
