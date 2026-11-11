@@ -1661,6 +1661,8 @@ VectorCraft sets these limits itself:
 | A dialog's message, title and prompt preset | 16 KiB, 256 bytes and 16 KiB |
 | `answers` | 10,000 answers and 1 MiB as JSON |
 | `dialogs` in the report | 10,000 dialogs and 1 MiB as JSON |
+| Files `File.open` reads | 8 MiB a file, 32 MiB in a run, 256 open at once |
+| `Folder.getFiles` | 2,048 entries, 65,536 names looked at |
 | Growth before a person is asked | 100,000 objects and 512 MiB of new document data |
 
 In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
@@ -1673,7 +1675,9 @@ another file than the script) and `fuelLeft`.
 
 - `runTimeMs` is the time the script ran, its commands included. Waits between frames and for a person's answer are
   left out. `timingAvailable` is false on the web, where `runTimeMs` is 0.
-- `hostCallCounts` is `{vcRun, documentReads, commandListReads, vcLog, consoleWrites}`.
+- `hostCallCounts` is `{vcRun, documentReads, commandListReads, vcLog, consoleWrites, fileCalls, fileExecutes}`.
+  `fileCalls` counts the calls `File` and `Folder` make to the app, and `fileExecutes` the `execute` calls, which open
+  nothing.
 - `slowestCommands` lists at most 5 commands as `{id, calls, totalMs, maxMs}`, the longest in all first, then by id.
 - `console` is `{lines, droppedLines, truncatedLines}`: the run's own output, `vc.log` lines and uncaught error, as
   text.
@@ -1731,6 +1735,54 @@ empty object are the same.
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "if (confirm(\"Add a frame?\")) vc.log(prompt(\"Name\", \"Frame\"));", "answers": [{"kind": "confirm", "value": true}, {"kind": "prompt", "value": "Border"}]}'
 ```
+
+The help pages https://extendscript.docsforadobe.dev/file-system-access/file-object/ and
+https://extendscript.docsforadobe.dev/file-system-access/folder-object/ describe the `File` and `Folder` objects. A
+script reads files with them:
+
+- `new File(path)` and `new Folder(path)` name a path without looking it up. A path is a platform path or a URI
+  path: a relative path is taken from `Folder.current`, which starts at the script's folder, `~` is the home folder,
+  `%xx` escapes are read as UTF-8, and on Windows `/` and `\` both separate names and `/c/` names drive C. `File(path)`
+  without `new` gives a `Folder` for an existing folder, and `Folder(path)` gives a `File` for an existing file. Two
+  objects for the same path are different objects.
+- `name`, `displayName`, `fsName`, `absoluteURI`, `fullName`, `relativeURI`, `path`, `parent` and `toString()` come
+  from the path. `exists`, `length`, `created`, `modified`, `hidden`, `readonly` and `alias` read the file system.
+  `File.encode`, `File.decode` and `File.isEncodingAvailable` (and the same on `Folder`), `File.fs`, and the folders
+  `Folder.temp`, `Folder.desktop`, `Folder.myDocuments`, `Folder.userData` and the others are there too.
+- `open('r')` opens a file to read, and `read([chars])`, `readln()`, `readch()`, `seek(pos[, mode])`, `tell()`, `eof`
+  and `close()` read it. `read`, `readln` and `readch` count characters, and `seek` and `tell` count bytes. `readln`
+  and `readch` take CR, LF, CRLF and LF CR as one line end. `folder.getFiles([mask])` lists a folder, sorted by name;
+  the mask matches `*` and `?` without regard to case, and a function as the mask keeps the entries it returns true
+  for.
+- A method that fails returns `false`, `null` or an empty string and sets `error`, such as `Script file access
+  denied`, `Script file does not exist` or `Script file is not open`. A count or a position that is not a finite
+  number, or a negative count, throws a `RangeError`.
+
+VectorCraft reads files by these rules of its own:
+
+- A script run from a file reads only in that file's folder and the folders below it, as its includes are read, and
+  a script given as `source` reads no files. When automation read roots are set, as for a run over MCP or the command
+  line, the files must also be inside them. A path outside, a Windows network path (`\\host\share`) and a device path
+  (`\\?\`, `\\.\`) are refused before anything is looked up: `exists` is `false`, the dates and `getFiles` give `null`,
+  and `error` is `Script file access denied`. A path that leads out through a link or a junction is refused too, and
+  `getFiles` leaves such an entry out.
+- `open` reads the whole file. A file larger than 8 MiB is refused from its size before any of it is read, with
+  `Script file exceeds 8 MiB`, and a run that opens more than 32 MiB in all ends with an error. A run has at most 256
+  files open at once; another `open` returns `false` with `Script has 256 files open` until one is closed.
+- The encoding is the one the file's byte order mark gives (UTF-8, UTF-16LE or UTF-16BE), otherwise the `encoding`
+  the script set before `open`, otherwise UTF-8 when the bytes are valid UTF-8, otherwise CP1252. `BINARY` reads each
+  byte as one character. A byte the encoding cannot read, such as one above 127 in `ASCII`, fails the read with
+  `Script file cannot be decoded` and leaves the position where it was.
+- `getFiles` gives at most 2,048 entries and looks at most 65,536 names; past that it gives `null` with `Script folder
+  has more than 2,048 entries`. A mask that takes more than 16,777,216 steps to match against the names of one
+  folder gives `null` with `Script folder mask takes too many steps to match`.
+- A path longer than 32,767 characters throws a `RangeError` (`Script file path exceeds 32,767 characters`) when a
+  `File` or `Folder` is made from it.
+- Writing is not available yet: `open('w')`, `open('e')`, `open('a')`, `write`, `writeln`, `copy`, `remove`,
+  `rename`, `create` and `createAlias` return `false` with `Script file writing is not available`, and setting
+  `length`, `hidden` or `readonly` sets `error` to that message and changes nothing. The file
+  and folder dialogs return `null`, and `execute` opens nothing and returns `false`. In the web build every lookup
+  fails with `Script file access is unavailable on the web`.
 
 Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
 `$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message` (or `name: file:line:column: message` when the error is in another

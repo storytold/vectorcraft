@@ -154,6 +154,7 @@ mod script_console;
 mod script_dialogs;
 mod script_folder;
 mod script_include;
+mod script_io;
 mod script_run;
 mod scripts;
 mod select_ids_first;

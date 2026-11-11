@@ -398,6 +398,20 @@ impl Realm {
         }
     }
 
+    /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
+    /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
+    /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
+    /// `encode`, `decode`, `encodingAvailable`, `current` and `locations`, with the values `system`
+    /// and `lineFeed` and the messages `text.notOpen`, `text.noWrites`, `text.noPicker` and
+    /// `text.badMode`. Each object keeps its path, its `error` text, its open file's id, its
+    /// encoding and its line feed in properties that are not enumerable.
+    pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
+        match crate::file_classes::install(&mut self.interp, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Defines the global function `name`, whose arguments arrive converted as `args` says
     /// ([`crate::HostItem::Converted`]). Unlike a host object, a script may replace or delete it, as
     /// it may a built-in function.

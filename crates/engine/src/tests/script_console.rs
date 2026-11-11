@@ -137,7 +137,10 @@ fn the_result_and_the_report_agree_and_count_each_kind_of_host_call() {
                   try { vc.run('no.such', {}); } catch (e) {} var d = vc.document; var c = vc.commands; vc.log({a: 1}); vc.log('two\\nlines'); $.writeln('w');";
     let r = run(&mut s, source).unwrap();
     assert_eq!(&r, s.script_report().unwrap());
-    assert_eq!(r["hostCallCounts"], json!({"vcRun": 3, "documentReads": 1, "commandListReads": 1, "vcLog": 2, "consoleWrites": 1}));
+    assert_eq!(
+        r["hostCallCounts"],
+        json!({"vcRun": 3, "documentReads": 1, "commandListReads": 1, "vcLog": 2, "consoleWrites": 1, "fileCalls": 0, "fileExecutes": 0})
+    );
     assert_eq!(r["timingAvailable"], true);
     assert!(r["runTimeMs"].is_u64());
     let slow = r["slowestCommands"].as_array().unwrap();

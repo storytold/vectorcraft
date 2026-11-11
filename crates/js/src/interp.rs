@@ -175,6 +175,8 @@ pub(crate) struct Interp {
     pub(crate) held_bytes: usize,
     /// Why installing the built-ins failed; a realm with this set runs no script.
     pub(crate) install_error: Option<String>,
+    /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
+    pub(crate) files: Option<crate::file_classes::Classes>,
     /// The clock and time zone `Date` reads.
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
@@ -395,6 +397,7 @@ impl Interp {
             join_stack: Vec::new(),
             held_bytes: 0,
             install_error: None,
+            files: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
             pause: Rc::default(),
@@ -587,6 +590,7 @@ impl Interp {
         }
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
+        roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
