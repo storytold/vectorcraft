@@ -9198,6 +9198,20 @@ fn the_task_bar_offers_the_artboard_tools_actions() {
     assert_eq!(names(&mut app), ["Resize", "Duplicate", "Export"]);
 }
 
+/// Screen readers name the Contextual Task Bar's text buttons by their labels.
+#[test]
+fn screen_readers_name_the_task_bars_text_buttons() {
+    use crate::widgets::accessibility_tests::{named, tree};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 180, "y": 130, "width": 40, "height": 40})).unwrap();
+    app.select_tool("selection");
+    let tree = tree(|ui| show(&mut app, ui));
+    for label in ["Edit Path", "Offset Path", "Simplify", "Duplicate"] {
+        assert_eq!(named(&tree, label).role(), egui::accesskit::Role::Button, "{label}");
+    }
+}
+
 /// A selected group's Contextual Task Bar offers Ungroup and Isolate. While an opacity mask is
 /// edited, when Enter Isolation Mode is off, a group in the mask art gets Ungroup without Isolate.
 #[test]
