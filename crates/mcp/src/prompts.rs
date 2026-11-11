@@ -424,11 +424,7 @@ Desktop-only Auto Spell Check is edit.autoSpellCheck (ui: true); use --connect f
                 description: "Where the data comes from",
                 required: false,
                 default: "define variables on the selection by hand",
-                values: Values::Fixed(&[
-                    "define variables on the selection by hand",
-                    "import a CSV or TSV data set",
-                    "load a variable library XML",
-                ]),
+                values: Values::Fixed(&["define variables on the selection by hand", "import a CSV or TSV data set", "load a variable library XML"]),
             },
         ],
         text: "\
@@ -446,23 +442,21 @@ Method:
         name: "path-tools",
         title: "Path Tools add-on",
         description: "Use addon.pathtools.* commands (and addon.path.* live effects) to edit path geometry.",
-        arguments: &[
-            PromptArg {
-                name: "task",
-                description: "What to do to the selection",
-                required: true,
-                default: "",
-                values: Values::Fixed(&[
-                    "extend open ends",
-                    "close paths",
-                    "add anchors along curves",
-                    "simplify anchors",
-                    "split at anchors",
-                    "expand dashes to geometry",
-                    "create a parametric shape",
-                ]),
-            },
-        ],
+        arguments: &[PromptArg {
+            name: "task",
+            description: "What to do to the selection",
+            required: true,
+            default: "",
+            values: Values::Fixed(&[
+                "extend open ends",
+                "close paths",
+                "add anchors along curves",
+                "simplify anchors",
+                "split at anchors",
+                "expand dashes to geometry",
+                "create a parametric shape",
+            ]),
+        }],
         text: "\
 Perform this Path Tools task in VectorCraft: {task}.
 

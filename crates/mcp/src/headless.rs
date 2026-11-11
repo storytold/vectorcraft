@@ -153,8 +153,7 @@ impl Headless {
 
     fn commands(&self) -> Value {
         let mut v: Vec<Value> = self.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();
-        let mut seen: std::collections::HashSet<String> =
-            v.iter().filter_map(|c| c.get("id").and_then(Value::as_str).map(str::to_owned)).collect();
+        let mut seen: std::collections::HashSet<String> = v.iter().filter_map(|c| c.get("id").and_then(Value::as_str).map(str::to_owned)).collect();
         for (id, label, params) in HOST_COMMANDS {
             if !seen.insert((*id).to_owned()) {
                 continue;

@@ -19,6 +19,7 @@ only protocol messages.
 `command_list` / `list_commands` / `vectorcraft://commands` return the live catalogue for the backend in use:
 
 - **Headless:** engine and plug-in commands, plus the desktop menu catalogue (`UI_COMMANDS`) marked `"ui": true` so agents can discover ids such as `view.fitArtboard`, `file.newDialog` and `window.*`. Running a UI-only command that the headless host does not implement returns an error that points at `--connect`.
+  The catalogue is mirrored in `crates/mcp/src/ui_catalog.rs` (mcp does not depend on ui-egui). Regenerate with `cargo xtask ui-commands`; `cargo xtask ci` runs `ui-commands --check` so the mirror cannot drift.
 - **Remote:** the same lists, with each UI entry's `enabled` taken from the live app. Run UI commands with `command_run` / `run_command` or `invoke_menu`.
 
 Effect ids from `effect.list` / `apply_effect` / `vectorcraft://effect/{id}` (for example `warp.arc`, `blur.gaussian`, `threeD.revolve`, `adjust.hueSaturation`, `addon.path.dashes`, `addon.color.halftone`) are not command ids. Apply one with `effect.apply` or the `apply_effect` tool; do not pass an effect id to `command_run`. Path Effects keep the `addon.path.*` effect ids; the Path Tools add-on's *commands* are `addon.pathtools.*`.

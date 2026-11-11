@@ -250,10 +250,7 @@ fn headless_command_list_includes_post_022_engine_commands() {
         let r = call(&mut s, 10 + n as u64, "command_list", json!({"filter": id, "brief": true}));
         assert_eq!(r["isError"], false, "{id}: {r}");
         let list: Value = serde_json::from_str(&text_of(&r)).unwrap();
-        assert!(
-            list.as_array().unwrap().iter().any(|c| c["id"] == *id),
-            "missing {id} in {list}"
-        );
+        assert!(list.as_array().unwrap().iter().any(|c| c["id"] == *id), "missing {id} in {list}");
     }
 }
 
