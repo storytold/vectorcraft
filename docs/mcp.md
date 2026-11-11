@@ -486,6 +486,18 @@ values, and they stay as the Arc tool's `closed`, `baseAlong` and `slope` option
 dragged, `c` chooses the tool bound to C, and `f` runs the shortcut bound to F in remote mode (headless has no
 binding for it).
 
+While a spiral is being dragged out with the Spiral tool, a `drag` event with `mods.alt` or `mods.cmd` keeps the
+spiral's inner end at the distance from the center it had on the first modified `drag` event, and the outer end follows
+the pointer. With `mods.alt` alone, dragging outward adds whole winds of four segments and dragging inward removes
+them. The fitted segment count rounds to the nearest whole wind from the count on the first Alt-only `drag`, within 2…1000.
+With `mods.cmd`, decay changes to fit within 5…99.99 %; it takes precedence when both modifiers are held. Switching
+back to Alt uses the current count as its new base while keeping the held inner end. The spiral drawn on release uses
+the new values, and they stay as the Spiral tool's `segments` and `decay` options for the next spiral:
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"spiral","events":[{"kind":"down","x":100,"y":100},{"kind":"drag","x":200,"y":100,"mods":{"alt":true}},{"kind":"drag","x":300,"y":100,"mods":{"alt":true}},{"kind":"up","x":300,"y":100}]}}
+```
+
 Appearance stacks: an object can carry several fills and strokes (`appearance.addFill`, `appearance.addStroke`), indexed
 in paint order (0 is painted first, the bottom row of the Appearance panel). Cmd+/ runs `appearance.addFill` and
 Cmd+Alt+/ runs `appearance.addStroke` (`press_key {key: "/", mods: {cmd: true, alt: true}}`). `paint.setFill`, `paint.setStroke`,

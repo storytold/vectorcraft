@@ -5,7 +5,10 @@
 //! start point and the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering too.
 //! While dragging, ↑/↓ change the arc's slope, the spiral's segments, the grid rows or the
 //! concentric dividers; ←/→ change grid columns / radial dividers. C switches the arc between open
-//! and closed, and F switches its base between the X and Y axes.
+//! and closed, and F switches its base between the X and Y axes. While a spiral is dragged out, Alt
+//! and Ctrl/Cmd keep its inner end at the distance from the center on the first modified drag as
+//! the outer end follows the pointer: Alt adds or removes whole winds of four segments, and
+//! Ctrl/Cmd changes the decay.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::Point;
@@ -33,6 +36,11 @@ pub struct FamilyTool {
     pub decay: f64,
     pub segments: u32,
     pub clockwise: bool,
+    /// The natural logarithm of the radius of the spiral's inner end, held while Alt or Ctrl/Cmd
+    /// is down in a drag.
+    spiral_end: Option<f64>,
+    /// The segment count when Alt alone starts adjusting winds.
+    spiral_alt_base: Option<u32>,
     /// Rows / concentric dividers.
     pub rows: u32,
     /// Columns / radial dividers.
@@ -75,6 +83,8 @@ impl FamilyTool {
             decay: 80.0,
             segments: 10,
             clockwise: true,
+            spiral_end: None,
+            spiral_alt_base: None,
             rows: 5,
             columns: 5,
             skew: [0.0; 2],
@@ -105,6 +115,46 @@ impl FamilyTool {
 
     fn is_grid(&self) -> bool {
         matches!(self.id, "rectangularGrid" | "polarGrid")
+    }
+
+    /// The natural logarithm of the radius of the inner end of a spiral of outer radius `r` drawn
+    /// with the tool's decay and segments (a logarithm, so that a low decay with many segments does
+    /// not round to 0). The decay ratio is clamped to 0.05…0.9999 as `shapes::spiral` clamps it.
+    fn spiral_inner_end_ln(&self, r: f64) -> f64 {
+        r.ln() + f64::from(self.segments) * (self.decay / 100.0).clamp(0.05, 0.9999).ln()
+    }
+
+    /// Alt or Ctrl/Cmd in a spiral drag from `start` to `p`: the inner end keeps the distance from
+    /// the center it had on the first modified drag while the outer end follows the pointer. With
+    /// Ctrl/Cmd the decay changes to fit (within 5…99.99 %, the decays `shapes::spiral` draws);
+    /// with Alt alone the count changes in whole winds of four segments from its Alt entry count
+    /// (within 2…1000). Ctrl/Cmd takes precedence when both modifiers are held.
+    /// The new values stay once the key is let go.
+    fn hold_spiral_end(&mut self, start: Point, p: Point, m: Mods) {
+        let r = p.distance(start).max(0.01);
+        match (m.cmd || m.alt, self.spiral_end) {
+            (true, None) => self.spiral_end = Some(self.spiral_inner_end_ln(r)),
+            (false, Some(_)) => self.spiral_end = None,
+            _ => {}
+        }
+        if m.alt && !m.cmd {
+            self.spiral_alt_base.get_or_insert(self.segments);
+        } else {
+            self.spiral_alt_base = None;
+        }
+        let Some(end) = self.spiral_end.filter(|e| e.is_finite()) else { return };
+        if m.cmd {
+            let ratio = ((end - r.ln()) / f64::from(self.segments)).exp();
+            if ratio.is_finite() {
+                self.decay = (ratio * 100.0).clamp(5.0, 99.99);
+            }
+        } else {
+            let fitted = (r.ln() - end) / -(self.decay / 100.0).clamp(0.05, 0.9999).ln();
+            if fitted.is_finite() {
+                let base = f64::from(self.spiral_alt_base.unwrap_or(self.segments));
+                self.segments = (base + 4.0 * ((fitted - base) / 4.0).round()).clamp(2.0, 1000.0) as u32;
+            }
+        }
     }
 
     /// A grid's options a drag draws with: its dividers, skews and switches (the Default Size and
@@ -187,6 +237,8 @@ impl Tool for FamilyTool {
                 self.start = Some(p);
                 self.last = p;
                 self.began = false;
+                self.spiral_end = None;
+                self.spiral_alt_base = None;
                 vec![]
             }
             PointerKind::Drag => {
@@ -204,6 +256,9 @@ impl Tool for FamilyTool {
                     self.began = true;
                     out.push(Action::Begin(self.label().into()));
                 }
+                if self.id == "spiral" {
+                    self.hold_spiral_end(s, ev.pos, ev.mods);
+                }
                 let (c, v) = self.command_at(s, ev.pos, ev.mods, cx.constrain_angle);
                 out.push(Action::Preview(c, v));
                 out
@@ -211,6 +266,8 @@ impl Tool for FamilyTool {
             PointerKind::Up => {
                 let Some(s) = self.start.take() else { return vec![] };
                 self.snap.clear();
+                self.spiral_end = None;
+                self.spiral_alt_base = None;
                 if std::mem::take(&mut self.began) { vec![Action::Commit] } else { vec![Action::Dialog(self.id.into(), json!({"x": s.x, "y": s.y}))] }
             }
             _ => vec![],
@@ -262,11 +319,18 @@ impl Tool for FamilyTool {
             _ => false,
         };
         if changed {
+            // An arrow with Alt or Ctrl/Cmd still held: the held inner end moves with the new segment count.
+            if self.spiral_end.is_some() {
+                self.spiral_end = Some(self.spiral_inner_end_ln(self.last.distance(s).max(0.01)));
+                self.spiral_alt_base = (self.mods.alt && !self.mods.cmd).then_some(self.segments);
+            }
             let (c, v) = self.command_at(s, self.last, self.mods, cx.constrain_angle);
             vec![Action::Preview(c, v)]
         } else if key == ToolKey::Escape {
             self.start = None;
             self.began = false;
+            self.spiral_end = None;
+            self.spiral_alt_base = None;
             self.snap.clear();
             vec![Action::Cancel]
         } else {
@@ -459,6 +523,148 @@ mod tests {
                 "fillArc": false,
             })
         );
+    }
+
+    /// While a spiral is dragged out, Alt and Ctrl/Cmd keep its inner end at the distance from the
+    /// center it had when the key went down as the outer end follows the pointer: Alt adds or
+    /// removes whole winds of four segments and Ctrl/Cmd changes the decay. The new values stay
+    /// once the key is let go, and for the next spiral. Both keys work with the lowest decay and
+    /// many segments.
+    #[test]
+    fn spiral_drag_alt_changes_its_segments_and_ctrl_its_decay() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let alt = Mods { alt: true, ..Mods::default() };
+        let ctrl = Mods { cmd: true, ..Mods::default() };
+        let spiral = |a: Vec<Action>| match a.last() {
+            Some(Action::Preview(c, v)) if c == "shape.spiral" => {
+                (v["radius"].as_f64().unwrap(), v["decay"].as_f64().unwrap(), v["segments"].as_u64().unwrap())
+            }
+            _ => panic!("{a:?}"),
+        };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0))), (100.0, 80.0, 10));
+        // Alt rounds the fitted count to whole winds from the count when Alt goes down.
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt))), (100.0, 80.0, 10));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt))), (200.0, 80.0, 14));
+        // ↑ with Alt held adds one, and the held inner end moves with it.
+        assert_eq!(spiral(t.key(&cx, ToolKey::Up, alt)).2, 15);
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt))).2, 15);
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(alt))), (50.0, 80.0, 7));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 101.0, 100.0).with_mods(alt))).2, 2, "at least two");
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(alt))).2, 7);
+        // The count stays as the radius follows the pointer again.
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0))), (100.0, 80.0, 7));
+        // Ctrl/Cmd fits the decay to the held inner end.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
+        let (r, decay, n) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(ctrl)));
+        assert!((r, n) == (50.0, 7) && (decay - 80.0 * 2f64.powf(1.0 / 7.0)).abs() < 1e-9, "{r} {decay} {n}");
+        let (_, decay, _) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 400.0, 100.0).with_mods(ctrl)));
+        assert!((decay - 80.0 * (1.0f64 / 3.0).powf(1.0 / 7.0)).abs() < 1e-9, "{decay}");
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.5, 100.0).with_mods(ctrl))).1, 99.99, "at most 99.99 %");
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 1e20, 100.0).with_mods(ctrl))).1, 5.0, "at least 5 %");
+        let (_, decay, _) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(ctrl)));
+        assert!((decay - 80.0 * 0.5f64.powf(1.0 / 7.0)).abs() < 1e-9, "{decay}");
+        // Let go: the decay stays, and the spiral drawn next keeps both.
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 100.0))), (150.0, decay, 7));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 100.0)), vec![Action::Commit]);
+        assert_eq!((t.options()["decay"].as_f64(), t.options()["segments"].clone()), (Some(decay), json!(7)));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        let (_, d2, n2) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 140.0).with_mods(alt)));
+        assert_eq!((d2, n2), (decay, 7), "a new drag holds the end anew");
+        // 5 % and 300 segments: an inner radius of 100 × 0.05^300 is below the smallest f64.
+        let mut t = FamilyTool::new("spiral");
+        t.set_option("decay", &json!(5.0));
+        t.set_option("segments", &json!(300));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
+        let (_, decay, _) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(ctrl)));
+        assert!((decay - 5.0 * 2f64.powf(1.0 / 300.0)).abs() < 1e-9, "{decay}");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0));
+        // Alt: a large radius increase adds a whole wind.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0).with_mods(alt));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200100.0, 100.0).with_mods(alt))).2, 304);
+    }
+
+    /// Switching between Alt and Ctrl/Cmd keeps the held inner end and uses the current segment
+    /// count when Alt resumes. Escape clears the held end before the next drag.
+    #[test]
+    fn spiral_drag_switches_between_alt_and_ctrl_and_escape_lets_go_of_the_inner_end() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let alt = Mods { alt: true, ..Mods::default() };
+        let ctrl = Mods { cmd: true, ..Mods::default() };
+        let both = Mods { alt: true, cmd: true, ..Mods::default() };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
+        assert_eq!(t.segments, 14);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(both));
+        assert_eq!(t.segments, 14, "Ctrl/Cmd takes precedence");
+        let decay = t.decay;
+        assert!(decay > 80.0);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
+        assert_eq!(t.segments, 18, "Alt resumes from the current count with the held end");
+        assert_eq!(t.decay, decay);
+        t.key(&cx, ToolKey::Escape, alt);
+        assert_eq!(t.spiral_end, None);
+        assert_eq!(t.spiral_alt_base, None);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
+        assert_eq!(t.segments, 18, "a new drag holds a new inner end");
+    }
+
+    /// Alt adjusts the segment count in whole winds while keeping it within 2 to 1000.
+    #[test]
+    fn spiral_drag_alt_keeps_the_segments_within_2_to_1000() {
+        let mut t = FamilyTool::new("spiral");
+        let alt = Mods { alt: true, ..Mods::default() };
+        let start = Point::new(0.0, 0.0);
+        t.hold_spiral_end(start, Point::new(100.0, 0.0), alt);
+        t.hold_spiral_end(start, Point::new(200.0, 0.0), alt);
+        assert_eq!(t.segments, 14);
+        t.hold_spiral_end(start, Point::new(0.01, 0.0), alt);
+        assert_eq!(t.segments, 2);
+        t.hold_spiral_end(start, Point::new(1e150, 0.0), alt);
+        assert_eq!(t.segments, 1000);
+    }
+
+    #[test]
+    fn spiral_drag_arrows_and_release_clear_the_right_held_state() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let alt = Mods { alt: true, ..Mods::default() };
+        let both = Mods { alt: true, cmd: true, ..Mods::default() };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(both));
+        t.key(&cx, ToolKey::Up, both);
+        assert_eq!(t.segments, 11);
+        assert_eq!(t.spiral_alt_base, None, "Ctrl/Cmd still takes precedence after Up");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
+        assert_eq!(t.spiral_alt_base, Some(11), "Alt starts from the current count");
+        t.key(&cx, ToolKey::Down, alt);
+        assert_eq!(t.segments, 10);
+        assert_eq!(t.spiral_alt_base, Some(10));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 100.0).with_mods(alt));
+        assert_eq!(t.spiral_end, None);
+        assert_eq!(t.spiral_alt_base, None);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 100.0));
+        assert_eq!(t.spiral_end, None, "Up after Down clears the held end");
+        assert_eq!(t.spiral_alt_base, None, "Up after Down clears the Alt base");
     }
 
     #[test]
