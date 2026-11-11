@@ -3641,21 +3641,36 @@ the canvas (coordinates out of range)".
 is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `subpath`"); `path.split` refuses such
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
 
-`path.reshape {id, x, y, dx, dy, tol?, radius?}` (a Reshape tool drag) grabs the path at `x`, `y`, adding an anchor
-there unless one lies within `tol` (3 by default), and moves that point by `dx`, `dy`.
+`path.reshape {id, x, y, dx, dy, tol?, focal?, radius?}` (a Reshape tool drag) grabs the path at `x`, `y`, adding an
+anchor there unless one lies within `tol` (3 by default), and moves that point by `dx`, `dy`.
 [Adjust path segments](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/adjust-path-segments.html)
-has the Reshape tool stretch part of a path from the dragged point without losing the path's general form. How far
-the stretch reaches and the share of the drag each point takes are VectorCraft's own rule. An open path stretches from
-the grabbed point to its two ends: the two end anchors stay in place, and each anchor between an end and the grabbed
-point takes `u² (3 - 2u)` of the drag, where `u` is its distance from that end along the path's control polygon
-(anchor, out handle, the next in handle, the next anchor) divided by the grabbed point's distance from that end. A
+has the Reshape tool stretch part of a path from the dragged point without losing the path's general form, with every
+highlighted focal point pulling the path. Which anchors stay, how far the stretch reaches and the share of the drag each
+point takes are VectorCraft's own rule. The grabbed point and the anchors that `focal` lists as `[subpath, anchor]` pairs are focal
+points and move by the whole drag; a pair that names no anchor of the path is refused ("`focal` names [0, 7], which is
+not an anchor of the path"). Anchors that are not direct-selected stay in place (on a path selected whole, or not
+selected, every anchor is selected), and so do the two ends of an open path unless they are focal points. A selected
+anchor between two focal points moves by the whole drag. A selected anchor between a focal point and an anchor that
+stays takes `u² (3 - 2u)` of the drag, where `u` is its distance from the anchor that stays along the path's control
+polygon (anchor, out handle, the next in handle, the next anchor) divided by the focal point's distance from it. A
 handle takes the share on the tangent line of that curve at its anchor, so the handles of a smooth anchor stay in line
-with it; a handle that is long beside the distance from the end to the grabbed point takes a share below 0 or above 1,
-and moves against the drag or farther than the grabbed point. On a closed path, or when `radius` is given, the anchors
-within `radius` of the grabbed point along the path follow with a smooth falloff and the others stay; `radius`
-defaults to half the diagonal of the subpath's bounding box, and a negative `radius` is refused ("`radius` must be 0
-or more"). A drag of no length on an anchor (`dx` and `dy` 0 or left out) leaves the path as it is and records no undo
-step.
+with it; a handle that is long beside that distance takes a share below 0 or above 1, and moves against the drag or
+farther than the focal point. A closed subpath with every anchor selected moves whole, and a subpath with no focal
+point does not move. An anchor added on a segment of a partly selected path is selected, and the other selected
+anchors stay selected. With `radius`, only the grabbed point's subpath changes, whatever the selection: the anchors
+within `radius` of the grabbed point along the path follow with a smooth falloff and the others stay; a negative
+`radius` is refused ("`radius` must be 0 or more"), and so is `radius` given with `focal` ("`focal` and `radius`
+cannot be used together"). A drag of no length on an anchor (`dx` and `dy` 0 or left out) leaves the path as it is
+and records no undo step.
+
+With the Reshape tool, a click on an anchor of a selected path makes it the focal point, and a click on a segment adds
+an anchor there (one undo step) that becomes the focal point. Shift-click adds an anchor or a point on a segment to the
+focal points. The rest of the tool's behavior is VectorCraft's own rule: Shift-click on a focal point removes it, and
+the focal points belong to one path, so a click on another selected path starts again there. Each focal point shows a
+filled anchor square in a larger hollow one. A drag from a focal point moves all of them; a drag from another point
+moves that point alone as the focal point, with or without Shift (Shift keeps the drag's angle). After a drag the
+focal points stay highlighted where it left them; Escape during a drag puts the path back and keeps them, and
+switching to another tool clears them.
 
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
 naming the key; the document does not change and no undo step is recorded: `t`, `dx` and `dy` in
