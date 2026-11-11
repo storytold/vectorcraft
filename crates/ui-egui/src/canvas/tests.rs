@@ -1173,6 +1173,56 @@ fn a_click_just_outside_the_canvas_does_not_reach_the_tool() {
     assert_eq!(selected(&app), vec![vectorcraft_doc::NodeId(id)]);
 }
 
+/// The box-drawing shape tools show the bounding box of the shape just drawn (#5477). A drag of
+/// its bottom-right handle with the tool still active scales that shape, as with the Selection
+/// tool, rather than drawing a second shape from the handle.
+#[test]
+fn a_shape_tool_scales_the_shape_just_drawn_by_its_bounding_box_handle() {
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for tool in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool(tool);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let drag = |app: &mut VectorcraftApp, a: Pos2, b: Pos2| {
+            for ev in [
+                egui::Event::PointerMoved(a),
+                button(a, true),
+                egui::Event::PointerMoved(a.lerp(b, 0.5)),
+                egui::Event::PointerMoved(b),
+                button(b, false),
+            ] {
+                frame(app, &ctx, vec![ev]);
+            }
+            frame(app, &ctx, vec![]);
+        };
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        drag(&mut app, xf.to_screen(Point::new(150.0, 120.0)), xf.to_screen(Point::new(210.0, 170.0)));
+        let objects = |app: &VectorcraftApp| {
+            let mut n = 0;
+            app.session.active().unwrap().doc.walk(|node| n += usize::from(node.path_data().is_some()));
+            n
+        };
+        assert_eq!(objects(&app), 1, "{tool}: the drag draws one shape");
+        let before = app.selection_box().unwrap_or_else(|| panic!("{tool}: the shape just drawn shows its box"));
+        // The bottom-right handle, dragged 40 pt along the box's width and 30 pt along its height
+        // (a polygon's or star's box turns with the shape).
+        let (corner, to) = (Point::new(before.rect.x1, before.rect.y1), Point::new(before.rect.x1 + 40.0, before.rect.y1 + 30.0));
+        drag(&mut app, xf.to_screen(before.to_doc() * corner), xf.to_screen(before.to_doc() * to));
+        let after = app.selection_box().unwrap_or_else(|| panic!("{tool}: the shape stays selected"));
+        let label = app.session.active().and_then(|st| st.history.undo.last().map(|e| e.label.clone()));
+        assert_eq!(objects(&app), 1, "{tool}: no second shape, last step {label:?}");
+        assert!(
+            (after.rect.width() - before.rect.width() - 40.0).abs() < 0.5 && (after.rect.height() - before.rect.height() - 30.0).abs() < 0.5,
+            "{tool}: {:?} -> {:?}, last step {label:?}",
+            before.rect,
+            after.rect
+        );
+        assert_eq!(label.as_deref(), Some("Scale"), "{tool}");
+    }
+}
+
 #[test]
 fn a_drag_from_a_ruler_onto_the_canvas_makes_a_guide() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
