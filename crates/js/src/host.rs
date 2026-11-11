@@ -85,11 +85,13 @@ pub enum Arg {
     Bool,
 }
 
-/// How the arguments of a host function are read.
+/// How the arguments of a host function are read, and its result given.
 #[derive(Clone)]
 pub(crate) enum ArgRead {
     /// Each as [`Data`].
     Data,
+    /// Each as [`Data`], with the result given frozen, as [`HostItem::Value`] gives its value.
+    Frozen,
     /// Each as the string `String(value)` gives.
     Text,
     /// One by one as the list says; those past its end are not read.
@@ -109,6 +111,9 @@ pub enum HostItem {
     Converted(Vec<Arg>, HostFunction),
     /// A property whose value the function gives each time it is read.
     Getter(HostFunction),
+    /// A property whose value the function gives each time it is read, frozen as
+    /// [`HostItem::Value`] gives its value.
+    FrozenGetter(HostFunction),
     /// A property whose value `get` gives each time it is read, and that `set` is given each value
     /// assigned to it, as its one argument; an error from `set` is thrown to the script.
     Property {
@@ -359,7 +364,7 @@ impl Interp {
         let result = f(data);
         self.can_wait.set(false);
         match result {
-            Ok(d) => self.write_data(d, 0, false),
+            Ok(d) => self.write_data(d, 0, matches!(how, ArgRead::Frozen)),
             Err(HostError::Wait) if can_wait => {
                 self.waiting = true;
                 self.pause.set(true);
@@ -412,14 +417,14 @@ impl Interp {
         let mut data = Vec::with_capacity(args.len());
         // A conversion can run the script's own `toString`, which may collect garbage.
         let mark = self.temp_roots.len();
-        if !matches!(how, ArgRead::Data) {
+        if !matches!(how, ArgRead::Data | ArgRead::Frozen) {
             self.temp_roots.extend(args.iter().cloned());
         }
         let mut read = Ok(());
         for (i, a) in args.iter().enumerate() {
             reading.path.push(Step::Index(u32::try_from(i).unwrap_or(u32::MAX)));
             let d = match how {
-                ArgRead::Data => self.read_data(a, &mut reading),
+                ArgRead::Data | ArgRead::Frozen => self.read_data(a, &mut reading),
                 ArgRead::Text => self.read_text(a, &mut reading),
                 ArgRead::Each(list) => match list.get(i) {
                     Some(Arg::TextOrUndefined) if matches!(a, Value::Undefined) => Ok(Data::Undefined),
@@ -507,6 +512,7 @@ impl Interp {
         let prop = match item {
             HostItem::Value(d) => Prop::Data { value: self.write_data(d, 0, true)?, flags: ENUMERABLE },
             HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, ArgRead::Data)), set: None, flags: ENUMERABLE },
+            HostItem::FrozenGetter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, ArgRead::Frozen)), set: None, flags: ENUMERABLE },
             HostItem::Property { get, set } => Prop::Accessor {
                 get: Some(self.host_function(get, &full, ArgRead::Data)),
                 set: Some(self.host_function(set, &full, ArgRead::Data)),

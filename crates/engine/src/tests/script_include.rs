@@ -192,7 +192,7 @@ fn script_target_other_app_does_not_route() {
     assert_eq!(r["log"], json!([1]));
     for (source, message) in [
         ("#target\nvc.log(1);", "#target needs a value"),
-        ("#targetengine \"session\"", "unsupported script directive: #targetengine"),
+        ("#targetengine \"session\"", "#targetengine must come before the script's code and #include lines"),
         ("#engine \"main\"", "unsupported script directive: #engine"),
         ("#strict maybe", "#strict takes on or off"),
         ("#frobnicate 1", "unknown script directive: #frobnicate"),

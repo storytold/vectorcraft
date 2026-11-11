@@ -209,7 +209,7 @@ fn directives_are_read_at_the_start_of_a_line_in_both_forms() {
     let includes: Vec<_> = r.includes.iter().map(|i| (i.value.as_str(), i.line, i.status)).collect();
     assert_eq!(includes, [("lib/a.jsxinc", 3, IncludeStatus::NotRead)]);
     assert_eq!(problems(&r), [("unknownDirective", Some(8), Some("#pragma")), ("unknownDirective", Some(9), Some("#!"))]);
-    assert_eq!(r.needs, [Need::Language, Need::HostOnly]);
+    assert_eq!(r.needs, [Need::Language], "VectorCraft runs #targetengine");
 }
 
 #[test]

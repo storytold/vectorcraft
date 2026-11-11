@@ -58,6 +58,23 @@ fn state_survives_a_pause_and_a_collection_between_slices() {
     assert_eq!(finish(&mut r, 50).0.unwrap(), JsValue::Number(1500.0));
 }
 
+/// A paused run that is ended leaves no frames behind: the realm starts the next run with its
+/// globals, as many times as it is ended.
+#[test]
+fn an_ended_run_leaves_the_realm_ready_for_the_next() {
+    let mut r = realm(u64::MAX);
+    for _ in 0..3 {
+        r.start("var kept = 'yes'; function deep(n) { return n ? deep(n - 1) : (function () { while (true) {} })(); } deep(50);").unwrap();
+        assert_eq!(r.advance(500).unwrap(), Progress::Paused);
+        r.end();
+        assert!(!r.is_running());
+    }
+    assert!(r.interp().frames.is_empty() && r.interp().stack.is_empty());
+    r.start("kept").unwrap();
+    assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::String("yes".into()));
+    r.end();
+}
+
 #[test]
 fn the_fuel_limit_covers_every_slice_together() {
     let mut r = realm(5_000);
@@ -221,6 +238,18 @@ fn a_getter_is_read_each_time() {
     });
     r.define_host_object("host", vec![("n".into(), HostItem::Getter(f))]).unwrap();
     assert_eq!(r.run("host.n + host.n").unwrap(), JsValue::Number(3.0));
+}
+
+/// A frozen getter gives a new value each time it is read, frozen to its leaves.
+#[test]
+fn a_frozen_getter_gives_a_frozen_value_each_time() {
+    let mut r = realm(1_000_000);
+    let f: HostFunction = Rc::new(|_| Ok(Data::Object(vec![("a".into(), Data::Array(vec![Data::Number(1.0)]))])));
+    let g = f.clone();
+    r.define_host_object("host", vec![("v".into(), HostItem::FrozenGetter(f)), ("open".into(), HostItem::Getter(g))]).unwrap();
+    let source = "var v = host.v; v.b = 2; try { v.a.push(2); } catch (e) {} \
+                  [Object.isFrozen(v), Object.isFrozen(v.a), v.b === undefined, v.a.length, host.v === host.v, Object.isFrozen(host.open)].join()";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("true,true,true,1,false,false".into()));
 }
 
 #[test]
@@ -406,6 +435,25 @@ fn a_converted_function_reads_each_argument_as_its_list_says() {
     assert_eq!(*seen.borrow(), want, "arguments past the list are not read");
     let out = r.run("var a = typeof conv; conv = 1; a + ' ' + conv").unwrap();
     assert_eq!(out, JsValue::String("function 1".into()), "a script may replace the function");
+}
+
+#[test]
+fn error_sources_count_from_the_last_script_and_code_from_an_earlier_one_is_unknown() {
+    let mut r = realm(10_000_000);
+    let source: HostFunction = Rc::new(|_| Ok(Data::String("\nthrow new Error('in eval')".into())));
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    r.define_host_object("host", vec![("load".into(), load)]).unwrap();
+    r.run("function late() { throw new Error('late'); }").unwrap();
+    assert!(r.run("host.load()").is_err());
+    assert_eq!(r.error_source(), 1, "the first source the evaluator gave in this run");
+    assert!(r.run("\nlate()").is_err());
+    assert_eq!(r.error_source(), UNKNOWN_SOURCE, "an earlier script defined late");
+    assert!(r.run("\nthrow 1").is_err());
+    assert_eq!(r.error_source(), 0);
+    assert!(r.run("host.load()").is_err());
+    assert_eq!(r.error_source(), 1, "counted again from this run's script");
+    assert!(r.run("var = 1").is_err());
+    assert_eq!(r.error_source(), 0, "a syntax error is in the script");
 }
 
 proptest::proptest! {

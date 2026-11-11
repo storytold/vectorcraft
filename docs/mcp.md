@@ -1492,10 +1492,10 @@ top-level `import` or `export`, such as a React `.jsx` file), `notText` (a NUL b
 control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script, the reply holds these lists:
 
 - `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects
-  and directives, such as `$`, `alert`, `UnitValue` and `#target`), `dom` (the reference app's document model),
-  `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the reference app has: palettes,
-  `#targetengine`, BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading,
-  reflection, actions and `selectTool`).
+  and directives, such as `$`, `alert`, `UnitValue`, `#target` and `#targetengine`), `dom` (the reference app's
+  document model), `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the reference app has:
+  palettes, BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading, reflection, actions
+  and `selectTool`).
 - `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
   and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
   `locale`. A directive is read where it starts a line, written `#name` or `//@name`.
@@ -1577,10 +1577,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   is read at once and `timeout` is not waited on. The run's fuel and limits apply to the file. An empty path, a
   missing file and a refused path throw errors the script can catch.
 - `$.fileName` is the file being run, which is the file `$.evalFile` is running while it runs, and is empty for a
-  script given as `source`. `$.includePath` is the current `#includepath` list, separated by `;`.
+  script given as `source`. `$.includePath` is the current `#includepath` list, separated by `;`. `$.engineName` is
+  the name `#targetengine` gave the engine the script runs in (`VectorCraft` without the line) and is read-only.
 - `alert(message[, title, errorIcon])`, `confirm(message[, noAsDflt, title])` and `prompt(message, preset[, title])`
   open a dialog, described below. `vc.api.has("dialogs")` is true.
-- `vc.args` is the `args` object.
+- `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
 Before any of the script runs, its preprocessor lines are read. The help page
@@ -1610,8 +1611,12 @@ VectorCraft reads them by these rules of its own:
   and `Function` compile takes the checks of the code that compiles it. A file `$.evalFile` runs takes the checks of
   its own last `#strict` line, for its code and the functions it defines, or the caller's when it has none; the
   caller's code keeps its own. Any value other than `on` or `off` ends the run with `#strict takes on or off`.
-- `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name` with an
-  unknown-directive error. A `//@` line with another name is a comment.
+- `#targetengine name` and `//@targetengine name` run the script in the named engine. The help page above describes
+  the line: the engine it names lasts for the application session, and a later script that names it sees the globals
+  and functions earlier ones left. A script without the line, and `#targetengine main`, get a new engine for each
+  run, as before. The rest are VectorCraft's own rules, described under Script engines below.
+- `#engine` ends the run with an unsupported-directive error, and any other `#name` with an unknown-directive error.
+  A `//@` line with another name is a comment.
 - A script run from a file reads its included files and the files `$.evalFile` runs only in that file's folder and
   the folders below it. A path with a `..` name, a path that leads out of the folder through a link or a junction, a
   Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
@@ -1688,6 +1693,35 @@ change anything outside the documents: `script.*` except `script.check`, `plugin
 `edit.clearHistory`: a run keeps each document's undo steps from before it and adds one. Calling one of these throws
 an error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
 has unsaved changes.
+
+### Script engines
+
+A named engine (`#targetengine`) keeps its globals and functions between the runs that name it, until it is dropped
+or the session ends. These are VectorCraft's own rules:
+
+- The name is either a name of ASCII letters, digits and `_` that does not start with a digit, or a name in single or
+  double quotes of 1 to 64 bytes of UTF-8 without control characters. Names are matched as written: `Session` and
+  `session` are two engines. `main` is the engine of a script without the line, which is new for each run.
+- Only the script itself has the line, once, before its code and its `#include` lines; blanks, comments and the other
+  preprocessor lines may come before it. A second line, a late line, a bad name, or the line in an included file or a
+  file `$.evalFile` runs ends the run at that line before any of it runs, and makes no engine.
+- A session keeps at most 8 named engines. A run that names a ninth ends with a limit error before any of it runs,
+  and the other eight are kept. Each named engine has a heap of 64 MiB, which holds what it keeps between runs; a run
+  that goes past it ends with the heap limit, and the engine stays usable.
+- The documents go back after an uncaught error, a limit or `script.stop` as they do for any run, and the engine keeps
+  the globals the run set before it ended. An internal error drops the engine. An error in a function an earlier run
+  defined is reported without a line and column.
+- `vc`, `$`, `alert`, `confirm` and `prompt` act for the run that calls them, including a copy an earlier run kept in a
+  global. `vc.args` is the calling run's `args`, through a `vc` object an earlier run kept too. An engine
+  holds no document: `vc.document` is a copy, read when it is called. What a run sets on `$` (`$.locale`,
+  `$.localize`, `$.flags`, `$.setenv` values and `$.hiresTimer`) lasts for that run only, as in a run without the line.
+- `script.engines {}` lists the named engines in the order they were made: `{engines: [{name, heapBytes, running}],
+  limit: 8, heapLimit: 67108864}`, where `heapBytes` is the engine's heap after its last run.
+- `script.engine.drop {name}` drops a named engine and its globals, and returns `{dropped: true, name}`. The next run
+  that names it gets a new engine. `main`, a name with no engine, and the engine of the running script are refused;
+  the last one ends with the busy error.
+- A script cannot run `script.engines` or `script.engine.drop`.
+- The web build has no named engines: a run that names one other than `main` ends with an error before any of it runs.
 
 VectorCraft sets these limits itself:
 

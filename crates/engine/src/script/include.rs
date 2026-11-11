@@ -16,8 +16,13 @@
 //!   the `JSINCLUDE` environment variable. A later `#includepath` replaces the list.
 //! - Files are read through the script's [`ScriptScope`]: a refused path ends the run, except a
 //!   `JSINCLUDE` folder outside the scope, which is passed over.
-//! - `#target` takes any value and changes nothing. `#targetengine` and `#engine` are refused as
-//!   unsupported, and any other `#name` as unknown; `//@name` with another name stays a comment.
+//! - `#target` takes any value and changes nothing. `#engine` is refused as unsupported, and any
+//!   other `#name` as unknown; `//@name` with another name stays a comment.
+//! - `#targetengine name` names the engine the script runs in ([`Expanded::engine`]). Only the
+//!   script itself may have one, at most once, and only before its first code or `#include` line:
+//!   blanks, comments and the other preprocessor lines may come before it. The name is an unquoted
+//!   name of ASCII letters, digits and `_` that does not start with a digit, or a quoted one of 1 to
+//!   [`MAX_ENGINE_NAME_BYTES`] bytes without control characters, compared as written.
 //! - The last `#strict on` or `#strict off` of the script and the files it includes sets the checks
 //!   for the whole run; without one they are off. A write to a property that has only a getter is
 //!   checked as a read-only one, the objects that take no new properties are those that are not
@@ -50,6 +55,8 @@ pub const MAX_TOTAL_BYTES: usize = 32 << 20;
 pub const MAX_PROBES: usize = 1024;
 /// The longest value a preprocessor line may have, in bytes.
 const MAX_VALUE_BYTES: usize = 4096;
+/// The longest name `#targetengine` may give, in bytes of UTF-8.
+pub const MAX_ENGINE_NAME_BYTES: usize = 64;
 
 /// Where the lines of an expanded source came from: file 0 is the file expanded, the others the
 /// files it included.
@@ -107,12 +114,78 @@ pub(crate) struct Failure {
 }
 
 /// A source with its preprocessor lines read: the text to run, where its lines came from, the
-/// name its `#script` line gave, and what its last `#strict` line set (`None` without one).
+/// name its `#script` line gave, what its last `#strict` line set (`None` without one), and the
+/// engine its `#targetengine` line named, with that line's line and column.
 pub(crate) struct Expanded {
     pub source: String,
     pub map: SourceMap,
     pub name: Option<String>,
     pub strict: Option<bool>,
+    pub engine: Option<(String, u32, u32)>,
+}
+
+/// What the preprocessor lines of a file have named so far: its `#script` name and its engine, and
+/// whether code or an `#include` line has come before.
+#[derive(Default)]
+struct Named {
+    name: Option<String>,
+    engine: Option<(String, u32, u32)>,
+    code_seen: bool,
+}
+
+/// Are `units` only blanks and comments?
+fn only_blanks_and_comments(units: &[u16]) -> bool {
+    let mut i = 0;
+    while let Some(&u) = units.get(i) {
+        match u {
+            0x2F if units.get(i + 1) == Some(&0x2F) => {
+                while units.get(i).is_some_and(|&c| !matches!(c, 0x0A | 0x0D | 0x2028 | 0x2029)) {
+                    i += 1;
+                }
+            }
+            0x2F if units.get(i + 1) == Some(&0x2A) => {
+                let Some(end) = units.get(i + 2..).and_then(|rest| rest.windows(2).position(|w| w == [0x2A, 0x2F])) else { return false };
+                i += end + 4;
+            }
+            0xFEFF => i += 1,
+            u if char::from_u32(u32::from(u)).is_some_and(char::is_whitespace) => i += 1,
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// The engine name of a `#targetengine` line's value `value` (as written, quotes included), or what
+/// is wrong with it.
+fn engine_name(value: &str) -> Result<String, &'static str> {
+    let name = match value.chars().next() {
+        None => return Err("needs a name"),
+        Some(q @ ('"' | '\'')) => {
+            let inner = value.get(1..).and_then(|v| v.strip_suffix(q)).ok_or("needs a closing quote after the name")?;
+            if inner.contains(q) {
+                return Err("takes one name");
+            }
+            if inner.chars().any(char::is_control) {
+                return Err("needs a name without control characters");
+            }
+            inner
+        }
+        _ => {
+            let mut chars = value.chars();
+            let first_ok = chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+            if !first_ok || !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                return Err("needs a name of letters, digits and _, or a quoted name");
+            }
+            value
+        }
+    };
+    if name.is_empty() {
+        return Err("needs a name");
+    }
+    if name.len() > MAX_ENGINE_NAME_BYTES {
+        return Err("needs a name of at most 64 bytes");
+    }
+    Ok(name.to_string())
 }
 
 /// A file being run: its name for people and the folder its relative paths start from (none for a
@@ -342,8 +415,8 @@ impl Files {
     /// its `#script` line names the run.
     fn expand(&mut self, shown: Arc<str>, dir: Option<PathBuf>, text: &str, script: bool) -> Result<Expanded, Failure> {
         let mut out = Out { units: Vec::with_capacity(text.len()), line: 1, column: 0, after_cr: false, map: SourceMap::default(), strict: None };
-        let mut name = None;
-        self.file(&mut out, shown, dir.as_deref(), text, script, &mut name)?;
+        let mut named = Named::default();
+        self.file(&mut out, shown, dir.as_deref(), text, script, &mut named)?;
         let source = String::from_utf16(&out.units).map_err(|_| Failure {
             kind: FailKind::Syntax,
             message: "the script is not valid text".into(),
@@ -352,20 +425,12 @@ impl Files {
             line: 0,
             column: 0,
         })?;
-        Ok(Expanded { source, map: out.map, name, strict: out.strict })
+        Ok(Expanded { source, map: out.map, name: named.name, strict: out.strict, engine: named.engine })
     }
 
     /// Adds file `shown` (in folder `dir`, with text `text`) to `out`, its included files in place
     /// of their lines.
-    fn file(
-        &mut self,
-        out: &mut Out,
-        shown: Arc<str>,
-        dir: Option<&Path>,
-        text: &str,
-        script: bool,
-        name: &mut Option<String>,
-    ) -> Result<(), Failure> {
+    fn file(&mut self, out: &mut Out, shown: Arc<str>, dir: Option<&Path>, text: &str, script: bool, named: &mut Named) -> Result<(), Failure> {
         let index = out.map.files.len();
         out.map.files.push(shown.clone());
         let units: Vec<u16> = text.encode_utf16().collect();
@@ -385,7 +450,11 @@ impl Files {
                 units.get(..start).and_then(|u| u.iter().rposition(|&c| matches!(c, 0x0A | 0x0D | 0x2028 | 0x2029))).map_or(0, |i| i + 1);
             let column = u32::try_from(start - line_start + 1).unwrap_or(u32::MAX);
             let at = |kind, message: String| fail(kind, message, d.line, column);
-            out.emit(units.get(cursor..start).unwrap_or_default());
+            let before = units.get(cursor..start).unwrap_or_default();
+            if !named.code_seen && !only_blanks_and_comments(before) {
+                named.code_seen = true;
+            }
+            out.emit(before);
             cursor = end;
             let label = format!("{}{}", d.form, d.name);
             if d.value.len() > MAX_VALUE_BYTES {
@@ -397,11 +466,12 @@ impl Files {
                     if value.is_empty() {
                         return Err(at(FailKind::Syntax, format!("{label} needs a file name")));
                     }
+                    named.code_seen = true;
                     let (real, bytes) = self.open(value, dir, true).map_err(|(kind, message)| at(kind, message))?;
                     let included = self.admit(&real, bytes, value).map_err(|(kind, message)| at(kind, message))?;
                     self.chain.push(real.clone());
                     self.levels += 1;
-                    let r = self.file(out, display(&real), folder_of(&real).as_deref(), &included, false, name);
+                    let r = self.file(out, display(&real), folder_of(&real).as_deref(), &included, false, named);
                     self.chain.pop();
                     self.levels -= 1;
                     r?;
@@ -416,7 +486,7 @@ impl Files {
                         return Err(at(FailKind::Syntax, format!("{label} needs a name")));
                     }
                     if script && index == 0 {
-                        *name = Some(value.to_string());
+                        named.name = Some(value.to_string());
                     }
                 }
                 Some(DirectiveName::Target) => {
@@ -429,7 +499,19 @@ impl Files {
                     "on" => out.strict = Some(true),
                     _ => return Err(at(FailKind::Syntax, format!("{label} takes on or off"))),
                 },
-                Some(DirectiveName::TargetEngine) => return Err(at(FailKind::Syntax, format!("unsupported script directive: {label}"))),
+                Some(DirectiveName::TargetEngine) => {
+                    if !script || index > 0 {
+                        return Err(at(FailKind::Syntax, format!("{label} may only be in the script itself, not in a file it runs")));
+                    }
+                    if named.engine.is_some() {
+                        return Err(at(FailKind::Syntax, format!("the script has more than one {label} line")));
+                    }
+                    if named.code_seen {
+                        return Err(at(FailKind::Syntax, format!("{label} must come before the script's code and #include lines")));
+                    }
+                    let engine = engine_name(&d.value).map_err(|why| at(FailKind::Syntax, format!("{label} {why}")))?;
+                    named.engine = Some((engine, d.line, column));
+                }
                 None if d.name.eq_ignore_ascii_case("engine") => {
                     return Err(at(FailKind::Syntax, format!("unsupported script directive: {label}")));
                 }
