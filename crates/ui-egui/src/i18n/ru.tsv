@@ -3606,6 +3606,8 @@ digits	Malayalam	Малаялам
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруются слева направо, затем вниз; оставьте диапазон пустым для всех плиток.
 	Copies per Sheet (as many as fit, in a grid)	Копий на лист (сколько поместится, сеткой)
 	Tint	Оттенок
+	Fill Tint	Оттенок заливки
+	Stroke Tint	Оттенок обводки
 	Tip extends past the end point	Кончик выходит за конечную точку
 	Tip on the end point	Кончик на конечной точке
 	Title Case	Как в заголовке
@@ -5346,6 +5348,7 @@ lighting	Light	Свет
 @msg	Invalid drawing scale	Недопустимый масштаб чертежа
 @msg	Invalid real scale	Недопустимый реальный масштаб
 @msg	Measured anchor no longer exists	Измеряемая опорная точка больше не существует
+@msg	Invalid measured point	Недопустимая измеряемая точка
 @msg	Measured segment no longer exists	Измеряемый сегмент больше не существует
 @msg	Non-finite dimension	Размер не является конечным числом
 @msg	Only linear dimensions are horizontal or vertical	Только линейные размеры бывают горизонтальными или вертикальными

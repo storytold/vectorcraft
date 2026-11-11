@@ -3605,6 +3605,8 @@ effect	Points	Точки
 	Copies per Sheet (as many as fit, in a grid)	Копій на аркуш (скільки поміститься, сіткою)
 	Gutter:	Проміжок:
 	Tint	Відтінок
+	Fill Tint	Відтінок заливки
+	Stroke Tint	Відтінок обведення
 	Tip extends past the end point	Кінчик виходить за кінцеву точку
 	Tip on the end point	Кінчик на кінцевій точці
 	Title Case	Як у заголовку
@@ -5332,6 +5334,7 @@ lighting	Light	Світло
 @msg	Invalid drawing scale	Неприпустимий масштаб креслення
 @msg	Invalid real scale	Неприпустимий реальний масштаб
 @msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
+@msg	Invalid measured point	Недійсна виміряна точка
 @msg	Measured segment no longer exists	Виміряний сегмент більше не існує
 @msg	Non-finite dimension	Розмір не є скінченним числом
 @msg	Only linear dimensions are horizontal or vertical	Лише лінійні розміри бувають горизонтальними або вертикальними

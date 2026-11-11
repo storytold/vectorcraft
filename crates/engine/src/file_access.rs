@@ -23,6 +23,9 @@
 //! A path is checked, then opened: a process that can change the folders in between (swapping in
 //! a link) can still win that race. The roots keep an agent to the files it was given; they don't
 //! guard against other programs on the computer.
+//!
+//! [`ScriptScope`] holds the folders a running script's own files (its includes and `$.evalFile`)
+//! are read from, inside the roots.
 
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -345,6 +348,88 @@ fn windows_name_refusal(path: &str) -> Option<&'static str> {
         Component::Normal(n) if n.to_string_lossy().contains(':') => Some("alternate data streams are not allowed"),
         _ => None,
     })
+}
+
+/// The folders a running script's own files are read from: the files its `#include` lines name and
+/// the files it passes to `$.evalFile` (`Scope::Script`'s reads). VectorCraft's own rules: a script
+/// run from a file may read inside that file's folder and the folders below it, and a script given as
+/// text may read none. A path is refused when it has a `..` component, a Windows device name or
+/// stream, or names a computer on the network, or when it leads (through its links, junctions
+/// included) out of every granted folder. The automation roots ([`check_read`]) apply as well.
+///
+/// The file opened is the path with its links followed, and after reading, the path is followed
+/// again and must still lead to the same place: a process that changes the folders twice in between
+/// can still win that race.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ScriptScope {
+    /// The granted folders, made absolute with their links followed.
+    roots: Vec<PathBuf>,
+}
+
+/// Why a script's file was not read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ScriptRead {
+    /// There is no such file.
+    Missing,
+    /// The scope does not let the script read it.
+    Refused,
+    /// The file has more than the bytes asked for.
+    TooLarge,
+    /// The file system gave this error.
+    Failed(String),
+}
+
+impl ScriptScope {
+    /// The scope of a script run from a file in folder `dir`: that folder.
+    pub(crate) fn of_folder(dir: &Path) -> Self {
+        Self { roots: std::fs::canonicalize(dir).ok().into_iter().collect() }
+    }
+
+    /// Is `path` refused by its name alone: a `..` component, a NUL, a Windows device name or
+    /// stream, or a computer on the network?
+    fn refused_by_name(path: &Path) -> bool {
+        let text = path.to_string_lossy();
+        text.contains('\0')
+            || path.components().any(|c| c == Component::ParentDir)
+            || (cfg!(windows) && (windows_name_refusal(&text).is_some() || network_path(&text)))
+    }
+
+    /// The real path of the file at `path` and its first `max` bytes, at most.
+    pub(crate) fn read(&self, path: &Path, max: usize) -> Result<(PathBuf, Vec<u8>), ScriptRead> {
+        use std::io::Read;
+        if self.roots.is_empty() || Self::refused_by_name(path) || check_read(&path.to_string_lossy()).is_err() {
+            return Err(ScriptRead::Refused);
+        }
+        let real = match std::fs::canonicalize(path) {
+            Ok(real) => real,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // A link whose target is missing is there all the same: it is not followed.
+                return Err(if std::fs::symlink_metadata(path).is_ok() { ScriptRead::Refused } else { ScriptRead::Missing });
+            }
+            Err(e) => return Err(ScriptRead::Failed(e.to_string())),
+        };
+        if !self.roots.iter().any(|r| inside(&real, r)) {
+            return Err(ScriptRead::Refused);
+        }
+        let file = std::fs::File::open(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        let meta = file.metadata().map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        if !meta.is_file() {
+            return Err(ScriptRead::Missing);
+        }
+        if meta.len() > max as u64 {
+            return Err(ScriptRead::TooLarge);
+        }
+        let mut bytes = Vec::new();
+        // One byte more than asked for shows a file that grew while it was read.
+        file.take(max as u64 + 1).read_to_end(&mut bytes).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        if bytes.len() > max {
+            return Err(ScriptRead::TooLarge);
+        }
+        if std::fs::canonicalize(path).ok().as_ref() != Some(&real) {
+            return Err(ScriptRead::Refused);
+        }
+        Ok((real, bytes))
+    }
 }
 
 #[cfg(test)]

@@ -5019,6 +5019,8 @@ axis	Both	Ambos
 	Text Wrap Options	Opções de Quebra de Texto
 	Tile Full Pages	Dividir em Páginas Inteiras
 	Tint	Tom
+	Fill Tint	Tom de Preenchimento
+	Stroke Tint	Tom do Traçado
 	Tip extends past the end point	A ponta se estende além do ponto final
 	Tip on the end point	Ponta no ponto final
 	Toolbar: Add Tool	Barra de Ferramentas: Adicionar Ferramenta
@@ -5671,6 +5673,7 @@ mark-style	Japanese	Japonesas
 @msg	Invalid drawing scale	Escala de desenho inválida
 @msg	Invalid real scale	Escala real inválida
 @msg	Measured anchor no longer exists	O ponto de ancoragem medido não existe mais
+@msg	Invalid measured point	Ponto medido inválido
 @msg	Measured segment no longer exists	O segmento medido não existe mais
 @msg	Non-finite dimension	Cota não finita
 @msg	Only linear dimensions are horizontal or vertical	Somente cotas lineares são horizontais ou verticais
