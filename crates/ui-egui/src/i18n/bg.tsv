@@ -2539,6 +2539,7 @@ digits	Malayalam	Малаялам
 	Radial	Радиален
 	Radial Glows	Лъчисти сияния
 	Radial Gradient	Лъчист градиент
+	Conic Gradient	Конусен градиент
 	Radius 1	Радиус 1
 	Radius 2	Радиус 2
 	Radius1	Радиус1
@@ -4068,6 +4069,8 @@ axis	Both	И двете
 @msg	`gradient` must be an object	`gradient` трябва да бъде обект
 @msg	`library` is a library id or name (see {list})	`library` е идентификатор или име на библиотека (вижте {list})
 @msg	`mode` applies to freeform gradients	`mode` се прилага към свободни разградки
+@msg	a negative `aspect` applies to conic gradients	отрицателен `aspect` се прилага към конусни градиенти
+@msg	`focal` applies to radial gradients	`focal` се прилага към радиални градиенти
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` трябва да бъде 1, 3 или 5
 @msg	`stops` must be an array	`stops` трябва да бъде масив
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` трябва да бъде обект с опции за SVG (вижте document.formats)
@@ -4524,7 +4527,7 @@ axis	Both	И двете
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (точки, линии)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	непознат вид градиент `{k}` (линеен, радиален, свободна форма)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, свободна форма)
 @msg	unknown highlight `{h}`	непознат акцент `{h}`
 @msg	unknown option `{path}.{k}`	непозната опция `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
@@ -5617,7 +5620,7 @@ theme	Appearance	Външен вид
 @msg	span must be "object" or "selection", got {v}	span трябва да е "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" поставя `gradient`, а не мостра
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" поставя градиент: задайте `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" поставя линеен или радиален градиент, а не свободен
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" поставя линеен, радиален или конусен градиент, а не свободен
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" поставя самия градиент: пропуснете `start` и `end` (те вече го поставят в координатите на документа)
 	Make Image Dynamic	Динамично изображение
 	Import Data Sets…	Импортиране на набори от данни…

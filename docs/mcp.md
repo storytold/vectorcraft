@@ -452,7 +452,7 @@ so a bad one draws nothing. The object and its styling are one `command.batch`, 
 it can't read, a swatch the document lacks) fails the call and leaves the document as it was. The reply adds `name`, `opacity` and `effects` (each `effect.apply` result)
 when given; `paint` lists the stroke options applied.
 A gradient given to several objects fits each one's own bounds; `paint.setFill` / `paint.setStroke` with
-`span: "selection"` place a linear or radial gradient once on the union of the targets' bounds instead, so one
+`span: "selection"` place a linear, radial or conic gradient once on the union of the targets' bounds instead, so one
 ramp runs across them.
 `paint.setFill` without `item` on a grayscale or 1-bit image sets the color the image is drawn in: each pixel takes
 the color as far as the pixel is dark, and white pixels are transparent. `none` removes the color. An image with an
@@ -1048,7 +1048,27 @@ radial shadings:
 {"name":"run_command","arguments":{"command":"paint.setGradientGeom","params":{"aspect":60,"focal":[130,140]}}}
 ```
 
-Dither (the Gradient panel's box) draws a linear or radial gradient fill with fine noise that hides banding;
+A conic gradient (`kind: "conic"`, also accepted as `angle` or `conical`) sweeps its stops once around the center
+(the start), clockwise on the page from the vector, with a seam where the last stop meets the first. Its annotator
+draws the extent ellipse, aspect dot and center ring of a radial gradient, without a focal point; a `focal` given
+for a conic gradient is an error. A negative `aspect` mirrors the sweep (counterclockwise), as reflecting the object
+does; for the other kinds a negative `aspect` is an error. The Gradient panel's Aspect Ratio field and the aspect dot
+keep a mirrored sweep mirrored. Dither and Method apply as they do to a linear gradient. PDF export writes it as a
+function-based shading (type 1) whose calculator function turns the angle into the ramp, and PDF import reads a
+function-based shading whose color turns around the origin of its space back as a conic gradient, with its stops'
+opacity, also when the origin lies outside the painted area; in a PDF/A file, or with more than 97 stops on its
+curve, it is written as an image. SVG has no conic gradient: one of opaque stops is written as 360 solid wedges
+clipped to the shape, others as an image, and on type characters as a linear gradient. CSS (CSS Properties, a swatch
+library saved as CSS) writes `conic-gradient(from …)`, an elliptical sweep as a circular one. EPS and legacy `.ai`
+files get 360 solid wedges, and the `.ai` editing data a linear gradient along the vector with the same stops.
+Object › Expand turns it into wedges (`steps`) or a mesh of columns around the center. An export that writes it in
+another form gives a warning:
+
+```json
+{"name":"run_command","arguments":{"command":"paint.setFill","params":{"gradient":{"kind":"conic","start":[150,150],"end":[200,150],"aspect":-100}}}}
+```
+
+Dither (the Gradient panel's box) draws a linear, radial or conic gradient fill with fine noise that hides banding;
 SVG and PDF exports write such a fill as an image at the Document Raster Effects resolution. It applies to fills
 (`stroke: true` is refused):
 
@@ -1057,9 +1077,9 @@ SVG and PDF exports write such a fill as an image at the Document Raster Effects
 ```
 
 Method (the Gradient panel's menu): `classic` (the default) mixes the colours between stops in display RGB,
-`perceptual` mixes a linear or radial gradient's colours in OKLab so the steps look even. SVG exports write a
+`perceptual` mixes a linear, radial or conic gradient's colors in OKLab so the steps look even. SVG exports write a
 Perceptual gradient as an image at the Document Raster Effects resolution (a dithered Perceptual fill with its noise).
-PDF exports write it the same way, except for a linear or radial gradient with spot color stops whose other stops
+PDF exports write it the same way, except for a linear, radial or conic gradient with spot color stops whose other stops
 are all paper white or written in CMYK or gray, that is not a dithered fill and whose curve does not have too many
 stops. An export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a
 CMYK document unless the export converts colors to an RGB destination profile. PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK

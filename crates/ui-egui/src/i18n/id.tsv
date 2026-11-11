@@ -1591,6 +1591,7 @@ digits	Malayalam	Malayalam
 	No gradient swatches	Tidak ada swatch gradien
 	Points: clicks add free points	Titik: klik menambahkan titik bebas
 	Radial Gradient	Gradien radial
+	Conic Gradient	Gradien kerucut
 	Reset to White, Black	Setel ulang ke putih, hitam
 	Reverse Gradient	Balikkan gradien
 	Save to Swatches	Simpan ke swatch
@@ -4185,6 +4186,8 @@ imageTrace	Outline	Kontur
 @msg	`gradient` must be an object	`gradient` harus berupa objek
 @msg	`library` is a library id or name (see {list})	`library` adalah id atau nama pustaka (lihat {list})
 @msg	`mode` applies to freeform gradients	`mode` berlaku untuk gradien bentuk bebas
+@msg	a negative `aspect` applies to conic gradients	`aspect` negatif berlaku untuk gradien kerucut
+@msg	`focal` applies to radial gradients	`focal` berlaku untuk gradien radial
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` harus 1, 3, atau 5
 @msg	`stops` must be an array	`stops` harus berupa larik
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` harus berupa objek opsi SVG (lihat document.formats)
@@ -4620,7 +4623,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	format tidak dikenal
 @msg	unknown format `{f}` (Save writes {_1})	format `{f}` tidak dikenal (Simpan menulis {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode bentuk bebas `{m}` tidak dikenal (titik, garis)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, bentuk bebas)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, kerucut, bentuk bebas)
 @msg	unknown highlight `{h}`	sorotan `{h}` tidak dikenal
 @msg	unknown option `{path}.{k}`	opsi `{path}.{k}` tidak dikenal
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	overprint `{o}` tidak dikenal (pertahankan, simulasikan, atau buang)
@@ -5373,7 +5376,7 @@ mark-style	Japanese	Jepang
 @msg	span must be "object" or "selection", got {v}	span harus "object" atau "selection", diterima {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" menempatkan `gradient`, bukan swatch
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" menempatkan gradien: berikan `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" menempatkan gradien linear atau radial, bukan gradien bebas
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" menempatkan gradien linear, radial, atau kerucut, bukan gradien bebas
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" menempatkan gradien itu sendiri: jangan sertakan `start` dan `end` (keduanya sudah menempatkannya dalam koordinat dokumen)
 	Make Image Dynamic	Jadikan gambar dinamis
 	Import Data Sets…	Impor himpunan data…

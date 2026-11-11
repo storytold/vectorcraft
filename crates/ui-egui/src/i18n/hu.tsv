@@ -3154,6 +3154,7 @@ mark-style	Japanese	Japán
 	Radial Blur…	Körkörös elmosás…
 	Radial Glows	Körkörös ragyogások
 	Radial Gradient	Körkörös színátmenet
+	Conic Gradient	Kúpos színátmenet
 	Radial Repeat	Körkörös ismétlés
 	Radius	Sugár
 	Radius 1	Sugár 1
@@ -4708,6 +4709,8 @@ imageTrace	Outline	Körvonal
 @msg	`colors` must be an array of colors, not {v}	`colors`: színek tömbje kell, ez nem az: {v}
 @msg	`library` is a library id or name (see {list})	a `library` könyvtárazonosító vagy -név lehet (lásd: {list})
 @msg	`mode` applies to freeform gradients	a `mode` a szabad formájú színátmenetekre vonatkozik
+@msg	a negative `aspect` applies to conic gradients	a negatív `aspect` a kúpos színátmenetekre vonatkozik
+@msg	`focal` applies to radial gradients	a `focal` a sugaras színátmenetekre vonatkozik
 @msg	`preserve` must be an object	`preserve`: objektum kell
 @msg	`globalAdjust` must be an object	`globalAdjust`: objektum kell
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize`: 1, 3 vagy 5 kell
@@ -5515,7 +5518,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown format	ismeretlen formátum
 @msg	unknown format `{f}` (Save writes {_1})	ismeretlen formátum: `{f}` (a Mentés ezeket írja: {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	ismeretlen szabad formájú mód: `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	ismeretlen színátmenet-fajta: `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	ismeretlen színátmenet-fajta: `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	ismeretlen kiemelés: `{h}`
 @msg	unknown option `{path}.{k}`	ismeretlen beállítás: `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
@@ -5756,7 +5759,7 @@ imageTrace	Outline	Körvonal
 @msg	span must be "object" or "selection", got {v}	a span értéke "object" vagy "selection" lehet, nem {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" egy `gradient` értéket helyez el, nem színmintát
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" színátmenetet helyez el: adja meg a `gradient` értéket
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" lineáris vagy sugaras színátmenetet helyez el, nem szabad formájút
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" lineáris, sugaras vagy kúpos színátmenetet helyez el, nem szabad formájút
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" magát a színátmenetet helyezi el: hagyja el a `start` és `end` értéket (ezek már a dokumentum koordinátáiban helyezik el)
 	Make Image Dynamic	Kép dinamikussá tétele
 	Import Data Sets…	Adatkészletek importálása…
