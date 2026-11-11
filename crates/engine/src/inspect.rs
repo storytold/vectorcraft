@@ -99,12 +99,16 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> 
         NodeKind::Text(t) => {
             v["text"] = json!(t.plain_text());
             // Area type and type on a path: does the text fit (the red overflow "+")? Area type
-            // also reports its fit and Shrink Text's factor (1 unshrunk).
+            // also reports its fit and Shrink Text's factor (1 unshrunk), and type on a path its
+            // Dynamic Text setting and factor (1 when off).
             if !matches!(t.kind, vectorcraft_doc::TextKind::Point) {
                 let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
                 v["overflow"] = json!(lay.overflow);
                 if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) {
                     v["fit"] = json!(t.area.fit.id());
+                    v["fitScale"] = json!(lay.fit_scale);
+                } else {
+                    v["dynamicText"] = json!(t.dynamic_text);
                     v["fitScale"] = json!(lay.fit_scale);
                 }
             }

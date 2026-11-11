@@ -2365,6 +2365,8 @@ file-filter	Templates	Modelli
 	Open…	Apri…
 	Optical	Ottica
 	Optical Margin Alignment	Allineamento ottico dei margini
+	Dynamic Text	Testo dinamico
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	il testo su tracciato in un testo concatenato non può usare il testo dinamico: {frames}
 	Optimize for fast web view	Ottimizza per visualizzazione web veloce
 	Optimized	Ottimizzato
 	Options	Opzioni

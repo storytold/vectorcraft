@@ -2146,6 +2146,8 @@ shape	Open	Açık
 	Open…	Aç…
 	Optical	Optik
 	Optical Margin Alignment	Optik Kenar Boşluğu Hizalaması
+	Dynamic Text	Dinamik Metin
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	zincirli metindeki yol üzerindeki yazı dinamik metin kullanamaz: {frames}
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
 	Options	Seçenekler

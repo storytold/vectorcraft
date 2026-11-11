@@ -434,6 +434,8 @@ digits	Malayalam	マラヤーラム数字
 	Smart Punctuation…	欧文用字形の自動置換…
 	Create Outlines	アウトラインを作成
 	Optical Margin Alignment	最適なマージン揃え
+	Dynamic Text	ダイナミックテキスト
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	スレッドテキスト内のパス上文字にはダイナミックテキストを使用できません: {frames}
 	Fill with Placeholder Text	サンプルテキストの割り付け
 	Insert Inline Symbol	インラインシンボルを挿入
 	Show Hidden Characters	制御文字を表示

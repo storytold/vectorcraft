@@ -631,6 +631,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "type.convertToAreaType",
     "type.convertToPointType",
     "type.createOutlines",
+    "type.dynamicText",
     "type.fillPlaceholder",
     "type.fitHeadline",
     "type.insert",

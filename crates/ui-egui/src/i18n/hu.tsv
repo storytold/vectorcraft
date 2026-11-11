@@ -2822,6 +2822,8 @@ file-filter	Templates	Sablonok
 	Open…	Megnyitás…
 	Optical	Optikai
 	Optical Margin Alignment	Optikai margóigazítás
+	Dynamic Text	Dinamikus szöveg
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	a láncolt szövegben lévő útvonalszöveg nem használhat dinamikus szöveget: {frames}
 	Optimize for fast web view	Optimalizálás gyors webes megtekintéshez
 	Optimized	Optimalizált
 	Options	Beállítások

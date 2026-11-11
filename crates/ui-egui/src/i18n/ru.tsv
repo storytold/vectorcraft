@@ -2360,6 +2360,8 @@ file-filter	Templates	Шаблоны
 	Open…	Открыть…
 	Optical	Оптический
 	Optical Margin Alignment	Оптическое выравнивание полей
+	Dynamic Text	Динамический текст
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст по контуру в связанном тексте не может использовать динамический текст: {frames}
 	Optimize for fast web view	Оптимизировать для быстрого просмотра в web
 	Optimized	Оптимизировано
 	Options	Параметры
