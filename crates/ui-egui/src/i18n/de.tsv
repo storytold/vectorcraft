@@ -2799,6 +2799,8 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Wiederherstellen
 	Restore every preference to its default (applied on OK)	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen (wird bei OK angewendet)
+	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
 	Restored documents open unsaved: save them to keep them.	Wiederhergestellte Dokumente werden ungespeichert geöffnet: Speichern Sie sie, um sie zu behalten.
 	Restrict printing, editing and other tasks	Drucken, Bearbeiten und andere Aufgaben einschränken

@@ -723,6 +723,13 @@ fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
 
 /// [`fake_app`], answering `ui.dialog.confirm` with the error `refusal` when one is given.
 fn fake_app_refusing_confirm(refusal: Option<&'static str>) -> (String, std::thread::JoinHandle<Vec<Value>>) {
+    fake_app_with(refusal, true)
+}
+
+/// [`fake_app_refusing_confirm`]. With `answers_in_set`, `ui.dialog.set {action}` also confirms or
+/// cancels the dialog and replies `{dialog, result}`, as the app does; without it the set ignores
+/// `action`, as an app that predates it does.
+fn fake_app_with(refusal: Option<&'static str>, answers_in_set: bool) -> (String, std::thread::JoinHandle<Vec<Value>>) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let h = std::thread::spawn(move || {
@@ -738,6 +745,17 @@ fn fake_app_refusing_confirm(refusal: Option<&'static str>) -> (String, std::thr
                 "engine.execute" => json!({"ok": true, "result": {"echo": msg["params"]}}),
                 "ui.inspect" => json!({"ok": true, "result": {"tool": "selection"}}),
                 "ui.dialog.set" if !dialog_open => json!({"ok": false, "error": "no dialog open"}),
+                "ui.dialog.set" if answers_in_set && msg["params"].get("action").is_some() => {
+                    let dialog = json!({"echo": {"fields": msg["params"]["fields"]}});
+                    match msg["params"]["action"].as_str() {
+                        Some("confirm") if refusal.is_some() => json!({"ok": false, "error": refusal}),
+                        Some("confirm") => json!({"ok": true, "result": {"dialog": dialog, "result": {"echo": {}}}}),
+                        _ => {
+                            dialog_open = false;
+                            json!({"ok": true, "result": {"dialog": dialog, "result": null}})
+                        }
+                    }
+                }
                 "ui.dialog.confirm" if refusal.is_some() => json!({"ok": false, "error": refusal}),
                 m if m.starts_with("ui.dialog.") => {
                     dialog_open &= m != "ui.dialog.cancel";
@@ -775,8 +793,10 @@ fn remote_forwards_methods() {
     assert_eq!(seen[1]["params"], json!({"command": "object.group", "params": {}}));
 }
 
+/// Fields and `action` go to the app in one `ui.dialog.set`, so the dialog the fields are set in is
+/// the one confirmed or canceled.
 #[test]
-fn answer_dialog_sets_fields_in_order_then_confirms() {
+fn answer_dialog_sets_fields_in_order_and_confirms_in_one_request() {
     let (addr, h) = fake_app();
     let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
     let set = json!([{"field": "discard", "value": true}, {"field": "note"}]);
@@ -785,7 +805,11 @@ fn answer_dialog_sets_fields_in_order_then_confirms() {
     let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
     let fields = json!([{"field": "discard", "value": true}, {"field": "note", "value": null}]);
     assert_eq!(reply, json!({"dialog": {"echo": {"fields": fields}}, "result": {"echo": {}}}));
-    let r = call(&mut s, 2, "answer_dialog", json!({"action": "cancel"}));
+    let r = call(&mut s, 2, "answer_dialog", json!({"set": set}));
+    assert_eq!(r["isError"], false, "{r}");
+    let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(reply, json!({"dialog": {"echo": {"fields": fields}}, "result": null}));
+    let r = call(&mut s, 3, "answer_dialog", json!({"action": "cancel"}));
     assert_eq!(r["isError"], false, "{r}");
     // Bad arguments are refused before anything reaches the app.
     for (i, args) in [
@@ -807,8 +831,26 @@ fn answer_dialog_sets_fields_in_order_then_confirms() {
     drop(s);
     let seen = h.join().unwrap();
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
-    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm", "ui.dialog.cancel"]);
-    assert_eq!(seen[0]["params"], json!({"fields": fields}));
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.set", "ui.dialog.cancel"]);
+    assert_eq!(seen[0]["params"], json!({"fields": fields, "action": "confirm"}));
+    assert_eq!(seen[1]["params"], json!({"fields": fields}));
+}
+
+/// An app whose `ui.dialog.set` predates `action` replies with the dialog alone; the dialog is
+/// then confirmed with its own `ui.dialog.confirm`.
+#[test]
+fn answer_dialog_confirms_separately_when_the_app_set_did_not_answer() {
+    let (addr, h) = fake_app_with(None, false);
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let set = json!([{"field": "copy", "value": true}]);
+    let r = call(&mut s, 1, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(reply, json!({"dialog": {"echo": {"fields": set, "action": "confirm"}}, "result": {"echo": {}}}));
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm"]);
 }
 
 /// When the app refuses the `ui.dialog.set`, the call is an error and nothing is confirmed.
@@ -826,7 +868,7 @@ fn answer_dialog_does_not_confirm_when_the_app_refuses_the_set() {
     let seen = h.join().unwrap();
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
     assert_eq!(methods, ["ui.dialog.cancel", "ui.dialog.set"], "one set call, refused, and no confirm");
-    assert_eq!(seen[1]["params"], json!({"fields": set}));
+    assert_eq!(seen[1]["params"], json!({"fields": set, "action": "confirm"}));
 }
 
 /// The app refuses to confirm a plug-in's install approval for automation: the call is an error
@@ -843,7 +885,7 @@ fn answer_dialog_reports_that_the_app_refuses_to_approve_a_plugin_install() {
     drop(s);
     let seen = h.join().unwrap();
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
-    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm"]);
+    assert_eq!(methods, ["ui.dialog.set"]);
 }
 
 #[test]

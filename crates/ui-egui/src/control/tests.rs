@@ -254,6 +254,38 @@ fn dialog_set_refuses_a_field_list_over_the_limit() {
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["dx"].clone()), Some(json!(last)), "the whole list is stored, in order");
 }
 
+/// `ui.dialog.set {fields, action}` confirms or cancels the dialog it set the fields in, within the
+/// same request, and replies `{dialog, result}`. A bad `action` or a refused field sets nothing and
+/// leaves the dialog open.
+#[test]
+fn dialog_set_with_an_action_answers_the_same_dialog() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let open = |app: &mut VectorcraftApp| app.ui.dialog = Some(crate::state::Dialog::new("note", json!({"text": "a"})));
+    let text = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.fields["text"].clone());
+    open(&mut app);
+    for params in [
+        json!({"fields": [{"field": "text", "value": "b"}], "action": "ok"}),
+        json!({"fields": [{"field": "text", "value": "b"}], "action": true}),
+        json!({"fields": [{"field": "text", "value": "b"}], "action": null}),
+        json!({"fields": [{"field": "text", "value": "b"}, {"field": "nope", "value": 1}], "action": "confirm"}),
+    ] {
+        let r = input_request(&mut app, "ui.dialog.set", params.clone());
+        assert_eq!(r["ok"], false, "{params}: {r}");
+        assert_eq!(text(&app), Some(json!("a")), "{params}: the dialog stays open as it was");
+    }
+    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": [{"field": "text", "value": "b"}], "action": "confirm"}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["result"], json!({"dialog": {"kind": "note", "fields": {"text": "b"}}, "result": null}));
+    assert!(app.ui.dialog.is_none(), "confirmed in the same request");
+    open(&mut app);
+    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": [{"field": "text", "value": "c"}], "action": "cancel"}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["result"], json!({"dialog": {"kind": "note", "fields": {"text": "c"}}, "result": null}));
+    assert!(app.ui.dialog.is_none(), "canceled in the same request");
+    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": [], "action": "confirm"}));
+    assert_eq!(r["error"], "no dialog open");
+}
+
 /// #1004: `ui.render` (the MCP `screenshot` of a connected app) renders the artboard asked
 /// for, at the scale asked for; the first without one.
 #[test]

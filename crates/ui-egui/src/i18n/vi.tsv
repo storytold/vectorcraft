@@ -3158,6 +3158,8 @@ mark-style	Japanese	Kiểu Nhật
 	Responsive	Đáp ứng
 	Restore	Khôi phục
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
+	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
 	Restored documents open unsaved: save them to keep them.	Tài liệu đã khôi phục mở ở trạng thái chưa lưu: hãy lưu để giữ lại.
 	Restrict printing, editing and other tasks	Hạn chế in, chỉnh sửa và các tác vụ khác

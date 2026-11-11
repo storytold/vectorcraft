@@ -2740,6 +2740,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Responsive	响应式
 	Restore	恢复
 	Restore every preference to its default (applied on OK)	把所有首选项恢复为默认值 (点击确定后应用)
+	Reset all preferences to their defaults?	将所有首选项重置为默认值？
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
 	Restored documents open unsaved: save them to keep them.	恢复的文档处于未存储状态：请存储以保留。
 	Restrict printing, editing and other tasks	限制打印、编辑及其他操作

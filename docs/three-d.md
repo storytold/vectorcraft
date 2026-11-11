@@ -122,7 +122,11 @@ them all. The members stay editable: moving or editing one reshapes the solids. 
 - Each member's own geometry effects shape it first, then those of each group inside the 3D group that holds it,
   applied to that group's members together; the 3D group's geometry effects before the 3D effect reshape the
   members, and those after it bend the result as a whole. The members' other effects, and the group's own fills and
-  strokes, are not drawn. A member's opacity applies to its solids; its blending mode does not.
+  strokes, are not drawn. A member's opacity applies to its solids; its blending mode does not. An opacity mask on
+  a member masks its solids, and one on a group inside the 3D group masks the solids of that group's members
+  together. The mask stays where it is on the page; it does not turn with the solids. A disabled mask is ignored.
+- When a member, or a group inside the 3D group, has an opacity mask, each solid is drawn on its own, the backmost
+  member's first, as when a solid is transparent.
 - When every solid is opaque, all members' faces are drawn in one back-to-front order; otherwise each solid is drawn
   on its own, the backmost member's first.
 - Hidden members and guides are left out. A group holding a live object other than a blend (an envelope, a mesh, a
@@ -277,6 +281,16 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   builds them, against the same 163,840. The point limit is counted on the shape as drawn and, when its contours
   meet, again on the merged outline, which can have more points (bars crossing in a grid trace every hole between
   them); past it, the shape is too complex for the effect.
+- The faces drawn, exported and made by **Object › Expand Appearance** keep the shape's curves: the caps of
+  Extrude & Bevel, the flat face of Rotate, and the edges of the walls and bevels where they meet a cap are cubic
+  curves, with smooth anchors where the art's are smooth, while visibility and depth are worked out on the
+  sampled points. Without perspective and bevel each curve maps exactly. With perspective, a curve is split into
+  cubics until each lies within 0.001 pt of the projected outline. A face inset or outset by a bevel follows its
+  sampled outline within the sampling tolerance above, one curve for each sampled edge through its two sampled
+  points, so the cap and the walls next to it draw the edge they share as the same curves. The edges between two bevel steps or two wall slices, a
+  piece of curve that does not fit after 8 halvings, an edge of a twisted wall cut into pieces, and the curves
+  past 1,048,576 for one solid stay straight. The tolerances and limits are VectorCraft's own values. Inflate's
+  faces are polygons.
 - Inflate also limits the work of filling its grid, which grows with the outline's points times the grid cells its
   outline crosses. An outline of tens of thousands of points that crosses nearly every cell (a comb of 4,000 teeth
   across the shape) is refused because the 3D surface is too complex; a closed path of 65,536 points round a

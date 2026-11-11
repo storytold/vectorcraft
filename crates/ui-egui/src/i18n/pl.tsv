@@ -3983,6 +3983,8 @@ font-technology	Variable	Zmienne
 	Preferences	Preferencje
 	Previous	Wstecz
 	Restore every preference to its default (applied on OK)	Przywróć domyślne wartości wszystkich preferencji (zastosowane po OK)
+	Reset all preferences to their defaults?	Przywrócić domyślne wartości wszystkich preferencji?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Wartości domyślne zostaną zastosowane po kliknięciu OK w Preferencjach. Anuluj w tym oknie zachowuje bieżące preferencje.
 	Smaller ↔ Larger	Mniejszy ↔ większy
 	Smart Guides (View → Smart Guides)	Inteligentne linie pomocnicze (Widok → Inteligentne linie pomocnicze)
 	Couldn't save recovery data: {e}	Nie udało się zapisać danych odzyskiwania: {e}

@@ -4091,6 +4091,8 @@ font-technology	Variable	Varijabilni
 	Preferences	Postavke
 	Previous	Prethodno
 	Restore every preference to its default (applied on OK)	Vrati svaku postavku na zadanu vrijednost (primjenjuje se na U redu)
+	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće
 	Smart Guides (View → Smart Guides)	Pametne vodilice (Prikaz → Pametne vodilice)
 	Couldn't save recovery data: {e}	Nije moguće sačuvati podatke za oporavak: {e}

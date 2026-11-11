@@ -4143,6 +4143,8 @@ font-technology	Variable	Variabilní
 	Preferences	Předvolby
 	Previous	Předchozí
 	Restore every preference to its default (applied on OK)	Obnovit všechny předvolby na výchozí hodnoty (použije se po OK)
+	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší
 	Smart Guides (View → Smart Guides)	Chytrá vodítka (Zobrazení → Chytrá vodítka)
 	Couldn't save recovery data: {e}	Data pro obnovení nelze uložit: {e}

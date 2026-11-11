@@ -375,6 +375,54 @@ fn a_symbol_holding_more_objects_than_the_work_limit_is_refused_before_its_art_i
     assert!(work <= 2, "refused before the symbol's art is placed and listed: {work}");
 }
 
+/// A gradient fill: a path filled with one is drawn in clip groups where it crosses 9-slice guides.
+fn gradient() -> Paint {
+    use vectorcraft_doc::color::{Gradient, GradientPaint};
+    Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())))
+}
+
+/// A document whose symbol "Sliced" has 9-slice guides and holds `count` paths across all of them,
+/// each filled with `fill`, and an Extrude on an instance of it at twice its size.
+fn sliced(count: usize, fill: impl Fn() -> Paint) -> (Document, Node) {
+    let mut d = document();
+    let members = (0..count).map(|i| {
+        Arc::new(Node::path(NodeId(i as u64 + 1), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(fill(), Paint::None, 0.0)))
+    });
+    d.symbols.push(Symbol { dynamic: true, name: "Sliced".into(), art: Arc::new(Node::group(NodeId(0), members.collect())) });
+    d.set_symbol_nine_slice("Sliced", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let n = with(instance(30, "Sliced", Affine::scale(2.0)), EXTRUDE, json!({}));
+    (d, n)
+}
+
+#[test]
+fn a_symbol_whose_9_slice_guides_would_place_too_many_objects_is_refused_before_its_art_is_placed() {
+    // Each gradient path becomes a group of nine clip groups, so the art placed is far past the
+    // limit while the symbol itself holds less than a tenth of it.
+    let (d, n) = sliced(source::MAX_WORK / 20, gradient);
+    assert!(d.symbols[1].art.count_with_masks() < source::MAX_WORK);
+    let err = validate_three_d_in(Some(&d), &n, EXTRUDE, &json!({})).unwrap_err();
+    assert!(err.contains("hold too many objects"), "{err}");
+    let work = source::WORK.with(std::cell::Cell::get);
+    assert!(work <= 2, "refused before the symbol's art is placed and listed: {work}");
+}
+
+#[test]
+fn a_dynamic_symbol_whose_overrides_would_place_too_many_objects_is_refused_before_its_art_is_placed() {
+    // Solid paths are cut at the guides and stay one path each; the instance's overrides fill them
+    // with a gradient, which places each in nine clip groups.
+    let (d, mut n) = sliced(source::MAX_WORK / 20, || Paint::solid(Color::BLACK));
+    n.extras_mut().symbol_overrides = (0..source::MAX_WORK / 20)
+        .map(|i| vectorcraft_doc::SymbolOverride { path: vec![i as u32], fill: Some(gradient()), ..Default::default() })
+        .collect();
+    let err = validate_three_d_in(Some(&d), &n, EXTRUDE, &json!({})).unwrap_err();
+    assert!(err.contains("hold too many objects"), "{err}");
+    let work = source::WORK.with(std::cell::Cell::get);
+    assert!(work <= 2, "refused before the instance's art is placed and listed: {work}");
+    // A few such paths build.
+    let (d, n) = sliced(4, || Paint::solid(Color::BLACK));
+    assert!(solid_art_in(Some(&d), &n).is_some());
+}
+
 #[test]
 fn empty_sources_and_sources_inside_sources_build_or_refuse_cleanly() {
     let mut d = document();
@@ -412,6 +460,67 @@ fn empty_sources_and_sources_inside_sources_build_or_refuse_cleanly() {
     let placed = with(instance(30, "Clipped", Affine::translate((200.0, 0.0))), ROTATE, front());
     let cut = with(Node::group(NodeId(30), vec![Arc::new(rect(31, 200.0, 0.0, 250.0, 100.0, 0.0))]), ROTATE, front());
     assert!(close(bounds(&solid_art_in(Some(&d), &placed).unwrap()), bounds(&solid_art(&cut).unwrap()), 0.01));
+}
+
+/// The id of the art of [`masked_by`]'s opacity masks.
+const MASK_ART: NodeId = NodeId(900);
+
+/// `n` with an opacity mask of white art covering `r`.
+fn masked_by(mut n: Node, r: Rect) -> Node {
+    let art = Node::path(MASK_ART, shapes::rectangle(r), Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
+    n.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+    n
+}
+
+/// The faces (paths) of `art`, and how many of them are inside an object [`masked_by`] masks with
+/// a mask that is not disabled.
+fn masked_faces(art: &Node) -> (usize, usize) {
+    fn walk(n: &Node, masked: bool, out: &mut (usize, usize)) {
+        let masked = masked || n.extras().mask.as_ref().is_some_and(|m| m.art.id == MASK_ART && !m.disabled);
+        match n.children() {
+            Some(children) => children.iter().for_each(|c| walk(c, masked, out)),
+            None => {
+                out.0 += 1;
+                out.1 += usize::from(masked);
+            }
+        }
+    }
+    let mut out = (0, 0);
+    walk(art, false, &mut out);
+    out
+}
+
+#[test]
+fn an_opacity_mask_on_a_member_or_a_group_in_a_three_d_group_masks_its_solids() {
+    let d = document();
+    let mask = Rect::new(0.0, 0.0, 400.0, 400.0);
+    let mut members = vec![("a path", rect(1, 100.0, 100.0, 150.0, 200.0, 2.0))];
+    members.extend(sources());
+    for (what, member) in members {
+        let other = || Arc::new(rect(91, 600.0, 600.0, 650.0, 650.0, 0.0));
+        let in_group = Node::group(NodeId(80), vec![Arc::new(member.clone())]);
+        let cases = [
+            ("masked", Node::group(NodeId(90), vec![Arc::new(masked_by(member.clone(), mask)), other()])),
+            ("in a masked group", Node::group(NodeId(90), vec![Arc::new(masked_by(in_group, mask)), other()])),
+        ];
+        for (how, g) in cases {
+            for id in TYPES {
+                let g = with(g.clone(), id, json!({}));
+                let (faces, masked) = masked_faces(&art(&d, &g, id).expect("drawn"));
+                assert!(masked > 0, "{id}: the faces of {what} {how} are masked");
+                assert!(masked < faces, "{id}: the other member's faces are not ({masked} of {faces})");
+            }
+        }
+        // A disabled mask masks nothing.
+        let mut off = masked_by(member.clone(), mask);
+        if let Some(m) = off.extras_mut().mask.as_mut() {
+            m.disabled = true;
+        }
+        for id in TYPES {
+            let g = with(Node::group(NodeId(90), vec![Arc::new(off.clone()), other()]), id, json!({}));
+            assert_eq!(masked_faces(&art(&d, &g, id).expect("drawn")).1, 0, "{id}: {what} with a disabled mask");
+        }
+    }
 }
 
 #[test]

@@ -2867,6 +2867,8 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивний
 	Restore	Відновити
 	Restore every preference to its default (applied on OK)	Відновити всі параметри за промовчанням (застосовується при натисканні ОК)
+	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
 	Restore Recovered Documents	Відновити відновлені документи
 	Restored documents open unsaved: save them to keep them.	Відновлені документи відкриваються незбереженими: збережіть їх, щоб залишити.
 	Restrict printing, editing and other tasks	Обмежити друк, редагування та інші завдання

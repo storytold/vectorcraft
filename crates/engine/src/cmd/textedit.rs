@@ -12,7 +12,7 @@ use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
 use super::{
     CommandSpec, EngineError, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, has_selection, id_param,
-    index, number_or, point_param, str_param, switch_or, targets,
+    index, number_or, point_param, str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -568,7 +568,8 @@ pub(crate) fn change_font_axes(st: &mut CharStyle, change: &AxisChange) {
 /// `features: ["dlig", "-liga", …]` → the canonical tag list (differences from the defaults).
 pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>> {
     let Some(v) = p.get("features").filter(|v| !v.is_null()) else { return Ok(None) };
-    let tags: Vec<&str> = v.as_array().ok_or_else(|| bad(cmd, "features must be a list of tags"))?.iter().filter_map(Value::as_str).collect();
+    let not_tags = || bad(cmd, "features must be a list of tags");
+    let tags: Vec<&str> = v.as_array().ok_or_else(not_tags)?.iter().map(|t| t.as_str().ok_or_else(not_tags)).collect::<Result<_>>()?;
     if let Some(t) = tags.iter().find(|t| !vectorcraft_text::OtFeatures::known_tag(t)) {
         return Err(bad(
             cmd,
@@ -708,8 +709,8 @@ impl CharChange {
             stroke_opts.weight = Some(w.clamp(0.0, 1000.0));
         }
         let c = Self {
-            font: str_param(p, "font").map(str::to_string),
-            style: str_param(p, "style").map(str::to_string),
+            font: text_param(p, "font", cmd)?.map(str::to_string),
+            style: text_param(p, "style", cmd)?.map(str::to_string),
             size: num("size"),
             leading: auto_or_num(p, "leading", cmd)?,
             tracking: num("tracking"),

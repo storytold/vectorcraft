@@ -101,15 +101,7 @@ pub(super) const DEBRIS: f64 = 1e-6;
 /// under even-odd), or that are all thinner than [`DEBRIS`], fill nothing, so nothing is built.
 /// Each curve takes at most `most` pieces, on the profile as drawn and on the merged outline.
 pub(super) fn solid_rings(path: &PathData, rule: FillRule, size: f64, limit: usize, most: u32) -> Result<Vec<Vec<Point>>, String> {
-    let sampled = sample(path, size, limit, most)?;
-    let closed = closed_straight(path);
-    if !meets(&sampled, &closed) {
-        return orient(sampled, rule);
-    }
-    match vectorcraft_pathops::try_unite_all_with(&[(&closed, rule)], DEBRIS) {
-        Ok(merged) => sample(&merged, size, limit, most).map(wound),
-        Err(_) => orient(sampled, rule),
-    }
+    Ok(solid_rings_traced(path, rule, size, limit, most)?.into_iter().map(|r| r.points).collect())
 }
 
 /// Do the `sampled` rings of `closed` (the profile as the boolean takes it) meet, so that it must
@@ -155,10 +147,10 @@ pub(super) fn closed_straight(path: &PathData) -> std::borrow::Cow<'_, PathData>
 /// The boolean's rings turned so the filled side is on each one's left. Its holes already run
 /// against their outlines, so only the direction of the whole is chosen: the one whose rings
 /// enclose positive area in all.
-pub(super) fn wound(mut rings: Vec<Vec<Point>>) -> Vec<Vec<Point>> {
-    rings.retain(|r| signed_area(r).abs() > 1e-9);
-    if rings.iter().map(|r| signed_area(r)).sum::<f64>() < 0.0 {
-        rings.iter_mut().for_each(|r| r.reverse());
+pub(super) fn wound<R: Turnable>(mut rings: Vec<R>) -> Vec<R> {
+    rings.retain(|r| signed_area(r.points()).abs() > 1e-9);
+    if rings.iter().map(|r| signed_area(r.points())).sum::<f64>() < 0.0 {
+        rings.iter_mut().for_each(Turnable::turn_around);
     }
     rings
 }
@@ -251,6 +243,71 @@ fn segments_meet(a: Point, b: Point, c: Point, d: Point, touch: f64) -> bool {
     dist(a, c, d).min(dist(b, c, d)).min(dist(c, a, b)).min(dist(d, a, b)) <= touch
 }
 
+/// Where one edge of a sampled ring lies on the curve it follows: the piece of `curve` from `t0`
+/// to `t1` (`t1` below `t0` on a ring that runs against its curve).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Span {
+    pub(super) curve: vectorcraft_geom::CubicBez,
+    pub(super) t0: f64,
+    pub(super) t1: f64,
+}
+
+/// A sampled ring with, for each edge (point `i` to point `i + 1`, the last back to the first),
+/// the piece of curve it follows, or `None` for a straight edge.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Ring {
+    pub(super) points: Vec<Point>,
+    pub(super) spans: Vec<Option<Span>>,
+}
+
+/// A ring that [`orient`] and [`wound`] can turn around.
+pub(super) trait Turnable {
+    fn points(&self) -> &[Point];
+    fn turn_around(&mut self);
+}
+
+impl Turnable for Vec<Point> {
+    fn points(&self) -> &[Point] {
+        self
+    }
+    fn turn_around(&mut self) {
+        self.reverse();
+    }
+}
+
+impl Turnable for Ring {
+    fn points(&self) -> &[Point] {
+        &self.points
+    }
+    fn turn_around(&mut self) {
+        // The ring keeps its first point, an anchor of the art, so that a run of edges along one
+        // curve doesn't start part way along it. Edge `j` of the turned ring is edge `n - 1 - j`
+        // of the ring, run the other way.
+        self.points.reverse();
+        if !self.points.is_empty() {
+            self.points.rotate_right(1);
+        }
+        self.spans.reverse();
+        for s in self.spans.iter_mut().flatten() {
+            std::mem::swap(&mut s.t0, &mut s.t1);
+        }
+    }
+}
+
+/// [`solid_rings`] with the piece of curve each edge follows.
+pub(super) fn solid_rings_traced(path: &PathData, rule: FillRule, size: f64, limit: usize, most: u32) -> Result<Vec<Ring>, String> {
+    let sampled = sample_traced(path, size, limit, most)?;
+    let closed = closed_straight(path);
+    let points: Vec<Vec<Point>> = sampled.iter().map(|r| r.points.clone()).collect();
+    if !meets(&points, &closed) {
+        return orient(sampled, rule);
+    }
+    match vectorcraft_pathops::try_unite_all_with(&[(&closed, rule)], DEBRIS) {
+        Ok(merged) => sample_traced(&merged, size, limit, most).map(wound),
+        Err(_) => orient(sampled, rule),
+    }
+}
+
 /// The rings of a shape: closed polygons with the filled side on their left, (-dy, dx): outer
 /// outlines run one way and holes the other, so nonzero winding fills them as the art is. Curves
 /// are followed within a tolerance of 1/2000 of `size` (at least 0.05 pt), so small curves take
@@ -266,6 +323,11 @@ pub(super) fn rings(path: &PathData, rule: FillRule, size: f64, limit: usize) ->
 /// The closed polygons that follow `path`'s subpaths, as [`rings`] samples them, each running as
 /// its subpath does, each curve in at most `most` pieces.
 pub(super) fn sample(path: &PathData, size: f64, limit: usize, most: u32) -> Result<Vec<Vec<Point>>, String> {
+    Ok(sample_traced(path, size, limit, most)?.into_iter().map(|r| r.points).collect())
+}
+
+/// [`sample`] with the piece of curve each edge follows.
+fn sample_traced(path: &PathData, size: f64, limit: usize, most: u32) -> Result<Vec<Ring>, String> {
     let tolerance = (size / 2000.0).max(0.05);
     let mut count = 0;
     let mut out = vec![];
@@ -275,34 +337,44 @@ pub(super) fn sample(path: &PathData, size: f64, limit: usize, most: u32) -> Res
         if segments > limit {
             return Err(TOO_COMPLEX_SHAPE.into());
         }
-        let mut ring: Vec<Point> = vec![];
+        // Each point with the piece of curve of the edge that ends at it.
+        let mut ring: Vec<(Point, Option<Span>)> = vec![];
         if let Some(first) = sp.anchors.first() {
-            ring.push(first.p);
+            ring.push((first.p, None));
         }
         for i in 0..segments {
             let curve = sp.segment(i);
-            let samples = if sp.segment_is_line(i) { 1 } else { pieces(curve, tolerance).min(most.max(1)) };
+            let line = sp.segment_is_line(i);
+            let samples = if line { 1 } else { pieces(curve, tolerance).min(most.max(1)) };
             count += samples as usize;
             if count > limit {
                 return Err(TOO_COMPLEX_SHAPE.into());
             }
             for k in 1..=samples {
-                ring.push(curve.eval(f64::from(k) / f64::from(samples)));
+                let (t0, t1) = (f64::from(k - 1) / f64::from(samples), f64::from(k) / f64::from(samples));
+                ring.push((curve.eval(t1), (!line).then_some(Span { curve, t0, t1 })));
             }
         }
-        if ring.iter().any(|p| !p.x.is_finite() || !p.y.is_finite() || p.x.abs() > 1e8 || p.y.abs() > 1e8) {
+        if ring.iter().any(|(p, _)| !p.x.is_finite() || !p.y.is_finite() || p.x.abs() > 1e8 || p.y.abs() > 1e8) {
             return Err("The shape contains invalid coordinates".into());
         }
-        ring.dedup_by(|a, b| a.distance(*b) < 1e-9);
-        while ring.len() > 1 && ring.first().zip(ring.last()).is_some_and(|(a, b)| a.distance(*b) < 1e-9) {
-            ring.pop();
+        ring.dedup_by(|a, b| a.0.distance(b.0) < 1e-9);
+        // The last point back on the first closes the ring along the edge that ends at it.
+        while ring.len() > 1 && ring.first().zip(ring.last()).is_some_and(|(a, b)| a.0.distance(b.0) < 1e-9) {
+            let closing = ring.pop().and_then(|(_, s)| s);
+            if let Some(first) = ring.first_mut() {
+                first.1 = closing;
+            }
         }
+        let points: Vec<Point> = ring.iter().map(|(p, _)| *p).collect();
         // Rings with no area are kept here: a contour that crosses itself into lobes that cancel
         // (a bowtie) has none, and [`edges_meet`] must see it. [`orient`] leaves them out. A flat
         // ring, every point on one line, fills nothing under either rule and is left out now, so
         // that it doesn't send the profile through the boolean.
-        if ring.len() >= 3 && !flat(&ring) {
-            out.push(ring);
+        if points.len() >= 3 && !flat(&points) {
+            let n = points.len();
+            let spans = (0..n).map(|i| ring.get((i + 1) % n).and_then(|(_, s)| *s)).collect();
+            out.push(Ring { points, spans });
         }
     }
     Ok(out)
@@ -310,15 +382,15 @@ pub(super) fn sample(path: &PathData, size: f64, limit: usize, most: u32) -> Res
 
 /// `out` (sampled rings) turned so the filled side is on each one's left, and under the nonzero
 /// `rule` without the rings that are no edge of the shape, as [`rings`] describes.
-fn orient(mut out: Vec<Vec<Point>>, rule: FillRule) -> Result<Vec<Vec<Point>>, String> {
-    out.retain(|r| signed_area(r).abs() > 1e-9);
+fn orient<R: Turnable>(mut out: Vec<R>, rule: FillRule) -> Result<Vec<R>, String> {
+    out.retain(|r| signed_area(r.points()).abs() > 1e-9);
     // Which rings hold which: each ring against the others, its edges walked only where its
     // bounds hold the point, and within [`MAX_CONTAINMENT_EDGES`] edges and pairs in all (a pair
     // whose bounds miss the point costs a step too: many small rings are a square of pairs).
     let too_complex = || String::from(TOO_COMPLEX_SHAPE);
     let mut work = 0usize;
-    let mut within = |out: &[Vec<Point>], bounds: &[Rect], i: usize| -> Result<Vec<usize>, String> {
-        let p = out.get(i).and_then(|r| r.first()).copied().unwrap_or_default();
+    let mut within = |out: &[R], bounds: &[Rect], i: usize| -> Result<Vec<usize>, String> {
+        let p = out.get(i).and_then(|r| r.points().first()).copied().unwrap_or_default();
         let mut held_by = vec![];
         for (j, (o, b)) in out.iter().zip(bounds).enumerate() {
             work = work.saturating_add(1);
@@ -328,18 +400,18 @@ fn orient(mut out: Vec<Vec<Point>>, rule: FillRule) -> Result<Vec<Vec<Point>>, S
                 }
                 continue;
             }
-            work = work.saturating_add(o.len());
+            work = work.saturating_add(o.points().len());
             if work > MAX_CONTAINMENT_EDGES {
                 return Err(too_complex());
             }
-            if contains(o, p) {
+            if contains(o.points(), p) {
                 held_by.push(j);
             }
         }
         Ok(held_by)
     };
-    let bounds_of = |out: &[Vec<Point>]| -> Vec<Rect> {
-        out.iter().map(|r| r.iter().map(|q| Rect::from_points(*q, *q)).reduce(|a, b| a.union(b)).unwrap_or_default()).collect()
+    let bounds_of = |out: &[R]| -> Vec<Rect> {
+        out.iter().map(|r| r.points().iter().map(|q| Rect::from_points(*q, *q)).reduce(|a, b| a.union(b)).unwrap_or_default()).collect()
     };
     if rule == FillRule::NonZero {
         let turn = |r: &[Point]| if signed_area(r) > 0.0 { 1 } else { -1 };
@@ -347,8 +419,8 @@ fn orient(mut out: Vec<Vec<Point>>, rule: FillRule) -> Result<Vec<Vec<Point>>, S
         let mut edge = Vec::with_capacity(out.len());
         for (i, r) in out.iter().enumerate() {
             // The winding number just outside the ring, and just inside it.
-            let outside: i32 = within(&out, &bounds, i)?.into_iter().filter_map(|j| out.get(j)).map(|o| turn(o)).sum();
-            edge.push((outside != 0) != (outside + turn(r) != 0));
+            let outside: i32 = within(&out, &bounds, i)?.into_iter().filter_map(|j| out.get(j)).map(|o| turn(o.points())).sum();
+            edge.push((outside != 0) != (outside + turn(r.points()) != 0));
         }
         let mut edge = edge.into_iter();
         out.retain(|_| edge.next().unwrap_or(true));
@@ -357,8 +429,8 @@ fn orient(mut out: Vec<Vec<Point>>, rule: FillRule) -> Result<Vec<Vec<Point>>, S
     let bounds = bounds_of(&out);
     let holes: Vec<bool> = (0..out.len()).map(|i| within(&out, &bounds, i).map(|held| held.len() % 2 == 1)).collect::<Result<_, _>>()?;
     for (r, hole) in out.iter_mut().zip(holes) {
-        if (signed_area(r) > 0.0) == hole {
-            r.reverse();
+        if (signed_area(r.points()) > 0.0) == hole {
+            r.turn_around();
         }
     }
     Ok(out)

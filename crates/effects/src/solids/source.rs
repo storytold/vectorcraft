@@ -129,16 +129,23 @@ impl Resolver<'_> {
         }
         self.spend(1)?;
         match &n.kind {
-            NodeKind::SymbolInstance { symbol, .. } => {
-                // Counted before the art is placed, so a symbol past the limit is never copied.
-                let held = self.doc.and_then(|d| d.symbols.iter().find(|s| s.name == *symbol)).map_or(0, |s| s.art.count_with_masks());
-                if self.work.saturating_add(held) > MAX_WORK {
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let missing = || format!("{label} can't build a solid from the instance of symbol \"{symbol}\": the symbol's art isn't available");
+                let doc = self.doc.ok_or_else(missing)?;
+                let sym = doc.symbols.iter().find(|s| s.name == *symbol).ok_or_else(missing)?;
+                // Counted before the art is placed, so a symbol past the limit is never copied:
+                // first its own objects, which the instance's overrides keep, then the most
+                // objects placing makes, with those overrides and the symbol's 9-slice guides.
+                if self.work.saturating_add(sym.art.count_with_masks()) > MAX_WORK {
                     return Err(self.too_much_work());
                 }
-                let art = crate::outline_object(self.doc, n).ok_or_else(|| {
-                    format!("{label} can't build a solid from the instance of symbol \"{symbol}\": the symbol's art isn't available")
-                })?;
-                Ok(self.list(kids(&art), depth + 1)?.0)
+                let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                let most = doc.symbol_slice_map(symbol, *xf).map_or(art.count_with_masks() as u64, |m| m.most_placed(&art, doc));
+                if (self.work as u64).saturating_add(most) > MAX_WORK as u64 {
+                    return Err(self.too_much_work());
+                }
+                let placed = doc.place_symbol_art(symbol, &art, *xf).ok_or_else(missing)?;
+                Ok(self.list(&[Arc::new(placed)], depth + 1)?.0)
             }
             NodeKind::Blend { children, spec } => {
                 // Counted before the steps are made, so a blend past the limit is never expanded.
@@ -343,25 +350,22 @@ fn clip_area(first: &Node) -> (PathData, FillRule) {
 }
 
 /// `pieces`, each with the [`Scope`]s of the groups it was in, back in groups of `n`'s id with
-/// those groups' opacity and blending mode: consecutive pieces sharing the scope at `level` go into
-/// one group, so its transparency applies to them together. `level` stays below the nesting the
-/// pieces came from ([`nested_past`]).
+/// those groups' opacity, blending mode and opacity mask: consecutive pieces sharing the scope at
+/// `level` go into one group, so its transparency applies to them together. `level` stays below the
+/// nesting the pieces came from ([`nested_past`]).
 fn nest(n: &Node, pieces: Vec<(Vec<Scope>, Node)>, level: usize) -> Vec<Arc<Node>> {
     let mut out = vec![];
     let mut run: Vec<(Vec<Scope>, Node)> = vec![];
-    let mut key = None;
+    let mut key: Option<Scope> = None;
     let close = |run: &mut Vec<(Vec<Scope>, Node)>, scope: Option<Scope>, out: &mut Vec<Arc<Node>>| {
         let Some(scope) = scope else { return };
-        let mut g = Node::group(n.id, nest(n, std::mem::take(run), level + 1));
-        g.opacity = scope.opacity;
-        g.blend = scope.blend;
-        out.push(Arc::new(g));
+        out.push(Arc::new(scope.group(n.id, nest(n, std::mem::take(run), level + 1))));
     };
     for (scopes, piece) in pieces {
-        let here = scopes.get(level).copied();
-        if here.map(|s| s.key) != key.map(|s: Scope| s.key) {
-            close(&mut run, key, &mut out);
-            key = here;
+        let here = scopes.get(level).cloned();
+        if here.as_ref().map(|s| s.key) != key.as_ref().map(|s| s.key) {
+            close(&mut run, key.take(), &mut out);
+            key = here.clone();
         }
         match here {
             Some(_) => run.push((scopes, piece)),
@@ -430,12 +434,15 @@ fn shape(n: &Node, path: PathData, rule: FillRule, items: Vec<AppearanceItem>) -
     piece
 }
 
-/// A plain group of `children` with `n`'s id, visibility, opacity and blending mode.
+/// A plain group of `children` with `n`'s id, visibility, opacity, blending mode and opacity mask.
 fn wrap(n: &Node, children: Vec<Arc<Node>>) -> Node {
     let mut g = Node::group(n.id, children);
     g.name = n.name.clone();
     g.opacity = n.opacity;
     g.blend = n.blend;
+    if let Some(mask) = &n.extras().mask {
+        g.extras_mut().mask = Some(mask.clone());
+    }
     g
 }
 

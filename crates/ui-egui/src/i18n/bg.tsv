@@ -2766,6 +2766,8 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивен
 	Restore	Възстановяване
 	Restore every preference to its default (applied on OK)	Възстановяване на всички настройки по подразбиране (прилага се при ОПК)
+	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Стойностите по подразбиране се прилагат, когато щракнете върху ОК в Настройки. Отказ там запазва текущите ви настройки.
 	Restore Recovered Documents	Възстановяване на възстановените документи
 	Restored documents open unsaved: save them to keep them.	Възстановените документи се отварят незаписани: запазете ги, за да ги съхраните.
 	Restrict printing, editing and other tasks	Ограничаване на печата, редактирането и други задачи

@@ -307,7 +307,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "answer_dialog",
             "Answer dialog",
-            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none. When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"discard\",value:true}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
+            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none and answers that same dialog in the same request (ui.dialog.set with action). When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"discard\",value:true}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
             obj(
                 json!({
                     "set": {
@@ -316,7 +316,7 @@ pub fn tool_definitions() -> Vec<Value> {
                         "items": obj(json!({"field": string("Dialog field"), "value": {"description": "The field's new value (any JSON; default null)"}}), &["field"]),
                         "description": "Fields to set, in order (one ui.dialog.set that sets all of them or none)",
                     },
-                    "action": {"type": "string", "enum": ["confirm", "cancel"], "description": "Then confirm (OK) or cancel the dialog"},
+                    "action": {"type": "string", "enum": ["confirm", "cancel"], "description": "Then confirm (OK) or cancel the dialog the fields were set in"},
                 }),
                 &[],
             ),
