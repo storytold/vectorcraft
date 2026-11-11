@@ -595,6 +595,12 @@ not store a series' paint. An `appearance.*` command or `graphicStyle.apply` giv
 `graphicStyle.redefine` on a series group linked to the style, edit the group's own rows, and the graph does not store
 them.
 
+`text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
+it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
+kind takes them when the graph is drawn again. The graph saves the paragraph attributes as `valuesPara`,
+`categoriesPara` and `legendPara` in its label styles, and still sets each label's alignment for its place. The legend
+leaves room for a legend label's stored indents, spacing and leading.
+
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
 those outlines. On paths, compound paths and images it does not change what is drawn.
@@ -6912,6 +6918,9 @@ With Preferences › General › Anti-aliased Artwork off, the canvas draws all 
 so does an export whose own Anti-aliasing option is None. SVG, PDF and EPS export draw the type unchanged. The native
 document such a file carries (an EPS VectorCraft wrote, or an SVG or PDF saved with Preserve Editing) keeps each frame's
 method, and opening the file restores it.
+A graph label given a method keeps it for every label of its kind (value axis numbers, category labels or legend
+labels) when the graph is drawn again; the graph saves it as `valuesAntiAlias`, `categoriesAntiAlias` or
+`legendAntiAlias` in its label styles.
 Reset Panel sets Sharp. Saved as `antiAlias` only when not `sharp`. One undo step.
 
 ```json
