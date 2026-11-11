@@ -506,7 +506,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     // document keeps its text as saved), and every frame of a thread takes its first frame's
     // Optical Margin Alignment setting and writing direction. When that changes the direction of a
     // frame of a restored document, the story flows through that frame's thread again. Threaded
-    // frames keep their size: Auto Size is off for them.
+    // frames keep their size: Auto Size is off for them. The story is laid out in the document's
+    // own composite fonts.
+    let fonts = if doc.text_threads.is_empty() { Default::default() } else { doc.composite_fonts.clone() };
+    let lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&fonts);
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
     } else if !doc.text_threads.is_empty() {
@@ -517,6 +520,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         // paragraph's first-line indent and list marker.
         crate::cmd::threads::mark_continued(&mut doc);
     }
+    drop(lent);
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
