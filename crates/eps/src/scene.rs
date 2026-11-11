@@ -44,6 +44,7 @@ const SPOT_GRADIENTS_SHARED: &str = "gradients whose spot inks can't share a Dev
 const SPOT_GRADIENTS_PERCEPTUAL: &str = "Perceptual gradients of spot colors are written in process colors";
 /// The most colorants a DeviceN color space may have (PostScript's limit).
 const MAX_DEVICE_N: usize = 32;
+const EXPANSION_LEFT_OUT: &str = "symbols and patterns hold too many objects for EPS: the instances past that were left out";
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
 const TOO_LARGE: &str = "the artwork is too large for EPS: what follows 256 MB of PostScript was left out";
 /// The most PostScript the page body may grow to: symbols and patterns that hold one another
@@ -155,6 +156,8 @@ pub(crate) struct Scene<'a> {
     colorized_images: HashMap<(String, String), Option<Arc<String>>>,
     /// Symbols and brush art being written inside one another.
     nest: u32,
+    /// The objects of the symbol and pattern art expanded so far, within [`vectorcraft_doc::MAX_SYMBOL_NODES`].
+    expanded: u64,
 }
 
 impl<'a> Scene<'a> {
@@ -174,6 +177,8 @@ impl<'a> Scene<'a> {
             images: HashMap::new(),
             colorized_images: HashMap::new(),
             nest: 0,
+            // A test starts with most of it spent, so the limit is met without walking millions of objects.
+            expanded: if cfg!(test) { vectorcraft_doc::MAX_SYMBOL_NODES - 1_000_000 } else { 0 },
         }
     }
 
@@ -370,11 +375,29 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
                 {
-                    self.nest += 1;
-                    self.node(&art, true);
-                    self.nest -= 1;
+                    // Symbols holding instances of symbols are written in full for each instance, empty
+                    // or not: every instance's art counts against one budget for the export.
+                    let doc = self.doc;
+                    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                    let most = art.count_with_masks() as u64;
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.expanded, most, || {
+                        let placed = doc.place_symbol_art(symbol, &art, *xf);
+                        let count = placed.as_ref().map_or(0, |a| a.count_with_masks() as u64);
+                        (placed, count)
+                    });
+                    match placed {
+                        Some(Some(art)) => {
+                            self.nest += 1;
+                            self.node(&art, true);
+                            self.nest -= 1;
+                        }
+                        Some(None) => {}
+                        None => {
+                            self.expanded = vectorcraft_doc::MAX_SYMBOL_NODES;
+                            self.warn(EXPANSION_LEFT_OUT);
+                        }
+                    }
                 }
             }
             // Live blends, envelopes, meshes and repeats are written as their evaluated art.
@@ -488,8 +511,19 @@ impl<'a> Scene<'a> {
             Paint::Gradient(g) => self.gradient(g, bounds, area),
             Paint::Pattern { pattern, xf } => match doc.pattern(pattern) {
                 Some(def) => {
-                    for inst in def.instances_in(*xf, area) {
-                        self.node(&inst, true);
+                    // Over what the budget has left, no tile is built.
+                    let left = usize::try_from(vectorcraft_doc::MAX_SYMBOL_NODES.saturating_sub(self.expanded)).unwrap_or(usize::MAX);
+                    let expanded = &mut self.expanded;
+                    let tiles = def.instances_in_at_most(*xf, area, false, left).filter(|tiles| {
+                        let count = tiles.iter().map(|t| t.count_with_masks() as u64).sum();
+                        vectorcraft_doc::charge_symbol_art(expanded, count, || ((), count)).is_some()
+                    });
+                    match tiles {
+                        Some(tiles) => tiles.iter().for_each(|inst| self.node(inst, true)),
+                        None => {
+                            self.expanded = vectorcraft_doc::MAX_SYMBOL_NODES;
+                            self.warn(EXPANSION_LEFT_OUT);
+                        }
                     }
                 }
                 None => {

@@ -336,11 +336,21 @@ impl PatternDef {
     /// [`Self::instances_in`], each instance placed with `scaling` (what scales with `paint_xf`
     /// besides geometry).
     pub fn instances_in_with(&self, paint_xf: Affine, region: Rect, scaling: impl Into<crate::node::Scaling>) -> Vec<Node> {
+        self.instances_in_at_most(paint_xf, region, scaling, usize::MAX).unwrap_or_default()
+    }
+    /// [`Self::instances_in_with`], but `None` without copying any art when the instances would be
+    /// more than `max` nodes (the art's top-level nodes times the positions): a caller with a budget
+    /// left learns it before the copies exist.
+    pub fn instances_in_at_most(&self, paint_xf: Affine, region: Rect, scaling: impl Into<crate::node::Scaling>, max: usize) -> Option<Vec<Node>> {
         let scaling = scaling.into();
         let inv = paint_xf.inverse();
         let pr = inv.transform_rect_bbox(region);
+        let offsets = self.offsets_covering(pr);
+        if offsets.len().saturating_mul(self.art.len()) > max {
+            return None;
+        }
         let mut out = vec![];
-        for o in self.offsets_covering(pr) {
+        for o in offsets {
             let m = paint_xf * self.instance_xf(o);
             for a in &self.art {
                 let mut n = (**a).clone();
@@ -349,7 +359,7 @@ impl PatternDef {
                 out.push(n);
             }
         }
-        out
+        Some(out)
     }
 }
 

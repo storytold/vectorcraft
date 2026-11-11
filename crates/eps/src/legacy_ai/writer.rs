@@ -10,6 +10,8 @@ use super::{
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
 
+const EXPANSION_LEFT_OUT: &str = "symbols and patterns hold too many objects for Illustrator 3: the instances past that were left out";
+
 pub(super) struct Writer<'a> {
     doc: &'a Document,
     /// The document → art space.
@@ -27,6 +29,8 @@ pub(super) struct Writer<'a> {
     locked: bool,
     /// Symbols and live objects being written inside one another.
     nest: u32,
+    /// The objects of the symbol and pattern art expanded so far, within [`vectorcraft_doc::MAX_SYMBOL_NODES`].
+    expanded: u64,
     /// What to do with hidden objects.
     hidden: HiddenObjects,
     /// Type as outlines.
@@ -53,6 +57,7 @@ impl<'a> Writer<'a> {
             warnings: vec![],
             locked: false,
             nest: 0,
+            expanded: if cfg!(test) { vectorcraft_doc::MAX_SYMBOL_NODES - 1_000_000 } else { 0 },
             hidden: o.hidden,
             outline_text: o.outline_text,
             hidden_art: vec![],
@@ -268,12 +273,28 @@ impl<'a> Writer<'a> {
                 self.warn(LIVE);
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(mut art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
                 {
-                    art.visible = true;
-                    self.nest += 1;
-                    self.node(&art, locked);
-                    self.nest -= 1;
+                    let doc = self.doc;
+                    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                    let most = art.count_with_masks() as u64;
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.expanded, most, || {
+                        let placed = doc.place_symbol_art(symbol, &art, *xf);
+                        let count = placed.as_ref().map_or(0, |a| a.count_with_masks() as u64);
+                        (placed, count)
+                    });
+                    match placed {
+                        Some(Some(mut art)) => {
+                            art.visible = true;
+                            self.nest += 1;
+                            self.node(&art, locked);
+                            self.nest -= 1;
+                        }
+                        Some(None) => {}
+                        None => {
+                            self.expanded = vectorcraft_doc::MAX_SYMBOL_NODES;
+                            self.warn(EXPANSION_LEFT_OUT);
+                        }
+                    }
                 }
             }
             NodeKind::Blend { .. }
@@ -432,7 +453,17 @@ impl<'a> Writer<'a> {
             return self.path_object(path, rule, Some(&flat), None);
         };
         let area = path.to_bezpath().bounding_box();
-        let tiles = def.instances_in(*xf, area);
+        // Over what the budget has left, no tile is built.
+        let left = usize::try_from(vectorcraft_doc::MAX_SYMBOL_NODES.saturating_sub(self.expanded)).unwrap_or(usize::MAX);
+        let expanded = &mut self.expanded;
+        let Some(tiles) = def.instances_in_at_most(*xf, area, false, left).filter(|tiles| {
+            let count = tiles.iter().map(|t| t.count_with_masks() as u64).sum();
+            vectorcraft_doc::charge_symbol_art(expanded, count, || ((), count)).is_some()
+        }) else {
+            self.expanded = vectorcraft_doc::MAX_SYMBOL_NODES;
+            self.warn(EXPANSION_LEFT_OUT);
+            return;
+        };
         self.line("q");
         self.fill_rule(rule);
         let several = path.subpaths.len() > 1;

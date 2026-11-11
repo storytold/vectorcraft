@@ -1084,3 +1084,24 @@ fn ruby_is_written_with_its_type() {
     };
     assert_eq!(moves(true), moves(false) + reading, "the reading's contours are written");
 }
+
+/// Symbols that hold many instances of the next symbol expand into every instance: past the budget
+/// of objects the instances are left out with a warning, in the EPS and the Illustrator 3 writers,
+/// instead of cloning and walking billions of objects.
+#[test]
+fn symbols_holding_many_instances_of_symbols_stop_at_the_budget() {
+    let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S0".into(), xf: Affine::IDENTITY })]);
+    let leaf = path(&mut d, shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S5".into(), art: Arc::new(leaf) });
+    for level in (0..5).rev() {
+        let next = format!("S{}", level + 1);
+        let kids: Vec<Arc<Node>> =
+            (0..40).map(|_| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: next.clone(), xf: Affine::IDENTITY }))).collect();
+        let art = Node::new(d.alloc_id(), NodeKind::Group { children: kids, clip: false });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("S{level}"), art: Arc::new(art) });
+    }
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    assert!(out.warnings.iter().any(|w| w.contains("too many objects")), "{:?}", out.warnings);
+    let out = export_legacy_ai(&d, &LegacyAiOptions::default()).unwrap();
+    assert!(out.warnings.iter().any(|w| w.contains("too many objects")), "{:?}", out.warnings);
+}
