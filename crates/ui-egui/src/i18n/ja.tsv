@@ -5395,6 +5395,7 @@ lighting	Light	ライト
 @msg	Invalid drawing scale	図面の縮尺が無効です
 @msg	Invalid real scale	実寸の縮尺が無効です
 @msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
+@msg	Invalid measured point	測定した点が無効です
 @msg	Measured segment no longer exists	測定したセグメントはもう存在しません
 @msg	Non-finite dimension	寸法が有限ではありません
 @msg	Only linear dimensions are horizontal or vertical	水平または垂直にできるのは直線寸法のみです

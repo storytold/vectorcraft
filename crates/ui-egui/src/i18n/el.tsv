@@ -5695,6 +5695,7 @@ effect	Points	Σημεία
 @msg	Invalid drawing scale	Μη έγκυρη κλίμακα σχεδίου
 @msg	Invalid real scale	Μη έγκυρη πραγματική κλίμακα
 @msg	Measured anchor no longer exists	Το μετρημένο σημείο αγκύρωσης δεν υπάρχει πλέον
+@msg	Invalid measured point	Μη έγκυρο μετρημένο σημείο
 @msg	Measured segment no longer exists	Το μετρημένο τμήμα δεν υπάρχει πλέον
 @msg	Non-finite dimension	Η διάσταση δεν είναι πεπερασμένος αριθμός
 @msg	Only linear dimensions are horizontal or vertical	Μόνο οι γραμμικές διαστάσεις είναι οριζόντιες ή κατακόρυφες

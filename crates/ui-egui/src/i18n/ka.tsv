@@ -5346,6 +5346,7 @@ imageTrace	Outline	კონტური
 @msg	Invalid drawing scale	ნახაზის არასწორი მასშტაბი
 @msg	Invalid real scale	რეალური ზომის არასწორი მასშტაბი
 @msg	Measured anchor no longer exists	გაზომილი საყრდენი წერტილი აღარ არსებობს
+@msg	Invalid measured point	გაზომილი წერტილი არასწორია
 @msg	Measured segment no longer exists	გაზომილი სეგმენტი აღარ არსებობს
 @msg	Non-finite dimension	ზომა სასრული რიცხვი არ არის
 @msg	Only linear dimensions are horizontal or vertical	მხოლოდ ხაზოვანი ზომებია ჰორიზონტალური ან ვერტიკალური

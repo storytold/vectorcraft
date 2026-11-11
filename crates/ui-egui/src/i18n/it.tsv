@@ -5352,6 +5352,7 @@ lighting	Light	Luce
 @msg	Invalid drawing scale	Scala del disegno non valida
 @msg	Invalid real scale	Scala reale non valida
 @msg	Measured anchor no longer exists	Il punto di ancoraggio misurato non esiste più
+@msg	Invalid measured point	Punto misurato non valido
 @msg	Measured segment no longer exists	Il segmento misurato non esiste più
 @msg	Non-finite dimension	Quota non finita
 @msg	Only linear dimensions are horizontal or vertical	Solo le quote lineari sono orizzontali o verticali

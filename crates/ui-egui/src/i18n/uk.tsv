@@ -5332,6 +5332,7 @@ lighting	Light	Світло
 @msg	Invalid drawing scale	Неприпустимий масштаб креслення
 @msg	Invalid real scale	Неприпустимий реальний масштаб
 @msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
+@msg	Invalid measured point	Недійсна виміряна точка
 @msg	Measured segment no longer exists	Виміряний сегмент більше не існує
 @msg	Non-finite dimension	Розмір не є скінченним числом
 @msg	Only linear dimensions are horizontal or vertical	Лише лінійні розміри бувають горизонтальними або вертикальними

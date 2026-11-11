@@ -2609,6 +2609,7 @@ file-filter	Templates	範本
 @msg	Invalid drawing scale	圖紙比例無效
 @msg	Invalid real scale	實際比例無效
 @msg	Measured anchor no longer exists	測量的錨點已不存在
+@msg	Invalid measured point	測量點無效
 @msg	Measured segment no longer exists	測量的線段已不存在
 @msg	Non-finite dimension	尺寸標註不是有限值
 @msg	Only linear dimensions are horizontal or vertical	只有線性尺寸可以是水平或垂直的

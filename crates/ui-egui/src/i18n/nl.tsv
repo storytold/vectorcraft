@@ -5341,6 +5341,7 @@ mark-style	Japanese	Japans
 @msg	Invalid drawing scale	Ongeldige tekeningsschaal
 @msg	Invalid real scale	Ongeldige werkelijke schaal
 @msg	Measured anchor no longer exists	Gemeten ankerpunt bestaat niet meer
+@msg	Invalid measured point	Ongeldig gemeten punt
 @msg	Measured segment no longer exists	Gemeten segment bestaat niet meer
 @msg	Non-finite dimension	Niet-eindige maatlijn
 @msg	Only linear dimensions are horizontal or vertical	Alleen lineaire maatlijnen zijn horizontaal of verticaal

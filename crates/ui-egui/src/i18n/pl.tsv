@@ -5592,6 +5592,7 @@ mark-style	Japanese	Japońskie
 @msg	Invalid drawing scale	Nieprawidłowa skala rysunku
 @msg	Invalid real scale	Nieprawidłowa skala rzeczywista
 @msg	Measured anchor no longer exists	Mierzony punkt kontrolny już nie istnieje
+@msg	Invalid measured point	Nieprawidłowy mierzony punkt
 @msg	Measured segment no longer exists	Mierzony odcinek już nie istnieje
 @msg	Non-finite dimension	Wymiar nie jest liczbą skończoną
 @msg	Only linear dimensions are horizontal or vertical	Tylko wymiary liniowe są poziome lub pionowe

@@ -5681,6 +5681,7 @@ mark-style	Japanese	Japonesas
 @msg	Invalid drawing scale	Escala de dibujo no válida
 @msg	Invalid real scale	Escala real no válida
 @msg	Measured anchor no longer exists	El punto de ancla medido ya no existe
+@msg	Invalid measured point	Punto medido no válido
 @msg	Measured segment no longer exists	El segmento medido ya no existe
 @msg	Non-finite dimension	Cota no finita
 @msg	Only linear dimensions are horizontal or vertical	Solo las cotas lineales son horizontales o verticales

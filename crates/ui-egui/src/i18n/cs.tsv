@@ -5740,6 +5740,7 @@ mark-style	Japanese	Japonské
 @msg	Invalid drawing scale	Neplatné měřítko výkresu
 @msg	Invalid real scale	Neplatné skutečné měřítko
 @msg	Measured anchor no longer exists	Měřený kotevní bod už neexistuje
+@msg	Invalid measured point	Neplatný měřený bod
 @msg	Measured segment no longer exists	Měřený segment už neexistuje
 @msg	Non-finite dimension	Kóta není konečné číslo
 @msg	Only linear dimensions are horizontal or vertical	Vodorovné nebo svislé jsou jen lineární kóty
