@@ -5751,7 +5751,11 @@ whose drawn characters use a pattern included, hidden fills and strokes, strokes
 member's own fills and strokes, an image's fills and strokes that no Convert to Shape or Outline Object effect gives a
 shape, and characters that draw nothing (spaces and line breaks without an underline or strikethrough) left out, with
 the patterns it uses, which the patterns category lists as Pattern Objects and `objects.patterns` counts; with `selectionOnly`, those in the selection),
-`patternNames` (the patterns those objects use) and `pathLength` (pt: the total length of the paths, compound paths' pieces included and guides left
+`patternNames` (the patterns those objects use), `gradientObjects` (`[{id, name, gradients}]`: every object filled or
+stroked with a gradient, by the same rules as `patternObjects`, with the gradients it uses: the name of the gradient
+swatch a gradient is linked to, else `Linear gradient`, `Radial gradient` or `Freeform gradient`; the gradients category
+lists them as Gradient Objects and `objects.gradients` counts them; gradient swatches no art uses are not listed; with
+`selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use) and `pathLength` (pt: the total length of the paths, compound paths' pieces included and guides left
 out, which objects lists as Path Length in the document's units, say for a cut line or an LED strip along the letters);
 `format: "text"` returns the plain-text report Document Info › Save… (`docInfo.save {path?, selectionOnly?, category?}`:
 only `category` when given, else every category) and the package report write.
