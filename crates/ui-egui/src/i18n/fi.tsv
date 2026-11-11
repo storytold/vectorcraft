@@ -6149,6 +6149,12 @@ axis	Y Axis	Y-akseli
 	Flag	Lippu
 	Crosshair	Tähtäin
 	Checkpoint	Tarkastuskohta
+	Inventory Icons	Inventaarioikonit
+	Sword	Miekka
+	Shield	Kilpi
+	Potion	Taikajuoma
+	Key	Avain
+	Gem	Jalokivi
 	Open Symbol Library	Avaa symbolikirjasto
 	Save Symbol Library	Tallenna symbolikirjasto
 	Save Symbol Library…	Tallenna symbolikirjasto…
