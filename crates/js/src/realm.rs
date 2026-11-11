@@ -174,6 +174,14 @@ impl Realm {
         self.unbroken_fuel = fuel;
     }
 
+    /// With `on`, the scripts run next (and the code they define and evaluate) throw a
+    /// `TypeError` when they assign to a read-only or getter-only property or add a property to
+    /// an object that is not extensible, as strict mode code does, without the rest of strict
+    /// mode. Off by default.
+    pub fn set_strict_writes(&mut self, on: bool) {
+        self.interp.strict_writes = on;
+    }
+
     pub fn limits(&self) -> &Limits {
         &self.interp.limits
     }
@@ -221,9 +229,13 @@ impl Realm {
         interp.source_units = 0;
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;
+        interp.last_error = Value::Null;
         interp.host_abort = None;
         interp.waiting = false;
         interp.error_tag = UNKNOWN_SOURCE;
+        interp.thrown_mark = None;
+        interp.finally_marks.clear();
+        interp.error_mark = None;
         let strict = interp.options.strict;
         interp.source_tag = 0;
         let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
@@ -244,11 +256,14 @@ impl Realm {
         let site = interp.throw_site.take();
         interp.error_tag = site.as_ref().map_or(UNKNOWN_SOURCE, |(code, _)| code.source.tag);
         let (line, column) = site.map_or((0, 0), |(code, pc)| code.line_column(pc));
+        interp.error_mark = interp.thrown_mark.take().filter(|_| matches!(result, Err(Abrupt::Throw(_) | Abrupt::Limit(LimitKind::Host))));
+        interp.finally_marks.clear();
         interp.stack.clear();
         interp.frames.clear();
         interp.temp_roots.clear();
         interp.join_stack.clear();
         interp.waiting = false;
+        interp.passing = Value::Undefined;
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {
@@ -359,6 +374,12 @@ impl Realm {
         self.interp.error_tag
     }
 
+    /// The mark of the host error ([`crate::HostError::Marked`]) the last run ended with, when no
+    /// `catch` clause took that error's exception on its way out; `None` otherwise.
+    pub fn error_mark(&self) -> Option<u32> {
+        self.interp.error_mark
+    }
+
     /// Fuel the run has left.
     pub fn fuel_left(&self) -> u64 {
         self.interp.fuel
@@ -379,6 +400,17 @@ impl Realm {
         }
     }
 
+    /// Adds the script extensions: the global `localize(object, ...values)`, which gives a
+    /// localization object's text for the locale of [`Realm::localization`], the global
+    /// `toSource(value)` and `Object.prototype.toSource()`, which write plain data as source text,
+    /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
+    pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
+        match crate::builtins::extensions::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Defines the global function `name`, whose arguments arrive converted as `args` says
     /// ([`crate::HostItem::Converted`]). Unlike a host object, a script may replace or delete it, as
     /// it may a built-in function.
@@ -387,6 +419,11 @@ impl Realm {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }
+    }
+
+    /// The locale `localize` reads, which the host's functions may change during a run.
+    pub fn localization(&self) -> std::rc::Rc<crate::Localization> {
+        self.interp.localization.clone()
     }
 
     /// Defines the global variable `name` holding the exception the last run did not catch

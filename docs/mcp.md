@@ -112,6 +112,9 @@ the suite) keep the agent to the folders you give it:
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
   library and preset saves to a path, the copies `links.relink {copy}` makes.
 - `file.list {path}` (through `run_command`) lists a folder's files and folders, held to the read roots like any read, so an agent can see what it was given (#1163).
+- `file.recentFiles` and the control channel's `ui.menu.list` leave out the recent files outside the read roots. The
+  other File › Open Recent Files rows keep their ids (`file.openRecent3` still opens the third file), and
+  `file.openRecentN` for a file outside the roots ends with `no such recent file`, as an empty slot does.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
@@ -1595,15 +1598,74 @@ VectorCraft reads them by these rules of its own:
   folder of the file that includes. A later `#includepath` replaces the list.
 - `#script "name"` names the run in the report and the Script Console, unless `name` is given. A `#script` line in an
   included file does not rename the run.
-- `#target` takes any value and does not change how the script runs. `#strict off` is taken.
-- `#strict on`, `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name`
-  with an unknown-directive error. A `//@` line with another name is a comment.
+- `#target` takes any value and does not change how the script runs.
+- `#strict on` turns on the checks the dollar-object help page gives for `$.strict`: an assignment to a read-only
+  property throws a `TypeError`, and so does adding a property to an object that takes no new ones. By VectorCraft's
+  own rules, an assignment to a property with only a getter is checked as a read-only one, and the objects that take
+  no new properties are those that are not extensible: objects passed to `Object.preventExtensions`, `Object.seal` or
+  `Object.freeze`, and the frozen `vc` and `$` objects. Other objects take new properties as before. The rest of ES5
+  strict mode (`with`, undeclared variables, `this` in a plain call) is unchanged; a script asks for it with
+  `'use strict'`. `#strict off` turns the checks off, and they are off in a script without either line.
+- The last `#strict` line of the script and the files it includes sets the checks for the whole run. Code that `eval`
+  and `Function` compile takes the checks of the code that compiles it. A file `$.evalFile` runs takes the checks of
+  its own last `#strict` line, for its code and the functions it defines, or the caller's when it has none; the
+  caller's code keeps its own. Any value other than `on` or `off` ends the run with `#strict takes on or off`.
+- `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name` with an
+  unknown-directive error. A `//@` line with another name is a comment.
 - A script run from a file reads its included files and the files `$.evalFile` runs only in that file's folder and
   the folders below it. A path with a `..` name, a path that leads out of the folder through a link or a junction, a
   Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
   `source`. A `JSINCLUDE` folder outside the script's folder is passed over.
 - A missing or refused included file ends the run before any of it runs. An error in an included file or a file `$.evalFile`
-  ran is reported at that file's line and column, and the report's `file` names the file.
+  ran is reported at that file's line and column, and the report's `file` names the file. So is an error `$.evalFile`
+  throws for a file it cannot run, such as a syntax error, when no `catch` takes it. When a `catch` takes that error
+  and a later `throw` raises it again, the error is reported where that `throw` is, as any other thrown error is.
+
+`$` also has the other members the Dollar object page lists, besides `$.evalFile`, `$.fileName` and `$.includePath`
+above. Each run
+starts with its own `$`: what a script changes there lasts until the run ends. The values and rules below are
+VectorCraft's own, and `vc.api.has("dollar")` is true where they are available:
+
+| Member | In VectorCraft |
+|--------|----------------|
+| `about()` | `"VectorCraft script engine <version>"`; no window opens |
+| `appEncoding` | `"UTF-8"`; setting `"UTF-8"` is accepted, any other encoding throws a `RangeError` |
+| `bp()`, `colorPicker()` | throw an `Error`: scripts have no debugger and cannot show a dialog |
+| `build`, `version` | VectorCraft's version |
+| `buildDate` | `null` |
+| `decimalPoint` | `","` for a locale whose language writes a decimal comma (such as `de`, `fr`, `ru`), otherwise `"."` |
+| `engineName` | `"VectorCraft"` |
+| `error` | the last `Error` object the run threw, caught or not, or `null` before one |
+| `flags` | `0`, or `512` while localization is on; only `0` and `512` can be set, and setting `512` turns `$.localize` on |
+| `gc()` | does nothing; the interpreter collects its own garbage |
+| `getenv(name)`, `setenv(name, value)` | only `LANG`, `LC_MESSAGES`, `LC_ALL` and `OS`; `getenv` of any other name returns `null`, and `setenv` of one throws. `setenv` changes the value for the rest of the run only, never the app's environment. A value has at most 64 letters, digits and `_ . - @` |
+| `global` | the global object |
+| `hiresTimer` | the microseconds since the run last read it, or since the run started; `0` on the web |
+| `level`, `memCache` | `0`; setting `memCache` throws |
+| `line`, `stack` | the line of the code that reads it; the running code, outermost first, one a line as `name:line` (`[global]` for the script's own code, `[anonymous]` for a function without a name), at most 64 lines |
+| `locale` | the interface's language as a locale such as `de` or `pt_BR` (`en` when the interface follows the system); a script can set `ll` or `ll_RR`, and `null` or `""` sets the interface's again |
+| `localize` | `false`; while `true`, `String(object)` of a localization object gives its text for `$.locale` |
+| `os` | `Windows`, `macOS`, `Linux`, `FreeBSD`, `Unix` or `Web`, without a version |
+| `screens` | an empty array |
+| `sleep(ms)` | waits from 0 to 1,000 milliseconds between two frames of the app, without stopping it from drawing; `script.stop` ends the wait; it does not wait on the web; called with more than 0 inside a getter, a conversion, a callback of a built-in function or a file `$.evalFile` runs, it throws an `Error` instead of waiting |
+| `strict` | `false` |
+
+Members that are values (`build`, `level`, `os` and the like) cannot be changed. A wrong value for a member that can
+be set throws a `TypeError` or `RangeError`.
+
+`localize(object, ...values)` gives the text of a localization object, an object whose property names are locales
+(https://extendscript.docsforadobe.dev/extendscript-tools-features/localizing-extendscript-strings/). It looks up the
+locale with the platform's suffix (`_Win`, `_Mac` or `_Unix`; none on the web), the locale, its language with the
+suffix, its language, and then `en`, and returns the object itself when none of them is a string property of it. No
+getter runs. `%1` is replaced by the first value, `%2` by the second and so on, each once; a number with no value stays
+as it is. A string as the first argument is used as the text.
+
+`toSource(value)` and `value.toSource()` write `undefined`, `null`, booleans, numbers, strings, arrays and plain
+objects as the text of an expression that makes the same value, such as `({"a":[1, "x"]})`. A function, a getter, a
+date, a regular expression, an error, a host object such as `vc`, an array with properties besides its elements, an
+object whose prototype is not `Object.prototype`, a property that is not enumerable, or an object that contains
+itself throws a `TypeError`. A value deeper than 64 levels, with more than 1,048,576 entries or with text longer than 16,777,216
+characters throws a `RangeError`.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records
@@ -1728,7 +1790,12 @@ at the bottom of the panel and in its menu. Output goes on while the panel is cl
 
 - `script.console {}` returns `{lines: [{run, name, kind, text}], droppedLines, truncatedLines}`. `run` is the
   run's number in the session, and `kind` is `start`, `output`, `log`, `error`, `end` or `report`. An end line's text
-  is `ended:`, a space, and then `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`.
+  is `ended:`, a space, and then `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`. A report
+  line's text is the run's time (`12 ms`, or `time unavailable` on a platform without a clock), a comma and its host
+  calls (`1 host call`, `2 host calls`), then `; slowest:` and the slowest commands when any were timed. The panel
+  shows the same text in the interface language. Every run that starts gets an end line. When a run is no longer
+  available, its end line is `stopped` if the run was abandoned and `internal` if the next slice found it missing, and
+  no report line follows.
 - `script.console.clear {}` empties the console, sets its counts to zero and returns `{cleared}`. A running script
   goes on writing, and `scriptReport` keeps the last run's console.
 - `ui.copyScriptConsole {first?, last?}` copies lines `first` to `last` to the clipboard as the panel shows them, or
@@ -3743,7 +3810,8 @@ what every object that uses it draws, in the edit's one undo step, and an applic
 filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
 empty) until a filter of that name is defined or imported again. A pasted effect that names one of the document's
 filters but draws another definition keeps its own filter under a free name (`Soft 2`); pasted back into the document
-it was copied from, it takes the document's filter. Opened from such an effect, Apply SVG Filter shows the
+it was copied from, it takes the document's filter. The free name is one that no filter of the document and no effect in
+its art, brushes or graphic styles uses; when no such name keeps the filter within 64 KB, the paste is refused. Opened from such an effect, Apply SVG Filter shows the
 name above the list, not selectable. `effect.apply {effect: "svg.filter", params: {xml}}` takes a filter
 directly and names it by its `id`; an `xml` that isn't one such filter is an error. `ui.svgFilterDialog {}` opens Apply
 SVG Filter (New, Edit, Delete, Import…), and from the Appearance panel it edits which filter an applied effect runs;
@@ -5232,7 +5300,8 @@ fills or strokes carry effects is written as one piece per fill and stroke, so o
 When an image in the art can't be decoded, `object.rasterize` and `object.cropImage` (without `trim`) make their image
 without it, and their results carry the `warning` that Flatten Transparency gives. `object.rasterize` takes each frame
 of threaded text that it rasterizes out of its thread with the text it shows, as `type.createOutlines` does (see
-Threading text from the in and out ports), and the other frames keep the text they hold.
+Threading text from the in and out ports), and the other frames keep the text they hold. `object.rasterize`
+refuses an image larger than 64 million pixels or longer than 32,768 pixels a side, and the art stays as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}
@@ -6185,7 +6254,9 @@ as Overprint Preview shows them (darkened); either way the file has no overprint
 overprints. `flattenerPreset` (High Resolution, Medium Resolution, Low Resolution or a saved preset,
 `flattener.presets.list`) flattens transparency before printing, as Object → Flatten Transparency does; empty, a
 PDF keeps it live (PostScript, which has none, uses `file.print`'s `flattenerPreset`, else this one, else medium).
-`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution.
+`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution,
+or at the highest resolution that fits when the image would be larger than 64 million pixels or longer than 32,768
+pixels a side.
 `color.profile` names an RGB or CMYK profile: composite PDF colours are converted to it with `color.intent` (CMYK
 colours keep their numbers with `preserveNumbers`), so a CMYK profile writes device CMYK; separations separate with a
 CMYK one. Settings saved before these options load with their defaults.
@@ -7319,8 +7390,8 @@ and the stages with a part of their input too small for the drawing the refresh 
 timed out, failed or have no plug-in. `id` names one object in place of
 `ids`, and an entry that is not an object id of the document is an error. Each document has its own budget and its own deferred stages. Exports, Expand
 Appearance and commands run every stage under the per-call limit, so an export never leaves out a stage that was only
-deferred for time, and the canvas then draws the result. The web build has no clock for the budget: there the first
-view runs no plug-in effect, and Refresh Deferred Effects runs them. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
+deferred for time, and the canvas then draws the result. The web build measures the budget and the per-call
+limit with the page's `performance.now()`. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
 `document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
 that no built-in format has. An importer adds a read-only file format `plugin.<id>` (listed by `document.formats`
 with `read: true`, and `openExtensions` holds the extensions File › Open opens with it, without those a built-in format reads or that File › Open installs, imports or loads as something else, such as `.wasm` or `.ase`): `document.open {path | name, dataBase64, importer?:

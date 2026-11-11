@@ -184,7 +184,7 @@ pub(crate) enum Func {
     Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
     Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
-    Eval { f: DataFn, end: Rc<dyn Fn()>, name: Rc<str> },
+    Eval { f: DataFn, end: Rc<dyn Fn()>, strict_writes: Rc<dyn Fn() -> Option<bool>>, name: Rc<str> },
     Bound { target: ObjId, this: Value, args: Rc<[Value]> },
 }
 
@@ -529,7 +529,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(flags);
         }
         let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
-        for k in keys.chain(&code.self_name) {
+        for k in keys.chain(&code.self_name).chain(&code.decl_name) {
             strings.add_key(k);
         }
         stack.extend(code.functions.iter().map(|f| &**f));

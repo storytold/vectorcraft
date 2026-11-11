@@ -8522,18 +8522,42 @@ fn layer_with(ops: &str) -> Node {
 /// the colour index and the last one change nothing.
 #[test]
 fn the_template_flag_of_a_layer() {
+    // Index 4 is the file's Magenta (#6502).
     let l = layer_with("1 1 0 0 1 0 0 4 255 79 255 1 50 0");
     let NodeKind::Layer { template, printable, dim_images, color, .. } = l.kind else { panic!() };
     assert!(template && !printable && l.locked);
-    assert_eq!((dim_images, color), (Some(50), LayerColor::Preset(4)));
+    assert_eq!((dim_images, color), (Some(50), LayerColor::Preset(5)));
+    // Index 5 is the file's Cyan (#6502).
     for ops in ["1 1 1 1 1 0 1 5 1 2 3 1 30 0", "1 1 1 1 1 0 0 5 1 2 3 1 30 1", "1 1 1 1 1 0 1 5 1 2 3 1 30"] {
         let l = layer_with(ops);
         let NodeKind::Layer { template, printable, dim_images, color, .. } = l.kind else { panic!() };
         assert!(template && printable && !l.locked, "{ops}");
-        assert_eq!((dim_images, color), (Some(30), LayerColor::Preset(5)), "{ops}");
+        assert_eq!((dim_images, color), (Some(30), LayerColor::Preset(6)), "{ops}");
     }
     let l = layer_with("1 1 1 1 0 0 1 0 79 128 255 0 50 0");
     assert!(matches!(l.kind, NodeKind::Layer { template: false, .. }));
+}
+
+/// #6502: an `.ai` file numbers Magenta, Cyan and Yellow 4, 5 and 6 (the index and RGB pairs of
+/// the `Lb` records in files users sent), so they open as those presets; the index decides, not
+/// the RGB beside it, and the other presets keep their position.
+#[test]
+fn layer_colour_indexes_follow_the_file_format() {
+    let color = |ops: &str| match layer_with(ops).kind {
+        NodeKind::Layer { color, .. } => color,
+        _ => panic!(),
+    };
+    let preset = |name: &str| {
+        let i = vectorcraft_doc::LAYER_COLORS.iter().position(|(n, _)| *n == name).unwrap();
+        LayerColor::Preset(u8::try_from(i).unwrap())
+    };
+    for (index, rgb, name) in
+        [(3, "79 79 255", "Blue"), (4, "255 79 255", "Magenta"), (5, "79 255 255", "Cyan"), (6, "255 255 79", "Yellow"), (7, "128 128 128", "Gray")]
+    {
+        assert_eq!(color(&format!("1 1 1 1 0 0 0 {index} {rgb} 0 50 0")), preset(name), "index {index}");
+    }
+    // The RGB beside an index doesn't change the preset.
+    assert_eq!(color("1 1 1 1 0 0 0 4 255 255 79 0 50 0"), preset("Magenta"));
 }
 
 /// The colour index is one place earlier in eleven and twelve operands, as in ten, and the twelfth
