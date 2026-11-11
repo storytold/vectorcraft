@@ -25,6 +25,7 @@ pub(super) mod clip;
 mod clipboard;
 mod clipflavours;
 mod clippaint;
+mod cmd_direct;
 mod cmdsplit;
 mod cmykflatten;
 mod colorguide;
