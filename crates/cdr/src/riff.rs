@@ -85,9 +85,10 @@ impl<'a> Index<'a> {
         let declared = r.u32().ok_or(Error::NotCdr)? as usize;
         let form = r.fourcc().ok_or(Error::NotCdr)?;
         let version = form_version(form).ok_or(Error::NotCdr)?;
-        // A file cut short keeps what it holds: its last chunk is truncated with a warning.
+        // A file cut short keeps what it holds: its last chunk is truncated with a warning. A
+        // length that ends inside the form type is damage too, and the chunks after it are read.
         let end = match declared.checked_add(8) {
-            Some(e) if e <= input.len() => e,
+            Some(e) if (12..=input.len()).contains(&e) => e,
             _ => {
                 push(warn, Warning::Damaged);
                 input.len()

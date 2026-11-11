@@ -298,6 +298,17 @@ fn a_file_cut_short_keeps_what_it_holds() {
 }
 
 #[test]
+fn a_riff_length_shorter_than_the_form_type_is_damage() {
+    for declared in 0u32..4 {
+        let mut file = synth::sample(900, false);
+        file[4..8].copy_from_slice(&declared.to_le_bytes());
+        let d = read(&file, Limits::default()).unwrap();
+        assert!(d.warnings.contains(&Warning::Damaged), "{declared}");
+        assert!(!d.pages.is_empty(), "{declared}");
+    }
+}
+
+#[test]
 fn a_zip_bomb_stops_at_the_inflate_limit() {
     let v = V(1100);
     let big = chunk(b"junk", vec![0; 4 << 20]);
