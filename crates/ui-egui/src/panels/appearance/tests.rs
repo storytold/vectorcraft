@@ -1,4 +1,6 @@
-use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll, fx_menu_ends};
+use super::super::tests_long_popups::{
+    PopupWindow, assert_last_row_scrolls_into_view, assert_popup_stays_put, assert_short_list_does_not_scroll, fx_menu_ends,
+};
 use super::*;
 
 /// A selected rectangle, for the fill row's swatch picker and the Add Effect button.
@@ -79,6 +81,36 @@ fn the_add_effect_popup_scrolls_inside_a_short_window() {
     let (first, last) = fx_menu_ends();
     assert_last_row_scrolls_into_view(&mut app_with_a_selected_rectangle(), 150.0, draw_bottom_bar, fx_button, &first, &last);
     assert_short_list_does_not_scroll(&mut app_with_a_selected_rectangle(), draw_bottom_bar, fx_button, &first, &last);
+}
+
+/// The Add New Effect popup opened from a button `below` pt above the bottom of a window `height`
+/// pt tall stays at one place on every frame, inside the window.
+fn assert_add_effect_popup_stays_put(height: f32, below: f32) -> Rect {
+    let (first, _) = fx_menu_ends();
+    let draw = move |app: &mut VectorcraftApp, ui: &mut Ui| {
+        ui.add_space((height - below - 24.0).max(0.0));
+        draw_bottom_bar(app, ui);
+    };
+    assert_popup_stays_put(&mut app_with_a_selected_rectangle(), height, draw, fx_button, &first)
+}
+
+/// Opened from a button near the bottom of a short window, the Add New Effect popup stays at one
+/// place instead of being drawn above and below the button on alternate frames.
+#[test]
+fn the_add_effect_popup_stays_put_near_the_bottom_of_a_short_window() {
+    for height in [200.0, 300.0, 400.0, 600.0] {
+        let row = assert_add_effect_popup_stays_put(height, 8.0);
+        assert!(row.bottom() < height - 32.0, "in a {height} pt window the popup opens above the button: {row:?}");
+    }
+}
+
+/// Opened from a button near the top of a window, the popup opens below it and stays there.
+#[test]
+fn the_add_effect_popup_stays_put_below_a_button_near_the_top() {
+    for height in [200.0, 400.0, 900.0] {
+        let row = assert_add_effect_popup_stays_put(height, height - 32.0);
+        assert!(row.top() > 24.0, "in a {height} pt window the popup opens below the button: {row:?}");
+    }
 }
 
 /// Duplicating rows highlights the copies, each right above its original, as the Layers panel
