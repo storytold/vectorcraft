@@ -21,15 +21,15 @@ use std::fmt::Write;
 use kurbo::{ParamCurveArclen, PathSeg};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
-    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, Mojikumi, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign,
-    PathEffect, TextKind, TextObject, VerticalAlign,
+    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, LineCap, LineJoin, Mojikumi, Node, NodeId, NodeKind, ParaDirection,
+    ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
 };
 use vectorcraft_geom::{Affine, PathData, Point};
 
 use crate::ps;
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and stroke weight, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -347,6 +347,9 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             fill: unlinked(&s.fill),
             stroke: unlinked(&s.stroke),
             stroke_width: if stroked { s.stroke_width } else { CharStyle::default().stroke_width },
+            stroke_cap: if stroked { s.stroke_cap } else { CharStyle::default().stroke_cap },
+            stroke_join: if stroked { s.stroke_join } else { CharStyle::default().stroke_join },
+            stroke_miter_limit: if stroked { miter_limit(s.stroke_miter_limit) } else { CharStyle::default().stroke_miter_limit },
             all_caps: s.all_caps,
             small_caps: s.small_caps.filter(|v| *v == default_small_caps),
             tate_chu_yoko: s.tate_chu_yoko,
@@ -357,7 +360,19 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
     };
     let run_lost = |s: &CharStyle| {
         let stroked = !s.stroke.is_none();
-        let s = CharStyle { stroke_width: if stroked { s.stroke_width } else { CharStyle::default().stroke_width }, ..s.clone() };
+        // Without a stroke, its weight, cap, join and miter limit draw nothing: nothing is lost.
+        let unstroked = CharStyle::default();
+        let s = if stroked {
+            s.clone()
+        } else {
+            CharStyle {
+                stroke_width: unstroked.stroke_width,
+                stroke_cap: unstroked.stroke_cap,
+                stroke_join: unstroked.stroke_join,
+                stroke_miter_limit: unstroked.stroke_miter_limit,
+                ..s.clone()
+            }
+        };
         // A Lab color is written as RGB.
         let lab = |p: &Paint| matches!(p, Paint::Solid { color: Color::Lab { .. }, .. });
         s != held_char(&s) || lab(&s.fill) || lab(&s.stroke) || !font_kept(&s)
@@ -461,6 +476,32 @@ fn font_name(st: &CharStyle) -> FontRecord {
         None if st.font_style.is_empty() || st.font_style == "Regular" => record(st.font_family.clone()),
         None => record(format!("{}-{}", st.font_family, st.font_style.replace(' ', ""))),
     }
+}
+
+/// The text document's number for a stroke's cap (key 61), as PostScript numbers them: 0 butt, 1
+/// round, 2 projecting.
+fn cap_code(cap: LineCap) -> i64 {
+    match cap {
+        LineCap::Butt => 0,
+        LineCap::Round => 1,
+        LineCap::Square => 2,
+    }
+}
+
+/// The text document's number for a stroke's join (key 62), as PostScript numbers them: 0 miter, 1
+/// round, 2 bevel.
+fn join_code(join: LineJoin) -> i64 {
+    match join {
+        LineJoin::Miter => 0,
+        LineJoin::Round => 1,
+        LineJoin::Bevel => 2,
+    }
+}
+
+/// A stroke's miter limit (key 64) as the reader takes it back: at least 1 and at most 500, 10 when
+/// it isn't a number at least 1.
+fn miter_limit(v: f64) -> f64 {
+    if v.is_finite() && v >= 1.0 { v.min(500.0) } else { 10.0 }
 }
 
 /// `v` as the 16.16 fixed-point number a design vector holds (`wght` 700 is 45875200).
@@ -621,7 +662,12 @@ impl TextDoc {
         }
         d.extend([(56, V::Bool(fill.is_some())), (57, V::Bool(stroke.is_some()))]);
         if stroke.is_some() {
-            d.push((63, V::Small(st.stroke_width / scale)));
+            d.extend([
+                (61, V::Int(cap_code(st.stroke_cap))),
+                (62, V::Int(join_code(st.stroke_join))),
+                (63, V::Small(st.stroke_width / scale)),
+                (64, real(miter_limit(st.stroke_miter_limit))),
+            ]);
         }
         dict(d)
     }
