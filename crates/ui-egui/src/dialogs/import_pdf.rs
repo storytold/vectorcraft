@@ -272,6 +272,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             show_preview(ui, preview(app, ui.ctx(), d, current).as_ref(), PREVIEW);
             ui.add_space(6.0);
+            ui.horizontal(|ui| {
             // Hebrew puts First/Previous on the physical right and Next/Last on the left,
             // reversing arrows while preserving the logical page destination.
             let hebrew = crate::i18n::current().code() == "he";
