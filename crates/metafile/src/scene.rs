@@ -225,7 +225,11 @@ impl<'a> Scene<'a> {
                     // or not: every instance's art counts against one budget for the export.
                     let (doc, clips) = (self.doc, self.clips);
                     let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
-                    let most = art.count_with_masks() as u64;
+                    let count = art.count_with_masks() as u64;
+                    // Placed through 9-slice guides it can make more objects than `art` holds.
+                    let most = doc
+                        .symbol_slice_map(symbol, *xf)
+                        .map_or(count, |m| if clips { m.most_placed(&art, doc) } else { m.most_placed_unclipped(&art, doc) });
                     let placed = vectorcraft_doc::charge_symbol_art(&mut self.expanded, most, || {
                         let placed = if clips { doc.place_symbol_art(symbol, &art, *xf) } else { doc.place_symbol_art_unclipped(symbol, &art, *xf) };
                         let count = placed.as_ref().map_or(0, |a| a.count_with_masks() as u64);
@@ -342,7 +346,8 @@ impl<'a> Scene<'a> {
             Paint::Pattern { pattern, xf } if self.clips && self.nest < MAX_NEST && self.tiles_left > 0 && self.doc.pattern(pattern).is_some() => {
                 let area = bp.bounding_box().intersect(self.region);
                 // Over what the budget has left, none are built.
-                let tiles = self.doc.pattern(pattern).map(|def| def.instances_in_at_most(*xf, area, false, self.tiles_left)).unwrap_or_default();
+                let tiles =
+                    self.doc.pattern(pattern).map(|def| def.instances_in_at_most(*xf, area, false, self.tiles_left, false)).unwrap_or_default();
                 let Some(tiles) = tiles else {
                     self.tiles_left = 0;
                     self.warn(TOO_MANY_TILES);
@@ -358,7 +363,7 @@ impl<'a> Scene<'a> {
                 self.ops.push(Op::Clip { path: bp.clone(), rule });
                 self.nest += 1;
                 let mut chunks = Vec::new();
-                let (whole, left) = (self.whole_tiles, self.tiles_left);
+                let (whole, left, spent) = (self.whole_tiles, self.tiles_left, self.expanded);
                 self.whole_tiles = per_tile.is_some();
                 for (i, t) in tiles.iter().enumerate() {
                     if per_tile.is_some_and(|k| k > 0 && i % k == 0) {
@@ -375,6 +380,8 @@ impl<'a> Scene<'a> {
                     }
                     // Patterns inside the tiles take from the budget once.
                     self.tiles_left = left;
+                    // The walk that was dropped doesn't count against the art that is kept.
+                    self.expanded = spent;
                     tiles.iter().for_each(|t| self.node(t, true));
                 }
                 self.nest -= 1;

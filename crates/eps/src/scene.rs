@@ -380,7 +380,9 @@ impl<'a> Scene<'a> {
                     // or not: every instance's art counts against one budget for the export.
                     let doc = self.doc;
                     let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
-                    let most = art.count_with_masks() as u64;
+                    let count = art.count_with_masks() as u64;
+                    // Placed through 9-slice guides it can make more objects than `art` holds.
+                    let most = doc.symbol_slice_map(symbol, *xf).map_or(count, |m| m.most_placed(&art, doc));
                     let placed = vectorcraft_doc::charge_symbol_art(&mut self.expanded, most, || {
                         let placed = doc.place_symbol_art(symbol, &art, *xf);
                         let count = placed.as_ref().map_or(0, |a| a.count_with_masks() as u64);
@@ -514,7 +516,7 @@ impl<'a> Scene<'a> {
                     // Over what the budget has left, no tile is built.
                     let left = usize::try_from(vectorcraft_doc::MAX_SYMBOL_NODES.saturating_sub(self.expanded)).unwrap_or(usize::MAX);
                     let expanded = &mut self.expanded;
-                    let tiles = def.instances_in_at_most(*xf, area, false, left).filter(|tiles| {
+                    let tiles = def.instances_in_at_most(*xf, area, false, left, true).filter(|tiles| {
                         let count = tiles.iter().map(|t| t.count_with_masks() as u64).sum();
                         vectorcraft_doc::charge_symbol_art(expanded, count, || ((), count)).is_some()
                     });

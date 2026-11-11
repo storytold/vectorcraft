@@ -544,6 +544,17 @@ fn symbols_holding_many_instances_of_symbols_stop_at_the_budget() {
 fn pattern_tiles_over_what_is_left_are_not_built() {
     let def = point_tiles("P", path(shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), red(), Paint::None, 0.0));
     let region = Rect::new(0.0, 0.0, 100.0, 100.0);
-    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 100).is_none());
-    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 1_000_000).is_some_and(|t| t.len() >= 10_000));
+    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 100, false).is_none());
+    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 1_000_000, false).is_some_and(|t| t.len() >= 10_000));
+}
+
+#[test]
+fn a_deep_allowance_counts_every_object_of_the_tile_art() {
+    let kids = (0..100).map(|_| Arc::new(path(shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), red(), Paint::None, 0.0))).collect();
+    let group = Node::new(NodeId(0), NodeKind::Group { children: kids, clip: false });
+    let def = point_tiles("P", group);
+    let region = Rect::new(0.0, 0.0, 100.0, 100.0);
+    // About 10,000 positions of one top-level node: within 100,000 flat, over it counted deep.
+    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 100_000, false).is_some());
+    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 100_000, true).is_none());
 }
