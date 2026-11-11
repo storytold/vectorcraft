@@ -1018,6 +1018,32 @@ fn comparing_xml_values_is_charged_to_the_heap() {
     assert!(heap_stops_only(setup, "(SPARE, x == y)", "x == y && y.@q == '2'") > 0);
 }
 
+/// Runs `setup` with no limit, then `action` in the same realm, and returns how `action` ended.
+fn after_setup(setup: &str, action: &str) -> Result<JsValue, RunErrorKind> {
+    let mut r = realm();
+    let interp = r.interp();
+    let global = interp.global;
+    assert!(crate::builtins::method(interp, global, "squeeze", squeeze, 1).is_ok());
+    r.run(setup).unwrap();
+    r.run(action).map_err(|e| e.kind)
+}
+
+#[test]
+fn namespace_declarations_and_qname_strings_are_charged_to_the_heap() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    let distinct = "var x = <r/>; var a = []; for (var i = 0; i < 400; i++) a.push(new Namespace('p' + i, 'u' + i));";
+    for method in ["addNamespace", "setNamespace"] {
+        let action = format!("squeeze(4096); for (var i = 0; i < 400; i++) x.{method}(a[i]); 1");
+        assert_eq!(after_setup(distinct, &action), heap, "{method}");
+    }
+    let same = "var x = <r/>; var n = new Namespace('p', 'u');";
+    let action = "squeeze(4096); for (var i = 0; i < 400; i++) x.addNamespace(n); 1";
+    assert_eq!(after_setup(same, action), Ok(JsValue::Number(1.0)));
+    let long = "var s = 'x'; for (var i = 0; i < 12; i++) s += s; var q = new QName('u', s);";
+    let action = "squeeze(12000); var t1 = q.toString(); var t2 = q.toString(); 1";
+    assert_eq!(after_setup(long, action), heap);
+}
+
 #[test]
 fn an_interrupt_stops_serialization() {
     let mut r = realm();

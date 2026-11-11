@@ -299,7 +299,9 @@ fn qname_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> Js
         _ => {}
     }
     units.extend_from_slice(&name.local);
-    interp.reserve_heap(string_bytes(units.len()))?;
+    let bytes = string_bytes(units.len());
+    interp.reserve_heap(bytes)?;
+    interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
     Ok(Value::String(Str::from_units(units)))
 }
 
@@ -816,7 +818,11 @@ fn add_in_scope(interp: &mut Interp, x: ObjId, ns: XmlNs) -> JsResult<()> {
     if prefix.is_empty() && node.name.as_ref().and_then(|n| n.uri.as_ref()).is_some_and(|u| u.is_empty()) {
         return Ok(());
     }
-    interp.reserve_heap(crate::heap::XML_NS_BYTES)?;
+    if !node.ns.iter().any(|m| m.prefix.as_ref() == Some(&prefix)) {
+        let bytes = crate::heap::XML_NS_BYTES;
+        interp.reserve_heap(bytes)?;
+        interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
+    }
     let attrs = interp.xml_node(x)?.attrs.clone();
     let node = interp.xml_node_mut(x)?;
     node.ns.retain(|m| m.prefix.as_ref() != Some(&prefix));
