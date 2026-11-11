@@ -330,7 +330,7 @@ fn pasted_art_takes_no_name_the_documents_brushes_use() {
 fn a_renamed_paste_takes_a_free_capital_letter() {
     let mut s = session();
     for n in ('a'..='z').chain('0'..='9') {
-        run(&mut s, "svgFilter.define", json!({"xml": format!(r#"<filter id="{n}"><feOffset dx="1" dy="1"/></filter>"#)}));
+        run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}));
     }
     run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="S"><feOffset dx="3" dy="3"/></filter>"#}));
     let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
@@ -347,13 +347,24 @@ fn a_renamed_paste_takes_a_free_capital_letter() {
     assert!(pasted[0].1.contains("dx=\"9\""), "its own filter");
 }
 
-/// A pasted filter at the size limit with a one-letter name, when every free name it could take is
-/// in use, is refused rather than pasted under the name of the document's filter.
+/// A filter named `n`, with the characters a quoted attribute value cannot hold escaped.
+fn one_char_filter(n: char) -> String {
+    let id = match n {
+        '"' => "&quot;".to_string(),
+        '&' => "&amp;".to_string(),
+        '<' => "&lt;".to_string(),
+        c => c.to_string(),
+    };
+    format!(r#"<filter id="{id}"><feOffset dx="1" dy="1"/></filter>"#)
+}
+
+/// A pasted filter at the size limit with a one-letter name takes a free punctuation character when
+/// every letter and digit is in use.
 #[test]
-fn a_paste_with_no_free_name_for_its_filter_is_refused() {
+fn a_renamed_paste_takes_a_free_punctuation_character() {
     let mut s = session();
     for n in ('a'..='z').chain('0'..='9').chain('A'..='Z') {
-        run(&mut s, "svgFilter.define", json!({"xml": format!(r#"<filter id="{n}"><feOffset dx="1" dy="1"/></filter>"#)}));
+        run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}));
     }
     let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
     let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
@@ -361,9 +372,41 @@ fn a_paste_with_no_free_name_for_its_filter_is_refused() {
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#S)"/></svg>"#
     );
     run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
-    let before = steps(&s);
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].0, "!");
+    assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok("!".to_string()));
+    assert!(pasted[0].1.contains("dx=\"9\""), "its own filter");
+}
+
+/// A pasted filter at the size limit with a one-letter name, when every free name it could take is
+/// in use, is refused rather than pasted under the name of the document's filter.
+#[test]
+fn a_paste_with_no_free_name_for_its_filter_is_refused() {
+    let mut s = session();
+    for n in ('a'..='z').chain('0'..='9').chain('A'..='Z') {
+        run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}));
+    }
+    // A document holds at most 64 filters: the other one-character names are taken by effects
+    // whose filters were deleted.
+    for n in ('!'..='~').filter(|c| !c.is_ascii_alphanumeric()) {
+        let a = rect(&mut s, 10.0);
+        let name = run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}))["name"].as_str().unwrap().to_string();
+        assert_eq!(name, n.to_string());
+        run(&mut s, "svgFilter.apply", json!({"name": name, "ids": [a.0]}));
+        run(&mut s, "svgFilter.delete", json!({"name": name}));
+    }
+    let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
+    let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#S)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    let (before, effects) = (steps(&s), filter_effects(&s).len());
+    assert_eq!(effects, 32);
     assert!(err(&mut s, "edit.pasteInPlace", json!({})).contains("no free name"));
-    assert!(filter_effects(&s).is_empty(), "nothing pasted");
+    assert_eq!(filter_effects(&s).len(), effects, "nothing pasted");
     assert_eq!(steps(&s), before);
 }
 
