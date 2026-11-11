@@ -53,7 +53,7 @@ pub(super) fn width_outline_near(bp: &BezPath, width: f64, profile: &WidthProfil
             kept.push(!(a.x.max(b.x) < near.x0 || a.x.min(b.x) > near.x1 || a.y.max(b.y) < near.y0 || a.y.min(b.y) > near.y1));
         }
         if kept.iter().all(|v| *v) {
-            ctx.subpath(&mut out, &flat, &segs, closed, (0.0, 1.0));
+            ctx.subpath(&mut out, &flat, &segs, closed, (0.0, 1.0), count as f64);
             continue;
         }
         cut = true;
@@ -78,14 +78,14 @@ pub(super) fn width_outline_near(bp: &BezPath, width: f64, profile: &WidthProfil
             } else if let Some(part) = run.take()
                 && part.pts.len() > 1
             {
-                ctx.subpath(&mut out, &part, &segs, false, (from, walked / total));
+                ctx.subpath(&mut out, &part, &segs, false, (from, walked / total), count as f64);
             }
             walked += lengths[i];
         }
         if let Some(part) = run
             && part.pts.len() > 1
         {
-            ctx.subpath(&mut out, &part, &segs, false, (from, walked / total));
+            ctx.subpath(&mut out, &part, &segs, false, (from, walked / total), count as f64);
         }
     }
     cut.then_some(out)
@@ -101,7 +101,9 @@ pub(super) fn outline_spans(bp: &BezPath, spans: &[(f64, f64)], width: f64, prof
         let segs = segments(&bp.elements()[r]);
         let flat = flatten(&segs, closed, ctx.tol);
         if flat.pts.len() > 1 {
-            ctx.subpath(&mut out, &flat, &segs, closed, spans.get(i).copied().unwrap_or((0.0, 1.0)));
+            let span = spans.get(i).copied().unwrap_or((0.0, 1.0));
+            let pieces = if closed { flat.pts.len() } else { flat.pts.len() - 1 }.max(1);
+            ctx.subpath(&mut out, &flat, &segs, closed, span, pieces as f64 / (span.1 - span.0));
         }
     }
     out
@@ -214,14 +216,24 @@ pub(super) fn flatten(segs: &[PathSeg], closed: bool, tol: f64) -> Flat {
 /// Insert samples where the profile has width points and between them, so its smooth curve is
 /// drawn as a smooth outline along straight runs too (the two points of a discontinuous point
 /// share one sample). `span` maps the subpath onto the profile (see [`outline_spans`]).
-fn densify(flat: &Flat, segs: &[PathSeg], closed: bool, profile: &WidthProfile, span: (f64, f64)) -> (Vec<Point>, Vec<bool>, Vec<Vec2>) {
+fn densify(
+    flat: &Flat,
+    segs: &[PathSeg],
+    closed: bool,
+    profile: &WidthProfile,
+    span: (f64, f64),
+    density: f64,
+) -> (Vec<Point>, Vec<bool>, Vec<Vec2>) {
     // Two samples per profile segment: the segment end plus its midpoint. The outline is fitted
     // with cubics through these points, so a smooth width curve needs far fewer samples than it
     // did when every pair of samples became a separate cubic. A profile with a strong bend gets
     // one more subdivision; a flat profile draws the same straight pieces as before.
     const SAMPLES: usize = 2;
     const MAX_SAMPLES: usize = 8;
-    const BEND: f64 = 0.20;
+    // The gap (in width factor) the straight line between two samples may leave: small enough
+    // that a sharp peak like the lens' needs one more piece, large enough that a long taper's
+    // gentle bend does not.
+    const BEND: f64 = 0.05;
     let total = length(&flat.pts, closed);
     let range = span.1 - span.0;
     if total <= 1e-12 || range <= 1e-12 {
@@ -237,8 +249,6 @@ fn densify(flat: &Flat, segs: &[PathSeg], closed: bool, profile: &WidthProfile, 
     // A curved path's flattened points already sample the width along the subpath. On a dense
     // piece the profile's own points are enough; a straight run has only its ends, so it needs
     // the extra samples. This keeps curved, profiled art close to a uniform stroke's size.
-    let pieces = if closed { flat.pts.len() } else { flat.pts.len().saturating_sub(1) }.max(1);
-    let spacing = total / pieces as f64;
     let mut marks = Vec::with_capacity(ts.len() * SAMPLES);
     for w in ts.windows(2) {
         let (a, b) = (w[0], w[1]);
@@ -250,7 +260,10 @@ fn densify(flat: &Flat, segs: &[PathSeg], closed: bool, profile: &WidthProfile, 
             let start = a.rem_euclid(1.0);
             let end = start + (b - a);
             let want = adaptive_samples(profile, start, end, SAMPLES, MAX_SAMPLES, BEND).min(cap);
-            let existing = (b - a) * total / spacing;
+            // How many of the flattened path's points already fall in this profile segment.
+            // `density` is measured on the whole subpath, not on this piece, so outlining only
+            // the piece near the view picks the same samples as outlining the whole subpath.
+            let existing = (b - a) * density;
             if existing >= want as f64 { 1 } else { want }
         };
         for k in 0..samples {
@@ -267,15 +280,18 @@ fn densify(flat: &Flat, segs: &[PathSeg], closed: bool, profile: &WidthProfile, 
 /// How many pieces one profile segment needs so a cubic fit through their ends keeps the width
 /// curve. A straight taper is already straight; a visible bend gets progressively more samples.
 fn adaptive_samples(profile: &WidthProfile, t0: f64, t1: f64, base: usize, max: usize, bend: f64) -> usize {
-    let mut samples = base;
-    let (l0, r0) = profile.at(t0);
-    let (l1, r1) = profile.at(t1);
+    let mut samples = base.max(1);
     while samples < max {
+        // One probe in the middle of each piece: how far the curve leaves the straight line
+        // between the piece's ends. The more pieces, the closer the line follows the curve, so
+        // the loop only stops when the pieces it has are fine enough (or at `max`).
         let mut dev = 0.0_f64;
-        for q in [0.25, 0.5, 0.75] {
-            let (l, r) = profile.at(t0 + (t1 - t0) * q);
-            let want = (l0 + (l1 - l0) * q, r0 + (r1 - r0) * q);
-            dev = dev.max((l - want.0).abs()).max((r - want.1).abs());
+        for k in 0..samples {
+            let (a, b) = (k as f64 / samples as f64, (k + 1) as f64 / samples as f64);
+            let (la, ra) = profile.at(t0 + (t1 - t0) * a);
+            let (lb, rb) = profile.at(t0 + (t1 - t0) * b);
+            let (lm, rm) = profile.at(t0 + (t1 - t0) * (a + b) / 2.0);
+            dev = dev.max((lm - (la + lb) / 2.0).abs()).max((rm - (ra + rb) / 2.0).abs());
         }
         if dev <= bend {
             break;
@@ -403,8 +419,8 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    fn subpath(&self, out: &mut BezPath, flat: &Flat, segs: &[PathSeg], closed: bool, span: (f64, f64)) {
-        let (pts, corner, dirs) = densify(flat, segs, closed, self.profile, span);
+    fn subpath(&self, out: &mut BezPath, flat: &Flat, segs: &[PathSeg], closed: bool, span: (f64, f64), density: f64) {
+        let (pts, corner, dirs) = densify(flat, segs, closed, self.profile, span, density);
         let n = pts.len();
         let seg_count = if closed { n } else { n - 1 };
         let seg_dir: Vec<Vec2> = (0..seg_count).map(|i| unit(pts[(i + 1) % n] - pts[i])).collect();

@@ -18,12 +18,11 @@ use std::collections::VecDeque;
 use kurbo::{BezPath, Point, Shape, Vec2};
 use vectorcraft_doc::color::{Gradient, GradientGeom, GradientPaint, Paint};
 use vectorcraft_doc::live::{H_DOWN, H_LEFT, H_RIGHT, H_UP};
-use vectorcraft_doc::{GradientMesh, LineJoin, MeshPoint, StrokeAlign, StrokeGradientMode, StrokeLayer};
+use vectorcraft_doc::{GradientMesh, LineCap, LineJoin, MeshPoint, StrokeAlign, StrokeGradientMode, StrokeLayer};
 use vectorcraft_geom::FillRule;
 
 use super::width::{flatten, left, length, split_at};
 use super::{aligned_width, arrow, cap_extent, is_closed, segments, subpaths, unit};
-use crate::stroke::stroke_pieces;
 
 /// Largest stretch of a rib on a turn's bisector (1 / cos of half the turn, about 74°) before the
 /// corner gets a fan of ribs round its outside.
@@ -98,7 +97,10 @@ impl Lay<'_> {
 
     /// How far a rib at fraction `t` reaches either side of the path to cover the stroke there.
     fn cover(&self, t: f64) -> f64 {
-        self.half(t) + self.margin
+        // A square cap's corners stand √2 of the half-width out from where the dash ends, and a
+        // dash can end just past a corner: reach that far, or they paint outside every slice.
+        let diag = if self.st.dash.is_some() && self.st.cap == LineCap::Square { std::f64::consts::SQRT_2 } else { 1.0 };
+        self.half(t) * diag + self.margin
     }
 
     /// The across band at fraction `t` of a subpath whose visible side is `side` (`Some(true)`:
@@ -384,11 +386,8 @@ pub fn gradient_slices(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64,
     let across = st.gradient_mode == StrokeGradientMode::Across;
     // A width profile changes the across band along the path: ribs close enough to follow it.
     let max_dt = if across && st.profile.is_some() { PROFILE_STEP } else { 1.0 };
-    // Ribs sit on the same line the outline reads: a tip-aligned arrowhead trims that line by the
-    // head inset (`stroke_pieces`), so trim here too, or ribs sit where nothing paints.
-    let pieces = stroke_pieces(bp, st);
     let mut out = vec![];
-    for ribs in strips(&*pieces.line, rule, st, tol, margin, &[], max_dt) {
+    for ribs in strips(bp, rule, st, tol, margin, &[], max_dt) {
         for w in ribs.windows(2) {
             let (a, b) = (&w[0], &w[1]);
             let shape = polygon(&[a.l, b.l, b.c, b.r, a.r, a.c], grow);
@@ -503,9 +502,7 @@ pub fn gradient_meshes(bp: &BezPath, rule: FillRule, st: &StrokeLayer, g: &Gradi
     };
     us.sort_by(f64::total_cmp);
     us.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
-    // Ribs sit on the same line the outline reads (see gradient_slices).
-    let pieces = stroke_pieces(bp, st);
-    strips(&*pieces.line, rule, st, SLICE_TOL, SLICE_MARGIN, &marks, max_dt)
+    strips(bp, rule, st, SLICE_TOL, SLICE_MARGIN, &marks, max_dt)
         .into_iter()
         .filter(|ribs| ribs.len() > 1)
         .map(|ribs| {
