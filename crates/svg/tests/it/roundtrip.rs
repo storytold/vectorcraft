@@ -682,6 +682,32 @@ fn svg_in_physical_units_reopens_at_the_same_size() {
     }
 }
 
+/// A viewer's default `meet` scaling must preserve the artwork's physical extent, not just
+/// reopen an artboard with roughly the right width and height.
+#[test]
+fn physical_units_preserve_rendered_extent_at_low_coordinate_precision() {
+    for (width, height, decimals) in [(200.0, 10.0, 1), (10.0, 200.0, 1), (0.2, 0.1, 1), (0.002, 0.001, 3)] {
+        let mut d = Document::new(width, height);
+        let n = rect_node(&mut d, Rect::new(0.0, 0.0, width, height), Appearance::basic(solid("#000000"), Paint::None, 0.0));
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+        for units in [SizeUnit::Mm, SizeUnit::Cm, SizeUnit::In, SizeUnit::Pt] {
+            let svg = export(&d, &ExportOptions { units, decimals, ..Default::default() });
+            let tree = usvg::Tree::from_str(&svg, &usvg::Options::default()).unwrap();
+            let extent = tree.root().abs_bounding_box();
+            // CSS consumers render physical lengths at 96 px/in, document geometry is 72 pt/in.
+            for (actual, expected) in [
+                (tree.size().width(), width * 96.0 / 72.0),
+                (tree.size().height(), height * 96.0 / 72.0),
+                (extent.width(), width * 96.0 / 72.0),
+                (extent.height(), height * 96.0 / 72.0),
+            ] {
+                assert!((f64::from(actual) / expected - 1.0).abs() < 2e-5, "{units:?}: {actual} != {expected}\n{svg}");
+            }
+        }
+    }
+}
+
 #[test]
 fn unique_sanitized_ids() {
     let mut d = Document::new(200.0, 200.0);

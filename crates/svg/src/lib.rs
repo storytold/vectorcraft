@@ -184,7 +184,8 @@ impl Encoding {
 /// The `viewBox` stays in user units (points) whatever is chosen.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SizeUnit {
-    /// Bare numbers, CSS pixels at one per point (72 per inch).
+    /// Legacy bare numbers, unchanged: one per document point. CSS pixels are 96 per inch;
+    /// choose an explicit physical unit to preserve the document's physical size.
     #[default]
     #[serde(rename = "px")]
     Px,
@@ -210,20 +211,14 @@ impl SizeUnit {
         }
     }
 
-    /// `points` as a length in this unit, rounded to `decimals` places, e.g. `70.556mm`. A
-    /// positive size never rounds to zero (a zero `width` disables rendering): in a unit with a
-    /// suffix it gets more places, up to 12, until a digit survives. `px` stays as [`fmt_num`]
-    /// writes it.
+    /// `points` as a length in this unit. Physical sizes use at least six decimal places and
+    /// six significant digits, independent of coordinate precision, so rounding does not change
+    /// the viewBox's rendered scale. `px` keeps [`fmt_num`]'s selected `decimals`.
     pub fn length(self, points: f64, decimals: u8) -> String {
-        const MAX_PLACES: u8 = 12;
         let (scale, suffix) = self.per_point();
         let v = points * scale;
-        let mut places = decimals;
-        if !suffix.is_empty() && v.is_finite() && v > 0.0 {
-            while places < MAX_PLACES && fmt_num(v, places) == "0" {
-                places += 1;
-            }
-        }
+        let places =
+            if !suffix.is_empty() && v.is_finite() && v != 0.0 { decimals.max(6).max((5.0 - v.abs().log10().floor()) as u8) } else { decimals };
         format!("{}{suffix}", fmt_num(v, places))
     }
 }
@@ -783,12 +778,15 @@ mod tests {
     }
 
     #[test]
-    fn tiny_physical_sizes_never_format_as_zero() {
-        // 3 pt is 0.0417 in: one place would write `0in`, and a zero width disables rendering.
-        assert_eq!(SizeUnit::In.length(3.0, 1), "0.04in");
-        assert_eq!(SizeUnit::Mm.length(0.001, 1), "0.0004mm");
-        // Nothing to widen when a digit survives, or when the size really is zero.
-        assert_eq!(SizeUnit::In.length(72.0, 1), "1in");
+    fn tiny_physical_sizes_keep_their_scale() {
+        for unit in [SizeUnit::Pt, SizeUnit::Mm, SizeUnit::Cm, SizeUnit::In] {
+            let (scale, suffix) = unit.per_point();
+            for points in [200.0, 10.0, 3.0, 0.001, 1e-14, 1e-30] {
+                let written = unit.length(points, 1);
+                let value: f64 = written.strip_suffix(suffix).unwrap().parse().unwrap();
+                assert!((value / scale / points - 1.0).abs() < 1e-5, "{points}pt: {written}");
+            }
+        }
         assert_eq!(SizeUnit::In.length(0.0, 1), "0in");
         // `px` is written exactly as `fmt_num` does.
         assert_eq!(SizeUnit::Px.length(3.0, 1), "3");

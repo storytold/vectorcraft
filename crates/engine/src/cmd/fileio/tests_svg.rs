@@ -102,20 +102,20 @@ fn svg_export_writes_width_height_with_the_requested_unit() {
     let plain = svg(&mut s, json!({}));
     assert!(plain.contains(" width=\"200\" height=\"100\" viewBox=\"0 0 200 100\""), "{plain}");
     assert_eq!(svg(&mut s, json!({"units": "px"})), plain, "px is the default, byte for byte");
-    for (unit, size) in [
-        ("mm", "width=\"70.556mm\" height=\"35.278mm\""),
-        ("cm", "width=\"7.056cm\" height=\"3.528cm\""),
-        ("in", "width=\"2.778in\" height=\"1.389in\""),
-        ("pt", "width=\"200pt\" height=\"100pt\""),
-    ] {
-        for p in [json!({"units": unit}), json!({"svg": {"units": unit}})] {
-            let out = svg(&mut s, p);
-            assert!(out.contains(&format!(" {size} viewBox=\"0 0 200 100\"")), "{unit}:\n{out}");
+    for unit in ["mm", "cm", "in", "pt"] {
+        for decimals in [1, 3] {
+            for p in [json!({"units": unit, "decimals": decimals}), json!({"svg": {"units": unit, "decimals": decimals}})] {
+                let out = svg(&mut s, p);
+                assert!(out.contains(&format!("{unit}\"")) && out.contains("viewBox=\"0 0 200 100\""), "{unit}:\n{out}");
+                let back = vectorcraft_svg::import(&out).unwrap();
+                let rect = back.artboards[0].rect;
+                assert!((rect.width() - 200.0).abs() < 0.001 && (rect.height() - 100.0).abs() < 0.001, "{unit}: {rect:?}\n{out}");
+            }
         }
     }
     let out = svg(&mut s, json!({"units": "mm", "responsive": true}));
     assert!(!out.contains("mm\"") && !out.contains("height=\"100\" viewBox") && out.contains("viewBox=\"0 0 200 100\""), "{out}");
-    assert!(svg(&mut s, json!({"units": "mm", "decimals": 1})).contains("width=\"70.6mm\" height=\"35.3mm\""));
+    assert!(svg(&mut s, json!({"units": "mm", "decimals": 1})).contains("x=\"10.1\""), "coordinate precision is unchanged");
 }
 
 #[test]
