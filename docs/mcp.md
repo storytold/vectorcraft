@@ -1621,6 +1621,52 @@ VectorCraft reads them by these rules of its own:
   throws for a file it cannot run, such as a syntax error, when no `catch` takes it. When a `catch` takes that error
   and a later `throw` raises it again, the error is reported where that `throw` is, as any other thrown error is.
 
+`$` also has the other members the Dollar object page lists, besides `$.evalFile`, `$.fileName` and `$.includePath`
+above. Each run
+starts with its own `$`: what a script changes there lasts until the run ends. The values and rules below are
+VectorCraft's own, and `vc.api.has("dollar")` is true where they are available:
+
+| Member | In VectorCraft |
+|--------|----------------|
+| `about()` | `"VectorCraft script engine <version>"`; no window opens |
+| `appEncoding` | `"UTF-8"`; setting `"UTF-8"` is accepted, any other encoding throws a `RangeError` |
+| `bp()`, `colorPicker()` | throw an `Error`: scripts have no debugger and cannot show a dialog |
+| `build`, `version` | VectorCraft's version |
+| `buildDate` | `null` |
+| `decimalPoint` | `","` for a locale whose language writes a decimal comma (such as `de`, `fr`, `ru`), otherwise `"."` |
+| `engineName` | `"VectorCraft"` |
+| `error` | the last `Error` object the run threw, caught or not, or `null` before one |
+| `flags` | `0`, or `512` while localization is on; only `0` and `512` can be set, and setting `512` turns `$.localize` on |
+| `gc()` | does nothing; the interpreter collects its own garbage |
+| `getenv(name)`, `setenv(name, value)` | only `LANG`, `LC_MESSAGES`, `LC_ALL` and `OS`; `getenv` of any other name returns `null`, and `setenv` of one throws. `setenv` changes the value for the rest of the run only, never the app's environment. A value has at most 64 letters, digits and `_ . - @` |
+| `global` | the global object |
+| `hiresTimer` | the microseconds since the run last read it, or since the run started; `0` on the web |
+| `level`, `memCache` | `0`; setting `memCache` throws |
+| `line`, `stack` | the line of the code that reads it; the running code, outermost first, one a line as `name:line` (`[global]` for the script's own code, `[anonymous]` for a function without a name), at most 64 lines |
+| `locale` | the interface's language as a locale such as `de` or `pt_BR` (`en` when the interface follows the system); a script can set `ll` or `ll_RR`, and `null` or `""` sets the interface's again |
+| `localize` | `false`; while `true`, `String(object)` of a localization object gives its text for `$.locale` |
+| `os` | `Windows`, `macOS`, `Linux`, `FreeBSD`, `Unix` or `Web`, without a version |
+| `screens` | an empty array |
+| `sleep(ms)` | waits from 0 to 1,000 milliseconds between two frames of the app, without stopping it from drawing; `script.stop` ends the wait; it does not wait on the web; called with more than 0 inside a getter, a conversion, a callback of a built-in function or a file `$.evalFile` runs, it throws an `Error` instead of waiting |
+| `strict` | `false` |
+
+Members that are values (`build`, `level`, `os` and the like) cannot be changed. A wrong value for a member that can
+be set throws a `TypeError` or `RangeError`.
+
+`localize(object, ...values)` gives the text of a localization object, an object whose property names are locales
+(https://extendscript.docsforadobe.dev/extendscript-tools-features/localizing-extendscript-strings/). It looks up the
+locale with the platform's suffix (`_Win`, `_Mac` or `_Unix`; none on the web), the locale, its language with the
+suffix, its language, and then `en`, and returns the object itself when none of them is a string property of it. No
+getter runs. `%1` is replaced by the first value, `%2` by the second and so on, each once; a number with no value stays
+as it is. A string as the first argument is used as the text.
+
+`toSource(value)` and `value.toSource()` write `undefined`, `null`, booleans, numbers, strings, arrays and plain
+objects as the text of an expression that makes the same value, such as `({"a":[1, "x"]})`. A function, a getter, a
+date, a regular expression, an error, a host object such as `vc`, an array with properties besides its elements, an
+object whose prototype is not `Object.prototype`, a property that is not enumerable, or an object that contains
+itself throws a `TypeError`. A value deeper than 64 levels, with more than 1,048,576 entries or with text longer than 16,777,216
+characters throws a `RangeError`.
+
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records
 commands run one at a time. A preference the run changed takes the run's value, and a preference changed in the app
@@ -3764,7 +3810,8 @@ what every object that uses it draws, in the edit's one undo step, and an applic
 filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
 empty) until a filter of that name is defined or imported again. A pasted effect that names one of the document's
 filters but draws another definition keeps its own filter under a free name (`Soft 2`); pasted back into the document
-it was copied from, it takes the document's filter. Opened from such an effect, Apply SVG Filter shows the
+it was copied from, it takes the document's filter. The free name is one that no filter of the document and no effect in
+its art, brushes or graphic styles uses; when no such name keeps the filter within 64 KB, the paste is refused. Opened from such an effect, Apply SVG Filter shows the
 name above the list, not selectable. `effect.apply {effect: "svg.filter", params: {xml}}` takes a filter
 directly and names it by its `id`; an `xml` that isn't one such filter is an error. `ui.svgFilterDialog {}` opens Apply
 SVG Filter (New, Edit, Delete, Import…), and from the Appearance panel it edits which filter an applied effect runs;
