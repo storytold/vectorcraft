@@ -403,6 +403,20 @@ fn file_info_edits_a_files_own_title_and_the_document_follows() {
 }
 
 #[test]
+fn restored_file_info_title_keeps_authored_spaces() {
+    let mut s = session();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).metadata.title = Some("Release  Plan".into());
+    for format in ["vectorcraft", "svg", "pdf"] {
+        let bytes = b64(&s.execute("document.export", &json!({"format": format, "preserveEditing": true})).unwrap());
+        let mut reopened = Session::new();
+        let reply = open_named(&mut reopened, &format!("again.{format}"), &bytes);
+        assert_eq!(reply["restored"], format != "vectorcraft", "{format}");
+        assert_eq!(reopened.doc().unwrap().doc.metadata.title.as_deref(), Some("Release  Plan"), "{format}");
+        assert_eq!(titles(&mut reopened)[1], "Release  Plan", "{format}");
+    }
+}
+
+#[test]
 fn the_files_own_title_is_kept_by_saves_and_written_by_exports() {
     let mut s = Session::new();
     open_named(&mut s, "box.svg", svg_titled("<title>Access paths</title>").as_bytes());

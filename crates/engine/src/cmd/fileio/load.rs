@@ -522,12 +522,11 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
     // The title the file gives itself (an SVG's `<title>`, a PDF's, `.ai`'s or `.ait`'s XMP `dc:title`
-    // or Info `Title`, which the readers put in File Info; the one a native document holds) is the
-    // File Info title, cleaned as `file.info` takes one. A file restored from the editing data it
-    // carries gives the title that document had, unless that is the file's name. The document's own
-    // name stays what it has always been: the file's name (#3626).
+    // or Info `Title`, which the readers put in File Info) is separate from the document's name.
+    // Existing File Info is preserved exactly; only a restored document's legacy name fallback is
+    // cleaned as imported text. The document's name stays the file's name (#3626).
     let held = restored.then_some(doc.title.as_str()).filter(|t| *t != title);
-    doc.metadata.title = doc.metadata.title.as_deref().or(held).and_then(imported_title);
+    doc.metadata.title = doc.metadata.title.or_else(|| held.and_then(imported_title));
     // Imports are named after the file; a native document keeps its own title (the tab shows the
     // file name once it has a path).
     if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
