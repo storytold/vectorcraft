@@ -4216,14 +4216,12 @@
 	to	થી
 	x-Height	x-ઊંચાઈ
 	{count} of {total} artboards	{total} માંથી {count} આર્ટબોર્ડ
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} અગાઉની લાઇનો છોડી, {cut} લાઇનો કાપી
 	{effect} is already applied	{effect} પહેલેથી લાગુ છે
 	{file}, line {line}	{file}, લાઇન {line}
 	{folders} and {files} searched	{folders} ફોલ્ડર અને {files} ફાઇલ શોધાયા
 	{format} Options	{format} વિકલ્પો
 	{kind} Gradient	{kind} ગ્રેડિયન્ટ
 	{kind}, {model}	{kind}, {model}
-	{ms} ms, {calls} host calls	{ms} ms, {calls} હોસ્ટ કૉલ
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	{name} (spot)	{name} (સ્પૉટ)
 	{pages} in all, {count} per copy	કુલ {pages}, પ્રતિ નકલ {count}
@@ -4268,3 +4266,27 @@ antiAlias	Sharp	શાર્પ
 @msg	{note}) ({more}	{note} ({more})
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` માટે અમાન્ય પેરામીટર: {msg}
 @msg	fonts not copied: {fonts}	ફૉન્ટ્સ કૉપિ થયા નથી: {fonts}
+	Energy Beams	ઊર્જા કિરણો
+	Laser Bolt	લેસર બોલ્ટ
+	Plasma Arc	પ્લાઝ્મા આર્ક
+	Charge Wave	ચાર્જ તરંગ
+	Spark Trail	તણખાનો પથ
+	Skill Icons	કૌશલ્ય આઇકન
+	Attack	હુમલો
+	Defend	બચાવ
+	Heal	ઉપચાર
+	Buff	બફ
+	Ult	અલ્ટ
+	Write pages longer than 200 in at full size in points	200 in થી લાંબા પેજ પૂરા કદમાં, પોઇન્ટ્સમાં લખો
+	Dynamic Text	ડાયનેમિક ટેક્સ્ટ
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	થ્રેડમાં પાથ પરનું ટાઇપ ડાયનેમિક ટેક્સ્ટ વાપરી શકતું નથી: {frames}
+@msg	id {value} is a ruler guide, not an object	id {value} રૂલર ગાઇડ છે, ઑબ્જેક્ટ નથી
+@msg	a ruler guide goes only directly in a layer or sublayer	રૂલર ગાઇડ ફક્ત સીધા લેયર અથવા સબલેયરમાં જ જાય છે
+	time unavailable	સમય ઉપલબ્ધ નથી
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	સૌથી ધીમા: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} હોસ્ટ કૉલ|{n} હોસ્ટ કૉલ
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} અગાઉની લાઇન છોડી|{n} અગાઉની લાઇનો છોડી
+@plural	{n} line cut|{n} lines cut	{n} લાઇન કાપી|{n} લાઇનો કાપી
