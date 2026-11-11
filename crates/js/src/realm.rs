@@ -436,8 +436,13 @@ impl Realm {
     }
 
     /// Sets `Folder.current` back to the host's `current`, for the next run of a realm that has
-    /// `File` and `Folder` ([`Realm::define_file_classes`]); a realm without them is left as it is.
+    /// `File` and `Folder` ([`Realm::define_file_classes`]); a realm without them keeps its
+    /// `Folder.current`. The files an earlier run opened are no longer open. The last run's uncaught
+    /// exception and `$.error` are dropped first, as [`Realm::start`] drops them, so memory that only
+    /// they held is free for the reset.
     pub fn reset_folder_current(&mut self) -> Result<(), RunError> {
+        self.interp.last_thrown = Value::Undefined;
+        self.interp.last_error = Value::Null;
         match crate::file_classes::reset_current(&mut self.interp) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),

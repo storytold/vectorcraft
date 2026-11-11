@@ -1723,14 +1723,16 @@ has unsaved changes.
 ### Script engines
 
 A named engine (`#targetengine`) keeps its globals and functions between the runs that name it, until it is dropped
-or the session ends. These are VectorCraft's own rules:
+or the session ends. Engines stay on the thread that made them: a session used on another thread starts there with
+no engines, and the engines it left are dropped when their own thread next uses engines. These are VectorCraft's own rules:
 
 - The name is either a name of ASCII letters, digits and `_` that does not start with a digit, or a name in single or
   double quotes of 1 to 64 bytes of UTF-8 without control characters. Names are matched as written: `Session` and
   `session` are two engines. `main` is the engine of a script without the line, which is new for each run.
 - Only the script itself has the line, once, before its code and its `#include` lines; blanks, comments and the other
-  preprocessor lines may come before it. A second line, a late line, a bad name, or the line in an included file or a
-  file `$.evalFile` runs ends the run at that line before any of it runs, and makes no engine.
+  preprocessor lines may come before it. A second line, a late line, a bad name, or the line in an included file ends
+  the run at that line before any of it runs, and makes no engine. In a file `$.evalFile` runs, the line makes that
+  call throw a `SyntaxError` when the call runs.
 - A session keeps at most 8 named engines. A run that names a ninth ends with a limit error before any of it runs,
   and the other eight are kept. Each named engine has a heap of 64 MiB, which holds what it keeps between runs; a run
   that goes past it ends with the heap limit, and the engine stays usable.

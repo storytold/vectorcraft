@@ -151,7 +151,8 @@ fn a_kept_eval_file_reads_in_the_calling_run_scope() {
 }
 
 /// `File` and `Folder` objects an earlier run kept read in the folder of the run that calls them,
-/// `Folder.current` starts at each run's script, and a file an earlier run left open is not open.
+/// `Folder.current` starts at each run's script, and a file an earlier run left open is not open:
+/// it takes the encoding it is given, as a closed file does.
 #[test]
 fn kept_file_objects_read_in_the_calling_run_folder() {
     let base: PathBuf = std::env::temp_dir().join(format!("vc-script-engines-files-{}", std::process::id()));
@@ -165,11 +166,12 @@ fn kept_file_objects_read_in_the_calling_run_folder() {
     std::fs::write(&a, "#targetengine e\nvar keep = new File('data.txt');\nkeep.open('r');\nvc.log([Folder.current.name, keep.read(1)]);").unwrap();
     assert_eq!(s.execute("script.run", &json!({"path": a.to_string_lossy()})).unwrap()["log"], json!([["a", "A"]]));
     let b = base.join("b").join("main.jsx");
-    let text = "#targetengine e\nvar g = new File('data.txt');\ng.open('r');\nvc.log([Folder.current.name, g.read(), keep.read(), keep.error, keep.exists]);";
+    let text = "#targetengine e\nvar g = new File('data.txt');\ng.open('r');\nvc.log([Folder.current.name, g.read(), keep.read(), keep.error, keep.exists]);\n\
+                var before = keep.encoding;\nkeep.encoding = 'BINARY';\nkeep.open('r');\nvc.log([before, keep.encoding]);";
     std::fs::write(&b, text).unwrap();
     let log = s.execute("script.run", &json!({"path": b.to_string_lossy()})).unwrap()["log"].clone();
     let _ = std::fs::remove_dir_all(base);
-    assert_eq!(log, json!([["b", "B", "", "Script file is not open", false]]));
+    assert_eq!(log, json!([["b", "B", "", "Script file is not open", false], ["UTF-8", "BINARY"]]));
 }
 
 #[test]

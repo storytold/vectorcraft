@@ -75,6 +75,25 @@ fn an_ended_run_leaves_the_realm_ready_for_the_next() {
     r.end();
 }
 
+/// Setting `Folder.current` back for the next run drops what only the last run's uncaught
+/// exception held, so a full heap from that exception does not stop the next run.
+#[test]
+fn resetting_folder_current_drops_the_last_uncaught_exception() {
+    let mut r = realm(10_000_000);
+    let len = Rc::new(Cell::new(4));
+    let n = len.clone();
+    let current: HostFunction = Rc::new(move |_| Ok(Data::String("d".repeat(n.get()))));
+    r.define_file_classes(vec![("current".into(), HostItem::Function(current))]).unwrap();
+    assert!(r.run("throw (function () { var a = []; for (var i = 0; i < 2000; i++) a.push('item ' + i); return a; })();").is_err());
+    let interp = r.interp();
+    interp.collect_garbage();
+    interp.limits.heap_bytes = interp.heap.bytes;
+    len.set(200);
+    assert_eq!(r.reset_folder_current(), Ok(()));
+    r.set_limits(Limits::default());
+    assert_eq!(r.run("typeof Folder"), Ok(JsValue::String("function".into())));
+}
+
 #[test]
 fn the_fuel_limit_covers_every_slice_together() {
     let mut r = realm(5_000);
