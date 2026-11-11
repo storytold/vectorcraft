@@ -120,8 +120,11 @@ the suite) keep the agent to the folders you give it:
   and the folder preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
   (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
   empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
-  roots shows as `loaded/<file name>` in its id and its panel's id, in `ui_inspect` and in `ui.docking`. The other
-  entries keep their order, and the app's own state is not changed.
+  roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
+  Color Guide's `ui.color_guide_limit` and a closed panel's key in `ui.docking_hidden`, also when its panel is
+  closed. When another hidden library has the same file name, the libraries take `loaded/<file name>`,
+  `loaded/<file name> (2)`, `(3)` and so on in the order of their full ids, and each one keeps its id in both
+  replies. The other entries keep their order, and the app's own state is not changed.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice

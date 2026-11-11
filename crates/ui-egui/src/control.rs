@@ -308,22 +308,95 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // for the person at the computer: what asked for it runs again when it answers.
         "fileDialog": app.picks.waiting_kind(),
     });
-    hide_library_ids(&mut inspected, &unreadable_library_ids(app));
+    let ids = unreadable_library_ids(app);
+    hide_library_ids(&mut inspected, &ids);
     inspected
 }
 
-/// The ids of the loaded libraries (`loaded/<path>`) whose file the request may not read, each with
-/// the id the reply shows instead: `loaded/<file name>`, as a library loaded without a path is named.
+/// The fields of the UI state, by their keys in `ui.inspect`'s `ui`, that hold panel ids: the panel
+/// popped out of the collapsed column, the docking layout, closed panels' places and groups, the panels
+/// shown as icons or collapsed, and the older floating panels' record.
+const PANEL_FIELDS: [&str; 7] =
+    ["open_panel", "docking", "docking_hidden", "docking_hidden_groups", "docking_icons", "docking_collapsed", "floating_panels"];
+
+/// The ids of the loaded libraries (`loaded/<path>`) that the UI state refers to and whose file the
+/// request may not read, each with the id a reply shows instead: `loaded/<file name>`, as a library
+/// loaded without a path is named. The UI state refers to a library by its bare id in a library panel
+/// and the Color Guide's limit, and by a panel id (`library:<kind>:loaded/<path>`) in the fields of
+/// [`PANEL_FIELDS`] and the workspaces' layouts. Text the person types (a command palette query, a
+/// workspace's name) is not read. When another of those ids already shows that name, the next free one
+/// of `loaded/<file name> (2)`, `(3)` and so on is shown, in the sorted order of the full ids, so that
+/// two libraries stay two and `ui.inspect` and `ui.docking` show a library under the same id.
 fn unreadable_library_ids(app: &VectorcraftApp) -> Vec<(String, String)> {
-    app.ui
-        .library_panels
-        .iter()
-        .filter_map(|panel| {
-            let path = panel.id.strip_prefix("loaded/")?;
-            let name = vectorcraft_engine::cmd::fileio::file_name(path);
-            (name != path && !readable(path)).then(|| (panel.id.clone(), format!("loaded/{name}")))
+    let mut ids = std::collections::BTreeSet::new();
+    let ui = serde_json::to_value(&app.ui).unwrap_or_default();
+    for field in PANEL_FIELDS {
+        collect_library_panel_ids(&ui[field], &mut ids);
+    }
+    for workspace in ["custom_workspaces", "workspace_changes"].iter().filter_map(|k| ui[k].as_array()).flatten() {
+        for (_, layout) in workspace.as_object().into_iter().flatten().filter(|(k, _)| k.as_str() != "name") {
+            collect_library_panel_ids(layout, &mut ids);
+        }
+    }
+    collect_library_panel_ids(&json!(app.ui.transient_panel), &mut ids);
+    for id in app.ui.library_panels.iter().map(|p| p.id.as_str()).chain([app.ui.color_guide_limit.as_str()]) {
+        add_library_id(id, &mut ids);
+    }
+    let mut hidden = Vec::new();
+    let mut taken = std::collections::BTreeSet::new();
+    for id in ids {
+        let path = &id["loaded/".len()..];
+        let name = vectorcraft_engine::cmd::fileio::file_name(path);
+        if name != path && !readable(path) {
+            hidden.push((id, name));
+        } else {
+            taken.insert(id);
+        }
+    }
+    let mut hidden = hidden
+        .into_iter()
+        .map(|(id, name)| {
+            let mut shown = format!("loaded/{name}");
+            let mut n = 2;
+            while taken.contains(&shown) {
+                shown = format!("loaded/{name} ({n})");
+                n += 1;
+            }
+            taken.insert(shown.clone());
+            (id, shown)
         })
-        .collect()
+        .collect::<Vec<_>>();
+    // The longest first, so that an id that begins another one does not replace part of it.
+    hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
+    hidden
+}
+
+/// Adds `id` to `ids` when it is a loaded library's id (`loaded/<path>`).
+fn add_library_id(id: &str, ids: &mut std::collections::BTreeSet<String>) {
+    if id.len() > "loaded/".len() && id.starts_with("loaded/") {
+        ids.insert(id.to_string());
+    }
+}
+
+/// Adds to `ids` the loaded library id of every library panel id (`library:<kind>:loaded/<path>`)
+/// that `v` holds as a string or a key.
+fn collect_library_panel_ids(v: &Value, ids: &mut std::collections::BTreeSet<String>) {
+    let add = |s: &str, ids: &mut std::collections::BTreeSet<String>| {
+        if let Some((_, id)) = s.strip_prefix(crate::panels::library_panel::PREFIX).and_then(|rest| rest.split_once(':')) {
+            add_library_id(id, ids);
+        }
+    };
+    match v {
+        Value::String(s) => add(s, ids),
+        Value::Array(items) => items.iter().for_each(|item| collect_library_panel_ids(item, ids)),
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                add(key, ids);
+                collect_library_panel_ids(item, ids);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Writes each id of `ids` as the id the reply shows instead, wherever `v` holds it: in a library's
@@ -445,7 +518,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "ui.inspect" => ok(inspect(app, ctx)),
         "ui.docking" => {
             let mut docking = crate::panel_docking::inspect(app, ctx);
-            hide_library_ids(&mut docking, &unreadable_library_ids(app));
+            let ids = unreadable_library_ids(app);
+            hide_library_ids(&mut docking, &ids);
             ok(docking)
         }
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),

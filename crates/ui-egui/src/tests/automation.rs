@@ -425,6 +425,116 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A closed panel's former place, as `ui.docking_hidden` keeps it.
+fn hidden_place() -> craft_ui::docking::Location<String> {
+    serde_json::from_value(json!({"floating": null, "anchor": null, "placement": {"Tab": {"before": null}}, "size": null, "stack": null})).unwrap()
+}
+
+/// `ui.inspect` hides the path of a library loaded from outside the read root wherever the reply holds
+/// its id, also when its panel is closed: here only the Color Guide's limit and a closed panel's place
+/// name it.
+#[test]
+fn ui_inspect_hides_a_closed_librarys_path_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-closed-lib");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.docking_hidden.insert(format!("library:swatches:{theirs}"), hidden_place());
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    assert_eq!(ui["color_guide_limit"], "loaded/b.svg", "{r}");
+    assert!(ui["docking_hidden"].as_object().unwrap().contains_key("library:swatches:loaded/b.svg"), "{r}");
+    let hidden = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    assert_eq!(crate::control::inspect(&app, &egui::Context::default())["ui"]["color_guide_limit"], json!(theirs), "the person's");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Two libraries loaded from outside the read root with the same file name stay two in `ui.inspect`:
+/// the second one shows as `loaded/<file name> (2)`, the same in every place the reply names it.
+#[test]
+fn ui_inspect_keeps_two_hidden_libraries_with_one_file_name_apart() {
+    let (mut app, tx, base) = confined("inspect-same-name");
+    let (x, y) = (format!("loaded/{}", s(base.join("outside/x/b.svg"))), format!("loaded/{}", s(base.join("outside/y/b.svg"))));
+    let panel = |id: &str| -> crate::panels::library_panel::LibraryPanel { serde_json::from_value(json!({"kind": "swatches", "id": id})).unwrap() };
+    app.ui.library_panels = vec![panel(&x), panel(&y)];
+    for id in [&x, &y] {
+        app.ui.docking_hidden.insert(format!("library:swatches:{id}"), hidden_place());
+    }
+    app.ui.color_guide_limit = y.clone();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    let ids: Vec<_> = ui["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
+    assert_eq!(ids, [json!("loaded/b.svg"), json!("loaded/b.svg (2)")], "{r}");
+    let keys: Vec<_> = ui["docking_hidden"].as_object().unwrap().keys().cloned().collect();
+    assert_eq!(keys, ["library:swatches:loaded/b.svg", "library:swatches:loaded/b.svg (2)"], "no entry is dropped: {r}");
+    assert_eq!(ui["color_guide_limit"], "loaded/b.svg (2)", "the same id everywhere");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` and `ui.docking` show a hidden library under the same id, also when another hidden
+/// library with the same file name is in only one of the replies (here as the Color Guide's limit).
+#[test]
+fn ui_inspect_and_ui_docking_give_a_hidden_library_the_same_id() {
+    let (mut app, tx, base) = confined("inspect-docking-same-id");
+    let (x, y) = (format!("loaded/{}", s(base.join("outside/x/b.svg"))), format!("loaded/{}", s(base.join("outside/y/b.svg"))));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": y})).unwrap();
+    app.ui.library_panels = vec![panel];
+    app.ui.open_panel = Some(format!("library:swatches:{y}"));
+    app.ui.color_guide_limit = x.clone();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    assert_eq!(
+        (ui["color_guide_limit"].as_str(), ui["open_panel"].as_str()),
+        (Some("loaded/b.svg"), Some("library:swatches:loaded/b.svg (2)")),
+        "{r}"
+    );
+    let d = request(&mut app, &tx, "ui.docking", json!({}));
+    assert_eq!(d["result"]["flyout"], ui["open_panel"], "{d}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` rewrites only the ids of libraries the UI state refers to: a script's report line and
+/// a command palette query that look like a library id, with no such library, stay as written, and
+/// the query does not take the file name of a real library outside the root.
+#[test]
+fn ui_inspect_keeps_text_that_only_looks_like_a_library_id() {
+    let (mut app, tx, base) = confined("inspect-lookalike");
+    let real = format!("loaded/{}", s(base.join("outside/x/d.svg")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": real})).unwrap();
+    app.ui.library_panels = vec![panel];
+    let query = format!("library:swatches:loaded/{}", s(base.join("outside/d.svg")));
+    app.ui.palette_query = query.clone();
+    let text = format!("loaded/{}", s(base.join("outside/c.svg")));
+    let source = format!("vc.log({})", json!(text));
+    app.session.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_pump().is_some() {
+            break;
+        }
+    }
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["log"], json!([text]), "{r}");
+    assert_eq!(r["result"]["ui"]["palette_query"], json!(query), "{r}");
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/d.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A client without automation roots sees every loaded library's full id in `ui.inspect`.
+#[test]
+fn ui_inspect_shows_full_library_ids_without_a_read_root() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    let theirs = format!("loaded/{}", s(std::env::temp_dir().join("vc-ui-roots-unconfined").join("b.svg")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": theirs})).unwrap();
+    app.ui.library_panels = vec![panel];
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.docking_hidden.insert(format!("library:swatches:{theirs}"), hidden_place());
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    assert_eq!((&ui["library_panels"][0]["id"], &ui["color_guide_limit"]), (&json!(theirs), &json!(theirs)), "{r}");
+    assert!(ui["docking_hidden"].as_object().unwrap().contains_key(&format!("library:swatches:{theirs}")), "{r}");
+}
+
 /// Hidden logic-only ticks between the injection and its UI pass must not drain another step:
 /// one step per settled pass, not per hidden tick.
 #[test]
