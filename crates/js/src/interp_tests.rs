@@ -843,6 +843,7 @@ fn code(ops: Vec<Op>) -> Code {
         max_stack: 0,
         strict: false,
         self_name: None,
+        decl_name: None,
         params: Vec::new(),
         vars: Vec::new(),
         fun_decls: Vec::new(),

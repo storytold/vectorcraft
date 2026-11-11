@@ -2450,3 +2450,30 @@ fn a_ruler_guide_under_the_centre_point_keeps_the_pointer() {
     let drag = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 150.0));
     assert!(drag.iter().any(|a| matches!(a, Action::Preview(cmd, _) if cmd == "guide.move")), "the guide drags: {down:?} {drag:?}");
 }
+
+/// #6437: in Outline view, where an image is drawn as its frame, a click inside it on the edge of
+/// a path behind selects that path, with the image selected or not. In Preview the image takes
+/// the click.
+#[test]
+fn outline_view_click_through_an_image_selects_the_path_behind() {
+    use vectorcraft_doc::{Appearance, Document, ImageObject, Node, NodeKind};
+    let mut d = Document::new(500.0, 500.0);
+    let layer = d.layers[0].id;
+    let (back, image) = (d.alloc_id(), d.alloc_id());
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0));
+    d.insert(Some(layer), 0, Node::path(back, square, Appearance::default_art())).unwrap();
+    let xf = vectorcraft_geom::Affine::translate((150.0, 150.0));
+    let im = ImageObject { key: "k".into(), width: 100, height: 100, xf, link: None, placement: Default::default(), pixels: None };
+    d.insert(Some(layer), 1, Node::new(image, NodeKind::Image(Box::new(im)))).unwrap();
+    let selects = |a: &[Action], id: NodeId| a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([id.0])));
+    let p = paint();
+    for picked in [vec![], vec![image]] {
+        let mut s = Selection::default();
+        s.set(picked.clone());
+        let outline = ToolContext { outline: true, ..cx(&d, &s, &p) };
+        let a = SelectionTool::default().pointer(&outline, &ev(PointerKind::Down, 200.0, 180.0));
+        assert!(selects(&a, back), "outline, {picked:?} selected: {a:?}");
+        let a = SelectionTool::default().pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 200.0, 180.0));
+        assert!(!selects(&a, back), "preview, {picked:?} selected: {a:?}");
+    }
+}
