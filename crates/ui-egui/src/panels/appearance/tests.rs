@@ -1,5 +1,6 @@
 use super::super::tests_long_popups::{
-    PopupWindow, assert_last_row_scrolls_into_view, assert_popup_stays_put, assert_short_list_does_not_scroll, fx_menu_ends,
+    PopupWindow, assert_last_row_scrolls_into_view, assert_popup_stays_put, assert_rows_stay_on_one_line, assert_short_list_does_not_scroll,
+    fx_menu_ends,
 };
 use super::*;
 
@@ -63,6 +64,20 @@ fn a_short_swatch_picker_does_not_scroll() {
     assert!(tiles[tiles.len() - 1].bottom() <= 900.0, "every tile is inside the window");
     window.wheel_down(&mut app, tiles[0].center());
     assert_eq!(window.clickable(TILE), tiles, "a list that fits does not scroll");
+}
+
+/// The Add New Effect popup keeps each group's name on one line when its list scrolls: the scroll
+/// bar's column widens the popup instead of narrowing the rows.
+#[test]
+fn the_add_effect_popup_keeps_its_rows_on_one_line_when_it_scrolls() {
+    let mut groups: Vec<String> = vec![];
+    for effect in vectorcraft_effects::effect_catalog() {
+        let group = effect.menu.get(1).copied().unwrap_or("Other").to_string();
+        if !groups.contains(&group) {
+            groups.push(group);
+        }
+    }
+    assert_rows_stay_on_one_line(&mut app_with_a_selected_rectangle(), draw_bottom_bar, fx_button, &groups, "Distort & Transform", 120.0);
 }
 
 /// The Add New Effect button: the third of the bottom bar's 24 pt buttons.

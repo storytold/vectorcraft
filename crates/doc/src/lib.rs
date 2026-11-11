@@ -339,6 +339,11 @@ pub struct Document {
     /// names it as the file's active artboard. `None`: the first. Native files do not keep it.
     #[serde(skip)]
     pub opened_artboard: Option<u32>,
+    /// The file this document was read from recorded its units (a `.ai` file's
+    /// `%AI5_RulerUnits`): it opens in them. A file that records none opens in Preferences ›
+    /// Units › General (#5820). Native files do not keep it: they always keep their units.
+    #[serde(skip)]
+    pub units_from_file: bool,
     /// Some object is a dimension (the Dimension tool): edits refresh dimensions only while this
     /// is set, so documents without any pay nothing for them.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
