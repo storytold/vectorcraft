@@ -3,7 +3,7 @@ use std::rc::Rc;
 use proptest::prelude::*;
 
 use crate::bytecode::{Code, Handler, Op, Source, verify};
-use crate::{JsValue, LimitKind, Limits, Options, Realm, RunError, RunErrorKind};
+use crate::{JsValue, LimitKind, Limits, Options, Progress, Realm, RunError, RunErrorKind};
 
 fn run(src: &str) -> JsValue {
     match Realm::new().run(src) {
@@ -355,6 +355,45 @@ fn function_source_text_counts_toward_the_heap() {
     assert_eq!(limit(&mut small(limits.clone()), &src), LimitKind::Heap);
     let mut realm = small(limits);
     assert_eq!(realm.run("(function f(a) { return a; }).toString()"), Ok(JsValue::String("function f(a) { return a; }".into())));
+}
+
+#[test]
+fn a_function_that_returns_from_a_finally_block_does_not_keep_its_code() {
+    // The function's source holds a 256 Ki-unit comment. Its result stays on the stack while the
+    // second call runs, after the function was dropped. A collection then leaves its code out of
+    // the live total, as it does for a function whose finally block ran without an exception.
+    let live = |body: &str| {
+        let mut r = small(Limits::default());
+        let src = format!(
+            "var s = 'x'; for (var i = 0; i < 18; i++) s += s;\n\
+             var f = Function('/*' + s + '*/ try {{ {body} }} finally {{ return 0; }}'); s = null;\n\
+             f() + (f = null, (function () {{ var a = 0; for (var i = 0; i < 50; i++) a += i; return a; }})())"
+        );
+        if let Err(e) = r.start(&src) {
+            panic!("{e:?}");
+        }
+        let mut bytes = None;
+        loop {
+            match r.advance(1) {
+                Ok(Progress::Paused) => {
+                    let i = r.interp();
+                    if i.frames.len() == 2 && i.stack.len() > 1 {
+                        i.collect_garbage();
+                        bytes = Some(i.heap.bytes);
+                    }
+                }
+                Ok(Progress::Done(v)) => {
+                    assert_eq!(v, JsValue::Number(1225.0));
+                    break;
+                }
+                Err(e) => panic!("{e:?}"),
+            }
+        }
+        let Some(bytes) = bytes else { panic!("the second call never paused") };
+        bytes
+    };
+    let (plain, thrown) = (live(""), live("throw 1;"));
+    assert!(thrown < plain + 4096, "{thrown} > {plain}");
 }
 
 #[test]

@@ -779,6 +779,8 @@ impl Interp {
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
+        // A `return` in a finally block leaves the block, and the value takes its exception's slot.
+        self.drop_left_finally_sites(frame.base);
         let v = match frame.construct {
             Some(o) if !matches!(v, Value::Object(_)) => Value::Object(o),
             _ => v,
