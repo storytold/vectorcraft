@@ -241,6 +241,31 @@ fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, Str
     fileio::save_plan(&app.session, mode, p).map_err(|e| e.to_string())
 }
 
+/// Ordinary File > Save alone offers another destination when its own location refuses writes.
+/// Save Changes during Close/Quit continues to use [`save`].
+pub(crate) fn save_current(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    save_current_in(app, p, fileio::documents_dialog_folder())
+}
+
+/// The same entry with a resolved Documents folder (also permits deterministic host-free tests).
+pub(super) fn save_current_in(app: &mut VectorcraftApp, p: &Value, folder: Option<String>) -> Result<Value, String> {
+    remember_view(app);
+    let first = plan(app, SaveMode::Save, &acknowledged(p))?;
+    let own = !app.automation_is_acting()
+        && !is_web(app)
+        && p.get("path").is_none_or(Value::is_null)
+        && first.path.is_some()
+        && app.session.active().is_some_and(|st| !st.converted && !st.recovered && st.path == first.path && st.format == first.format.id);
+    if !own {
+        return save(app, SaveMode::Save, p, true);
+    }
+    if let Some(r) = first.path.as_deref().and_then(|path| ask_before_losing(app, path, "file.save", p)) {
+        return Ok(r);
+    }
+    let retry = super::read_only_save::Retry::new(&first, folder);
+    write_plan(app, first, Some(retry))
+}
+
 /// File → Save, Save As…, Save a Copy…, Save as Template… and the options dialogs' OK. `p` is the
 /// engine command's `{path?, format?, options?, svg?}`.
 ///
@@ -253,6 +278,17 @@ fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, Str
 /// → `{path, format, warnings…}` once written, or `{pending: <dialog kind>,
 /// path?}` while a dialog is open.
 pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bool) -> Result<Value, String> {
+    save_suggesting(app, mode, p, ask_options, None)
+}
+
+/// Reuse Save As with a captured name and folder, without changing the document before writing.
+pub(super) fn save_suggesting(
+    app: &mut VectorcraftApp,
+    mode: SaveMode,
+    p: &Value,
+    ask_options: bool,
+    suggestion: Option<&FilePick>,
+) -> Result<Value, String> {
     remember_view(app);
     // Writing over the file the document was read from is asked about here, not refused.
     let first = plan(app, mode, &acknowledged(p))?;
@@ -264,7 +300,7 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         if ask && matches!(mode, SaveMode::SaveAs | SaveMode::Copy) && matches!(first.format.id, "svg" | "svgz") {
             return ask_format_options(app, mode, first.format, &path);
         }
-        return write_plan(app, first);
+        return write_plan(app, first, None);
     }
     if is_web(app) && ask_options {
         return Ok(open_options(app, mode.command(), first.format, &first.name, true));
@@ -273,8 +309,12 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         SaveMode::Template => fileio::template_filters(first.format.id),
         _ => fileio::save_filters(first.format.id),
     });
-    let pick = FilePick { name: first.name.clone(), folder: first.folder.clone(), filters };
-    let picked = pick_finished(app, &pick, |picked, file_type| with_picked_type(picked, &first.name, file_type, first.format, mode))?;
+    let pick = FilePick {
+        name: suggestion.map_or_else(|| first.name.clone(), |s| s.name.clone()),
+        folder: suggestion.map_or_else(|| first.folder.clone(), |s| s.folder.clone()),
+        filters,
+    };
+    let picked = pick_finished(app, &pick, |picked, file_type| with_picked_type(picked, &pick.name, file_type, first.format, mode))?;
     // The picked file type wins over a `format` param.
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = q.as_object_mut() {
@@ -291,7 +331,7 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         crate::dialogs::opened_by_panel(app);
         return r;
     }
-    write_plan(app, chosen)
+    write_plan(app, chosen, None)
 }
 
 /// The UI command that runs a save in `mode`.
@@ -418,7 +458,7 @@ pub(crate) fn saved_status(path: &str, r: &Value) -> String {
 /// ([`background`]): this returns `{path, background: true, status, format, warnings}` at once
 /// (`warnings`: what the format loses, then the save's notes on its params, such as an option the format
 /// doesn't read), and the document takes the file (and counts as saved, as of the snapshot) once it is written.
-fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String> {
+fn write_plan(app: &mut VectorcraftApp, plan: SavePlan, retry: Option<super::read_only_save::Retry>) -> Result<Value, String> {
     let uid = app.session.active().ok_or("no document")?.uid;
     // Saves of one document finish in order.
     if app.background.busy_with(uid) {
@@ -444,19 +484,53 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     let enabled = app.session.prefs.background_save && target.is_some();
     // The work writes the file; the copy makes it the document's own afterwards.
     let done = job.clone();
+    // Capture the caller before background work leaves the request: it must never open a panel
+    // or error dialog later, when answering_control has been reset.
+    let by_control = app.automation_is_acting();
+    let location_refused = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let refused_by_work = location_refused.clone();
+    let own_path = target.clone();
+    let save_write = app.services.save_write.clone().filter(|_| !is_web(app));
+    let save_stream = app.services.save_stream.clone().filter(|_| job.streams() && !is_web(app));
     // A native file streams into the file as it is encoded (desktop; not to a download).
     let stream = app.services.stream_shared.clone().filter(|_| job.streams() && !is_web(app));
     let work = move |write: Writer| {
-        match stream {
-            Some(stream) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(EngineError::Other)),
-            None => job.write(|p, b| write(p, b).map_err(EngineError::Other)),
-        }
-        .map_err(|e| e.to_string())
+        let mut own_refused = false;
+        let mut observed = |p: &str, r: vectorcraft_engine::Result<()>| {
+            own_refused = own_path.as_deref() == Some(p) && matches!(&r, Err(EngineError::ReadOnlyLocation(_)));
+            r
+        };
+        let r = match (save_stream, save_write, stream) {
+            (Some(stream), _, _) => job.write_streamed(&mut |p, fill| observed(p, stream(p, fill))),
+            (_, Some(write), _) => job.write(|p, b| observed(p, write(p, b))),
+            (_, _, Some(stream)) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(EngineError::Other)),
+            _ => job.write(|p, b| write(p, b).map_err(EngineError::Other)),
+        };
+        r.map_err(|e| {
+            if let EngineError::ReadOnlyLocation(reason) = &e {
+                refused_by_work.store(own_refused, std::sync::atomic::Ordering::Relaxed);
+                if !by_control {
+                    return reason.clone();
+                }
+            }
+            e.to_string()
+        })
     };
     let failed = target.clone().unwrap_or_default();
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
+        if r.is_err()
+            && location_refused.load(std::sync::atomic::Ordering::Relaxed)
+            && let Some(retry) = retry
+            && let Some(r) = retry.instead(app, uid)
+        {
+            return r;
+        }
         // Not written: the document keeps its file, format and modified state, and the user is told.
-        let r = r.inspect_err(|e| report_write_error(app, false, &failed, e))?;
+        let r = r.inspect_err(|e| {
+            if !by_control {
+                report_write_error(app, false, &failed, e);
+            }
+        })?;
         // The document may have closed meanwhile: the file is written all the same.
         done.complete(&mut app.session, uid);
         let path = r["path"].as_str().unwrap_or_default().to_string();

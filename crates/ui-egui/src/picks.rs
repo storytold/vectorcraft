@@ -188,6 +188,15 @@ pub(crate) fn as_entry<R>(app: &mut VectorcraftApp, entry: impl FnOnce() -> Entr
     r
 }
 
+/// Run a continuation under its own entry: a refused Save's panel must resume Save As, not retry
+/// the original Save. Restore the enclosing entry for any work it does afterwards.
+pub(crate) fn as_own_entry<R>(app: &mut VectorcraftApp, entry: Entry, f: impl FnOnce(&mut VectorcraftApp) -> R) -> R {
+    let outer = app.picks.entry.replace(entry);
+    let r = f(app);
+    app.picks.entry = outer;
+    r
+}
+
 /// [`as_entry`] for a panel's or a dialog's button that `f` handles.
 pub(crate) fn button(app: &mut VectorcraftApp, f: impl Fn(&mut VectorcraftApp) + 'static) {
     let f = Rc::new(f);

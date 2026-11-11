@@ -89,6 +89,31 @@ pub fn write_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write)
     vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
+/// The save commands' writer: preserves a filesystem location refusal as a typed error. Other
+/// writers keep their existing errors; an automation-root refusal is never reclassified.
+pub fn write_save_file(path: &str, bytes: &[u8]) -> Result<()> {
+    write_save_file_with(path, &mut |w| w.write_all(bytes))
+}
+
+/// [`write_save_file`] for a streamed save.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn write_save_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
+    vectorcraft_doc::cancel::check()?;
+    may_write(path)?;
+    vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| save_write_error(path, e))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn save_write_error(path: &str, error: std::io::Error) -> EngineError {
+    let reason = format!("{path}: {error}");
+    if vectorcraft_format::read_only_location(&error) { EngineError::ReadOnlyLocation(reason) } else { EngineError::Other(reason) }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn write_save_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
+    write_file_with(path, fill)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_dir(path: &str) -> Result<()> {
     may_write(path)?;
