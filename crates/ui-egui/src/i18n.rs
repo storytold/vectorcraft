@@ -352,8 +352,8 @@ pub static LANGUAGES: [LangInfo; 29] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
-    // Norwegian Bokmal. `nb-NO` from browsers and Windows/macOS; `no` and `nn` POSIX locales
-    // resolve here too (see `candidates`). Plurals follow the English rule: one (1), other.
+    // Norwegian Bokmål: the whole interface, keeping product and workspace names in English.
+    // Windows, macOS and browsers report Bokmål as `nb`, POSIX locales as `no` or `nn`.
     LangInfo {
         code: "nb",
         name: "Norsk",
@@ -445,15 +445,14 @@ fn candidates(tag: &str) -> Vec<String> {
     for n in (1..=parts.len()).rev() {
         out.push(parts[..n].join("-"));
     }
+    if matches!(primary, "no" | "nb" | "nn") && !parts.contains(&"nb") {
+        // Norwegian: `nb` from Windows, macOS and browsers, `no` or `nn` from POSIX locales.
+        out.insert(out.len() - 1, "nb".to_string());
+    }
     if primary == "zh" && !parts.iter().any(|p| matches!(*p, "hans" | "hant")) {
         // Chinese by region when no script is given.
         let script = if parts.iter().any(|p| matches!(*p, "tw" | "hk" | "mo")) { "zh-hant" } else { "zh-hans" };
         out.insert(out.len() - 1, script.to_string());
-    }
-    if matches!(primary, "no" | "nb" | "nn") && !out.iter().any(|c| c == "nb") {
-        // Norwegian arrives as `nb` (Bokmal) from browsers, Windows and macOS, but as `no` or
-        // `nn` from POSIX locales; all three select this Bokmal catalog rather than English.
-        out.insert(out.len() - 1, "nb".to_string());
     }
     out
 }
