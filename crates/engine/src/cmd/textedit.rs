@@ -1087,12 +1087,16 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The em a laid-out glyph's kerning and tracking are measured in, in text space: the size it
-/// was shaped at (superscript, small caps and Shrink Text to Fit included).
+/// was shaped at (superscript, small caps and Shrink Text to Fit included), in horizontal type
+/// as its Horizontal Scale draws it ([`vectorcraft_text::spacing_scale`]).
 fn glyph_em(db: &vectorcraft_text::FontDb, t: &TextObject, g: &vectorcraft_text::PositionedGlyph) -> Option<f64> {
     let face = db.face_by_id(g.font_id)?;
-    let h_scale = edit::slice_runs(&t.runs, g.byte, g.byte + g.len).first()?.style.h_scale / 100.0;
+    let runs = edit::slice_runs(&t.runs, g.byte, g.byte + g.len);
+    let style = &runs.first()?.style;
+    // The glyph's own scale takes in the Horizontal Scale.
+    let h_scale = style.h_scale / 100.0;
     let [a, b, ..] = g.xf.as_coeffs();
-    Some(a.hypot(b) * face.units_per_em() / h_scale).filter(|em| em.is_finite() && *em > 0.0)
+    Some(a.hypot(b) * face.units_per_em() / h_scale * vectorcraft_text::spacing_scale(style, t.vertical)).filter(|em| em.is_finite() && *em > 0.0)
 }
 
 /// The current pair correction in thousandths of an em, including an automatic correction.
