@@ -6627,6 +6627,111 @@ axis	Y Axis	Axe Y
 	Heal	Soin
 	Buff	Bonus
 	Ult	Ult
+	Currency Tokens	Jetons de monnaie
+	Coin	Pièce
+	Gem Shard	Éclat de gemme
+	Ticket	Ticket
+	Token	Jeton
+	Keycard	Carte-clé
+	Crystal	Cristal
+	World Props	Props du monde
+	Town	Ville
+	Dungeon	Donjon
+	Camp	Camp
+	Portal	Portail
+	Shop	Boutique
+	Boss Gate	Porte de boss
+	Party Roles	Rôles de groupe
+	Tank	Tank
+	Healer	Soigneur
+	DPS	DPS
+	Support	Soutien
+	Scout	Éclaireur
+	Caster	Lanceur
+	Loot Chests	Coffres de butin
+	Wood Chest	Wood Chest
+	Iron Chest	Iron Chest
+	Gold Chest	Gold Chest
+	Locked Chest	Locked Chest
+	Open Chest	Open Chest
+	Mimic	Mimic
+	Resource Nodes	Resource Nodes
+	Ore	Ore
+	Herb	Herb
+	Wood Log	Wood Log
+	Fish	Fish
+	Crystal Vein	Crystal Vein
+	Scrap	Scrap
+	Quest Marks	Quest Marks
+	New Quest	New Quest
+	Active Quest	Active Quest
+	Turn In	Turn In
+	Failed Quest	Failed Quest
+	Hidden Quest	Hidden Quest
+	Daily	Daily
+	Status Pips	Status Pips
+	Poison Pip	Poison Pip
+	Burn Pip	Burn Pip
+	Stun Pip	Stun Pip
+	Shield Pip	Shield Pip
+	Buff Pip	Buff Pip
+	Debuff Pip	Debuff Pip
+	Vehicle Icons	Vehicle Icons
+	Cart	Cart
+	Boat	Boat
+	Airship	Airship
+	Mount	Mount
+	Bike	Bike
+	Elevator	Elevator
+	Dialogue UI	Dialogue UI
+	Speech	Speech
+	Whisper	Whisper
+	Shout	Shout
+	Thought	Thought
+	Choice	Choice
+	Narration	Narration
+	Crafting Stations	Crafting Stations
+	Anvil	Anvil
+	Cauldron	Cauldron
+	Loom	Loom
+	Workbench	Workbench
+	Enchant Table	Enchant Table
+	Smelter	Smelter
+	Arrow Marks	Arrow Marks
+	Left Arrow	Left Arrow
+	Right Arrow	Right Arrow
+	Up Arrow	Up Arrow
+	Down Arrow	Down Arrow
+	Bidirectional	Bidirectional
+	Chevron	Chevron
+	Nature Icons	Icônes nature
+	Tree	Arbre
+	Leaf	Feuille
+	Mountain	Montagne
+	Cloud	Nuage
+	Sun	Soleil
+	Moon	Lune
+	UI Badges	UI Badges
+	New Badge	New Badge
+	Hot Badge	Hot Badge
+	Sale Badge	Sale Badge
+	Lock Badge	Lock Badge
+	Check Badge	Check Badge
+	Alert Badge	Alert Badge
+	Hazard Signs	Hazard Signs
+	Warning	Warning
+	Danger	Danger
+	Radiation	Radiation
+	Biohazard	Biohazard
+	Slippery	Slippery
+	Electric	Electric
+	Tool Icons	Icônes d’outils
+	Hammer	Marteau
+	Wrench	Clé
+	Pickaxe	Pioche
+	Axe	Hache
+	Fishing Rod	Canne
+	Torch	Torche
 	Sword	Épée
 	Shield	Bouclier
 	Potion	Potion

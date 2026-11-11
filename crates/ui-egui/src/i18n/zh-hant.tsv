@@ -6277,6 +6277,111 @@ axis	Y Axis	Y 軸
 	Heal	治療
 	Buff	增益
 	Ult	必殺
+	Currency Tokens	貨幣代幣
+	Coin	硬幣
+	Gem Shard	寶石碎片
+	Ticket	票券
+	Token	代幣
+	Keycard	門卡
+	Crystal	水晶
+	World Props	世界道具
+	Town	城鎮
+	Dungeon	地牢
+	Camp	營地
+	Portal	傳送門
+	Shop	商店
+	Boss Gate	首領門
+	Party Roles	Party Roles
+	Tank	Tank
+	Healer	Healer
+	DPS	DPS
+	Support	Support
+	Scout	Scout
+	Caster	Caster
+	Loot Chests	Loot Chests
+	Wood Chest	Wood Chest
+	Iron Chest	Iron Chest
+	Gold Chest	Gold Chest
+	Locked Chest	Locked Chest
+	Open Chest	Open Chest
+	Mimic	Mimic
+	Resource Nodes	Resource Nodes
+	Ore	Ore
+	Herb	Herb
+	Wood Log	Wood Log
+	Fish	Fish
+	Crystal Vein	Crystal Vein
+	Scrap	Scrap
+	Quest Marks	Quest Marks
+	New Quest	New Quest
+	Active Quest	Active Quest
+	Turn In	Turn In
+	Failed Quest	Failed Quest
+	Hidden Quest	Hidden Quest
+	Daily	Daily
+	Status Pips	Status Pips
+	Poison Pip	Poison Pip
+	Burn Pip	Burn Pip
+	Stun Pip	Stun Pip
+	Shield Pip	Shield Pip
+	Buff Pip	Buff Pip
+	Debuff Pip	Debuff Pip
+	Vehicle Icons	Vehicle Icons
+	Cart	Cart
+	Boat	Boat
+	Airship	Airship
+	Mount	Mount
+	Bike	Bike
+	Elevator	Elevator
+	Dialogue UI	Dialogue UI
+	Speech	Speech
+	Whisper	Whisper
+	Shout	Shout
+	Thought	Thought
+	Choice	Choice
+	Narration	Narration
+	Crafting Stations	Crafting Stations
+	Anvil	Anvil
+	Cauldron	Cauldron
+	Loom	Loom
+	Workbench	Workbench
+	Enchant Table	Enchant Table
+	Smelter	Smelter
+	Arrow Marks	Arrow Marks
+	Left Arrow	Left Arrow
+	Right Arrow	Right Arrow
+	Up Arrow	Up Arrow
+	Down Arrow	Down Arrow
+	Bidirectional	Bidirectional
+	Chevron	Chevron
+	Nature Icons	自然圖示
+	Tree	樹
+	Leaf	葉
+	Mountain	山
+	Cloud	雲
+	Sun	日
+	Moon	月
+	UI Badges	UI Badges
+	New Badge	New Badge
+	Hot Badge	Hot Badge
+	Sale Badge	Sale Badge
+	Lock Badge	Lock Badge
+	Check Badge	Check Badge
+	Alert Badge	Alert Badge
+	Hazard Signs	Hazard Signs
+	Warning	Warning
+	Danger	Danger
+	Radiation	Radiation
+	Biohazard	Biohazard
+	Slippery	Slippery
+	Electric	Electric
+	Tool Icons	工具圖示
+	Hammer	錘
+	Wrench	扳手
+	Pickaxe	鎬
+	Axe	斧
+	Fishing Rod	釣竿
+	Torch	火把
 	Sword	劍
 	Shield	盾
 	Potion	藥水

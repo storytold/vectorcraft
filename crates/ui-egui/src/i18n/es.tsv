@@ -6575,6 +6575,111 @@ axis	Y Axis	Eje Y
 	Heal	Curación
 	Buff	Mejora
 	Ult	Ult
+	Currency Tokens	Fichas de moneda
+	Coin	Moneda
+	Gem Shard	Esquirla de gema
+	Ticket	Ticket
+	Token	Ficha
+	Keycard	Tarjeta
+	Crystal	Cristal
+	World Props	Props del mundo
+	Town	Pueblo
+	Dungeon	Mazmorra
+	Camp	Campamento
+	Portal	Portal
+	Shop	Tienda
+	Boss Gate	Puerta de jefe
+	Party Roles	Roles de grupo
+	Tank	Tank
+	Healer	Sanador
+	DPS	DPS
+	Support	Soporte
+	Scout	Explorador
+	Caster	Conjurador
+	Loot Chests	Cofres de botín
+	Wood Chest	Cofre de madera
+	Iron Chest	Cofre de hierro
+	Gold Chest	Cofre de oro
+	Locked Chest	Cofre cerrado
+	Open Chest	Cofre abierto
+	Mimic	Mímico
+	Resource Nodes	Nodos de recurso
+	Ore	Mineral
+	Herb	Hierba
+	Wood Log	Tronco
+	Fish	Pez
+	Crystal Vein	Veta de cristal
+	Scrap	Chatarra
+	Quest Marks	Marcas de misión
+	New Quest	Nueva misión
+	Active Quest	Misión activa
+	Turn In	Entregar
+	Failed Quest	Misión fallida
+	Hidden Quest	Misión oculta
+	Daily	Diaria
+	Status Pips	Pips de estado
+	Poison Pip	Poison Pip
+	Burn Pip	Burn Pip
+	Stun Pip	Stun Pip
+	Shield Pip	Shield Pip
+	Buff Pip	Buff Pip
+	Debuff Pip	Debuff Pip
+	Vehicle Icons	Iconos de vehículo
+	Cart	Carreta
+	Boat	Barco
+	Airship	Dirigible
+	Mount	Montura
+	Bike	Bici
+	Elevator	Ascensor
+	Dialogue UI	UI de diálogo
+	Speech	Habla
+	Whisper	Susurro
+	Shout	Grito
+	Thought	Pensamiento
+	Choice	Elección
+	Narration	Narración
+	Crafting Stations	Estaciones de crafteo
+	Anvil	Yunque
+	Cauldron	Caldero
+	Loom	Telar
+	Workbench	Banco
+	Enchant Table	Mesa de encantamientos
+	Smelter	Fundición
+	Arrow Marks	Marcas de flecha
+	Left Arrow	Flecha izq.
+	Right Arrow	Flecha der.
+	Up Arrow	Flecha arriba
+	Down Arrow	Flecha abajo
+	Bidirectional	Bidireccional
+	Chevron	Chevron
+	Nature Icons	Iconos de naturaleza
+	Tree	Árbol
+	Leaf	Hoja
+	Mountain	Montaña
+	Cloud	Nube
+	Sun	Sol
+	Moon	Luna
+	UI Badges	Insignias UI
+	New Badge	New Badge
+	Hot Badge	Hot Badge
+	Sale Badge	Sale Badge
+	Lock Badge	Lock Badge
+	Check Badge	Check Badge
+	Alert Badge	Alert Badge
+	Hazard Signs	Señales de peligro
+	Warning	Aviso
+	Danger	Peligro
+	Radiation	Radiación
+	Biohazard	Biohazard
+	Slippery	Resbaladizo
+	Electric	Eléctrico
+	Tool Icons	Iconos de herramientas
+	Hammer	Martillo
+	Wrench	Llave
+	Pickaxe	Pico
+	Axe	Hacha
+	Fishing Rod	Caña
+	Torch	Antorcha
 	Sword	Espada
 	Shield	Escudo
 	Potion	Poción

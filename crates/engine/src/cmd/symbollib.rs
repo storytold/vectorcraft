@@ -160,6 +160,21 @@ pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
     BuiltinSymbolLibrary { id: "map-markers", name: "Map Markers", make: map_markers },
     BuiltinSymbolLibrary { id: "inventory-icons", name: "Inventory Icons", make: inventory_icons },
     BuiltinSymbolLibrary { id: "skill-icons", name: "Skill Icons", make: skill_icons },
+    BuiltinSymbolLibrary { id: "currency-tokens", name: "Currency Tokens", make: currency_tokens },
+    BuiltinSymbolLibrary { id: "world-props", name: "World Props", make: world_props },
+    BuiltinSymbolLibrary { id: "party-roles", name: "Party Roles", make: party_roles },
+    BuiltinSymbolLibrary { id: "loot-chests", name: "Loot Chests", make: loot_chests },
+    BuiltinSymbolLibrary { id: "resource-nodes", name: "Resource Nodes", make: resource_nodes },
+    BuiltinSymbolLibrary { id: "quest-marks", name: "Quest Marks", make: quest_marks },
+    BuiltinSymbolLibrary { id: "status-pips", name: "Status Pips", make: status_pips },
+    BuiltinSymbolLibrary { id: "vehicle-icons", name: "Vehicle Icons", make: vehicle_icons },
+    BuiltinSymbolLibrary { id: "dialogue-ui", name: "Dialogue UI", make: dialogue_ui },
+    BuiltinSymbolLibrary { id: "crafting-stations", name: "Crafting Stations", make: crafting_stations },
+    BuiltinSymbolLibrary { id: "arrow-marks", name: "Arrow Marks", make: arrow_marks },
+    BuiltinSymbolLibrary { id: "nature-icons", name: "Nature Icons", make: nature_icons },
+    BuiltinSymbolLibrary { id: "ui-badges", name: "UI Badges", make: ui_badges },
+    BuiltinSymbolLibrary { id: "hazard-signs", name: "Hazard Signs", make: hazard_signs },
+    BuiltinSymbolLibrary { id: "tool-icons", name: "Tool Icons", make: tool_icons },
 ];
 
 /// Built-in library `id`, made once.
@@ -356,6 +371,420 @@ fn skill_icons() -> SymbolLibrary {
     }
     doc.title = "Skill Icons".into();
     SymbolLibrary { name: "Skill Icons".into(), doc }
+}
+
+fn poly(pts: &[(f64, f64)]) -> vectorcraft_geom::PathData {
+    let pts: Vec<Point> = pts.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true))
+}
+
+fn solid_icons(title: &str, icons: impl IntoIterator<Item = (&'static str, vectorcraft_geom::PathData, &'static str)>) -> SymbolLibrary {
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in icons {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = title.into();
+    SymbolLibrary { name: title.into(), doc }
+}
+
+/// Currency Tokens: original game/UI marks (no 9-slice).
+fn currency_tokens() -> SymbolLibrary {
+    let c = Point::ZERO;
+    solid_icons(
+        "Currency Tokens",
+        [
+            ("Coin", shapes::ellipse(Rect::new(-14.0, -14.0, 14.0, 14.0)), "#f1c40f"),
+            ("Gem Shard", poly(&[(0.0, -18.0), (10.0, -4.0), (6.0, 16.0), (-6.0, 16.0), (-10.0, -4.0)]), "#1abc9c"),
+            ("Ticket", poly(&[(-16.0, -10.0), (16.0, -10.0), (16.0, 10.0), (-16.0, 10.0)]), "#e67e22"),
+            ("Token", shapes::polygon(c, 14.0, 6, 0.0), "#95a5a6"),
+            ("Keycard", poly(&[(-18.0, -12.0), (18.0, -12.0), (18.0, 12.0), (-18.0, 12.0)]), "#3498db"),
+            ("Crystal", poly(&[(0.0, -20.0), (12.0, 0.0), (0.0, 20.0), (-12.0, 0.0)]), "#9b59b6"),
+        ],
+    )
+}
+
+/// World Props: original game/UI marks (no 9-slice).
+fn world_props() -> SymbolLibrary {
+    solid_icons(
+        "World Props",
+        [
+            (
+                "Town",
+                poly(&[(-16.0, 14.0), (-16.0, -2.0), (-6.0, -2.0), (-6.0, -14.0), (6.0, -14.0), (6.0, -2.0), (16.0, -2.0), (16.0, 14.0)]),
+                "#e67e22",
+            ),
+            ("Dungeon", poly(&[(-14.0, 16.0), (-14.0, -8.0), (0.0, -18.0), (14.0, -8.0), (14.0, 16.0)]), "#7f8c8d"),
+            ("Camp", poly(&[(-16.0, 12.0), (0.0, -18.0), (16.0, 12.0)]), "#27ae60"),
+            ("Portal", shapes::ellipse(Rect::new(-12.0, -16.0, 12.0, 16.0)), "#8e44ad"),
+            ("Shop", poly(&[(-16.0, 14.0), (-16.0, -4.0), (0.0, -16.0), (16.0, -4.0), (16.0, 14.0)]), "#3498db"),
+            (
+                "Boss Gate",
+                poly(&[(-18.0, 16.0), (-18.0, -6.0), (-8.0, -6.0), (-8.0, -16.0), (8.0, -16.0), (8.0, -6.0), (18.0, -6.0), (18.0, 16.0)]),
+                "#c0392b",
+            ),
+        ],
+    )
+}
+
+/// Party Roles: original game/UI marks (no 9-slice).
+fn party_roles() -> SymbolLibrary {
+    let c = Point::ZERO;
+    solid_icons(
+        "Party Roles",
+        [
+            ("Tank", poly(&[(0.0, -18.0), (14.0, -8.0), (12.0, 14.0), (0.0, 18.0), (-12.0, 14.0), (-14.0, -8.0)]), "#3498db"),
+            (
+                "Healer",
+                poly(&[
+                    (-4.0, -18.0),
+                    (4.0, -18.0),
+                    (4.0, -4.0),
+                    (18.0, -4.0),
+                    (18.0, 4.0),
+                    (4.0, 4.0),
+                    (4.0, 18.0),
+                    (-4.0, 18.0),
+                    (-4.0, 4.0),
+                    (-18.0, 4.0),
+                    (-18.0, -4.0),
+                    (-4.0, -4.0),
+                ]),
+                "#2ecc71",
+            ),
+            ("DPS", poly(&[(-16.0, 12.0), (0.0, -18.0), (16.0, 12.0), (0.0, 4.0)]), "#e74c3c"),
+            ("Support", shapes::star(c, 16.0, 7.0, 5, 0.0), "#f1c40f"),
+            ("Scout", poly(&[(-14.0, 10.0), (0.0, -16.0), (14.0, 10.0), (0.0, 2.0)]), "#1abc9c"),
+            ("Caster", shapes::polygon(c, 16.0, 6, 0.0), "#9b59b6"),
+        ],
+    )
+}
+
+/// Loot Chests: original game/UI marks (no 9-slice).
+fn loot_chests() -> SymbolLibrary {
+    solid_icons(
+        "Loot Chests",
+        [
+            (
+                "Wood Chest",
+                poly(&[(-16.0, -6.0), (16.0, -6.0), (16.0, 14.0), (-16.0, 14.0), (-16.0, -6.0), (-16.0, -12.0), (16.0, -12.0), (16.0, -6.0)]),
+                "#a0522d",
+            ),
+            ("Iron Chest", poly(&[(-15.0, -8.0), (15.0, -8.0), (15.0, 14.0), (-15.0, 14.0)]), "#7f8c8d"),
+            ("Gold Chest", poly(&[(-15.0, -8.0), (15.0, -8.0), (15.0, 14.0), (-15.0, 14.0)]), "#f1c40f"),
+            (
+                "Locked Chest",
+                poly(&[(-15.0, -4.0), (15.0, -4.0), (15.0, 14.0), (-15.0, 14.0), (-4.0, -4.0), (-4.0, -12.0), (4.0, -12.0), (4.0, -4.0)]),
+                "#95a5a6",
+            ),
+            (
+                "Open Chest",
+                poly(&[(-16.0, 0.0), (16.0, 0.0), (16.0, 14.0), (-16.0, 14.0), (-16.0, 0.0), (-14.0, -14.0), (14.0, -10.0), (16.0, 0.0)]),
+                "#e67e22",
+            ),
+            (
+                "Mimic",
+                poly(&[(-16.0, -4.0), (16.0, -4.0), (16.0, 14.0), (-16.0, 14.0), (-10.0, -4.0), (-6.0, -14.0), (6.0, -14.0), (10.0, -4.0)]),
+                "#8e44ad",
+            ),
+        ],
+    )
+}
+
+/// Resource Nodes: original game/UI marks (no 9-slice).
+fn resource_nodes() -> SymbolLibrary {
+    let c = Point::ZERO;
+    solid_icons(
+        "Resource Nodes",
+        [
+            ("Ore", shapes::polygon(c, 14.0, 5, 0.0), "#7f8c8d"),
+            ("Herb", poly(&[(0.0, 16.0), (-4.0, 4.0), (-14.0, -2.0), (-4.0, -4.0), (0.0, -18.0), (4.0, -4.0), (14.0, -2.0), (4.0, 4.0)]), "#27ae60"),
+            ("Wood Log", poly(&[(-18.0, -6.0), (18.0, -6.0), (18.0, 6.0), (-18.0, 6.0)]), "#a0522d"),
+            ("Fish", poly(&[(-18.0, 0.0), (-6.0, -10.0), (10.0, -6.0), (18.0, 0.0), (10.0, 6.0), (-6.0, 10.0)]), "#3498db"),
+            (
+                "Crystal Vein",
+                poly(&[(0.0, -18.0), (8.0, -4.0), (16.0, 4.0), (4.0, 4.0), (0.0, 18.0), (-4.0, 4.0), (-16.0, 4.0), (-8.0, -4.0)]),
+                "#9b59b6",
+            ),
+            ("Scrap", poly(&[(-12.0, -8.0), (4.0, -14.0), (14.0, -2.0), (8.0, 12.0), (-10.0, 10.0), (-16.0, 0.0)]), "#95a5a6"),
+        ],
+    )
+}
+
+/// Quest Marks: original game/UI marks (no 9-slice).
+fn quest_marks() -> SymbolLibrary {
+    let c = Point::ZERO;
+    solid_icons(
+        "Quest Marks",
+        [
+            ("New Quest", shapes::star(c, 16.0, 7.0, 4, 0.0), "#f1c40f"),
+            ("Active Quest", poly(&[(0.0, -18.0), (8.0, -4.0), (0.0, 16.0), (-8.0, -4.0)]), "#e67e22"),
+            ("Turn In", poly(&[(-12.0, -2.0), (0.0, -14.0), (12.0, -2.0), (4.0, -2.0), (4.0, 14.0), (-4.0, 14.0), (-4.0, -2.0)]), "#2ecc71"),
+            (
+                "Failed Quest",
+                poly(&[
+                    (-14.0, -14.0),
+                    (-8.0, -14.0),
+                    (0.0, -2.0),
+                    (8.0, -14.0),
+                    (14.0, -14.0),
+                    (4.0, 0.0),
+                    (14.0, 14.0),
+                    (8.0, 14.0),
+                    (0.0, 2.0),
+                    (-8.0, 14.0),
+                    (-14.0, 14.0),
+                    (-4.0, 0.0),
+                ]),
+                "#e74c3c",
+            ),
+            ("Hidden Quest", shapes::ellipse(Rect::new(-10.0, -14.0, 10.0, 10.0)), "#8e44ad"),
+            ("Daily", shapes::polygon(c, 15.0, 8, 0.0), "#3498db"),
+        ],
+    )
+}
+
+/// Status Pips: original game/UI marks (no 9-slice).
+fn status_pips() -> SymbolLibrary {
+    solid_icons(
+        "Status Pips",
+        [
+            ("Poison Pip", shapes::ellipse(Rect::new(-10.0, -10.0, 10.0, 10.0)), "#27ae60"),
+            ("Burn Pip", shapes::ellipse(Rect::new(-10.0, -10.0, 10.0, 10.0)), "#e74c3c"),
+            ("Stun Pip", shapes::ellipse(Rect::new(-10.0, -10.0, 10.0, 10.0)), "#f1c40f"),
+            ("Shield Pip", shapes::ellipse(Rect::new(-10.0, -10.0, 10.0, 10.0)), "#3498db"),
+            ("Buff Pip", shapes::ellipse(Rect::new(-10.0, -10.0, 10.0, 10.0)), "#2ecc71"),
+            ("Debuff Pip", shapes::ellipse(Rect::new(-10.0, -10.0, 10.0, 10.0)), "#8e44ad"),
+        ],
+    )
+}
+
+/// Vehicle Icons: original game/UI marks (no 9-slice).
+fn vehicle_icons() -> SymbolLibrary {
+    solid_icons(
+        "Vehicle Icons",
+        [
+            (
+                "Cart",
+                poly(&[
+                    (-16.0, 4.0),
+                    (-16.0, -6.0),
+                    (12.0, -6.0),
+                    (16.0, 0.0),
+                    (16.0, 4.0),
+                    (10.0, 4.0),
+                    (10.0, 10.0),
+                    (4.0, 10.0),
+                    (4.0, 4.0),
+                    (-4.0, 4.0),
+                    (-4.0, 10.0),
+                    (-10.0, 10.0),
+                    (-10.0, 4.0),
+                ]),
+                "#a0522d",
+            ),
+            ("Boat", poly(&[(-18.0, 4.0), (-10.0, 14.0), (10.0, 14.0), (18.0, 4.0), (0.0, 4.0), (0.0, -16.0), (-2.0, 4.0)]), "#3498db"),
+            ("Airship", poly(&[(-16.0, 0.0), (-8.0, -12.0), (8.0, -12.0), (16.0, 0.0), (8.0, 8.0), (-8.0, 8.0)]), "#9b59b6"),
+            (
+                "Mount",
+                poly(&[(-14.0, 10.0), (-10.0, -4.0), (-2.0, -14.0), (6.0, -8.0), (14.0, 2.0), (10.0, 12.0), (0.0, 6.0), (-8.0, 12.0)]),
+                "#e67e22",
+            ),
+            ("Bike", poly(&[(-16.0, 8.0), (-8.0, -4.0), (4.0, -4.0), (12.0, 8.0), (4.0, 8.0), (0.0, 0.0), (-4.0, 8.0)]), "#7f8c8d"),
+            (
+                "Elevator",
+                poly(&[
+                    (-12.0, -16.0),
+                    (12.0, -16.0),
+                    (12.0, 16.0),
+                    (-12.0, 16.0),
+                    (-12.0, -16.0),
+                    (-8.0, -10.0),
+                    (8.0, -10.0),
+                    (8.0, 10.0),
+                    (-8.0, 10.0),
+                    (-8.0, -10.0),
+                ]),
+                "#95a5a6",
+            ),
+        ],
+    )
+}
+
+/// Dialogue UI: original game/UI marks (no 9-slice).
+fn dialogue_ui() -> SymbolLibrary {
+    solid_icons(
+        "Dialogue UI",
+        [
+            ("Speech", poly(&[(-16.0, -12.0), (16.0, -12.0), (16.0, 6.0), (4.0, 6.0), (0.0, 16.0), (-4.0, 6.0), (-16.0, 6.0)]), "#ecf0f1"),
+            ("Whisper", poly(&[(-14.0, -10.0), (14.0, -10.0), (14.0, 4.0), (2.0, 4.0), (0.0, 12.0), (-2.0, 4.0), (-14.0, 4.0)]), "#bdc3c7"),
+            ("Shout", poly(&[(-18.0, -14.0), (18.0, -14.0), (18.0, 8.0), (6.0, 8.0), (0.0, 18.0), (-6.0, 8.0), (-18.0, 8.0)]), "#e74c3c"),
+            ("Thought", shapes::ellipse(Rect::new(-14.0, -12.0, 14.0, 8.0)), "#85c1e9"),
+            ("Choice", poly(&[(-16.0, 0.0), (0.0, -14.0), (16.0, 0.0), (0.0, 14.0)]), "#f1c40f"),
+            ("Narration", poly(&[(-18.0, -8.0), (18.0, -8.0), (18.0, 8.0), (-18.0, 8.0)]), "#7f8c8d"),
+        ],
+    )
+}
+
+/// Crafting Stations: original game/UI marks (no 9-slice).
+fn crafting_stations() -> SymbolLibrary {
+    solid_icons(
+        "Crafting Stations",
+        [
+            ("Anvil", poly(&[(-16.0, 8.0), (-12.0, -4.0), (12.0, -4.0), (16.0, 8.0), (8.0, 8.0), (8.0, 14.0), (-8.0, 14.0), (-8.0, 8.0)]), "#7f8c8d"),
+            ("Cauldron", poly(&[(-14.0, -4.0), (-10.0, -12.0), (10.0, -12.0), (14.0, -4.0), (12.0, 12.0), (-12.0, 12.0)]), "#8e44ad"),
+            (
+                "Loom",
+                poly(&[(-16.0, -14.0), (-16.0, 14.0), (-10.0, 14.0), (-10.0, -8.0), (10.0, -8.0), (10.0, 14.0), (16.0, 14.0), (16.0, -14.0)]),
+                "#e67e22",
+            ),
+            (
+                "Workbench",
+                poly(&[
+                    (-18.0, 0.0),
+                    (18.0, 0.0),
+                    (18.0, 6.0),
+                    (14.0, 6.0),
+                    (14.0, 14.0),
+                    (8.0, 14.0),
+                    (8.0, 6.0),
+                    (-8.0, 6.0),
+                    (-8.0, 14.0),
+                    (-14.0, 14.0),
+                    (-14.0, 6.0),
+                    (-18.0, 6.0),
+                ]),
+                "#a0522d",
+            ),
+            (
+                "Enchant Table",
+                poly(&[(-14.0, 8.0), (-14.0, -4.0), (0.0, -16.0), (14.0, -4.0), (14.0, 8.0), (8.0, 8.0), (8.0, 14.0), (-8.0, 14.0), (-8.0, 8.0)]),
+                "#9b59b6",
+            ),
+            ("Smelter", poly(&[(-12.0, 14.0), (-12.0, -4.0), (-6.0, -14.0), (6.0, -14.0), (12.0, -4.0), (12.0, 14.0)]), "#e74c3c"),
+        ],
+    )
+}
+
+/// Arrow Marks: original game/UI marks (no 9-slice).
+fn arrow_marks() -> SymbolLibrary {
+    solid_icons(
+        "Arrow Marks",
+        [
+            ("Left Arrow", poly(&[(8.0, -12.0), (-12.0, 0.0), (8.0, 12.0), (8.0, 4.0), (16.0, 4.0), (16.0, -4.0), (8.0, -4.0)]), "#3498db"),
+            ("Right Arrow", poly(&[(-8.0, -12.0), (12.0, 0.0), (-8.0, 12.0), (-8.0, 4.0), (-16.0, 4.0), (-16.0, -4.0), (-8.0, -4.0)]), "#3498db"),
+            ("Up Arrow", poly(&[(-12.0, 8.0), (0.0, -12.0), (12.0, 8.0), (4.0, 8.0), (4.0, 16.0), (-4.0, 16.0), (-4.0, 8.0)]), "#3498db"),
+            ("Down Arrow", poly(&[(-12.0, -8.0), (0.0, 12.0), (12.0, -8.0), (4.0, -8.0), (4.0, -16.0), (-4.0, -16.0), (-4.0, -8.0)]), "#3498db"),
+            (
+                "Bidirectional",
+                poly(&[
+                    (-16.0, 0.0),
+                    (-6.0, -10.0),
+                    (-6.0, -4.0),
+                    (6.0, -4.0),
+                    (6.0, -10.0),
+                    (16.0, 0.0),
+                    (6.0, 10.0),
+                    (6.0, 4.0),
+                    (-6.0, 4.0),
+                    (-6.0, 10.0),
+                ]),
+                "#2ecc71",
+            ),
+            ("Chevron", poly(&[(-10.0, -14.0), (6.0, 0.0), (-10.0, 14.0), (-4.0, 14.0), (12.0, 0.0), (-4.0, -14.0)]), "#e67e22"),
+        ],
+    )
+}
+
+/// Nature Icons: original game/UI marks (no 9-slice).
+fn nature_icons() -> SymbolLibrary {
+    let c = Point::ZERO;
+    solid_icons(
+        "Nature Icons",
+        [
+            ("Tree", poly(&[(0.0, -18.0), (12.0, 0.0), (6.0, 0.0), (6.0, 16.0), (-6.0, 16.0), (-6.0, 0.0), (-12.0, 0.0)]), "#27ae60"),
+            ("Leaf", poly(&[(0.0, -16.0), (12.0, -4.0), (8.0, 12.0), (0.0, 16.0), (-4.0, 4.0), (-10.0, -2.0)]), "#2ecc71"),
+            ("Mountain", poly(&[(-18.0, 14.0), (-6.0, -10.0), (0.0, 0.0), (8.0, -16.0), (18.0, 14.0)]), "#7f8c8d"),
+            ("Cloud", poly(&[(-16.0, 2.0), (-10.0, -8.0), (0.0, -12.0), (12.0, -6.0), (16.0, 4.0), (8.0, 10.0), (-12.0, 8.0)]), "#85c1e9"),
+            ("Sun", shapes::star(c, 16.0, 8.0, 8, 0.0), "#f1c40f"),
+            ("Moon", poly(&[(4.0, -16.0), (14.0, -8.0), (14.0, 8.0), (4.0, 16.0), (-2.0, 8.0), (6.0, 4.0), (6.0, -4.0), (-2.0, -8.0)]), "#f7dc6f"),
+        ],
+    )
+}
+
+/// UI Badges: original game/UI marks (no 9-slice).
+fn ui_badges() -> SymbolLibrary {
+    let c = Point::ZERO;
+    solid_icons(
+        "UI Badges",
+        [
+            ("New Badge", shapes::polygon(c, 16.0, 6, 0.0), "#2ecc71"),
+            ("Hot Badge", shapes::star(c, 16.0, 7.0, 5, 0.0), "#e74c3c"),
+            ("Sale Badge", shapes::polygon(c, 16.0, 8, 0.0), "#e67e22"),
+            (
+                "Lock Badge",
+                poly(&[(-10.0, -2.0), (-10.0, 14.0), (10.0, 14.0), (10.0, -2.0), (6.0, -2.0), (6.0, -10.0), (-6.0, -10.0), (-6.0, -2.0)]),
+                "#95a5a6",
+            ),
+            ("Check Badge", poly(&[(-12.0, 0.0), (-4.0, 10.0), (14.0, -12.0), (8.0, -16.0), (-4.0, 2.0), (-8.0, -4.0)]), "#27ae60"),
+            ("Alert Badge", poly(&[(0.0, -16.0), (14.0, 14.0), (-14.0, 14.0)]), "#f1c40f"),
+        ],
+    )
+}
+
+/// Hazard Signs: original game/UI marks (no 9-slice).
+fn hazard_signs() -> SymbolLibrary {
+    let c = Point::ZERO;
+    solid_icons(
+        "Hazard Signs",
+        [
+            ("Warning", poly(&[(0.0, -18.0), (16.0, 14.0), (-16.0, 14.0)]), "#f1c40f"),
+            ("Danger", poly(&[(-16.0, -16.0), (16.0, -16.0), (16.0, 16.0), (-16.0, 16.0)]), "#e74c3c"),
+            ("Radiation", shapes::star(c, 16.0, 6.0, 3, 0.0), "#e67e22"),
+            ("Biohazard", shapes::polygon(c, 15.0, 6, 0.0), "#27ae60"),
+            ("Slippery", poly(&[(-16.0, 10.0), (-4.0, -14.0), (4.0, -6.0), (16.0, 10.0), (6.0, 10.0), (0.0, -2.0), (-6.0, 10.0)]), "#3498db"),
+            ("Electric", poly(&[(4.0, -18.0), (-8.0, 0.0), (0.0, 0.0), (-4.0, 18.0), (8.0, -2.0), (0.0, -2.0)]), "#f1c40f"),
+        ],
+    )
+}
+
+/// Tool Icons: original game/UI marks (no 9-slice).
+fn tool_icons() -> SymbolLibrary {
+    solid_icons(
+        "Tool Icons",
+        [
+            (
+                "Hammer",
+                poly(&[(-6.0, -4.0), (-16.0, -10.0), (-12.0, -16.0), (2.0, -8.0), (4.0, -10.0), (16.0, 6.0), (10.0, 12.0), (-2.0, 0.0), (-4.0, 2.0)]),
+                "#95a5a6",
+            ),
+            (
+                "Wrench",
+                poly(&[
+                    (-14.0, -14.0),
+                    (-6.0, -14.0),
+                    (-6.0, -6.0),
+                    (10.0, 10.0),
+                    (14.0, 6.0),
+                    (18.0, 14.0),
+                    (10.0, 18.0),
+                    (6.0, 14.0),
+                    (-10.0, -2.0),
+                    (-14.0, -2.0),
+                ]),
+                "#7f8c8d",
+            ),
+            ("Pickaxe", poly(&[(-16.0, -12.0), (-4.0, -16.0), (2.0, -8.0), (14.0, 12.0), (8.0, 16.0), (-2.0, 0.0), (-12.0, -4.0)]), "#a0522d"),
+            ("Axe", poly(&[(-4.0, -18.0), (4.0, -18.0), (4.0, 4.0), (14.0, 0.0), (14.0, 12.0), (4.0, 8.0), (4.0, 18.0), (-4.0, 18.0)]), "#e67e22"),
+            ("Fishing Rod", poly(&[(-16.0, 14.0), (-10.0, -16.0), (-4.0, -16.0), (2.0, 8.0), (12.0, 4.0), (14.0, 10.0), (2.0, 14.0)]), "#3498db"),
+            ("Torch", poly(&[(-4.0, 4.0), (-4.0, 18.0), (4.0, 18.0), (4.0, 4.0), (0.0, -16.0), (10.0, -4.0), (0.0, 0.0), (-10.0, -4.0)]), "#e74c3c"),
+        ],
+    )
 }
 
 /// An instance of symbol `name` (what the resource gathering follows).
