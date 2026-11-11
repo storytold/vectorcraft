@@ -11,7 +11,7 @@ use std::sync::Arc;
 use kurbo::{Affine, Rect};
 use vectorcraft_cdr::model::{self as cd, LayerKind};
 use vectorcraft_cdr::{Limits, Warning};
-use vectorcraft_doc::{Artboard, ColorMode, Document, Guide, LayerColor, Node};
+use vectorcraft_doc::{Artboard, ColorMode, Document, Guide, LayerColor, Node, NodeKind};
 
 use super::load::err;
 use crate::Result;
@@ -224,7 +224,14 @@ impl shapes::Builder {
             let l = layer(&mut doc, "Layer 1", 0, Vec::new());
             doc.layers.push(l);
         }
-        doc.guides.append(&mut self.guide_list);
+        // Ruler guides go at the top of the top layer, in the order they were read.
+        let guides: Vec<Arc<Node>> = std::mem::take(&mut self.guide_list)
+            .into_iter()
+            .map(|g| Arc::new(Node::new(doc.alloc_id(), NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard })))
+            .collect();
+        if let Some(kids) = doc.layers.last_mut().and_then(|l| Arc::make_mut(l).children_mut()) {
+            kids.extend(guides);
+        }
         self.finish_swatches(&mut doc);
         if self.cmyk > self.rgb {
             doc.color_mode = ColorMode::Cmyk;
@@ -271,9 +278,9 @@ impl shapes::Builder {
                 continue;
             }
             if turn.abs() < 1e-9 {
-                self.guide_list.push(Guide { vertical: false, pos: at.y, artboard, layer: None });
+                self.guide_list.push(Guide { artboard, ..Guide::new(false, at.y) });
             } else if (turn - 90.0).abs() < 1e-9 {
-                self.guide_list.push(Guide { vertical: true, pos: at.x, artboard, layer: None });
+                self.guide_list.push(Guide { artboard, ..Guide::new(true, at.x) });
             } else {
                 self.angled_guide(at, g.angle, p.rect);
             }

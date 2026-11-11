@@ -10,6 +10,7 @@ fn walk(nodes: &[std::sync::Arc<Node>], out: &mut Vec<Node>) {
     for n in nodes {
         match &n.kind {
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => walk(children, out),
+            NodeKind::RulerGuide { .. } => {}
             _ => out.push((**n).clone()),
         }
     }
@@ -49,12 +50,14 @@ fn every_version_opens_as_editable_art() {
         // The rectangle is filled red and stroked 2 pt with round caps.
         let a = &rect.appearance;
         assert_eq!(a.items.len(), 2, "{version}");
-        // The master page's vertical guideline at 36 pt right of the page centre.
+        // The master page's vertical guideline at 36 pt right of the page centre, a ruler guide
+        // on the top layer.
         if version >= 600 {
+            let guides = doc.ruler_guides();
+            let top = doc.layers.last().map(|l| l.id);
             assert!(
-                doc.guides.iter().any(|g| g.vertical && (g.pos - (306.0 + 36.0)).abs() < 0.05 && g.artboard == Some(1)),
-                "{version}: {:?}",
-                doc.guides
+                guides.iter().any(|g| g.vertical && (g.pos - (306.0 + 36.0)).abs() < 0.05 && g.artboard == Some(1) && g.layer == top),
+                "{version}: {guides:?}"
             );
         }
     }
@@ -185,7 +188,8 @@ fn pages_and_the_guides_copied_onto_them_are_bounded() {
     kids.extend((0..1100).map(|_| synth::page(false, vec![])));
     let (doc, warnings) = super::cdr::import(&synth::riff(1100, &kids)).unwrap();
     assert_eq!(doc.artboards.len(), 1000);
-    assert!(doc.guides.len() <= 100_000, "{}", doc.guides.len());
+    let guides = doc.ruler_guides().len();
+    assert!(guides <= 100_000, "{guides}");
     assert!(warnings.iter().any(|w| w.contains("past the import limits")), "{warnings:?}");
 }
 
