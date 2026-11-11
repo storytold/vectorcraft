@@ -78,6 +78,26 @@ fn names(d: &Document) -> Vec<String> {
 }
 
 #[test]
+fn ruler_units_in_the_program_header_alone_are_kept() {
+    let art = layer("Art", true, &square(10, 10));
+    let native = |units: &str| {
+        format!(
+            "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n{units}%AI5_NumLayers: 1\n{art}%%Trailer\n"
+        )
+    };
+    let with_header = |data: Vec<u8>| {
+        let at = data.windows(13).position(|w| w == b"%%EndComments").unwrap();
+        [&data[..at], &b"%AI5_RulerUnits: 0\n"[..], &data[at..]].concat()
+    };
+    let r = import(&with_header(eps(&page_square(10, 10), &native("")))).unwrap();
+    assert_eq!((r.document.units, r.document.units_from_file), (Unit::Inches, true), "the program's header gives them");
+    let r = import(&with_header(eps(&page_square(10, 10), &native("%AI5_RulerUnits: 1\n")))).unwrap();
+    assert_eq!(r.document.units, Unit::Millimeters, "the editing data's own come first");
+    let r = import(&eps(&page_square(10, 10), &native(""))).unwrap();
+    assert_eq!((r.document.units, r.document.units_from_file), (Unit::Points, false), "none recorded");
+}
+
+#[test]
 fn native_import_keeps_ruler_units_from_editing_data() {
     let art = layer("Art", true, &square(10, 10));
     let native = format!(

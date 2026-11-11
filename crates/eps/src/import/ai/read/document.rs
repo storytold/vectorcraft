@@ -648,6 +648,10 @@ impl<'a> Reader<'a> {
         if self.author.is_none() {
             self.author = outer.author;
         }
+        // Ruler units the editing data doesn't give: the file still records them (#5820).
+        if self.ruler_units.is_none() {
+            self.ruler_units = outer.ruler_units;
+        }
         self.names.absorb(outer.names);
         for n in outer.custom_colors {
             if self.custom_colors.len() < super::directives::MAX_CUSTOM_COLORS && !self.custom_colors.iter().any(|c| c.name == n.name) {
@@ -1255,6 +1259,7 @@ impl<'a> Reader<'a> {
         }
         if let Some(u) = self.ruler_units.and_then(ruler_unit) {
             doc.units = u;
+            doc.units_from_file = true;
         }
         // The file's own swatches in place of the defaults, in its order and colour groups.
         let own_palette = match self.palette_swatches(&doc.patterns) {
