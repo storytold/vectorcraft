@@ -6518,3 +6518,7 @@ breakText	Glyphs	Glif
 	Ended by an internal fault	Berakhir karena galat internal
 	{ms} ms, {calls} host calls	{ms} ms, {calls} panggilan host
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} baris lama dibuang, {cut} baris dipotong
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Segarkan efek yang ditunda
+	Deferred Effects	Efek yang ditunda

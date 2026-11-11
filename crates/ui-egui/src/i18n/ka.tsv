@@ -6839,3 +6839,9 @@ font-script	Japanese	იაპონური
 	{ms} ms, {calls} host calls	{ms} ms, ჰოსტის {calls} გამოძახება
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ძველი სტრიქონი წაიშალა, {cut} სტრიქონი შემოკლდა
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	გადადებული ეფექტების განახლება
+	Deferred Effects	გადადებული ეფექტები
+@msg	no plug-in effect is deferred	პლაგინის ეფექტი არ არის გადადებული
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.

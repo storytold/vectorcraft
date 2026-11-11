@@ -6773,3 +6773,9 @@ breakText	Glyphs	Glyphes
 	{ms} ms, {calls} host calls	{ms} ms, {calls} appels à l’hôte
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} lignes antérieures supprimées, {cut} lignes coupées
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` et `last` doivent être des numéros de lignes que la console contient, `first` avant `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Actualiser les effets différés
+	Deferred Effects	Effets différés
+@msg	no plug-in effect is deferred	aucun effet de plug-in n’est différé
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Ouvert avec {n} effet de plug-in différé. Effet › Actualiser les effets différés l’exécute.|Ouvert avec {n} effets de plug-in différés. Effet › Actualiser les effets différés les exécute.

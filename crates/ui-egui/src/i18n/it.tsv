@@ -6399,3 +6399,9 @@ breakText	Glyphs	Glifi
 	{ms} ms, {calls} host calls	{ms} ms, {calls} chiamate all'host
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} righe precedenti scartate, {cut} righe tagliate
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Aggiorna effetti rimandati
+	Deferred Effects	Effetti rimandati
+@msg	no plug-in effect is deferred	nessun effetto plug-in è rimandato
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aperto con {n} effetto plug-in rimandato. Effetto › Aggiorna effetti rimandati lo esegue.|Aperto con {n} effetti plug-in rimandati. Effetto › Aggiorna effetti rimandati li esegue.

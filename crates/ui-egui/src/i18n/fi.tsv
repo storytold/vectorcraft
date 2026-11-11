@@ -6813,3 +6813,9 @@ breakText	Glyphs	Merkit
 	{ms} ms, {calls} host calls	{ms} ms, {calls} isäntäkutsua
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} aiempaa riviä poistettu, {cut} riviä katkaistu
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ja `last` on oltava konsolin säilyttämien rivien numeroita, `first` ennen arvoa `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Päivitä lykätyt tehosteet
+	Deferred Effects	Lykätyt tehosteet
+@msg	no plug-in effect is deferred	yhtään laajennustehostetta ei ole lykätty
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Avattiin, ja {n} laajennustehoste lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa sen.|Avattiin, ja {n} laajennustehostetta lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa ne.

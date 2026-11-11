@@ -109,7 +109,153 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             move_effect
         ),
+        cmd!(
+            query "effect.deferredStatus",
+            "Deferred Effects",
+            [],
+            None,
+            "{} the live-effect plug-in stages the active document left undrawn: while a document is drawn on screen, the plug-in effects of its first view share a 2,000 ms budget (each run also keeps to its own 5,000 ms limit); a stage left out for want of time, or one that times out, fails or has no plug-in, draws its input art unchanged and stays listed until it gives a result (Effect › Refresh Deferred Effects, an edit to its input or parameters, or an export, which runs every stage under the per-call limit), or until its object is deleted or its effect is removed, moved or hidden (or its fill or stroke is hidden) → {budgetMs: 2000, effects: [{objectId (also an object in the art of a symbol, pattern, brush or opacity mask), effectIndex (in the object's effects, or in the fill's or stroke's), item? (the fill or stroke whose effect it is), pluginId, reason: budget|timeout|missing|failed|safeMode}]} (empty: none)",
+            has_doc,
+            deferred_status
+        ),
+        cmd!(
+            "effect.refreshDeferred",
+            "Refresh Deferred Effects",
+            ["Effect"],
+            None,
+            "{ids?: [object id] (objects of the document; `id` names one; default: every object with a deferred stage)} run the deferred live-effect plug-in stages of those objects again (effect.deferredStatus), sharing a fresh 2,000 ms budget; a stage that gives a result is drawn with it; not an undo step. Enabled when a stage is deferred → {refreshed, stillDeferred (left out for want of time again, or not reached because the object, or a group or layer holding it, is hidden, or with a part of its input too small for the refresh's drawing), failed (timed out, failed or has no plug-in)}",
+            has_deferred,
+            refresh_deferred
+        ),
     ]
+}
+
+/// The active document has deferred live-effect plug-in stages ([`deferred_status`]).
+fn has_deferred(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    if deferred_effects(&st.doc, &st.plugin_effects).is_empty() { Err("no plug-in effect is deferred".into()) } else { Ok(()) }
+}
+
+/// The objects the deferred stages of `fx` name, by id, each with whether it is in `d`'s layers.
+/// An object that is not is looked for in the art `d` draws from elsewhere, where live-effect
+/// plug-ins run too: the art of its symbols, patterns and brushes, and opacity masks.
+fn stage_objects(d: &Document, fx: &vectorcraft_plugins::deferred::Deferrals) -> std::collections::HashMap<u64, (Arc<Node>, bool)> {
+    let mut out = std::collections::HashMap::new();
+    let mut rest = Vec::new();
+    for object in fx.list().into_iter().map(|x| x.stage.object) {
+        match d.node_arc(NodeId(object)) {
+            Some(n) => {
+                out.insert(object, (n.clone(), true));
+            }
+            None => rest.push(object),
+        }
+    }
+    if rest.is_empty() {
+        return out;
+    }
+    let brushes = vectorcraft_brush::library(d);
+    let symbols = d.symbols.iter().map(|s| &*s.art);
+    let patterns = d.patterns.iter().flat_map(|p| p.art.iter().map(|a| &**a));
+    let layers = d.layers.iter().map(|a| &**a);
+    let mut look = |n: &Node| {
+        if rest.contains(&n.id.0) {
+            out.entry(n.id.0).or_insert_with(|| (Arc::new(n.clone()), false));
+        }
+    };
+    for a in symbols.chain(patterns).chain(brushes.iter().flat_map(|b| b.art())).chain(layers) {
+        vectorcraft_doc::swatches::walk_with_masks(a, &mut look);
+    }
+    out
+}
+
+/// Is plug-in `plugin`'s effect at `stage`'s place in `n` (`None`: no such object), and visible,
+/// on a visible fill or stroke when it is one's?
+fn stage_holds(n: Option<&Node>, stage: vectorcraft_plugins::deferred::Stage, plugin: &str) -> bool {
+    let Some(n) = n else { return false };
+    let list = match stage.item {
+        None => Some(n.appearance.effects.as_slice()),
+        Some(i) => n.appearance.items.get(i).filter(|it| it.visible()).map(|it| it.effects().as_slice()),
+    };
+    list.and_then(|l| l.get(stage.effect)).is_some_and(|e| e.visible && e.id == vectorcraft_plugins::effect::effect_id(plugin))
+}
+
+/// Drops the records of `fx`'s stages whose object or plug-in effect is no longer at their place
+/// in `d` ([`stage_holds`]), and gives the objects of the others ([`stage_objects`]).
+fn prune(d: &Document, fx: &vectorcraft_plugins::deferred::Deferrals) -> std::collections::HashMap<u64, (Arc<Node>, bool)> {
+    let objects = stage_objects(d, fx);
+    fx.retain(|stage, plugin| stage_holds(objects.get(&stage.object).map(|(n, _)| &**n), stage, plugin));
+    objects
+}
+
+/// The deferred stages of `d` as `effect.deferredStatus` lists them. The records of stages whose
+/// object or plug-in effect is no longer at their place in `d` are dropped first.
+fn deferred_effects(d: &Document, fx: &vectorcraft_plugins::deferred::Deferrals) -> Vec<Value> {
+    prune(d, fx);
+    fx.list()
+        .into_iter()
+        .map(|x| {
+            let mut v = json!({"objectId": x.stage.object, "effectIndex": x.stage.effect, "pluginId": x.plugin, "reason": x.reason.name()});
+            if let Some(i) = x.stage.item {
+                v["item"] = json!(i);
+            }
+            v
+        })
+        .collect()
+}
+
+/// `effect.deferredStatus`.
+fn deferred_status(s: &mut Session, _: &Value) -> Result<Value> {
+    let st = s.doc()?;
+    Ok(json!({"budgetMs": vectorcraft_plugins::deferred::OPENING_BUDGET_MS, "effects": deferred_effects(&st.doc, &st.plugin_effects)}))
+}
+
+/// Draws `n` alone, small, as the canvas would (its live-effect plug-ins run inside the view that
+/// applies): what matters is that it is drawn, not its pixels. Is every part of it drawn, none left
+/// out for its size?
+fn draw_small(renderer: &mut vectorcraft_render::Renderer, doc: &Document, n: &Arc<Node>) -> bool {
+    let Some(b) = n.geometric_bounds() else { return false };
+    let scale = 64.0 / b.width().max(b.height()).max(1.0);
+    let view = vectorcraft_geom::Affine::scale(scale) * vectorcraft_geom::Affine::translate((1.0 - b.x0, 1.0 - b.y0));
+    renderer.stats = Default::default();
+    renderer.render_node(doc, n, 66, 66, view);
+    renderer.stats.culled == 0
+}
+
+/// `effect.refreshDeferred`: each object of the document's layers is drawn again alone, small,
+/// inside the document's view, so its stages are run with the input they were deferred with; a
+/// hidden object, or one in a hidden layer or group, is not drawn. An object in the art of a
+/// symbol, pattern, brush or opacity mask runs where that art is used: the visible layers are
+/// drawn then. A stage input left out of a small drawing for its size stays deferred.
+fn refresh_deferred(s: &mut Session, p: &Value) -> Result<Value> {
+    let st = s.doc()?;
+    let (doc, fx) = (st.doc.clone(), st.plugin_effects.clone());
+    let ids = super::named_ids(p)?;
+    let objects = prune(&doc, &fx);
+    if let Some(id) = ids.iter().flatten().find(|id| doc.node(**id).is_none() && !objects.contains_key(&id.0)) {
+        return Err(EngineError::NoNode(*id));
+    }
+    let ids: Option<Vec<u64>> = ids.map(|ids| ids.iter().map(|id| id.0).collect());
+    let counts = fx.refresh(ids.as_deref(), |targets| {
+        let mut renderer = vectorcraft_render::Renderer::new();
+        let mut whole = Vec::new();
+        fx.view(|| {
+            let mut elsewhere = false;
+            for id in targets {
+                match objects.get(id) {
+                    Some((n, true)) if doc.is_visible(NodeId(*id)) && draw_small(&mut renderer, &doc, n) => whole.push(*id),
+                    Some((_, false)) => elsewhere = true,
+                    _ => {}
+                }
+            }
+            if elsewhere {
+                for layer in doc.layers.iter().filter(|l| l.visible) {
+                    draw_small(&mut renderer, &doc, layer);
+                }
+            }
+        });
+        whole
+    });
+    Ok(json!({"refreshed": counts.refreshed, "stillDeferred": counts.still_deferred, "failed": counts.failed}))
 }
 
 fn ids_json(ids: &[NodeId]) -> Value {

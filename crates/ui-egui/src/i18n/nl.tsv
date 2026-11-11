@@ -6569,3 +6569,7 @@ breakText	Glyphs	Glyphs
 	Ended by an internal fault	Beëindigd door een interne fout
 	{ms} ms, {calls} host calls	{ms} ms, {calls} host-aanroepen
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eerdere regels verwijderd, {cut} regels ingekort
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
+	Deferred Effects	Uitgestelde effecten

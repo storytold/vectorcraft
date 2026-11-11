@@ -2395,6 +2395,52 @@ fn undecodable_images_are_marked_and_reported_once() {
     assert_eq!(app.ui.status, "", "said once");
 }
 
+/// The plug-in effects a document's first view leaves out past its budget are reported in the
+/// status bar once, in the singular or the plural, and Effect › Refresh Deferred Effects is
+/// enabled until it has run them.
+#[test]
+fn the_first_view_reports_the_plug_in_effects_it_deferred() {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use vectorcraft_plugins::wat as tpl;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.canvas.worker_started = true; // render on this thread
+    let module = tpl::module(&tpl::manifest("test.ui.deferred", "effect", "{}"), tpl::ECHO, "", 1);
+    app.session.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(module).unwrap())})).unwrap();
+    // Each reading of the clock is 3 s later: the first run's result comes back after the budget,
+    // and no later run starts.
+    let step = std::sync::Arc::new(AtomicU64::new(3_000));
+    let ctx = egui::Context::default();
+    for (count, said) in [
+        (2, "Opened with 2 plug-in effects deferred. Effect › Refresh Deferred Effects runs them."),
+        (1, "Opened with 1 plug-in effect deferred. Effect › Refresh Deferred Effects runs it."),
+    ] {
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        // Art the plug-in has not been given before: a result it gave is kept and drawn at once.
+        for i in 0..count {
+            let x = 31.0 + 97.0 * f64::from(i) + 13.0 * f64::from(count);
+            let id = app.session.execute("shape.rectangle", &json!({"x": x, "y": 47, "width": 23, "height": 29})).unwrap()["id"].clone();
+            app.session.execute("effect.apply", &json!({"ids": [id], "effect": "plugin.test.ui.deferred"})).unwrap();
+        }
+        app.session.execute("select.none", &json!({})).unwrap();
+        let (now, by) = (std::sync::Arc::new(AtomicU64::new(0)), step.clone());
+        let clock: vectorcraft_plugins::deferred::Clock =
+            std::sync::Arc::new(move || Some(now.fetch_add(by.load(Ordering::Relaxed), Ordering::Relaxed)));
+        app.session.doc_mut().unwrap().plugin_effects = vectorcraft_plugins::deferred::Deferrals::with_clock(clock);
+        step.store(3_000, Ordering::Relaxed);
+        app.status("");
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(app.ui.status, said);
+        assert!(crate::menus::enabled(&app, "effect.refreshDeferred"));
+        app.status("");
+        app.session.doc_mut().unwrap().revision += 1;
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(app.ui.status, "", "said once");
+        step.store(0, Ordering::Relaxed);
+        app.session.execute("effect.refreshDeferred", &json!({})).unwrap();
+        assert!(!crate::menus::enabled(&app, "effect.refreshDeferred"), "nothing is left deferred");
+    }
+}
+
 /// A drag of an object with raster effects (#1257): the drag's frames render while
 /// interacting and draw the object's drop shadow and filtered content from the rasters of the
 /// frame before; the frame after the drag renders without `interacting`, on the render worker,
@@ -10687,6 +10733,7 @@ fn pan_job(doc: &std::sync::Arc<vectorcraft_doc::Document>, key: &CacheKey, (dx,
         view: Affine::translate((dx, dy)),
         opts: vectorcraft_render::RenderOptions::default(),
         scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+        effects: Default::default(),
         may_copy: true,
         may_keep: true,
     }
