@@ -170,6 +170,28 @@ fn transparency_is_flattened_with_the_flattener_preset() {
     assert!(e.contains("preset"), "{e}");
 }
 
+/// A picture cropped by a clipping path, in a clip group at 80%, over a square that only the
+/// hidden part of the picture covers: the file prints the square, and its image is as large as
+/// the crop, with the default preset (a rectangle of image) and with High Resolution (an image
+/// clipped to its regions).
+#[test]
+fn flattening_cropped_art_keeps_the_art_under_its_hidden_part() {
+    use super::tests_pdfx::{Art, CROP, cropped, drawn, lost, shown_image_sizes};
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    for preset in ["medium", "high"] {
+        let (mut s, _) = cropped("rgb", 400.0, Art::Image { see_through: false });
+        s.execute("transparency.set", &json!({"opacity": 80})).unwrap();
+        let canvas = drawn(&s.doc().unwrap().doc);
+        let opts = json!({"artboards": [0], "flattenerPreset": preset, "previewFormat": "none", "thumbnails": false});
+        let r = s.execute("document.exportEps", &opts).unwrap();
+        // What the file prints, not the document it carries.
+        let back = vectorcraft_eps::import_with(&b64(&r), false).unwrap().document;
+        assert_eq!(lost(&canvas, &drawn(&back)), 0, "{preset}: art went missing");
+        let sizes = shown_image_sizes(&back);
+        assert!(!sizes.is_empty() && sizes.iter().all(|(w, h)| *w <= CROP[2] + 1.0 && *h <= CROP[3] + 1.0), "{preset}: the images show {sizes:?}");
+    }
+}
+
 #[test]
 fn overprints_are_kept_or_discarded() {
     let mut s = session(100.0, 100.0, 1);
