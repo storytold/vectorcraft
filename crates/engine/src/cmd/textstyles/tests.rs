@@ -1107,7 +1107,7 @@ fn self_referencing_pattern_is_not_added_again() {
     let different = dst.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 30, "height": 30})).unwrap()["id"].clone();
     dst.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [different]})).unwrap();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert!(dst.doc().unwrap().doc.pattern("Dots 2").is_some());
     assert!(
         dst.doc().unwrap().doc.pattern("Dots 2").unwrap().art[0]
@@ -1118,7 +1118,7 @@ fn self_referencing_pattern_is_not_added_again() {
     );
     let before = dst.doc().unwrap().doc.clone();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert!(again.iter().all(|s| !s.added));
     assert_eq!(dst.doc().unwrap().doc, before);
 }
@@ -1150,13 +1150,13 @@ fn separate_self_referencing_patterns_are_not_added_again() {
         dst.execute("object.pattern.make", &json!({"name": format!("Dots{k}"), "edit": false, "ids": [different]})).unwrap();
     }
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     for k in 0..9 {
         assert!(dst.doc().unwrap().doc.pattern(&format!("Dots{k} 2")).is_some(), "{k}");
     }
     let before = dst.doc().unwrap().doc.clone();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert!(again.iter().all(|s| !s.added));
     assert_eq!(dst.doc().unwrap().doc.patterns.len(), before.patterns.len());
     assert_eq!(dst.doc().unwrap().doc, before);
@@ -1164,7 +1164,7 @@ fn separate_self_referencing_patterns_are_not_added_again() {
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
     target.patterns.retain(|p| !p.name.starts_with("Dots8"));
     let left = target.patterns.len();
-    let third = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    let third = super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert_eq!(dst.doc().unwrap().doc.patterns.len(), left + 1);
     assert!(third.iter().filter(|s| s.name != "Patterned8" && !s.name.starts_with("Patterned8 ")).all(|s| !s.added));
 }
@@ -1197,13 +1197,13 @@ fn a_long_loop_of_patterns_is_not_added_again() {
         dst.execute("object.pattern.make", &json!({"name": format!("Dots{k}"), "edit": false, "ids": [different]})).unwrap();
     }
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     for k in 0..9 {
         assert!(dst.doc().unwrap().doc.pattern(&format!("Dots{k} 2")).is_some(), "{k}");
     }
     let before = dst.doc().unwrap().doc.clone();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert!(again.iter().all(|s| !s.added));
     assert_eq!(dst.doc().unwrap().doc.patterns.len(), before.patterns.len());
     assert_eq!(dst.doc().unwrap().doc, before);
