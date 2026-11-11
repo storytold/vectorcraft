@@ -596,6 +596,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         if texts.is_empty() {
             return Err(EngineError::Other("Create Outlines: select text objects".into()));
         }
+        let before = (!super::dimension::reached(d, &roots).is_empty()).then(|| d.clone());
         let ended = super::dimension::end_links(d, &roots);
         let mut new_sel: Vec<NodeId> = roots.iter().copied().filter(|r| !texts.contains(r)).collect();
         let mut out = vec![];
@@ -691,7 +692,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 new_sel.push(gid);
             }
         }
-        super::dimension::restore_unchanged(d, ended);
+        if let Some(before) = &before {
+            super::dimension::restore_unchanged(before, d, ended);
+        }
         // Outlined frames of threaded text leave their threads with the text they show.
         super::threads::leave_threads(d, &threaded);
         sel.set(new_sel);
