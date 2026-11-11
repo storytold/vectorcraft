@@ -1,4 +1,4 @@
-use super::analysis::{Scratch, outlined_text, overlapping, reach};
+use super::analysis::{Scratch, has_effects, masked, outlined_text, overlapping, reach};
 use super::compose::{Builder, CLEAR, Composer, Elem, Fill, Kind, Px, WHITE};
 use super::options::FlattenOptions;
 use super::{
@@ -108,30 +108,82 @@ pub(super) fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render:
     let mut sc = Scratch { brushes: vectorcraft_brush::library(&baked), doc: baked.clone() };
     let plain: Vec<Node> = art.iter().map(|n| sc.plain(n)).collect();
     // Each object as its clip groups and clipping layers show it.
-    let clipped: Vec<Node> = plain.iter().zip(roots).map(|(n, id)| clipped_by_ancestors(src, *id, n)).collect();
+    let clipped: Vec<Node> = plain.iter().zip(roots).map(|(n, id)| clipped_by_ancestors(src, *id, n, None)).collect();
     let reaches: Vec<Option<Rect>> = plain.iter().zip(&clipped).map(|(n, c)| reach(n).zip(reach(c)).map(|(a, b)| a.intersect(b))).collect();
     let see_through: Vec<bool> = plain.iter().map(|n| o.shows_transparency(&baked, n) || o.draws_see_through_image(n)).collect();
     let cmyk = src.color_mode == ColorMode::Cmyk;
     let mut out = Plan { flat: vec![], kept: vec![], transparent: roots.iter().zip(&see_through).filter(|(_, t)| **t).map(|(id, _)| *id).collect() };
     // Baking above stopped early when cancelled; each group is a place to stop (a plan changes nothing).
     vectorcraft_doc::cancel::check()?;
-    for g in overlapping(&reaches)? {
+    let mut queue = overlapping(&reaches)?;
+    queue.reverse();
+    while let Some(g) = queue.pop() {
         vectorcraft_doc::cancel::check()?;
+        // A group that stays inside the clip groups and clipping layers of its topmost object
+        // replaces only the objects inside them, over the others, which are flattened on their own.
+        let (g, under) = match inside_and_under(src, roots, &g) {
+            Some((inside, under)) => {
+                queue.push(under.clone());
+                (inside, under)
+            }
+            None => (g, vec![]),
+        };
+        // Composited over white, the group covers what it is drawn over, so it is composited over
+        // the fills of the clipping paths around it and the objects under it in the same kind of
+        // layer. Composited over nothing, it keeps its alpha and they show through.
+        let backdrop = !o.preserve_alpha;
+        let state = g.last().map(|&i| layer_state(src, roots[i]));
+        let top = g.last().map(|&i| roots[i]);
+        // A blend mode of a layer or group around the group alone would blend the art under it
+        // twice.
+        let blends = |i: usize| top.is_some_and(|t| own_layers(src, t, Some(roots[i])).iter().any(|a| a.blend != BlendMode::Normal));
+        // Art under an opacity mask, effects or a knockout group is left out: the group can't draw it
+        // as those do.
+        let drawn_plainly = |i: usize| {
+            own_layers(src, roots[i], top).iter().all(|a| !masked(a) && !has_effects(a) && !matches!(a.knockout, vectorcraft_doc::Knockout::On))
+        };
+        let under_shown = under.iter().copied().filter(|&i| backdrop && Some(layer_state(src, roots[i])) == state && !blends(i) && drawn_plainly(i));
+        let composited: Vec<usize> = under_shown.chain(g.iter().copied()).collect();
+        let below = composited.len() - g.len();
+        let extent = composited.iter().filter_map(|&i| reaches[i]).reduce(|a, b| a.union(b)).unwrap_or_default();
+        let shown = |nodes: &[Node]| -> Vec<Node> {
+            let mut seen = vec![];
+            let (mut under, mut out) = (vec![], vec![]);
+            for (k, &i) in composited.iter().enumerate() {
+                let n = clipped_by_ancestors(src, roots[i], &nodes[i], backdrop.then_some((&mut seen, extent)));
+                if k < below {
+                    let groups = own_layers(src, roots[i], top).into_iter().filter(|a| !draws_as_is(a)).collect();
+                    under.push((groups, n));
+                } else {
+                    out.push(n);
+                }
+            }
+            let mut all = in_groups(under, 0);
+            all.extend(out);
+            all
+        };
         let ids: Vec<NodeId> = g.iter().map(|&i| roots[i]).collect();
         let group = g.iter().any(|&i| see_through[i]).then(|| {
-            let plain: Vec<&Node> = g.iter().map(|&i| &clipped[i]).collect();
-            flatten_group(&plain, o, cmyk)
+            let plain = shown(&plain);
+            flatten_group(&plain.iter().collect::<Vec<_>>(), o, cmyk)
         });
         let Some((regions, area)) = group.flatten() else {
-            out.kept.extend(ids);
+            // Transparent art that its clip groups or clipping layers hide entirely draws nothing:
+            // it is removed.
+            let hides = |i: usize| see_through[i] && reach(&plain[i]).is_some() && reach(&clipped[i]).is_none();
+            let (hidden, left): (Vec<usize>, Vec<usize>) = g.iter().partition(|&&i| hides(i));
+            if !hidden.is_empty() {
+                let roots = hidden.iter().map(|&i| roots[i]).collect();
+                out.flat.push(Flat { roots, regions: vec![], area: None, raster: None, lines: None });
+            }
+            out.kept.extend(left.iter().map(|&i| roots[i]));
             continue;
         };
         let raster = match area.as_ref().filter(|_| render) {
             Some(a) => {
                 // Drawn as planned: the image can land outside the clip groups and clipping layers
                 // around its art.
-                let art: Vec<Node> = g.iter().map(|&i| clipped_by_ancestors(src, roots[i], &art[i])).collect();
-                Some(render_raster(&baked, &art, a.rect, a.ppi, a.clip.clone(), o)?)
+                Some(render_raster(&baked, &shown(&art), a.rect, a.ppi, a.clip.clone(), o)?)
             }
             None => None,
         };
@@ -146,8 +198,10 @@ pub(super) fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render:
 
 /// `plain` (object `id` of `src` as plain art) inside a clip group for each clip group and
 /// clipping layer around `id`, innermost first, each clipped by that group's or layer's clipping
-/// path. `plain` itself when nothing around it clips.
-fn clipped_by_ancestors(src: &Document, id: NodeId, plain: &Node) -> Node {
+/// path. `plain` itself when nothing around it clips. With `fills` (clipping paths, and an area),
+/// the fill of each clipping path not in them yet goes behind the art, inside the area, and the
+/// path is added to them.
+fn clipped_by_ancestors(src: &Document, id: NodeId, plain: &Node, mut fills: Option<(&mut Vec<NodeId>, Rect)>) -> Node {
     let mut out = plain.clone();
     if !clips_count() {
         return out;
@@ -170,11 +224,104 @@ fn clipped_by_ancestors(src: &Document, id: NodeId, plain: &Node) -> Node {
         if let NodeKind::Path { rule: r, .. } = &mut path.kind {
             *r = rule;
         }
-        let mut g = Node::group(above.id, vec![Arc::new(path), Arc::new(out)]);
+        let mut children = vec![Arc::new(path)];
+        // The renderer paints the fill behind the clipped art.
+        if let Some((seen, r)) = fills.as_mut()
+            && !seen.contains(&clip.id)
+            && let Some(fill) = clip.clip_paint().fill
+        {
+            let r = *r;
+            seen.push(clip.id);
+            let mut at = Node::group(above.id, vec![Arc::new(Node::path(clip.id, shapes::rectangle(r), Appearance::default())), Arc::new(fill)]);
+            at.set_clips(true);
+            children.push(Arc::new(at));
+        }
+        children.push(Arc::new(out));
+        let mut g = Node::group(above.id, children);
         g.set_clips(true);
         out = g;
     }
     out
+}
+
+/// Whether layer or group `n` draws what it holds as it is: opaque, in Normal mode, not isolated.
+fn draws_as_is(n: &Node) -> bool {
+    n.opacity >= 1.0 && n.blend == BlendMode::Normal && !n.isolate
+}
+
+/// `items` (in paint order, each an object and the layers and groups around it, outermost first,
+/// that don't draw it as it is) with the objects of each such layer or group in one group with its
+/// opacity, blend mode and isolation, from the `depth`th around them on: they then composite
+/// together as that layer or group draws them.
+fn in_groups(items: Vec<(Vec<&Node>, Node)>, depth: usize) -> Vec<Node> {
+    let mut out = vec![];
+    let mut items = items.into_iter().peekable();
+    while let Some((around, n)) = items.next() {
+        let Some(a) = around.get(depth).copied() else {
+            out.push(n);
+            continue;
+        };
+        let mut run = vec![(around, n)];
+        while let Some(next) = items.next_if(|(around, _)| around.get(depth).is_some_and(|b| b.id == a.id)) {
+            run.push(next);
+        }
+        let mut g = Node::group(a.id, in_groups(run, depth + 1).into_iter().map(Arc::new).collect());
+        (g.opacity, g.blend, g.isolate) = (a.opacity, a.blend, a.isolate);
+        out.push(g);
+    }
+    out
+}
+
+/// The layers and groups around object `id` of `src` that are not also around `other`, outermost
+/// first.
+fn own_layers(src: &Document, id: NodeId, other: Option<NodeId>) -> Vec<&Node> {
+    let mine = src.ancestry(id).unwrap_or_default();
+    let theirs = other.and_then(|t| src.ancestry(t)).unwrap_or_default();
+    let shared = mine.iter().zip(&theirs).take_while(|(a, b)| a == b).count();
+    let own = mine.get(shared..mine.len().saturating_sub(1)).unwrap_or_default();
+    own.iter().filter_map(|a| src.node(*a)).collect()
+}
+
+/// The clip groups and clipping layers around object `id` of `d`, innermost first.
+fn clip_ancestors(d: &Document, id: NodeId) -> Vec<NodeId> {
+    let mut a = d.ancestry(id).unwrap_or_default();
+    a.pop();
+    a.into_iter().rev().filter(|a| d.node(*a).is_some_and(Node::clips)).collect()
+}
+
+/// Whether the layers around object `id` of `d` all print, all show, and whether one is a
+/// template.
+fn layer_state(d: &Document, id: NodeId) -> (bool, bool, bool) {
+    let mut a = d.ancestry(id).unwrap_or_default();
+    a.pop();
+    a.iter().filter_map(|a| d.node(*a)).fold((true, true, false), |(print, show, template), n| match &n.kind {
+        NodeKind::Layer { printable, template: t, .. } => (print && *printable, show && n.visible, template || *t),
+        _ => (print, show, template),
+    })
+}
+
+/// For group `g` (indices of `roots` of `src`, in paint order) whose flattened group can't leave
+/// the clip groups and clipping layers of its topmost object ([`place_of`]): the objects inside
+/// them and the objects under them. `None` when the group can leave them, or every object is
+/// inside them.
+fn inside_and_under(src: &Document, roots: &[NodeId], g: &[usize]) -> Option<(Vec<usize>, Vec<usize>)> {
+    if !clips_count() || g.len() < 2 {
+        return None;
+    }
+    let ids: Vec<NodeId> = g.iter().map(|&i| roots[i]).collect();
+    let top = clip_ancestors(src, *ids.last()?);
+    if top.is_empty() {
+        return None;
+    }
+    let inside = |id: NodeId| {
+        let mine = clip_ancestors(src, id);
+        top.iter().all(|c| mine.contains(c))
+    };
+    if !inside(place_of(src, &ids)?) {
+        return None;
+    }
+    let (inside, under): (Vec<usize>, Vec<usize>) = g.iter().partition(|&&i| inside(roots[i]));
+    (!under.is_empty()).then_some((inside, under))
 }
 
 /// The regions and the image area replacing one group of overlapping objects (`plain`: the art as
@@ -493,6 +640,17 @@ pub(super) fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan
     for f in plan.flat {
         // A group always has objects.
         let Some(top) = place_of(d, &f.roots) else { continue };
+        // Art hidden entirely is removed.
+        if f.regions.is_empty() && f.area.is_none() {
+            if one_pass {
+                flat.extend(f.roots.iter().map(|r| (*r, vec![])));
+            } else {
+                for r in &f.roots {
+                    d.remove(*r)?;
+                }
+            }
+            continue;
+        }
         let mut children = vec![];
         // The image goes under the regions, reaching a pixel past its own: their edges then fall on
         // matching pixels instead of on what is behind the group.
@@ -564,19 +722,26 @@ pub(super) fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan
 
 /// The object of `roots` (in paint order) whose place their flattened group takes: the topmost one
 /// that no clip group or clipping layer clips unless it clips every object of `roots`, else the
-/// topmost one.
+/// topmost one. The group stays with the topmost object rather than move to a layer that prints,
+/// shows or is a template where the topmost object's layer differs, out from a clip group or
+/// clipping layer whose clipping path has a fill, which would then cover it, or out from a layer
+/// or group with opacity, a blend mode or isolation.
 fn place_of(d: &Document, roots: &[NodeId]) -> Option<NodeId> {
-    let top = roots.last().copied();
+    let top = roots.last().copied()?;
     if !clips_count() || roots.len() < 2 {
-        return top;
+        return Some(top);
     }
-    let clips = |id: NodeId| -> Vec<NodeId> {
-        let ancestry = d.ancestry(id).unwrap_or_default();
-        ancestry.iter().rev().skip(1).filter(|a| d.node(**a).is_some_and(Node::clips)).copied().collect()
-    };
-    let all: Vec<Vec<NodeId>> = roots.iter().map(|r| clips(*r)).collect();
+    let fills = |clip: &NodeId| d.node(*clip).and_then(|n| n.children()?.first().map(|c| c.clip_paint().fill.is_some())).unwrap_or(false);
+    let all: Vec<Vec<NodeId>> = roots.iter().map(|r| clip_ancestors(d, *r)).collect();
+    let above = all.last().map_or(&[][..], Vec::as_slice);
     let shared = |mine: &Vec<NodeId>| mine.iter().all(|c| all.iter().all(|theirs| theirs.contains(c)));
-    roots.iter().zip(&all).rev().find(|(_, mine)| shared(mine)).map(|(r, _)| *r).or(top)
+    let leaves_fill = |mine: &Vec<NodeId>| above.iter().any(|c| !mine.contains(c) && fills(c));
+    // Out of a layer or group with opacity, a blend mode or isolation, the group would lose it.
+    let leaves_compositing = |r: NodeId| own_layers(d, top, Some(r)).iter().any(|a| !draws_as_is(a));
+    let state = layer_state(d, top);
+    let place =
+        roots.iter().zip(&all).rev().find(|(r, mine)| shared(mine) && !leaves_fill(mine) && layer_state(d, **r) == state && !leaves_compositing(**r));
+    Some(place.map_or(top, |(r, _)| *r))
 }
 
 /// An image of `r` (in a clip group when it is clipped).

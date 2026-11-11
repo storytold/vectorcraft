@@ -281,6 +281,13 @@ pub(super) fn lost(reference: &vectorcraft_render::Rendered, variant: &vectorcra
     reference.iter().zip(variant).filter(|(r, v)| r[..3].iter().any(|c| *c < 200) && v[..3].iter().all(|c| *c >= 250)).count()
 }
 
+/// How many pixels of `a` and `b` differ by more than 24 in a channel.
+fn differ(a: &vectorcraft_render::Rendered, b: &vectorcraft_render::Rendered) -> usize {
+    assert_eq!((a.width, a.height), (b.width, b.height));
+    let (a, b) = (a.pixels.as_chunks::<4>().0, b.pixels.as_chunks::<4>().0);
+    a.iter().zip(b).filter(|(p, q)| p[..3].iter().zip(&q[..3]).any(|(x, y)| x.abs_diff(*y) > 24)).count()
+}
+
 /// The width and height of what each of `doc`'s images shows: its frame inside the clipping
 /// paths around it.
 pub(super) fn shown_image_sizes(doc: &vectorcraft_doc::Document) -> Vec<(f64, f64)> {
@@ -500,4 +507,195 @@ fn flat_pdf_files_of_art_that_no_clip_group_hides_are_unchanged() {
     // Art that a clip group hides is what changes.
     let (mut s, _) = cropped("cmyk", 400.0, Art::Image { see_through: true });
     assert!(bytes(&mut s, &files[0]) != before(|| bytes(&mut s, &files[0])));
+}
+
+/// The options of the PDF files without transparency.
+const FLAT_FILES: [&str; 3] = [r#"{"standard": "pdfX1a"}"#, r#"{"standard": "pdfX3"}"#, r#"{"compatibility": "1.3", "preserveEditing": false}"#];
+
+/// [`cropped_by`]'s clipping layer of a gradient at 80%, with a rectangle in the layer below that
+/// crosses the crop's right edge. → the session and the clipping layer's id.
+fn clipping_layer_over_a_rectangle(mode: &str) -> (Session, u64) {
+    let (mut s, layer) = cropped_by(mode, 400.0, Art::Gradient, true);
+    run(&mut s, "transparency.set", json!({"opacity": 80}));
+    let below = s.doc().unwrap().doc.layers[0].id.0;
+    run(&mut s, "layer.setCurrent", json!({"id": below}));
+    run(&mut s, "shape.rectangle", json!({"x": 100, "y": 60, "width": 120, "height": 40}));
+    run(&mut s, "paint.setFill", json!({"color": "#406020"}));
+    (s, layer)
+}
+
+/// A clipping layer over a layer that doesn't print, and a clipping layer that doesn't print
+/// over one that does: the files without transparency print what the file with transparency
+/// prints, and nothing of the layer that doesn't print.
+#[test]
+fn flattening_for_pdfx_leaves_out_the_layers_that_do_not_print() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut wrong = vec![];
+    for mode in ["cmyk", "rgb"] {
+        for clipping_layer_prints in [true, false] {
+            let (mut s, layer) = clipping_layer_over_a_rectangle(mode);
+            let below = s.doc().unwrap().doc.layers[0].id.0;
+            let off = if clipping_layer_prints { below } else { layer };
+            run(&mut s, "layer.setProps", json!({"id": off, "printable": false}));
+            let reference = drawn(&read_back(&mut s, &json!({})));
+            for flat in FLAT_FILES {
+                let back = drawn(&read_back(&mut s, &serde_json::from_str(flat).unwrap()));
+                let (lost, gained) = (lost(&reference, &back), lost(&back, &reference));
+                if lost + gained > 0 {
+                    wrong.push(format!("{mode}, clipping layer prints: {clipping_layer_prints}, {flat}: {lost} pixels lost, {gained} gained"));
+                }
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// A clipping layer whose clipping path has a fill: the files without transparency show the art
+/// over the fill, not the fill over the art.
+#[test]
+fn flattening_for_pdfx_keeps_the_art_of_a_clipping_layer_over_its_clipping_path_fill() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut wrong = vec![];
+    for mode in ["cmyk", "rgb"] {
+        let (mut s, layer) = clipping_layer_over_a_rectangle(mode);
+        let clip = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(layer)).unwrap().children().unwrap()[0].id.0;
+        run(&mut s, "paint.setFill", json!({"ids": [clip], "color": "#ffdd00"}));
+        let reference = drawn(&read_back(&mut s, &json!({})));
+        for flat in FLAT_FILES {
+            let back = drawn(&read_back(&mut s, &serde_json::from_str(flat).unwrap()));
+            // PDF/X-1a converts an RGB document's colors to CMYK.
+            let converted = mode == "rgb" && flat.contains("pdfX1a");
+            let (lost, differ) = (lost(&reference, &back), if converted { 0 } else { differ(&reference, &back) });
+            if lost > 0 || differ > 100 {
+                wrong.push(format!("{mode}, {flat}: {lost} pixels of art lost, {differ} pixels differ"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Transparent art in a clipping layer whose clipping path is area type holding only a space,
+/// which hides it: the files without transparency are written, without the art.
+#[test]
+fn flattening_for_pdfx_removes_transparent_art_that_a_clipping_layer_hides_entirely() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let [x, y, w, h] = FRAME;
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300, "colorMode": "cmyk"}));
+    let layer = run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "shape.rectangle", json!({"x": x, "y": y, "width": w, "height": h}));
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    run(&mut s, "paint.setFill", json!({"gradient": {"kind": "linear", "stops": stops}}));
+    run(&mut s, "transparency.set", json!({"opacity": 80}));
+    run(&mut s, "text.create", json!({"x": 50, "y": 50, "text": " ", "area": {"width": 80, "height": 60}}));
+    run(&mut s, "layer.clippingMask.toggle", json!({"id": layer}));
+    let reference = drawn(&read_back(&mut s, &json!({})));
+    for flat in FLAT_FILES {
+        let p: Value = serde_json::from_str(flat).unwrap();
+        let back = match s.execute("document.exportPdf", &p) {
+            Ok(v) => vectorcraft_pdf::import(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap(),
+            Err(e) => panic!("{flat}: {e}"),
+        };
+        assert_eq!(lost(&drawn(&back), &reference), 0, "{flat}: the hidden art prints");
+    }
+}
+
+/// Object › Flatten Transparency of art in a clipping layer and art in the layer below that
+/// reaches past the clipping path: when the layer below doesn't print, the clipping layer has
+/// opacity, or the clipping path has a fill (see-through too, flattened keeping alpha, in a layer
+/// with opacity or Multiply mode, or
+/// over a layer with opacity, overlapping art of a layer with opacity or art an opacity mask
+/// hides), the group stays in the clipping layer, the art below stays in its layer, and the page
+/// looks the same.
+#[test]
+fn flattening_keeps_the_group_in_the_clipping_layer_when_the_layer_below_differs() {
+    let mut wrong = vec![];
+    let cases = [
+        "the layer below doesn't print",
+        "the clipping path has a fill",
+        "the clipping path has a see-through fill, keeping alpha",
+        "the clipping path has a see-through fill, in a layer with opacity",
+        "the clipping path has a see-through fill, in a layer in Multiply mode",
+        "the clipping path has a see-through fill, over a layer with opacity",
+        "the clipping path has a see-through fill, over art that an opacity mask hides",
+        "the clipping path has a see-through fill, over overlapping art of a layer at 50%",
+        "the clipping path has no fill, in a layer with opacity",
+    ];
+    for case in cases {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 400, "height": 300, "colorMode": "rgb"}));
+        let below = s.doc().unwrap().doc.layers[0].id.0;
+        let orange = run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 200, "height": 150}))["id"].clone();
+        run(&mut s, "paint.setFill", json!({"color": "#ff8000"}));
+        let upper = run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap();
+        let blue = run(&mut s, "shape.rectangle", json!({"x": 100, "y": 80, "width": 200, "height": 150}))["id"].clone();
+        run(&mut s, "paint.setFill", json!({"color": "#2040c0"}));
+        run(&mut s, "transparency.set", json!({"opacity": 50}));
+        let clip = run(&mut s, "shape.rectangle", json!({"x": 60, "y": 40, "width": 300, "height": 220}))["id"].clone();
+        run(&mut s, "layer.clippingMask.toggle", json!({"id": upper}));
+        if case.starts_with("the layer below") {
+            run(&mut s, "layer.setProps", json!({"id": below, "printable": false}));
+        } else if !case.contains("no fill") {
+            run(&mut s, "paint.setFill", json!({"ids": [clip], "color": "#88ffcc"}));
+        }
+        let keeping_alpha = case.ends_with("keeping alpha");
+        if case.contains("see-through fill") {
+            run(&mut s, "transparency.set", json!({"ids": [clip], "opacity": 50}));
+        }
+        if case.ends_with("in a layer with opacity") {
+            run(&mut s, "transparency.set", json!({"ids": [upper], "opacity": 80}));
+        }
+        if case.ends_with("over a layer with opacity") {
+            run(&mut s, "transparency.set", json!({"ids": [below], "opacity": 50}));
+        }
+        if case.ends_with("an opacity mask hides") {
+            run(&mut s, "layer.setCurrent", json!({"id": below}));
+            run(&mut s, "select.set", json!({"ids": [orange]}));
+            let group = run(&mut s, "object.group", json!({}))["id"].clone();
+            let mask = run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 200, "height": 150}))["id"].clone();
+            run(&mut s, "paint.setFill", json!({"color": "#000000"}));
+            run(&mut s, "select.set", json!({"ids": [group, mask]}));
+            run(&mut s, "transparency.makeOpacityMask", json!({}));
+        }
+        if case.ends_with("Multiply mode") {
+            run(&mut s, "transparency.set", json!({"ids": [upper], "blendMode": "multiply"}));
+        }
+        let mut art = vec![orange.clone()];
+        if case.ends_with("a layer at 50%") {
+            run(&mut s, "layer.setCurrent", json!({"id": below}));
+            art.push(run(&mut s, "shape.rectangle", json!({"x": 80, "y": 60, "width": 120, "height": 120}))["id"].clone());
+            run(&mut s, "paint.setFill", json!({"color": "#20a040"}));
+            run(&mut s, "transparency.set", json!({"ids": [below], "opacity": 50}));
+        }
+        art.push(blue.clone());
+        // The page as it prints.
+        let printed = |d: &vectorcraft_doc::Document| {
+            let mut d = d.clone();
+            if case.starts_with("the layer below") {
+                let mut layer = (*d.layers[0]).clone();
+                layer.visible = false;
+                d.layers[0] = layer.into();
+            }
+            drawn(&d)
+        };
+        let before = printed(&s.doc().unwrap().doc);
+        run(&mut s, "select.set", json!({"ids": art}));
+        run(&mut s, "object.flattenTransparency", json!({"preserveAlpha": keeping_alpha}));
+        let d = &s.doc().unwrap().doc;
+        let layer_of = |id: &Value| id.as_u64().and_then(|id| d.ancestry(vectorcraft_doc::NodeId(id))).map(|a| a[0].0);
+        if layer_of(&orange) != Some(below) {
+            wrong.push(format!("{case}: the art below is in layer {:?}", layer_of(&orange)));
+        }
+        let upper_art = d.node(vectorcraft_doc::NodeId(upper)).and_then(|l| l.children()).map_or(0, Vec::len);
+        if d.node(vectorcraft_doc::NodeId(blue.as_u64().unwrap())).is_some() || upper_art != 2 {
+            wrong.push(format!("{case}: the clipping layer holds {upper_art} objects"));
+        }
+        let after = printed(d);
+        // Flat regions differ from see-through art along their antialiased edges.
+        let (lost, differ) = (lost(&before, &after), differ(&before, &after));
+        if lost > 0 || differ > 1200 {
+            wrong.push(format!("{case}: {lost} pixels of art lost, {differ} pixels differ"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
 }
