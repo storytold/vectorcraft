@@ -316,6 +316,21 @@ mod tests {
         assert!(!transparent_left(&app));
     }
 
+    /// Cancel with the Save Preset row showing closes the dialog and rolls the preview back.
+    #[test]
+    fn cancel_while_saving_a_preset_closes_the_dialog() {
+        let mut app = scene();
+        let before = app.session.doc().unwrap().doc.clone();
+        app.run("ui.flattenTransparencyDialog", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
+        frame(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert(SAVING.into(), json!(true));
+        frame(&mut app);
+        super::super::cancel(&mut app);
+        assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+        assert_eq!(app.session.doc().unwrap().doc, before, "Cancel rolls back");
+    }
+
     #[test]
     fn ok_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
         const WARNING: &str = "an image couldn't be decoded and is missing from the picture";

@@ -1,8 +1,7 @@
-use super::{FillRule, ParamCurve, PathData, Point, Rect};
+use super::{FillRule, MAX_SOLID_FACES, ParamCurve, PathData, Point, Rect};
 
-/// Outline points Extrude & Bevel and Inflate sample at most: every point costs walls, bevel
-/// bands and distance tests.
-pub(super) const MAX_SOLID_POINTS: usize = 2048;
+/// Outline points Extrude & Bevel and Inflate sample at most, and contours they take at most.
+pub(super) const MAX_SOLID_POINTS: usize = 65536;
 
 /// Outline points Rotate samples at most: it only turns the outline, so an outlined paragraph fits.
 pub(super) const MAX_PLANE_POINTS: usize = 65536;
@@ -10,13 +9,76 @@ pub(super) const MAX_PLANE_POINTS: usize = 65536;
 /// Pieces a twisted wall's strip is cut into along one edge at most.
 pub(super) const MAX_PIECES: usize = 64;
 
+/// Pieces a curve takes at most, where its tolerance asks for them.
+pub(super) const CURVE_PIECES: u32 = 32;
+
+/// The fewest pieces a curve of a solid over its budget is held to: a curve whose tolerance asks
+/// for fewer takes fewer.
+pub(super) const MIN_CURVE_PIECES: u32 = 4;
+
+const TOO_COMPLEX_SHAPE: &str = "The shape is too complex for a 3D effect";
+pub(super) const TOO_COMPLEX_SURFACE: &str = "The 3D surface is too complex; simplify the shape";
+
 /// How many straight pieces follow `c` within `tolerance` (Wang's bound on a cubic's distance from
-/// its chords), 1 to 32.
+/// its chords), 1 to [`CURVE_PIECES`].
 fn pieces(c: vectorcraft_geom::CubicBez, tolerance: f64) -> u32 {
     let d = |a: Point, b: Point, c: Point| (a.to_vec2() - 2.0 * b.to_vec2() + c.to_vec2()).hypot();
     let bend = d(c.p0, c.p1, c.p2).max(d(c.p1, c.p2, c.p3));
     let n = (0.75 * bend / tolerance).sqrt().ceil();
-    if n.is_finite() { (n as u32).clamp(1, 32) } else { 32 }
+    if n.is_finite() { (n as u32).clamp(1, CURVE_PIECES) } else { CURVE_PIECES }
+}
+
+/// The most pieces each curve of a solid's outline takes, counted on `path` before any point is
+/// sampled: [`CURVE_PIECES`] when the outline fits within [`MAX_SOLID_POINTS`] points and
+/// [`MAX_SOLID_FACES`] faces, else the largest number down to [`MIN_CURVE_PIECES`] that fits, the
+/// same for every curve. A curve whose tolerance (see [`sample`]) asks for fewer pieces takes
+/// fewer. The faces are counted as `per_edge` for each edge of the outline and `fixed` more.
+///
+/// An error when the outline takes more than [`MAX_SOLID_POINTS`] points, or contours, with
+/// every curve held to [`MIN_CURVE_PIECES`], and when its faces do not fit with that many.
+pub(super) fn curve_pieces(path: &PathData, size: f64, per_edge: usize, fixed: usize) -> Result<u32, String> {
+    let tolerance = (size / 2000.0).max(0.05);
+    // How many curves ask for each number of pieces.
+    let mut curves = [0usize; CURVE_PIECES as usize + 1];
+    let (mut lines, mut segments, mut open) = (0usize, 0usize, 0usize);
+    for (contours, sp) in path.subpaths.iter().enumerate() {
+        if contours >= MAX_SOLID_POINTS {
+            return Err(TOO_COMPLEX_SHAPE.into());
+        }
+        // A subpath of one anchor draws nothing, as in [`sample`].
+        if sp.anchors.len() < 2 {
+            continue;
+        }
+        if sp.anchors.iter().any(|a| [a.p, a.h_in, a.h_out].iter().any(|q| !q.x.is_finite() || !q.y.is_finite())) {
+            return Err("The shape contains invalid coordinates".into());
+        }
+        let count = if sp.closed { sp.anchors.len() } else { sp.anchors.len() - 1 };
+        // Every segment takes a point at least.
+        segments = segments.saturating_add(count);
+        if segments > MAX_SOLID_POINTS {
+            return Err(TOO_COMPLEX_SHAPE.into());
+        }
+        open += usize::from(!sp.closed);
+        for i in 0..count {
+            if sp.segment_is_line(i) {
+                lines += 1;
+            } else if let Some(n) = curves.get_mut(pieces(sp.segment(i), tolerance) as usize) {
+                *n += 1;
+            }
+        }
+    }
+    let points = |most: u32| -> usize {
+        curves.iter().enumerate().fold(lines, |sum, (asked, n)| sum.saturating_add(n.saturating_mul(asked.min(most as usize))))
+    };
+    if points(MIN_CURVE_PIECES) > MAX_SOLID_POINTS {
+        return Err(TOO_COMPLEX_SHAPE.into());
+    }
+    // An open contour is closed by one more edge.
+    let faces = |most: u32| points(most).saturating_add(open).saturating_mul(per_edge).saturating_add(fixed);
+    (MIN_CURVE_PIECES..=CURVE_PIECES)
+        .rev()
+        .find(|most| points(*most) <= MAX_SOLID_POINTS && faces(*most) <= MAX_SOLID_FACES)
+        .ok_or_else(|| TOO_COMPLEX_SURFACE.into())
 }
 
 /// Contours thinner than this on average (twice their area over their perimeter) are dropped when
@@ -37,16 +99,9 @@ pub(super) const DEBRIS: f64 = 1e-6;
 /// are. A profile the boolean refuses is built from its contours as drawn, as it was before
 /// contours were merged. An empty answer is an answer: contours that cancel (a square drawn twice
 /// under even-odd), or that are all thinner than [`DEBRIS`], fill nothing, so nothing is built.
-pub(super) fn solid_rings(path: &PathData, rule: FillRule, size: f64, limit: usize) -> Result<Vec<Vec<Point>>, String> {
-    let sampled = sample(path, size, limit)?;
-    let closed = closed_straight(path);
-    if !meets(&sampled, &closed) {
-        return orient(sampled, rule);
-    }
-    match vectorcraft_pathops::try_unite_all_with(&[(&closed, rule)], DEBRIS) {
-        Ok(merged) => sample(&merged, size, limit).map(wound),
-        Err(_) => orient(sampled, rule),
-    }
+/// Each curve takes at most `most` pieces, on the profile as drawn and on the merged outline.
+pub(super) fn solid_rings(path: &PathData, rule: FillRule, size: f64, limit: usize, most: u32) -> Result<Vec<Vec<Point>>, String> {
+    Ok(solid_rings_traced(path, rule, size, limit, most)?.into_iter().map(|r| r.points).collect())
 }
 
 /// Do the `sampled` rings of `closed` (the profile as the boolean takes it) meet, so that it must
@@ -92,10 +147,10 @@ pub(super) fn closed_straight(path: &PathData) -> std::borrow::Cow<'_, PathData>
 /// The boolean's rings turned so the filled side is on each one's left. Its holes already run
 /// against their outlines, so only the direction of the whole is chosen: the one whose rings
 /// enclose positive area in all.
-pub(super) fn wound(mut rings: Vec<Vec<Point>>) -> Vec<Vec<Point>> {
-    rings.retain(|r| signed_area(r).abs() > 1e-9);
-    if rings.iter().map(|r| signed_area(r)).sum::<f64>() < 0.0 {
-        rings.iter_mut().for_each(|r| r.reverse());
+pub(super) fn wound<R: Turnable>(mut rings: Vec<R>) -> Vec<R> {
+    rings.retain(|r| signed_area(r.points()).abs() > 1e-9);
+    if rings.iter().map(|r| signed_area(r.points())).sum::<f64>() < 0.0 {
+        rings.iter_mut().for_each(Turnable::turn_around);
     }
     rings
 }
@@ -188,6 +243,71 @@ fn segments_meet(a: Point, b: Point, c: Point, d: Point, touch: f64) -> bool {
     dist(a, c, d).min(dist(b, c, d)).min(dist(c, a, b)).min(dist(d, a, b)) <= touch
 }
 
+/// Where one edge of a sampled ring lies on the curve it follows: the piece of `curve` from `t0`
+/// to `t1` (`t1` below `t0` on a ring that runs against its curve).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Span {
+    pub(super) curve: vectorcraft_geom::CubicBez,
+    pub(super) t0: f64,
+    pub(super) t1: f64,
+}
+
+/// A sampled ring with, for each edge (point `i` to point `i + 1`, the last back to the first),
+/// the piece of curve it follows, or `None` for a straight edge.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Ring {
+    pub(super) points: Vec<Point>,
+    pub(super) spans: Vec<Option<Span>>,
+}
+
+/// A ring that [`orient`] and [`wound`] can turn around.
+pub(super) trait Turnable {
+    fn points(&self) -> &[Point];
+    fn turn_around(&mut self);
+}
+
+impl Turnable for Vec<Point> {
+    fn points(&self) -> &[Point] {
+        self
+    }
+    fn turn_around(&mut self) {
+        self.reverse();
+    }
+}
+
+impl Turnable for Ring {
+    fn points(&self) -> &[Point] {
+        &self.points
+    }
+    fn turn_around(&mut self) {
+        // The ring keeps its first point, an anchor of the art, so that a run of edges along one
+        // curve doesn't start part way along it. Edge `j` of the turned ring is edge `n - 1 - j`
+        // of the ring, run the other way.
+        self.points.reverse();
+        if !self.points.is_empty() {
+            self.points.rotate_right(1);
+        }
+        self.spans.reverse();
+        for s in self.spans.iter_mut().flatten() {
+            std::mem::swap(&mut s.t0, &mut s.t1);
+        }
+    }
+}
+
+/// [`solid_rings`] with the piece of curve each edge follows.
+pub(super) fn solid_rings_traced(path: &PathData, rule: FillRule, size: f64, limit: usize, most: u32) -> Result<Vec<Ring>, String> {
+    let sampled = sample_traced(path, size, limit, most)?;
+    let closed = closed_straight(path);
+    let points: Vec<Vec<Point>> = sampled.iter().map(|r| r.points.clone()).collect();
+    if !meets(&points, &closed) {
+        return orient(sampled, rule);
+    }
+    match vectorcraft_pathops::try_unite_all_with(&[(&closed, rule)], DEBRIS) {
+        Ok(merged) => sample_traced(&merged, size, limit, most).map(wound),
+        Err(_) => orient(sampled, rule),
+    }
+}
+
 /// The rings of a shape: closed polygons with the filled side on their left, (-dy, dx): outer
 /// outlines run one way and holes the other, so nonzero winding fills them as the art is. Curves
 /// are followed within a tolerance of 1/2000 of `size` (at least 0.05 pt), so small curves take
@@ -197,12 +317,17 @@ fn segments_meet(a: Point, b: Point, c: Point, d: Point, touch: f64) -> bool {
 /// is left out: a contour inside another that runs the same way doesn't cut a hole, as it would
 /// if nesting alone decided (#1724).
 pub(super) fn rings(path: &PathData, rule: FillRule, size: f64, limit: usize) -> Result<Vec<Vec<Point>>, String> {
-    orient(sample(path, size, limit)?, rule)
+    orient(sample(path, size, limit, CURVE_PIECES)?, rule)
 }
 
 /// The closed polygons that follow `path`'s subpaths, as [`rings`] samples them, each running as
-/// its subpath does.
-pub(super) fn sample(path: &PathData, size: f64, limit: usize) -> Result<Vec<Vec<Point>>, String> {
+/// its subpath does, each curve in at most `most` pieces.
+pub(super) fn sample(path: &PathData, size: f64, limit: usize, most: u32) -> Result<Vec<Vec<Point>>, String> {
+    Ok(sample_traced(path, size, limit, most)?.into_iter().map(|r| r.points).collect())
+}
+
+/// [`sample`] with the piece of curve each edge follows.
+fn sample_traced(path: &PathData, size: f64, limit: usize, most: u32) -> Result<Vec<Ring>, String> {
     let tolerance = (size / 2000.0).max(0.05);
     let mut count = 0;
     let mut out = vec![];
@@ -210,36 +335,46 @@ pub(super) fn sample(path: &PathData, size: f64, limit: usize) -> Result<Vec<Vec
     for sp in path.subpaths.iter().filter(|sp| sp.anchors.len() >= 2) {
         let segments = if sp.closed { sp.anchors.len() } else { sp.anchors.len() - 1 };
         if segments > limit {
-            return Err("The shape is too complex for a 3D effect".into());
+            return Err(TOO_COMPLEX_SHAPE.into());
         }
-        let mut ring: Vec<Point> = vec![];
+        // Each point with the piece of curve of the edge that ends at it.
+        let mut ring: Vec<(Point, Option<Span>)> = vec![];
         if let Some(first) = sp.anchors.first() {
-            ring.push(first.p);
+            ring.push((first.p, None));
         }
         for i in 0..segments {
             let curve = sp.segment(i);
-            let samples = if sp.segment_is_line(i) { 1 } else { pieces(curve, tolerance) };
+            let line = sp.segment_is_line(i);
+            let samples = if line { 1 } else { pieces(curve, tolerance).min(most.max(1)) };
             count += samples as usize;
             if count > limit {
-                return Err("The shape is too complex for a 3D effect".into());
+                return Err(TOO_COMPLEX_SHAPE.into());
             }
             for k in 1..=samples {
-                ring.push(curve.eval(f64::from(k) / f64::from(samples)));
+                let (t0, t1) = (f64::from(k - 1) / f64::from(samples), f64::from(k) / f64::from(samples));
+                ring.push((curve.eval(t1), (!line).then_some(Span { curve, t0, t1 })));
             }
         }
-        if ring.iter().any(|p| !p.x.is_finite() || !p.y.is_finite() || p.x.abs() > 1e8 || p.y.abs() > 1e8) {
+        if ring.iter().any(|(p, _)| !p.x.is_finite() || !p.y.is_finite() || p.x.abs() > 1e8 || p.y.abs() > 1e8) {
             return Err("The shape contains invalid coordinates".into());
         }
-        ring.dedup_by(|a, b| a.distance(*b) < 1e-9);
-        while ring.len() > 1 && ring.first().zip(ring.last()).is_some_and(|(a, b)| a.distance(*b) < 1e-9) {
-            ring.pop();
+        ring.dedup_by(|a, b| a.0.distance(b.0) < 1e-9);
+        // The last point back on the first closes the ring along the edge that ends at it.
+        while ring.len() > 1 && ring.first().zip(ring.last()).is_some_and(|(a, b)| a.0.distance(b.0) < 1e-9) {
+            let closing = ring.pop().and_then(|(_, s)| s);
+            if let Some(first) = ring.first_mut() {
+                first.1 = closing;
+            }
         }
+        let points: Vec<Point> = ring.iter().map(|(p, _)| *p).collect();
         // Rings with no area are kept here: a contour that crosses itself into lobes that cancel
         // (a bowtie) has none, and [`edges_meet`] must see it. [`orient`] leaves them out. A flat
         // ring, every point on one line, fills nothing under either rule and is left out now, so
         // that it doesn't send the profile through the boolean.
-        if ring.len() >= 3 && !flat(&ring) {
-            out.push(ring);
+        if points.len() >= 3 && !flat(&points) {
+            let n = points.len();
+            let spans = (0..n).map(|i| ring.get((i + 1) % n).and_then(|(_, s)| *s)).collect();
+            out.push(Ring { points, spans });
         }
     }
     Ok(out)
@@ -247,15 +382,15 @@ pub(super) fn sample(path: &PathData, size: f64, limit: usize) -> Result<Vec<Vec
 
 /// `out` (sampled rings) turned so the filled side is on each one's left, and under the nonzero
 /// `rule` without the rings that are no edge of the shape, as [`rings`] describes.
-fn orient(mut out: Vec<Vec<Point>>, rule: FillRule) -> Result<Vec<Vec<Point>>, String> {
-    out.retain(|r| signed_area(r).abs() > 1e-9);
+fn orient<R: Turnable>(mut out: Vec<R>, rule: FillRule) -> Result<Vec<R>, String> {
+    out.retain(|r| signed_area(r.points()).abs() > 1e-9);
     // Which rings hold which: each ring against the others, its edges walked only where its
     // bounds hold the point, and within [`MAX_CONTAINMENT_EDGES`] edges and pairs in all (a pair
     // whose bounds miss the point costs a step too: many small rings are a square of pairs).
-    let too_complex = || String::from("The shape is too complex for a 3D effect");
+    let too_complex = || String::from(TOO_COMPLEX_SHAPE);
     let mut work = 0usize;
-    let mut within = |out: &[Vec<Point>], bounds: &[Rect], i: usize| -> Result<Vec<usize>, String> {
-        let p = out.get(i).and_then(|r| r.first()).copied().unwrap_or_default();
+    let mut within = |out: &[R], bounds: &[Rect], i: usize| -> Result<Vec<usize>, String> {
+        let p = out.get(i).and_then(|r| r.points().first()).copied().unwrap_or_default();
         let mut held_by = vec![];
         for (j, (o, b)) in out.iter().zip(bounds).enumerate() {
             work = work.saturating_add(1);
@@ -265,18 +400,18 @@ fn orient(mut out: Vec<Vec<Point>>, rule: FillRule) -> Result<Vec<Vec<Point>>, S
                 }
                 continue;
             }
-            work = work.saturating_add(o.len());
+            work = work.saturating_add(o.points().len());
             if work > MAX_CONTAINMENT_EDGES {
                 return Err(too_complex());
             }
-            if contains(o, p) {
+            if contains(o.points(), p) {
                 held_by.push(j);
             }
         }
         Ok(held_by)
     };
-    let bounds_of = |out: &[Vec<Point>]| -> Vec<Rect> {
-        out.iter().map(|r| r.iter().map(|q| Rect::from_points(*q, *q)).reduce(|a, b| a.union(b)).unwrap_or_default()).collect()
+    let bounds_of = |out: &[R]| -> Vec<Rect> {
+        out.iter().map(|r| r.points().iter().map(|q| Rect::from_points(*q, *q)).reduce(|a, b| a.union(b)).unwrap_or_default()).collect()
     };
     if rule == FillRule::NonZero {
         let turn = |r: &[Point]| if signed_area(r) > 0.0 { 1 } else { -1 };
@@ -284,8 +419,8 @@ fn orient(mut out: Vec<Vec<Point>>, rule: FillRule) -> Result<Vec<Vec<Point>>, S
         let mut edge = Vec::with_capacity(out.len());
         for (i, r) in out.iter().enumerate() {
             // The winding number just outside the ring, and just inside it.
-            let outside: i32 = within(&out, &bounds, i)?.into_iter().filter_map(|j| out.get(j)).map(|o| turn(o)).sum();
-            edge.push((outside != 0) != (outside + turn(r) != 0));
+            let outside: i32 = within(&out, &bounds, i)?.into_iter().filter_map(|j| out.get(j)).map(|o| turn(o.points())).sum();
+            edge.push((outside != 0) != (outside + turn(r.points()) != 0));
         }
         let mut edge = edge.into_iter();
         out.retain(|_| edge.next().unwrap_or(true));
@@ -294,8 +429,8 @@ fn orient(mut out: Vec<Vec<Point>>, rule: FillRule) -> Result<Vec<Vec<Point>>, S
     let bounds = bounds_of(&out);
     let holes: Vec<bool> = (0..out.len()).map(|i| within(&out, &bounds, i).map(|held| held.len() % 2 == 1)).collect::<Result<_, _>>()?;
     for (r, hole) in out.iter_mut().zip(holes) {
-        if (signed_area(r) > 0.0) == hole {
-            r.reverse();
+        if (signed_area(r.points()) > 0.0) == hole {
+            r.turn_around();
         }
     }
     Ok(out)

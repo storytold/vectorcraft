@@ -612,6 +612,96 @@ fn an_export_and_rasterize_hold_the_solid_of_3d_type() {
     assert!(rasterized.width() > letters.width() + 15.0, "{letters:?} {rasterized:?}");
 }
 
+/// A symbol instance, a blend and a clipping group with Extrude & Bevel, alone or in a group, draw
+/// their solids on the canvas, in an export and in Object › Rasterize, not their flat art.
+#[test]
+fn a_symbol_instance_a_blend_and_a_clipping_group_draw_their_solids() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind, Symbol};
+    let square = |x: f64, y: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut d = Document::new(200.0, 200.0);
+    d.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: square(0.0, 0.0) });
+    let mut clip = (*square(30.0, 30.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() });
+    let instance = NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((40.0, 40.0)) };
+    let clipped = NodeKind::Group { children: vec![Arc::new(clip), square(20.0, 20.0)], clip: true };
+    let in_group = |kind: NodeKind| NodeKind::Group { children: vec![Arc::new(Node::new(NodeId(0), kind)), square(100.0, 100.0)], clip: false };
+    let kinds = [
+        ("a symbol instance", instance.clone()),
+        ("a blend", NodeKind::Blend { children: vec![square(30.0, 30.0), square(60.0, 40.0)], spec }),
+        ("a clipping group", clipped.clone()),
+        ("a group holding a symbol instance", in_group(instance)),
+        ("a group holding a clipping group", in_group(clipped)),
+    ];
+    for (what, kind) in kinds {
+        let mut n = Node::new(d.alloc_id(), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let solid_doc = doc_of(&mut d.clone(), n);
+        let n = &solid_doc.layers[0].children().unwrap()[0];
+        let (solid, rasterized) = (crate::encode::art_bounds(&solid_doc).unwrap(), crate::drawn_bounds(&solid_doc, n).unwrap());
+        let size = |r: Rect| r.width() + r.height();
+        assert!(size(solid) > size(flat) + 20.0, "{what}: {flat:?} {solid:?}");
+        assert!(size(rasterized) > size(flat) + 20.0, "{what}: {flat:?} {rasterized:?}");
+        // The renderer builds the solid from the object itself, with the document's symbols, as
+        // the effect builds it: one solid built, not the object's art drawn again with the effect.
+        let built = vectorcraft_effects::solid_art_in(Some(&solid_doc), n).and_then(|a| a.visual_bounds()).unwrap();
+        assert!((solid.x0 - built.x0).abs() < 1.0 && (solid.x1 - built.x1).abs() < 1.0, "{what}: {built:?} {solid:?}");
+        let mut r = Renderer::new();
+        r.art_bounds_on(&solid_doc, Rect::new(0.0, 0.0, 200.0, 200.0));
+        assert_eq!(r.stats.three_d_built, 1, "{what}");
+    }
+}
+
+/// A loaded file can hold a 3D effect on art past the limits commands check: a blend of more
+/// than 4,096 objects, art nested more than 64 levels deep in a clipping group. The art then draws
+/// as it does without the effect, and drawing it does not fail.
+#[test]
+fn art_past_the_three_d_limits_draws_as_without_the_effect() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind};
+    let square = |x: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut clip = (*square(0.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let mut deep = (*square(0.0)).clone();
+    for _ in 0..200 {
+        deep = Node::group(NodeId(0), vec![Arc::new(deep)]);
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(1000), ..Default::default() });
+    let kinds = [
+        ("a blend of 6,000 objects", NodeKind::Blend { children: (0..6).map(|i| square(30.0 * i as f64)).collect(), spec }),
+        ("art 200 levels deep in a clip", NodeKind::Group { children: vec![Arc::new(clip), Arc::new(deep)], clip: true }),
+    ];
+    let d = Document::new(200.0, 200.0);
+    for (what, kind) in kinds {
+        let mut n = Node::new(NodeId(500), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let loaded = doc_of(&mut d.clone(), n);
+        let n = &loaded.layers[0].children().unwrap()[0];
+        assert!(vectorcraft_effects::validate_three_d_in(Some(&loaded), n, "threeD.extrude", &json!({})).is_err(), "{what}");
+        assert_eq!(crate::encode::art_bounds(&loaded), Some(flat), "{what}");
+        assert!(crate::drawn_bounds(&loaded, n).is_some(), "{what}");
+    }
+}
+
 fn doc_of(d: &mut Document, n: Node) -> Document {
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
@@ -900,8 +990,8 @@ fn the_brush_library_is_checked_only_after_3d_art_is_measured() {
     assert_eq!(r.brush_library, None);
 }
 
-/// An object whose 3D effect builds nothing (Revolve on a group) is measured by the renderer as the
-/// free measure does it: as the renderer draws it, by its members.
+/// An object whose 3D effect builds nothing (Revolve on a group's fill) is measured by the renderer
+/// as the free measure does it: as the renderer draws it, by its members.
 #[test]
 fn a_3d_effect_that_builds_nothing_is_measured_alike() {
     let mut d = Document::new(100.0, 100.0);
@@ -917,10 +1007,12 @@ fn a_3d_effect_that_builds_nothing_is_measured_alike() {
         Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
     );
     let mut g = Node::group(d.alloc_id(), vec![Arc::new(hidden), Arc::new(shown)]);
-    g.appearance.effects = vec![Effect { id: "threeD.revolve".into(), params: json!({}), visible: true }];
+    g.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+    *g.appearance.items[0].effects_mut() = vec![Effect { id: "threeD.revolve".into(), params: json!({}), visible: true }];
     let l = d.layers[0].id;
     d.insert(Some(l), 0, g).unwrap();
     let n = d.layers[0].children().unwrap()[0].clone();
+    assert!(crate::effects::has_revolve(&n) && crate::effects::revolve_art(&n).is_none(), "builds nothing");
     let symbols = d.symbol_boxes();
     assert_eq!(Renderer::new().effect_bounds(&symbols, &n), crate::effect_bounds(&symbols, &n));
     assert_eq!(Renderer::new().bounds_of(&symbols, &n), crate::brush_fx::cull_bounds(&symbols, &n));
@@ -1761,8 +1853,8 @@ fn an_image_inner_glow_follows_its_visible_pixels() {
     }
 }
 
-/// A 3D effect on a path's fill or stroke that builds nothing (Revolve after Roughen) draws the
-/// item as without it: the art made for the object is drawn without it, not as an object with
+/// A 3D effect on a path's fill or stroke that builds nothing (Revolve after Roughen, in a paint
+/// whose copies on the faces would pass the budget) draws the item as without it: the art made for the object is drawn without it, not as an object with
 /// effects again, and that art again, without end. A stroked object draws exactly as without the
 /// 3D effect, with a raster effect of its own (Drop Shadow, Gaussian Blur) too. An object with
 /// only a fill and a raster effect draws from that art, where without the 3D effect it draws as a
@@ -1775,6 +1867,12 @@ fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
     let rough =
         Effect { id: "distort.roughen".into(), params: json!({"size": 10, "relative": false, "detail": 10, "points": "smooth"}), visible: true };
     let revolve = Effect { id: "threeD.revolve".into(), params: json!({}), visible: true };
+    // A gradient of one color with 1,000 stops.
+    let ramp = |c: Color| {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        let stops = (0..1000).map(|i| GradientStop::new(i as f32 / 1000.0, c)).collect();
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))))
+    };
     let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({}), visible: true };
     let blur = Effect { id: "blur.gaussian".into(), params: json!({"radius": 2}), visible: true };
     let cases = [
@@ -1789,8 +1887,8 @@ fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
     for (object, on_fill, stroked) in cases {
         let draw = |object: &[Effect], three: bool| {
             let mut d = Document::new(100.0, 100.0);
-            let stroke = if stroked { Paint::solid(Color::rgb(0.0, 0.0, 1.0)) } else { Paint::None };
-            let ap = Appearance::basic(Paint::solid(Color::BLACK), stroke, 2.0);
+            let stroke = if stroked { ramp(Color::rgb(0.0, 0.0, 1.0)) } else { Paint::None };
+            let ap = Appearance::basic(ramp(Color::BLACK), stroke, 2.0);
             let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(30.0, 30.0, 60.0, 60.0)), ap);
             let l = d.layers[0].id;
             let id = d.insert(Some(l), 0, n).unwrap();

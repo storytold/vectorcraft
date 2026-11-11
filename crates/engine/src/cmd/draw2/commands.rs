@@ -74,7 +74,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Split Path",
             [],
             None,
-            "{id, subpath?, segment, t} or {id, subpath?, anchor}: closed paths open there, open paths become two → {ids}",
+            "{id, subpath?, segment, t} or {id, subpath?, anchor}: closed paths open there, open paths become two; one of the two new end points is left selected → {ids}",
             has_doc,
             split
         ),

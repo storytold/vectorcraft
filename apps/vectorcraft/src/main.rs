@@ -456,6 +456,8 @@ fn main() -> std::process::ExitCode {
                 let mut session = Session::new();
                 // The profiles loaded before come back before the preferences name any of them.
                 prefs_dir::attach_profile_store(&mut session);
+                // Then Edit › Color Settings, which may name one of those profiles.
+                prefs_dir::attach_color_settings(&mut session);
                 // Before any plug-in loads: this launch's marker in the Launch folder next to the
                 // preferences (none for runs without preferences), and Safe Mode.
                 let launch_dir = prefs_path().filter(|_| prefs_enabled()).and_then(|p| Some(p.parent()?.join("Launch")));

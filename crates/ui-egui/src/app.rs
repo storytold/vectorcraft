@@ -53,6 +53,8 @@ impl VectorcraftApp {
         // The place cursor's clicks and drags place their files through the app
         // ([`place::place_from_cursor`]).
         session.place_cursor_requests = true;
+        // A script runs a slice per frame, so the window keeps drawing and Stop can be pressed.
+        session.script_frames = true;
         let views = session.documents().iter().map(View::of).collect();
         let view_uids = session.documents().iter().map(|d| d.uid).collect();
         let known = session.documents().iter().map(|d| d.uid).collect();
@@ -86,6 +88,7 @@ impl VectorcraftApp {
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
+                plugin_keys: Default::default(),
                 cursors: Default::default(),
                 view_moved: None,
                 hover_cursor: None,
@@ -124,6 +127,7 @@ impl VectorcraftApp {
             updates_rt: Default::default(),
             frame_rate: Default::default(),
             canvas_rect: None,
+            control_rotate_press: None,
             hover_doc: None,
             titlebar_from_env: false,
             custom_titlebar: false,
@@ -232,6 +236,19 @@ impl VectorcraftApp {
 /// eframe isn't a dependency of this crate (the host owns the event loop); these entry points are
 /// called from the host's `eframe::App` impl.
 impl VectorcraftApp {
+    /// Applies the work that finished off the UI thread. It stays pending while a script runs, since
+    /// every change to the documents ends in a busy error until the script ends.
+    pub(crate) fn poll_finished_work(&mut self) {
+        if self.session.script_running() {
+            return;
+        }
+        background::poll(self);
+        opening::poll(self);
+        plugin_runs::poll(self);
+        trace_runs::poll(self);
+        placing::poll(self);
+    }
+
     /// The language the UI is drawn in: the Preferences dialog's choice while it is open (so a
     /// change shows before OK), else the `interfaceLanguage` preference (`auto` = the system's).
     pub fn ui_language(&self) -> i18n::Lang {
@@ -321,12 +338,12 @@ impl VectorcraftApp {
         // A Paste the host read before this iteration's formats were written must still wait for
         // them, even if the worker below finishes them during this same tick.
         ctx.data_mut(|d| d.insert_temp(egui::Id::unique("clipboard.pending-at-tick"), self.clipboard_publishing.is_pending()));
-        background::poll(self);
         screen_color::poll(self, ctx);
-        opening::poll(self);
-        plugin_runs::poll(self);
-        trace_runs::poll(self);
-        placing::poll(self);
+        self.poll_finished_work();
+        crate::script_runs::poll(self);
+        if self.session.script_running() && !self.session.script_waiting() {
+            ctx.request_repaint();
+        }
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
         crate::addons::select::link_status::refresh(self, now);
@@ -351,7 +368,12 @@ impl VectorcraftApp {
             crate::ime::close_viewport(self, ctx);
             self.ime_context.end_viewport(ctx.viewport_id());
             unsaved::finish_pending(self);
-            if self.file_sheet_open() {
+            if self.session.script_running() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                if self.ui.dialog.is_none() {
+                    self.ui.dialog = Some(crate::state::Dialog::new(dialogs::script_run::CLOSE_KIND, serde_json::json!({})));
+                }
+            } else if self.file_sheet_open() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.status(picks::busy());
             } else if unsaved::any_dirty(self) {

@@ -210,6 +210,27 @@ fn command_cursor_settings_refresh_hover_cursor_while_view_moves() {
     assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
 }
 
+/// A script that changes Caps Lock refreshes the pointer when its run ends.
+#[test]
+fn a_script_run_refreshes_hover_cursor_while_view_moves() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.session.select_tool("pen", vectorcraft_engine::ViewInfo::default()).unwrap();
+    app.hover_doc = Some(Point::new(200.0, 150.0));
+    let mods = Mods::default();
+    let view = vectorcraft_engine::ViewInfo::default();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Pen));
+    app.run("script.run", json!({"source": "vc.run('view.capsLock', {on: true});"})).unwrap();
+    for _ in 0..1_000 {
+        if !app.session.script_running() {
+            break;
+        }
+        crate::script_runs::poll(&mut app);
+    }
+    assert!(app.session.caps_lock);
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
+}
+
 /// #826: in a turned view each ruler still has ticks along its whole length; at 0° the top one
 /// reads x where the canvas has it.
 #[test]
@@ -1391,6 +1412,52 @@ fn new_ruler_guide_alt_cancel_keeps_document_and_redo() {
     }
 }
 
+/// With Preferences › Guides & Grid › Artboard Guides with Cmd/Ctrl + Ruler Drag on, Cmd/Ctrl held
+/// when a drag leaves either ruler makes a guide of the active artboard, even when the key is let
+/// go before the release; a guide outside the artboard is not made. With the preference off, the
+/// same drag makes a canvas guide.
+#[test]
+fn cmd_ruler_drags_make_artboard_guides_with_the_preference_on() {
+    use egui::{Event, Modifiers};
+    for source_vertical in [false, true] {
+        for on in [false, true] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+            app.session.execute("prefs.set", &json!({"key": "cmdRulerDragArtboardGuides", "value": on})).unwrap();
+            app.ui.view.rulers = true;
+            app.ui.view.smart_guides = false;
+            app.ui.view.snap_to_point = false;
+            app.select_tool("rectangle");
+            let ctx = egui::Context::default();
+            frame(&mut app, &ctx, vec![]);
+            let rect = app.canvas_rect.unwrap();
+            let xf = Xf::new(rect, app.view().unwrap());
+            let from =
+                if source_vertical { pos2(rect.left() - RULER / 2.0, rect.center().y) } else { pos2(rect.center().x, rect.top() - RULER / 2.0) };
+            let drag = |app: &mut VectorcraftApp, to: Point| {
+                let at = xf.to_screen(to);
+                assert!(rect.contains(at));
+                let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+                frame(app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), Event::PointerMoved(from)]);
+                frame(app, &ctx, vec![button(from, true, Modifiers::COMMAND)]);
+                frame(app, &ctx, vec![Event::PointerMoved(at)]);
+                frame(app, &ctx, vec![Event::ModifiersChanged(Modifiers::NONE), Event::PointerMoved(at), button(at, false, Modifiers::NONE)]);
+            };
+            let board = app.session.active().unwrap().doc.artboards[0].id;
+            drag(&mut app, Point::new(80.0, 120.0));
+            let st = app.session.active().unwrap();
+            assert_eq!(st.doc.guides.len(), 1, "vertical {source_vertical}, on {on}");
+            assert_eq!(st.doc.guides[0].vertical, source_vertical);
+            assert_eq!(st.doc.guides[0].artboard, on.then_some(board), "vertical {source_vertical}, on {on}");
+            // Beyond the artboard's right or bottom edge.
+            let beyond = xf.to_doc(rect.right_bottom() - egui::vec2(2.0, 2.0));
+            assert!(beyond.x > 400.0 && beyond.y > 300.0, "{beyond:?}");
+            drag(&mut app, beyond);
+            assert_eq!(app.session.active().unwrap().doc.guides.len(), if on { 1 } else { 2 }, "vertical {source_vertical}, on {on}");
+        }
+    }
+}
+
 /// #451: a guide dragged out of a ruler lands on the art's side midpoints (halving an
 /// artboard-sized rectangle) and on the artboard's edges; an artboard guide is drawn across
 /// its artboard only.
@@ -1544,6 +1611,73 @@ fn cmd_with_another_tool_drags_with_the_selection_tool_used_last() {
     assert_eq!(cmd_drag(&mut app, inside, inside), "groupSelection");
     app.select_tool("selection");
     assert_eq!(cmd_drag(&mut app, inside, inside), "selection");
+}
+
+/// #6369: only the selection box remains over the temporary halftone, and the original
+/// selection's marks come back when Preview is turned off or the dialog is cancelled.
+#[test]
+fn halftone_preview_hides_dot_outlines_and_keeps_selection_bounds() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.ui.view.bounding_box = true;
+    let original = app.run("shape.ellipse", json!({"x": 50, "y": 50, "width": 120, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let original = vectorcraft_doc::NodeId(original);
+    app.run("paint.setFill", json!({"color": "#000000"})).unwrap();
+    let canvas = egui::Context::default();
+    let dialog = egui::Context::default();
+    let dialog_frame = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = dialog.run_ui(raw, |ui| crate::dialogs::show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    let has_interior_marks = |app: &mut VectorcraftApp| {
+        frame(app, &canvas, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let corners = app.selection_box().unwrap().corners().map(|p| xf.to_screen(p));
+        let inside = egui::Rect::from_points(&corners).shrink(10.0);
+        let st = app.session.active().unwrap();
+        let color = c32(st.doc.layer_color(st.selection.objects[0]));
+        let points = drawn_in(app, &canvas, color, 1.0);
+        assert!(corners.iter().all(|p| points.contains(p)), "the outer selection box is still drawn");
+        points.iter().any(|p| inside.contains(*p))
+    };
+    assert!(has_interior_marks(&mut app), "the selected ellipse shows its outline");
+
+    app.run("ui.menuDialog", json!({"command": "object.vectorHalftone"})).unwrap();
+    dialog_frame(&mut app);
+    assert!(app.session.in_interaction());
+    assert_ne!(app.session.active().unwrap().selection.objects, vec![original], "the halftone is previewed and selected");
+    assert!(!has_interior_marks(&mut app), "selection marks cover the halftone dots");
+
+    let set_preview = |app: &mut VectorcraftApp, on| {
+        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(on));
+        dialog_frame(app);
+    };
+    set_preview(&mut app, false);
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![original]);
+    assert!(has_interior_marks(&mut app), "turning Preview off restores the outline");
+
+    set_preview(&mut app, true);
+    assert!(!has_interior_marks(&mut app), "turning Preview back on hides the dot marks again");
+    crate::dialogs::cancel(&mut app);
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![original]);
+    assert!(has_interior_marks(&mut app), "Cancel restores the outline");
+
+    app.run("ui.menuDialog", json!({"command": "object.move"})).unwrap();
+    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
+    dialog_frame(&mut app);
+    assert!(app.session.in_interaction());
+    assert!(has_interior_marks(&mut app), "another dialog's preview keeps selection marks");
+    crate::dialogs::cancel(&mut app);
+
+    app.run("ui.menuDialog", json!({"command": "object.vectorHalftone"})).unwrap();
+    dialog_frame(&mut app);
+    assert!(!has_interior_marks(&mut app));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert!(has_interior_marks(&mut app), "OK restores ordinary selection marks on the applied dots");
 }
 
 /// #525: a selection with more anchors than the overlay draws (a traced photo) shows its bounds,
@@ -4187,6 +4321,203 @@ fn outline_is_per_document_and_new_documents_start_in_preview() {
     app.sync_views();
     assert!(!app.outline_view() && !crate::menus::enabled(&app, "view.outline"));
     assert!(app.run("view.outline", json!({})).is_err());
+}
+
+/// One headless canvas frame → (the colors of the filled rectangles that cover the canvas, the
+/// fills of the shapes laid over an artboard, the artboards' edges drawn, the colors of the
+/// artboards' names).
+fn canvas_look(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Vec<Color32>, Vec<Color32>, usize, Vec<Color32>) {
+    let s = shapes(app, ctx);
+    let canvas = app.canvas_rect.unwrap();
+    let xf = Xf::new(canvas, app.view().unwrap());
+    let quads: Vec<Vec<Pos2>> = app.session.active().unwrap().doc.artboards.iter().map(|a| xf.quad(a.rect).to_vec()).collect();
+    let on = |p: &[Pos2]| quads.iter().any(|q| q.len() == p.len() && q.iter().zip(p).all(|(a, b)| (*a - *b).length() < 0.01));
+    let covers: Vec<Color32> = s
+        .iter()
+        .filter_map(|s| match s {
+            Shape::Rect(r) if r.rect.contains_rect(canvas) => Some(r.fill),
+            _ => None,
+        })
+        .collect();
+    let papers: Vec<Color32> = s
+        .iter()
+        .filter_map(|s| match s {
+            Shape::Path(p) if p.fill != Color32::TRANSPARENT && on(&p.points) => Some(p.fill),
+            _ => None,
+        })
+        .collect();
+    let edges = s.iter().filter(|s| matches!(s, Shape::Path(p) if p.closed && p.fill == Color32::TRANSPARENT && on(&p.points))).count();
+    let names: Vec<Color32> = s
+        .iter()
+        .filter_map(|s| match s {
+            Shape::Text(t) if names_an_artboard(t.galley.text()) => Some(t.fallback_color),
+            _ => None,
+        })
+        .collect();
+    (covers, papers, edges, names)
+}
+
+/// In Outline, in every interface brightness, color scheme and User Interface › Canvas Color, the
+/// whole canvas is white, pasteboard included, so the black outlines of art on the pasteboard show.
+/// The artboards draw no paper there, only their edges, and their names draw in a dark gray. In
+/// Preview the pasteboard keeps its color and the artboards their white paper.
+#[test]
+fn outline_draws_on_a_white_canvas_with_artboards_as_edges() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    for brightness in crate::theme::Brightness::ALL {
+        for scheme in crate::theme::Scheme::ALL {
+            // Canvas Color: matching the brightness, Dark Gray and Medium Gray, as `prefs_dialog` sets it.
+            for canvas_color in [None, Some(Color32::from_gray(0x5a)), Some(Color32::from_gray(0x96))] {
+                let ctx = egui::Context::default();
+                crate::theme::apply_with(&ctx, brightness, Default::default(), scheme);
+                if let Some(c) = canvas_color {
+                    let mut t = Tokens::get(&ctx);
+                    t.pasteboard = c;
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
+                }
+                let case = format!("{brightness:?} {scheme:?} {canvas_color:?}");
+                let pasteboard = Tokens::get(&ctx).pasteboard;
+                assert_ne!(pasteboard, Color32::WHITE, "{case}");
+                app.view_mut().unwrap().outline = false;
+                let (covers, papers, edges, names) = canvas_look(&mut app, &ctx);
+                assert_eq!(covers.last(), Some(&pasteboard), "{case}: Preview keeps the pasteboard");
+                assert_eq!(papers, [Color32::WHITE; 2], "{case}: and the artboards' paper");
+                assert_eq!(edges, 2, "{case}");
+                assert_eq!(names, [Tokens::get(&ctx).text_dim; 2], "{case}");
+                app.view_mut().unwrap().outline = true;
+                let (covers, papers, edges, names) = canvas_look(&mut app, &ctx);
+                assert_eq!(covers.last(), Some(&Color32::WHITE), "{case}: the canvas is white in Outline");
+                assert!(!covers.contains(&pasteboard), "{case}: no pasteboard in Outline");
+                assert!(papers.is_empty(), "{case}: no paper over the artboards in Outline: {papers:?}");
+                assert_eq!(edges, 2, "{case}: the artboards show as their edges");
+                assert_eq!(names, [OUTLINE_DIM; 2], "{case}: names readable on white");
+            }
+        }
+    }
+}
+
+/// In Outline the canvas stays white with Simulate Colored Paper on, with an artboard's own
+/// background color, and with View › Hide Artboards, which in Preview show the paper color, the
+/// artboard's color and the paper color over the whole canvas.
+#[test]
+fn outline_draws_no_colored_paper() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    {
+        let doc = std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc);
+        doc.setup.simulate_paper = true;
+        doc.setup.grid_colors = [vectorcraft_color::Color::rgb(0.9, 0.8, 0.6), vectorcraft_color::Color::rgb(0.5, 0.5, 0.5)];
+        doc.artboards[1].color = Some(vectorcraft_color::Color::rgb(0.6, 0.8, 1.0));
+    }
+    let paper = crate::panels::c32(&app.session.active().unwrap().doc.setup.paper());
+    let ctx = egui::Context::default();
+    crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
+    app.view_mut().unwrap().outline = false;
+    let (_, papers, _, _) = canvas_look(&mut app, &ctx);
+    assert_eq!(papers.len(), 2);
+    assert_eq!(papers[0], paper, "Preview: the simulated paper");
+    assert_ne!(papers[1], paper, "Preview: the artboard's own color");
+    app.view_mut().unwrap().outline = true;
+    let (covers, papers, edges, _) = canvas_look(&mut app, &ctx);
+    assert_eq!(covers.last(), Some(&Color32::WHITE));
+    assert!(papers.is_empty(), "{papers:?}");
+    assert_eq!(edges, 2);
+    app.ui.view.artboards = false;
+    app.view_mut().unwrap().outline = false;
+    let (covers, _, edges, _) = canvas_look(&mut app, &ctx);
+    assert_eq!(covers.last(), Some(&paper), "Preview with Hide Artboards: the paper over the whole canvas");
+    assert_eq!(edges, 0);
+    app.view_mut().unwrap().outline = true;
+    let (covers, papers, edges, _) = canvas_look(&mut app, &ctx);
+    assert_eq!(covers.last(), Some(&Color32::WHITE), "Outline with Hide Artboards");
+    assert!(!covers.contains(&paper));
+    assert!(papers.is_empty());
+    assert_eq!(edges, 0);
+}
+
+/// A split-view pane or floating window draws its own view's Outline, whatever the current view
+/// shows: the white canvas and dark gray artboard names in Outline, and the pasteboard and the
+/// theme's names in Preview.
+#[test]
+fn a_pane_draws_its_own_views_outline() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    crate::doc_windows::new_window(&mut app).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
+    let t = Tokens::get(&ctx);
+    let other = (0, 1);
+    for pane_outline in [true, false] {
+        crate::doc_windows::view_mut(&mut app, other).unwrap().outline = pane_outline;
+        app.view_mut().unwrap().outline = !pane_outline;
+        let cell = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            panes::pane(&mut app, ui, other, cell);
+        });
+        out.textures_delta.clear();
+        let mut s = vec![];
+        fn flat(s: Shape, out: &mut Vec<Shape>) {
+            match s {
+                Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
+                s => out.push(s),
+            }
+        }
+        out.shapes.into_iter().for_each(|c| flat(c.shape, &mut s));
+        let fills: Vec<Color32> = s.iter().filter_map(|s| if let Shape::Rect(r) = s { Some(r.fill) } else { None }).collect();
+        let names: Vec<Color32> = s
+            .iter()
+            .filter_map(|s| if let Shape::Text(x) = s { names_an_artboard(x.galley.text()).then_some(x.fallback_color) } else { None })
+            .collect();
+        let (canvas, name) = if pane_outline { (Color32::WHITE, OUTLINE_DIM) } else { (t.pasteboard, t.text_dim) };
+        assert_eq!(fills.first(), Some(&canvas), "pane in Outline: {pane_outline}");
+        assert_eq!(names, [name; 2], "pane in Outline: {pane_outline}");
+    }
+}
+
+/// While the rulers' origin is dragged out of their corner, its crosshair draws over the canvas in
+/// the theme's dim text color in Preview, and in Outline in the dark gray that shows on the white
+/// canvas.
+#[test]
+fn the_ruler_origin_crosshair_shows_on_the_outline_canvas() {
+    use egui::Event;
+    for outline in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.ui.view.rulers = true;
+        app.view_mut().unwrap().outline = outline;
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let corner = pos2(rect.left() - RULER / 2.0, rect.top() - RULER / 2.0);
+        let to = rect.center();
+        let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(corner)]);
+        frame(&mut app, &ctx, vec![button(corner, true)]);
+        frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+        let (s, mut delta) = frame_output(&mut app, &ctx);
+        delta.clear();
+        let lines: Vec<Color32> = s
+            .iter()
+            .filter_map(|s| match s {
+                Shape::LineSegment { points, stroke }
+                    if (points[0].x - to.x).abs() < 1.5
+                        && (points[1].x - to.x).abs() < 1.5
+                        && points[0].y <= rect.top() + 1.0
+                        && points[1].y >= rect.bottom() - 1.0 =>
+                {
+                    Some(stroke.color)
+                }
+                _ => None,
+            })
+            .collect();
+        let want = if outline { OUTLINE_DIM } else { Tokens::get(&ctx).text_dim };
+        assert_eq!(lines, [want], "Outline: {outline}");
+        frame(&mut app, &ctx, vec![button(to, false)]);
+    }
 }
 
 /// #3797: a preferences file saved while View › Outline was an interface setting still loads, with
@@ -10305,6 +10636,48 @@ fn a_whole_pixel_pan_copies_the_pixels_that_stay_on_screen() {
     }
 }
 
+/// Installing, replacing or removing a plug-in draws a document with a plug-in effect again, and a
+/// pan from the frame drawn before the change renders whole instead of copying its pixels. The key
+/// of a document without a plug-in effect does not follow the plug-ins. The other tests share the
+/// plug-in registry, and the plug-in is removed after.
+#[test]
+fn a_plug_in_change_draws_the_document_s_plug_in_effects_again() {
+    use vectorcraft_plugins::wat as tpl;
+    let id = "test.canvas.redraw";
+    let module = vectorcraft_format::base64_encode(&wat::parse_str(tpl::module(&tpl::manifest(id, "effect", "{}"), tpl::ECHO, "", 1)).unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("plugin.install", json!({"dataBase64": module})).unwrap();
+    app.session.execute("file.new", &json!({"width": 256, "height": 128})).unwrap();
+    let rect = app.run("shape.rectangle", json!({"x": 16, "y": 16, "width": 64, "height": 96})).unwrap()["id"].clone();
+    app.canvas.worker_started = true; // render on this thread
+    let ctx = egui::Context::default();
+    shapes(&mut app, &ctx);
+    // Other keys' fields (placed documents' bitmaps) follow what other tests do; this one's don't.
+    let plugins = |app: &VectorcraftApp| app.canvas.key.as_ref().expect("a frame was rendered").plugins;
+    let plain = plugins(&app);
+    app.run("plugin.install", json!({"dataBase64": module})).unwrap();
+    shapes(&mut app, &ctx);
+    assert_eq!(plugins(&app), plain, "no plug-in effect, so nothing to draw again");
+    app.run("effect.apply", json!({"effect": vectorcraft_plugins::effect::effect_id(id), "ids": [rect]})).unwrap();
+    shapes(&mut app, &ctx);
+    let before = app.canvas.key.clone().expect("a frame was rendered");
+    app.run("plugin.install", json!({"dataBase64": module})).unwrap();
+    shapes(&mut app, &ctx);
+    let after = plugins(&app);
+    assert_ne!(after, before.plugins, "drawn again once the plug-in was replaced");
+    // The worker's frame from before the change gives no pixels to the next pan.
+    let doc = app.session.active().unwrap().doc.clone();
+    let at_100 = CacheKey { zoom: 1.0, rot: 0.0, ppp: 1.0, pixel: None, ..before };
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut kept = None;
+    render_job(&mut r, &mut kept, &pan_job(&doc, &at_100, (0.0, 0.0)));
+    let pan = pan_job(&doc, &CacheKey { plugins: after, ..at_100.clone() }, (10.0, 0.0));
+    assert!(!render_job(&mut r, &mut kept, &pan).reused, "copied from the frame before the change");
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    shapes(&mut app, &ctx);
+    assert_ne!(plugins(&app), after, "drawn again once the plug-in was removed");
+}
+
 /// A frame does not copy from the last one when the view moves by part of a pixel or over half the
 /// frame, when copying is not allowed, or when a listed key field, render option, zoom, rotation,
 /// canvas size or device scale differs. Each such frame has the job's size. The session test
@@ -10358,6 +10731,7 @@ fn a_frame_renders_whole_when_anything_but_a_whole_pixel_pan_changed() {
         ("outline key", other_key(&|k| k.outline = true)),
         ("Pixel Preview", other_key(&|k| k.pixel = Some([0, 0, 256, 128]))),
         ("placed bitmaps", other_key(&|k| k.placed += 1)),
+        ("plug-ins", other_key(&|k| k.plugins += 1)),
         ("outline", other_opts(&|o| o.outline = true)),
         ("proof", other_opts(&|o| o.proof = Some(Default::default()))),
         ("overprint preview", other_opts(&|o| o.overprint_preview = true)),

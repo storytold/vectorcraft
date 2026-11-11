@@ -573,6 +573,8 @@
 	Hide Guides	Hulplijnen verbergen
 	Show Guides	Hulplijnen tonen
 	Lock Guides	Hulplijnen vergrendelen
+	Lock Guides by Default	Hulplijnen standaard vergrendelen
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Tekenbordhulplijnen met Cmd/Ctrl + slepen vanuit liniaal
 	Unlock Guides	Hulplijnen ontgrendelen
 	Make Guides	Hulplijnen maken
 	Release Guides	Hulplijnen vrijgeven
@@ -725,6 +727,13 @@
 	Other Library…	Andere bibliotheek…
 	Graphic Style Libraries	Bibliotheken met grafische stijlen
 	Shadows and Glows	Schaduwen en gloed
+	Game HUD	Game-HUD
+	Health Fill	Leven
+	Mana Glow	Mana
+	Damage Flash	Schade
+	Quest Outline	Quest
+	Coin Shine	Munt
+	Boss Alert	Baas
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
 	Gradient Finishes	Verloopafwerkingen
@@ -919,6 +928,7 @@ lighting	Light	Licht
 	Color Picker…	Kleurkiezer…
 	Coming soon — tracked in the parity plan	Binnenkort beschikbaar — opgenomen in het pariteitsplan
 	Command Dialog	Opdrachtdialoogvenster
+	Command API Reference	API-naslag voor opdrachten
 	Copy Selected Style	Geselecteerde stijl kopiëren
 	Corners…	Hoeken…
 	Define Perspective Grid…	Perspectiefraster definiëren…
@@ -2364,15 +2374,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Geselecteerde stalen
 	Advanced Options	Geavanceerde opties
 	Background Contents	Achtergrondinhoud
-	Background Contents:	Achtergrondinhoud:
 	BLANK DOCUMENT PRESETS	LEGE DOCUMENTVOORINSTELLINGEN
 	Bleed	Afrulling
 	Change to Right-to-Left Layout	Omschakelen naar lay-out van rechts naar links
 	Columns:	Kolommen:
-	Create Document	Document maken
 	Documents you create appear here.	Documenten die je maakt, verschijnen hier.
 	More Settings	Meer instellingen
-	New from Template	Nieuw uit sjabloon
 	Number of Artboards:	Aantal tekenborden:
 	Orientation:	Oriëntatie:
 	PRESET DETAILS	VOORINSTELLINGSDETAILS
@@ -2383,7 +2390,6 @@ digits	Malayalam	Malayalam
 	RECENT	RECENT
 	RECENT (1)	RECENT (1)
 	SAVED	OPGESLAGEN
-	Templates…	Sjablonen…
 	Transparent (Default)	Transparant (standaard)
 	Save for Office Documents	Opslaan voor Office-documenten
 	Transparent Background	Transparante achtergrond
@@ -3288,6 +3294,7 @@ theme	Appearance	Vormgeving
 	Arrange by Row	Ordenen op rij
 	Arrange by Column	Ordenen op kolom
 	Save Preset	Voorinstelling opslaan
+	Save Document Preset	Documentvoorinstelling opslaan
 	Screen (72 ppi)	Scherm (72 ppi)
 	Social Square Post 1080×1080	Vierkante socialmediapost 1080×1080
 	Distribute	Verdelen
@@ -3866,6 +3873,8 @@ font-technology	Variable	Variabel
 	Preferences	Voorkeuren
 	Previous	Vorige
 	Restore every preference to its default (applied on OK)	Elke voorkeur terugzetten naar de standaard (toegepast bij OK)
+	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	De standaardwaarden worden toegepast wanneer u in Voorkeuren op OK klikt. Annuleren daar behoudt uw huidige voorkeuren.
 	Smaller ↔ Larger	Kleiner ↔ Groter
 	Smart Guides (View → Smart Guides)	Slimme hulplijnen (Beeld → Slimme hulplijnen)
 	Couldn't save recovery data: {e}	Kon herstelgegevens niet opslaan: {e}
@@ -4089,6 +4098,15 @@ imageTrace	Outline	Contour
 @msg	Combine Slices: the slices have no bounds	Slices combineren: de slices hebben geen grenzen
 @msg	Convert to Artboards: selection has no area	Converteren naar tekengebieden: de selectie heeft geen oppervlakte
 @msg	Convert to Shape: no rectangles or ellipses selected	Converteren naar vorm: geen rechthoeken of ellipsen geselecteerd
+	Run	Uitvoeren
+	Run Script	Script uitvoeren
+	Stop Script	Script stoppen
+	Show External Script Warning	Waarschuwing voor externe scripts tonen
+	A Script Is Running	Er wordt een script uitgevoerd
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
+	Do not show this warning again	Deze waarschuwing niet meer tonen
+	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Dit script heeft heel veel objecten toegevoegd. Doorgaan, of het stoppen en de wijzigingen ervan ongedaan maken?
 @msg	Copied the script report	Scriptrapport gekopieerd
 @msg	Corners edits the corners of a path	Hoeken bewerkt de hoeken van een pad
 @msg	Couldn't copy to the system clipboard: {e}	Kon niet naar het systeemklembord kopiëren: {e}
@@ -5155,7 +5173,8 @@ mark-style	Japanese	Japans
 	Bevel both sides	Afschuining aan beide zijden
 	Presets	Voorinstellingen
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Een object kan maar één 3D-effect hebben. Pas de opties van het bestaande effect aan of verwijder het eerst.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} vereist momenteel een pad of samengesteld pad. Zet tekst, afbeeldingen en groepen eerst om naar paden.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} vereist momenteel een pad, samengesteld pad, tekst, groep, vermenging of symboolinstantie. Breid andere objecten eerst uit.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kan geen massief object maken van een afbeelding: traceer deze eerst met Object › Afbeelding traceren › Maken.
 @msg	{label} requires a shape with at least two anchors	{label} vereist een vorm met minstens twee ankerpunten
 @msg	The shape is too complex for a 3D effect	De vorm is te complex voor een 3D-effect
 @msg	The 3D surface is too complex; simplify the shape	Het 3D-oppervlak is te complex; vereenvoudig de vorm
@@ -5269,6 +5288,7 @@ mark-style	Japanese	Japans
 	Preview (1 inch on the page)	Voorbeeld (1 inch op de pagina)
 	Set as Default	Als standaard instellen
 	 out from a highlighted edge to place its dimension  |  	 uit een gemarkeerde rand om de bijbehorende maatlijn te plaatsen  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 op twee punten, verplaats daarna en klik om een uitgelijnde, horizontale of verticale maatlijn te plaatsen  |  
 	 cancels  |  Double-click the tool for options	 annuleert  |  Dubbelklik op het gereedschap voor opties
 	Angular	Hoek
 	Away from the Line	Van de lijn af
@@ -5300,12 +5320,14 @@ mark-style	Japanese	Japans
 @msg	Measured anchor no longer exists	Gemeten ankerpunt bestaat niet meer
 @msg	Measured segment no longer exists	Gemeten segment bestaat niet meer
 @msg	Non-finite dimension	Niet-eindige maatlijn
+@msg	Only linear dimensions are horizontal or vertical	Alleen lineaire maatlijnen zijn horizontaal of verticaal
 @msg	Scale Text Attributes: selected type has no scale to bake	Tekstkenmerken schalen: de geselecteerde tekst heeft geen schaling om toe te passen
 @msg	Scale must be drawing:real, for example 1:10	Schaal moet tekening:werkelijk zijn, bijvoorbeeld 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Schaalverhouding moet tussen 1:1000000 en 1000000:1 liggen
 @msg	Second measured segment no longer exists	Tweede gemeten segment bestaat niet meer
 @msg	Unknown dimension mode	Onbekende maatlijnmodus
 @msg	Unknown dimension option {k}	Onbekende maatlijnoptie {k}
+@msg	Unknown dimension orientation	Onbekende maatlijnrichting
 @msg	Unknown dimension style	Onbekende maatlijnstijl
 @msg	Unknown unit	Onbekende eenheid
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sluit de ronde uiteinden van open profielen. Gedeeltelijke omwentelingen houden hun afgesneden zijden open.
@@ -5854,6 +5876,7 @@ axis	Y Axis	Y-as
 	Show its progress, see Cancel and write log lines	De voortgang tonen, een annulering zien en logregels schrijven
 	Keep settings of its own	Eigen instellingen bewaren
 	Keep a cache of its own, which you can clear	Een eigen cache bewaren, die u kunt legen
+	Run these commands on the document: {ids}	Deze opdrachten op het document uitvoeren: {ids}
 	Clear Plug-in Cache	Plug-incache legen
 # Actions panel: action sets (#3712).
 	New Set…	Nieuwe set…
@@ -5903,6 +5926,11 @@ axis	Y Axis	Y-as
 	Button	Knop
 	Panel	Paneel
 	UI Frames	UI-kaders
+	Map Markers	Kaartmarkeringen
+	Pin	Speld
+	Flag	Vlag
+	Crosshair	Vizier
+	Checkpoint	Controlepunt
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…
@@ -5951,6 +5979,11 @@ axis	Y Axis	Y-as
 	User Brush Library 9	Penseelbibliotheek van gebruiker 9
 	User Brush Library 10	Penseelbibliotheek van gebruiker 10
 	Art Ribbons	Illustratielinten
+	Zigzag	Zigzag
+	Burst Ray	Inslagstraal
+	Dash Trail	Streepspoor
+	Speed Line	Snelheidslijn
+	Game Trails	Spelsporen
 	Calligraphic Nibs	Kalligrafische penpunten
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen
@@ -5963,6 +5996,8 @@ axis	Y Axis	Y-as
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punttekst
 	Area Text	Vlaktekst
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Tekst meten op glyphbegrenzing
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Opties voor uitlijnen op glyph tonen
 	Hide Snap to Glyph Options	Opties voor uitlijnen op glyph verbergen
@@ -6496,3 +6531,5 @@ breakText	Glyphs	Glyphs
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
+	Edit Custom Dictionary	Aangepast woordenboek bewerken
+	Entry:	Item:

@@ -492,7 +492,7 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
             break;
         }
         if let Some(pd) = cx.doc.node(id).and_then(editable_path)
-            && let Some((si, ai, a)) = nearest_anchor(&pd, p, tol)
+            && let Some((si, ai, a)) = nearest_anchor(&pd, p, tol, cx.selection.partial(id))
         {
             return Some((id, si, ai, a));
         }
@@ -524,7 +524,7 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
             return None;
         }
         let pd = cx.doc.node(id).and_then(editable_path)?;
-        nearest_anchor(&pd, p, tol).map(|(si, ai, a)| (id, si, ai, a))
+        nearest_anchor(&pd, p, tol, None).map(|(si, ai, a)| (id, si, ai, a))
     })
 }
 
@@ -535,9 +535,14 @@ fn over_path_type_anchor(cx: &ToolContext, p: Point) -> bool {
     hit_anchor(cx, p, cx.point_tol()).is_some_and(|(id, ..)| cx.doc.node(id).is_some_and(is_path_type))
 }
 
-/// The anchor of `pd` within `tol` of `p` nearest to it: (subpath, anchor, where it is).
-fn nearest_anchor(pd: &PathData, p: Point, tol: f64) -> Option<(usize, usize, Point)> {
-    pd.anchors().map(|(si, ai, a)| (si, ai, a.p)).filter(|(.., a)| a.distance(p) <= tol).min_by(|x, y| x.2.distance(p).total_cmp(&y.2.distance(p)))
+/// The anchor of `pd` within `tol` of `p` nearest to it: (subpath, anchor, where it is). Of anchors
+/// on top of each other, such as the two ends a cut leaves, one in `picked` comes first.
+fn nearest_anchor(pd: &PathData, p: Point, tol: f64, picked: Option<&BTreeSet<AnchorRef>>) -> Option<(usize, usize, Point)> {
+    let unpicked = |si: usize, ai: usize| !picked.is_some_and(|set| set.contains(&(si, ai)));
+    pd.anchors()
+        .map(|(si, ai, a)| (si, ai, a.p))
+        .filter(|(.., a)| a.distance(p) <= tol)
+        .min_by(|x, y| x.2.distance(p).total_cmp(&y.2.distance(p)).then_with(|| unpicked(x.0, x.1).cmp(&unpicked(y.0, y.1))))
 }
 
 /// An edge of an area type frame under `p`, topmost first: (text, the edge's two anchors).
@@ -557,7 +562,7 @@ fn hit_frame_edge(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, Vec<A
 fn handle_anchors(cx: &ToolContext) -> Vec<(NodeId, usize, usize, Anchor)> {
     let mut v = vec![];
     for &id in &cx.selection.objects {
-        let Some(pd) = cx.doc.node(id).and_then(|n| n.path_data()) else { continue };
+        let Some(pd) = cx.doc.node(id).and_then(handle_path) else { continue };
         let shown = cx.selection.partial(id);
         v.extend(pd.anchors().filter(|(si, ai, _)| shown.is_none_or(|set| set.contains(&(*si, *ai)))).map(|(si, ai, a)| {
             let mut a = *a;
@@ -577,6 +582,33 @@ fn handle_anchors(cx: &ToolContext) -> Vec<(NodeId, usize, usize, Anchor)> {
         v.clear();
     }
     v
+}
+
+/// The path whose direction handles Direct Selection shows and drags on `n` once it is selected:
+/// a path's, or type on a path's path (#3565), in document space.
+fn handle_path(n: &Node) -> Option<Cow<'_, PathData>> {
+    match &n.kind {
+        NodeKind::Path { path, .. } => Some(Cow::Borrowed(path)),
+        NodeKind::Text(t) if is_path_type(n) => t.type_path().map(Cow::Owned),
+        _ => None,
+    }
+}
+
+/// The direction handles of selected type on a path ([`handle_anchors`]), drawn by the tool:
+/// the canvas draws only a path's own (#3565).
+fn type_path_handles(cx: &ToolContext) -> Vec<Overlay> {
+    let mut out = vec![];
+    for (id, _, _, a) in handle_anchors(cx) {
+        if !cx.doc.node(id).is_some_and(is_path_type) {
+            continue;
+        }
+        let color = cx.doc.layer_color(id);
+        for h in [a.h_in, a.h_out].into_iter().filter(|h| h.distance(a.p) > 1e-6) {
+            out.push(Overlay::Line { a: a.p, b: h, color, dashed: false });
+            out.push(Overlay::Handle { p: h, color });
+        }
+    }
+    out
 }
 
 /// The end of a shown direction handle ([`handle_anchors`]) nearest to `p` within `tol`, and
@@ -897,8 +929,9 @@ impl Tool for DirectSelectionTool {
                 let (q, guides) = self.handle_snap.snap(cx, (id, si, ai), p, ev.mods.shift);
                 self.snapped = snapped(q.to_vec2(), p.to_vec2(), ev.mods.shift, &guides);
                 self.guides = guides;
+                let cmd = if cx.doc.node(id).is_some_and(is_path_type) { "text.setPathHandle" } else { "path.setHandle" };
                 vec![Action::Preview(
-                    "path.setHandle".into(),
+                    cmd.into(),
                     json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out {"out"} else {"in"}, "x": q.x, "y": q.y, "independent": ev.mods.alt}),
                 )]
             }
@@ -1001,6 +1034,7 @@ impl Tool for DirectSelectionTool {
                         out.push(Overlay::Path { path, color: cx.doc.layer_color(sp.instance), width: 1.0, dashed: false });
                     }
                     out.extend(frame_overlays(cx, &self.frame_anchors(cx)));
+                    out.extend(type_path_handles(cx));
                     let drag = if let State::Bracket(b) = &self.state { Some(b) } else { None };
                     out.extend(pathtype::overlays(cx, self.bracket_hover, drag));
                 }
@@ -1116,7 +1150,7 @@ fn hovered_anchor_with_hit(cx: &ToolContext, p: Point, hit: Option<&Hit>) -> Opt
     let under = hit.map(|h| cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol)).unwrap_or(h.leaf));
     cx.selection.objects.iter().copied().filter(|id| in_scope(cx.doc, cx.isolation, *id)).chain(under).find_map(|id| {
         let path = cx.doc.node(id).and_then(editable_path)?;
-        nearest_anchor(&path, p, tol).map(|(.., a)| (id, a))
+        nearest_anchor(&path, p, tol, None).map(|(.., a)| (id, a))
     })
 }
 
@@ -1437,7 +1471,7 @@ impl DirectSelectionTool {
             // them, an edge on a gridline on each axis), not that point (#3835).
             let grid = segment && (cx.snap_to_grid || cx.snap_to_pixel);
             self.partial_grid =
-                grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds(cx.selection, cx.doc, cx.preview_bounds)));
+                grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
         }
         let mut d = move_delta(start, p, ev.mods.shift, cx.constrain_angle);
         let unsnapped = d;
@@ -1474,7 +1508,7 @@ impl DirectSelectionTool {
             self.partial_snap = (!cx.selection.anchors.is_empty()).then(|| PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
             let grid = self.partial_snap.is_some() && grab.is_none() && (cx.snap_to_grid || cx.snap_to_pixel);
             self.partial_grid =
-                grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds(cx.selection, cx.doc, cx.preview_bounds)));
+                grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
             let copy = ev.mods.alt && self.partial_snap.is_none();
             out.push(Action::Begin(if copy { "Copy".into() } else { "Move".into() }));
             self.state = State::MoveObject { start, grab, hold, began: true, deselect: None };

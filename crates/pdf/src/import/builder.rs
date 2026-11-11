@@ -585,13 +585,13 @@ impl<'p> Builder<'p> {
         Some(Paint::Pattern { pattern: name, xf })
     }
 
-    /// Separation image `st` (`w` × `h` pixels) as the paint of its ink at 100 % (a spot swatch, a
+    /// Image `st` of one ink (`w` × `h` pixels) as the paint of its ink at 100 % (a spot swatch, a
     /// process plate or Registration, found by its colour space) and its tints as gray pixels
     /// ([`crate::import_image::tint_gray`]). `None` for another image, an ink whose colour can't
     /// be told, or tints that can't be read (with a warning): the image opens in RGB. The ink is
     /// only marked used once the tints are read.
     pub(super) fn separation_image(&mut self, st: &craft_pdf::syntax::object::Stream<'_>, w: u32, h: u32) -> Option<(Paint, Vec<u8>)> {
-        let space = self.colors.array_space(&crate::import_image::separation_space(st)?)?;
+        let space = self.colors.array_space(&crate::import_image::one_ink_space(st)?)?;
         let gray = crate::import_image::tint_gray(st, w, h).map_err(|why| self.warn(why)).ok()?;
         Some((self.colors.native(space, &[1.0])?.paint(), gray))
     }
@@ -865,6 +865,9 @@ impl<'p> Builder<'p> {
             let vx = self.fonts.get(&key).and_then(|f| f.vertical.as_ref()).map_or(500.0, |v| v.centre(glyph));
             m * kurbo::Point::new(vx, 880.0)
         });
+        // A horizontal line is gathered in visual order and put back in logical order as a whole:
+        // a ligature's characters (lam-alef, lam-lam-heh) go in visual order too (#6072).
+        let text = if top.is_none() { visual_glyph_text(text) } else { text };
         let place = |line: &mut TextLine| match top {
             Some(top) => line.push_upright(&look, at, opacity, Upright { top }, &text),
             None => line.push(&look, at, opacity, advance, &text),
@@ -893,4 +896,17 @@ impl<'p> Builder<'p> {
         }
         true
     }
+}
+
+/// The characters of one glyph in the order they are drawn: a PDF names a ligature's characters
+/// in logical order (lam then alef for لا), while a horizontal line of type is gathered glyph by
+/// glyph in visual order and only then put back in logical order. Right-to-left characters are
+/// turned round here so that putting the line back restores them.
+fn visual_glyph_text(text: String) -> String {
+    if text.chars().nth(1).is_none() {
+        return text;
+    }
+    let Some((order, _)) = vectorcraft_text::logical_order(&text) else { return text };
+    let chars: Vec<char> = text.chars().collect();
+    order.iter().filter_map(|&i| chars.get(i)).collect()
 }

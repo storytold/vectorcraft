@@ -206,9 +206,13 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         // Edit → Color Settings… / Assign Profile… (no params): show the colour-management panel
         // wherever it is, as Window › Separations Preview does (it isn't in an icon column, so a
-        // flyout for it never opened: #4542).
+        // flyout for it never opened: #4542), scrolled to its Color Settings section, which a short
+        // window shows only after scrolling past the plates and Proof Setup (#6419).
         "edit.colorSettings" | "edit.assignProfile" if p.as_object().is_none_or(|o| o.is_empty()) => {
-            crate::panel_docking::reveal_panel(app, "separations").and_then(|_| app.session.execute(id, p).map_err(|e| e.to_string()))
+            crate::panel_docking::reveal_panel(app, "separations").and_then(|_| {
+                app.ui.color_settings_scroll = true;
+                app.session.execute(id, p).map_err(|e| e.to_string())
+            })
         }
         // Outline or Preview is a setting of the active document's view.
         "view.outline" => match app.view_mut() {
@@ -969,6 +973,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "imageTrace.cancelRuns" => Ok(crate::trace_runs::cancel_all(app)),
         "imageTrace.hideRuns" => Ok(crate::trace_runs::hide_all(app)),
         "ui.checkScript" => crate::dialogs::script_check::command(app, p),
+        "ui.runScript" => crate::dialogs::script_run::command(app, p),
         "ui.perspectiveGridDialog" => crate::dialogs::perspective_grid::open(app),
         "ui.perspectivePresetsDialog" => {
             crate::dialogs::perspective_presets::open(app, s("selected").as_deref());

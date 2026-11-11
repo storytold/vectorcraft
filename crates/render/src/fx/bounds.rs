@@ -445,7 +445,8 @@ fn three_d_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Option<Rect>> {
     if !effects::has_revolve(n) && !effects::has_solid(n) {
         return None;
     }
-    let art = effects::revolve_art(n).or_else(|| effects::solid_art(n))?;
+    let doc = Some(symbols.document());
+    let art = effects::revolve_art_in(doc, n).or_else(|| effects::solid_art_in(doc, n))?;
     Some(three_d_art_bounds(symbols, &art))
 }
 

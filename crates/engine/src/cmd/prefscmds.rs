@@ -5,7 +5,7 @@
 
 use serde_json::{Map, Value, json};
 
-use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, str_param};
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, str_param, switch_or};
 use crate::Prefs;
 use crate::units::Measure;
 use vectorcraft_doc::{GridPrefs, Unit};
@@ -140,6 +140,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),
     p!("showHomeScreen", "General", "Options", "Show The Home Screen When No Documents Are Open", bool),
@@ -227,6 +228,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // Guides & Grid
     p!("guideColor", "Guides & Grid", "Guides", "Color", color),
     p!("guideStyle", "Guides & Grid", "Guides", "Style", choice(LINE_STYLE)),
+    p!("lockGuidesByDefault", "Guides & Grid", "Guides", "Lock Guides by Default", bool),
+    p!("cmdRulerDragArtboardGuides", "Guides & Grid", "Guides", "Artboard Guides with Cmd/Ctrl + Ruler Drag", bool),
     p!("gridColor", "Guides & Grid", "Grid", "Color", color),
     p!("gridStyle", "Guides & Grid", "Grid", "Style", choice(LINE_STYLE)),
     p!("gridlineEvery", "Guides & Grid", "Grid", "Gridline every", len(1.0, 16383.0, General)),
@@ -436,6 +439,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
+    // The bounding box and the Transform panel measure point type by its glyphs' ink (also in the Transform panel menu).
+    p!("typeGlyphBounds", "Type", "Glyph Bounds", "Measure Type by Glyph Bounds", bool),
     // Artboard Options › Global: the canvas darkens the area outside the artboards while the Artboard tool is active.
     p!("fadeRegionOutsideArtboard", "General", "Artboard Options", "Fade Region Outside Artboard", bool),
     p!("artboardUpdateWhileDragging", "General", "Artboard Options", "Update While Dragging", bool),
@@ -692,10 +697,16 @@ impl Session {
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
         let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
+        let lock_guides_changed = p.lock_guides_by_default != self.prefs.lock_guides_by_default;
         if p.trace_presets != self.prefs.trace_presets {
             self.trace_preset_changes.replaced();
         }
         self.prefs = p;
+        // Guides & Grid › Lock Guides by Default sets the lock when it changes, the saved value at
+        // start included. Otherwise the lock stays as View › Guides › Lock Guides left it.
+        if lock_guides_changed {
+            self.set_guides_locked(self.prefs.lock_guides_by_default);
+        }
         if corner_radius_changed {
             // General › Corner Radius is the Rounded Rectangle tool's radius (#394): a tool already
             // made (active, or lent a selection tool for a drag) takes the new value.
@@ -755,7 +766,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Preference",
             [],
             None,
-            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step; the eyedropper group takes a partial object, as eyedropper.setOptions; a new recoveryFolder must be a folder that can be listed and written in, and a new pluginsFolder a folder that can be listed: otherwise an error, and nothing changes; an empty value is not checked)",
+            "{key, value} or {values: {key: value, …}, documentUnits?: bool=true} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step, unless documentUnits is false; the eyedropper group takes a partial object, as eyedropper.setOptions; a new recoveryFolder must be a folder that can be listed and written in, and a new pluginsFolder a folder that can be listed: otherwise an error, and nothing changes; an empty value is not checked)",
             always,
             set
         ),
@@ -781,6 +792,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     if values.is_empty() {
         return Err(bad("prefs.set", "give {key, value} or {values}"));
     }
+    let document_units = switch_or(p, "documentUnits", true, "prefs.set")?;
     let mut next = s.prefs.clone();
     next.set_values(&values).map_err(|e| bad("prefs.set", e))?;
     if let Some(e) = s.prefs.keep_folders(&mut next).into_iter().next() {
@@ -789,7 +801,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     s.prefs.check_folders(&values).map_err(EngineError::Other)?;
     s.apply_prefs(next);
     // Units ▸ General is also the open document's units (as Document Setup sets them).
-    if values.contains_key("unitsGeneral") && s.active().is_some() {
+    if document_units && values.contains_key("unitsGeneral") && s.active().is_some() {
         s.set_document_units(s.default_units())?;
     }
     let all = s.prefs.to_json();

@@ -365,6 +365,7 @@ impl Session {
             freeform_point: self.selected_freeform_point(),
             raster_sample: self.prefs.eyedropper.sample_size,
             preview_bounds: self.prefs.use_preview_bounds,
+            glyph_bounds: self.prefs.type_glyph_bounds,
             preview_memo: Some(&self.preview_memo),
             unit,
             stroke_unit,
@@ -455,6 +456,9 @@ impl Session {
     /// applied, in order ([`Session::tool_poll`]); moves of the pointer with no button held go to
     /// the tool at once.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if self.script_running() {
+            return if ev.kind == PointerKind::Move { Ok(vec![]) } else { Err(EngineError::Busy) };
+        }
         let n = self.next_input();
         if ev.kind != PointerKind::Move && (!self.held_input.is_empty() || self.tool_edit_pending()) {
             self.held_input.push_back((n, HeldInput::Pointer(*ev), view));
@@ -705,15 +709,28 @@ impl Session {
     /// release), over the canvas or not (`on_canvas`). The guide shows where the pointer is over
     /// the canvas, snapped as a moved guide is, and is made where the button is released over it
     /// (one undo step); released anywhere else, none is. With the Artboard tool it is an artboard
-    /// guide of the active artboard.
+    /// guide of the active artboard. With Preferences › Guides & Grid › Artboard Guides with
+    /// Cmd/Ctrl + Ruler Drag on, `mods.cmd` on the drag's first event swaps the two: with another
+    /// tool the guide is one of the view's active artboard (`view.artboard`), shown and made only
+    /// where it lies within that artboard, and with the Artboard tool it is a canvas guide.
     pub fn ruler_guide(&mut self, vertical: bool, ev: &PointerEvent, on_canvas: bool, view: ViewInfo) -> Result<()> {
+        use vectorcraft_tools::rulerguide::NewGuide;
         let g = match self.ruler_guide.take() {
             Some(g) => Some(g),
             None => {
                 let boards = self.active().map_or(0, |d| d.doc.artboards.len());
-                let active = (self.tool.id() == "artboard").then(|| self.tool.options()["active"].as_u64()).flatten();
+                let artboard_tool = self.tool.id() == "artboard";
+                let swap = self.prefs.cmd_ruler_drag_artboard_guides && ev.mods.cmd;
+                let active = artboard_tool.then(|| self.tool.options()["active"].as_u64()).flatten();
                 let artboard = active.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < boards);
-                self.with_tool_cx(view, |_, cx| Some(vectorcraft_tools::rulerguide::NewGuide::new(cx, vertical, artboard)))
+                let view_board = view.artboard;
+                self.with_tool_cx(view, |_, cx| {
+                    Some(match (swap, artboard_tool) {
+                        (false, _) => NewGuide::new(cx, vertical, artboard),
+                        (true, true) => NewGuide::new(cx, vertical, None),
+                        (true, false) => NewGuide::within(cx, vertical, view_board),
+                    })
+                })
             }
         };
         let Some(mut g) = g else { return Ok(()) };
@@ -877,6 +894,9 @@ impl Session {
     /// A key for the active tool. While the tool computes an edit on another thread, the key is held
     /// and made once the edit is applied, after the input held before it.
     pub fn tool_key(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         let n = self.next_input();
         if self.tool_editing() {
             self.held_input.push_back((n, HeldInput::Key(key, mods), view));
@@ -910,6 +930,9 @@ impl Session {
 
     /// Typed text for the active tool (Type tool).
     pub fn tool_text(&mut self, text: &str, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         let acts = self.with_tool_cx(view, |t, cx| t.text_input(cx, text));
         self.take_tool_panic()?;
         self.apply_actions(acts)
@@ -1057,6 +1080,12 @@ impl Session {
     /// Does the active tool take `key` ahead of the shortcuts bound to it (see `Tool::claims_key`)?
     pub fn tool_claims_key(&mut self, key: ToolKey, view: ViewInfo) -> bool {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
+    }
+
+    /// Has the active tool started something that Escape ends while no button is pressed (see
+    /// `Tool::ends_on_escape`)?
+    pub fn tool_ends_on_escape(&mut self, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.ends_on_escape(cx))
     }
 
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
@@ -1282,6 +1311,9 @@ impl Session {
         let outer = std::mem::replace(&mut self.in_tool_actions, true);
         let r = self.apply_tool_actions(acts);
         self.in_tool_actions = outer;
+        if !outer && self.depth == 0 {
+            self.trim_histories();
+        }
         r
     }
 

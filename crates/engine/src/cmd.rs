@@ -2,6 +2,7 @@
 
 pub mod actionset;
 mod addons;
+mod apiref;
 pub(crate) mod appearance;
 mod assets;
 mod attributes;
@@ -69,6 +70,7 @@ pub mod pdfcmds;
 pub mod perspgrid;
 pub mod place;
 pub mod plugin;
+pub(crate) mod plugin_call;
 pub mod prefscmds;
 pub mod print;
 pub(crate) mod printadvanced;
@@ -149,11 +151,26 @@ pub struct CommandInfo {
     /// The parameters' schema as a JSON Schema 2020-12 object schema, for a command that has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<Value>,
+    /// The same schema in the form an MCP tool's `inputSchema` takes ([`input_schema`]).
+    #[serde(rename = "inputSchema", skip_serializing_if = "Option::is_none")]
+    pub input_schema: Option<Value>,
+}
+
+/// `schema` as an MCP tool input schema: the root `type` is `"object"`, since the arguments are
+/// always an object, and every other keyword is kept. The root of [`CommandInfo::schema`] also
+/// takes null when no parameter is required.
+pub(crate) fn input_schema(schema: &Value) -> Value {
+    let mut o = schema.clone();
+    if let Some(map) = o.as_object_mut() {
+        map.insert("type".into(), "object".into());
+    }
+    o
 }
 
 impl CommandSpec {
     pub fn info(&self, s: &Session) -> CommandInfo {
         let e = (self.enabled)(s);
+        let schema = self.schema.map(vectorcraft_apischema::ParamSchema::to_json);
         CommandInfo {
             id: self.id,
             label: self.label,
@@ -162,7 +179,8 @@ impl CommandSpec {
             params: self.params,
             enabled: e.is_ok(),
             disabled_reason: e.err(),
-            schema: self.schema.map(vectorcraft_apischema::ParamSchema::to_json),
+            input_schema: schema.as_ref().map(input_schema),
+            schema,
         }
     }
 }
@@ -368,6 +386,8 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(actionset::specs());
         v.extend(importmatches::specs());
         v.extend(addons::specs());
+        // Last, so the reference it writes ends with its own section.
+        v.extend(apiref::specs());
         v
     })
 }

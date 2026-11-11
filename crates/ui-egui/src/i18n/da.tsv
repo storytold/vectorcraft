@@ -559,6 +559,8 @@
 	Hide Guides	Skjul hjælpelinjer
 	Show Guides	Vis hjælpelinjer
 	Lock Guides	Lås hjælpelinjer
+	Lock Guides by Default	Lås hjælpelinjer som standard
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Hjælpelinjer til kunstplade med Cmd/Ctrl + træk fra lineal
 	Unlock Guides	Lås hjælpelinjer op
 	Make Guides	Opret hjælpelinjer
 	Release Guides	Frigør hjælpelinjer
@@ -711,6 +713,13 @@
 	Other Library…	Andet bibliotek…
 	Graphic Style Libraries	Biblioteker med grafiske stile
 	Shadows and Glows	Skygger og gløder
+	Game HUD	Spil-HUD
+	Health Fill	Helbred
+	Mana Glow	Mana
+	Damage Flash	Skade
+	Quest Outline	Quest
+	Coin Shine	Mønt
+	Boss Alert	Boss
 	Outlines and Rules	Konturer og linjer
 	Hand-Drawn	Håndtegnet
 	Gradient Finishes	Gradientfinish
@@ -905,6 +914,7 @@ lighting	Light	Lys
 	Color Picker…	Farvevælger…
 	Coming soon — tracked in the parity plan	Kommer snart — følges i paritetsplanen
 	Command Dialog	Kommandodialog
+	Command API Reference	API-reference for kommandoer
 	Copy Selected Style	Kopiér markeret typografi
 	Corners…	Hjørner…
 	Define Perspective Grid…	Definér perspektivgitter…
@@ -2350,15 +2360,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Markerede farveprøver
 	Advanced Options	Avancerede indstillinger
 	Background Contents	Baggrundens indhold
-	Background Contents:	Baggrundens indhold:
 	BLANK DOCUMENT PRESETS	TOMME DOKUMENTFORUDINDSTILLINGER
 	Bleed	Beskæring
 	Change to Right-to-Left Layout	Skift til højre-til-venstre-layout
 	Columns:	Kolonner:
-	Create Document	Opret dokument
 	Documents you create appear here.	Dokumenter, du opretter, vises her.
 	More Settings	Flere indstillinger
-	New from Template	Nyt fra skabelon
 	Number of Artboards:	Antal tegnebrætter:
 	Orientation:	Orientering:
 	PRESET DETAILS	FORUDINDSTILLINGSDETALJER
@@ -2369,7 +2376,6 @@ digits	Malayalam	Malayalam
 	RECENT	SENESTE
 	RECENT (1)	SENESTE (1)
 	SAVED	GEMT
-	Templates…	Skabeloner…
 	Transparent (Default)	Gennemsigtig (standard)
 	Save for Office Documents	Gem til Office-dokumenter
 	Transparent Background	Gennemsigtig baggrund
@@ -3274,6 +3280,7 @@ theme	Appearance	Udseende
 	Arrange by Row	Arranger efter række
 	Arrange by Column	Arranger efter kolonne
 	Save Preset	Gem forudindstilling
+	Save Document Preset	Gem dokumentforudindstilling
 	Screen (72 ppi)	Skærm (72 ppi)
 	Social Square Post 1080×1080	Socialt firkantet opslag 1080×1080
 	Distribute	Fordel
@@ -3852,6 +3859,8 @@ font-technology	Variable	Variable
 	Preferences	Præferencer
 	Previous	Forrige
 	Restore every preference to its default (applied on OK)	Gendan alle præferencer til standard (anvendes ved OK)
+	Reset all preferences to their defaults?	Nulstil alle præferencer til standard?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardværdierne anvendes, når du klikker på OK i Præferencer. Annullér der beholder dine nuværende præferencer.
 	Smaller ↔ Larger	Mindre ↔ Større
 	Smart Guides (View → Smart Guides)	Smarte hjælpelinjer (Vis → Smarte hjælpelinjer)
 	Couldn't save recovery data: {e}	Kunne ikke gemme gendannelsesdata: {e}
@@ -4075,6 +4084,15 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Kombinér udsnit: udsnittene har ingen grænser
 @msg	Convert to Artboards: selection has no area	Konvertér til tegneflader: markeringen har intet areal
 @msg	Convert to Shape: no rectangles or ellipses selected	Konvertér til figur: ingen rektangler eller ellipser er markeret
+	Run	Kør
+	Run Script	Kør script
+	Stop Script	Stop script
+	Show External Script Warning	Vis advarsel om eksterne scripts
+	A Script Is Running	Et script kører
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
+	Do not show this warning again	Vis ikke denne advarsel igen
+	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Dette script har tilføjet rigtig mange objekter. Fortsæt, eller stop det og fortryd det, det har gjort?
 @msg	Copied the script report	Kopierede scriptrapporten
 @msg	Corners edits the corners of a path	Hjørner redigerer hjørnerne på en kurve
 @msg	Couldn't copy to the system clipboard: {e}	Kunne ikke kopiere til systemets udklipsholder: {e}
@@ -5143,7 +5161,8 @@ mark-style	Japanese	Japansk
 	Bevel both sides	Facet på begge sider
 	Presets	Forudindstillinger
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Et objekt kan kun have én 3D-effekt. Redigér den eksisterende effekts indstillinger, eller fjern den først.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} kræver i øjeblikket en sti eller en sammensat sti. Konvertér tekst, billeder og grupper til stier først.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} kræver i øjeblikket en sti, en sammensat sti, tekst, en gruppe, en blanding eller en symbolforekomst. Udvid andre objekter først.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kan ikke bygge et legeme ud fra et billede: spor det først med Objekt › Billedsporing › Opret.
 @msg	{label} requires a shape with at least two anchors	{label} kræver en form med mindst to ankerpunkter
 @msg	The shape is too complex for a 3D effect	Formen er for kompleks til en 3D-effekt
 @msg	The 3D surface is too complex; simplify the shape	3D-fladen er for kompleks; forenkl formen
@@ -5257,6 +5276,7 @@ mark-style	Japanese	Japansk
 	Preview (1 inch on the page)	Forhåndsvisning (1 tomme på siden)
 	Set as Default	Angiv som standard
 	 out from a highlighted edge to place its dimension  |  	 ud fra en fremhævet kant for at placere dens mål  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 på to punkter, flyt derefter, og klik for at placere et justeret, vandret eller lodret mål  |  
 	 cancels  |  Double-click the tool for options	 annullerer  |  Dobbeltklik på værktøjet for indstillinger
 	Angular	Vinklet
 	Away from the Line	Væk fra linjen
@@ -5288,12 +5308,14 @@ mark-style	Japanese	Japansk
 @msg	Measured anchor no longer exists	Det målte ankerpunkt findes ikke længere
 @msg	Measured segment no longer exists	Det målte segment findes ikke længere
 @msg	Non-finite dimension	Ikke-endeligt mål
+@msg	Only linear dimensions are horizontal or vertical	Kun lineære mål er vandrette eller lodrette
 @msg	Scale Text Attributes: selected type has no scale to bake	Skalér tekstattributter: den valgte tekst har ingen skalering at anvende
 @msg	Scale must be drawing:real, for example 1:10	Målestokken skal være tegning:virkelig, for eksempel 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Målestoksforholdet skal være mellem 1:1000000 og 1000000:1
 @msg	Second measured segment no longer exists	Det andet målte segment findes ikke længere
 @msg	Unknown dimension mode	Ukendt måltilstand
 @msg	Unknown dimension option {k}	Ukendt målindstilling {k}
+@msg	Unknown dimension orientation	Ukendt målretning
 @msg	Unknown dimension style	Ukendt målstil
 @msg	Unknown unit	Ukendt enhed
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Luk de runde ender af åbne profiler. Delvise omdrejninger beholder deres skårne sider åbne.
@@ -5803,6 +5825,7 @@ axis	Y Axis	Y-akse
 	Show its progress, see Cancel and write log lines	Vise sin fremdrift, se en annullering og skrive logrækker
 	Keep settings of its own	Gemme sine egne indstillinger
 	Keep a cache of its own, which you can clear	Gemme sin egen cache, som du kan rydde
+	Run these commands on the document: {ids}	Køre disse kommandoer på dokumentet: {ids}
 	Clear Plug-in Cache	Ryd plug-in-cache
 # Actions panel: action sets (#3712).
 	New Set…	Nyt sæt…
@@ -5852,6 +5875,11 @@ axis	Y Axis	Y-akse
 	Button	Knap
 	Panel	Panel
 	UI Frames	UI-rammer
+	Map Markers	Kortmarkører
+	Pin	Nål
+	Flag	Flag
+	Crosshair	Sigtekorn
+	Checkpoint	Kontrolpunkt
 	Open Symbol Library	Åbn symbolbibliotek
 	Save Symbol Library	Gem symbolbibliotek
 	Save Symbol Library…	Gem symbolbibliotek…
@@ -5900,6 +5928,11 @@ axis	Y Axis	Y-akse
 	User Brush Library 9	Brugerpenselbibliotek 9
 	User Brush Library 10	Brugerpenselbibliotek 10
 	Art Ribbons	Kunstbånd
+	Zigzag	Zigzag
+	Burst Ray	Burststråle
+	Dash Trail	Streget spor
+	Speed Line	Hastighedslinje
+	Game Trails	Spilspor
 	Calligraphic Nibs	Kalligrafiske penne
 	Pattern Borders	Mønsterborter
 	Scatter Shapes	Spredte former
@@ -5912,6 +5945,8 @@ axis	Y Axis	Y-akse
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punkttekst
 	Area Text	Områdetekst
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mål tekst efter glyfafgrænsning
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Vis indstillinger for fastgørelse til tegn
 	Hide Snap to Glyph Options	Skjul indstillinger for fastgørelse til tegn
@@ -6445,3 +6480,5 @@ breakText	Glyphs	Glyffer
 # Align to Pixel Grid
 	Align to Pixel Grid	Juster efter pixelgitter
 @msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`
+	Edit Custom Dictionary	Redigér egen ordliste
+	Entry:	Opslag:

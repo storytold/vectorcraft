@@ -627,6 +627,8 @@ digits	Malayalam	マラヤーラム数字
 	Guides	ガイド
 	Hide Guides	ガイドを隠す
 	Lock Guides	ガイドをロック
+	Lock Guides by Default	ガイドを初期設定でロック
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Cmd/Ctrl + 定規からのドラッグでアートボードガイド
 	Make Guides	ガイドを作成
 	Release Guides	ガイドを解除
 	Clear Guides	ガイドを消去
@@ -798,6 +800,13 @@ digits	Malayalam	マラヤーラム数字
 	Other Library…	その他のライブラリ…
 	Graphic Style Libraries	グラフィックスタイルライブラリ
 	Shadows and Glows	シャドウと光彩
+	Game HUD	ゲーム HUD
+	Health Fill	体力
+	Mana Glow	マナ
+	Damage Flash	ダメージ
+	Quest Outline	クエスト
+	Coin Shine	コイン
+	Boss Alert	ボス
 	Outlines and Rules	アウトラインと罫線
 	Hand-Drawn	手描き風
 	Gradient Finishes	グラデーション仕上げ
@@ -1076,7 +1085,6 @@ antiAlias	Sharp	シャープ
 	Update While Dragging	ドラッグ中に更新
 	Hide Video Rulers	ビデオ定規を隠す
 	Background Contents	背景のカラー
-	Background Contents:	背景のカラー:
 	Background:	背景:
 	Bar Graph Tool	棒グラフツール
 	Baseline Shift	ベースラインシフト
@@ -1253,6 +1261,7 @@ antiAlias	Sharp	シャープ
 	Coming soon — tracked in the parity plan	近日対応予定
 	Command Click to Select Objects Behind	Command+クリックで背面のオブジェクトを選択
 	Command Dialog	コマンドダイアログ
+	Command API Reference	コマンド API リファレンス
 	Community	コミュニティ
 	Compatibility:	互換性:
 	Compatible Gradient and Gradient Mesh Printing	互換性のあるグラデーションとグラデーションメッシュのプリント
@@ -1302,7 +1311,6 @@ antiAlias	Sharp	シャープ
 	Corners…	コーナー…
 	Chamfer	面取り
 	Create Clipping Mask	クリッピングマスクを作成
-	Create Document	ドキュメントを作成
 	Create From:	作成元:
 	Create Graph	グラフを作成
 	Create New Layer	新規レイヤーを作成
@@ -2363,7 +2371,6 @@ antiAlias	Sharp	シャープ
 	New Symbol…	新規シンボル…
 	New Workspace	新規ワークスペース
 	New file	新規ファイル
-	New from Template	テンプレートから新規作成
 	New theme from the current color	現在のカラーから新規テーマ
 	New {kind} Style…	新規{kind}スタイル…
 	Next	次へ
@@ -2854,6 +2861,8 @@ mark-style	Japanese	日本式
 	Restore	復元
 	Restore Recovered Documents	復帰したドキュメントを復元
 	Restore every preference to its default (applied on OK)	すべての環境設定を初期値に戻す (OK で適用)
+	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
 	Restrict printing, editing and other tasks	印刷、編集などの操作を制限
 	Reverse Gradient	グラデーションを反転
@@ -2906,6 +2915,7 @@ mark-style	Japanese	日本式
 	Save PDF Preset	PDF プリセットを保存
 	Save Perspective Grid Preset	遠近グリッドプリセットを保存
 	Save Preset	プリセットを保存
+	Save Document Preset	ドキュメントプリセットを保存
 	Preset {number}	プリセット {number}
 	Save Preset…	保存…
 	Save Print Preset	プリントプリセットを保存
@@ -3254,7 +3264,6 @@ mark-style	Japanese	日本式
 	Target Contents	内容をターゲット
 	Target:	ターゲット:
 	Templates Folder	テンプレートフォルダー
-	Templates…	テンプレート…
 	Text Displayed in Cell:	セルに表示するテキスト:
 	Text Export Options	テキスト書き出しオプション
 	Text Import Options	テキスト読み込みオプション
@@ -4602,6 +4611,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	artboard {0} does not exist	アートボード {0} は存在しません
 @msg	cannot read PDF: {0}	PDF を読み込めません: {0}
 @msg	invalid PDF setting: {0}	PDF の設定が正しくありません: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: UserUnit {unit} で書き出されるため、UserUnit を無視するアプリではその倍率だけ小さく表示されます
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: {label} のページは UserUnit なしでポイント単位で書き出され、上限を守るアプリではページが 200 in で切り取られます
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 には、14,400 pt (200 in) を超えるページがサイズを保つために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	アートボード {n} のページは {size} で、PDF のページ辺 3 から 14,400 単位には長く細すぎます: 短辺を 3 単位以上に保つ UserUnit {unit} で書き出され、上限を守るアプリは長辺を 14,400 単位で切り取ります
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} ファイルの実数は {max} までですが、アートボード {n} の {side} pt のページにはそれより大きな値が必要です: PDF/X 規格なしの PDF 1.6 以降を選ぶか、アートボードを小さくしてください
 @msg	page {0} does not exist (the PDF has {1})	ページ {0} は存在しません (この PDF のページ数は {1} です)
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: ページ {n} は存在しません (このファイルのページ数は 1 です)
 @msg	the PDF has no pages	PDF にページがありません
@@ -4804,6 +4818,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	「{name}」を読み込みました。{n} 個のステップは省きました
 @msg	not an action set file	アクションセットファイルではありません
 @msg	the action set file is larger than 8 MiB	アクションセットファイルが 8 MiB を超えています
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: リファレンスが {MAX_BYTES} バイトを超えます
 @msg	the action set file holds more than 1,000 actions	アクションセットファイルのアクションが 1,000 個を超えています
 @msg	the action set file needs a later version of VectorCraft	このアクションセットファイルには新しいバージョンの VectorCraft が必要です
 @msg	an action in the action set file has more than 10,000 steps	アクションセットファイルに 10,000 ステップを超えるアクションがあります
@@ -4820,6 +4835,28 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the library item is damaged	ライブラリの項目が破損しています
 @msg	{_1} font families available	{_1} 個のフォントファミリーを使用できます
 @msg	{_1} has no {_2} style	{_1} には {_2} スタイルがありません
+	Run	実行
+	Run Script	スクリプトを実行
+	Stop Script	スクリプトを停止
+	Show External Script Warning	外部スクリプトの警告を表示
+	A Script Is Running	スクリプトの実行中
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
+	Do not show this warning again	今後この警告を表示しない
+	Stop the script and undo what it did? Then quit again.	スクリプトを停止して変更を取り消しますか？その後、もう一度終了してください。
+	This script has added a great many objects. Continue, or stop it and undo what it did?	このスクリプトは非常に多くのオブジェクトを追加しました。続行しますか、それとも停止して変更を取り消しますか？
+@msg	Choose a .js or .jsx script	.js または .jsx スクリプトを選択してください
+@msg	Ran {name}	{name} を実行しました
+@msg	The script was stopped and its changes were undone	スクリプトを停止し、変更を取り消しました
+@msg	a script is running: stop it or wait for it to finish	スクリプトの実行中です: 停止するか、終了するまでお待ちください
+@msg	this is a compiled script, which cannot be run; use its source text	これはコンパイル済みのスクリプトなので実行できません。ソーステキストを使用してください
+@msg	the script is not UTF-8 text	スクリプトは UTF-8 テキストではありません
+@msg	the script is too large to run	スクリプトが大きすぎて実行できません
+@msg	a drag or an undo group is open; finish it before running a script	ドラッグまたは取り消しグループが開いています。スクリプトを実行する前に完了してください
+@msg	the script left a document that cannot be kept	スクリプトが保持できないドキュメントを残しました
+@msg	the script's run is no longer available	スクリプトの実行は利用できなくなりました
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗したコマンドが元に戻せない取り消し手順を変更したため、スクリプトを停止しました
+@msg	a recovery copy could not be written, so the script was not run	復元用のコピーを書き込めなかったため、スクリプトは実行されませんでした
+@msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
@@ -5239,7 +5276,8 @@ lighting	Light	ライト
 	Bevel both sides	両面にベベル
 	Presets	プリセット
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	1 つのオブジェクトに適用できる 3D 効果は 1 つです。既存の効果のオプションを編集するか、先に削除してください。
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} には現在、パスまたは複合パスが必要です。テキスト、画像、グループは先にパスに変換してください。
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} には現在、パス、複合パス、テキスト、グループ、ブレンド、またはシンボルインスタンスが必要です。その他のオブジェクトは先に拡張してください。
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} は画像から立体を作成できません。先に「オブジェクト › 画像トレース › 作成」でトレースしてください。
 @msg	{label} requires a shape with at least two anchors	{label} には 2 つ以上のアンカーポイントを持つシェイプが必要です
 @msg	The shape is too complex for a 3D effect	シェイプが複雑すぎるため 3D 効果を適用できません
 @msg	The 3D surface is too complex; simplify the shape	3D サーフェスが複雑すぎます。シェイプを単純化してください
@@ -5307,6 +5345,7 @@ lighting	Light	ライト
 	Preview (1 inch on the page)	プレビュー（ページ上の 1 インチ）
 	Set as Default	デフォルトに設定
 	 out from a highlighted edge to place its dimension  |  	 でハイライトされた辺から外側へ寸法を配置  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 で 2 点を指定し、移動してクリックすると平行、水平または垂直の寸法を配置  |  
 	 cancels  |  Double-click the tool for options	 でキャンセル  |  ツールをダブルクリックしてオプション
 	Linear	直線
 	Angular	角度
@@ -5333,12 +5372,14 @@ lighting	Light	ライト
 @msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
 @msg	Measured segment no longer exists	測定したセグメントはもう存在しません
 @msg	Non-finite dimension	寸法が有限ではありません
+@msg	Only linear dimensions are horizontal or vertical	水平または垂直にできるのは直線寸法のみです
 @msg	Scale Text Attributes: selected type has no scale to bake	テキスト属性を拡大・縮小: 選択したテキストに取り込むスケールがありません
 @msg	Scale must be drawing:real, for example 1:10	縮尺は 図面:実寸 の形式にしてください (例: 1:10)
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	縮尺の比率は 1:1000000 から 1000000:1 の間にしてください
 @msg	Second measured segment no longer exists	2 番目の測定セグメントはもう存在しません
 @msg	Unknown dimension mode	寸法のモードが不明です
 @msg	Unknown dimension option {k}	不明な寸法オプション {k}
+@msg	Unknown dimension orientation	寸法の方向が不明です
 @msg	Unknown dimension style	寸法のスタイルが不明です
 @msg	Unknown unit	単位が不明です
 # Revolve cap description
@@ -5624,6 +5665,20 @@ axis	Y Axis	Y 軸
 	Show its progress, see Cancel and write log lines	進行状況の表示、キャンセルの検知、ログ行の書き込み
 	Keep settings of its own	独自の設定の保持
 	Keep a cache of its own, which you can clear	消去できる独自のキャッシュの保持
+	Run these commands on the document: {ids}	ドキュメントでのこれらのコマンドの実行: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	「{name}」は `commandAllowlist` にプラグインが呼び出せない `{id}` を挙げています
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: マニフェストの `commandAllowlist` にありません
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID または引数がモジュールのメモリの外にあります
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID または引数が UTF-8 ではありません
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: 引数が JSON オブジェクトではありません
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` を宣言できるのは通常の予算のフィルターだけです
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	コマンド呼び出し (1 回の実行につき {MAX_CALLS} 回、{MAX_CALL_BYTES} バイト)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	コマンド呼び出しのサイズ (vc_call `{shown}`: {len} バイト、上限 {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` のコマンドは最大 {MAX_ALLOWED_COMMANDS} 個です
+@msg	a plug-in may not call this command	プラグインはこのコマンドを呼び出せません
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` には権限 `commands` が必要で、`commands` には `commandAllowlist` が必要です
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` の `{shown}` はコマンド ID ではないか、2 回挙げられています
 	Clear Plug-in Cache	プラグインのキャッシュを消去
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	権限 `{permission}` にはプラグイン API レベル {PROGRESS_API} が必要です。`api` {PROGRESS_API} を指定してください
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	モジュールが `env.{name}` をホストと異なる型でインポートしています。ホストの型は {signature} です
@@ -5713,6 +5768,11 @@ axis	Y Axis	Y 軸
 	Button	ボタン
 	Panel	パネル
 	UI Frames	UIフレーム
+	Map Markers	マップマーカー
+	Pin	ピン
+	Flag	旗
+	Crosshair	クロスヘア
+	Checkpoint	チェックポイント
 	Open Symbol Library	シンボルライブラリを開く
 	Save Symbol Library	シンボルライブラリを保存
 	Save Symbol Library…	シンボルライブラリを保存…
@@ -5767,6 +5827,11 @@ axis	Y Axis	Y 軸
 	User Brush Library 9	ユーザーブラシライブラリ 9
 	User Brush Library 10	ユーザーブラシライブラリ 10
 	Art Ribbons	アートリボン
+	Zigzag	ジグザグ
+	Burst Ray	バーストレイ
+	Dash Trail	ダッシュトレイル
+	Speed Line	スピードライン
+	Game Trails	ゲームトレイル
 	Calligraphic Nibs	カリグラフィペン先
 	Pattern Borders	パターンボーダー
 	Scatter Shapes	散布シェイプ
@@ -5787,6 +5852,8 @@ axis	Y Axis	Y 軸
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	ポイント文字
 	Area Text	エリア内文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	文字を字形の境界で測定
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	グリフにスナップのオプションを表示
 	Hide Snap to Glyph Options	グリフにスナップのオプションを隠す
@@ -6354,3 +6421,8 @@ breakText	Glyphs	字形
 	Align to Pixel Grid	ピクセルグリッドに整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
 @msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）
+	Ignore All	すべて無視
+	Add to Dictionary	辞書に追加
+	No Suggestions	候補なし
+	Edit Custom Dictionary	カスタム辞書を編集
+	Entry:	エントリ:

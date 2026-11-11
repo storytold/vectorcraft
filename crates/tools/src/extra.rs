@@ -4,8 +4,8 @@
 //! (Shift holds their turn; click without dragging opens the Flare Tool Options), then a click
 //! sets the end point of the rings; Space held during either drag moves the flare. The rest comes
 //! from the tool's options (the Flare Tool Options, which last). Reshape: drag a point of a
-//! selected path; the engine's `path.reshape` adds an anchor there if needed and moves the
-//! neighbourhood smoothly.
+//! selected path; the engine's `path.reshape` adds an anchor there if needed and stretches an open
+//! path from that point to its two ends, or moves the neighborhood of the point on a closed path.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Vec2};

@@ -77,6 +77,7 @@ use tool_overlays::{
     print_tiling_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, spelling_overlay, thread_overlays,
 };
 pub(crate) use view::animated_zoom;
+pub(crate) use view::drag_rotation;
 pub use view::fit;
 use view::scroll_bars;
 #[cfg(test)]
@@ -315,7 +316,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview: off, images show
     // their pixels as they rasterize, hard-edged.
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
-    let key = cache_key(app, ui, st, &t, &v, (w, h, ppp), (pixel, smooth_images));
+    let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
+    let key = cache_key(app, ui, st, &t, &v, (w, h, ppp), (pixel, smooth_images, plugins));
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
@@ -543,8 +545,9 @@ fn ruler_bands(app: &VectorcraftApp, ui: &Ui, xf: &Xf, (full, rect): (egui::Rect
     let painter = ui.painter_at(rect);
     if let Some(origin) = origin_preview {
         let at = xf.to_screen(origin);
-        painter.line_segment([pos2(at.x, rect.top()), pos2(at.x, rect.bottom())], Stroke::new(1.0, t.text_dim));
-        painter.line_segment([pos2(rect.left(), at.y), pos2(rect.right(), at.y)], Stroke::new(1.0, t.text_dim));
+        let color = dim_on_canvas(t, app.outline_view());
+        painter.line_segment([pos2(at.x, rect.top()), pos2(at.x, rect.bottom())], Stroke::new(1.0, color));
+        painter.line_segment([pos2(rect.left(), at.y), pos2(rect.right(), at.y)], Stroke::new(1.0, color));
     }
     // View › Rulers › Show Video Rulers counts the active artboard in video pixels.
     let video = app.ui.view.video_rulers.then(|| crate::dialogs::artboard_options::active_index(app));
@@ -563,7 +566,7 @@ fn cache_key(
     t: &Tokens,
     v: &View,
     (w, h, ppp): (u32, u32, f32),
-    (pixel, smooth_images): (Option<[i64; 4]>, bool),
+    (pixel, smooth_images, plugins): (Option<[i64; 4]>, bool, u64),
 ) -> CacheKey {
     // Paths made into guides are drawn as the ruler guides are (Preferences › Guides & Grid).
     let guide_look = LineLook::guides(&app.session.prefs, t);
@@ -588,6 +591,7 @@ fn cache_key(
         highlight_alternate_glyphs: app.session.prefs.highlight_alternate_glyphs,
         highlight_substituted_fonts: app.session.prefs.highlight_substituted_fonts,
         placed: vectorcraft_render::placed_document::generation(),
+        plugins,
         pixel,
         smooth_images,
         isolated: st.isolation.map(|id| id.0),
@@ -597,6 +601,26 @@ fn cache_key(
         dragging: app.session.in_interaction() && ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool),
         // The Image Trace panel's eye button, while it is held.
         trace_source: app.ui.trace_hold_source.clone(),
+    }
+}
+
+/// [`CacheKey::plugins`] of document `st`, one of the documents open in `session`. `keys` holds each
+/// document's value and the plug-in revision it was checked at, so a document is looked through only
+/// once after each plug-in install or removal.
+fn plugin_key(
+    keys: &mut std::collections::HashMap<u64, (u64, u64)>,
+    session: &vectorcraft_engine::Session,
+    st: &vectorcraft_engine::DocState,
+) -> u64 {
+    let revision = vectorcraft_render::effects::plugin_revision();
+    match keys.get(&st.uid) {
+        Some(&(checked, key)) if checked == revision => key,
+        seen => {
+            let key = if vectorcraft_render::draws_plugin_effects(&st.doc) { revision } else { seen.map_or(0, |&(_, key)| key) };
+            keys.retain(|uid, _| session.documents().iter().any(|d| d.uid == *uid));
+            keys.insert(st.uid, (revision, key));
+            key
+        }
     }
 }
 
@@ -793,8 +817,17 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     }
 }
 
-/// The pasteboard, the artboards' shadows and paper, and the outline mode's white artboards, of
-/// document `st`, in Outline when `outline`.
+/// The canvas color in Outline, whatever the interface brightness and Canvas Color: the paths draw
+/// as black hairlines, and the artboards as their edges only.
+const OUTLINE_CANVAS: Color32 = Color32::WHITE;
+
+/// The color of the artboards' names and the ruler origin's crosshair in Outline, on
+/// [`OUTLINE_CANVAS`].
+const OUTLINE_DIM: Color32 = Color32::from_gray(0x4b);
+
+/// The pasteboard and the artboards' shadows and paper of document `st`, or in Outline (`outline`)
+/// the whole canvas in [`OUTLINE_CANVAS`], with no paper drawn for the artboards: no Simulate
+/// Colored Paper color, no artboard background color, and no paper with View › Hide Artboards.
 fn paint_paper(
     app: &VectorcraftApp,
     st: &vectorcraft_engine::DocState,
@@ -805,6 +838,12 @@ fn paint_paper(
     (t, outline): (&Tokens, bool),
 ) {
     let doc = &st.doc;
+    if outline {
+        // The art draws in black on white over the pasteboard and the artboards alike, and the
+        // artboards show as their edges (`artboard_outlines`).
+        painter.rect_filled(rect, 0.0, OUTLINE_CANVAS);
+        return;
+    }
     // Pasteboard, artboard shadows and paper (Document Setup: the transparency grid's look, the
     // simulated paper colour; a white Background Contents hides the grid).
     // An artboard with a background color draws its paper in that color. With Simulate Colored Paper
@@ -815,7 +854,7 @@ fn paint_paper(
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
         let setup = &doc.setup;
         painter.rect_filled(rect, 0.0, if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE });
-    } else if !outline {
+    } else {
         let setup = &doc.setup;
         let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent).then(|| checker_texture(ui.ctx(), setup));
         let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
@@ -832,10 +871,6 @@ fn paint_paper(
                     painter.add(Shape::convex_polygon(q, fill, Stroke::NONE));
                 }
             }
-        }
-    } else {
-        for ab in &doc.artboards {
-            painter.add(Shape::convex_polygon(xf.quad(ab.rect), Color32::WHITE, Stroke::NONE));
         }
     }
 }
@@ -1007,16 +1042,22 @@ fn artboard_outlines(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf:
     let tool_selected = artboards::tool_labelled(app);
     let editing_name = ui.data(|d| d.get_temp::<ArtboardNameEdit>(name_edit_id()).map(|e| e.index));
     let unlabelled = |i: usize| editing_name == Some(i) || u64::try_from(i).ok().is_some_and(|idx| tool_selected.contains(&idx));
-    artboard_edges(app, doc, (painter, xf, t), active_ab, unlabelled);
+    artboard_edges(app, doc, (painter, xf, t), (active_ab, dim_on_canvas(t, app.outline_view())), unlabelled);
 }
 
-/// The edges, bleeds, marks and names of `doc`'s artboards, `active_ab` the active one; the
-/// artboards `unlabelled` gives are not named.
+/// The color of the artboards' names and the ruler origin's crosshair over the pasteboard, or over
+/// [`OUTLINE_CANVAS`] in Outline (`outline`).
+fn dim_on_canvas(t: &Tokens, outline: bool) -> Color32 {
+    if outline { OUTLINE_DIM } else { t.text_dim }
+}
+
+/// The edges, bleeds, marks and names of `doc`'s artboards, `active_ab` the active one, the names
+/// in `label`; the artboards `unlabelled` gives are not named.
 fn artboard_edges(
     app: &VectorcraftApp,
     doc: &vectorcraft_doc::Document,
     (painter, xf, t): (&egui::Painter, &Xf, &Tokens),
-    active_ab: usize,
+    (active_ab, label): (usize, Color32),
     unlabelled: impl Fn(usize) -> bool,
 ) {
     let artboard_tool = app.session.tool_id() == "artboard";
@@ -1034,7 +1075,7 @@ fn artboard_edges(
             // At the artboard's own top-left corner, which a rotated view turns away from its
             // bounding box's (#1095).
             let corner = xf.to_screen(Point::new(ab.rect.x0, ab.rect.y0));
-            artboard_label(painter, corner, (ab.rect.width() * xf.zoom) as f32, &format!("{:02} - {}", i + 1, ab.name), t.text_dim);
+            artboard_label(painter, corner, (ab.rect.width() * xf.zoom) as f32, &format!("{:02} - {}", i + 1, ab.name), label);
         }
     }
 }

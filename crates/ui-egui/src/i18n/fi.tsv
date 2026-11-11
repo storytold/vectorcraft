@@ -600,6 +600,8 @@
 	Hide Guides	Piilota apuviivat
 	Show Guides	Näytä apuviivat
 	Lock Guides	Lukitse apuviivat
+	Lock Guides by Default	Lukitse apuviivat oletuksena
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Piirtoalustan apuviivat Cmd/Ctrl + vetämällä viivaimesta
 	Unlock Guides	Avaa apuviivojen lukitus
 	Make Guides	Luo apuviivat
 	Release Guides	Vapauta apuviivat
@@ -765,6 +767,13 @@
 	Other Library…	Muu kirjasto…
 	Graphic Style Libraries	Grafiikkatyylikirjastot
 	Shadows and Glows	Varjot ja hehkut
+	Game HUD	Peli-HUD
+	Health Fill	Terveys
+	Mana Glow	Mana
+	Damage Flash	Vahinko
+	Quest Outline	Tehtävä
+	Coin Shine	Kolikko
+	Boss Alert	Bossi
 	Outlines and Rules	Ääriviivat ja viivat
 	Hand-Drawn	Käsin piirretyt
 	Gradient Finishes	Liukuväriviimeistelyt
@@ -963,6 +972,7 @@ lighting	Light	Valo
 	Color Picker…	Värivalitsin…
 	Coming soon — tracked in the parity plan	Tulossa pian — seurataan yhdenmukaisuussuunnitelmassa
 	Command Dialog	Komentovalintaikkuna
+	Command API Reference	Komentojen API-viite
 	Copy Selected Style	Kopioi valittu tyyli
 	Corners…	Kulmat…
 	Define Perspective Grid…	Määritä perspektiiviruudukko…
@@ -2506,15 +2516,12 @@ digits	Malayalam	Malajalam
 	Selected Swatches	Valitut värimallit
 	Advanced Options	Lisäasetukset
 	Background Contents	Taustan sisältö
-	Background Contents:	Taustan sisältö:
 	BLANK DOCUMENT PRESETS	TYHJÄN ASIAKIRJAN ESIASETUKSET
 	Bleed	Leikkuuvara
 	Change to Right-to-Left Layout	Vaihda oikealta vasemmalle -asetteluun
 	Columns:	Sarakkeet:
-	Create Document	Luo asiakirja
 	Documents you create appear here.	Luomasi asiakirjat näkyvät tässä.
 	More Settings	Lisää asetuksia
-	New from Template	Uusi mallista
 	Number of Artboards:	Piirtoalustojen määrä:
 	Orientation:	Suunta:
 	PRESET DETAILS	ESIASETUKSEN TIEDOT
@@ -2525,7 +2532,6 @@ digits	Malayalam	Malajalam
 	RECENT	VIIMEISIMMÄT
 	RECENT (1)	VIIMEISIMMÄT (1)
 	SAVED	TALLENNETUT
-	Templates…	Mallit…
 	Transparent (Default)	Läpinäkyvä (oletus)
 	Save for Office Documents	Tallenna Office-asiakirjoja varten
 	Transparent Background	Läpinäkyvä tausta
@@ -3475,6 +3481,7 @@ theme	Appearance	Ulkoasu
 	Arrange by Row	Järjestä riveittäin
 	Arrange by Column	Järjestä sarakkeittain
 	Save Preset	Tallenna esiasetus
+	Save Document Preset	Tallenna asiakirjan esiasetus
 	Screen (72 ppi)	Näyttö (72 ppi)
 	Social Square Post 1080×1080	Neliömäinen somejulkaisu 1080×1080
 	Distribute	Jaa tasaisesti
@@ -4057,6 +4064,8 @@ font-technology	Variable	Muuttuvat
 	Preferences	Asetukset
 	Previous	Edellinen
 	Restore every preference to its default (applied on OK)	Palauta kaikki asetukset oletuksiin (käytetään, kun valitaan OK)
+	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Oletukset otetaan käyttöön, kun valitset Asetuksissa OK. Peruuta siellä säilyttää nykyiset asetuksesi.
 	Smaller ↔ Larger	Pienempi ↔ Suurempi
 	Smart Guides (View → Smart Guides)	Älykkäät apuviivat (Näytä → Älykkäät apuviivat)
 	Couldn't save recovery data: {e}	Palautustietoja ei voitu tallentaa: {e}
@@ -4293,6 +4302,28 @@ imageTrace	Outline	Ääriviiva
 @msg	Combine Slices: the slices have no bounds	Yhdistä viipaleet: viipaleilla ei ole rajoja
 @msg	Convert to Artboards: selection has no area	Muunna piirtoalustoiksi: valinnalla ei ole pinta-alaa
 @msg	Convert to Shape: no rectangles or ellipses selected	Muunna muodoksi: suorakulmioita tai ellipsejä ei ole valittu
+	Run	Suorita
+	Run Script	Suorita komentosarja
+	Stop Script	Pysäytä komentosarja
+	Show External Script Warning	Näytä ulkoisten komentosarjojen varoitus
+	A Script Is Running	Komentosarja on käynnissä
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
+	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
+	Stop the script and undo what it did? Then quit again.	Pysäytetäänkö komentosarja ja kumotaan sen muutokset? Lopeta sitten uudelleen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Tämä komentosarja on lisännyt hyvin paljon objekteja. Jatketaanko, vai pysäytetäänkö se ja kumotaan sen muutokset?
+@msg	Choose a .js or .jsx script	Valitse .js- tai .jsx-komentosarja
+@msg	Ran {name}	Suoritettu: {name}
+@msg	The script was stopped and its changes were undone	Komentosarja pysäytettiin ja sen muutokset kumottiin
+@msg	a script is running: stop it or wait for it to finish	komentosarja on käynnissä: pysäytä se tai odota sen valmistumista
+@msg	this is a compiled script, which cannot be run; use its source text	tämä on käännetty komentosarja, jota ei voi suorittaa; käytä sen lähdetekstiä
+@msg	the script is not UTF-8 text	komentosarja ei ole UTF-8-tekstiä
+@msg	the script is too large to run	komentosarja on liian suuri suoritettavaksi
+@msg	a drag or an undo group is open; finish it before running a script	vetäminen tai kumousryhmä on kesken; viimeistele se ennen komentosarjan suorittamista
+@msg	the script left a document that cannot be kept	komentosarja jätti asiakirjan, jota ei voi säilyttää
+@msg	the script's run is no longer available	komentosarjan suoritus ei ole enää käytettävissä
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	epäonnistunut komento muutti kumoamisvaiheita, joita ei voitu palauttaa, joten komentosarja pysäytettiin
+@msg	a recovery copy could not be written, so the script was not run	palautuskopiota ei voitu kirjoittaa, joten komentosarjaa ei suoritettu
+@msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}
@@ -4529,6 +4560,11 @@ imageTrace	Outline	Ääriviiva
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	sisäinen virhe kohteessa `{cmd}`: {msg} (asiakirja jätettiin ennalleen; ilmoita tästä virheestä)
 @msg	internal error: {msg} (please report this bug)	sisäinen virhe: {msg} (ilmoita tästä virheestä)
 @msg	invalid PDF setting: {0}	virheellinen PDF-asetus: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	piirtoalustan {n} sivu on {size}, pidempi kuin PDF:n 14 400 pt:n (200 in) sivuraja: se kirjoitetaan UserUnit-arvolla {unit}, joten UserUnitin ohittavat sovellukset näyttävät sen niin monta kertaa pienempänä
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	piirtoalustan {n} sivu on {size}, pidempi kuin PDF:n 14 400 pt:n (200 in) sivuraja: {label}-sivut kirjoitetaan ilman UserUnitia, pisteinä, ja rajaa noudattavat sovellukset rajaavat sivun 200 in:iin
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5:ssä ei ole UserUnitia, jota yli 14 400 pt:n (200 in) sivu tarvitsee säilyttääkseen kokonsa: tiedosto kirjoitetaan PDF 1.6:na
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	piirtoalustan {n} sivu on {size}, liian pitkä ja kapea PDF:n sivuille, jotka ovat 3:sta 14 400 yksikköön: se kirjoitetaan UserUnit-arvolla {unit}, joka pitää lyhyen sivun vähintään 3 yksikössä, ja rajaa noudattavat sovellukset leikkaavat pitkän sivun 14 400 yksikköön
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-tiedostot sallivat reaaliluvut enintään {max}, ja piirtoalustan {n} sivu, {side} pt pitkä, tarvitsee suurempia: valitse PDF 1.6 tai uudempi ilman PDF/X-standardia tai pienempi piirtoalusta
 @msg	invalid image data for `{0}`	virheellinen kuvadata kohteelle `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	virheelliset parametrit kohteelle `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	ei ole kuva, jota VectorCraft lukee
@@ -4633,6 +4669,7 @@ imageTrace	Outline	Ääriviiva
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Ladattiin ”{name}”: jätettiin pois {n} vaihe|Ladattiin ”{name}”: jätettiin pois {n} vaihetta
 @msg	not an action set file	ei ole toimintosarjatiedosto
 @msg	the action set file is larger than 8 MiB	toimintosarjatiedosto on suurempi kuin 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: viite olisi suurempi kuin {MAX_BYTES} tavua
 @msg	the action set file holds more than 1,000 actions	toimintosarjatiedostossa on yli 1 000 toimintoa
 @msg	the action set file needs a later version of VectorCraft	toimintosarjatiedosto vaatii uudemman VectorCraft-version
 @msg	an action in the action set file has more than 10,000 steps	toimintosarjatiedoston toiminnossa on yli 10 000 vaihetta
@@ -5472,7 +5509,8 @@ mark-style	Japanese	Japanilainen
 	Bevel both sides	Viiste molemmin puolin
 	Presets	Esiasetukset
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Objektilla voi olla yksi 3D-tehoste. Muokkaa olemassa olevan tehosteen asetuksia tai poista se ensin.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} vaatii tällä hetkellä polun tai yhdistelmäpolun. Muunna teksti, kuvat ja ryhmät ensin poluiksi.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} vaatii tällä hetkellä polun, yhdistelmäpolun, tekstin, ryhmän, sulautuksen tai symbolin ilmentymän. Laajenna muut objektit ensin.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} ei voi luoda kappaletta kuvasta: jäljitä se ensin komennolla Objekti › Kuvan jäljitys › Luo.
 @msg	{label} requires a shape with at least two anchors	{label} vaatii muodon, jossa on vähintään kaksi ankkuria
 @msg	The shape is too complex for a 3D effect	Muoto on liian monimutkainen 3D-tehosteelle
 @msg	The 3D surface is too complex; simplify the shape	3D-pinta on liian monimutkainen; yksinkertaista muotoa
@@ -5547,6 +5585,7 @@ mark-style	Japanese	Japanilainen
 # Strings added upstream after this catalog was written (machine-drafted; review welcome).
 	 cancels  |  Double-click the tool for options	 peruuttaa  |  Kaksoisnapsauta työkalua avataksesi asetukset
 	 out from a highlighted edge to place its dimension  |  	 ulospäin korostetusta reunasta sijoittaaksesi sen mitan  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 kahta pistettä, siirrä sitten ja napsauta sijoittaaksesi tasatun, vaaka- tai pystysuuntaisen mitan  |  
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Vanhassa .ai-tiedostossa on yksi piirtoalusta: jokainen valitsemasi piirtoalusta tallennetaan omaksi tiedostokseen.
 	Arrange Intertwine Area	Järjestä lomitusalue
 	Batch…	Erä…
@@ -5645,12 +5684,14 @@ mark-style	Japanese	Japanilainen
 @msg	Measured anchor no longer exists	Mitattua ankkuripistettä ei ole enää
 @msg	Measured segment no longer exists	Mitattua segmenttiä ei ole enää
 @msg	Non-finite dimension	Mitta ei ole äärellinen luku
+@msg	Only linear dimensions are horizontal or vertical	Vain lineaariset mitat ovat vaaka- tai pystysuuntaisia
 @msg	Scale Text Attributes: selected type has no scale to bake	Skaalaa tekstin attribuutit: valitulla tekstillä ei ole sovellettavaa skaalausta
 @msg	Scale must be drawing:real, for example 1:10	Mittakaavan on oltava muotoa piirustus:todellinen, esimerkiksi 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Mittakaavan suhteen on oltava välillä 1:1000000–1000000:1
 @msg	Second measured segment no longer exists	Toista mitattua segmenttiä ei ole enää
 @msg	Unknown dimension mode	Tuntematon mitoitustila
 @msg	Unknown dimension option {k}	Tuntematon mitoitusasetus {k}
+@msg	Unknown dimension orientation	Tuntematon mitan suunta
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`-arvon on oltava grayscale, rgb, hsb, cmyk tai websafe
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
@@ -5972,6 +6013,20 @@ axis	Y Axis	Y-akseli
 	Show its progress, see Cancel and write log lines	Näyttää edistymisensä, havaita peruutuksen ja kirjoittaa lokirivejä
 	Keep settings of its own	Säilyttää omat asetuksensa
 	Keep a cache of its own, which you can clear	Säilyttää oman välimuistin, jonka voit tyhjentää
+	Run these commands on the document: {ids}	Suorittaa nämä komennot asiakirjassa: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	”{name}” luettelee `commandAllowlist`-luettelossa komennon `{id}`, jota laajennus ei saa kutsua
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: manifestin `commandAllowlist` ei luettele sitä
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: tunnus tai argumentit ovat moduulin muistin ulkopuolella
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: tunnus tai argumentit eivät ole UTF-8:aa
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: argumentit eivät ole JSON-objekti
+@msg	only a filter with the usual budget declares `commandAllowlist`	vain tavallisen budjetin suodatin voi määrittää `commandAllowlist`-luettelon
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	komentokutsut ({MAX_CALLS} kutsua ja {MAX_CALL_BYTES} tavua ajoa kohden)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	komentokutsun koko (vc_call `{shown}`: {len} tavua, raja {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	enintään {MAX_ALLOWED_COMMANDS} komentoa `commandAllowlist`-luettelossa
+@msg	a plug-in may not call this command	laajennus ei saa kutsua tätä komentoa
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` tarvitsee käyttöoikeuden `commands`, ja `commands` tarvitsee `commandAllowlist`-luettelon
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` mainitsee kohteen `{shown}`, joka ei ole komennon tunnus tai on luettelossa kahdesti
 	Clear Plug-in Cache	Tyhjennä laajennuksen välimuisti
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	käyttöoikeus `{permission}` vaatii laajennus-API:n tason {PROGRESS_API}: anna `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	moduuli tuo kohteen `env.{name}` eri tyyppisenä kuin isäntä: isännän tyyppi on {signature}
@@ -6061,6 +6116,11 @@ axis	Y Axis	Y-akseli
 	Button	Painike
 	Panel	Paneeli
 	UI Frames	UI-kehykset
+	Map Markers	Karttamerkit
+	Pin	Nasta
+	Flag	Lippu
+	Crosshair	Tähtäin
+	Checkpoint	Tarkastuskohta
 	Open Symbol Library	Avaa symbolikirjasto
 	Save Symbol Library	Tallenna symbolikirjasto
 	Save Symbol Library…	Tallenna symbolikirjasto…
@@ -6115,6 +6175,11 @@ axis	Y Axis	Y-akseli
 	User Brush Library 9	Käyttäjän sivellinkirjasto 9
 	User Brush Library 10	Käyttäjän sivellinkirjasto 10
 	Art Ribbons	Kuvitusnauhat
+	Zigzag	Siksak
+	Burst Ray	Iskusäde
+	Dash Trail	Katkoviiva
+	Speed Line	Nopeusviiva
+	Game Trails	Pelijäljet
 	Calligraphic Nibs	Kalligrafiakärjet
 	Pattern Borders	Kuvioreunukset
 	Scatter Shapes	Sirontamuodot
@@ -6135,6 +6200,8 @@ axis	Y Axis	Y-akseli
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Pisteteksti
 	Area Text	Alueteksti
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mittaa teksti merkin rajoista
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Näytä merkkiin kohdistuksen asetukset
 	Hide Snap to Glyph Options	Piilota merkkiin kohdistuksen asetukset
@@ -6703,3 +6770,8 @@ breakText	Glyphs	Merkit
 	Align to Pixel Grid	Tasaa pikseliruudukkoon
 @msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon
 @msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`
+	Ignore All	Ohita kaikki
+	Add to Dictionary	Lisää sanastoon
+	No Suggestions	Ei ehdotuksia
+	Edit Custom Dictionary	Muokkaa omaa sanastoa
+	Entry:	Merkintä:
