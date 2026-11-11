@@ -77,7 +77,7 @@ fn fit_through_rec(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64, out: &mut Vec<Cu
         out.push(CubicBez::new(pts[0], pts[0] + t0 * d, pts[1] - t1 * d, pts[1]));
         return;
     }
-    let (curve, err, split) = fit_single(pts, t0, t1);
+    let (curve, err, split) = fit_single_tol(pts, t0, t1, tol);
     if err <= tol || depth >= MAX_SPLITS {
         out.push(curve);
         return;
@@ -190,6 +190,32 @@ fn center_tangent(pts: &[Point], split: usize, tol: f64) -> Option<Vec2> {
 /// the worst point).
 pub(crate) fn fit_single(pts: &[Point], t0: Vec2, t1: Vec2) -> (CubicBez, f64, usize) {
     fit_single_from(pts, chord_params(pts), t0, t1)
+}
+
+/// [`fit_single`] that stops reparameterising once the curve is within `tol` of its points: a
+/// curve already that close needs no better fit, and each Newton round reads every point.
+fn fit_single_tol(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64) -> (CubicBez, f64, usize) {
+    let mut u = chord_params(pts);
+    let mut best = generate(pts, &u, t0, t1);
+    let (mut best_err, mut best_split) = max_error(pts, &best, &u);
+    for _ in 0..MAX_REPARAM {
+        if best_err <= tol {
+            break;
+        }
+        for (i, ui) in u.iter_mut().enumerate() {
+            *ui = newton(&best, pts[i], *ui);
+        }
+        let c = generate(pts, &u, t0, t1);
+        let (e, s) = max_error(pts, &c, &u);
+        if e < best_err {
+            best = c;
+            best_err = e;
+            best_split = s;
+        } else {
+            break;
+        }
+    }
+    (best, best_err, best_split)
 }
 
 /// [`fit_single`] starting from the parameters `u` (one per point, 0 to 1) instead of the
