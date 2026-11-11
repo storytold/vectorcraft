@@ -490,6 +490,13 @@ arrowhead	Target	Diana
 	Heal	Curació
 	Buff	Potenciació
 	Ult	Ult
+	Element Icons	Icones d'elements
+	Fire	Foc
+	Water	Aigua
+	Earth	Terra
+	Air	Aire
+	Light	Llum
+	Dark	Foscor
 	Sword	Espasa
 	Shield	Escut
 	Potion	Poció
@@ -1163,7 +1170,6 @@ arrowhead	Target	Diana
 	Cutout	Retall
 	Cutout…	Retall…
 	Cyan	Cian
-	Dark	Fosc
 	Dark Gray	Gris fosc
 	Dark Intensity	Intensitat fosca
 	Dark Rough	Fosc aspre
