@@ -500,20 +500,23 @@ impl Importer {
     }
 
     /// Put `art` in layer `l` at `index` (at most its end) unclipped: a clipping mask on the layer
-    /// becomes a clip group in it, holding the art it clipped.
+    /// becomes a clip group in it, holding the art it clipped. The layer's ruler guides stay last,
+    /// outside the clip group.
     pub(super) fn add_unclipped(&mut self, l: &mut Node, index: usize, art: Vec<Arc<Node>>) {
         if art.is_empty() {
             return;
         }
         if let NodeKind::Layer { children, clip: clip @ true, .. } = &mut l.kind {
             *clip = false;
-            let clipped = std::mem::take(children);
+            let mut clipped = std::mem::take(children);
+            let guides = clipped.split_off(Node::guide_run_start(&clipped));
             if let Some(group) = self.named("", NodeKind::Group { children: clipped, clip: true }) {
                 children.push(Arc::new(group));
             }
+            children.extend(guides);
         }
         if let Some(ch) = l.children_mut() {
-            let i = index.min(ch.len());
+            let i = index.min(Node::guide_run_start(ch));
             ch.splice(i..i, art);
         }
     }

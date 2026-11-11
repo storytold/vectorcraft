@@ -152,7 +152,9 @@ impl<'a> Writer<'a> {
         self.locked = false;
         self.line("0 A");
         self.in_hidden = !n.visible;
-        self.contents(children, *clip, false);
+        // Ruler guides are kept in the document's native copy only.
+        let art: Vec<Arc<Node>> = children.iter().filter(|c| !c.is_ruler_guide()).cloned().collect();
+        self.contents(&art, *clip, false);
         self.in_hidden = false;
         self.line("LB\n%AI5_EndLayer--");
         true
@@ -209,6 +211,10 @@ impl<'a> Writer<'a> {
 
     /// One object (inside a container locked when `locked`).
     fn node(&mut self, n: &Node, locked: bool) {
+        // Ruler guides are kept in the document's native copy only.
+        if n.is_ruler_guide() {
+            return;
+        }
         if !n.visible && !self.in_hidden {
             match self.hidden {
                 HiddenObjects::Omit => {
@@ -292,6 +298,8 @@ impl<'a> Writer<'a> {
                     self.nest -= 1;
                 }
             }
+            // Ruler guides are kept in the document's native copy only.
+            NodeKind::RulerGuide { .. } => {}
         }
     }
 

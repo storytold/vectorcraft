@@ -1016,7 +1016,7 @@ fn dropped_type_press_restores_the_original_text_and_selection() {
     let a = at(&s, first);
     click(&mut s, a.x + 0.1, a.y);
     assert!(s.tool_wants_text());
-    s.select(|_, selection| selection.guides.push(0)).unwrap();
+    s.select(|d, selection| selection.guides.extend(d.ruler_guides().first().and_then(|g| g.id))).unwrap();
     let before = s.doc().unwrap().selection.clone();
     let b = at(&s, second);
     s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y), v).unwrap();

@@ -330,7 +330,7 @@ fn xml_ctor(interp: &mut Interp, _: Value, args: &[Value], construct: bool) -> J
     let v = arg(args, 0);
     interp.rooted(std::slice::from_ref(&v), |i| {
         let x = to_xml(i, &v)?;
-        if construct && matches!(i.classify(&v), Xv::Node(_)) {
+        if construct && matches!(i.classify(&v), Xv::Node(_) | Xv::List(_)) {
             return Ok(Value::Object(i.node_copy(x)?));
         }
         Ok(Value::Object(x))
@@ -883,8 +883,15 @@ fn insert_relative(interp: &mut Interp, this: Value, args: &[Value], after: bool
         if after { 0 } else { len }
     } else {
         let Xv::Node(r) = interp.classify(&reference) else { return Ok(Value::Undefined) };
-        interp.use_fuel()?;
-        let Some(i) = interp.xml_node(x)?.children.iter().position(|&c| c == r) else { return Ok(Value::Undefined) };
+        let mut found = None;
+        for i in 0..len {
+            interp.use_fuel()?;
+            if interp.xml_node(x)?.children.get(i) == Some(&r) {
+                found = Some(i);
+                break;
+            }
+        }
+        let Some(i) = found else { return Ok(Value::Undefined) };
         if after { i + 1 } else { i }
     };
     interp.rooted(std::slice::from_ref(&v), |i| i.xml_insert(x, at, &c))?;

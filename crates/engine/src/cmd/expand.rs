@@ -534,7 +534,7 @@ fn expand_piece_leaves(
         }
         return;
     }
-    for c in n.children_mut().into_iter().flatten() {
+    for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
         expand_piece_leaves(d, Arc::make_mut(c), left, expanded, expand);
     }
 }

@@ -1192,7 +1192,7 @@ fn a_drag_from_a_ruler_onto_the_canvas_makes_a_guide() {
         frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
         frame(app, &ctx, vec![button(to, false)]);
     };
-    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
+    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
     // From the top ruler: a horizontal guide where the button was released.
     let to = pos2(rect.center().x, rect.top() + 120.0);
     drag(&mut app, pos2(rect.center().x, rect.top() - RULER / 2.0), to);
@@ -1234,8 +1234,8 @@ fn artboard_guide_label_colors_only_its_own_guides() {
     {
         let st = app.session.active_mut().unwrap();
         let doc = std::sync::Arc::make_mut(&mut st.doc);
-        let last = doc.guides.len() - 1;
-        doc.guides[last].artboard = Some(gone);
+        let last = doc.ruler_guides().last().and_then(|g| g.id).unwrap();
+        assert!(doc.edit_ruler_guide(last, |g| g.artboard = Some(gone)));
     }
     app.ui.view.guides = true;
     let ctx = egui::Context::default();
@@ -1304,7 +1304,7 @@ fn a_guide_dragged_out_of_a_ruler_shows_while_dragged() {
         };
         assert!(shapes(&mut app, &ctx).iter().any(across), "real-time drawing {real_time}: the guide shows while dragged");
         frame(&mut app, &ctx, vec![button(at, false)]);
-        assert_eq!(app.session.active().unwrap().doc.guides.len(), 1, "real-time drawing {real_time}: released, it is made");
+        assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), 1, "real-time drawing {real_time}: released, it is made");
     }
 }
 
@@ -1383,7 +1383,7 @@ fn new_ruler_guides_follow_alt_through_preview_release_and_undo() {
             frame(&mut app, &ctx, vec![button(from, true, initially_alt)]);
             frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
             let assert_guide = |app: &VectorcraftApp, alt: bool, pos: Point| {
-                let guides = &app.session.active().unwrap().doc.guides;
+                let guides = &app.session.active().unwrap().doc.ruler_guides();
                 assert_eq!(guides.len(), 1);
                 assert_eq!(guides[0].vertical, source_vertical != alt);
                 let expected = if source_vertical != alt { pos.x } else { pos.y };
@@ -1463,7 +1463,7 @@ fn new_ruler_guide_alt_cancel_keeps_document_and_redo() {
             frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::ALT), Event::PointerMoved(from)]);
             frame(&mut app, &ctx, vec![button(from, true)]);
             frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
-            let guides = &app.session.active().unwrap().doc.guides;
+            let guides = &app.session.active().unwrap().doc.ruler_guides();
             assert_eq!(guides.len(), 1);
             assert_eq!(guides[0].vertical, !source_vertical);
             let artboard = (tool == "artboard").then_some(before.artboards[0].id);
@@ -1474,7 +1474,7 @@ fn new_ruler_guide_alt_cancel_keeps_document_and_redo() {
             assert_eq!(history(&app), before_history);
             app.session.execute("edit.redo", &json!({})).unwrap();
             assert!(app.session.active().unwrap().doc.art_bounds().is_some());
-            assert!(app.session.active().unwrap().doc.guides.is_empty());
+            assert!(app.session.active().unwrap().doc.ruler_guides().is_empty());
         }
     }
 }
@@ -1513,14 +1513,14 @@ fn cmd_ruler_drags_make_artboard_guides_with_the_preference_on() {
             let board = app.session.active().unwrap().doc.artboards[0].id;
             drag(&mut app, Point::new(80.0, 120.0));
             let st = app.session.active().unwrap();
-            assert_eq!(st.doc.guides.len(), 1, "vertical {source_vertical}, on {on}");
-            assert_eq!(st.doc.guides[0].vertical, source_vertical);
-            assert_eq!(st.doc.guides[0].artboard, on.then_some(board), "vertical {source_vertical}, on {on}");
+            assert_eq!(st.doc.ruler_guides().len(), 1, "vertical {source_vertical}, on {on}");
+            assert_eq!(st.doc.ruler_guides()[0].vertical, source_vertical);
+            assert_eq!(st.doc.ruler_guides()[0].artboard, on.then_some(board), "vertical {source_vertical}, on {on}");
             // Beyond the artboard's right or bottom edge.
             let beyond = xf.to_doc(rect.right_bottom() - egui::vec2(2.0, 2.0));
             assert!(beyond.x > 400.0 && beyond.y > 300.0, "{beyond:?}");
             drag(&mut app, beyond);
-            assert_eq!(app.session.active().unwrap().doc.guides.len(), if on { 1 } else { 2 }, "vertical {source_vertical}, on {on}");
+            assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), if on { 1 } else { 2 }, "vertical {source_vertical}, on {on}");
         }
     }
 }
@@ -1547,7 +1547,7 @@ fn guides_from_the_rulers_snap_and_artboard_guides_span_their_artboard() {
         frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
         frame(app, &ctx, vec![button(to, false)]);
     };
-    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
+    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
     // 3 px off the middle of the top and bottom sides: onto the line through them.
     let mid = xf.to_screen(Point::new(200.0, 150.0));
     drag(&mut app, pos2(rect.left() - RULER / 2.0, mid.y), mid + vec2(3.0, 40.0));
@@ -1596,7 +1596,7 @@ fn the_selection_tool_moves_and_deletes_ruler_guides() {
         frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
         frame(app, &ctx, vec![button(to, false)]);
     };
-    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
+    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
     // Two guides out of the rulers.
     let (h, v) = (pos2(rect.center().x + 30.0, rect.center().y + 20.0), pos2(rect.center().x - 40.0, rect.center().y));
     drag(&mut app, pos2(h.x, rect.top() - RULER / 2.0), h);
@@ -1607,7 +1607,7 @@ fn the_selection_tool_moves_and_deletes_ruler_guides() {
     drag(&mut app, h, to);
     let st = app.session.active().unwrap();
     assert_eq!(guides(&app), [(false, xf.to_doc(to).y), (true, xf.to_doc(v).x)]);
-    assert_eq!((st.selection.guides.clone(), st.selection.objects.clone()), (vec![0], vec![]));
+    assert_eq!((vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides), st.selection.objects.clone()), (vec![0], vec![]));
     assert_eq!(st.history.undo.last().unwrap().label, "Move Guide");
     let picked = Tokens::get(&ctx).selection;
     let s = shapes(&mut app, &ctx);
@@ -9512,7 +9512,7 @@ fn ruler_guide_origin_ui(alt: bool, cancel: bool) {
             frame(&mut app, &ctx, vec![button(from, true)]);
             frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
             let check = |app: &VectorcraftApp, switched: bool, expected: Point| {
-                let guides = &app.session.active().unwrap().doc.guides;
+                let guides = &app.session.active().unwrap().doc.ruler_guides();
                 assert_eq!(guides.len(), 1);
                 let vertical = source_vertical != switched;
                 assert_eq!(guides[0].vertical, vertical);
@@ -9522,7 +9522,7 @@ fn ruler_guide_origin_ui(alt: bool, cancel: bool) {
             assert_eq!(history(&app).0, original_history.0, "preview has no undo entry");
             if cancel {
                 // Cancellation is a baseline positive control, independent of snap correctness.
-                assert_eq!(app.session.active().unwrap().doc.guides.len(), 1);
+                assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), 1);
                 frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, false)]);
                 assert_eq!(app.session.active().unwrap().doc, before);
                 assert_eq!(app.session.active().unwrap().selection, selection);
@@ -9543,7 +9543,17 @@ fn ruler_guide_origin_ui(alt: bool, cancel: bool) {
             check(&app, alt, release);
             let st = app.session.active().unwrap();
             assert_eq!(st.doc.ruler_origin_for(0), origin);
-            assert_eq!(st.doc.layers, before.layers, "the rectangle tool draws no artwork");
+            let art = |d: &vectorcraft_doc::Document| {
+                d.layers
+                    .iter()
+                    .map(|l| {
+                        let mut l = vectorcraft_doc::Node::clone(l);
+                        l.strip_ruler_guides();
+                        l
+                    })
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(art(&st.doc), art(&before), "the rectangle tool draws no artwork");
             assert_eq!(st.selection, selection);
             assert_eq!(history(&app), (original_history.0 + 1, 0, true));
             assert_eq!(st.history.undo.last().unwrap().label, "New Guide");
@@ -9621,8 +9631,9 @@ fn ruler_guide_origin_tooltip_matches_selected_guide_fields() {
         frame(&mut app, &ctx, vec![Event::PointerMoved(from)]);
         frame(&mut app, &ctx, vec![button(from, true)]);
         frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
-        assert!((app.session.active().unwrap().doc.guides[0].pos - target).abs() < 1e-4);
-        assert_eq!(app.session.active().unwrap().selection.guides, vec![0]);
+        assert!((app.session.active().unwrap().doc.ruler_guides()[0].pos - target).abs() < 1e-4);
+        let st = app.session.active().unwrap();
+        assert_eq!(vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides), vec![0]);
         // Observe the real selected-guide field; no expected strings are inserted into UI state.
         let fields = egui::Context::default();
         crate::theme::install_fonts(&fields);
@@ -9652,7 +9663,7 @@ fn ruler_guide_origin_tooltip_matches_selected_guide_fields() {
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
         frame(&mut app, &ctx, vec![button(to, false)]);
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
-        assert!((app.session.active().unwrap().doc.guides[0].pos - target).abs() < 1e-4, "stored coordinate remains absolute");
+        assert!((app.session.active().unwrap().doc.ruler_guides()[0].pos - target).abs() < 1e-4, "stored coordinate remains absolute");
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.session.active().unwrap().doc, before);
     }

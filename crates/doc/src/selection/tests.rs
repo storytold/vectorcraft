@@ -20,25 +20,30 @@ fn basic_ops() {
 fn guides_are_selected_on_their_own() {
     let mut s = Selection::default();
     s.add(NodeId(1));
-    s.set_guides([2, 0, 2]);
-    assert_eq!((s.objects.clone(), s.guides.clone()), (vec![], vec![2, 0]));
+    let (g0, g2) = (NodeId(10), NodeId(12));
+    s.set_guides([g2, g0, g2]);
+    assert_eq!((s.objects.clone(), s.guides.clone()), (vec![], vec![g2, g0]));
     assert!(s.has_objects_or_guides() && s.is_empty());
     // Shift-adding an object keeps them; a new selection doesn't.
     s.add(NodeId(1));
-    assert_eq!(s.guides, vec![2, 0]);
+    assert_eq!(s.guides, vec![g2, g0]);
     s.set([NodeId(1)]);
     assert!(s.guides.is_empty());
     // Toggled, a guide joins (or leaves) the selected objects.
-    s.toggle_guide(0);
-    assert_eq!((s.objects.clone(), s.guides.clone()), (vec![NodeId(1)], vec![0]));
-    s.toggle_guide(0);
+    s.toggle_guide(g0);
+    assert_eq!((s.objects.clone(), s.guides.clone()), (vec![NodeId(1)], vec![g0]));
+    s.toggle_guide(g0);
     assert_eq!((s.objects.clone(), s.guides.clone()), (vec![NodeId(1)], vec![]));
-    // Pruning drops guides the document no longer has.
+    // Pruning drops guides the document no longer has, ids of other objects, and guides that are
+    // locked or hidden themselves.
     let mut d = Document::new(100.0, 100.0);
-    d.guides.push(crate::Guide::new(true, 10.0));
-    s.set_guides([0, 1]);
+    let layer = d.layers[0].id;
+    let kept = d.add_ruler_guide(&crate::Guide::new(true, 10.0));
+    let locked = d.add_ruler_guide(&crate::Guide { locked: true, ..crate::Guide::new(true, 20.0) });
+    let hidden = d.add_ruler_guide(&crate::Guide { hidden: true, ..crate::Guide::new(true, 30.0) });
+    s.set_guides([kept, NodeId(9999), layer, locked, hidden]);
     s.prune(&d);
-    assert_eq!(s.guides, vec![0]);
+    assert_eq!(s.guides, vec![kept]);
 }
 
 /// A picked object of a dynamic symbol's instance stays picked while it and the groups and layers
@@ -131,16 +136,26 @@ fn guides_show_and_lock_with_their_layer() {
     assert!(d.guide_shown(&crate::Guide::new(false, 5.0)));
     let gone = crate::Guide { layer: Some(NodeId(9999)), ..crate::Guide::new(true, 1.0) };
     assert!(d.guide_shown(&gone) && d.guide_editable(&gone));
-    d.guides.push(g);
-    assert_eq!(d.guides_on(layer).count(), 1);
-    // Guides on no layer, or a gone one, are adopted by the top visible, unlocked layer.
+    // As a node, a guide shows and locks with its layer and on its own.
+    let id = d.add_ruler_guide(&g);
+    let node = d.ruler_guide(id).unwrap();
+    assert_eq!(d.guides_on(layer), std::slice::from_ref(&node));
+    assert!(!d.guide_shown(&node) && !d.guide_editable(&node), "its layer is hidden");
     d.node_mut(layer).unwrap().visible = true;
     d.node_mut(layer).unwrap().locked = false;
-    d.guides.push(crate::Guide::new(false, 5.0));
-    d.guides.push(gone);
-    assert_eq!(d.adopt_guides(), 2);
-    assert!(d.guides.iter().all(|g| g.layer == Some(layer)));
-    assert_eq!(d.adopt_guides(), 0, "once");
+    assert!(d.guide_shown(&node) && d.guide_editable(&node));
+    d.node_mut(id).unwrap().locked = true;
+    let node = d.ruler_guide(id).unwrap();
+    assert!(d.guide_shown(&node) && !d.guide_editable(&node), "locked itself");
+    d.node_mut(id).unwrap().visible = false;
+    assert!(!d.guide_shown(&node), "hidden itself");
+    // Saved guides on no layer, or a gone one, go on the top visible, unlocked layer.
+    d.saved_guides.push(crate::Guide::new(false, 5.0));
+    d.saved_guides.push(gone);
+    assert_eq!(d.guides_into_nodes(), 2);
+    assert!(d.ruler_guides().iter().all(|g| g.layer == Some(layer)));
+    assert_eq!(d.ruler_guides().len(), 3);
+    assert_eq!(d.guides_into_nodes(), 0, "once");
     // A guide saved before guides had layers reads as one on no layer.
     let old: crate::Guide = serde_json::from_str(r#"{"vertical": true, "pos": 5.0}"#).unwrap();
     assert_eq!(old.layer, None);
@@ -267,7 +282,7 @@ fn random_selection(r: &mut u64, ids: &[NodeId]) -> Selection {
     s.key = s.objects.get(below(r, s.objects.len() as u64) as usize).copied();
     s.target = ids.get(below(r, ids.len() as u64) as usize).copied().filter(|_| below(r, 2) == 0);
     s.slices = ids.iter().copied().take(below(r, 3) as usize).collect();
-    s.guides = vec![1, 0];
+    s.guides = vec![NodeId(1), NodeId(0)];
     s
 }
 

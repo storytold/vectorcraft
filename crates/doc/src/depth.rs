@@ -132,7 +132,7 @@ fn limit(nodes: &mut Vec<Arc<Node>>, depth: usize) -> bool {
             out.push(a);
             continue;
         }
-        let clip = matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. });
+        let clip = n.clips();
         let (visible, locked) = (n.visible, n.locked);
         let mut held = n.children_mut().map(std::mem::take).unwrap_or_default();
         if clip && !held.is_empty() {
@@ -147,6 +147,13 @@ fn limit(nodes: &mut Vec<Arc<Node>>, depth: usize) -> bool {
         }
         // What it held takes its place, and is looked at in its turn.
         left.extend(held.into_iter().rev());
+    }
+    // The ruler guides of a sublayer merged into its parent layer go above the parent's art, with
+    // the parent's own.
+    if out.iter().any(|c| c.is_ruler_guide()) {
+        let (guides, art): (Vec<_>, Vec<_>) = out.into_iter().partition(|c| c.is_ruler_guide());
+        out = art;
+        out.extend(guides);
     }
     *nodes = out;
     true

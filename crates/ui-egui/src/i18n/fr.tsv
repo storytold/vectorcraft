@@ -4932,6 +4932,8 @@ axis	Both	Les deux
 @msg	invalid object id {value}: expected a non-negative integer	identifiant d’objet {value} non valide (un entier positif ou nul est attendu)
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	l’entrée {index} de `{key}` vaut {value}, pas un identifiant d’objet (entier positif ou nul)
 @msg	no such object id {value}	aucun objet ne porte l’identifiant {value}
+@msg	id {value} is a ruler guide, not an object	l’identifiant {value} est celui d’un repère, pas d’un objet
+@msg	a ruler guide goes only directly in a layer or sublayer	un repère ne peut se trouver que directement dans un calque ou un sous-calque
 @msg	id {value} is a layer, not an object	l’identifiant {value} désigne un calque, pas un objet
 @msg	id {value} is a layer, not an object; move layers with layer.move	l’identifiant {value} désigne un calque, pas un objet ; déplacez les calques avec layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	l’automatisation n’a pas accès au système de fichiers : aucune autorisation de lecture : {path}
@@ -6193,6 +6195,11 @@ axis	Y Axis	Axe Y
 	Dash Trail	Traînée tiretée
 	Speed Line	Ligne de vitesse
 	Game Trails	Traînées de jeu
+	Energy Beams	Faisceaux d'énergie
+	Laser Bolt	Trait laser
+	Plasma Arc	Arc de plasma
+	Charge Wave	Vague de charge
+	Spark Trail	Traînée d'étincelles
 	Calligraphic Nibs	Plumes calligraphiques
 	Pattern Borders	Bordures de motif
 	Scatter Shapes	Formes de dispersion

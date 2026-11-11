@@ -798,7 +798,7 @@ fn copied_artboards_take_a_free_id_and_keep_their_own_guides() {
         let mut kept = vec![];
         for i in [1, 0] {
             s.execute("artboard.delete", &json!({"index": i})).unwrap();
-            kept.push(s.doc().unwrap().doc.guides.iter().map(|g| g.artboard).collect::<Vec<_>>());
+            kept.push(s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.artboard).collect::<Vec<_>>());
             s.execute("edit.undo", &json!({})).unwrap();
         }
         got.push((cmd, s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect::<Vec<_>>(), kept));
@@ -1675,12 +1675,12 @@ fn delete_empty_artboards_deletes_those_with_no_art_in_one_step() {
     assert_eq!(s.execute("artboard.deleteEmpty", &json!({})).unwrap(), json!({"deleted": [0, 2]}));
     let st = s.doc().unwrap();
     assert_eq!(artboard_names(&s), ["Artboard 2"]);
-    assert_eq!(st.doc.guides.len(), 1, "the deleted artboards' guides go with them");
+    assert_eq!(st.doc.ruler_guides().len(), 1, "the deleted artboards' guides go with them");
     assert_eq!(st.doc.node(art).map(|n| n.geometric_bounds()), before.node(art).map(|n| n.geometric_bounds()), "the art stays");
     assert_eq!(st.history.undo.len(), steps + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(artboard_names(&s), ["Artboard 1", "Artboard 2", "Artboard 3"]);
-    assert_eq!(s.doc().unwrap().doc.guides.len(), 3);
+    assert_eq!(s.doc().unwrap().doc.ruler_guides().len(), 3);
 }
 
 /// What counts as art: hidden and locked objects, an object straddling two artboards and one
