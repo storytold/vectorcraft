@@ -180,7 +180,8 @@ fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
     labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
 }
 
-/// The size of the Control bar's Align, Distribute and area type vertical alignment buttons.
+/// The size of the Control bar's Align, Distribute and area type vertical alignment buttons, and
+/// the height of its Align To menu.
 const BUTTON: f32 = 24.0;
 
 /// The space ahead of the separator that ends a group of the Control bar's controls.
@@ -219,8 +220,9 @@ fn separator_width(ui: &Ui) -> f32 {
 
 /// The room the controls at the end of the Control bar need: the Transform link, or Document Setup
 /// and Preferences with nothing selected. The groups ahead of them (the Paragraph section, area
-/// type's vertical alignment, the Align and Distribute buttons) show only while it is left, so
-/// the bar trims them from its right end (#5372), after the inline X/Y/W/H fields.
+/// type's vertical alignment, the Align buttons, the Align To menu and the Distribute buttons) show
+/// only while it is left, so the bar trims them from its right end (#5372), after the inline
+/// X/Y/W/H fields.
 fn end_width(ui: &Ui, nothing_selected: bool) -> f32 {
     if nothing_selected { DOCUMENT_SETUP_WIDTH + ui.spacing().item_spacing.x + PREFERENCES_WIDTH } else { crate::panels::transform::link_width(ui) }
 }
@@ -228,9 +230,9 @@ fn end_width(ui: &Ui, nothing_selected: bool) -> f32 {
 /// Draws the Control bar's groups between its Character controls and the Transform link, and
 /// returns whether the Transform link and X/Y/W/H follow (false: nothing is selected, and Document
 /// Setup and Preferences, drawn here, end the bar). The groups are the Paragraph section and area
-/// type's vertical alignment (#3759), then the Align buttons and, for two or more objects, the
-/// Distribute buttons (a single object keeps the bar as it was); each shows only while the end of
-/// the bar keeps its room.
+/// type's vertical alignment (#3759), then the Align buttons, the Align To menu and, for two or more
+/// objects, the Distribute buttons (a single object keeps the bar as it was); each shows only while
+/// the end of the bar keeps its room.
 fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize) -> bool {
     let nothing = objects == 0;
     if crate::panels::paragraph::control_bar(app, ui, BUTTON, |ui| group_end_width(ui) + end_width(ui, nothing)) {
@@ -254,9 +256,12 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
     let end = separator_width(ui) + end_width(ui, false);
     if ui.available_width() >= buttons_width(ui, 7) + end {
         crate::panels::align::align_buttons(app, ui, BUTTON);
-        if objects > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
-            ui.add_space(GROUP_GAP);
-            crate::panels::align::distribute_buttons(app, ui, BUTTON);
+        if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x + end {
+            crate::panels::align::align_to_menu(app, ui, BUTTON);
+            if objects > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
+                ui.add_space(GROUP_GAP);
+                crate::panels::align::distribute_buttons(app, ui, BUTTON);
+            }
         }
         separator(ui);
     }
