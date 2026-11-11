@@ -1,6 +1,6 @@
 use super::common::{
-    dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, replace_with_pieces, samples_param,
-    sibling_with, size_pressure, target_paths, usize_opt,
+    dist_to_polyline, fill_targets, has_fill, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, replace_with_pieces,
+    samples_param, sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
     Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, ParamCurve, PathData, Point, Result, Session, SubPath,
@@ -244,7 +244,7 @@ pub(super) fn knife(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let strip = po::outline_stroke(&PathData::single(SubPath::polyline(&pts, false)), KNIFE_GAP, Cap::Butt, Join::Round, 4.0);
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, 1.0))? {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, 1.0), false)? {
         if !pd.is_closed() {
             continue;
         }
@@ -305,13 +305,34 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
         None => dist_to_polyline(&round, squash * q) <= r,
     };
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach))? {
-        if pd.is_closed() {
-            if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
-                continue;
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach), true)? {
+        let closed = pd.is_closed();
+        let single = pd.subpaths.len() == 1;
+        let filled = !closed && st.doc.node(id).is_some_and(has_fill) && po::area(&pd, rule) > 0.0;
+        // Fill implicitly closes an open contour. Keep zero-area open lines
+        // separate: the fill Boolean would otherwise discard their stroke geometry.
+        let (areas, lines): (Vec<_>, Vec<_>) =
+            pd.subpaths.into_iter().partition(|sp| closed || (filled && (single || po::area(&PathData::single(sp.clone()), rule) > 0.0)));
+        let (areas, lines) = (PathData::new(areas), PathData::new(lines));
+        let mut changed = false;
+        let mut pieces = vec![];
+        if !areas.is_empty() {
+            if po::area(&po::boolean(&areas, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) > 1e-6 {
+                changed = true;
+                pieces.extend(components(&po::boolean(&areas, rule, &region, FillRule::NonZero, BoolOp::Difference)));
+            } else {
+                pieces.push(areas);
             }
-            plan.push((id, components(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Difference))));
-        } else if let Some(pieces) = erase_outline(&pd, short / 2.0, &under) {
+        }
+        if !lines.is_empty() {
+            if let Some(rest) = erase_outline(&lines, short / 2.0, &under) {
+                changed = true;
+                pieces.extend(rest);
+            } else {
+                pieces.push(lines);
+            }
+        }
+        if changed {
             plan.push((id, pieces));
         }
     }
