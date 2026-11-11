@@ -5894,6 +5894,11 @@ axis	Y Axis	Y 轴
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要权限 `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	内存预算（对象 {_1} 需要 {size} 字节的输入，剩余 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
+@msg	instruction budget	指令预算
+@msg	time budget	时间预算
+@msg	memory budget (the selection is too large to hand over)	内存预算（所选内容太大，无法传递）
+@msg	output size ({what} is {len} bytes, limit {max})	输出大小（{what} 为 {len} 字节，上限 {max}）
+@msg	the plug-in's grant can't be removed from the plug-in store	无法从增效工具存储中移除该增效工具的授权
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”需要权限 {asked}：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `grant`

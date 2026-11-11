@@ -5667,6 +5667,11 @@ axis	Y Axis	Ось Y
 @msg	`inputs` needs the permission `doc.read`	для `inputs` нужно разрешение `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет памяти (объекту {_1} нужно {size} байт входных данных, осталось {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет объектов (более {MAX_OBJECTS} объектов только для чтения)
+@msg	instruction budget	бюджет инструкций
+@msg	time budget	бюджет времени
+@msg	memory budget (the selection is too large to hand over)	бюджет памяти (выделение слишком велико для передачи)
+@msg	output size ({what} is {len} bytes, limit {max})	размер вывода ({what}: {len} байт, предел {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	разрешение модуля нельзя удалить из хранилища модулей
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешение `{shown}` зарезервировано для будущего API модулей; этот хост его не выдаёт
 @msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» запрашивает разрешения {asked}: их должен одобрить человек в настольном приложении, либо передайте `grant` в сеансе, запущенном с --allow-plugin-grants

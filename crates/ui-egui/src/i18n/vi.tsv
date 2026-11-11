@@ -5654,6 +5654,11 @@ axis	Y Axis	Trục Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` cần quyền `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	ngân sách bộ nhớ (đối tượng {_1} cần {size} byte đầu vào, còn lại {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ngân sách đối tượng (hơn {MAX_OBJECTS} đối tượng chỉ đọc)
+@msg	instruction budget	ngân sách lệnh
+@msg	time budget	ngân sách thời gian
+@msg	memory budget (the selection is too large to hand over)	ngân sách bộ nhớ (vùng chọn quá lớn để chuyển giao)
+@msg	output size ({what} is {len} bytes, limit {max})	kích thước đầu ra ({what} là {len} byte, giới hạn {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	không thể xóa quyền của plug-in khỏi kho plug-in
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	quyền `{shown}` được dành cho một API plug-in sau này; máy chủ này không cấp quyền đó
 @msg	unknown permission `{shown}`	quyền không xác định `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” yêu cầu các quyền {asked}: cần một người phê duyệt trong ứng dụng máy tính, hoặc truyền `grant` trong phiên khởi động bằng --allow-plugin-grants

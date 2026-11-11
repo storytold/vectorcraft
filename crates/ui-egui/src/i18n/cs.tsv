@@ -6056,6 +6056,11 @@ axis	Y Axis	osa Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` vyžaduje oprávnění `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	rozpočet paměti (objekt {_1} potřebuje {size} bajtů vstupu, zbývá {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	rozpočet objektů (více než {MAX_OBJECTS} objektů jen pro čtení)
+@msg	instruction budget	rozpočet instrukcí
+@msg	time budget	časový rozpočet
+@msg	memory budget (the selection is too large to hand over)	rozpočet paměti (výběr je příliš velký na předání)
+@msg	output size ({what} is {len} bytes, limit {max})	velikost výstupu ({what} má {len} bajtů, limit {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	oprávnění zásuvného modulu nelze odebrat z úložiště zásuvných modulů
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	oprávnění `{shown}` je vyhrazeno pro pozdější API zásuvných modulů; tento hostitel ho neuděluje
 @msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ žádá o oprávnění {asked}: musí je schválit člověk v desktopové aplikaci, nebo předejte `grant` v relaci spuštěné s --allow-plugin-grants

@@ -5634,6 +5634,11 @@ axis	Y Axis	Y축
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
+@msg	instruction budget	명령어 예산
+@msg	time budget	시간 예산
+@msg	memory budget (the selection is too large to hand over)	메모리 예산(선택 항목이 너무 커서 넘길 수 없음)
+@msg	output size ({what} is {len} bytes, limit {max})	출력 크기({what}: {len}바이트, 제한 {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	플러그인 저장소에서 플러그인의 권한을 제거할 수 없습니다
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”은(는) {asked} 권한을 요청합니다. 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `grant`를 전달하세요

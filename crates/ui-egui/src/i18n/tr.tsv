@@ -6012,6 +6012,11 @@ axis	Y Axis	Y ekseni
 @msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
+@msg	instruction budget	talimat bütçesi
+@msg	time budget	zaman bütçesi
+@msg	memory budget (the selection is too large to hand over)	bellek bütçesi (seçim aktarılamayacak kadar büyük)
+@msg	output size ({what} is {len} bytes, limit {max})	çıktı boyutu ({what}: {len} bayt, sınır {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	eklentinin izni eklenti deposundan kaldırılamıyor
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” {asked} izinlerini istiyor: masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `grant` geçirin

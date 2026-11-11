@@ -6093,6 +6093,11 @@ digits	Malayalam	Malaiàlam
 @msg	`inputs` needs the permission `doc.read`	`inputs` requereix el permís `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	pressupost de memòria (l’objecte {_1} necessita {size} bytes d’entrada, en queden {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	pressupost d’objectes (més de {MAX_OBJECTS} objectes de només lectura)
+@msg	instruction budget	pressupost d’instruccions
+@msg	time budget	pressupost de temps
+@msg	memory budget (the selection is too large to hand over)	pressupost de memòria (la selecció és massa gran per passar-la)
+@msg	output size ({what} is {len} bytes, limit {max})	mida de la sortida ({what} fa {len} bytes, límit {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	el permís del complement no es pot treure del magatzem de complements
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» demana els permisos {asked}: una persona els ha d’aprovar a l’aplicació d’escriptori, o passa `grant` en una sessió iniciada amb --allow-plugin-grants

@@ -5639,6 +5639,11 @@ axis	Y Axis	Y-Achse
 @msg	`inputs` needs the permission `doc.read`	`inputs` erfordert die Berechtigung `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	Speicherbudget (Objekt {_1} benötigt {size} Byte Eingabe, {left} verbleiben)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	Objektbudget (mehr als {MAX_OBJECTS} schreibgeschützte Objekte)
+@msg	instruction budget	Anweisungsbudget
+@msg	time budget	Zeitbudget
+@msg	memory budget (the selection is too large to hand over)	Speicherbudget (die Auswahl ist zu groß zum Übergeben)
+@msg	output size ({what} is {len} bytes, limit {max})	Ausgabegröße ({what} ist {len} Byte groß, Grenze {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	die Berechtigung des Plug-ins kann nicht aus dem Plug-in-Speicher entfernt werden
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	die Berechtigung `{shown}` ist für eine spätere Plug-in-API reserviert; dieser Host gewährt sie nicht
 @msg	unknown permission `{shown}`	unbekannte Berechtigung `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ verlangt die Berechtigungen {asked}: Eine Person muss sie in der Desktop-App genehmigen, oder übergeben Sie `grant` in einer mit --allow-plugin-grants gestarteten Sitzung

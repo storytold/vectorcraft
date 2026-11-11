@@ -5738,6 +5738,11 @@ axis	Y Axis	Y 軸
 @msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	オブジェクト予算 ({MAX_OBJECTS} 個を超える読み取り専用オブジェクト)
+@msg	instruction budget	命令予算
+@msg	time budget	時間予算
+@msg	memory budget (the selection is too large to hand over)	メモリ予算 (選択範囲が大きすぎて渡せません)
+@msg	output size ({what} is {len} bytes, limit {max})	出力サイズ ({what} は {len} バイト、上限 {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	プラグインの許可をプラグインストアから削除できません
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	「{name}」は権限 {asked} を求めています。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `grant` を指定してください
