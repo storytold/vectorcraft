@@ -15,13 +15,13 @@ use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::pattern::{self, Overlap, PATTERN_EDIT_LAYER, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType, pattern_paint};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection};
-use vectorcraft_geom::Rect;
+use vectorcraft_geom::{Point, Rect};
 
 use super::edit::{outermost, selected_roots};
 use super::pathops::Beside;
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, has_doc, has_selection, ids_param, matrix_param, ok, point_param,
-    str_param, targets,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, finite_numbers, has_doc, has_selection, ids_param,
+    matrix_param, ok, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -134,7 +134,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Options…",
             ["Object", "Repeat"],
             None,
-            "{instances?, radius?, reverseOverlap?, startAngle?, endAngle?, center?: [x,y] | hSpacing?, vSpacing?, rows?, cols?, gridType?, flipRows?, flipCols? | angle?} set the options of the selected repeats",
+            "{instances?, radius?, reverseOverlap?, startAngle?, endAngle?, center?: [x,y] | hSpacing?, vSpacing?, rows?, cols?, gridType?, brickOffset?, flipRows?, flipCols? | angle?} set the options of the selected repeats",
             has_repeat,
             repeat_options
         ),
@@ -287,9 +287,12 @@ fn after_edit_mode(s: &mut Session, layer: Option<NodeId>) -> Result<()> {
     Ok(())
 }
 
+/// The tile type `p` gives `cmd` (`tileType`, `brickOffset`), else `current` with a given brick offset.
+/// A `tileType` that is not a string, or a `brickOffset` that is not a number, is an error.
 fn tile_type_param(p: &Value, cmd: &str, current: TileType) -> Result<TileType> {
+    check_numbers(p, &["brickOffset"], cmd)?;
     let off = p.get("brickOffset").and_then(Value::as_f64).map(|o| if o > 1.0 { o / 100.0 } else { o });
-    match str_param(p, "tileType") {
+    match text_param(p, "tileType", cmd)? {
         Some(t) => TileType::parse(t, off).ok_or_else(|| bad(cmd, format!("unknown tileType `{t}` ({})", TileType::IDS.join("|")))),
         None => Ok(match (current, off) {
             (TileType::BrickByRow { .. }, Some(o)) => TileType::BrickByRow { offset: o },
@@ -311,12 +314,13 @@ fn pattern_make(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "select the art for the pattern tile"));
     }
     let tt = tile_type_param(p, C, TileType::Grid)?;
+    check_numbers(p, &["width", "height"], C)?;
     let (w, h) = (p.get("width").and_then(Value::as_f64), p.get("height").and_then(Value::as_f64));
     if w.is_some_and(|v| !(v.is_finite() && v > 0.0)) || h.is_some_and(|v| !(v.is_finite() && v > 0.0)) {
         return Err(bad(C, "width/height must be > 0"));
     }
-    let edit = bool_or(p, "edit", true);
-    let wanted = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+    let edit = switch_or(p, "edit", true, C)?;
+    let wanted = text_param(p, "name", C)?.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
     let name = s.edit("Make Pattern", |d, sel| {
         let name = match &wanted {
             Some(n) => unique_pattern_name(d, n),
@@ -343,7 +347,7 @@ fn pattern_make(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn pattern_edit(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.pattern.edit";
-    let name = match str_param(p, "name") {
+    let name = match text_param(p, "name", C)? {
         Some(n) => n.to_string(),
         None => {
             // The selected object's fill (or stroke) pattern.
@@ -419,7 +423,7 @@ fn pattern_cancel(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn pattern_save_copy(s: &mut Session, p: &Value) -> Result<Value> {
-    let wanted = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+    let wanted = text_param(p, "name", "object.pattern.saveCopy")?.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
     let name = s.edit("Save a Copy", |d, _| {
         let pe = d.pattern_edit.clone().ok_or_else(|| EngineError::Other("not in pattern editing mode".into()))?;
         let mut def = d.pattern(&pe.pattern).cloned().ok_or_else(|| EngineError::Other("pattern missing".into()))?;
@@ -438,19 +442,21 @@ fn pattern_save_copy(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "pattern.options";
-    let name = match str_param(p, "name") {
+    let name = match text_param(p, "name", C)? {
         Some(n) => n.to_string(),
         None => editing(s).map(|e| e.pattern.clone()).ok_or_else(|| bad(C, "give `name` (or edit a pattern)"))?,
     };
     let cur = s.doc()?.doc.pattern(&name).cloned().ok_or_else(|| bad(C, format!("no pattern `{name}`")))?;
     let tt = tile_type_param(p, C, cur.tile_type)?;
+    check_numbers(p, &["width", "height", "hSpacing", "vSpacing", "copies", "dimCopies"], C)?;
+    check_switches(p, &["sizeTileToArt", "showTileEdge", "showSwatchBounds"], C)?;
     let num = |k: &str| p.get(k).and_then(Value::as_f64);
     for k in ["width", "height"] {
         if num(k).is_some_and(|v| !(v.is_finite() && v > 0.0)) {
             return Err(bad(C, format!("{k} must be > 0")));
         }
     }
-    let new_name = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty() && *n != name).map(str::to_string);
+    let new_name = text_param(p, "newName", C)?.map(str::trim).filter(|n| !n.is_empty() && *n != name).map(str::to_string);
     if let Some(n) = &new_name {
         let d = &s.doc()?.doc;
         if d.pattern(n).is_some() {
@@ -461,11 +467,15 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let overlap = match p.get("overlap") {
-        Some(o) => Overlap {
-            right_in_front: str_param(o, "h").map_or(cur.overlap.right_in_front, |v| v == "right"),
-            bottom_in_front: str_param(o, "v").map_or(cur.overlap.bottom_in_front, |v| v == "bottom"),
+        None | Some(Value::Null) => cur.overlap,
+        Some(o) if o.is_object() => Overlap {
+            right_in_front: overlap_side(o, "h", ["left", "right"], cur.overlap.right_in_front, C)?,
+            bottom_in_front: overlap_side(o, "v", ["top", "bottom"], cur.overlap.bottom_in_front, C)?,
         },
-        None => cur.overlap,
+        Some(got) => {
+            let (path, expected) = ("overlap", "an object");
+            return Err(bad(C, format!("`{path}` must be {expected}, not {got}")));
+        }
     };
     let edit_layer = editing(s).filter(|e| e.pattern == name).map(|e| e.layer);
     let out_name = new_name.clone().unwrap_or(name.clone());
@@ -512,6 +522,19 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "name": out_name }))
+}
+
+/// Side `side` of the `overlap` object `o` gives `cmd`: true for the second of `names`, false for the
+/// first, `current` when `o` leaves it out or gives null. Any other value is an error.
+fn overlap_side(o: &Value, side: &str, names: [&str; 2], current: bool, cmd: &str) -> Result<bool> {
+    match o.get(side) {
+        None | Some(Value::Null) => Ok(current),
+        Some(Value::String(v)) if names.contains(&v.as_str()) => Ok(v == names[1]),
+        Some(_) => {
+            let key = format!("overlap.{side}");
+            Err(bad(cmd, format!("`{key}` must be one of {}", names.join(", "))))
+        }
+    }
 }
 
 /// Is `new` taken for pattern `old` by a swatch or a color group (they share one namespace,
@@ -571,7 +594,7 @@ fn nodes_using(d: &Document, name: Option<&str>) -> Vec<NodeId> {
 
 fn pattern_delete(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "pattern.delete";
-    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing name"))?.to_string();
+    let name = text_param(p, "name", C)?.ok_or_else(|| bad(C, "missing name"))?.to_string();
     if s.doc()?.doc.pattern(&name).is_none() {
         return Err(bad(C, format!("no pattern `{name}`")));
     }
@@ -694,18 +717,25 @@ fn make_repeat(s: &mut Session, p: &Value, cmd: &str, label: &str, make: impl Fn
 }
 
 fn repeat_radial(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.repeat.radial";
+    check_numbers(p, &["instances", "radius"], C)?;
     let n = f64_or(p, "instances", 8.0);
     if !(1.0..=1000.0).contains(&n) {
-        return Err(bad("object.repeat.radial", "instances must be 1..1000"));
+        return Err(bad(C, "instances must be 1..1000"));
     }
-    let radius = p.get("radius").and_then(Value::as_f64).filter(|r| r.is_finite() && *r >= 0.0);
-    make_repeat(s, p, "object.repeat.radial", "Radial Repeat", |src| RepeatSpec::radial(src, n as u32, radius))
+    let radius = p.get("radius").and_then(Value::as_f64);
+    if radius.is_some_and(|r| r < 0.0) {
+        let key = "radius";
+        return Err(bad(C, format!("`{key}` must be a number not below 0")));
+    }
+    make_repeat(s, p, C, "Radial Repeat", |src| RepeatSpec::radial(src, n as u32, radius))
 }
 
 fn repeat_grid(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["hSpacing", "vSpacing", "rows", "cols"], "object.repeat.grid")?;
     let (hs, vs) = (p.get("hSpacing").and_then(Value::as_f64), p.get("vSpacing").and_then(Value::as_f64));
-    let rows = p.get("rows").and_then(Value::as_u64).map(|v| v.clamp(1, 500) as u32);
-    let cols = p.get("cols").and_then(Value::as_u64).map(|v| v.clamp(1, 500) as u32);
+    let rows = p.get("rows").and_then(Value::as_f64).map(|v| (v as u32).clamp(1, 500));
+    let cols = p.get("cols").and_then(Value::as_f64).map(|v| (v as u32).clamp(1, 500));
     make_repeat(s, p, "object.repeat.grid", "Grid Repeat", |src| {
         let b = vectorcraft_doc::live::nodes_bounds(&src).unwrap_or(Rect::new(0.0, 0.0, 10.0, 10.0));
         let mut r = RepeatSpec::grid(src, hs.unwrap_or(b.width() / 4.0), vs.unwrap_or(b.height() / 4.0));
@@ -718,6 +748,7 @@ fn repeat_grid(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn repeat_mirror(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["angle", "offset"], "object.repeat.mirror")?;
     let angle = f64_or(p, "angle", 90.0);
     let offset = f64_or(p, "offset", 10.0);
     make_repeat(s, p, "object.repeat.mirror", "Mirror Repeat", |src| RepeatSpec::mirror(src, angle, offset))
@@ -803,16 +834,26 @@ pub(crate) fn expand_repeats(d: &mut Document, roots: &[NodeId]) -> Result<usize
 fn repeat_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.repeat.options";
     let reps = selected_repeats(s);
+    let numbers = ["instances", "radius", "startAngle", "endAngle", "hSpacing", "vSpacing", "rows", "cols", "brickOffset", "angle"];
+    check_numbers(p, &numbers, C)?;
+    check_switches(p, &["reverseOverlap", "flipRows", "flipCols"], C)?;
     let num = |k: &str| p.get(k).and_then(Value::as_f64).filter(|v| v.is_finite());
     let flag = |k: &str| p.get(k).and_then(Value::as_bool);
     if num("instances").is_some_and(|n| !(1.0..=1000.0).contains(&n)) {
         return Err(bad(C, "instances must be 1..1000"));
     }
-    let grid_type = match str_param(p, "gridType") {
+    let grid_type = match text_param(p, "gridType", C)? {
         Some(t) => Some(TileType::parse(t, num("brickOffset")).ok_or_else(|| bad(C, format!("unknown gridType `{t}`")))?),
         None => None,
     };
-    let center = point_param(p, "center");
+    let center = match p.get("center") {
+        None | Some(Value::Null) => None,
+        Some(v) => {
+            let key = "center";
+            let [x, y] = finite_numbers::<2>(v).ok_or_else(|| bad(C, format!("{key} must be [x, y] with finite coordinates")))?;
+            Some(Point::new(x, y))
+        }
+    };
     s.edit("Repeat Options", |d, _| {
         for r in &reps {
             let Some(NodeKind::Repeat(spec)) = d.node_mut(*r).map(|n| &mut n.kind) else { continue };
@@ -852,6 +893,8 @@ fn repeat_options(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     if let Some(t) = grid_type {
                         *gt = t;
+                    } else if let (Some(v), TileType::BrickByRow { offset } | TileType::BrickByColumn { offset }) = (num("brickOffset"), &mut *gt) {
+                        *offset = v;
                     }
                     if let Some(v) = flag("flipRows") {
                         *flip_rows = v;

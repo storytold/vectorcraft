@@ -771,6 +771,64 @@ fn rasterize_on_an_image_takes_in_its_strokes_shape() {
     assert_eq!((lum(img.pixel(8, 35)), lum(img.pixel(12, 35)), img.pixel(35, 35)), (WHITE, 0, [255, 0, 0, 255]));
 }
 
+/// A 40 pt square filled with `fill` carrying effect `id`, in a 100×100 document.
+fn glowing_square(fill: Color, id: &str, params: Value) -> Document {
+    let mut n = Node::path(NodeId(0), shapes::rectangle(Rect::new(30.0, 30.0, 70.0, 70.0)), Appearance::basic(Paint::solid(fill), Paint::None, 0.0));
+    n.appearance.effects.push(fx(id, params));
+    doc_with(Document::new(100.0, 100.0), n)
+}
+
+/// A glow on the bare page is drawn before the background goes under the art: the pixel is the
+/// transparent render's over that color, also for a background other than white (#6125).
+#[test]
+fn a_screen_outer_glow_on_the_bare_page_shows_on_a_background() {
+    let d = glowing_square(Color::WHITE, "stylize.outerGlow", json!({}));
+    let clear = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixel(27, 50);
+    assert!(clear[0] > 20 && clear[0] == clear[1] && clear[2] == 0, "the glow is yellow: {clear:?}");
+    for (bg, name) in [([255, 255, 255, 255], "white"), ([0, 0, 255, 255], "blue")] {
+        let p = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { background: Some(bg), ..Default::default() }).pixel(27, 50);
+        let a = u32::from(clear[3]);
+        let want: Vec<u32> = (0..3).map(|c| (u32::from(clear[c]) * a + u32::from(bg[c]) * (255 - a)) / 255).collect();
+        assert!(a > 0 && (0..3).all(|c| u32::from(p[c]).abs_diff(want[c]) <= 2), "{name}: {p:?}, want {want:?}");
+        assert_eq!(p[3], 255, "{name}: opaque");
+    }
+}
+
+/// A thumbnail with a background shows a Screen glow on the bare page, opaque (#6125).
+#[test]
+fn a_screen_outer_glow_is_in_a_thumbnail_on_a_background() {
+    let d = glowing_square(Color::WHITE, "stylize.outerGlow", json!({}));
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let img = Renderer::new().render_node_thumbnail(&d, &n, 100, Some([255; 4])).unwrap();
+    let pixels = img.pixels.as_chunks::<4>().0;
+    assert!(pixels.iter().all(|p| p[3] == 255), "every pixel is opaque");
+    assert!(pixels.iter().any(|p| p[0] > 235 && p[1] > 235 && p[2] < 235), "the glow shows as yellow on white");
+}
+
+/// The ink planes put the background under the art too: on a white background a Screen glow on
+/// the bare page prints yellow ink, and the bare page around it prints none (#6125).
+#[test]
+fn a_screen_outer_glow_prints_ink_on_a_background() {
+    let d = glowing_square(Color::WHITE, "stylize.outerGlow", json!({}));
+    let opts = RenderOptions { background: Some([255; 4]), ..Default::default() };
+    let inks = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0, &opts);
+    let at = |x: usize, y: usize| &inks[(y * 100 + x) * 4..][..4];
+    assert!(at(27, 50)[2] > 10, "yellow ink in the glow: {:?}", at(27, 50));
+    assert_eq!(at(5, 50), [0; 4], "no ink on the bare page");
+}
+
+/// An Inner Glow blends with the object's own fill whatever is under the page: white Screen
+/// lightens a black square, red Screen leaves a white one white, and red Normal shows on it.
+#[test]
+fn an_inner_glow_blends_with_its_own_fill_on_a_background() {
+    let red = |mode: &str| json!({"color": "#ff0000", "mode": mode, "opacity": 100});
+    let dark = render(&glowing_square(Color::BLACK, "stylize.innerGlow", json!({"color": "#ffffff", "opacity": 100}))).pixel(32, 50);
+    assert!(dark[0] > 20 && dark[0] == dark[1], "the white glow lightens the black edge: {dark:?}");
+    assert_eq!(render(&glowing_square(Color::WHITE, "stylize.innerGlow", red("screen"))).pixel(32, 50), [255, 255, 255, 255]);
+    let normal = render(&glowing_square(Color::WHITE, "stylize.innerGlow", red("normal"))).pixel(32, 50);
+    assert!(normal[0] == 255 && normal[1] < 245, "red on the white edge: {normal:?}");
+}
+
 #[test]
 fn a_strokes_own_glow_paints_around_that_stroke_only() {
     let mut d = Document::new(100.0, 100.0);

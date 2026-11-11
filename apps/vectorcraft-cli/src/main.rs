@@ -78,7 +78,7 @@ USAGE:
       Safe Mode is on. Plug-ins stay installed. `--safe-mode mcp` serves a headless session and
       does not take --connect.
 
-  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
+  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]... [--allow-plugin-grants]
       Run the MCP server on stdio. Default: connect to a running app at 127.0.0.1:7979
       (vectorcraft --control 7979), falling back to a headless in-process session.
       --automation-read-root / --automation-write-root confine the files the agent's commands read
@@ -86,8 +86,18 @@ USAGE:
       DIR, links followed; each may be given more than once, a path inside any of its folders being
       allowed, and a kind left out grants none of its access. They imply --headless: a running app
       enforces its own (vectorcraft --control PORT --automation-read-root DIR …).
+      --allow-plugin-grants lets plugin.install's grant and allowHeavy take effect in this session,
+      so whoever sends the commands can give a plug-in the permissions it lists, and a heavy budget,
+      with nobody approving them. Without it they are refused, and a plug-in that lists permissions
+      installs only when its hash is already recorded in grants.json, by a person's approval in the
+      desktop app or by a grant accepted under this flag. A grant accepted under this flag stays
+      recorded and counts as approved in later sessions. It implies --headless. It can't be used
+      with --automation-read-root or --automation-write-root: a server confined to folders has no
+      plug-in store, so it reads no grants.json, and a plug-in that lists permissions or asks for a
+      heavy budget does not install there. With VECTORCRAFT_NO_PREFS set there is no store either,
+      and a grant accepted under this flag lasts for that session only.
 
-  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N] [--ppi N]
+  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N] [--ppi N] [--allow-plugin-grants]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
       order, export each FILE in the format its extension picks (see Writable formats; a .ait FILE
       is a template, written as file.saveAsTemplate writes it). Raster exports use the document's
@@ -97,6 +107,8 @@ USAGE:
       --cmd and --export steps: a JSON array of {\"command\": ID, \"params\": {...}} (or \"id\" for
       \"command\"), or one such object per line (JSON Lines), at most 64 MiB and 100000 steps.
       Errors name the step, counting from 0 as \"$N\" references do.
+      --allow-plugin-grants lets plugin.install's grant and allowHeavy take effect in this run, as
+      for mcp.
 
   vectorcraft-cli commands
       Print the command catalogue as JSON.
@@ -224,12 +236,24 @@ fn main() -> ExitCode {
 }
 
 /// A headless session that remembers what the user keeps between runs: the PDF presets saved, the
-/// ICC profiles loaded and the plug-ins installed (#2168, #2174, #2541), in the folders next to the preferences that the desktop
-/// app uses too. `VECTORCRAFT_NO_PREFS` and `VECTORCRAFT_CONFIG_DIR` apply as they do there.
+/// ICC profiles loaded, the plug-ins installed (#2168, #2174, #2541), the custom dictionary's words (#4936) and the Color Settings (#6335), in the folders
+/// and files next to the preferences that the desktop app uses too, and lists the scripts of the Scripts folder there
+/// (`script.listInstalled`). `VECTORCRAFT_NO_PREFS` and `VECTORCRAFT_CONFIG_DIR` apply as they do there.
 fn with_stores(mut h: Headless) -> Headless {
+    prefs_dir::attach_scripts_dir(&mut h.session);
     prefs_dir::attach_profile_store(&mut h.session);
+    prefs_dir::attach_color_settings(&mut h.session);
     prefs_dir::attach_plugin_store(&mut h.session);
     prefs_dir::attach_pdf_preset_store(&mut h.session);
+    prefs_dir::attach_custom_dictionary(&mut h.session);
+    h
+}
+
+/// Makes `h`'s `plugin.install` accept `grant` and `allowHeavy` when `allow` (`--allow-plugin-grants`).
+fn accepting_grants(mut h: Headless, allow: bool) -> Headless {
+    if allow {
+        h.session.allow_plugin_grants_from_requests();
+    }
     h
 }
 
@@ -241,6 +265,7 @@ fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
     }
     let mut connect: Option<String> = None;
     let mut headless = false;
+    let mut allow_grants = false;
     let (mut read_roots, mut write_roots): (Vec<String>, Vec<String>) = (vec![], vec![]);
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -252,6 +277,7 @@ fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
         match flag {
             "--connect" => connect = Some(it.next().cloned().ok_or("--connect needs an address")?),
             "--headless" => headless = true,
+            "--allow-plugin-grants" => allow_grants = true,
             "--automation-read-root" | "--automation-write-root" => {
                 let dir = inline.or_else(|| it.next().cloned()).ok_or_else(|| format!("{flag} needs a folder"))?;
                 if flag == "--automation-read-root" { read_roots.push(dir) } else { write_roots.push(dir) }
@@ -261,6 +287,12 @@ fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
     }
     if headless && connect.is_some() {
         return Err("use either --connect or --headless".into());
+    }
+    if allow_grants && connect.is_some() {
+        return Err("--allow-plugin-grants applies to the headless server; in a running app a person approves each plug-in".into());
+    }
+    if allow_grants && !(read_roots.is_empty() && write_roots.is_empty()) {
+        return Err("--allow-plugin-grants can't be used with --automation-read-root or --automation-write-root: a server confined to folders has no plug-in store to record a grant in".into());
     }
     if safe_mode && connect.is_some() {
         return Err("--safe-mode runs a headless session without plug-ins; a running app loads its own: start it with `vectorcraft --safe-mode --control <port>`".into());
@@ -276,9 +308,9 @@ fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
         // Every thread of this process, not only the server's: nothing reaches past the roots.
         file_access::confine_process(roots.clone());
         eprintln!("vectorcraft-cli: files confined: {}", roots.describe());
-        Box::new(Headless::with_document().with_automation_roots(Some(roots)))
-    } else if headless || safe_mode {
-        Box::new(with_stores(Headless::with_document()))
+        Box::new(accepting_grants(Headless::with_document().with_automation_roots(Some(roots)), allow_grants))
+    } else if headless || safe_mode || allow_grants {
+        Box::new(accepting_grants(with_stores(Headless::with_document()), allow_grants))
     } else if let Some(addr) = connect {
         // Explicit address: fail loudly if the app isn't there.
         Box::new(Remote::connect(&addr).map_err(|e| format!("cannot connect to {addr}: {e}"))?)
@@ -561,6 +593,7 @@ fn run(args: &[String]) -> Result<(), String> {
     let mut stdin_read = false;
     let mut scale = None::<f64>;
     let mut ppi = None::<f64>;
+    let mut allow_grants = false;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let mut val = |what: &str| it.next().cloned().ok_or_else(|| format!("{a} needs {what}"));
@@ -595,6 +628,7 @@ fn run(args: &[String]) -> Result<(), String> {
                 steps.push(Step::Export(val("a file")?));
                 params_for = None;
             }
+            "--allow-plugin-grants" => allow_grants = true,
             "--scale" | "-s" => {
                 let raw = val("a number")?;
                 scale = Some(raw.parse::<f64>().map_err(|_| format!("--scale {raw}: not a number"))?);
@@ -612,7 +646,7 @@ fn run(args: &[String]) -> Result<(), String> {
         }
     }
 
-    let mut h = with_stores(Headless::new());
+    let mut h = accepting_grants(with_stores(Headless::new()), allow_grants);
     let mut out = std::io::stdout().lock();
     // A reader that stopped early (a closed pipe) isn't an error, and the batch goes on: its later
     // steps (an export…) still run, unprinted.

@@ -127,6 +127,12 @@ pub struct TextObject {
     /// vertical column's centre line), filled in with `cached_bounds` (not serialized).
     #[serde(skip)]
     pub cached_baselines: Vec<(Point, Point)>,
+    /// Cached ink of the glyphs in text space, underline and strikethrough bars included
+    /// (`vectorcraft_effects::preview::laid_out_ink`, `None` when nothing draws),
+    /// with the `cached_bounds` it was measured with: filled in with `cached_bounds` by the engine's
+    /// text edits, and stale once `cached_bounds` differs ([`Self::ink`]). Not serialized.
+    #[serde(skip)]
+    pub cached_ink: Option<(Rect, Option<Rect>)>,
 }
 
 /// Conversion from stored character attributes to document-space type controls.

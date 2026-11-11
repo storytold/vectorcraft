@@ -31,6 +31,7 @@ fn doc(n: usize, image: bool, on_first: bool) -> Document {
             show_video_safe_areas: false,
             video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
+            guide_label: None,
         });
     }
     let mut png = vec![];

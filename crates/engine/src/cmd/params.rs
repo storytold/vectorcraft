@@ -18,13 +18,24 @@
 //! `effect.setParams` answer a key the effect doesn't take, or a value of another type than its
 //! default, with a parameter error ([`check_effect_params`]).
 //!
+//! A command with a parameter schema (`CommandSpec::schema`) is also checked against the schema
+//! before it runs ([`crate::schemas::check`]): the schema refuses a value of the wrong type or out
+//! of range, a missing required parameter and an unknown key at any depth, and fills in declared
+//! defaults, so the command runs with the filled-in params. The check here still runs first for
+//! such a command, so a misspelled top-level key gets the same error from either, and a
+//! `command.batch` or an `action.batch` checks each step's schema before the first step runs. The
+//! keys of commands without a schema, and the options of exports and effects, are checked only as
+//! this module describes.
+//!
 //! Saved steps play through [`Session::replay`] instead: a journal or an action recorded by an older
 //! version, with a key a command no longer reads or an effect parameter it no longer takes, still
-//! plays. Even there, an effect's `color` that the effect can't read and a Levels or Curves
+//! plays. A key a schema doesn't name passes there too, and the values of the parameters it names
+//! are still checked. Even there, an effect's `color` that the effect can't read and a Levels or Curves
 //! `channel` that the effect doesn't have are refused by `effect.apply` and `effect.setParams`
 //! themselves ([`check_effect_color`], [`check_effect_channel`]).
 
 use serde_json::Value;
+use vectorcraft_apischema::shown_key;
 
 use super::{bad, command_specs, find_command};
 use crate::Result;
@@ -239,9 +250,11 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
 /// The parameter error of command `id` for `key`, which isn't one of `keys`: with the nearest of
 /// them, or all of them.
 pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
+    let near = nearest(key, keys);
+    let key = shown_key(key);
     bad(
         id,
-        match nearest(key, keys) {
+        match near {
             Some(near) => format!("unknown parameter `{key}`; did you mean `{near}`?"),
             None if keys.is_empty() => format!("unknown parameter `{key}`; the command takes no parameters"),
             None => format!("unknown parameter `{key}`; the command takes: {}", keys.join(", ")),
@@ -522,6 +535,7 @@ fn check_option_tree(id: &str, within: &str, given: &serde_json::Map<String, Val
                     Some(near) => format!("did you mean `{within}{near}`?"),
                     None => format!("`{}` takes: {}", within.trim_end_matches('.'), keys.join(", ")),
                 };
+                let key = shown_key(key);
                 return Err(bad(id, format!("unknown parameter `{within}{key}`; {why}")));
             }
             (Some(Value::Object(inner)), Value::Object(value)) => check_option_tree(id, &format!("{within}{key}."), value, inner)?,
@@ -538,9 +552,11 @@ fn check_option_tree(id: &str, within: &str, given: &serde_json::Map<String, Val
 fn check_option_keys(id: &str, within: &str, given: &serde_json::Map<String, Value>, keys: &[&str], why_not: &str, trees: &Value) -> Result<()> {
     for (key, value) in given {
         if !keys.contains(&key.as_str()) {
+            let near = nearest(key, keys);
+            let key = shown_key(key);
             return Err(bad(
                 id,
-                match nearest(key, keys) {
+                match near {
                     Some(near) => format!("unknown parameter `{within}{key}`; did you mean `{within}{near}`?"),
                     None => format!("unknown parameter `{within}{key}`; {why_not}"),
                 },
@@ -647,6 +663,7 @@ fn check_screen_rows(id: &str, within: &str, p: &serde_json::Map<String, Value>)
                     Some(near) => format!("did you mean `{within}settings.{near}`?"),
                     None => format!("`{within}settings` takes: {}", formats.join(", ")),
                 };
+                let format = shown_key(format);
                 return Err(bad(id, format!("unknown parameter `{within}settings.{format}`; {why}")));
             }
             if let Value::Object(options) = options {
@@ -758,10 +775,13 @@ fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
         return Ok(());
     }
     check_keys(id, spec.params, params)?;
+    if in_batch {
+        crate::schemas::check(spec, params, false)?;
+    }
     if matches!(id, "command.batch" | "action.batch") && !in_batch {
         for step in params.get("commands").and_then(Value::as_array).into_iter().flatten() {
-            if let (Some(step_id), Some(step_params)) = (step.get("command").and_then(Value::as_str), step.get("params")) {
-                check_params_in(step_id, step_params, true)?;
+            if let Some(step_id) = step.get("command").and_then(Value::as_str) {
+                check_params_in(step_id, step.get("params").unwrap_or(&Value::Null), true)?;
             }
         }
     }
@@ -778,8 +798,8 @@ pub(crate) fn nearest_command(id: &str) -> Option<&'static str> {
 /// The error for `id`, which names no command: with the nearest command id, when one is near.
 pub(crate) fn unknown_command(id: &str) -> crate::EngineError {
     match nearest_command(id) {
-        Some(near) => crate::EngineError::UnknownCommandNear(id.to_string(), near.to_string()),
-        None => crate::EngineError::UnknownCommand(id.to_string()),
+        Some(near) => crate::EngineError::UnknownCommandNear(shown_key(id), near.to_string()),
+        None => crate::EngineError::UnknownCommand(shown_key(id)),
     }
 }
 

@@ -43,6 +43,22 @@ impl Loaded {
         }
         self
     }
+
+    /// The file in the units of Preferences › Units › General when it records none of its own: a
+    /// PDF, an EPS or `.ai` without ruler units, a raster image, a metafile, an Affinity file or
+    /// what an importer plug-in reads, as the reference app opens such files (#5820). A native
+    /// document (also one that an SVG, PDF, `.ai` or EPS file carries, `restored`), an SVG (the
+    /// units of its root's size, pixels when it gives none), a DXF drawing (the unit it was read
+    /// in) and a `.ai` or EPS with ruler units keep theirs. Only the units the document shows
+    /// change, not its art.
+    pub(crate) fn with_unit_prefs(mut self, prefs: &Prefs) -> Self {
+        let records_units =
+            self.restored || self.doc.units_from_file || matches!(self.format.id, "vectorcraft" | "template" | "svg" | "svgz" | "dxf");
+        if !records_units {
+            self.doc.units = crate::units::pref_unit(&prefs.units_general);
+        }
+        self
+    }
 }
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
@@ -611,7 +627,8 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
 /// Make a loaded file the new active document; `links` is what became of its linked files, and
 /// `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } = loaded.with_grid_prefs(&s.prefs);
+    let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } =
+        loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
     // fallbacks must ask before overwriting the richer source they could not fully read.
     let losses: Vec<String> = warnings

@@ -3,7 +3,9 @@ use super::{CommandSpec, EngineError, Result, Session, cmd, has_doc};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::dimension::{ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, TextAlignment, TextPosition};
+use vectorcraft_doc::dimension::{
+    ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, Orientation, TextAlignment, TextPosition,
+};
 use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 
@@ -14,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Dimension",
             [],
             None,
-            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}}, offset?: pt, options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
+            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
             has_doc,
             create
         ),
@@ -23,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Dimensions",
             [],
             None,
-            "{ids?: [dimension ids] (default selection), options?: dimension options, offset?: pt} restyle or move existing dimensions → {ids}",
+            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on), offset?: pt (as in dimension.create)} restyle, turn or move existing dimensions → {ids}",
             has_doc,
             update
         ),
@@ -92,9 +94,34 @@ fn recipe(s: &Session, p: &Value) -> Result<Dimension> {
     } else {
         Point::ZERO
     };
-    let mut d = Dimension { mode, a, b, vertex, offset: distance(p, 30.0)?, length: a.distance(b), options: options(s, p)?, source, moved: None };
+    let orientation = orientation(p, mode)?.unwrap_or_default();
+    let mut d = Dimension {
+        mode,
+        a,
+        b,
+        vertex,
+        offset: distance(p, 30.0)?,
+        length: a.distance(b),
+        options: options(s, p)?,
+        source,
+        orientation,
+        moved: None,
+    };
+    if mode == DimensionMode::Linear {
+        d.length = d.measured();
+    }
     d.resolve(&s.doc()?.doc).map_err(error)?;
     Ok(d)
+}
+
+/// The `orientation` param, if given: only a linear dimension is horizontal or vertical.
+fn orientation(p: &Value, mode: DimensionMode) -> Result<Option<Orientation>> {
+    let Some(v) = p.get("orientation") else { return Ok(None) };
+    let orientation: Orientation = serde_json::from_value(v.clone()).map_err(|_| error("Unknown dimension orientation"))?;
+    if orientation != Orientation::Aligned && mode != DimensionMode::Linear {
+        return Err(error("Only linear dimensions are horizontal or vertical"));
+    }
+    Ok(Some(orientation))
 }
 
 fn insert(doc: &mut Document, parent: Option<NodeId>, dim: Dimension) -> Result<NodeId> {
@@ -134,21 +161,38 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(error("Select dimensions to update"));
     }
     let o = if p.get("options").is_some() { Some(options(s, p)?) } else { None };
-    s.edit("Update Dimensions", |doc, _| {
+    // Every dimension is checked before anything changes, and an update that changes none of
+    // them records no undo step.
+    let mut next = Vec::with_capacity(ids.len());
+    {
+        let doc = &s.doc()?.doc;
         for id in &ids {
             if !doc.is_editable(*id) {
                 return Err(error("Dimension is locked or hidden"));
             }
-            let mut dim = dimension_of(doc, *id)?;
+            let old = dimension_of(doc, *id)?;
+            let mut dim = old.clone();
             if let Some(o) = &o {
                 dim.options = o.clone();
             }
+            if let Some(orientation) = orientation(p, dim.mode)? {
+                dim.set_orientation(orientation);
+            }
             dim.offset = distance(p, dim.offset)?;
             dim.resolve(doc).map_err(error)?;
-            replace(doc, *id, dim)?;
+            if dim != old {
+                next.push((*id, dim));
+            }
         }
-        Ok(())
-    })?;
+    }
+    if !next.is_empty() {
+        s.edit("Update Dimensions", |doc, _| {
+            for (id, dim) in next {
+                replace(doc, id, dim)?;
+            }
+            Ok(())
+        })?;
+    }
     Ok(json!({"ids":ids}))
 }
 
@@ -277,6 +321,7 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
             changed = true;
             continue;
         }
+        next.keep_gap(&old);
         // Moved on its own (the art it measures stayed put): it keeps its new place.
         if let Some(v) = moved
             && (next.a, next.b, next.vertex) == (old.a, old.b, old.vertex)
@@ -424,17 +469,19 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
         text_at = d.vertex + dir * if away { r + gap } else { (r - gap).max(o.font_size * 0.5) };
     } else {
         let delta = d.b - d.a;
-        let u = delta / delta.hypot();
+        // A linear dimension measures along its direction (a → b, or the horizontal or vertical axis).
+        let u = if d.mode == DimensionMode::Linear { d.direction() } else { delta / delta.hypot() };
         let n = Vec2::new(-u.y, u.x);
         let (a, b) = match d.mode {
             DimensionMode::Radius => (d.a, d.b),
             DimensionMode::Diameter => (d.a - delta, d.b),
-            _ => (d.a + n * d.offset, d.b + n * d.offset),
+            _ => d.line_ends(),
         };
-        // The side of the line facing away from the object.
+        // The side of the line facing away from the object: the side the line is on, seen from
+        // the middle of the measured points.
         let outward = match d.mode {
             DimensionMode::Linear => {
-                if d.offset < 0.0 {
+                if (a.midpoint(b) - d.a.midpoint(d.b)).dot(n) < 0.0 {
                     -n
                 } else {
                     n
@@ -443,8 +490,16 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
             _ => n,
         };
         if d.mode == DimensionMode::Linear && !o.hide_extensions {
+            // Each extension line runs from its point toward the dimension line, which can lie on
+            // different sides of the two points of a horizontal or vertical dimension.
             for (p, q) in [(d.a, a), (d.b, b)] {
-                paths.push((line(p + outward * o.extension_offset, q + outward * o.extension_length), appearance(o, mode, true, false)));
+                let side = (q - p).dot(n);
+                let toward = match side {
+                    s if s < 0.0 => -n,
+                    s if s > 0.0 => n,
+                    _ => outward,
+                };
+                paths.push((line(p + toward * o.extension_offset, q + toward * o.extension_length), appearance(o, mode, true, false)));
             }
         }
         angle = u.atan2();

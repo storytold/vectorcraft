@@ -61,6 +61,34 @@ fn assert_queued_wheel_discarded_after_target_change(range: bool) {
 }
 
 #[test]
+fn a_font_field_that_appears_under_a_still_pointer_leaves_the_wheel_until_the_pointer_moves() {
+    let (ctx, mut app) = selected_type_with_control();
+    let mut texts = Vec::new();
+    for _ in 0..8 {
+        texts = frame(&mut app, &ctx, vec![]);
+    }
+    let point = texts.iter().find(|(t, p)| t == "Inter" && p.y < 150.0).unwrap().1;
+    let selected = app.session.active().unwrap().selection.objects.first().unwrap().0;
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, &ctx, vec![Event::PointerMoved(point)]);
+    frame(&mut app, &ctx, vec![]);
+    app.run("select.set", json!({"ids": [selected]})).unwrap();
+    for _ in 0..8 {
+        frame(&mut app, &ctx, vec![]);
+    }
+    let mut still = wheel_input(point);
+    still.events.remove(0);
+    app.raw_input_hook(&ctx, &mut still);
+    assert!(still.events.iter().any(|e| matches!(e, Event::MouseWheel { .. })), "the pointer did not move after the field appeared");
+    let mut out = ctx.run_ui(still, |ui| app.ui(ui));
+    out.textures_delta.clear();
+    let mut moved = wheel_input(point + vec2(1.0, 0.0));
+    moved.time = Some(ctx.input(|i| i.time) + 5.0);
+    app.raw_input_hook(&ctx, &mut moved);
+    assert!(!moved.events.iter().any(|e| matches!(e, Event::MouseWheel { .. })), "the pointer moved onto the field");
+}
+
+#[test]
 fn artboard_controls_leave_replaced_font_fields_wheel_available() {
     let (ctx, mut app) = selected_type_with_control();
     let mut texts = Vec::new();

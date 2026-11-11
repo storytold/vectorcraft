@@ -342,7 +342,12 @@ fn pixels(s: &Session, id: NodeId) -> Vec<[u8; 4]> {
 
 /// A selected embedded 2×2 image.
 fn image_node(s: &mut Session) -> NodeId {
-    let bytes = png([[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [255, 255, 255, 128]]);
+    image_of(s, [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [255, 255, 255, 128]])
+}
+
+/// A selected embedded 2×2 image of the pixels `px`.
+fn image_of(s: &mut Session, px: [[u8; 4]; 4]) -> NodeId {
+    let bytes = png(px);
     s.edit("Place", |d, sel| {
         d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(bytes));
         let id = d.alloc_id();
@@ -381,6 +386,85 @@ fn invert_recolours_an_embedded_image() {
     // Recolor maps exact pixel colours.
     s.execute("recolor.apply", &json!({"map": {"#ff0000": "#000000"}})).unwrap();
     assert_eq!(pixels(&s, id)[..2], [[0, 0, 0, 255], [0, 255, 0, 255]]);
+}
+
+/// The key of image object `id`'s blob.
+fn image_key(s: &Session, id: NodeId) -> String {
+    let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("not an image") };
+    im.key.clone()
+}
+
+/// Convert to Grayscale stores an image with one color channel, alpha kept (#5632).
+#[test]
+fn convert_to_grayscale_stores_an_image_as_grayscale() {
+    let mut s = session();
+    let id = image_node(&mut s);
+    let r = s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    assert_eq!(r["changed"], 1);
+    let key = image_key(&s, id);
+    let source = s.doc().unwrap().doc.images[&key].gray_source();
+    assert!(source.is_some_and(|g| g.alpha && !g.one_bit), "a grayscale file with alpha: {source:?}");
+    let gray = |hex: &str| Color::from_hex(hex).unwrap().in_model(vectorcraft_color::cms::Model::Gray).to_rgba8(1.0)[0];
+    let (r_, g_, b_, w) = (gray("#ff0000"), gray("#00ff00"), gray("#0000ff"), gray("#ffffff"));
+    assert_eq!(pixels(&s, id), [[r_, r_, r_, 255], [g_, g_, g_, 255], [b_, b_, b_, 255], [w, w, w, 128]]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(pixels(&s, id)[0], [255, 0, 0, 255], "one undo step restores the color image");
+    s.execute("edit.redo", &json!({})).unwrap();
+    // An image that is already grayscale has nothing to convert.
+    let again = s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    assert_eq!(again["changed"], 0);
+    assert_eq!(image_key(&s, id), key);
+}
+
+/// An RGB image whose pixels are all neutral still becomes a one-channel image (#5632).
+#[test]
+fn convert_to_grayscale_stores_a_neutral_rgb_image_as_grayscale() {
+    let mut s = session();
+    let id = image_of(&mut s, [[255, 255, 255, 255], [0, 0, 0, 255], [255, 255, 255, 255], [0, 0, 0, 255]]);
+    let r = s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    assert_eq!(r["changed"], 1);
+    let source = s.doc().unwrap().doc.images[&image_key(&s, id)].gray_source();
+    assert!(source.is_some_and(|g| !g.alpha), "an opaque image has no alpha channel: {source:?}");
+}
+
+/// Select All leaves a hidden neutral RGB image out of Convert to Grayscale, which would change it.
+#[test]
+fn a_hidden_neutral_rgb_image_counts_as_not_converted() {
+    let mut s = session();
+    let hidden = image_of(&mut s, [[255, 255, 255, 255], [0, 0, 0, 255], [255, 255, 255, 255], [0, 0, 0, 255]]);
+    s.execute("layer.setProps", &json!({"ids": [hidden.0], "visible": false})).unwrap();
+    rect(&mut s, json!("#ff0000"));
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 1}), "{r}");
+}
+
+/// Adjust Colors converting to gray stores an image with one channel; without Convert it keeps
+/// the image's RGB (#5632).
+#[test]
+fn adjust_colors_converting_to_gray_stores_an_image_as_grayscale() {
+    let source = |convert: bool| {
+        let mut s = session();
+        let id = image_node(&mut s);
+        s.execute("edit.colors.adjustBalance", &json!({"mode": "gray", "gray": 10, "convert": convert})).unwrap();
+        s.doc().unwrap().doc.images[&image_key(&s, id)].gray_source()
+    };
+    assert!(source(true).is_some(), "converted to gray");
+    assert!(source(false).is_none(), "the colors keep their model");
+}
+
+/// A PDF of a CMYK document writes an image Convert to Grayscale made with one channel (#5632).
+#[test]
+fn a_converted_image_is_written_to_pdf_as_gray_in_a_cmyk_document() {
+    let mut s = session();
+    s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    image_of(&mut s, [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [10, 200, 30, 255]]);
+    s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    let opts = vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() };
+    let pdf = String::from_utf8_lossy(&vectorcraft_pdf::export(&s.doc().unwrap().doc, &opts).unwrap()).into_owned();
+    let image = pdf.split("/Subtype/Image").nth(1).or_else(|| pdf.split("/Subtype /Image").nth(1)).expect("an image in the PDF");
+    let image = &image[..image.find("stream").unwrap_or(image.len())];
+    assert!(image.contains("/DeviceGray") && !image.contains("/DeviceRGB"), "one color channel: {image}");
 }
 
 /// "Dots": a red square tile; a selected rectangle filled with it.

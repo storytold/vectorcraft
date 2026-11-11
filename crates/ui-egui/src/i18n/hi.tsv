@@ -27,6 +27,7 @@
 	 on the canvas to create one	 बनाने के लिए कैनवास पर
 	 on the canvas to create one (	 बनाने के लिए कैनवास पर (
 	 out from a highlighted edge to place its dimension  |  	 माप रखने के लिए हाइलाइट किए किनारे से बाहर की ओर  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 दो बिंदुओं पर, फिर संरेखित, क्षैतिज या ऊर्ध्वाधर आयाम रखने के लिए पॉइंटर ले जाएँ और क्लिक करें  |  
 	 over paths to roughen their outlines  |  	 आउटलाइन खुरदरी करने के लिए पाथ पर  |  
 	 over paths, and hold still to keep going  |  	 पाथ पर, और जारी रखने के लिए स्थिर रखें  |  
 	 right or left to zoom in or out  |  	 ज़ूम इन या आउट करने के लिए दाएँ या बाएँ  |  
@@ -394,6 +395,7 @@ antiAlias	Sharp	शार्प
 	Area / Path Type	एरिया / पाथ टाइप
 	Area Graph Tool	एरिया ग्राफ़ टूल
 	Area Text	एरिया टेक्स्ट
+	Measure Type by Glyph Bounds	टाइप को ग्लिफ़ की सीमाओं से मापें
 	Area Text Objects	एरिया टेक्स्ट ऑब्जेक्ट
 	Area Type	एरिया टाइप
 	Area Type Options	एरिया टाइप ऑप्शन्स
@@ -420,6 +422,11 @@ antiAlias	Sharp	शार्प
 	Art Brush Options	आर्ट ब्रश ऑप्शन्स
 	Art Optimized	आर्टवर्क के लिए अनुकूलित
 	Art Ribbons	आर्ट रिबन
+	Zigzag	ज़िगज़ैग
+	Burst Ray	बर्स्ट रे
+	Dash Trail	डैश ट्रेल
+	Speed Line	स्पीड लाइन
+	Game Trails	गेम ट्रेल्स
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -490,8 +497,8 @@ antiAlias	Sharp	शार्प
 	B5	B5
 	Back	वापस
 	Background Color:	बैकग्राउंड रंग:
+	Guide Label:	गाइड लेबल:
 	Background Contents	बैकग्राउंड सामग्री
-	Background Contents:	बैकग्राउंड सामग्री:
 	Background Level	बैकग्राउंड स्तर
 	Background:	बैकग्राउंड:
 	Backspace	Backspace
@@ -511,6 +518,14 @@ antiAlias	Sharp	शार्प
 	Basic Character Formats	बुनियादी कैरेक्टर फ़ॉर्मैट
 	Basic Latin	बेसिक लैटिन
 	Basic Shapes	बुनियादी शेप्स
+	Button	बटन
+	Panel	पैनल
+	UI Frames	UI फ़्रेम
+	Map Markers	मानचित्र चिह्न
+	Pin	पिन
+	Flag	झंडा
+	Crosshair	क्रॉसहेयर
+	Checkpoint	चेकपॉइंट
 	Batch	बैच
 	Batch Trace Folder	फ़ोल्डर बैच ट्रेस करें
 	Batch…	बैच…
@@ -894,6 +909,7 @@ antiAlias	Sharp	शार्प
 	Command	कमांड
 	Command Click to Select Objects Behind	कमांड पीछे ऑब्जेक्ट्स का सिलेक्ट करने के लिए क्लिक करें
 	Command Dialog	कमान डायलॉग
+	Command API Reference	कमांड API संदर्भ
 	Comment not closed	टिप्पणी बंद नहीं
 	Commenting, filling in form fields and signing	टिप्पणी करना, फॉर्म फ़ील्ड में भरना और हस्ताक्षर करना
 	Commits	कमिट्स
@@ -1026,7 +1042,6 @@ antiAlias	Sharp	शार्प
 	Create Clipping Mask	क्लिपिंग मास्क बनाएँ
 	Create Compound Path From Ellipses	एलिप्स से कंपाउंड पाथ बनाएँ
 	Create Dimension	आयाम बनाएँ
-	Create Document	डॉक्यूमेंट बनाएं
 	Create from Guides	गाइड से बनाएँ
 	Create from Selection	सिलेक्शन से बनाएँ
 	Create From:	से बनाएँ:
@@ -2552,6 +2567,8 @@ antiAlias	Sharp	शार्प
 	Lock Artboards	लॉक आर्टबोर्ड
 	Lock Grid	लॉक ग्रिड
 	Lock Guides	गाइड्स लॉक करें
+	Lock Guides by Default	गाइड्स डिफ़ॉल्ट रूप से लॉक करें
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Cmd/Ctrl + रूलर से ड्रैग करके आर्टबोर्ड गाइड्स
 	Lock Others	लॉक अन्य
 	Lock Selected	लॉक सिलेक्टेड
 	Lock Slices	स्लाइस लॉक करें
@@ -2833,7 +2850,6 @@ antiAlias	Sharp	शार्प
 	New Design	नई डिजाइन
 	New Document Presets	नया डॉक्यूमेंट प्रीसेट
 	New file	नई फ़ाइल
-	New from Template	टेम्पलेट से नया
 	New from Template…	टेम्पलेट से नया…
 	New Graphic Style	नई ग्राफिक स्टाइल
 	New Graphic Style (Alt-click to name it)	नया ग्राफ़िक स्टाइल (नाम देने के लिए Alt-क्लिक करें)
@@ -3765,6 +3781,12 @@ antiAlias	Sharp	शार्प
 	Reset Painting	पेंटिंग रीसेट करें
 	Reset Panel	पैनल रीसेट करें
 	Reset Preferences	प्रेफ़रेंसेज़ रीसेट करें
+	Export Preferences…	प्रेफ़रेंसेज़ निर्यात करें…
+	Import Preferences…	प्रेफ़रेंसेज़ आयात करें…
+	Save the applied preferences to a JSON file	लागू प्रेफ़रेंसेज़ को JSON फ़ाइल में सहेजें
+	Apply the preferences in a file Export Preferences saved	प्रेफ़रेंसेज़ निर्यात करें से सहेजी गई फ़ाइल की प्रेफ़रेंसेज़ लागू करें
+	Export Preferences	प्रेफ़रेंसेज़ निर्यात करें
+	Import Preferences	प्रेफ़रेंसेज़ आयात करें
 	Search Preferences	प्रेफ़रेंसेज़ में खोजें
 	No settings found	कोई सेटिंग नहीं मिली
 	Reset Printing and Proofing	मुद्रण और प्रूफिंग रीसेट करें
@@ -3807,6 +3829,8 @@ antiAlias	Sharp	शार्प
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें
 	Restore every preference to its default (applied on OK)	प्रत्येक वरीयता को उसके डिफ़ॉल्ट में पुनर्स्थापित करें ( OK पर लागू)
+	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट
 	Restored documents open unsaved: save them to keep them.	रिकवर किए डॉक्यूमेंट बिना सेव किए ओपन होते हैं। रखने के लिए उन्हें सेव करें।
 	Restrict printing, editing and other tasks	प्रिंटिंग, एडिटिंग और बाकी कामों पर पाबंदी लगाएँ
@@ -3954,6 +3978,7 @@ antiAlias	Sharp	शार्प
 	Save PDF Preset	PDF प्रीसेट सेव करें
 	Save Perspective Grid Preset	सेव पर्सपेक्टिव ग्रिड प्रीसेट
 	Save Preset	प्रीसेट सेव करें
+	Save Document Preset	डॉक्यूमेंट प्रीसेट सेव करें
 	Save Preset…	प्रीसेट सेव करें…
 	Save Print Preset	सेव करें प्रिंट प्रीसेट
 	Save Recovery Data	रिकवरी डेटा सेव करें
@@ -4229,6 +4254,13 @@ antiAlias	Sharp	शार्प
 	Shading	शेडिंग
 	Shadow Intensity	शैडो तीव्रता
 	Shadows and Glows	छाया और चमक
+	Game HUD	गेम HUD
+	Health Fill	स्वास्थ्य
+	Mana Glow	माना
+	Damage Flash	क्षति
+	Quest Outline	क्वेस्ट
+	Coin Shine	सिक्का
+	Boss Alert	बॉस
 	Shaft:	दस्ता:
 	Shape	शेप
 	Shape Builder	शेप बिल्डर
@@ -4733,7 +4765,6 @@ antiAlias	Sharp	शार्प
 	Template literal not closed	टेम्पलेट साक्षर नहीं बंद
 	Templates	टेम्पलेट्स
 	Templates Folder	टेम्पलेट्स फ़ोल्डर
-	Templates…	टेम्पलेट्स…
 	Tetrad	टेट्राड
 	Tetrad 2	टेट्राड 2
 	Tetrad 3	टेट्राड 3
@@ -5254,7 +5285,7 @@ antiAlias	Sharp	शार्प
 	Zoom with Mouse Wheel	माउस व्हील के साथ ज़ूम
 @id	file.close	बंद करें
 @id	pathfinder.add	मिलाएँ
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” अधिक संसाधन माँगता है (हर रन में {minutes} मिनट और सामान्य से {times} गुना निर्देश): उपयोगकर्ता की सहमति मिलने पर इसे `allowHeavy: true` से इंस्टॉल करें
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” अधिक संसाधन माँगता है (हर रन में {minutes} मिनट और सामान्य से {times} गुना निर्देश): इसे डेस्कटॉप ऐप में किसी व्यक्ति को स्वीकृत करना होगा, या --allow-plugin-grants से शुरू किए गए सत्र में `allowHeavy: true` दें
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" एक रंग नहीं है: इसे #rrggbb के रूप में लिखें
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	"{name}" स्थापित करें, जो ये अनुमतियां मांगता है?
@@ -5272,6 +5303,20 @@ antiAlias	Sharp	शार्प
 	Show its progress, see Cancel and write log lines	अपनी प्रगति दिखाना, रद्द करने का अनुरोध देखना और लॉग पंक्तियाँ लिखना
 	Keep settings of its own	अपनी सेटिंग्स रखना
 	Keep a cache of its own, which you can clear	अपना कैश रखना, जिसे आप साफ़ कर सकते हैं
+	Run these commands on the document: {ids}	दस्तावेज़ पर ये कमांड चलाना: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” `commandAllowlist` में `{id}` सूचीबद्ध करता है, जिसे कोई प्लग-इन कॉल नहीं कर सकता
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: मैनिफ़ेस्ट की `commandAllowlist` में यह सूचीबद्ध नहीं है
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: आईडी या आर्ग्युमेंट मॉड्यूल की मेमोरी के बाहर हैं
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: आईडी या आर्ग्युमेंट UTF-8 नहीं हैं
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: आर्ग्युमेंट JSON ऑब्जेक्ट नहीं हैं
+@msg	only a filter with the usual budget declares `commandAllowlist`	केवल सामान्य बजट वाला फ़िल्टर `commandAllowlist` घोषित करता है
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	कमांड कॉल (हर रन में {MAX_CALLS} कॉल और {MAX_CALL_BYTES} बाइट)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	कमांड कॉल का आकार (vc_call `{shown}`: {len} बाइट, सीमा {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` में अधिकतम {MAX_ALLOWED_COMMANDS} कमांड
+@msg	a plug-in may not call this command	कोई प्लग-इन इस कमांड को कॉल नहीं कर सकता
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` को `commands` अनुमति चाहिए, और `commands` को `commandAllowlist` चाहिए
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` में `{shown}` है, जो कमांड आईडी नहीं है या दो बार सूचीबद्ध है
 	Clear Plug-in Cache	प्लग-इन कैश साफ़ करें
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	अनुमति `{permission}` के लिए प्लग-इन API स्तर {PROGRESS_API} चाहिए: `api` {PROGRESS_API} दें
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	मॉड्यूल `env.{name}` को होस्ट से अलग प्रकार के साथ आयात करता है: होस्ट का प्रकार {signature} है
@@ -5295,7 +5340,9 @@ antiAlias	Sharp	शार्प
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ऑब्जेक्ट बजट ({MAX_OBJECTS} से अधिक केवल-पठन ऑब्जेक्ट)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	अनुमति `{shown}` बाद के प्लग-इन API के लिए आरक्षित है; यह होस्ट इसे नहीं देता
 @msg	unknown permission `{shown}`	अज्ञात अनुमति `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” अनुमतियां {asked} मांगता है: उपयोगकर्ता की सहमति मिलने पर इसे उन्हें सूचीबद्ध करने वाले `grant` के साथ इंस्टॉल करें
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” अनुमतियां {asked} मांगता है: इन्हें डेस्कटॉप ऐप में किसी व्यक्ति को स्वीकृत करना होगा, या --allow-plugin-grants से शुरू किए गए सत्र में `grant` दें
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` और `allowHeavy` केवल --allow-plugin-grants से शुरू किए गए सत्र में प्रभावी होते हैं: डेस्कटॉप ऐप में प्लग-इन स्वीकृत करें
+@msg	Only the person at the keyboard can approve installing a plug-in	प्लग-इन इंस्टॉल करने की स्वीकृति केवल कीबोर्ड पर मौजूद व्यक्ति दे सकता है
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” को `{p}` नहीं दी गई, जो उसके आउटपुट को चाहिए: कुछ नहीं बदला
 @msg	a heavy filter runs in the background, so it can't declare `commands`	भारी फ़िल्टर पृष्ठभूमि में चलता है, इसलिए वह `commands` घोषित नहीं कर सकता
 @msg	at most {MAX_COMMANDS} `commands`	अधिकतम {MAX_COMMANDS} `commands`
@@ -5395,7 +5442,8 @@ antiAlias	Sharp	शार्प
 @msg	{key} must name a registered panel	{key} एक पंजीकृत पैनल का नाम होना चाहिए
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} फ़ाइलों में पारदर्शिता नहीं होती और इस फ़ाइल में {what} होगा: पहले इसे फ़्लैट करें (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} इमेज ओपन नहीं हो सकतीं (document.formats देखें)
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} वर्तमान में एक पाथ या यौगिक पाथ की आवश्यकता होती है। पहले पाथ के लिए प्रकार, इमेज और समूहों को परिवर्तित करें।
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} के लिए वर्तमान में एक पाथ, यौगिक पाथ, टाइप, समूह, ब्लेंड या सिंबल इंस्टेंस आवश्यक है। पहले अन्य ऑब्जेक्ट को एक्सपैंड करें।
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} इमेज से ठोस नहीं बना सकता: पहले ऑब्जेक्ट › इमेज ट्रेस › बनाएँ से उसे ट्रेस करें।
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} डॉक्यूमेंट के {n} आर्टबोर्ड में से 1 रखता है: फ़ाइल एक के साथ फिर से खुलती है। उन्हें रखने के लिए संरक्षित संपादन क्षमताओं को चालू करें।
 @msg	{label} must be a number	{label} एक नंबर होना चाहिए
 @msg	{label} must be a number above 0 and at most {max}	{label} 0 से ऊपर और सबसे {max} पर होना चाहिए
@@ -5538,7 +5586,7 @@ antiAlias	Sharp	शार्प
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` एक अंतर्निहित वर्कस्पेस है; एक और नाम चुनें
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` एक प्रक्रिया रंग है: टिंट वैश्विक और स्पॉट रंगों पर लागू होते हैं
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` एक स्थिर सिंबल है: अपने सिंबल प्रकार को पहले गतिशील करने के लिए सेट करें
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	सिंबल इंस्टेंस में चुने गए पाथ, कंपाउंड पाथ या टाइप का केवल ठोस रंग वाला फ़िल और स्ट्रोक बदला जा सकता है
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	प्रतीक इंस्टेंस में चयनित पथ, संयोजित पथ या पाठ का केवल भराव, स्ट्रोक, अपारदर्शिता और ब्लेंड बदला जा सकता है
 @msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` `{base}` का एक टिंट है: `{base}` संपादित करें (केवल एक टिंट swatch केवल एक नया नाम लेता है)
 @msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` वर्किंग स्पेस है: पहले edit.colorSettings से दूसरा चुनें
 @msg	`{name}` is built in and stays	`{name}` बनाया गया है और रहता है
@@ -5993,6 +6041,7 @@ antiAlias	Sharp	शार्प
 @msg	bad base64	बुरा आधार64
 @msg	bad color {c}	बुरा रंग {c}
 @msg	bad color {v}	बुरा रंग {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` null, किसी लेयर रंग का नाम या #rrggbb होता है
 @msg	bad colour	बुरा रंग
 @msg	bad colour {v}	बुरा रंग {v}
 @msg	bad colour {v} in groupColors	groupColors में अमान्य रंग {v}
@@ -6124,6 +6173,31 @@ antiAlias	Sharp	शार्प
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control को fillStroke, coloring, drawMode या screenMode होना चाहिए
 @msg	Convert to Artboards: selection has no area	आर्टबोर्ड में कनवर्ट करें: सिलेक्शन में कोई क्षेत्र नहीं है
 @msg	Convert to Shape: no rectangles or ellipses selected	आकार में कनवर्ट करें: कोई आयत या अंडाकार सिलेक्शन नहीं
+	Run	चलाएँ
+	Run Script	स्क्रिप्ट चलाएँ
+	Stop Script	स्क्रिप्ट रोकें
+	Show External Script Warning	बाहरी स्क्रिप्ट की चेतावनी दिखाएँ
+	A Script Is Running	एक स्क्रिप्ट चल रही है
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	स्क्रिप्ट खुले दस्तावेज़ बदल सकती है और अपने चलाए कमांड से फ़ाइलें लिख सकती है। केवल भरोसेमंद स्क्रिप्ट चलाएँ।
+	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
+	Stop the script and undo what it did? Then quit again.	स्क्रिप्ट रोककर उसके बदलाव पूर्ववत करें? फिर दोबारा बाहर निकलें।
+	This script has added a great many objects. Continue, or stop it and undo what it did?	इस स्क्रिप्ट ने बहुत सारे ऑब्जेक्ट जोड़े हैं। जारी रखें, या इसे रोककर इसके बदलाव पूर्ववत करें?
+@msg	Choose a .js or .jsx script	.js या .jsx स्क्रिप्ट चुनें
+@msg	Ran {name}	{name} चलाई गई
+@msg	The script was stopped and its changes were undone	स्क्रिप्ट रोकी गई और उसके बदलाव पूर्ववत किए गए
+@msg	a script is running: stop it or wait for it to finish	एक स्क्रिप्ट चल रही है: उसे रोकें या पूरा होने की प्रतीक्षा करें
+@msg	this is a compiled script, which cannot be run; use its source text	यह कंपाइल की हुई स्क्रिप्ट है, जिसे चलाया नहीं जा सकता; इसका स्रोत पाठ इस्तेमाल करें
+@msg	the script is not UTF-8 text	स्क्रिप्ट UTF-8 पाठ नहीं है
+@msg	the script is too large to run	स्क्रिप्ट चलाने के लिए बहुत बड़ी है
+@msg	a drag or an undo group is open; finish it before running a script	कोई ड्रैग या पूर्ववत समूह खुला है; स्क्रिप्ट चलाने से पहले उसे पूरा करें
+@msg	the script left a document that cannot be kept	स्क्रिप्ट ने ऐसा दस्तावेज़ छोड़ा है जिसे रखा नहीं जा सकता
+@msg	the script is no longer in the Scripts folder	स्क्रिप्ट अब Scripts फ़ोल्डर में नहीं है
+	Some scripts were not listed	कुछ स्क्रिप्ट सूचीबद्ध नहीं की गईं
+	The Scripts folder cannot be read	Scripts फ़ोल्डर पढ़ा नहीं जा सकता
+@msg	the script's run is no longer available	स्क्रिप्ट का रन अब उपलब्ध नहीं है
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	एक विफल कमांड ने पूर्ववत चरण बदल दिए जिन्हें वापस नहीं रखा जा सका, इसलिए स्क्रिप्ट रोक दी गई
+@msg	a recovery copy could not be written, so the script was not run	रिकवरी प्रति नहीं लिखी जा सकी, इसलिए स्क्रिप्ट नहीं चलाई गई
+@msg	Running a script	स्क्रिप्ट चल रही है
 @msg	Copied the script report	Copied स्क्रिप्ट रिपोर्ट
 @msg	copy needs path: the file to copy into the document's folder	copy: प्रतिलिपि की जरूरत है पाथ: फ़ाइल को डॉक्यूमेंट के फ़ोल्डर में कॉपी करने के लिए
 @msg	copy takes images only: relink placed documents where their files are	copy: प्रतिलिपि केवल इमेज को लेती है: डॉक्यूमेंट्स को फिर से लिंक करें जहां उनकी फ़ाइलें हैं
@@ -6449,6 +6523,11 @@ antiAlias	Sharp	शार्प
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` के लिए अमान्य पैरामीटर: {msg}
 @msg	invalid pattern tile choice	अमान्य पैटर्न टाइल ऑप्शन
 @msg	invalid PDF setting: {0}	Invalid PDF सेटिंग: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: इसे {unit} के UserUnit के साथ लिखा जाता है, इसलिए UserUnit को अनदेखा करने वाले ऐप इसे उतने गुना छोटा दिखाते हैं
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: {label} पेज बिना UserUnit के, पॉइंट में लिखे जाते हैं, और सीमा मानने वाले ऐप पेज को 200 in पर काट देते हैं
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 में UserUnit नहीं है, जिसकी 14,400 pt (200 in) से लंबे पेज को अपना आकार बनाए रखने के लिए ज़रूरत होती है: फ़ाइल PDF 1.6 के रूप में लिखी जाती है
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 3 से 14,400 इकाई की पेज भुजाओं के लिए बहुत लंबा और संकरा है: इसे {unit} की UserUnit के साथ लिखा जाता है, जो छोटी भुजा को 3 इकाई या अधिक पर रखती है, और सीमा का पालन करने वाले ऐप लंबी भुजा को 14,400 इकाई पर काट देते हैं
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} फ़ाइलें {max} तक की वास्तविक संख्याएँ रखती हैं, और आर्टबोर्ड {n} का {side} pt लंबा पेज इससे बड़ी संख्याएँ माँगता है: बिना PDF/X मानक के PDF 1.6 या बाद का चुनें, या छोटा आर्टबोर्ड
 @msg	invalid point	अमानवीय बिंदु
 @msg	Invalid point	अमानवीय बिंदु
 @msg	Invalid real scale	अमानवीय वास्तविक पैमाने
@@ -6899,6 +6978,7 @@ antiAlias	Sharp	शार्प
 @msg	node {_1} is not type	नोड {_1} टाइप नहीं है
 @msg	node {_1} is on a locked artboard	नोड {_1} एक लॉक्ड आर्टबोर्ड पर है
 @msg	Non-finite dimension	गैर-परिष्कृत आयाम
+@msg	Only linear dimensions are horizontal or vertical	केवल रैखिक आयाम क्षैतिज या ऊर्ध्वाधर होते हैं
 @msg	None of these issues are left: check again	इन मुद्दों में से कोई भी छोड़ दिया जाता है: फिर से जांच करें
 @msg	not a blend	मिश्रण नहीं
 @msg	not a closed path	एक बंद पाथ नहीं
@@ -7382,6 +7462,7 @@ antiAlias	Sharp	शार्प
 @msg	the action has no steps	कार्रवाई में कोई कदम नहीं है
 @msg	the action set file holds more than 1,000 actions	एक्शन सेट फ़ाइल 1,000 से अधिक कार्यों को रखती है
 @msg	the action set file is larger than 8 MiB	एक्शन सेट फ़ाइल 8 MiB से बड़ा है
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: संदर्भ {MAX_BYTES} बाइट से बड़ा होगा
 @msg	the action set file needs a later version of VectorCraft	एक्शन सेट फ़ाइल को वेक्टर क्रेफ्ट के बाद के संस्करण की आवश्यकता होती है
 @msg	the action set ids are not a list	कार्रवाई सेट ids एक सूची नहीं हैं
 @msg	the action sets changed; nothing was deleted	कार्रवाई सेट बदल गया; कुछ भी नहीं हटा दिया गया था
@@ -7744,6 +7825,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	अज्ञात नियंत्रण `{name}`: fillStroke, रंग, drawMode या screenMode
 @msg	Unknown dimension mode	अज्ञात आयाम मोड
 @msg	Unknown dimension option {k}	अज्ञात आयाम ऑप्शन {k}
+@msg	Unknown dimension orientation	अज्ञात आयाम अभिविन्यास
 @msg	Unknown dimension style	अज्ञात आयाम स्टाइल
 @msg	unknown effect `{e}`	अज्ञात इफ़ेक्ट `{e}`
 @msg	unknown effect `{id}`	अज्ञात इफ़ेक्ट `{id}`
@@ -7789,6 +7871,11 @@ antiAlias	Sharp	शार्प
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
 @msg	unknown parameter `{key}`; the command takes: {keys}	अज्ञात पैरामीटर `{key}`; कमांड लेता है: {keys}
+@msg	the params must be an object, not {got}	पैरामीटर एक ऑब्जेक्ट होने चाहिए, {got} नहीं
+@msg	unknown parameter `{path}`; the object takes no keys	अज्ञात पैरामीटर `{path}`; ऑब्जेक्ट कोई कुंजी नहीं लेता
+@msg	unknown parameter `{path}`; it takes: {keys}	अज्ञात पैरामीटर `{path}`; यह लेता है: {keys}
+@msg	missing `{path}`	लापता `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` {expected} होना चाहिए, {got} नहीं
 @msg	unknown PDF preset `{name}` (presets: {_1})	अज्ञात PDF प्रीसेट `{name}` (presets: {_1})
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	अज्ञात pieLegend `{v}` (one, मानक या wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	अज्ञात piePosition `{v}` (यहां तक कि अनुपात या स्टैक्ड)
@@ -7796,6 +7883,20 @@ antiAlias	Sharp	शार्प
 @msg	unknown plate `{n}`	अज्ञात प्लेट `{n}`
 @msg	unknown preference `{k}`	अज्ञात वरीयता `{k}`
 @msg	unknown preference `{key}`	अज्ञात वरीयता `{key}`
+@msg	Preferences imported.	प्रेफ़रेंसेज़ आयात की गईं।
+@msg	not a preferences file: {e}	प्रेफ़रेंसेज़ फ़ाइल नहीं: {e}
+@msg	not a preferences file: no JSON object	प्रेफ़रेंसेज़ फ़ाइल नहीं: कोई JSON ऑब्जेक्ट नहीं
+@msg	not a preferences file (format `{format}`)	प्रेफ़रेंसेज़ फ़ाइल नहीं (फ़ॉर्मैट `{format}`)
+@msg	not a preferences file: no `format`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `format` नहीं है
+@msg	not a preferences file: no `version`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `version` नहीं है
+@msg	not a preferences file: no `prefs`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `prefs` नहीं है
+@msg	the file was saved by a newer version of VectorCraft (version {v})	फ़ाइल VectorCraft के नए संस्करण से सहेजी गई थी (संस्करण {v})
+@msg	the file holds no preferences	फ़ाइल में कोई प्रेफ़रेंस नहीं है
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` एक फ़ोल्डर बताता है, और प्रेफ़रेंसेज़ फ़ाइलों में फ़ोल्डर नहीं होते
+@msg	the file is larger than 1 MB	फ़ाइल 1 MB से बड़ी है
+@msg	give `path` or `data`	`path` या `data` दें
+@msg	`{key}` must be an object	`{key}` एक ऑब्जेक्ट होना चाहिए
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` अकेले चलता है, बैच के चरण के रूप में नहीं
 @msg	unknown preset (one of {_1})	अज्ञात प्रीसेट ({_1} में से एक)
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	अज्ञात प्रीसेट `{name}` (उच्च, मध्यम, निम्न या एक बचाया: flattener.presets.list देखें)
 @msg	unknown preset `{name}` (see flattener.presets.list)	अज्ञात प्रीसेट `{name}` (देखें flattener.presets.list)
@@ -7995,6 +8096,7 @@ file-filter	Flattener presets	फ़्लैटनर प्रीसेट्�
 file-filter	PDF presets	PDF प्रीसेट्स
 file-filter	PDF-compatible .ai	PDF-संगत .ai
 file-filter	Print presets	प्रिंट प्रीसेट्स
+file-filter	Preferences	प्रेफ़रेंसेज़
 file-filter	SVG Compressed	SVG संपीड़ित
 file-filter	Swatch libraries	स्वॉच लाइब्रेरीज़
 file-filter	Templates	टेम्पलेट्स
@@ -8099,3 +8201,24 @@ theme	Appearance	अपीयरेंस
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
 @msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं
+	Ignore All	सभी को अनदेखा करें
+	Add to Dictionary	शब्दकोश में जोड़ें
+	No Suggestions	कोई सुझाव नहीं
+	Edit Custom Dictionary	कस्टम शब्दकोश संपादित करें
+	Entry:	प्रविष्टि:
+# Script Console
+	Script Console	स्क्रिप्ट कंसोल
+	Clear Script Console	स्क्रिप्ट कंसोल साफ़ करें
+	Copy Script Console	स्क्रिप्ट कंसोल कॉपी करें
+	Copy All	सब कॉपी करें
+	Copy Selected	चयनित कॉपी करें
+	Finished	पूरा हुआ
+	Ended with an error	त्रुटि के साथ समाप्त
+	Out of fuel	निर्देश सीमा समाप्त
+	Ended at a host limit	होस्ट सीमा पर समाप्त
+	Ended at a limit	सीमा पर समाप्त
+	Stopped	रोका गया
+	Ended by an internal fault	आंतरिक त्रुटि से समाप्त
+	{ms} ms, {calls} host calls	{ms} ms, {calls} होस्ट कॉल
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} पुरानी पंक्तियाँ हटाई गईं, {cut} पंक्तियाँ काटी गईं
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में

@@ -2,8 +2,8 @@ use super::output::{sanitize_id, valid_xml_value, xml_attr_escape, xml_attr_vali
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
 use super::{
-    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer, Writer,
-    Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
+    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, HashMap, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer,
+    Writer, Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
 };
 
 /// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
@@ -143,8 +143,11 @@ fn pin_to_page(n: &mut Node, m: Affine) {
 const TINY_MASKS: &str = "SVG Tiny 1.2 has no masks: opacity masks are left out and knockout groups written as plain groups";
 pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 
-/// A region covering any artwork (mask and filter extents).
+/// The region of a mask or filter over art that has no box to measure: one covering any artwork.
 const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\"";
+
+/// How deep [`Writer::paint_reach`] looks into members and symbol art.
+const MAX_REACH_DEPTH: u32 = 64;
 
 /// Attributes of every `<mask>`: user-space units, and luminance taken from the sRGB values (as the
 /// canvas and PDF take it) rather than from linearised ones.
@@ -354,13 +357,18 @@ impl Writer<'_> {
             return self.node_body(&bare);
         }
         let mid = self.fresh_id("mask");
+        let mut bare = n.clone();
+        bare.extras_mut().mask = None;
+        // The region covers what the object and the mask art paint: readers draw the mask into an
+        // image of the region's size.
+        let region = self.region_attrs(&[&bare, &m.art]);
         // Mask art is a picture of its own: it takes no part in a knockout group around the object.
         let knockout = std::mem::take(&mut self.knockout);
         let art = self.detached(2, |w| w.node(&m.art));
         self.knockout = knockout;
         let inv = m.invert.then(|| {
             let fid = self.fresh_id("invert");
-            self.def(1, &format!("<filter id=\"{fid}\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\" {BIG}>"));
+            self.def(1, &format!("<filter id=\"{fid}\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\" {region}>"));
             self.def(2, "<feColorMatrix type=\"matrix\" values=\"-1 0 0 0 1 0 -1 0 0 1 0 0 -1 0 1 0 0 0 1 0\"/>");
             self.def(1, "</filter>");
             fid
@@ -368,13 +376,13 @@ impl Writer<'_> {
         // The mask's options, so import restores them (and its art without backdrop and filter).
         let flags: Vec<&str> = [(!m.clip).then_some("noclip"), m.invert.then_some("invert")].into_iter().flatten().collect();
         let data = if flags.is_empty() { String::new() } else { format!(" {MASK_FLAGS}=\"{}\"", flags.join(" ")) };
-        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {BIG}{data}>"));
+        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {region}{data}>"));
         if let Some(fid) = &inv {
             self.def(1, &format!("<g filter=\"url(#{fid})\">"));
         }
         if !m.clip || m.invert {
             let c = if m.clip { "black" } else { "white" };
-            self.def(1, &format!("<rect {BIG} fill=\"{c}\"/>"));
+            self.def(1, &format!("<rect {region} fill=\"{c}\"/>"));
         }
         self.defs.push_str(&art);
         if inv.is_some() {
@@ -383,8 +391,6 @@ impl Writer<'_> {
         self.def(1, "</mask>");
         self.line(&format!("<g mask=\"url(#{mid})\">"));
         self.depth += 1;
-        let mut bare = n.clone();
-        bare.extras_mut().mask = None;
         self.node_body(&bare);
         self.depth -= 1;
         self.line("</g>");
@@ -397,6 +403,127 @@ impl Writer<'_> {
         write(self);
         self.depth = saved;
         std::mem::replace(&mut self.body, body)
+    }
+
+    /// The `x`, `y`, `width` and `height` of a mask or filter region over `nodes`, in the current
+    /// user space: the box of everything they paint ([`Self::paint_reach`]), 2 larger on each
+    /// side for antialiasing. [`BIG`] when none of them has a box, when one holds type (a reader
+    /// sets live type in its own font, which can be wider, and type on a path is measured by its
+    /// path), or when one nests deeper than [`MAX_REACH_DEPTH`]. The art of a symbol instance
+    /// written in place keeps its strokes and effects at their own size while the instance scales
+    /// its geometry, so the region also covers the geometry's box, placed, grown by the strokes'
+    /// and effects' reach unscaled.
+    fn region_attrs(&mut self, nodes: &[&Node]) -> String {
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.doc.symbol_boxes());
+        let mut art_reach = std::mem::take(&mut self.art_reach);
+        let region = self.region_of(&symbols, &mut art_reach, nodes);
+        self.region_boxes = Some(symbols);
+        self.art_reach = art_reach;
+        region
+    }
+
+    /// [`Self::region_attrs`] with the document's symbol boxes and the symbols' art reach so far.
+    fn region_of(&self, symbols: &vectorcraft_doc::SymbolBoxes, art_reach: &mut HashMap<String, f64>, nodes: &[&Node]) -> String {
+        let mut painted: Option<Rect> = None;
+        for n in nodes {
+            let Some(v) = n.visual_bounds_with(symbols) else { continue };
+            let Some(r) = self.paint_reach(symbols, art_reach, n, v, 0) else {
+                return BIG.to_string();
+            };
+            let g = n.geometric_bounds_with(symbols).unwrap_or(v);
+            let stroke = [g.x0 - v.x0, g.y0 - v.y0, v.x1 - g.x1, v.y1 - g.y1].into_iter().fold(0.0, f64::max);
+            let scaled = self.xf.transform_rect_bbox(v.inflate(r, r));
+            let unscaled = self.xf.transform_rect_bbox(g).inflate(stroke + r, stroke + r);
+            let both = scaled.union(unscaled);
+            painted = Some(painted.map_or(both, |p| p.union(both)));
+        }
+        let Some(b) = painted.map(|b| b.inflate(2.0, 2.0)).filter(|b| b.is_finite()) else {
+            return BIG.to_string();
+        };
+        format!("x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"", self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()))
+    }
+
+    /// How far what `n` paints reaches past its visual box `b`: the reach of its own raster effects
+    /// and of those of its fills and strokes (measured as [`Self::open_filters`] measures them),
+    /// how far brush art can paint past its brushed strokes (`16 × w + 8` for the widest brushed
+    /// stroke `w`, as the canvas allows for it), and the most that one of its members or its
+    /// symbol's art reaches past its own box, spread by its own effects. `art_reach` keeps each
+    /// symbol's art reach by name once measured, so art used many times is measured once. A live
+    /// object is measured as the art it is written as: expanded on its own, as [`Self::node`]
+    /// expands it, so with the same limits. `None` when `n`, its members or its symbol's art hold
+    /// type, or nest deeper than [`MAX_REACH_DEPTH`].
+    fn paint_reach(
+        &self,
+        symbols: &vectorcraft_doc::SymbolBoxes,
+        art_reach: &mut HashMap<String, f64>,
+        n: &Node,
+        b: Rect,
+        depth: u32,
+    ) -> Option<f64> {
+        use vectorcraft_effects::RasterFx;
+        // Type draws past its measured box in a reader's own font.
+        if matches!(n.kind, NodeKind::Text(_)) {
+            return None;
+        }
+        // An Outer Glow's silhouette grows by a quarter of a pixel of the document's raster grid first.
+        let grow = 18.0 / self.doc.raster_ppi();
+        let reach = |effects: &[vectorcraft_doc::Effect]| -> f64 {
+            vectorcraft_effects::raster_effects(effects)
+                .iter()
+                .map(|f| f.outset(b) + if matches!(f, RasterFx::OuterGlow { .. }) { grow } else { 0.0 })
+                .sum()
+        };
+        let items = n.appearance.items.iter().map(|i| reach(i.effects())).fold(0.0, f64::max);
+        let brush = if vectorcraft_brush::has_brush(n) {
+            let w =
+                n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.width) } else { None }).fold(1.0, f64::max);
+            16.0 * w + 8.0
+        } else {
+            0.0
+        };
+        let own = reach(&n.appearance.effects) + items + brush;
+        if vectorcraft_doc::live::is_live(n) {
+            if depth >= MAX_REACH_DEPTH {
+                return None;
+            }
+            let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+            let Some(gb) = g.visual_bounds_with(symbols) else { return Some(own) };
+            let past = [b.x0 - gb.x0, b.y0 - gb.y0, gb.x1 - b.x1, gb.y1 - b.y1].into_iter().fold(0.0, f64::max);
+            return Some(own + past + self.paint_reach(symbols, art_reach, &g, gb, depth + 1)?);
+        }
+        let symbol = match &n.kind {
+            NodeKind::SymbolInstance { symbol, xf } => self.doc.symbols.iter().find(|s| s.name == *symbol).map(|s| (s, xf)),
+            _ => None,
+        };
+        if n.children().is_none_or(|c| c.is_empty()) && symbol.is_none() {
+            return Some(own);
+        }
+        if depth >= MAX_REACH_DEPTH {
+            return None;
+        }
+        let mut inner: f64 = 0.0;
+        for c in n.children().into_iter().flatten() {
+            if let Some(cb) = c.visual_bounds_with(symbols) {
+                inner = inner.max(self.paint_reach(symbols, art_reach, c, cb, depth + 1)?);
+            }
+        }
+        if let Some((s, xf)) = symbol {
+            let art = match art_reach.get(&s.name) {
+                Some(r) => *r,
+                None => {
+                    let r = match s.art.visual_bounds_with(symbols) {
+                        Some(ab) => self.paint_reach(symbols, art_reach, &s.art, ab, depth + 1)?,
+                        None => 0.0,
+                    };
+                    art_reach.insert(s.name.clone(), r);
+                    r
+                }
+            };
+            // The art's reach, measured in symbol space, as far as the instance can stretch it.
+            let [xx, xy, yx, yy, _, _] = xf.as_coeffs();
+            inner = inner.max(art * xx.hypot(xy).max(yx.hypot(yy)).max(1.0));
+        }
+        Some(own + inner)
     }
 
     /// Props of a group (or layer): a knockout group is isolated, a hidden one not displayed.
@@ -450,9 +577,12 @@ impl Writer<'_> {
             written.push((before, self.detached(depth + nest - 1 - i, |w| w.node(c))));
         }
         let after = self.symbol_nodes;
+        // Each mask covers what the group's elements paint.
+        let all: Vec<&Node> = elements.iter().map(|c| &***c).collect();
+        let region = self.region_attrs(&all);
         for (c, (before, _)) in rest.iter().zip(&written).rev() {
             self.symbol_nodes = *before;
-            let mid = self.knockout_mask(c);
+            let mid = self.knockout_mask(c, &region);
             self.line(&format!("<g mask=\"url(#{mid})\">"));
             self.depth += 1;
         }
@@ -466,16 +596,18 @@ impl Writer<'_> {
     }
 
     /// A mask that is 1 − the knockout shape of `c`: white, then `c` painted black (at full object
-    /// opacity without its own mask, unless those define its shape). Returns the mask id.
-    fn knockout_mask(&mut self, c: &Node) -> String {
-        let filter = match &self.knockout_filter {
+    /// opacity without its own mask, unless those define its shape). `region` is the attributes of
+    /// the mask's region ([`Self::region_attrs`]), which the filter that paints `c` black shares.
+    /// Returns the mask id.
+    fn knockout_mask(&mut self, c: &Node, region: &str) -> String {
+        let filter = match self.knockout_filters.get(region) {
             Some(f) => f.clone(),
             None => {
                 let f = self.fresh_id("knockout-shape");
-                self.def(1, &format!("<filter id=\"{f}\" filterUnits=\"userSpaceOnUse\" {BIG}>"));
+                self.def(1, &format!("<filter id=\"{f}\" filterUnits=\"userSpaceOnUse\" {region}>"));
                 self.def(2, "<feColorMatrix type=\"matrix\" values=\"0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0\"/>");
                 self.def(1, "</filter>");
-                self.knockout_filter = Some(f.clone());
+                self.knockout_filters.insert(region.to_string(), f.clone());
                 f
             }
         };
@@ -490,8 +622,8 @@ impl Writer<'_> {
         let art = self.detached(3, |w| w.node(&shape));
         self.anonymous = anonymous;
         let mid = self.fresh_id("knockout");
-        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {BIG}>"));
-        self.def(2, &format!("<rect {BIG} fill=\"white\"/>"));
+        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {region}>"));
+        self.def(2, &format!("<rect {region} fill=\"white\"/>"));
         self.def(2, &format!("<g filter=\"url(#{filter})\">"));
         self.defs.push_str(&art);
         self.def(2, "</g>");

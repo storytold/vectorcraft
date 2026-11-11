@@ -65,6 +65,8 @@ pub mod print;
 pub mod recovery;
 pub mod render_worker;
 pub mod screen_color;
+pub mod script_runs;
+pub mod scripts_menu;
 mod scrub;
 pub mod shortcut_editor;
 pub mod shortcuts;
@@ -186,6 +188,8 @@ pub struct VectorcraftApp {
     frame_rate: frame_rate::FrameRate,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
     pub canvas_rect: Option<egui::Rect>,
+    /// An unfinished control-channel Rotate View gesture, kept only for this app instance.
+    pub(crate) control_rotate_press: Option<control::RotateViewPress>,
     /// Hover position in document coordinates.
     pub hover_doc: Option<vectorcraft_geom::Point>,
     /// System clipboard: SVG to publish next frame, the last SVG we published (so pasting it back
@@ -309,6 +313,9 @@ pub struct VectorcraftApp {
     /// This frame carries input the control channel injected ([`Self::raw_input_hook`]): it runs
     /// confined to [`Self::automation_roots`].
     synthetic_frame: bool,
+    /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
+    /// `ui.dialog.set` writes.
+    pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,

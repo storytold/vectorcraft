@@ -20,6 +20,7 @@ mod features;
 mod file_font;
 mod fontconfig;
 mod fontdb;
+mod harakat;
 pub mod hyphen;
 mod justify;
 mod kashida;

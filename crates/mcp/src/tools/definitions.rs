@@ -98,7 +98,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "command_list",
             "List commands",
-            "Discover command ids, labels, parameter descriptions and enabled state. Returns an array. The whole catalogue is large: narrow it with filter (or query), menu, and brief. list_commands lists the same commands; it takes enabledOnly instead of enabled_only and returns {count, commands}.",
+            "Discover command ids, labels, parameter descriptions and enabled state. A command with a parameter schema also lists it as schema (JSON Schema 2020-12) and as inputSchema (the same schema with an object root, the form of a tool's inputSchema). Returns an array. The whole catalogue is large: narrow it with filter (or query), menu, and brief. list_commands lists the same commands; it takes enabledOnly instead of enabled_only and returns {count, commands}.",
             obj(
                 json!({"filter": string("Case-insensitive id, label or menu substring"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabled_only": {"type":"boolean"}, "brief": {"type":"boolean", "description": BRIEF}}),
                 &[],
@@ -156,7 +156,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "list_commands",
             "List commands",
-            "List VectorCraft commands (id, label, menu path, shortcut, parameter description, enabled state). Every editing action is a command; run any of them with run_command. Coordinates are points in document space, y down, origin at the first artboard's top-left. command_list lists the same commands as a bare array and takes enabled_only.",
+            "List VectorCraft commands (id, label, menu path, shortcut, parameter description, enabled state, and schema and inputSchema for a command with a parameter schema). Every editing action is a command; run any of them with run_command. Coordinates are points in document space, y down, origin at the first artboard's top-left. command_list lists the same commands as a bare array and takes enabled_only.",
             obj(
                 json!({"filter": string("Case-insensitive substring matched against id, label and menu path (e.g. \"align\", \"Object\")"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabledOnly": {"type": "boolean", "description": "Only commands that can run right now"}, "brief": {"type": "boolean", "description": BRIEF}}),
                 &[],
@@ -307,7 +307,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "answer_dialog",
             "Answer dialog",
-            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none. When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"discard\",value:true}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
+            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none and answers that same dialog in the same request (ui.dialog.set with action). When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"discard\",value:true}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
             obj(
                 json!({
                     "set": {
@@ -316,7 +316,7 @@ pub fn tool_definitions() -> Vec<Value> {
                         "items": obj(json!({"field": string("Dialog field"), "value": {"description": "The field's new value (any JSON; default null)"}}), &["field"]),
                         "description": "Fields to set, in order (one ui.dialog.set that sets all of them or none)",
                     },
-                    "action": {"type": "string", "enum": ["confirm", "cancel"], "description": "Then confirm (OK) or cancel the dialog"},
+                    "action": {"type": "string", "enum": ["confirm", "cancel"], "description": "Then confirm (OK) or cancel the dialog the fields were set in"},
                 }),
                 &[],
             ),

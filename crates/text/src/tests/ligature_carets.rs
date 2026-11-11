@@ -629,6 +629,31 @@ fn an_upright_ligature_takes_its_caret_down_its_cell() {
     assert!((at(900) - 0.5).abs() < 1e-9, "{}", at(900));
 }
 
+/// Horizontal type does not read Standard Vertical Roman Alignment or the tate-chu-yoko offsets, so
+/// setting one of them on the f of "fi" keeps the ligature. Vertical type reads them per glyph, so
+/// there the f is shaped apart from the i.
+#[test]
+fn vertical_only_settings_keep_a_horizontal_ligature_whole() {
+    let db = db_with(vertical_ligature_caret_font(280));
+    let marks: [fn(&mut CharStyle); 3] = [|s| s.standard_vertical_roman = true, |s| s.tcy_up_down = 10.0, |s| s.tcy_left_right = 10.0];
+    for (i, mark) in marks.into_iter().enumerate() {
+        for vertical in [false, true] {
+            let mut t = point("fi", VERTICAL_LIGATURE_CARET_FAMILY);
+            t.vertical = vertical;
+            let plain = t.runs[0].style.clone();
+            let mut marked = plain.clone();
+            mark(&mut marked);
+            t.runs = vec![
+                vectorcraft_doc::TextRun { text: "f".into(), style: marked, inline: None },
+                vectorcraft_doc::TextRun { text: "i".into(), style: plain, inline: None },
+            ];
+            let l = layout(&db, &t);
+            let joined = l.glyphs.iter().any(|g| g.len == 2);
+            assert_eq!(joined, !vertical, "setting {i}, vertical {vertical}: {:?}", l.glyphs);
+        }
+    }
+}
+
 /// On a path, an upright ligature in vertical type stands with its top toward the path's start, and
 /// its cell runs from 0.12 em before the pen to 0.88 em after it, with or without the font's vertical
 /// metrics. The inner stop lies at the middle of that cell, and the first character's selection ends

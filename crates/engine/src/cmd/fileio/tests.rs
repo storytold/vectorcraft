@@ -914,3 +914,34 @@ fn read_path_for_a_named_importer_stops_at_the_limit() {
     assert!(e.to_string().contains("larger than") && e.to_string().contains("drawing.tuv"), "{e}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// #3084, #2096: Export for Screens writes JPGs a strict reader opens, in every colour model and at
+/// the qualities and scales the reports used. A four-component (CMYK) file has no JFIF segment,
+/// which describes only one- and three-component images (#3140); RGB and gray files keep it.
+#[test]
+fn export_for_screens_jpgs_open_in_every_colour_model() {
+    let mut s = session(100.0, 80.0, 1);
+    s.execute("paint.setFill", &json!({"color": "#cc3300"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 60, "height": 40})).unwrap();
+    for (model, components) in [("rgb", 3), ("cmyk", 4), ("gray", 1)] {
+        for quality in [100, 80, 50] {
+            let r = s
+                .execute(
+                    "document.exportForScreens",
+                    &json!({"formats": [{"format": "jpg"}, {"format": "jpg", "scale": 2}], "settings": {"jpg": {"colorModel": model, "quality": quality}}}),
+                )
+                .unwrap();
+            let files = r["files"].as_array().unwrap();
+            assert_eq!(files.len(), 2, "{model} {quality}: {r}");
+            for (f, width) in files.iter().zip([100, 200]) {
+                let bytes = b64(f);
+                let what = format!("{model} q{quality} {}", f["name"]);
+                assert_eq!(bytes.get(..2), Some(&[0xFF, 0xD8][..]), "{what}: starts with SOI");
+                let jfif = bytes.get(2..4) == Some(&[0xFF, 0xE0][..]);
+                assert_eq!(jfif, components != 4, "{what}: JFIF only on one- and three-component files");
+                let image = image::load_from_memory(&bytes).unwrap_or_else(|e| panic!("{what}: {e}"));
+                assert_eq!(image.width(), width, "{what}");
+            }
+        }
+    }
+}

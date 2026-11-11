@@ -210,8 +210,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"poster","
 
 ### Resource templates
 
-`vectorcraft://document` (summary), `vectorcraft://document/json` (the whole model), and
-`vectorcraft://commands` (the live command catalog with enabled state) are the fixed resources. The templates read one thing at a time, which matters on a real document: the full model
+`vectorcraft://document` (summary), `vectorcraft://document/json` (the whole model),
+`vectorcraft://commands` (the live command catalog with enabled state) and `vectorcraft://commands/reference` (the
+command API reference in Markdown, `text/markdown; charset=utf-8`; see [Parameter schemas](#parameter-schemas)) are
+the fixed resources. The templates read one thing at a time, which matters on a real document: the full model
 is thousands of lines an agent pays for again on every change.
 
 | `uriTemplate` | Reads |
@@ -369,10 +371,10 @@ The older names below remain listed because existing workflows use them.
 
 | Tool | Arguments and result |
 |---|---|
-| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text); returns the command array. `list_commands` lists the same commands; it takes `enabledOnly` and returns `{count, commands}` |
+| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text, `schema` or `inputSchema`); returns the command array. A command with a parameter schema lists `schema` and `inputSchema` (see [Parameter schemas](#parameter-schemas)). `list_commands` lists the same commands; it takes `enabledOnly` and returns `{count, commands}` |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)). `run_command` runs a command the same way and takes its id as `command` |
 | `command_batch` | `steps: [{id, params?}]` (at most 256), optional `stop_on_error` (default true), `atomic` and `label`; returns `completed`, `failed`, `results: [{ok, result\|error}]` and `created` (the ids the `draw_path` / `draw_shape` steps made, in order). A step's `id` is a command id, or `draw_path` / `draw_shape` with that tool's arguments as `params` (checked as `tools/call` checks them; the step's result is the tool's, so `"$N.id"` is the new object). Each edit has its own undo step, or with `atomic: true` the batch's edits are one undo step named `label` (else after its first edit; `edit.undoGroup.begin`/`end` underneath), and the edits made in a document that a step opens or creates (`document.open`, `file.new`) are one undo step there, named the same, also when no document was open before the batch. In a document that was open before the batch and that a step switches to (`document.activate`), each edit stays its own undo step; failures set `isError`. A param string `"$N.path"` or `"$last.path"` takes a value from an earlier step's result (see `run` below). Kept step results total at most 8 MiB; past that the batch stops with the reason. This is the MCP tool, not the engine command `command.batch` (that one takes `commands: [{command, params}]` and is what the Actions panel plays); use `command_run` with `command.batch` when replaying a recorded action |
-| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text); returns the command array |
+| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text, `schema` or `inputSchema`); returns the command array |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)) |
 | `doc_inspect` | Optional `depth`, `childLimit`, `ids`, `kind`, `limit`, `offset`; same summary as `inspect_document` |
 | `render_preview` | Optional `max_side` (1–4096, default 1024), `artboard` (0-based, default 0) and `traceViews`; inline PNG of that artboard without editing it, drawn as `export` draws a PNG with `background: "white"` at the scale that fits `max_side` (at most 1). With `traceViews: true`, Image Trace objects draw in the view set with `imageTrace.setView` (outlines, the source image…), as in the app's window; by default they draw their tracing result. Artboards too large to render within the allocation bound return a tool error |
@@ -446,7 +448,7 @@ opens the picker through `run_command` with the remote backend.
 
 | Tool | Arguments | Notes |
 |---|---|---|
-| `list_commands` | `{filter?, query?, menu?, enabledOnly?, brief?}` | The command catalogue: id, label, menu, shortcut, params doc (left out with `brief`), enablement. |
+| `list_commands` | `{filter?, query?, menu?, enabledOnly?, brief?}` | The command catalogue: id, label, menu, shortcut, params doc, enablement, and `schema` and `inputSchema` for a command with a parameter schema (the params doc and both schemas are left out with `brief`). |
 | `run_command` | `{command, params?}` | Runs any command. Use it for everything without a dedicated tool. |
 | `inspect_document` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | Artboards (with `color`, `#rrggbb`, for one with a background color), layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
@@ -458,7 +460,7 @@ opens the picker through `run_command` with the remote backend.
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. Returns `{applied, objects}`: `objects` is the number of objects painted, as the `objects` of the `paint.setFill`, `paint.setStroke` and `stroke.set` replies (the largest of them): a selected group counts the objects inside it. When it is 0, a `note` says that only the paint for new art changed. |
 | `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool (digits too: `5` while dragging with the Perspective Selection tool; `e` while dragging a Selection or Group Selection marquee; `c` and `f` while dragging out an arc; `f`, `v`, `x` and `c` while dragging out a rectangular or polar grid). |
 | `type_text` | `{text}` | Remote only. |
-| `answer_dialog` | `{set?: [{field, value?}], action?}` | Remote only. Sets fields of the app's open dialog in the order given with one `ui.dialog.set {fields}` (a missing `value` is `null`). The app stores all of them or none. When the app refuses the `ui.dialog.set`, for example because no dialog is open, the call is an error and `action` is not sent. Then `action` `confirm` (OK, `ui.dialog.confirm`) or `cancel` (`ui.dialog.cancel`). Give `set`, `action` or both; `set` holds at most 256 fields. `inspect_ui` shows the open dialog and its fields as `ui.dialog`. Returns `{dialog, result}`: the dialog after the fields were set (or `null`) and the reply to `confirm` or `cancel` (or `null`). After `invoke_menu` `app.quit`, `file.close` or `file.closeAll` replies `{"pending": "saveChanges"}`, `{action: "confirm"}` saves, `{set: [{field: "discard", value: true}], action: "confirm"}` closes without saving and `{action: "cancel"}` cancels the close or quit. |
+| `answer_dialog` | `{set?: [{field, value?}], action?}` | Remote only. Sets fields of the app's open dialog in the order given with one `ui.dialog.set {fields, action?}` (a missing `value` is `null`). The app stores all of them or none, then answers that same dialog with `action` in the same request: `confirm` (OK) or `cancel`. Another connection cannot open a dialog between the two steps. When the app refuses the `ui.dialog.set`, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. `action` alone is sent as `ui.dialog.confirm` or `ui.dialog.cancel`. Give `set`, `action` or both; `set` holds at most 256 fields. `inspect_ui` shows the open dialog and its fields as `ui.dialog`. Returns `{dialog, result}`: the dialog after the fields were set (or `null`) and the reply to `confirm` or `cancel` (or `null`). After `invoke_menu` `app.quit`, `file.close` or `file.closeAll` replies `{"pending": "saveChanges"}`, `{action: "confirm"}` saves, `{set: [{field: "discard", value: true}], action: "confirm"}` closes without saving and `{action: "cancel"}` cancels the close or quit. |
 | `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. Includes UI commands such as `view.*` and `window.*` in remote mode. |
 | `open_panel` | `{panel}` | Remote only. `panel` is a panel id (`layers`, `swatches`, `colorGuide`, …, as `window.panel` takes) or its display label (`"Color Guide"`), in any case. |
 | `screenshot` | `{path?, scale?, artboard?, window?, max_side?, traceViews?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard with the pixels of a PNG `export` with `background: "white"` at the same scale; `traceViews:true` draws Image Trace objects in the view set with `imageTrace.setView`, as in the app's window; `window:true` captures the app window (remote only), as `ui_screenshot` does, and `max_side` (1–4096, window captures only) scales the returned image down as described for `ui_screenshot`. With `path` the backend (the headless session or the app) writes the PNG there too; a window capture written there keeps its full size with `max_side`. |
@@ -748,6 +750,7 @@ Fixed resources and the four templates (same as [Resource templates](#resource-t
 | `vectorcraft://document` | `document.inspect` summary (JSON) |
 | `vectorcraft://document/json` | The complete document model (JSON) |
 | `vectorcraft://commands` | Live command catalog with enabled state |
+| `vectorcraft://commands/reference` | The command API reference (`engine.apiReference`), as Markdown (`text/markdown; charset=utf-8`) |
 | `vectorcraft://object/{id}` | One layer or object (`document.node {id, summary: true}`) |
 | `vectorcraft://command/{id}` | One command's metadata and enablement |
 | `vectorcraft://effect/{id}` | One live effect with parameters and defaults |
@@ -779,7 +782,7 @@ point (72 times that value in ppi); `options.ppi` wins over either scale option.
 default 72 ppi still use 72 ppi; use `--ppi 300` for print output from those documents.
 
 Raster exports take more options in `options`: `ppi` (72, 150, 300…; stored in the file, except in GIF, WebP and
-Targa), `background` (`transparent`, `white`, `black` or `"#rrggbb"`; `#rrggbbaa` and `#rgba` are refused), `antiAlias` (`none`, `art`, `type`: text
+Targa), `background` (`transparent`, `white`, `black` or `"#rrggbb"`; `#rrggbbaa` and `#rgba` are refused; drawn under the finished art, so blend modes do not read it), `antiAlias` (`none`, `art`, `type`: text
 snapped to pixels) and, for PNG, `interlaced`. `width` or `height` sets the size of each file in pixels: each artboard
 (with `useArtboards`, each file), `rect` or art bounds gets the scale that makes it that wide or high, within 0.01–64
 pixels per point, and the file stores the resolution that results, as with `ppi`. `width` wins over `height`, and
@@ -837,7 +840,16 @@ transparency and rasterized areas are clipped to their regions. A file that woul
 export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too.
 A page with a side longer than 14,400 pt is written with a `UserUnit` (PDF 1.6): its longer side divided by 14,400,
 rounded up to the next thousandth, with the page's sizes and coordinates in those units, so that no side is longer than
-14,400 units (ISO 32000-1, Annex C.2). In PDF 1.3 to 1.5 files and PDF/X files, such a page is written in points.
+14,400 units (ISO 32000-1, Annex C.2). A PDF 1.5 file with such a page is written as PDF 1.6, with a warning, and
+keeps PDF 1.5's encryption (128-bit RC4). PDF/X files and PDF 1.3 and 1.4 files write such a page in points, and apps
+that keep to the limit cut it to 200 in. In PDF 1.3 and 1.4 files, PDF/X-1a and PDF/X-3 among them, a real number can
+be at most 32,767, and whole numbers are written as integers: a page longer than 32,767 pt whose sides aren't whole
+numbers of points fails the export with an error naming the page before the thumbnails are drawn and the transparency is
+flattened, and one whose art needs a real number past 32,767 fails with the same error when the file is written. A page whose short side is 3 pt or longer but would be under 3 units at that
+`UserUnit` (Annex C.2 gives 3 as the smallest page side), such as 30 m × 6 mm, gets a smaller `UserUnit`: its short
+side divided by 3, rounded down to the next thousandth, so that the short side is at least 3 units and the long side is
+longer than 14,400 units. Each such page adds a warning with its size and how it is written. File › Print writes pages in
+points, 14,400 pt at most.
 
 An Illustrator EPS (version 9 on) or `.ai` file opens from the editing data it carries (after the EPS page; in the
 `.ai` file's PDF private data): layers and sublayers (name, order, visibility, lock, printing, preview, dimming,
@@ -1112,7 +1124,7 @@ before anything runs, with the step's number and its entry (`entry 3`) or line (
 
 ### What a headless session remembers
 
-`vectorcraft-cli run` and the headless `mcp` server keep two things between runs, in folders next to the
+`vectorcraft-cli run` and the headless `mcp` server keep these between runs, in folders and files next to the
 preferences (the folder the desktop app uses, so both see the same ones; `VECTORCRAFT_CONFIG_DIR` moves it):
 
 - **Saved PDF presets** (`pdf.preset.save`, `.delete`, `.import`): one `.vcpdfpresets` file per preset in
@@ -1123,8 +1135,12 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   command, so `edit.colorSettings {"cmyk": "…"}` or a preset's output intent can name it in a later run. The
   copy is what counts: the original may move or be deleted. `color.removeProfile {name}` forgets a profile and its
   copy (not while it is a working space).
+- **Color Settings** (`edit.colorSettings`): the RGB and CMYK working spaces, intent and black point
+  compensation go into `Color Settings.json` when they change, and are the active settings again at the next
+  start, after the profiles above are registered (#6335). Saved settings that name a profile that is no longer
+  there, or a damaged file, leave the defaults (logged), and the next change writes over the file.
 
-Not remembered: Color Settings, the document, anything else. Nothing is read or written when
+Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
 `--automation-write-root` keeps nothing either (the folders are outside its roots). A file that is damaged, too large
 (a profile over 32 MB, a presets file over 1 MB) or not a valid preset or profile is skipped and logged. When the
@@ -1356,7 +1372,7 @@ naming the key, and change nothing: `radius` in `shape.rectangle`; `sides` and `
 in `shape.flare`; `decay` and `segments` in `shape.spiral`; `rows` and `columns` in `shape.rectangularGrid`; `concentric`
 and `radial` in `shape.polarGrid`; `size` and the `width`, `height` and `fitMinPercent` of `area` in `text.create`;
 `size` and `fitMinPercent` in `text.createInPath`; `start`, `end`, `size`, `tracking`,
-`baselineShift`, `hScale`, `vScale`, `rotation` and `strokeWidth` in `text.setRangeStyle`; `start` and `end` in
+`baselineShift`, `hScale`, `vScale`, `rotation` and `strokeWidth` in `text.setRangeStyle`; `strokeWidth` in `text.setStyle`; `start` and `end` in
 `text.editRange` and `text.getRange`; `at` in `text.startList`; `start`, `hScale`, `vScale` and `rotation` in `text.touchType`; `start` in
 `text.glyphAlternates` and `text.setGlyphAlternate`; `by`, `start` and
 `end` in `type.step`; `by` in `type.size.increase` and `type.size.decrease`; `size` in `type.ruby`; `width`, `height`
@@ -1367,6 +1383,15 @@ and `amount` in `color.harmony`; `angle` in `paint.editGradient` and in the `gra
 `paint.freeform.splitLine`; `tolerance` and `gap` in `shapeBuilder.merge`; `gap` in `shapeBuilder.regions`; and
 `width` and `tolerance` in `livePaint.strokeEdge`. A null is read as a key left out. A gradient stop that names a
 swatch refuses a `tint` that is not a number with `` stop 0: `tint` must be a number ``.
+
+`text.setStyle` refuses a `size` that is neither a number nor a length with a unit (`"12 pt"`, `"5 mm"`) with
+`` `size` must be a number, not true ``, and a `tracking` that is neither a number nor a number written as a string
+(`"20"`) with `` `tracking` must be a number, not false ``. It and `text.setRangeStyle` refuse a `font` or `style` that is not a string
+with `` `font` must be a string ``, and a `features` list with an entry that is not a string with
+`features must be a list of tags`; `text.setStyle` refuses such a `justify` too. `type.ruby` refuses a `text`,
+`position` or `align` that is not a string, and `text.setPathHandle` refuses a `which` other than `in` or `out` with
+`` `which` must be one of in, out ``. Each leaves the document, the selection and the undo history as they were, also
+when the call gives another param it could apply. A null is read as a key left out.
 
 A byte offset must be a whole number of at least 0. `at` in `text.startList`, and `start` and `end` in
 `text.editRange`, `text.getRange` and `text.setRangeStyle`, and in `type.step` and `addon.type.textTweaker` given an `id`,
@@ -1382,6 +1407,71 @@ reference that names no value fails the step, so a command never runs with one l
 ```sh
 vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd text.create --params '{"x":10,"y":60,"text":"plain and bold words","size":30}'   --cmd text.setRangeStyle --params '{"id":"$1.id","start":10,"end":14,"style":"Bold"}'
 ```
+
+### Parameter schemas
+
+Some commands have a machine-readable parameter schema: at present `view.capsLock`, `view.saved.new`,
+`view.saved.edit`, `view.saved.list`, `view.transparencyGrid`, `view.snapToGlyph.options` and `engine.apiReference`. The engine's
+`engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
+(https://json-schema.org/draft/2020-12). Its root has `$schema` (the 2020-12 dialect), `description` when the
+command has a summary, and `deprecated: true` when the command is deprecated. The schema uses `type`, `properties`, `required` and
+`additionalProperties: false` for objects; `minimum`, `maximum`, `exclusiveMinimum` and `exclusiveMaximum` for ranges;
+`enum` for a list of names; `items` for the values of a list; `prefixItems`, `items: false` and `minItems: 2` for a
+point; `anyOf` and `minItems: 3` for a color, which is a string, a list of at least three numbers or an object;
+`description` for a parameter's doc text; `default` for a default the engine fills in; and `deprecated: true` for a
+deprecated parameter. VectorCraft's own fields are `x-since` (the API level that added the command or the parameter), `x-deprecatedSince`, `x-lenient`,
+`x-unit`, `x-kind` (`id`, `color` or `point`), `x-default` (a default the command works out, such as `toggle`),
+`x-cost`, `x-writes` (`nothing`, `session`, `preferences` or `document`) and `x-returns`. A parameter that reads null
+as left out is an `anyOf` with `{"type": "null"}`. Null params read as `{}`, so a schema with no required parameter has
+the root `type` `["object", "null"]`. A schema with a required parameter has the root `type` `"object"`, and the engine
+refuses null params for it as a missing parameter. A number with no fractional part, such as `2.0`, is an integer, as
+JSON Schema defines one, and the command receives `2`. An `x-lenient` parameter's schema states the documented type,
+and the engine also passes a value of another type to the command. The command's `params` text equals the text the
+schema writes, and a test checks that they are the same.
+
+The `engine.commands` list and the `command_list` and `list_commands` tools also give such a command an `inputSchema`
+field: the same schema in the form of an MCP tool's `inputSchema`
+(https://modelcontextprotocol.io/specification/2025-06-18/schema), whose root `type` is always `"object"`
+(https://modelcontextprotocol.io/specification/2026-07-28/schema). It differs from `schema` only in the root `type`,
+which is `"object"` also when no parameter is required; every other keyword, `$schema` and the `x-` fields included,
+is the same. A command without a schema lists neither field. The commands remain commands run with `command_run`
+or `run_command`: `tools/list` does not list them as tools. With `brief`, the listings leave out `schema` and
+`inputSchema` as well as the `params` text; a listing with the command's id as `filter` gives them.
+
+The engine checks the params of such a command against its schema before the command runs, for every new call: from
+the desktop app, the control channel, MCP or the CLI, and when one command runs another. The steps of `command.batch`
+and `action.batch` are checked before the first step runs. A value of the wrong type, out of range or not in its list,
+a missing required parameter or an unknown key is refused with a parameter error that names the parameter, with the
+path to a value inside a list or an object, and the document and its undo history stay as they were:
+
+```json
+{"id": "view.saved.new", "params": {"center": [0, 0], "zoom": 0}}
+→ invalid parameters for `view.saved.new`: `zoom` must be a number > 0, not 0
+{"id": "view.saved.edit", "params": {"edits": [{"name": "A", "delete": 1}]}}
+→ invalid parameters for `view.saved.edit`: `edits[0].delete` must be true or false, not 1
+```
+
+An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
+were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
+more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 2
+(`vectorcraft_engine::schemas::API_VERSION`); a change to any of them raises the level. Level 2 added
+`engine.apiReference`. Commands that plug-ins add have no schema here.
+
+`engine.apiReference {}` → `{markdown}` returns the command API reference, written from these schemas each time it
+runs; no file of it is kept. It needs no open document and changes nothing. The reference has a `##` section for each
+built-in command that has a schema, in registry order (the order `engine.commands` lists them), and leaves out every
+command without one, plug-in commands included; `engine.commands` still lists those with their params text. A section
+lists the command's label, menu path, API level, deprecation level, what it writes (`x-writes`), cost, summary and
+return, then a table of its parameters in the schema's order with the columns Parameter, Type, Range, Unit, Default,
+Required, Since, Deprecated and Description. A member of an object parameter is a row of its own after it, named with
+dots and `[]` for a list (`edits[].name`). A range says whether each end is included ("more than 0", "at most 64"); a
+default is either the JSON value the engine fills in, marked "(JSON)", or the note of a default the command works out;
+the Description says when null reads as omitted and when the engine does not refuse a value of another type (a lenient
+parameter). Text from a schema is escaped as Markdown text: each of `` \ | [ ] < > ` * _ ! & # ~ : @ `` and the `.`
+after `www` get a backslash, and line breaks, tabs and other control characters become spaces, so a description cannot
+end a table cell or make a link, an image or HTML. A reference larger than 1 MiB (1,048,576 bytes) is an error naming
+`engine.apiReference`, and no part of it is returned. MCP serves the same text as the resource
+`vectorcraft://commands/reference`.
 
 ## Checking scripts written for the reference app
 
@@ -1453,6 +1543,160 @@ the included files too.
 vectorcraft-cli run --cmd script.check --params '{"path": "Tidy Layers.jsx"}'
 ```
 
+`script.run {path? | source?, name?, args?, answers?, maxFuel?}` runs a JavaScript file against the open documents.
+File › Scripts › Other Script… (Cmd+F12) picks a `.js` or `.jsx` file and runs it the same way; the help page
+https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html
+describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
+case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
+not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and
+`ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. The script reaches the
+app through the global object `vc`, and writes to the Script Console through `$`:
+
+- `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
+  catch. The documents and the session state the command changed, preferences included, go back, and any file it
+  wrote stays written and is named in the report. A result too large to cross throws a `RangeError`, and the
+  command's changes go back the same way.
+- `vc.document` is a snapshot of the active document, or `null` when none is open. A snapshot too large to cross
+  throws a `RangeError`.
+- `vc.commands` lists the commands a script may run.
+- `vc.log(value)` adds a value to the report and a line to the Script Console.
+- `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
+  `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
+- `vc.args` is the `args` object.
+- `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
+run that changes no document adds no undo step. The journal records each command the run finished, as it records
+commands run one at a time. A preference the run changed takes the run's value, and a preference changed in the app
+while the run went on keeps that change. On an uncaught error, a limit or `script.stop`, every open document and the
+session go back to their state before the run. A script can write files through the commands it runs, such as
+export commands. A file written before the run failed stays on disk, and the error names it. A run from the menu
+shows a warning first, unless you ticked Do not show this warning again or set the preference
+`showExternalScriptWarning` to false.
+
+While a script runs, every other command that changes anything ends with the error `a script is running: stop it or
+wait for it to finish`. MCP reports that error as JSON-RPC error `-32003`. `script.stop {}` stops the run and
+returns `{stopped}`. `notifications/cancelled` stops a run only while the `tools/call` that started it is waiting
+for it, as in a headless server; use `script.stop` for a run the app started. A script cannot run commands that
+change anything outside the documents: `script.*` except `script.check`, `plugin.*`, `prefs.*`, `actionSet.*`,
+`shortcutSet.*`, `help.*`, `print.*`, `library.*`, `importMatches.*`, `edit.undoGroup.*`, `file.recovery.*`,
+`stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
+`text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
+`view.proofSetup`, `view.proofColors`, `view.overprintPreview` and `view.separationsPreview`. It also cannot run
+`edit.clearHistory`: a run keeps each document's undo steps from before it and adds one. Calling one of these throws
+an error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
+has unsaved changes.
+
+VectorCraft sets these limits itself:
+
+| Limit | Value |
+|-------|-------|
+| Source text | 8 MiB |
+| Heap | 256 MiB (128 MiB on the web) |
+| Host calls | 2,000,000 |
+| `maxFuel`, instructions in all | 1 to 100,000,000,000; 1,000,000,000 by default |
+| Instructions without a pause | 200,000,000 |
+| Nesting depth | 64 levels |
+| A value crossing to or from a command | 16 MiB and 1,048,576 entries |
+| `args` as JSON | 1 MiB |
+| Log | 10,000 entries and 4 MiB |
+| Script Console | 2,048 lines and 1 MiB of text; 4,096 bytes a line; 256 bytes of a script's name |
+| Growth before a person is asked | 100,000 objects and 512 MiB of new document data |
+
+In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
+`ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
+with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
+runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console}`. In the app the reply is `{running: true,
+name}`, and the report appears later as `scriptReport` in `ui.inspect`. The report of a failed run has the same
+fields after `kind`, `message`, `line`, `column` and `fuelLeft`. `answers` takes only an empty object, since scripts
+have no prompts yet.
+
+- `runTimeMs` is the time the script ran, its commands included. Waits between frames and for a person's answer are
+  left out. `timingAvailable` is false on the web, where `runTimeMs` is 0.
+- `hostCallCounts` is `{vcRun, documentReads, commandListReads, vcLog, consoleWrites}`.
+- `slowestCommands` lists at most 5 commands as `{id, calls, totalMs, maxMs}`, the longest in all first, then by id.
+- `console` is `{lines, droppedLines, truncatedLines}`: the run's own output, `vc.log` lines and uncaught error, as
+  text.
+
+```json
+{"name":"run_command","arguments":{"command":"script.run","params":{"source":"vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10});"}}}
+```
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"path": "Tidy Layers.js", "args": {"margin": 12}}'
+```
+
+Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
+`$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message`, its end, and a report of
+its time, host calls and slowest commands. Each line shows the run's number and the script's name. Line feeds,
+carriage returns and the two together break lines, and other control characters show as their Unicode Control
+Pictures. The console keeps at most 2,048 lines and 1 MiB of text and drops the oldest lines past that. A line longer
+than 4,096 bytes, and a script's name longer than 256 bytes, is cut with `…`. When the console has dropped or cut any lines, a note at the top counts them. The panel lays out only the
+rows in view. Click a line to select it and Shift-click to extend the selection. Clear, Copy Selected and Copy All are
+at the bottom of the panel and in its menu. Output goes on while the panel is closed.
+
+- `script.console {}` returns `{lines: [{run, name, kind, text}], droppedLines, truncatedLines}`. `run` is the
+  run's number in the session, and `kind` is `start`, `output`, `log`, `error`, `end` or `report`. An end line's text
+  is `ended:`, a space, and then `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`.
+- `script.console.clear {}` empties the console, sets its counts to zero and returns `{cleared}`. A running script
+  goes on writing, and `scriptReport` keeps the last run's console.
+- `ui.copyScriptConsole {first?, last?}` copies lines `first` to `last` to the clipboard as the panel shows them, or
+  every line when both are left out. When the console has dropped or cut any lines, a copy of every line starts with a
+  line that counts them. Pass both or neither. It returns `{lines}`, which does not count that line.
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"source": "$.writeln(\"layers: \", 3);"}'
+```
+
+File › Scripts lists the scripts of the `Scripts` folder next to the preferences: `~/Library/Application
+Support/VectorCraft/Scripts` on macOS, `%APPDATA%\VectorCraft\Scripts` on Windows, and
+`$XDG_CONFIG_HOME/vectorcraft/Scripts` or `~/.config/vectorcraft/Scripts` on Linux and BSD. VectorCraft does not make
+the folder: create it, and put `.js` or `.jsx` files in it. Each file is a menu item named after the file without its
+extension, and each subfolder is a submenu that holds the scripts in it. The help page
+https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html and
+the page https://ai-scripting.docsforadobe.dev/introduction/executingScripts/ describe a Scripts folder listed this
+way. The listed scripts come first in the menu, above Check Script… and Other Script…. Choosing one runs the file as
+`script.run` runs a file, without the warning that Other Script… shows.
+
+The rest of this section is VectorCraft's own rules:
+
+- The folder is read when the app starts, each time its window becomes the active one, and, where the menus are in
+  the window (Windows, Linux and BSD), each time the File menu opens. A script added while VectorCraft runs is listed
+  after the next of these. A read takes names only, never a script's text, and runs off the UI thread, one read at a
+  time.
+- Each level is sorted by label without regard to case, with scripts and subfolders mixed. A script whose label
+  another row of its folder has (`Tidy.js` beside `Tidy.jsx`, or beside a subfolder `Tidy`) shows its whole file name.
+- A symbolic link or a Windows junction is never followed: a linked file or subfolder is left out, and a `Scripts`
+  folder that is itself a link is not read. Names that start with a dot, files and folders Windows marks hidden or
+  system, names that are not Unicode, names longer than 255 bytes and subfolders without a script are left out too,
+  and a listed script that is marked hidden or system, or lies in a folder marked so, by the time it is chosen does
+  not run.
+- One read looks at 2,048 folder entries at most, lists 512 scripts and reads 128 subfolders, 4 levels deep, for at
+  most 250 ms. A label longer than 128 characters is cut, and control and bidirectional formatting characters in a
+  name are shown as `\u{…}` escapes. When a read stops at a limit or cannot read a subfolder, the menu keeps what it
+  found and shows `Some scripts were not listed`. The menu also shows that note, and leaves the rows out, when a
+  read finds new names after the menus have shown 16,384 different script and folder names since VectorCraft started.
+  When the folder is there and cannot be read, the menu shows
+  `The Scripts folder cannot be read`.
+- A listed file is checked again when it is chosen. A file that is gone, is no longer a `.js` or `.jsx` file under
+  the folder, or is or lies behind a link ends with `the script is no longer in the Scripts folder`, and nothing runs.
+- The web build has no Scripts folder, and neither has a run with `VECTORCRAFT_NO_PREFS` set.
+
+`script.listInstalled {}` returns the same listing: `{folder, scripts: [{path, label, folders}], truncated,
+unreadable}`, with the scripts in menu order and `folders` the labels of the subfolders a script is in. `folder` is
+`null` without a Scripts folder. `ui.runInstalledScript {path}` runs one of them by the `path` the listing gave, as
+its menu item does. Under `--automation-read-root`, `script.listInstalled` lists the folder only when the folder lies
+inside a read root, `ui.runInstalledScript` runs a script only when the script lies inside one, and `ui.menu.list`
+leaves out the listed scripts outside the read roots.
+
+```json
+{"name":"run_command","arguments":{"command":"script.listInstalled","params":{}}}
+```
+
+```sh
+vectorcraft-cli run --cmd script.listInstalled --params '{}'
+```
+
 ## Transparency and opacity masks
 
 Transparency and opacity-mask commands take `ids` (or `id`), so they need no selection. Opacity is a percentage
@@ -1469,6 +1713,12 @@ the editing layer. With gradient mesh points picked, `opacity` goes to those poi
 {"name":"run_command","arguments":{"command":"transparency.setOpacityMask","params":{"id":12,"clip":false}}}
 {"name":"run_command","arguments":{"command":"transparency.info","params":{"ids":[12,20]}}}
 ```
+
+`transparency.makeOpacityMask` rejects a `clip` or `invert` value that is not a boolean, such as `"clip": "false"`,
+and `transparency.setOpacityMask` does the same for `clip`, `invert`, `disabled` and `linked`. The toggles
+`transparency.toggleNewMasksClipping`, `transparency.toggleNewMasksInverted`, `transparency.togglePageKnockoutGroup`
+and `transparency.togglePageIsolatedBlending` reject a `value` that is not a boolean. A rejected call changes nothing.
+Omitting a param or giving null keeps its default.
 
 Knockout Group has three states: `transparency.set {knockout: "on"|"off"|"neutral"}` (`true` = on, `false` =
 neutral, the default). In a knockout group each child hides what it covers of the children below it; neutral groups
@@ -1570,9 +1820,17 @@ overrides selected anchors or guides. Every explicit id is validated before any 
 or unknown id leaves the document unchanged. An empty `ids` array does nothing. Layers themselves
 are kept, and selecting an ancestor together with its descendants deletes that subtree once.
 Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
-Cut still removes the objects it copied, including a whole compound when a member is selected.
 With `ids`, `guides: true` also deletes the selected ruler guides. The command rejects a `guides` value that is not a
 boolean.
+
+`edit.copy` takes a compound-path member selected on its own (whole or in part, with Direct or Group Selection) as an
+ordinary path with the compound's paint, transparency, opacity mask and fill rule. The path is linked to the compound's
+graphic style while it has that style's look, and otherwise to no style. A gradient fitted to the compound keeps the compound's fit. Copy takes the whole compound when the compound itself is selected, or when every member is
+selected whole outside isolation mode, which includes the one member of a compound of one. In an isolated compound
+path each member is taken as itself. `edit.cut` removes the same objects it copies, so cutting one member leaves the
+other members in the compound, a compound of one member included. When Clear deletes every anchor or segment of every
+member, it also removes the compound. With a copied member still selected, `edit.pasteInFront` puts the path into the
+compound, just above the member.
 
 `object.setProps` with `visible: false` or `locked: true` deselects every selected object that is hidden or
 locked after the call: the selected objects it hides or locks, selected objects inside them, and selected objects
@@ -1787,6 +2045,11 @@ View › Guides › Lock Guides (`view.guides.lock`) deselects them and the path
 document, and refuses these commands until unlocked. While it is on, a command that selects art, such as `edit.undo`,
 `edit.redo`, `object.exitIsolation`, `object.unlockAll`, `object.showAll` or `edit.paste`, leaves the guides out.
 `view.guides.lock` rejects a `locked` value that is not a boolean. Omitting `locked` toggles the current value.
+While guides are locked, `guide.add` and a guide dragged out of a ruler still make new guides, which are locked too.
+Preferences › Guides & Grid › Lock Guides by Default (`lockGuidesByDefault`, off by default) locks guides when the
+desktop app starts. Changing the preference, with `prefs.set` or `prefs.reset`, sets the lock to the new value at once.
+`view.guides.lock` changes the lock for the session and does not change the preference. A headless session starts
+with guides unlocked, as the preference is off until `prefs.set` turns it on.
 
 `view.guides.release {index?, ids?}` (View › Guides › Release Guides) turns guides into paths → `{count}`. With
 `index` it releases that ruler guide, and with `ids` it releases those guide paths (and the guide paths inside them).
@@ -1807,6 +2070,12 @@ Guides off, View › Snap to Point pulls it onto anchors. In the desktop app a g
 same way and is made where it is released over the canvas (with the Artboard tool, as an artboard guide of the
 active artboard), a guide dropped off the canvas onto its ruler is deleted, and hidden guides (View › Guides › Hide
 Guides) can't be picked. An artboard guide is picked, drawn and snapped to across its artboard only.
+Preferences › Guides & Grid › Artboard Guides with Cmd/Ctrl + Ruler Drag (`cmdRulerDragArtboardGuides`, off by
+default) is VectorCraft's own option. With it on, Cmd/Ctrl held when a drag leaves a ruler makes the guide an artboard
+guide of the active artboard, with any tool but the Artboard tool, and with the Artboard tool a canvas guide. The key
+is read when the drag starts, so letting it go during the drag keeps the kind of guide. Such an artboard guide shows,
+and is made, only where it lies within the active artboard: a vertical guide between its left and right edges, a
+horizontal guide between its top and bottom. Released anywhere else, it makes no guide and no undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"guide.add","params":{"vertical":true,"pos":100}}}
@@ -1829,7 +2098,8 @@ already walks Image Trace. Short agent entry points:
   a symbol with guides keeps its corners at their size, and `symbol.breakLink` gives its art as it draws; dragging a
   guide on the canvas in symbol editing mode sends `nineSliceGuides` in one undo step; `type` is
   Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options dialog),
-  `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}` (the art keeps the instance's opacity mask), `symbol.replace`,
+  `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}` (the art keeps the instance's opacity mask; a hidden or locked instance's
+  art stays hidden or locked and is not selected), `symbol.replace`,
   `symbol.edit {id?, ids?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
   isolated layer, where the instance `id` shows it or centered on (x, y), by default on the center of artboard
   `artboard`, the active one the app passes, or in a document without artboards on `viewCenter`, the view's center the
@@ -1860,16 +2130,23 @@ already walks Image Trace. Short agent entry points:
   one back to the symbol. It is refused for a static symbol and for a path that names no object. On the canvas (VectorCraft's own rule), a Direct Selection click on an instance of a
   dynamic symbol selects the path, compound path or type object of its art under the pointer and outlines it
   (`symbol.instance.selectPart {id, path}`; Alt or Shift selects the instance whole). While it is selected,
-  `paint.setFill` and `paint.setStroke` with a solid color or none, `paint.invert` and `paint.complement` on a solid
-  color, all without `ids`, `id` or `item`, and the Eyedropper's `appearance.copyFrom` with a solid fill and stroke
-  change that object's fill or stroke for this instance only, each as one undo step. A painted stroke on type without a
-  weight gets 1 pt. A gradient or pattern for the object is refused with a status message, and so are `paint.invert` and
-  `paint.complement` on type whose characters differ in color, Eyedropper options that pick up neither color, an
-  Eyedropper source that is not a path, compound path or type (a symbol instance or a group, for which the paint defaults
-  stay as they are too), and a click
-  or `symbol.instance.selectPart` on any other object of the art (a group, image, blend or nested instance among them).
+  `paint.setFill` and `paint.setStroke` (solid, none, gradient or pattern) and `paint.invert` and `paint.complement`
+  on a solid color change that object's fill or stroke for this instance only when `ids`, `id` and `item` are omitted.
+  `transparency.set` with opacity and/or blend does the same when `ids`, `id` and `item` are omitted; with `ids` or
+  `id` it edits those objects, so the instance's id changes the instance. `appearance.copyFrom` takes the source's
+  fill and stroke (including a gradient or pattern) for this instance only when `ids` is omitted and `reverse`,
+  `append` and `defaultsOnly` are false or omitted, and only for each paint the Eyedropper Options pick up and
+  apply; a paint disabled in either tree stays as it was. With `ids`, and `reverse` false or omitted, it copies
+  onto those objects; with `reverse` true it copies from the first of `ids` onto `source`. The paint commands,
+  Transparency and the Eyedropper each record an undo step only when the override changes; an unchanged override
+  records none. A painted stroke on type without a weight gets 1 pt. `paint.invert` and `paint.complement`
+  on a gradient or pattern, or on type whose characters differ in color, are refused with a status message, and so are
+  Eyedropper options that pick up neither color, an Eyedropper source that is not a path, compound path or type (a
+  symbol instance or a group, for which the paint defaults stay as they are too), isolate, knockout, knockoutShape,
+  aligned and target on `transparency.set`, and a click or `symbol.instance.selectPart` on any other object of the art
+  (a group, image, blend or nested instance among them).
   The commands that change the selected objects without `ids` are refused the same way and change nothing, among them
-  opacity and blending mode, moving and transforming, `path.moveAnchors`, `file.place` with `replace`, Puppet Warp, Delete
+  moving and transforming, `path.moveAnchors`, `file.place` with `replace`, Puppet Warp, Delete
   and Cut, Group, Hide, Lock, Arrange, Expand,
   Recolor Artwork, plug-in filters, effects, the gradient commands, `gradient.selectStop`, the Appearance panel's rows and
   `symbol.instance.setAppearance`. A Cmd-drag that lends the Selection or Group Selection tool selects the instance whole
@@ -2341,10 +2618,12 @@ default) white ones knock out instead; `"discard"` writes none.
 
 ## Revolve (initial 3D effect)
 
-`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path
-or compound path. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
+`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path,
+compound path, type, clipping group, blend, symbol instance, or a group or layer of them. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
 `effect.expandAppearance` bakes it into shaded vector faces. Native saves keep the editable source;
 SVG/PDF exports bake the same faces the canvas draws. Only one Revolve is supported per profile.
+Type sweeps as its glyph outlines and stays type. On a group or layer, every visible member sweeps about one axis on the chosen edge of the members' bounds together, in its own paint, and the members stay editable. A clipping group sweeps its art inside the clipping path, a blend its keys and steps, and a symbol instance its symbol's art where the instance places it, alone or in a group ([three-d.md](three-d.md#clipping-groups-blends-and-symbol-instances)). An image, alone or in a group, is refused with "trace it first with Object › Image Trace › Make"; a group holding another object that can't be swept is refused, and so is type with no outlines or a group with no shape in it.
+A surface takes at most 16,384 profile points and 163,840 faces, the members of a group together, counted after any geometry effects before the Revolve. A straight segment takes one point, a curve takes at least four, and each contour takes one. Each curved segment takes 16 samples; on a surface over those limits every curve takes as many as fit, down to 4, and the call is refused below that with "reduce Segments or simplify the profile". The call is also refused with "reduce Segments or simplify the gradient" when the faces' copies of the paint would take more than 256 MiB, counted together for the members of a group and for the fills and strokes of one object that carry a Revolve. To find the holes, mesh export cuts each sampled piece of a closed contour where it crosses another closed contour, adding a profile point at each cut, and tests the middle of each part against the closed contours whose bounds share its cell of a grid over the profile. It refuses the profile as too complex when its contours overlap so much that the search would take more than 16,000,000 steps, where each path element tested, each contour looked at and each contour placed in a grid cell counts one.
 
 Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000, default 0),
 `edge` (`"left"` or `"right"`), `rotationX/Y/Z` (degrees, defaults 0/0/0), `perspectiveAngle`
@@ -2417,7 +2696,14 @@ checked as that effect's. It is one undo step. Any other `threeDType` value, or 
 
 `effect.apply {effect: "threeD.extrude" | "threeD.inflate" | "threeD.rotate", params: {...}, ids?, item?}` applies
 the other 3D types to a path or compound path, live like Revolve (the source stays editable; SVG/PDF exports and
-`effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included.
+`effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included. On a group or
+layer the 3D effect goes on the group itself: `effect.apply` and `effect.setParams` refuse one on its fill or stroke.
+Every 3D type, `threeD.classicExtrude` and `threeD.revolve` included, also applies to a clipping group, a blend or a
+symbol instance, alone or in a group, and builds from the art it shows, the same way for the canvas, exports and
+`assets.add3D` ([three-d.md](three-d.md#clipping-groups-blends-and-symbol-instances)); like a group, it takes the
+effect on the object itself, not on a fill or stroke. An image, alone or in a group, is refused with "trace it first
+with Object › Image Trace › Make", and nothing changes. On a group, an opacity mask on a member, or on a group inside
+it, masks that member's solids ([three-d.md](three-d.md#groups)).
 
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
@@ -2427,6 +2713,12 @@ solid, false open behind), `volume` (0..100%, default 50), `bothSides`.
 All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
 `perspectiveAngle` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
 the scope and what differs from the public documentation.
+`threeD.extrude` and `threeD.inflate` take up to 65,536 outline points and build up to 163,840 faces for each solid
+(VectorCraft's own limits); with more faces than that, each curve takes fewer pieces, down to 4. A shape past the
+points returns "The shape is too complex for a 3D effect", and one whose faces do not fit at 4 pieces a curve returns
+"The 3D surface is too complex; simplify the shape". `threeD.inflate` also returns the surface error when its outline
+has so many points across so many of its grid's cells that filling the grid would pass its work limit. `threeD.rotate`
+takes up to 65,536 points.
 
 ## Extrude & Bevel (Classic)
 
@@ -2465,6 +2757,8 @@ the image; linked images are left alone) and the tiles of pattern fills and stro
 pattern swatch, e.g. "Dots 2"; the original pattern is untouched). Colorized image fills are recolored when fills are in
 scope, but their pixels are never recolored. `includeImages: false` leaves other images' pixels unchanged.
 For `edit.colors.*`, `fill: false` leaves colorized image fills unchanged. `recolor.apply` always includes fills.
+`edit.colors.toGrayscale` and `edit.colors.adjustBalance` with `mode: "gray"` and `convert: true` store an embedded image
+with one gray channel, so a PDF writes it in gray.
 `includePatterns: false` leaves patterns out. The Blend commands also grade gradient meshes, which keep their shading.
 `edit.colors.saturate` needs `intensity`, a number from -100 to 100 (a number outside the range counts as its nearest
 end). Without one, or with a value that is not a number, it answers `` missing number `intensity` `` and changes nothing.
@@ -2638,7 +2932,7 @@ as a value left out.
 ## Graphic style libraries
 
 Graphic style libraries are read-only sets of graphic styles generated in code (Shadows and Glows, Outlines and
-Rules, Hand-Drawn, Gradient Finishes, Shape Effects, Blends and Transparency). `graphicStyle.libraries` lists them
+Rules, Hand-Drawn, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD). `graphicStyle.libraries` lists them
 (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and `graphicStyle.library {library}` returns one's
 styles in the `graphicStyle.list` shape (`library` is an id or a name). `graphicStyle.addFromLibrary {library, name? |
 names?}` copies styles into the document's Graphic Styles as one undo step (no names: the whole library); styles the
@@ -2686,10 +2980,10 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: four generated in code (Art Ribbons, Calligraphic Nibs, Pattern
-Borders, Scatter Shapes), the `.vectorcraft` files in the user library folder of the desktop app (User Defined) and
-the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has the default
-ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
+Brush libraries are read-only sets of brushes: five generated in code (Art Ribbons, Calligraphic Nibs, Pattern
+Borders, Scatter Shapes, Game Trails), the `.vectorcraft` files in the user library folder of the desktop app (User
+Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
+the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
 `brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
 `brush.addFromLibrary {library, name? | names?}` copies brushes into the document's Brushes as one undo step (no
 names: the whole library), with the resources their art uses: patterns, symbols, swatches (`swatchConflict` as for
@@ -2866,7 +3160,7 @@ where the layout puts it.
 `object.flattenTransparency {ids?, preset?, …options}` turns transparent art into opaque art that looks the same, in
 one undo step. The targets split into groups of overlapping objects; groups without transparency stay as they are.
 Each other group becomes one group of atomic regions: paths filled with the flat colour the art showed there (over
-white; over nothing, keeping alpha, with `preserveAlpha: true`), plus one image where gradients, patterns, images,
+white, which blend modes do not read; over nothing, keeping alpha, with `preserveAlpha: true`), plus one image where gradients, patterns, images,
 opacity masks or raster effects reach (clipped to those regions with `clipComplexRegions`, a rectangle without).
 `preset` is `high`, `medium` (the default) or `low`; option keys (`balance` 0–100, `lineArtPpi`, `gradientPpi`,
 `textToOutlines`, `strokesToOutlines`, `clipComplexRegions`, `antiAlias`, `preserveAlpha`, `preserveOverprints`)
@@ -2894,6 +3188,22 @@ pattern's own swatches have (a name Swatch Options gave the pattern's swatch, fo
 the old name. A rename gives the new name to the pattern's swatches that had the old one; any other swatch that has the
 old name keeps it. A blank name gives "New Pattern N" in `object.pattern.make` and "`<pattern>` copy" in
 `object.pattern.saveCopy`, and `pattern.options` keeps the name.
+
+The pattern commands (`object.pattern.make`, `object.pattern.edit`, `object.pattern.saveCopy`, `pattern.options`,
+`pattern.delete`) and the Repeat commands (`object.repeat.radial`, `object.repeat.grid`, `object.repeat.mirror`,
+`object.repeat.options`) reject a param of the wrong type, such as `"instances": "8"`, `"edit": "false"` or
+`"tileType": 2`, and change nothing. `pattern.options` also rejects an `overlap` that is not an object, and an
+`overlap.h` other than `left` or `right` or an `overlap.v` other than `top` or `bottom`. `object.repeat.options` rejects
+a `center` that is not `[x, y]`, and `object.repeat.radial` rejects a negative `radius`. In `object.pattern.make`,
+`object.pattern.saveCopy`, `object.repeat.radial`, `object.repeat.grid` and `object.repeat.mirror`, omitting a param or
+giving null keeps its default. In `pattern.options` and `object.repeat.options`, omitting a param or giving null keeps
+the pattern's or the repeat's current value, with two exceptions. A brick `tileType` in `pattern.options` or a brick
+`gridType` in `object.repeat.options` with `brickOffset` omitted or null sets the offset to 0.5. While `sizeTileToArt`
+is on, each `pattern.options` call sizes the tile to the art plus `hSpacing` and `vSpacing` again and ignores `width`
+and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` still rejects a non-null `width` or
+`height` that is not a positive number, such as `"width": 0`, and changes nothing. Without a `name`,
+`object.pattern.edit` edits the pattern that fills or strokes a selected object, and `pattern.options` changes the
+pattern being edited; each returns an error when there is no such pattern. `pattern.delete` requires `name`.
 
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
@@ -3171,18 +3481,24 @@ and `stroke.widthProfile.reset` removes every saved one. `stroke.set {profile}` 
 
 ## Arrowheads
 
-`stroke.set {startArrow, endArrow}` takes any of 40 generated heads by name (the params doc lists them; `null` for
-none): arrows (`Arrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Right`, `Chevron`, `Feather`,
+`stroke.set {startArrow, endArrow}` takes any of 41 generated heads by name (the params doc lists them; `null` for
+none): arrows (`Arrow`, `LineArrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Right`, `Chevron`, `Feather`,
 `Swallowtail`…), filled and open shapes (`Triangle`, `Circle`, `Oval`, `Target`, `Tag`, `Diamond`, `Hexagon`, `Star`,
 the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `DoubleSlash`, `Bracket`, `Fork`, `Cross`,
-`Plus`). Each head fits a box about four times its weight (stroke weight × `arrowScale`) long and wide.
+`Plus`). Each head fits a box about four times its weight long and wide. A head's weight is the stroke weight scaled by
+`arrowScale`, at least 0.25 pt. `LineArrow` has two arms of the head's weight (the line's weight at 100 % for lines of
+0.25 pt or more) at right angles and spreads twice as wide.
 
 ## Stroke bounds and clicks
 
 Visual bounds (Fit to Selected Art, Rasterize, exporting all art) and clicks on the canvas take
 in the whole stroke as drawn: arrowheads, inside/outside alignment (an outside stroke is hit outside the path, an
 inside one inside it), the width profile's width where you click, projecting caps and miter spikes up to the miter
-limit. A rectangle's right-angle miters stay within half the weight of its edges.
+limit. A rectangle's right-angle miters stay within half the weight of its edges. A butt-capped stroke on an open
+path does not reach past the path's ends: a straight segment's box comes from the four corners of its stroked
+rectangle. Past an end, only a round or projecting cap or an arrowhead adds to the box. A curve that bends more
+tightly than half the stroke weight can measure a little larger than it paints, and a butt-dashed path whose first or
+last dash is a gap is measured to the path's ends.
 
 A symbol instance is measured by its symbol's art, placed by the instance's transform. The bounds in
 `document.inspect` and `document.node`, the Align commands, `object.setBounds`, the bounding box, clicks, marquees,
@@ -3244,6 +3560,8 @@ holds symbol instances that `object` expands, whether only their art holds it, w
 mesh points as the gradient paints them, with the colors Object › Expand gives them.
 `object.expand`, `effect.expandAppearance`, `type.createOutlines` and `object.path.outlineStroke` turn a dimension whose
 art they change into a plain group of that art, in the same undo step (see [dimensions.md](dimensions.md)).
+`object.expand` rejects a param of the wrong type, such as `"fill": "yes"`, `"gradient": 3` or `"steps": "16"`, and
+changes nothing. Omitting a param or giving null keeps its default.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
@@ -3387,7 +3705,9 @@ Selected End Points) joins the ends again; `path.join {ids: [a, b], ends: ["last
 (Average & Join, Cmd+Alt+Shift+J) moves two ends to their midpoint and joins them there, the joined anchor a corner or a smooth point, in one
 undo step: the two direct-selected anchors when they are open path ends, else the nearest ends of the two open paths in `ids` or the
 selection (both ends of one, closing it); anything else is refused. `path.convertAnchor {id, subpath?, anchor, to, x?, y?}` and
-`path.split {id, subpath?, anchor}` do the same to one anchor (the Anchor Point and Scissors tools); the Pen with Alt
+`path.split {id, subpath?, anchor}` do the same to one anchor (the Anchor Point and Scissors tools); `path.split`,
+at an anchor or at `segment` and `t`, leaves the first anchor of the piece after the cut selected alone, and a Direct
+Selection press on two anchors on top of each other takes the selected one; the Pen with Alt
 held over a selected path's handle, anchor or segment works as the Anchor Point tool. `press_key` Escape between two
 `pointer_gesture` calls of an Anchor Point drag cancels it: the path goes back and no undo step is added. `path.reshapeSegment {id,
 subpath?, segment, t, dx, dy, perpendicular?}` (a segment dragged with Direct Selection or the Anchor Point tool) moves the segment's
@@ -3405,6 +3725,37 @@ the canvas (coordinates out of range)".
 `path.setHandle`, `path.moveAnchor` and `path.insertAnchor` edit subpath 0 when `subpath` is absent or null, and refuse a `subpath` that
 is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `subpath`"); `path.split` refuses such
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
+
+`path.reshape {id, x, y, dx, dy, tol?, focal?, radius?}` (a Reshape tool drag) grabs the path at `x`, `y`, adding an
+anchor there unless one lies within `tol` (3 by default), and moves that point by `dx`, `dy`.
+[Adjust path segments](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/adjust-path-segments.html)
+has the Reshape tool stretch part of a path from the dragged point without losing the path's general form, with every
+highlighted focal point pulling the path. Which anchors stay, how far the stretch reaches and the share of the drag each
+point takes are VectorCraft's own rule. The grabbed point and the anchors that `focal` lists as `[subpath, anchor]` pairs are focal
+points and move by the whole drag; a pair that names no anchor of the path is refused ("`focal` names [0, 7], which is
+not an anchor of the path"). Anchors that are not direct-selected stay in place (on a path selected whole, or not
+selected, every anchor is selected), and so do the two ends of an open path unless they are focal points. A selected
+anchor between two focal points moves by the whole drag. A selected anchor between a focal point and an anchor that
+stays takes `u² (3 - 2u)` of the drag, where `u` is its distance from the anchor that stays along the path's control
+polygon (anchor, out handle, the next in handle, the next anchor) divided by the focal point's distance from it. A
+handle takes the share on the tangent line of that curve at its anchor, so the handles of a smooth anchor stay in line
+with it; a handle that is long beside that distance takes a share below 0 or above 1, and moves against the drag or
+farther than the focal point. A closed subpath with every anchor selected moves whole, and a subpath with no focal
+point does not move. An anchor added on a segment of a partly selected path is selected, and the other selected
+anchors stay selected. With `radius`, only the grabbed point's subpath changes, whatever the selection: the anchors
+within `radius` of the grabbed point along the path follow with a smooth falloff and the others stay; a negative
+`radius` is refused ("`radius` must be 0 or more"), and so is `radius` given with `focal` ("`focal` and `radius`
+cannot be used together"). A drag of no length on an anchor (`dx` and `dy` 0 or left out) leaves the path as it is
+and records no undo step.
+
+With the Reshape tool, a click on an anchor of a selected path makes it the focal point, and a click on a segment adds
+an anchor there (one undo step) that becomes the focal point. Shift-click adds an anchor or a point on a segment to the
+focal points. The rest of the tool's behavior is VectorCraft's own rule: Shift-click on a focal point removes it, and
+the focal points belong to one path, so a click on another selected path starts again there. Each focal point shows a
+filled anchor square in a larger hollow one. A drag from a focal point moves all of them; a drag from another point
+moves that point alone as the focal point, with or without Shift (Shift keeps the drag's angle). After a drag the
+focal points stay highlighted where it left them; Escape during a drag puts the path back and keeps them, and
+switching to another tool clears them.
 
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
 naming the key; the document does not change and no undo step is recorded: `t`, `dx` and `dy` in
@@ -3480,6 +3831,11 @@ dialog `simplifySlider` with field `level`) at the Auto-Simplify level for the s
 `ui.dialog.confirm`. `ui.simplifyAuto` moves the open slider back to the Auto-Simplify level, and `ui.simplifyMoreOptions`
 opens the Simplify dialog at the slider's tolerance. When OK confirms the dialog with `retain` ticked, the menu item opens
 the dialog on those settings next time.
+
+`object.path.simplify`, `object.path.offsetPath`, `object.path.splitIntoGrid`, `object.path.cleanUp`,
+`object.pathfinder.trap` and `addon.contour.set` reject a param of the wrong type, such as `"offset": true`,
+`"joins": 3`, `"rows": "many"` or `"addGuides": "yes"`, and change nothing. A distance still takes a string with a unit
+(`"5 mm"`). `joins` must be `miter`, `round` or `bevel`. Omitting a param or giving null keeps its default.
 
 ## Smooth
 
@@ -3911,6 +4267,36 @@ an error that lists the choices of a `horizontal`, `vertical`, `to`, `axis` or `
 (`object.reflect` also takes an angle and names the value given), and one for a `spacing` that is not a number; nothing
 moves.
 
+## Glyph bounds for type
+
+The bounding box normally measures point type by its em box, which leaves room above and below the letters for
+ascenders, descenders and capitals. With the preference `typeGlyphBounds` on (`prefs.set {key: "typeGlyphBounds",
+value: true}`; also Preferences › Type › Glyph Bounds and the Transform panel menu's Measure Type by Glyph Bounds), the
+bounding box and its handles, the Transform panel's, Control bar's and Properties panel's X, Y, W and H,
+`object.setBounds`, the Scale, Rotate and Reflect tools' reference point, and Swap Objects, Replace with Top Object,
+Set Size of Each and Sort Objects measure point type, horizontal or vertical, by the ink of its glyphs: its glyph
+outlines and its underline and strikethrough bars. This applies to each point type object that is selected as an object
+(not inside a selected group), in a selection with other objects too. The option is VectorCraft's own and is off by
+default.
+
+A width or height typed with the option on scales the type until its ink has that size. The type stays live type: its
+font size changes by the vertical scale, so `object.setBounds {height: 72}` on "H" gives the cap height 72 pt, not a
+72 pt font. A width typed alone, out of proportion, changes the horizontal scale and keeps the font size, and a height
+typed alone keeps the width, so the horizontal scale changes the other way. With Use Preview Bounds on, the ink takes in the characters' strokes, and type with geometry effects is
+measured as drawn. Rotated type keeps its own angle, and skewed type is measured by its glyph outlines. Type that
+draws nothing (no text, or only spaces without underline or strikethrough), area type, type on a path and type inside
+a selected group are measured as before. Arrange in Grid and Group Overlapping Objects measure visual bounds as
+before, and Align and Distribute follow Align to Glyph Bounds.
+
+When moved type snaps (Snap to Grid, Snap to Pixel, Smart Guides and ruler guides), the edges and center of its ink box
+snap, and the Distance Guides measure from that box. The other objects that it snaps to keep their usual boxes, as
+they do with Use Preview Bounds. The preference is not saved in documents.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeGlyphBounds":true}}}}
+{"name":"run_command","arguments":{"command":"object.setBounds","params":{"height":72,"proportional":true}}}
+```
+
 ## Selection preferences
 
 The Selection & Anchor Display and General preferences apply to `pointer_gesture` as they do to the mouse:
@@ -3989,9 +4375,11 @@ desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps;
 `disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
 segment or an anchor of a selected path.
 
-`ctrlWheelScrollsSideways` (on by default): on, Cmd/Ctrl-wheel scrolls the canvas sideways instead of zooming while
-`zoomWithMouseWheel` is off; off, Cmd/Ctrl-wheel zooms about the pointer. Alt + Cmd/Ctrl-wheel and a pinch on a Mac
-trackpad, on a touch screen or in the web build still zoom about the pointer. With `zoomWithMouseWheel` off, once a
+`ctrlWheelScrollsSideways` (on by default): on, Cmd/Ctrl with a mouse wheel's whole notches scrolls the canvas sideways
+instead of zooming while `zoomWithMouseWheel` is off; off, Cmd/Ctrl-wheel zooms about the pointer. Alt + Cmd/Ctrl-wheel
+and a pinch on a Mac trackpad, on a touch screen or in the web build still zoom about the pointer. Under either
+wheel preference, Cmd/Ctrl zooms about the pointer for the rest of a wheel turn once the turn has a trackpad event,
+point deltas from an unnamed source in the desktop app, or line deltas that are not whole notches. With `zoomWithMouseWheel` off, once a
 trackpad gesture holds Alt, it zooms until it ends, also after Alt is let go. The control channel's
 `ui.wheel` with `cmd: true` turns the wheel with Cmd/Ctrl held.
 
@@ -4003,7 +4391,21 @@ every document they read except a native file and the native document that an SV
 
 `view.rotate {angle}` (desktop app) turns the view to `angle` degrees about the center of the canvas; a positive angle
 turns the art clockwise on screen. View › Rotate View and the status bar's angle menu run it. It returns `{angle}`, the
-angle it set, normalized to (-180, 180], and `view.rotateReset` turns the view back to 0.
+angle it set, normalized to (-180, 180], and `view.rotateReset` turns the view back to 0, returning `null` on success.
+
+Select the Rotate View Tool with `select_tool` and the tool id `rotateView`. Its `pointer_gesture`
+drags turn the canvas about its center; Shift snaps to 15°. Document coordinates for a rotation
+gesture use the view at the initial down event, including when the gesture spans several calls.
+The control channel rejects malformed rotation packets without changing the angle and cancels
+the current press. Start a new down event after an error.
+Reset Rotate View is the command `view.rotateReset`:
+
+```json
+{"name":"select_tool","arguments":{"tool":"rotateView"}}
+{"name":"pointer_gesture","arguments":{"events":[{"kind":"down","x":300,"y":150},{"kind":"drag","x":200,"y":250},{"kind":"up","x":200,"y":250}]}}
+{"name":"command_run","arguments":{"id":"view.rotateReset","params":{}}}
+```
+
 `view.rotateToSelection` (desktop app, View › Rotate View to Selection) turns the view about the center of the canvas to
 the angle the selected objects share (`selectionRotation` in `document.inspect`, 0 when their angles differ), so their
 bounding box is square to the window. It returns `{angle}`, and with nothing selected it returns "nothing selected".
@@ -4200,8 +4602,8 @@ selected) on top of a template. With nothing selected, `stroke.set` / `stroke.se
 arrowheads, profile…) and `graphicStyle.apply` (every fill, stroke and effect, opacity, blend mode and the link to the
 style; `add: true` stacks it) set that template instead of editing art. With the Appearance panel's New Art Has Basic
 Appearance on (the default), a `select.*` command or `layer.target` that changes the selection loads the proxies and
-the weight from it: only a paint or weight the selected objects share, and art without paint (a placed image) changes
-nothing. With the option off (`appearance.setNewArtBasic {on: false}`, the preference `newArtBasic`) new art takes the
+the weight from it: only a paint or weight the selected objects share, and art without paint (a placed image that isn't
+colorized) changes nothing. With the option off (`appearance.setNewArtBasic {on: false}`, the preference `newArtBasic`) new art takes the
 whole appearance of the last selected object. `appearance.newArt` reports what the next object gets; `paint.default`
 resets it.
 `appearance.setNewArtBasic` rejects an `on` value that is not a boolean. Omitting `on` toggles the current preference.
@@ -4238,7 +4640,8 @@ four: General (rulers, positions and sizes, the Info panel, dialog distances, ca
 (weights, dashes), Type (font size, leading, baseline shift) and East Asian Type (no field uses it yet). General is the active document's units
 (`document.inspect` → `units`): `document.setUnits {units}` (Document Setup) sets it for that document, and
 `prefs.set {key: "unitsGeneral", value}` sets it for the active document too (one undo step) and is the units
-`file.new` starts in when it gets no `units`. Stroke, Type and East Asian Type are the preferences `unitsStroke`,
+`file.new` starts in when it gets no `units`. With `documentUnits: false`, `prefs.set` sets only the preference and
+leaves the document's units as they are; Reset Preferences followed by OK in the Preferences dialog does this. Stroke, Type and East Asian Type are the preferences `unitsStroke`,
 `unitsType` and `unitsAsianType`. Only `unitsAsianType` also takes `q` (Q, `Q`) and `ha` (Ha, `Ha`), each a quarter of
 a millimetre (0.709 pt); the other preferences, `document.setUnits` and the rulers do not list them, and it is Points
 by default. A length typed with a unit
@@ -4263,10 +4666,31 @@ a string with a unit. Unit names: `Points`, `Picas`, `Inches`, `Millimeters`, `C
 settings whose label, section or category contains it, ignoring case, in the interface language or in English, or by
 "No settings found". Choosing a setting sets `__category` to its category, sets `__found` to its key (the row is
 highlighted until another category is shown) and clears `__search`. Cmd/Ctrl+F focuses the field again; Escape in the
-field with text clears it, and Escape in the empty field closes the dialog.
+field with text clears it, and Escape in the empty field closes the dialog. Its Reset Preferences button opens a
+`resetPreferences` question (fields `message`, `detail`) over Preferences: `ui.dialog.cancel` shows Preferences again
+as it was, and `ui.dialog.confirm` shows it again with every preference at its default value, applied by OK in
+Preferences. `prefs.reset` resets the preferences at once, without the question.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
+```
+
+`prefs.export {path?}` writes the preferences as a JSON file, `{"format": "vectorcraft-preferences", "version": 1,
+"prefs": {…}}`, and replies `{path, count}`; without `path` it replies `{data, count}` with the file's text. The file
+holds every preference `prefs.list` lists and the `eyedropper`, `perspectiveWidget`, `pathfinder` and `glyphSnap`
+groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `recoveryFolder`, `templatesFolder`) and
+saved presets. An export over 1 MB, the most `prefs.import` reads, is an error and writes nothing.
+`prefs.import {path | data}` applies such a file and replies `{imported}`, the number of preferences it
+set. It checks every value first, as `prefs.set` does: a file over 1 MB, malformed JSON, another `format`, a newer
+`version`, an empty `prefs`, an unknown preference, a value of the wrong type or out of range, or a folder preference
+is an error, and nothing changes. Preferences the file leaves out keep their values. An import leaves the open
+document's units as they are, records no undo step, and is saved with the other preferences. An open Preferences
+dialog shows the imported values. `prefs.import` is refused as a `command.batch` step. The dialog's Export Preferences… and Import Preferences… buttons run the two
+commands with a save or open dialog; the web build downloads the exported file and has no Import Preferences… button.
+Exporting and importing preferences is an optional VectorCraft feature.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.import","params":{"data":"{\"format\":\"vectorcraft-preferences\",\"version\":1,\"prefs\":{\"uiAccent\":\"green\"}}"}}}
 ```
 
 ## Document Setup
@@ -4470,7 +4894,7 @@ value: true}`; the Control bar's and Properties' Scale Artwork with Artboard che
 Artboard) makes its handle drags proportional and passes `scaleArt`, as do Properties' and the Transform panel's
 artboard size fields while the tool is in use.
 
-`artboard.setProps {artboards: [{index, name?, color?, locked?, showCenterMark?, showCrossHairs?, showVideoSafeAreas?, videoRulerPixelAspectRatio?, x?, y?, width?, height?}…], scaleArt?, moveArt?, …}` sets several
+`artboard.setProps {artboards: [{index, name?, color?, guideLabel?, locked?, showCenterMark?, showCrossHairs?, showVideoSafeAreas?, videoRulerPixelAspectRatio?, x?, y?, width?, height?}…], scaleArt?, moveArt?, …}` sets several
 artboards in one undo step, each with its own fields; the other params apply to all of them. The art that moves or
 scales with each artboard is the art inside it before any of them changes, and an object inside several of them goes
 with the first one listed that moves or scales its art. An empty list and a list that names an artboard twice are
@@ -4603,6 +5027,20 @@ else, and a file's outside the range opens brought into it),
 is the width of one video pixel over its height, which `view.videoRulers` counts the artboard in. Duplicates, copies and
 the native format keep both (written only when on or not 1), and `inspect_document` adds `showVideoSafeAreas: true` and
 `videoRulerPixelAspectRatio` to an artboard that has them.
+
+Artboard Options' Guide Label: `artboard.setProps {index, guideLabel?: name | "#rrggbb" | null}` (or each entry of
+`artboards`) gives the artboard a guide label, and `artboard.new` takes one too. The canvas draws the artboard's own
+guides (`guide.add {artboard}`) in the label's color instead of the guide color preference, in the preference's style;
+canvas guides, guides of an artboard without a label and guides whose artboard is gone keep the preference's color, and
+selected guides are still drawn in the selection color. The value is a layer color's name, spelled exactly as Layer
+Options lists it (`"Light Blue"`, `"Red"`, …), or `#rrggbb`; null clears it, and new artboards and older files have none.
+The label is VectorCraft's own (no public documentation describes one): it is screen-only, so exports and print leave
+it out, the paper and the artboard's background color stay as they are, and a locked artboard's label can change.
+Anything else (a preset's index, another letter case, `#rrggbbaa`) is refused with "`guideLabel` is null, a layer
+color's name or #rrggbb", and a list with a bad value anywhere changes nothing. Duplicates and copies keep it, the
+native format writes it only when set (a preset index past the layer colors opens as none), and `inspect_document` adds
+`guideLabel` (the name or `#rrggbb`) to an artboard that has one. `artboard.setProps` adds no undo step when nothing it
+is given differs from the artboard.
 
 Artboard Options' Global checkboxes are application preferences, not artboard properties: `fadeRegionOutsideArtboard`
 (Fade Region Outside Artboard) and `artboardUpdateWhileDragging` (Update While Dragging), both on by default
@@ -5120,7 +5558,12 @@ fallback font…), each note once; the export still writes or returns every file
 
 Batch exports (#1935):
 - **What:** `layers: [id…]` (each layer's art alone) or `selection: "one" | "each"` instead of artboards
-  (`assets`, `fullDocument` as before).
+  (`assets`, `fullDocument` as before). A selected object, a layer's object or an asset's object stays in the layers
+  and groups that hold it, so their clipping paths, opacity masks, effects, opacity and blend modes apply to it as on
+  the canvas, and the file is cropped to the bounds the renderer measures for that art (a clip group by its clip); an
+  object of a blend, envelope, repeat or intertwine is drawn on its own. Those layers are drawn even when they are
+  hidden, template or non-printing layers, and a PSD of the file names its layers after them.
+  `document.exportSelection` and the pictures of `css.export {rasterize: true}` draw the selected objects the same way.
 - **Names:** `name` is a pattern for every file: `<filename>` (the document's file name without its extension, or
   its title before it is saved; the Full Document file and the `.zip` use the same name), `<name>` (the artboard,
   asset, layer or object), `<index>`, `####` (a counter zero-padded to the run of `#`, from `counterStart`; `counterPer: "item"`
@@ -5555,7 +5998,7 @@ dictionaries (the standard ones are values in `systemdict`; `dictstack`, `intern
 intervals share storage, resources (categories made from `Generic`, `resourceforall`), executable filters (`cvx exec`
 runs their data; `flushfile` skips it), axial and radial shadings and shading patterns (gradients), images and image
 masks (data in the file through ASCII85, hex, run-length, Flate, LZW or DCT filters, or from procedures), and type as
-point type in the font the file names (embedded font programs are skipped). In a file in Illustrator's own format
+point type in the font the file names (embedded Type 1 and Type 42 fonts' characters and widths come from the font program they carry, and the show operators' spacing along the baseline is kept as tracking, while spacing that moves characters off it (`yshow`, `xyshow`) makes a text object per character; CID-keyed fonts draw the glyphs of the Type 0 and Type 2 CIDFonts the file carries, CIDFonts in a FontSet's Compact Font Format data included). In a file in Illustrator's own format
 (Illustrator 3–8 `.ai` and their EPS, written with the prolog that defines its operators) the groups it writes (`u` …
 `U`) come in as groups, nested as they were; clips and groups nest at most 128 deep. The artboard is the `%%HiResBoundingBox`
 (else `%%BoundingBox`; a letter page without one). A program the interpreter can't run (an operator it doesn't know,
@@ -5709,6 +6152,9 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 `text.reshapePath {id, anchors: [[subpath, anchor]…], dx, dy}` does the same for the path of type on a path
 (Direct Selection dragging one of its anchors): the start and end brackets keep their fractions of the path and the
 text reflows along it.
+`text.setPathHandle {id, subpath?, anchor, which: "in"|"out", x, y, independent?}` moves a direction handle of one
+of its anchors, as `path.setHandle` moves a path's (Direct Selection dragging a handle of the path, #3565), in one
+undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
@@ -5892,6 +6338,53 @@ returns the new value.
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"hyphenate":true,"wordsLongerThan":8,"hyphenLimit":2}}}
 ```
+
+
+## Spelling
+
+`text.spelling.check {ids?}` lists the words of the document's type that its dictionaries don't know: every
+visible, unlocked type object in paint order, or those in `ids` (and in the groups `ids` names). Each run is checked
+in its Character panel Language (English when it has none) by craft-proof, one paragraph at a time; a language without
+a spelling dictionary marks nothing. English words come from the first dictionary craft-proof finds: a Hunspell
+dictionary in the user's dictionaries folder, the SCOWL dictionary for that English built in from craft-i18n, a
+system Hunspell dictionary, and last the public-domain Moby word list built into craft-proof. Words in capitals, words with digits and web addresses are taken as correct. The result is
+`{words: [{id, start, end, word, lang}], more}`: `start` and `end` are byte offsets in the type object's text, the
+ones `text.editRange` takes, so `text.editRange {id, start, end, insert}` changes a word as one undo step. At most
+10,000 words are listed; `more` is `true` when there were more. `text.spelling.suggest {word, max?, lang?}` gives
+the words the dictionary of `lang` (default English) suggests instead of `word`, best first, at most `max` (1 to 20,
+default 5). Both only read the document.
+
+```json
+{"name":"run_command","arguments":{"command":"text.spelling.check","params":{}}}
+{"name":"run_command","arguments":{"command":"text.spelling.suggest","params":{"word":"drawng","lang":"en"}}}
+```
+
+The custom dictionary holds words every check takes as right, in every language. `text.spelling.addWord {word}`
+adds one (Check Spelling's Add; one word of at most 64 characters, kept in lower case) and says whether it was new;
+`text.spelling.removeWord {word}` deletes one and `text.spelling.changeWord {word, to}` replaces one (Edit Custom
+Dictionary's Delete and Change; an error when `word` isn't there); `text.spelling.dictionary` lists them, sorted. The
+desktop app and `vectorcraft-cli` (its `mcp` and `run` sessions) keep them in `Custom Dictionary.txt` next to the
+preferences, one word per line; without preferences (`VECTORCRAFT_NO_PREFS`, the web app) they last until the app
+closes. `text.spelling.ignoreAll {word}` is Ignore All: the active document's checks skip the word, in
+any case, while the document is open. It is not saved and not an undo step.
+
+In the app, Edit › Edit Custom Dictionary… (`text.spelling.dictionary` with no params, from the menus) opens a dialog of
+the words, with an Entry field and Add, Delete and Change; Done runs `text.spelling.editDictionary {remove, add}` for
+the words that differ, which deletes and adds them and saves once, all or none (a save that fails keeps none of them),
+and Cancel changes nothing.
+
+```json
+{"name":"run_command","arguments":{"command":"text.spelling.addWord","params":{"word":"VectorCraft"}}}
+{"name":"run_command","arguments":{"command":"text.spelling.ignoreAll","params":{"word":"Zqvwkx"}}}
+```
+
+In the app, Edit › Spelling › Auto Spell Check (the UI command `edit.autoSpellCheck`, which returns whether it is now
+on) underlines on the canvas the words `text.spelling.check` lists, in the visible type without effects, and keeps the
+lines up to date as the type, the custom dictionary and the Ignore All words change.
+A right-click on an underlined word puts at the top of the canvas context menu the words `text.spelling.suggest` gives
+for it (each a `text.editRange {id, start, end, insert}` item labelled with its word), or No Suggestions, then Ignore
+All (`text.spelling.ignoreAll {word}`) and Add to Dictionary (`text.spelling.addWord {word}`); the context menu's
+entries list them with their params. A right-click on type also has Spelling › Auto Spell Check (`edit.autoSpellCheck`).
 
 
 ## Justification options
@@ -6671,7 +7164,7 @@ them again at startup (`plugin.remove` deletes them there):
 schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected). A filter whose manifest lists `inputs`
 (`type`, `image`, `symbolInstance`; `inputs` in its `plugin.list` entry) also lists `doc.read` in its `permissions`, so
-`plugin.install` needs `grant`. It is also given the selected objects of those kinds to read, in paint order from the
+installing it needs a person's approval. It is also given the selected objects of those kinds to read, in paint order from the
 bottom, with at most 16 MiB of pixels and 16 MiB of type runs over one run (an object that doesn't fit what the objects
 before it left comes with `pixelsOmitted` or `truncated`; an image that reaches the decoder counts toward the pixels
 even when decoding fails). Every object counts toward the input's half of the plug-in's memory cap, ids, bounds,
@@ -6680,7 +7173,13 @@ fit makes `plugin.run` return a memory-budget error naming the object and its si
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
-field, and the document and undo history are unchanged. A live-effect plug-in is an effect with
+field, and the document and undo history are unchanged. A filter at plug-in API level 2 whose manifest lists the
+`commands` permission and a `commandAllowlist` (both in its `plugin.list` entry) runs the commands that list names
+while it runs, through `vc_call`: the calls and its output are one undo step, and a run that fails or makes a call that
+fails leaves the documents, selections and history as they were. Without `doc.read` every call fails. A command that
+reads or writes files, uses the clipboard, changes preferences or the view, runs a script, an action or a plug-in,
+switches documents or undoes is never called; `plugin.install` refuses a manifest that lists one, and `plugin.inspect` lists such ids as
+`refusedCommands` and ids no command has as `unknownCommands` (`plugin.install` lists those too). A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
 `effect.list` lists it. One whose manifest declares `paintOutput` (at plug-in API level 2; `plugin.list` gives `api`
 and `paintOutput: true`) draws the pieces it returns with paints of their own, and `effect.expandAppearance` writes them
@@ -6702,15 +7201,26 @@ on the desktop a picked file is read off the UI thread and the reply is `{backgr
 `pluginImport` dialog. `params` holds the importer's parameters (their defaults when
 omitted). A failing plug-in returns an error and leaves the document as it was (an export writes
 no file, and an import opens no document). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
-`plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
+`plugin.inspect {path | dataBase64}` entry) needs a person's approval, and `plugin.install` refuses `allowHeavy: true`
+from a request. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
-installs only with `grant: [permission]` listing every one of them: show the user the list and ask first, and pass
-the entry's `hash` as `hash` so that a module that changed since is refused. Without `grant`, `plugin.install` returns
-an error naming the permissions needed. The grant is kept with the module's hash and covers only that module: the
-same bytes install again without `grant`, and a module with other bytes has `needsApproval: true` and needs a new
-`grant` even when it lists the same permissions. `plugin.install` does not check that a person approved `grant`: it
-trusts the client that sends it. `plugin.remove` forgets the grant. A
+needs a person's approval too, and `plugin.install` refuses `grant: [permission]` from a request. With a desktop
+app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,
+`ui.dialog.confirm` and injected input can't confirm it. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
+accepts `grant` and `allowHeavy` from any request, in that session only (headless; it can't be combined with
+`--connect`, `--automation-read-root` or `--automation-write-root`). A server confined to folders has no plug-in
+store, so it reads no `grants.json`, and a module that lists permissions or asks for a heavy budget does not install
+there. Without `--allow-plugin-grants` and without a recorded grant for the module, `plugin.install` returns an error
+naming the permissions needed. With `VECTORCRAFT_NO_PREFS` set there is no store, and a `grant` accepted under the
+flag lasts for that session only. In other sessions the approval, or a `grant` accepted under the flag, is kept with the module's
+hash, counts as approved in later sessions and in the desktop app, and covers only that module: the
+same bytes install again without one, also from a headless session that reads the same `grants.json`, and a module
+with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. `plugin.remove`
+forgets the approval, and so does installing a module that lists no permissions under that id: the earlier bytes then
+need a new approval. A refused install keeps the grant. A failed write of the module to the plug-in store leaves the
+grant in the store. A stored module that is disabled, or not read in Safe Mode, keeps the grant for its id. When
+`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
@@ -7153,8 +7663,12 @@ bounding-box handles scale it in plane space (`perspective.transform`; Shift kee
 centre), and `press_key` `5` during a drag switches the move to perpendicular to the plane (press again to switch
 back). Holding Shift during an in-plane move constrains each object's displacement to an axis or 45° diagonal of its
 own plane. `perspective.move` accepts `constrain: true` (default false) and adjusts Snap to Grid along the constrained
-direction on the first object's plane and depth. With Snap to Grid, every object on the first object's plane moves
-by the same plane offset, whatever its depth, and the edge of their joint bounds nearer a gridline lands on it.
+direction on the first object's plane and depth. With Snap to Grid, an in-plane move moves every object on the first
+object's plane by the same plane offset, whatever its depth. Without `constrain`, on each axis, the edge of their joint
+bounds nearer a gridline lands on it when that edge ends within a quarter cell of the gridline. With `constrain`, an
+edge also lands only when it ends within a quarter cell of a gridline: a horizontal or vertical move can land only an
+edge on its own axis, and a 45° move lands the edge on the axis whose nonzero correction is smaller. When no edge on
+those axes is that close, the move does not snap. A perpendicular move does not snap.
 `press_key` Escape during a move, a resize or a plane widget drag cancels it and puts the objects and the
 grid back. The arrow keys nudge a selection in perspective by the keyboard increment (`perspective.nudge`; Shift ×10, Alt
 copies). Object › Transform › Transform Again repeats the last perspective move or scale in plane space.
@@ -7587,7 +8101,9 @@ Tools:
   `bezier` or `arc`; E cycles it. Shift steps the length by the keyboard increment.
 - **Measure & Inspect tool** (`measureInspect`): a drag measures distance, angle and offsets, as the Measure tool does
   (`tool.options` reports the last one); hovering a path reads it, as `addon.pathtools.inspect` does. Nothing goes into
-  the document.
+  the document. With Snap to Glyph, Smart Guides and Alignment Guides on, and Snap to Grid and Snap to Pixel off, both ends
+  of either tool's drag land within the snapping tolerance on the guides of live type, except Anchor Point, and the guide
+  shows during the drag.
 - **Parametric Shape Tool** (`parametricShape`): draws shapes that stay editable as numbers. A drag from the centre runs
   `addon.pathtools.shape.create`: the drag's length is the shape's size (height 2 × the distance, width in the last
   shape's proportions), its direction the rotation (Shift: 45° steps). While dragging, ↑/↓ change the kind's count or

@@ -6,7 +6,7 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 use serde_json::{Value, json};
 use vectorcraft_doc::{
     Node,
-    dimension::{self, Dimension, DimensionMode, DimensionOptions, DimensionSource, PointRef, SegmentRef},
+    dimension::{self, Dimension, DimensionMode, DimensionOptions, DimensionSource, Orientation, PointRef, SegmentRef},
 };
 use vectorcraft_geom::{BezPath, Point, Vec2};
 
@@ -67,7 +67,48 @@ pub struct DimensionTool {
     snap: crate::guides::DrawSnap,
     /// Where the next Linear pick lands, as last worked out for the pointer (for the overlays).
     snapped: Option<(Point, Option<PointRef>)>,
+    /// Whether the press under way began on an anchor a Linear click picks.
+    press_on_anchor: bool,
+    /// The second point clicked for the Linear dimension being placed, and where the pointer was
+    /// for that click (a snap or Shift can move the point away from it): placed with the pointer
+    /// still at either, it is aligned.
+    second: Option<(Point, Point)>,
 }
+
+/// What a linear dimension between `a` and `b` measures with the pointer at `p` while it is
+/// placed (VectorCraft's own rule). Beside the points, where the nearest point of the line
+/// through them lies between them, the dimension is aligned: it measures the distance between
+/// them. Past either point it measures along an axis. The line through the points and the
+/// perpendicular at that point bound a quarter on each side; the pointer's quarter holds either
+/// the straight up or down direction, which gives the horizontal distance, or the straight left
+/// or right direction, which gives the vertical distance. Points on one horizontal or vertical
+/// line only give an aligned dimension.
+fn orientation_at(a: Point, b: Point, p: Point) -> Orientation {
+    let u = b - a;
+    let len = u.hypot();
+    if len < 1e-9 {
+        return Orientation::Aligned;
+    }
+    let along = (p - a).dot(u) / (len * len);
+    if (0.0..=1.0).contains(&along) {
+        return Orientation::Aligned;
+    }
+    // Out past the nearer point, and the side of the line the pointer is on.
+    let (out, side) = (if along > 1.0 { u } else { -u }, u.cross(p - a));
+    let axes = [
+        (Vec2::new(0.0, 1.0), Orientation::Horizontal),
+        (Vec2::new(0.0, -1.0), Orientation::Horizontal),
+        (Vec2::new(1.0, 0.0), Orientation::Vertical),
+        (Vec2::new(-1.0, 0.0), Orientation::Vertical),
+    ];
+    let within = len * 1e-9;
+    axes.into_iter()
+        .find(|(axis, _)| axis.dot(out) > within && u.cross(*axis).abs() > within && u.cross(*axis) * side > 0.0)
+        .map_or(Orientation::Aligned, |(_, orientation)| orientation)
+}
+
+/// How near an anchor (screen pixels) a pick snaps to it.
+const ANCHOR_REACH: f64 = 8.0;
 
 /// `at` as a Shift click picks it: the direction from `last` snapped to 45° steps (from the
 /// constrain angle), the distance kept.
@@ -119,8 +160,43 @@ fn anchor_near(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<(usize, 
     [edge.segment, next]
         .into_iter()
         .filter_map(|i| Some((i, sp.anchors.get(i)?.p)))
-        .filter(|(_, a)| a.distance(p) <= cx.tol(8.0))
+        .filter(|(_, a)| a.distance(p) <= cx.tol(ANCHOR_REACH))
         .min_by(|(_, a), (_, b)| a.distance(p).total_cmp(&b.distance(p)))
+}
+
+/// The anchor nearest `p` within reach, on any editable path (the topmost on a tie), as a link to
+/// its path. Bounded work, and dimension artwork is skipped, as in [`pick`].
+fn anchor_under(cx: &ToolContext, p: Point) -> Option<(Point, PointRef)> {
+    type Best = Option<(f64, Point, PointRef)>;
+    fn visit(n: &Node, p: Point, reach: f64, budget: &mut usize, best: &mut Best) {
+        if *budget == 0 || !n.visible || n.locked || n.extras().dimension.is_some() {
+            return;
+        }
+        if let Some(path) = n.path_data() {
+            for (subpath, sp) in path.subpaths.iter().enumerate() {
+                for (anchor, a) in sp.anchors.iter().enumerate() {
+                    if *budget == 0 {
+                        return;
+                    }
+                    *budget -= 1;
+                    let d = a.p.distance(p);
+                    if d <= reach && best.as_ref().is_none_or(|(nearest, ..)| d < *nearest) {
+                        *best = Some((d, a.p, PointRef { node: n.id, subpath, anchor }));
+                    }
+                }
+            }
+        }
+        if let Some(ch) = n.children() {
+            for c in ch.iter().rev() {
+                visit(c, p, reach, budget, best);
+            }
+        }
+    }
+    let (reach, mut budget, mut best) = (cx.tol(ANCHOR_REACH), 20_000usize, None);
+    for n in cx.doc.layers.iter().rev() {
+        visit(n, p, reach, &mut budget, &mut best);
+    }
+    best.map(|(_, at, r)| (at, r))
 }
 
 /// The point of `edge` closest to `p`.
@@ -138,25 +214,22 @@ fn nearest_on(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<Point> {
 }
 
 impl DimensionTool {
-    /// Where a Linear pick at `p` lands: on an anchor of the line under the pointer, within reach
-    /// (kept as a link to its path); else where Smart Guides put it (another object's anchor or
-    /// centre, in line with one, or for the second point on a construction guide through the
-    /// first), its guides showing; else on the closest point of that line; else `p` itself.
+    /// Where a Linear pick at `p` lands: on the nearest anchor of any path, within reach (kept as
+    /// a link to its path); else where Smart Guides put it (another object's anchor or centre, in
+    /// line with one, or for the second point on a construction guide through the first), its
+    /// guides showing; else on the closest point of the line under the pointer; else `p` itself.
     fn snap_linear(&mut self, cx: &ToolContext, p: Point) -> (Point, Option<PointRef>) {
         let leave = self.points.last().map(|(first, _)| crate::guides::Leave::segment(cx, *first, false));
         let guided = self.snap.hover(cx, p, &[], leave.as_ref());
-        let edge = pick(cx, p);
-        if let Some(edge) = &edge
-            && let Some((anchor, point)) = anchor_near(cx, edge, p)
-        {
+        if let Some((point, reference)) = anchor_under(cx, p) {
             self.snap.clear();
-            return (point, Some(PointRef { node: edge.node, subpath: edge.subpath, anchor }));
+            return (point, Some(reference));
         }
         if guided.distance(p) > 1e-9 {
             return (guided, None);
         }
         // Not on an anchor or a guide: snap to the closest point of the line (#2432).
-        (edge.and_then(|e| nearest_on(cx, &e, p)).unwrap_or(p), None)
+        (pick(cx, p).and_then(|e| nearest_on(cx, &e, p)).unwrap_or(p), None)
     }
     fn target(&self, cx: &ToolContext, p: Point) -> Option<Target> {
         let edge = pick(cx, p)?;
@@ -177,7 +250,18 @@ impl DimensionTool {
         }
     }
     fn recipe(&self, mode: DimensionMode, a: Point, b: Point, vertex: Point, source: Option<DimensionSource>) -> Dimension {
-        Dimension { mode, a, b, vertex, offset: 0.0, length: a.distance(b), options: self.style.clone(), source, moved: None }
+        Dimension {
+            mode,
+            a,
+            b,
+            vertex,
+            offset: 0.0,
+            length: a.distance(b),
+            options: self.style.clone(),
+            source,
+            orientation: Orientation::Aligned,
+            moved: None,
+        }
     }
     /// The dimension a target gives when dragged from.
     fn dimension_for(&self, target: &Target, p: Point) -> Option<Dimension> {
@@ -210,6 +294,9 @@ impl DimensionTool {
         if let Some(source) = &d.source {
             p["source"] = json!(source);
         }
+        if d.orientation != Orientation::Aligned {
+            p["orientation"] = json!(d.orientation);
+        }
         p
     }
     fn preview(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
@@ -218,6 +305,18 @@ impl DimensionTool {
             && let Some(Target::Radial { center, radius, .. }) = self.press.as_ref().and_then(|(_, t)| t.as_ref())
         {
             d.mode = if p.distance(*center) >= *radius { DimensionMode::Radius } else { DimensionMode::Diameter };
+        }
+        if d.mode == DimensionMode::Linear {
+            // The points the dimension measures: a dragged segment's ends, read from the art.
+            let ends = match &d.source {
+                Some(DimensionSource::Segment { edge }) => edge.endpoints(cx.doc),
+                _ => Some((d.a, d.b)),
+            };
+            let again = self.second.is_some_and(|(at, pointer)| at.distance(p).min(pointer.distance(p)) <= cx.tol(ANCHOR_REACH));
+            d.orientation = match ends {
+                Some((a, b)) if !again => orientation_at(a, b, p),
+                _ => Orientation::Aligned,
+            };
         }
         d.place(p);
         if d.resolve(cx.doc).is_err() {
@@ -243,12 +342,14 @@ impl DimensionTool {
     fn reset(&mut self) {
         self.pending = None;
         self.press = None;
+        self.press_on_anchor = false;
         self.points.clear();
         self.lines.clear();
         self.dragging = false;
         self.began = false;
         self.snap.clear();
         self.snapped = None;
+        self.second = None;
     }
     /// A plain click: picks a point or a line, or measures a circle's radius.
     fn click(&mut self, cx: &ToolContext, p: Point, target: Option<Target>, mods: Mods) -> Vec<Action> {
@@ -266,6 +367,7 @@ impl DimensionTool {
                     let source = (ra.is_some() || rb.is_some()).then(|| DimensionSource::Points { a: ra.clone(), b: rb.clone(), vertex: None });
                     let mut d = self.recipe(DimensionMode::Linear, *a, *b, Point::ZERO, source);
                     if d.resolve(cx.doc).is_ok() {
+                        self.second = Some((*b, p));
                         self.pending = Some(d);
                     }
                     self.points.clear();
@@ -355,6 +457,10 @@ impl Tool for DimensionTool {
                     self.press = Some((ev.pos, None));
                     return self.preview(cx, ev.pos);
                 }
+                // A Linear press on an anchor picks the anchor unless it drags past the anchor's
+                // reach: moving a few pixels before the release does not drag out the dimension of
+                // a segment under the pointer.
+                self.press_on_anchor = self.kind == Kind::Linear && anchor_under(cx, ev.pos).is_some();
                 self.press = Some((ev.pos, self.target(cx, ev.pos)));
                 vec![]
             }
@@ -364,7 +470,7 @@ impl Tool for DimensionTool {
                 }
                 if self.pending.is_none()
                     && let Some((start, Some(target))) = self.press.clone()
-                    && start.distance(ev.pos) > cx.tol(3.0)
+                    && start.distance(ev.pos) > cx.tol(if self.press_on_anchor { ANCHOR_REACH } else { 3.0 })
                     && self.points.is_empty()
                     && self.lines.is_empty()
                 {
@@ -541,6 +647,117 @@ mod tests {
         assert!(matches!(dragged.last(), Some(Action::Preview(_, _))), "{dragged:?}");
         let placed = t.pointer(&c, &ev(PointerKind::Up, 490.0, 470.0));
         assert!(matches!(placed.last(), Some(Action::Commit)), "{placed:?}");
+    }
+
+    /// A Linear press on an anchor picks that anchor even when the pointer moves a few pixels
+    /// before the release: it does not drag out the dimension of a segment that ends there. Both
+    /// picks keep their links to the path, so the dimension measures between the two anchors.
+    #[test]
+    fn a_press_on_an_anchor_picks_it_when_the_pointer_moves() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let mut t = DimensionTool::default();
+        for ((x, y), (dx, dy)) in [((100.0, 100.0), (3.5, 1.0)), ((200.0, 200.0), (-4.0, -2.0))] {
+            assert!(t.pointer(&c, &ev(PointerKind::Down, x, y)).is_empty());
+            assert!(t.pointer(&c, &ev(PointerKind::Drag, x + dx, y + dy)).is_empty(), "no segment dimension is dragged out");
+            assert!(t.pointer(&c, &ev(PointerKind::Up, x + dx, y + dy)).is_empty(), "nothing is committed");
+        }
+        let d = t.pending.as_ref().expect("both anchors were picked");
+        assert_eq!((d.a, d.b), (Point::new(100.0, 100.0), Point::new(200.0, 200.0)));
+        let anchor = |anchor| Some(PointRef { node: id, subpath: 0, anchor });
+        assert_eq!(d.source, Some(DimensionSource::Points { a: anchor(0), b: anchor(2), vertex: None }));
+        // Dragged past the anchor's reach, the press drags out the dimension of a segment there.
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 100.0, 100.0));
+        assert!(t.pointer(&c, &ev(PointerKind::Drag, 103.0, 106.0)).is_empty());
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 100.0, 60.0));
+        assert!(matches!(acts.first(), Some(Action::Begin(_))), "{acts:?}");
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Up, 100.0, 60.0)).last(), Some(Action::Commit)));
+    }
+
+    /// The anchors of a live rectangle are picked the same way.
+    #[test]
+    fn a_press_on_a_live_shapes_anchor_picks_it() {
+        let (d, id) = doc_with_live_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 100.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 197.0, 102.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 197.0, 102.0));
+        let [(at, Some(r))] = t.points.as_slice() else { panic!("{:?}", t.points) };
+        assert_eq!((*at, r.node), (Point::new(200.0, 100.0), id));
+    }
+
+    /// An anchor of a compound path inside nested groups, lying just inside another object's
+    /// edge, is picked and linked, though that edge is nearer the pointer than any of the
+    /// compound path's own segments. A press there that moves a few pixels picks it too.
+    #[test]
+    fn an_anchor_under_another_objects_edge_is_picked() {
+        use std::sync::Arc;
+        use vectorcraft_doc::{Appearance, NodeKind};
+        use vectorcraft_geom::Rect;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let (outer, inner, compound) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let mut path = vectorcraft_geom::shapes::rectangle(Rect::new(20.0, 20.0, 40.0, 40.0));
+        path.subpaths.extend(vectorcraft_geom::shapes::rectangle(Rect::new(150.0, 103.0, 180.0, 130.0)).subpaths);
+        let art = Node::path(compound, path, Appearance::default_art());
+        let inner_group = Node::new(inner, NodeKind::Group { children: vec![Arc::new(art)], clip: false });
+        let group = Node::new(outer, NodeKind::Group { children: vec![Arc::new(inner_group)], clip: false });
+        d.insert(Some(l), 0, group).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let corner = (Point::new(150.0, 103.0), Some(PointRef { node: compound, subpath: 1, anchor: 0 }));
+        let mut t = DimensionTool::default();
+        assert_eq!(t.snap_linear(&c, Point::new(151.0, 101.0)), corner);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 151.0, 101.0));
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 155.0, 100.0)).is_empty(), "no segment dimension is dragged out");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 155.0, 100.0));
+        assert_eq!(t.points, vec![corner]);
+    }
+
+    /// Beside the two points the dimension is aligned; past either point it is horizontal when
+    /// the pointer's quarter holds the straight up or down direction and vertical when it holds
+    /// the straight left or right direction. Points on one horizontal or vertical line, a pointer
+    /// on the line through the points, and two equal points give aligned.
+    #[test]
+    fn the_pointer_chooses_aligned_horizontal_or_vertical() {
+        use Orientation::{Aligned, Horizontal, Vertical};
+        let at = |a: (f64, f64), b: (f64, f64), p: (f64, f64)| orientation_at(Point::new(a.0, a.1), Point::new(b.0, b.1), Point::new(p.0, p.1));
+        // A line rising to the right (y grows downwards), and the same points in the other order.
+        for (a, b) in [((100.0, 300.0), (200.0, 200.0)), ((200.0, 200.0), (100.0, 300.0))] {
+            for (p, want) in [
+                ((120.0, 160.0), Aligned),
+                ((200.0, 300.0), Aligned),
+                ((150.0, 250.0), Aligned),
+                ((200.0, 200.0), Aligned),
+                ((100.0, 300.0), Aligned),
+                ((210.0, 120.0), Horizontal),
+                ((240.0, 150.0), Horizontal),
+                ((280.0, 220.0), Vertical),
+                ((240.0, 170.0), Vertical),
+                ((40.0, 310.0), Vertical),
+                ((90.0, 380.0), Horizontal),
+                ((250.0, 150.0), Aligned),
+            ] {
+                assert_eq!(at(a, b, p), want, "{a:?} to {b:?}, pointer at {p:?}");
+            }
+        }
+        // A line falling to the right.
+        let (a, b) = ((100.0, 100.0), (300.0, 200.0));
+        for (p, want) in
+            [((200.0, 50.0), Aligned), ((320.0, 300.0), Horizontal), ((400.0, 210.0), Vertical), ((60.0, 20.0), Horizontal), ((20.0, 90.0), Vertical)]
+        {
+            assert_eq!(at(a, b, p), want, "pointer at {p:?}");
+        }
+        for (a, b) in [((100.0, 100.0), (300.0, 100.0)), ((100.0, 100.0), (100.0, 300.0)), ((100.0, 100.0), (100.0, 100.0))] {
+            for p in [(50.0, 50.0), (350.0, 50.0), (350.0, 350.0), (50.0, 350.0), (200.0, 60.0), (60.0, 200.0), (400.0, 100.0), (100.0, 400.0)] {
+                assert_eq!(at(a, b, p), Aligned, "{a:?} to {b:?}, pointer at {p:?}");
+            }
+        }
     }
 
     #[test]

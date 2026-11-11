@@ -167,6 +167,8 @@ pub struct NewGuide {
     vertical: bool,
     /// The artboard (index) it belongs to: an artboard guide.
     artboard: Option<usize>,
+    /// Made only within its artboard ([`Self::within`]).
+    within: bool,
     snap: GuideSnap,
     /// The preview's orientation and position (none off the canvas), and the pointer.
     at: Option<(bool, f64)>,
@@ -177,7 +179,24 @@ impl NewGuide {
     /// A vertical guide out of the left ruler, else a horizontal one out of the top ruler; an
     /// artboard guide of `artboard`, if any.
     pub fn new(cx: &ToolContext, vertical: bool, artboard: Option<usize>) -> Self {
-        Self { vertical, artboard, snap: GuideSnap::new(cx), at: None, pointer: Point::ZERO }
+        Self { vertical, artboard, within: false, snap: GuideSnap::new(cx), at: None, pointer: Point::ZERO }
+    }
+
+    /// An artboard guide of `artboard` that shows, and is made, only where it lies within that
+    /// artboard: a vertical guide between its left and right edges, a horizontal one between its
+    /// top and bottom. With no such artboard, it never shows and nothing is made.
+    pub fn within(cx: &ToolContext, vertical: bool, artboard: usize) -> Self {
+        Self { within: true, ..Self::new(cx, vertical, Some(artboard)) }
+    }
+
+    /// May the guide go at `at` (the x of a vertical guide, the y of a horizontal one)?
+    fn fits(&self, cx: &ToolContext, vertical: bool, at: f64) -> bool {
+        if !self.within {
+            return true;
+        }
+        let Some(r) = self.artboard.and_then(|i| cx.doc.artboards.get(i)).map(|a| a.rect) else { return false };
+        let (lo, hi) = if vertical { (r.min_x(), r.max_x()) } else { (r.min_y(), r.max_y()) };
+        lo <= at && at <= hi
     }
 
     /// The pointer at `ev`, over the canvas or not (`on_canvas`): the actions that show the guide
@@ -185,9 +204,13 @@ impl NewGuide {
     pub fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent, on_canvas: bool) -> Vec<Action> {
         let mut out = vec![];
         self.pointer = ev.pos;
-        if on_canvas {
-            let vertical = self.vertical != ev.mods.alt;
-            let at = self.snap.snap(cx, vertical, if vertical { ev.pos.x } else { ev.pos.y }, ev.mods.shift);
+        let place = on_canvas
+            .then(|| {
+                let vertical = self.vertical != ev.mods.alt;
+                (vertical, self.snap.snap(cx, vertical, if vertical { ev.pos.x } else { ev.pos.y }, ev.mods.shift))
+            })
+            .filter(|(vertical, at)| self.fits(cx, *vertical, *at));
+        if let Some((vertical, at)) = place {
             if self.at.is_none() {
                 out.push(Action::Begin("New Guide".into()));
             }

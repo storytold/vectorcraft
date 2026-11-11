@@ -14,13 +14,14 @@ repository = "https://github.com/storytold/vectorcraft"
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb", default-features = false, features = ["interpret", "write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb", features = ["serde"] }
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "bb8320f5fa5d20fa78a026d0de06fe4e2f08a099", features = ["serde"] }
 craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
+craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
 # Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per
 # desktop. The `egui` feature adds `craft_window::decorate`. (craft-libs#217.)
 craft-window = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb", features = ["egui"] }
 # The `.vectorcraft` envelope: its members, version, embedded images and the data after the JSON.
-craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
+craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "1b34eba41e62138fc2438d2734523b302840b45d" }
 # craft-update: app-specific pretend versions apply to startup and manual checks.
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "1b34eba41e62138fc2438d2734523b302840b45d", features = ["egui"] }
 # internal
@@ -54,6 +55,7 @@ vectorcraft-plugins = { path = "crates/plugins" }
 vectorcraft-affinity = { path = "crates/affinity" }
 vectorcraft-scriptcheck = { path = "crates/scriptcheck" }
 vectorcraft-js = { path = "crates/js" }
+vectorcraft-apischema = { path = "crates/apischema" }
 
 # foundation
 kurbo = { version = "0.13", features = ["serde"] }

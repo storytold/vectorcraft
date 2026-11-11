@@ -102,7 +102,7 @@ the two can still win that race.
 | `ui.click` / `ui.drag` | `{x, y, button?, count?, shift?, alt?, ctrl?, cmd?}` / `{x, y, toX, toY, steps?, count?, button?, shift?, alt?, ctrl?, cmd?}` | egui pointer input; see synthetic input budgets above |
 | `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls, Cmd-wheel (Ctrl on Windows and Linux) scrolls sideways and Alt-wheel (Option on the Mac) zooms about the pointer (with the `ctrlWheelScrollsSideways` preference off, Cmd-wheel zooms too); with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways. Over a focused numeric field (click it first) each notch steps its value as Up/Down do (Shift: ten, Cmd/Ctrl: a tenth) and the panel stays put; over anything else in a panel the wheel scrolls it. Over the canvas, the wheel preferences in `docs/mcp.md` change what these keys do |
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?, imageTracePreview?}` | `outline`: View › Outline for the active document only (each document has its own, a document opens in Preview, and `ui.inspect` shows it as `view.outline`; an error without a document). `imageTracePreview`: the Image Trace panel's Preview (`ui.inspect` shows it as `ui.image_trace_preview`) |
-| `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` or `{fields: [{field, value}…]}` | fill and submit the open dialog. `ui.dialog.set` takes the fields the dialog has (`ui.inspect`), `__` fields, `discard` on a dialog with a discard button, `preview` on one with a live preview, the fields that the dialog reads but adds only when a control changes (such as `searchFolder`, or `copy` in the Transform dialogs), and the fields it passes to the command it runs: every parameter of the `command` dialog's command (`ui.paramDialog`), and the `textureImage` that Load Texture… sets in the Glass and Texturizer effects; any other field is an error that lists the dialog's fields, and the dialog stays as it was `fields` sets the list (at most 256 items) in order (a missing `value` is `null`) and checks every item first: when one is refused, the call is an error and no field changes |
+| `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value, action?}` or `{fields: [{field, value}…], action?}` | fill and submit the open dialog. `ui.dialog.set` takes the fields the dialog has (`ui.inspect`), `__` fields, `discard` on a dialog with a discard button, `preview` on one with a live preview, the fields that the dialog reads but adds only when a control changes (such as `searchFolder`, or `copy` in the Transform dialogs), and the fields it passes to the command it runs: every parameter of the `command` dialog's command (`ui.paramDialog`), and the `textureImage` that Load Texture… sets in the Glass and Texturizer effects; any other field is an error that lists the dialog's fields, and the dialog stays as it was `fields` sets the list (at most 256 items) in order (a missing `value` is `null`) and checks every item first: when one is refused, the call is an error and no field changes. `action: "confirm"` or `"cancel"` on `ui.dialog.set` then confirms or cancels the same dialog in the same request, as `ui.dialog.confirm` and `ui.dialog.cancel` do, and the reply is `{dialog, result}`: the dialog after the fields were set and the reply to confirm (`null` for cancel); any other `action` is an error and no field changes |
 | `ui.screenshot` | `{path?, data?}` | capture the window (PNG), written to `path`; `data: true` sends it back as `pngBase64` too. The inline PNG is capped at 64 MiB: with a `path` the file is still written and `pngBase64` is omitted when the image is larger, while a path-less `data: true` request fails if either the raw RGBA image or the encoded PNG exceeds the cap. Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
 | `ui.render` | `{path?, scale?, artboard?, data?, traceViews?}` | render an artboard headlessly (PNG with the pixels of `app.export {format: "png", background: "white"}` at the same scale; `artboard`: its 0-based index, default the first; `traceViews: true`: Image Trace objects draw in their View, as on the canvas, instead of their tracing result): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
 | `ui.render` | `{path?, scale?, artboard?, data?}` | render an artboard headlessly (PNG with the pixels of `app.export {format: "png", background: "white"}` at the same scale; `artboard`: its 0-based index, default the first): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
@@ -216,7 +216,8 @@ the `effect` dialog (`effect.dialog {effect: "plugin.<id>"}`). An exporter plug-
 export's own parameters); `ui.dialog.confirm` writes the file. An importer plug-in with parameters opens the
 `pluginImport` dialog when `file.openWith` is given no `params`: one field per parameter, `__plugin`, and `__open`
 (`path` and `importer`); `ui.dialog.confirm` opens the file. `ui.installPlugin {path?}` installs a `.wasm` (without
-a path it asks for one); see [plugins.md](plugins.md).
+a path it asks for one); one that needs approval opens the `pluginInstall` dialog, which only a person can confirm
+(`ui.dialog.confirm` and injected input are refused); see [plugins.md](plugins.md).
 
 Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
 `edit.colors.overprintBlack` (fields `remove`, `percentage`, `fill`, `stroke`, `includeCmyBlacks`,
@@ -528,6 +529,11 @@ fields measure visual bounds.
 Align to Glyph Bounds: the Align panel flyout's Align to Glyph Bounds submenu shows and toggles the
 `alignGlyphBoundsPoint` (Point Text) and `alignGlyphBoundsArea` (Area Text) preferences (`prefs.set`), checked while on.
 
+Measure Type by Glyph Bounds: the Transform panel menu's Measure Type by Glyph Bounds item shows and toggles the
+`typeGlyphBounds` preference (`prefs.set`), checked while on; while it is on, the bounding box and the Transform
+panel, Properties and Control bar fields measure each point type object selected as an object (not inside a selected
+group) by its glyphs' ink.
+
 Align To: the Align panel's Align To choice is saved with the preferences, and `ui.inspect` reports it as
 `ui.align_to` (`"selection"` or `"artboard"`; Align to Key Object stores no choice). The align buttons of the Align
 panel, the Control bar and the Properties panel run `object.align` with `to: "artboard"` when one object is selected,
@@ -571,9 +577,15 @@ New Document: File → New… (`file.newDialog`, Cmd+N) opens the `newDocument` 
 `colorMode`, `rasterEffectsPpi`, `previewMode`) plus `category` (the tab: Recent, Saved, Mobile, Web, Print, Film &
 Video, Art & Illustration, Branding, Social), `advanced` (Advanced Options open), `bleedLinked` and `presetName`
 (Save Preset's name). Setting `preset` to a name from `file.newPresets` fills the other fields from that preset;
-changing a field afterwards makes the settings custom (`preset` becomes ""). More Settings is the `newDocumentMore`
-dialog over the same fields (its Profile is `category`). `ui.dialog.confirm` runs `file.new` with the fields (with
-`previewMode: "pixel"` the app turns Pixel Preview on); on an error the dialog stays open.
+changing a field afterwards makes the settings custom (`preset` becomes ""). The `newDocumentMore` dialog is New
+Document with the More Settings pop-up open over it, which edits `artboards` and `artboardLayout` (layout, right-to-left,
+spacing and columns). While `__saving` is true, Preset Details shows Save Document Preset with the `presetName` field,
+Cancel and Save in place of the document's name and hides Close and Create. `ui.dialog.cancel` closes the More Settings
+pop-up first, then leaves saving, and keeps the fields each time. `ui.dialog.confirm` runs `file.new` with the fields
+(with `previewMode: "pixel"` the app turns Pixel Preview on); on an error the dialog stays open. While `__saving` is
+true, `ui.dialog.confirm` saves the preset and does not create a document; after a save `presetName` is empty, and the
+next Save Preset fills it with the first `Preset N` that no saved preset has. `ui.click` on the More Settings button
+opens the `newDocumentMore` pop-up.
 
 Swatch Conflict: through the app, when the pasted objects' global or spot swatches conflict with the document's
 (see `clipboard.conflicts`) and the params have no `swatchConflict`, every Paste command opens the `swatchConflict`
