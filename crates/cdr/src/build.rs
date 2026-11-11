@@ -255,10 +255,8 @@ impl<'a, 'b> Ctx<'a, 'b> {
     fn layer(&mut self, list: &Chunk) -> Layer {
         let ix = self.ix;
         let kind = flags(ix, list).map_or(LayerKind::Drawing, |f| layer_kind(f, true));
-        let name = own_loda(ix, list)
-            .and_then(|c| records::loda(ix.data(c), &self.p, &self.budget.limits, self.warn))
-            .and_then(|l| l.arg(ARG_NAME).map(|b| records::name(b, &self.p)))
-            .unwrap_or_default();
+        let loda = own_loda(ix, list).and_then(|c| records::loda(ix.data(c), &self.p, &self.budget.limits, self.warn));
+        let name = loda.and_then(|l| l.arg(ARG_NAME).map(|b| records::name(b, &self.p, self.warn))).unwrap_or_default();
         let mut guides = Vec::new();
         let objects = self.objects(ix.children(list), &mut guides);
         Layer { name, kind, objects, guides }

@@ -13,7 +13,8 @@ const TAG_1300: u32 = 1300;
 const MAX_SKIPPED: usize = 4;
 /// The most records skipped before an outline's own (R12).
 const MAX_OUTLINE_RECORDS: usize = 16;
-/// The most UTF-16 units of a library color's name kept.
+/// The most UTF-16 units of a library color's name kept, and the most bytes or UTF-16 units of
+/// a layer's.
 const MAX_NAME: usize = 256;
 
 /// A header field: u16 in short files, u32 otherwise.
@@ -299,13 +300,40 @@ pub(crate) fn outline(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<
     Some((id, Some(Outline { width, color, cap, join, dashes })))
 }
 
-/// A name argument (R9): Windows-1252 up to a NUL before version 12, UTF-16LE from it.
-pub(crate) fn name(b: &[u8], p: &Profile) -> String {
+/// A name argument (R9): Windows-1252 up to a NUL before version 12, UTF-16LE from it. A name
+/// longer than [`MAX_NAME`] bytes or UTF-16 units keeps its first ones (without half of a
+/// surrogate pair) and a hash of the whole name, with a warning, as a library color's name does.
+pub(crate) fn name(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> String {
     if p.utf16_names {
-        let units: Vec<u16> = b.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).take_while(|u| *u != 0).collect();
-        String::from_utf16_lossy(&units)
+        let units = b.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).take_while(|u| *u != 0);
+        let (mut kept, hash) = capped(units, warn);
+        if hash.is_some() && kept.last().is_some_and(|u| (0xD800..0xDC00).contains(u)) {
+            kept.pop();
+        }
+        with_hash(String::from_utf16_lossy(&kept), hash)
     } else {
-        b.iter().take_while(|c| **c != 0).map(|c| windows_1252(*c)).collect()
+        let bytes = b.iter().copied().take_while(|c| *c != 0);
+        let (kept, hash) = capped(bytes, warn);
+        with_hash(kept.into_iter().map(windows_1252).collect(), hash)
+    }
+}
+
+/// The first [`MAX_NAME`] of `units`, and when there are more, an FNV-1a hash of them all, with a
+/// warning.
+fn capped<T: Copy + Into<u64>>(units: impl Iterator<Item = T> + Clone, warn: &mut Vec<Warning>) -> (Vec<T>, Option<u64>) {
+    if units.clone().nth(MAX_NAME).is_none() {
+        return (units.collect(), None);
+    }
+    push(warn, Warning::TooDeep);
+    let hash = units.clone().fold(0xcbf2_9ce4_8422_2325_u64, |h, u| (h ^ u.into()).wrapping_mul(0x0100_0000_01b3));
+    (units.take(MAX_NAME).collect(), Some(hash))
+}
+
+/// `name`, followed by `hash` in hexadecimal when there is one.
+fn with_hash(name: String, hash: Option<u64>) -> String {
+    match hash {
+        Some(h) => format!("{name} {h:016x}"),
+        None => name,
     }
 }
 
@@ -330,9 +358,35 @@ mod tests {
     #[test]
     fn single_byte_names_read_as_windows_1252() {
         let p = crate::layout::for_version(1100).unwrap();
-        assert_eq!(name(b"Caf\xe9 \x80\x96\0junk", &p), "Café €–");
+        assert_eq!(name(b"Caf\xe9 \x80\x96\0junk", &p, &mut vec![]), "Café €–");
         let p = crate::layout::for_version(1200).unwrap();
-        assert_eq!(name(&[0x41, 0, 0x42, 0, 0, 0, 0x43, 0], &p), "AB");
+        assert_eq!(name(&[0x41, 0, 0x42, 0, 0, 0, 0x43, 0], &p, &mut vec![]), "AB");
+    }
+
+    /// A layer name longer than [`MAX_NAME`] bytes or UTF-16 units keeps its first ones and a hash
+    /// of the whole name, with a warning, in both encodings. A cut never keeps half of a surrogate
+    /// pair.
+    #[test]
+    fn long_layer_names_are_cut_with_a_hash() {
+        for version in [1100, 1200] {
+            let p = crate::layout::for_version(version).unwrap();
+            let bytes =
+                |s: &str| if p.utf16_names { s.encode_utf16().flat_map(u16::to_le_bytes).collect::<Vec<u8>>() } else { s.as_bytes().to_vec() };
+            let mut w = vec![];
+            let a = name(&bytes(&"N".repeat(100_000)), &p, &mut w);
+            let b = name(&bytes(&format!("{}M", "N".repeat(99_999))), &p, &mut vec![]);
+            assert_ne!(a, b, "{version}");
+            assert!(a.starts_with(&"N".repeat(MAX_NAME)) && a.chars().count() == MAX_NAME + 17, "{version}: {}", a.len());
+            assert_eq!(w, vec![Warning::TooDeep], "{version}");
+            let mut w = vec![];
+            assert_eq!(name(&bytes(&"N".repeat(MAX_NAME)), &p, &mut w), "N".repeat(MAX_NAME), "{version}");
+            assert!(w.is_empty(), "{version}");
+        }
+        let p = crate::layout::for_version(1200).unwrap();
+        let emoji: Vec<u8> = format!("N{}", "\u{1F600}".repeat(200)).encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let cut = name(&emoji, &p, &mut vec![]);
+        assert!(!cut.contains('\u{FFFD}'), "{cut}");
+        assert_eq!(cut.chars().filter(|c| *c == '\u{1F600}').count(), (MAX_NAME - 1) / 2);
     }
 
     #[test]
