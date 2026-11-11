@@ -5255,6 +5255,7 @@ effect	Soft	Weich
 	Preview (1 inch on the page)	Vorschau (1 Zoll auf der Seite)
 	Set as Default	Als Standard festlegen
 	 out from a highlighted edge to place its dimension  |  	 von einer hervorgehobenen Kante nach außen, um ihre Bemaßung zu platzieren  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 auf zwei Punkte, dann bewegen und klicken, um eine ausgerichtete, horizontale oder vertikale Bemaßung zu platzieren  |  
 	 cancels  |  Double-click the tool for options	 bricht ab  |  Doppelklick auf das Werkzeug für Optionen
 	Linear	Linear
 	Angular	Winkel
@@ -5289,12 +5290,14 @@ effect	Soft	Weich
 @msg	Measured anchor no longer exists	Der gemessene Ankerpunkt existiert nicht mehr
 @msg	Measured segment no longer exists	Das gemessene Segment existiert nicht mehr
 @msg	Non-finite dimension	Die Bemaßung ist keine endliche Zahl
+@msg	Only linear dimensions are horizontal or vertical	Nur lineare Bemaßungen sind horizontal oder vertikal
 @msg	Scale Text Attributes: selected type has no scale to bake	Textattribute skalieren: Der ausgewählte Text weist keine zu übernehmende Skalierung auf
 @msg	Scale must be drawing:real, for example 1:10	Der Maßstab muss Zeichnung:Realität sein, zum Beispiel 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Das Maßstabsverhältnis muss zwischen 1:1000000 und 1000000:1 liegen
 @msg	Second measured segment no longer exists	Das zweite gemessene Segment existiert nicht mehr
 @msg	Unknown dimension mode	Unbekannter Bemaßungsmodus
 @msg	Unknown dimension option {k}	Unbekannte Bemaßungsoption {k}
+@msg	Unknown dimension orientation	Unbekannte Bemaßungsausrichtung
 @msg	Unknown dimension style	Unbekannter Bemaßungsstil
 @msg	Unknown unit	Unbekannte Einheit
 # Revolve cap description

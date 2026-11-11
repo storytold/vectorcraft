@@ -5287,6 +5287,7 @@ imageTrace	Outline	კონტური
 	Preview (1 inch on the page)	წინასწარი ნახვა (1 დუიმი გვერდზე)
 	Set as Default	ნაგულისხმევად დაყენება
 	 out from a highlighted edge to place its dimension  |  	 — გამოკვეთილი კიდიდან გარეთ, მისი ზომის დასასმელად  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 — ორ წერტილზე, შემდეგ გადაადგილეთ და დააწკაპუნეთ გასწორებული, ჰორიზონტალური ან ვერტიკალური ზომის დასასმელად  |  
 	 cancels  |  Double-click the tool for options	 — გაუქმება  |  პარამეტრებისთვის ორჯერ დაწკაპეთ ხელსაწყოზე
 	Angular	კუთხური
 	Away from the Line	ხაზისგან მოშორებით
@@ -5318,12 +5319,14 @@ imageTrace	Outline	კონტური
 @msg	Measured anchor no longer exists	გაზომილი საყრდენი წერტილი აღარ არსებობს
 @msg	Measured segment no longer exists	გაზომილი სეგმენტი აღარ არსებობს
 @msg	Non-finite dimension	ზომა სასრული რიცხვი არ არის
+@msg	Only linear dimensions are horizontal or vertical	მხოლოდ ხაზოვანი ზომებია ჰორიზონტალური ან ვერტიკალური
 @msg	Scale Text Attributes: selected type has no scale to bake	ტექსტის ატრიბუტების მასშტაბირება: არჩეულ ტექსტს არ აქვს გადასაყვანი მასშტაბი
 @msg	Scale must be drawing:real, for example 1:10	მასშტაბი უნდა იყოს ნახაზი:რეალური, მაგალითად 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	მასშტაბის შეფარდება 1:1000000-სა და 1000000:1-ს შორის უნდა იყოს
 @msg	Second measured segment no longer exists	მეორე გაზომილი სეგმენტი აღარ არსებობს
 @msg	Unknown dimension mode	ზომის უცნობი რეჟიმი
 @msg	Unknown dimension option {k}	ზომის უცნობი პარამეტრი {k}
+@msg	Unknown dimension orientation	ზომის უცნობი ორიენტაცია
 @msg	Unknown dimension style	ზომის უცნობი სტილი
 @msg	Unknown unit	უცნობი ერთეული
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეები ღია რჩება.

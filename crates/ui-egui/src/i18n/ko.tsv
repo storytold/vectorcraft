@@ -5251,6 +5251,7 @@ lighting	Light	광원
 	Preview (1 inch on the page)	미리 보기 (페이지의 1인치)
 	Set as Default	기본값으로 설정
 	 out from a highlighted edge to place its dimension  |  	 강조된 가장자리에서 바깥쪽으로 끌어 치수 배치  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 으로 두 점을 지정한 다음 이동하고 클릭하여 정렬, 가로 또는 세로 치수 배치  |  
 	 cancels  |  Double-click the tool for options	 취소  |  도구를 두 번 클릭하면 옵션
 	Linear	선형
 	Angular	각도
@@ -5285,12 +5286,14 @@ lighting	Light	광원
 @msg	Measured anchor no longer exists	측정한 고정점이 더 이상 없습니다
 @msg	Measured segment no longer exists	측정한 세그먼트가 더 이상 없습니다
 @msg	Non-finite dimension	유한하지 않은 치수
+@msg	Only linear dimensions are horizontal or vertical	선형 치수만 가로 또는 세로로 지정할 수 있습니다
 @msg	Scale Text Attributes: selected type has no scale to bake	텍스트 속성 크기 조절: 선택한 텍스트에 적용할 크기 조절이 없습니다
 @msg	Scale must be drawing:real, for example 1:10	축척은 도면:실제 형식이어야 합니다(예: 1:10)
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	축척 비율은 1:1000000에서 1000000:1 사이여야 합니다
 @msg	Second measured segment no longer exists	두 번째 측정 세그먼트가 더 이상 없습니다
 @msg	Unknown dimension mode	알 수 없는 치수 모드
 @msg	Unknown dimension option {k}	알 수 없는 치수 옵션 {k}
+@msg	Unknown dimension orientation	알 수 없는 치수 방향
 @msg	Unknown dimension style	알 수 없는 치수 스타일
 @msg	Unknown unit	알 수 없는 단위
 # Revolve cap description

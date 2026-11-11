@@ -11,6 +11,26 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   curved segment is measured from end to end. With Smart Guides on, both points also snap into line with other objects'
   anchors and centres, and the second onto the construction guides through the first; the guides
   show while hovering, before each click.
+  A linear dimension is aligned, horizontal or vertical, as the
+  [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
+  describes: after the second click, clicking again places an aligned dimension, and moving the
+  pointer away gives a horizontal or vertical one. Which one a pointer position gives is
+  VectorCraft's own rule. When the pointer is beside the two points (the nearest point of the
+  line through them lies between them) or on that line, the dimension is aligned. When the
+  pointer is past either point, the line through the points and the perpendicular through that
+  point divide the area beyond it into two quarters, one on each side of the line. The quarter
+  that contains the direction straight up or down from the point gives the horizontal distance,
+  and the quarter that contains the direction straight left or right gives the vertical distance.
+  A click within 8 pixels of the second point, or of where the pointer was for the second click,
+  places an aligned dimension. Two points on one horizontal or vertical line always give an
+  aligned dimension. A dragged segment uses the same rule with its two ends.
+  A horizontal or vertical dimension keeps its orientation when it or the art it measures turns,
+  and shows the new horizontal or vertical distance, as the help describes for rotated objects. It
+  shows 0 when its points lie on one line across its axis. When the line of a linked dimension
+  lies outside its points, the line stays on the same side of the art, as far past the outermost
+  point as before. An unlinked dimension that
+  turns has its line where the turn puts it, or, when that would put it between the points, as
+  far past the outermost point as before.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
   straight lines that meet (or would, extended), then click to place.
 - **Radial:** hover a circle, or a segment that is a perfect arc, and drag: outwards gives its
@@ -55,8 +75,13 @@ document.
 ## Commands
 
 - `dimension.create`: two points, or a source (segment, angle, circle, arc, points), the mode,
-  offset and style; returns the group id and label.
-- `dimension.update`: restyle or move existing dimensions.
+  the orientation of a linear dimension (`aligned`, the default, `horizontal` or `vertical`),
+  offset and style; returns the group id and label. `offset` is the distance of the dimension
+  line from the first point: along the left normal of a → b for an aligned dimension, downward
+  for a horizontal one and leftward for a vertical one. A negative offset goes the other way.
+- `dimension.update`: restyle or move existing dimensions, or change the orientation of linear
+  ones. A new orientation keeps the line on the side of the points it was on. An update that
+  changes nothing records no undo step.
 - `dimension.applyToAll`: every dimension takes one dimension's style, in one undo step.
 - `tool.select {"tool":"dimension"}` and
   `tool.setOption {"tool":"dimension","values":{"mode":"linear","style":{"units":"mm","scale":"1:10"}}}`

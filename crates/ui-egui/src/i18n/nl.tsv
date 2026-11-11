@@ -5284,6 +5284,7 @@ mark-style	Japanese	Japans
 	Preview (1 inch on the page)	Voorbeeld (1 inch op de pagina)
 	Set as Default	Als standaard instellen
 	 out from a highlighted edge to place its dimension  |  	 uit een gemarkeerde rand om de bijbehorende maatlijn te plaatsen  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 op twee punten, verplaats daarna en klik om een uitgelijnde, horizontale of verticale maatlijn te plaatsen  |  
 	 cancels  |  Double-click the tool for options	 annuleert  |  Dubbelklik op het gereedschap voor opties
 	Angular	Hoek
 	Away from the Line	Van de lijn af
@@ -5315,12 +5316,14 @@ mark-style	Japanese	Japans
 @msg	Measured anchor no longer exists	Gemeten ankerpunt bestaat niet meer
 @msg	Measured segment no longer exists	Gemeten segment bestaat niet meer
 @msg	Non-finite dimension	Niet-eindige maatlijn
+@msg	Only linear dimensions are horizontal or vertical	Alleen lineaire maatlijnen zijn horizontaal of verticaal
 @msg	Scale Text Attributes: selected type has no scale to bake	Tekstkenmerken schalen: de geselecteerde tekst heeft geen schaling om toe te passen
 @msg	Scale must be drawing:real, for example 1:10	Schaal moet tekening:werkelijk zijn, bijvoorbeeld 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Schaalverhouding moet tussen 1:1000000 en 1000000:1 liggen
 @msg	Second measured segment no longer exists	Tweede gemeten segment bestaat niet meer
 @msg	Unknown dimension mode	Onbekende maatlijnmodus
 @msg	Unknown dimension option {k}	Onbekende maatlijnoptie {k}
+@msg	Unknown dimension orientation	Onbekende maatlijnrichting
 @msg	Unknown dimension style	Onbekende maatlijnstijl
 @msg	Unknown unit	Onbekende eenheid
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sluit de ronde uiteinden van open profielen. Gedeeltelijke omwentelingen houden hun afgesneden zijden open.

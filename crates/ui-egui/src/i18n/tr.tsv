@@ -5361,6 +5361,7 @@ theme	Appearance	Görünüm
 	Preview (1 inch on the page)	Önizleme (sayfada 1 inç)
 	Set as Default	Varsayılan Olarak Ayarla
 	 out from a highlighted edge to place its dimension  |  	 boyutunu yerleştirmek için vurgulanan kenardan dışarı |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 ile iki nokta seçin, ardından hizalı, yatay veya dikey bir boyut yerleştirmek için hareket ettirip tıklayın  |  
 	 cancels  |  Double-click the tool for options	 iptal |  Seçenekler için araca çift tıklayın
 	Angular	Açısal
 	Away from the Line	Çizgiden Uzakta
@@ -5392,11 +5393,13 @@ theme	Appearance	Görünüm
 @msg	Measured anchor no longer exists	Ölçülen çapa artık mevcut değil
 @msg	Measured segment no longer exists	Ölçülen segment artık mevcut değil
 @msg	Non-finite dimension	Sonlu olmayan boyut
+@msg	Only linear dimensions are horizontal or vertical	Yalnızca doğrusal boyutlar yatay veya dikey olabilir
 @msg	Scale must be drawing:real, for example 1:10	Ölçek çizim olmalıdır:gerçek, örneğin 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Ölçek oranı 1:1000000 ile 1000000:1 arasında olmalıdır
 @msg	Second measured segment no longer exists	Ölçülen ikinci segment artık mevcut değil
 @msg	Unknown dimension mode	Bilinmeyen boyut modu
 @msg	Unknown dimension option {k}	Bilinmeyen boyut seçeneği {k}
+@msg	Unknown dimension orientation	Bilinmeyen boyut yönü
 @msg	Unknown dimension style	Bilinmeyen boyut stili
 @msg	Unknown unit	Bilinmeyen birim
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Açık profillerin dairesel uçlarını kapatın. Kısmi süpürmeler kesik taraflarını açık tutar.

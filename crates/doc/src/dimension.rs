@@ -25,6 +25,17 @@ impl DimensionMode {
     }
 }
 
+/// The direction a linear dimension measures in: along the line through its two points, or only
+/// their horizontal or vertical distance.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Orientation {
+    #[default]
+    Aligned,
+    Horizontal,
+    Vertical,
+}
+
 /// The unit a length is labelled in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -349,6 +360,10 @@ pub struct Dimension {
     pub length: f64,
     pub options: DimensionOptions,
     pub source: Option<DimensionSource>,
+    /// What a linear dimension measures: the distance between its points (aligned), or only its
+    /// horizontal or vertical part. Other modes ignore it.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub orientation: Orientation,
     /// How far a linked dimension was moved on its own since the last refresh: the refresh turns
     /// it into a new placement unless the measured art moved too.
     #[serde(skip)]
@@ -359,16 +374,107 @@ impl Dimension {
     /// A point on the drawn dimension line (linear), arc (angular) or radius line.
     pub fn handle(&self) -> Point {
         match self.mode {
-            DimensionMode::Linear => self.a.midpoint(self.b) + self.normal() * self.offset,
+            DimensionMode::Linear => {
+                let (a, b) = self.line_ends();
+                a.midpoint(b)
+            }
             DimensionMode::Angular => self.vertex + self.bisector() * self.offset.abs().max(12.0),
             DimensionMode::Radius | DimensionMode::Diameter => self.b,
         }
     }
-    /// The left normal of a → b.
+    /// The unit direction a linear dimension measures along: a → b when aligned, else the x axis
+    /// (horizontal) or the y axis (vertical), whichever way the points lie.
+    pub fn direction(&self) -> Vec2 {
+        match self.orientation {
+            Orientation::Horizontal if self.mode == DimensionMode::Linear => Vec2::new(1.0, 0.0),
+            Orientation::Vertical if self.mode == DimensionMode::Linear => Vec2::new(0.0, 1.0),
+            _ => {
+                let u = self.b - self.a;
+                let len = u.hypot();
+                if len > 1e-9 { u / len } else { Vec2::new(1.0, 0.0) }
+            }
+        }
+    }
+    /// The left normal of [`Self::direction`].
     pub fn normal(&self) -> Vec2 {
-        let u = self.b - self.a;
-        let len = u.hypot();
-        if len > 1e-9 { Vec2::new(-u.y, u.x) / len } else { Vec2::new(0.0, 1.0) }
+        let u = self.direction();
+        Vec2::new(-u.y, u.x)
+    }
+    /// The length a linear dimension shows: the distance between its points along
+    /// [`Self::direction`].
+    pub fn measured(&self) -> f64 {
+        (self.b - self.a).dot(self.direction()).abs()
+    }
+    /// The two ends of a linear dimension's line: the measured points moved onto one line along
+    /// [`Self::direction`], `offset` from a along the normal.
+    pub fn line_ends(&self) -> (Point, Point) {
+        let (u, n) = (self.direction(), self.normal());
+        let a = self.a + n * self.offset;
+        (a, a + u * (self.b - self.a).dot(u))
+    }
+    /// A horizontal or vertical dimension whose points moved from `old`'s keeps its line as far
+    /// outside them as it was, on the same side: the gap is measured from the outermost point
+    /// on the line's side, so the line stays clear of art that turns. A line that lay between
+    /// the two points keeps its distance from the first point.
+    pub fn keep_gap(&mut self, old: &Dimension) {
+        if self.mode != DimensionMode::Linear
+            || self.orientation == Orientation::Aligned
+            || old.orientation != self.orientation
+            || (self.a, self.b) == (old.a, old.b)
+        {
+            return;
+        }
+        let n = self.normal();
+        let across = |p: Point| p.to_vec2().dot(n);
+        let line = across(old.a) + old.offset;
+        let (low, high) = (across(old.a).min(across(old.b)), across(old.a).max(across(old.b)));
+        let (new_low, new_high) = (across(self.a).min(across(self.b)), across(self.a).max(across(self.b)));
+        let at = if line >= high {
+            new_high + (line - high)
+        } else if line <= low {
+            new_low + (line - low)
+        } else {
+            return;
+        };
+        let offset = at - across(self.a);
+        if offset.is_finite() && offset.abs() <= 1e6 {
+            self.offset = offset;
+        }
+    }
+    /// Whether a linear dimension's line lies strictly between its two points along the normal.
+    fn line_between_points(&self) -> bool {
+        let n = self.normal();
+        let across = |p: Point| p.to_vec2().dot(n);
+        let line = across(self.a) + self.offset;
+        across(self.a).min(across(self.b)) < line && line < across(self.a).max(across(self.b))
+    }
+    /// Makes a linear dimension measure in `orientation`, with its line on the side of the points
+    /// it was on. The line goes through the middle of the old line when that point lies outside
+    /// the two points along the new normal; otherwise it lies as far past the outermost point on
+    /// that side as the old line lay from its points.
+    pub fn set_orientation(&mut self, orientation: Orientation) {
+        if self.mode != DimensionMode::Linear || self.orientation == orientation {
+            self.orientation = orientation;
+            return;
+        }
+        let (handle, gap) = (self.handle(), self.offset.abs());
+        self.orientation = orientation;
+        let n = self.normal();
+        let across = |p: Point| p.to_vec2().dot(n);
+        let (low, high) = (across(self.a).min(across(self.b)), across(self.a).max(across(self.b)));
+        let h = across(handle);
+        let at = if h >= high || h <= low {
+            h
+        } else if 2.0 * h >= low + high {
+            high + gap
+        } else {
+            low - gap
+        };
+        let offset = at - across(self.a);
+        if offset.is_finite() && offset.abs() <= 1e6 {
+            self.offset = offset;
+        }
+        self.length = self.measured();
     }
     fn bisector(&self) -> Vec2 {
         let start = (self.a - self.vertex).atan2();
@@ -397,11 +503,24 @@ impl Dimension {
             self.moved = Some((xf * at) - at + self.moved.unwrap_or_default());
             return;
         }
+        // A horizontal or vertical dimension keeps measuring along its axis, between the points
+        // where they now are, and its line goes through where the transform puts it. When that
+        // puts the line between the points (a quarter turn), the line keeps its gap from them.
+        let before = (self.mode == DimensionMode::Linear && self.orientation != Orientation::Aligned).then(|| (self.clone(), xf * self.handle()));
         self.a = xf * self.a;
         self.b = xf * self.b;
         self.vertex = xf * self.vertex;
+        if let Some((old, p)) = before {
+            let offset = (p - self.a).dot(self.normal());
+            if offset.is_finite() && offset.abs() <= 1e6 {
+                self.offset = offset;
+            }
+            if self.line_between_points() && !old.line_between_points() {
+                self.keep_gap(&old);
+            }
+        }
         if self.mode == DimensionMode::Linear {
-            self.length = self.a.distance(self.b);
+            self.length = self.measured();
         }
     }
     pub fn resolve(&mut self, doc: &Document) -> Result<(), String> {
@@ -412,13 +531,13 @@ impl Dimension {
                         *point = r.position(doc).ok_or("Measured anchor no longer exists")?;
                     }
                 }
-                self.length = self.a.distance(self.b);
+                self.length = if self.mode == DimensionMode::Linear { self.measured() } else { self.a.distance(self.b) };
             }
             Some(DimensionSource::Segment { edge }) => {
                 let (a, b) = edge.endpoints(doc).ok_or("Measured segment no longer exists")?;
                 self.a = a;
                 self.b = b;
-                self.length = a.distance(b);
+                self.length = self.measured();
             }
             Some(DimensionSource::Angle { first, second }) => {
                 for edge in [first, second] {
@@ -486,7 +605,7 @@ impl Dimension {
             DimensionMode::Angular => self.angle().abs().to_degrees(),
             DimensionMode::Radius => self.a.distance(self.b),
             DimensionMode::Diameter => self.a.distance(self.b) * 2.0,
-            DimensionMode::Linear => self.a.distance(self.b),
+            DimensionMode::Linear => self.measured(),
         };
         self.options.label(value, self.mode == DimensionMode::Angular)
     }

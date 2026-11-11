@@ -5573,6 +5573,7 @@ theme	Appearance	Utseende
 3d	Light	Ljus
 	 cancels  |  Double-click the tool for options	 avbryter  |  Dubbelklicka på verktyget för alternativ
 	 out from a highlighted edge to place its dimension  |  	 utåt från en framhävd kant för att placera dess mått  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 på två punkter, flytta sedan och klicka för att placera ett justerat, vågrätt eller lodrätt mått  |  
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	En äldre .ai-fil rymmer en rityta: varje rityta du markerar sparas som en separat fil.
 	Arrange Intertwine Area	Ordna sammanflätningsområde
 	Batch…	Batch…
@@ -5671,12 +5672,14 @@ theme	Appearance	Utseende
 @msg	Measured anchor no longer exists	Den mätta ankarpunkten finns inte längre
 @msg	Measured segment no longer exists	Det mätta segmentet finns inte längre
 @msg	Non-finite dimension	Måttet är inte ett ändligt tal
+@msg	Only linear dimensions are horizontal or vertical	Endast linjära mått är vågräta eller lodräta
 @msg	Scale Text Attributes: selected type has no scale to bake	Skala textattribut: det valda texten har ingen skalning att tillämpa
 @msg	Scale must be drawing:real, for example 1:10	Skalan måste anges som ritning:verklighet, till exempel 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Skalförhållandet måste ligga mellan 1:1000000 och 1000000:1
 @msg	Second measured segment no longer exists	Det andra mätta segmentet finns inte längre
 @msg	Unknown dimension mode	Okänt måttläge
 @msg	Unknown dimension option {k}	Okänt måttalternativ {k}
+@msg	Unknown dimension orientation	Okänd måttriktning
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` måste vara grayscale, rgb, hsb, cmyk eller websafe
 @msg	`{key}` must be an array of these names: {_1}	`{key}` måste vara en lista med dessa namn: {_1}
 @msg	choose a destination folder	välj en målmapp

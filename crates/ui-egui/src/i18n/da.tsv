@@ -5272,6 +5272,7 @@ mark-style	Japanese	Japansk
 	Preview (1 inch on the page)	Forhåndsvisning (1 tomme på siden)
 	Set as Default	Angiv som standard
 	 out from a highlighted edge to place its dimension  |  	 ud fra en fremhævet kant for at placere dens mål  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 på to punkter, flyt derefter, og klik for at placere et justeret, vandret eller lodret mål  |  
 	 cancels  |  Double-click the tool for options	 annullerer  |  Dobbeltklik på værktøjet for indstillinger
 	Angular	Vinklet
 	Away from the Line	Væk fra linjen
@@ -5303,12 +5304,14 @@ mark-style	Japanese	Japansk
 @msg	Measured anchor no longer exists	Det målte ankerpunkt findes ikke længere
 @msg	Measured segment no longer exists	Det målte segment findes ikke længere
 @msg	Non-finite dimension	Ikke-endeligt mål
+@msg	Only linear dimensions are horizontal or vertical	Kun lineære mål er vandrette eller lodrette
 @msg	Scale Text Attributes: selected type has no scale to bake	Skalér tekstattributter: den valgte tekst har ingen skalering at anvende
 @msg	Scale must be drawing:real, for example 1:10	Målestokken skal være tegning:virkelig, for eksempel 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Målestoksforholdet skal være mellem 1:1000000 og 1000000:1
 @msg	Second measured segment no longer exists	Det andet målte segment findes ikke længere
 @msg	Unknown dimension mode	Ukendt måltilstand
 @msg	Unknown dimension option {k}	Ukendt målindstilling {k}
+@msg	Unknown dimension orientation	Ukendt målretning
 @msg	Unknown dimension style	Ukendt målstil
 @msg	Unknown unit	Ukendt enhed
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Luk de runde ender af åbne profiler. Delvise omdrejninger beholder deres skårne sider åbne.

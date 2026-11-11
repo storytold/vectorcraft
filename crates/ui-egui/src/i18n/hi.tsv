@@ -27,6 +27,7 @@
 	 on the canvas to create one	 बनाने के लिए कैनवास पर
 	 on the canvas to create one (	 बनाने के लिए कैनवास पर (
 	 out from a highlighted edge to place its dimension  |  	 माप रखने के लिए हाइलाइट किए किनारे से बाहर की ओर  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 दो बिंदुओं पर, फिर संरेखित, क्षैतिज या ऊर्ध्वाधर आयाम रखने के लिए पॉइंटर ले जाएँ और क्लिक करें  |  
 	 over paths to roughen their outlines  |  	 आउटलाइन खुरदरी करने के लिए पाथ पर  |  
 	 over paths, and hold still to keep going  |  	 पाथ पर, और जारी रखने के लिए स्थिर रखें  |  
 	 right or left to zoom in or out  |  	 ज़ूम इन या आउट करने के लिए दाएँ या बाएँ  |  
@@ -6963,6 +6964,7 @@ antiAlias	Sharp	शार्प
 @msg	node {_1} is not type	नोड {_1} टाइप नहीं है
 @msg	node {_1} is on a locked artboard	नोड {_1} एक लॉक्ड आर्टबोर्ड पर है
 @msg	Non-finite dimension	गैर-परिष्कृत आयाम
+@msg	Only linear dimensions are horizontal or vertical	केवल रैखिक आयाम क्षैतिज या ऊर्ध्वाधर होते हैं
 @msg	None of these issues are left: check again	इन मुद्दों में से कोई भी छोड़ दिया जाता है: फिर से जांच करें
 @msg	not a blend	मिश्रण नहीं
 @msg	not a closed path	एक बंद पाथ नहीं
@@ -7809,6 +7811,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	अज्ञात नियंत्रण `{name}`: fillStroke, रंग, drawMode या screenMode
 @msg	Unknown dimension mode	अज्ञात आयाम मोड
 @msg	Unknown dimension option {k}	अज्ञात आयाम ऑप्शन {k}
+@msg	Unknown dimension orientation	अज्ञात आयाम अभिविन्यास
 @msg	Unknown dimension style	अज्ञात आयाम स्टाइल
 @msg	unknown effect `{e}`	अज्ञात इफ़ेक्ट `{e}`
 @msg	unknown effect `{id}`	अज्ञात इफ़ेक्ट `{id}`

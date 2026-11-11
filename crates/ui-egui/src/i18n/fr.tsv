@@ -5676,6 +5676,7 @@ theme	Appearance	Apparence
 	Preview (1 inch on the page)	Aperçu (1 pouce sur la page)
 	Set as Default	Définir par défaut
 	 out from a highlighted edge to place its dimension  |  	 vers l'extérieur depuis un bord mis en évidence pour placer sa cote  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 sur deux points, puis déplacez et cliquez pour placer une cote alignée, horizontale ou verticale  |  
 	 cancels  |  Double-click the tool for options	 annule  |  Double-clic sur l'outil pour les options
 	Angular	Angulaire
 	Away from the Line	À l'écart de la ligne
@@ -5707,12 +5708,14 @@ theme	Appearance	Apparence
 @msg	Measured anchor no longer exists	Le point d’ancrage mesuré n’existe plus
 @msg	Measured segment no longer exists	Le segment mesuré n’existe plus
 @msg	Non-finite dimension	Cote non finie
+@msg	Only linear dimensions are horizontal or vertical	Seules les cotes linéaires sont horizontales ou verticales
 @msg	Scale Text Attributes: selected type has no scale to bake	Mettre à l’échelle les attributs de texte : le texte sélectionné n’a pas d’échelle à intégrer
 @msg	Scale must be drawing:real, for example 1:10	L’échelle doit être dessin:réel, par exemple 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Le rapport d’échelle doit être compris entre 1:1000000 et 1000000:1
 @msg	Second measured segment no longer exists	Le second segment mesuré n’existe plus
 @msg	Unknown dimension mode	Mode de cote inconnu
 @msg	Unknown dimension option {k}	Option de cote inconnue {k}
+@msg	Unknown dimension orientation	Orientation de cote inconnue
 @msg	Unknown dimension style	Style de cote inconnu
 @msg	Unknown unit	Unité inconnue
 # Revolve cap description
