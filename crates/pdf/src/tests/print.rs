@@ -33,6 +33,7 @@ fn artboard(id: u32, x: f64) -> Artboard {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     }
 }
 

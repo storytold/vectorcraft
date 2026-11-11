@@ -289,6 +289,7 @@ fn an_artboard_guide_is_picked_and_snapped_to_across_its_artboard_only() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     d.guides = vec![Guide { artboard: Some(id), ..Guide::new(false, 150.0) }];
     let (s, p) = (Selection::default(), paint());
@@ -604,6 +605,7 @@ fn ruler_guide_readouts_count_from_the_active_artboard_with_artboard_rulers() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     doc.ruler_origin = Point::new(5.0, 5.0);
     let (paint, selection) = (paint(), Selection::default());

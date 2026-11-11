@@ -1067,6 +1067,7 @@ antiAlias	Sharp	날카롭게
 	Average	평균
 	BLANK DOCUMENT PRESETS	빈 문서 프리셋
 	Background Color:	배경색:
+	Guide Label:	안내선 레이블:
 	Show Center Mark	중심 표시 보기
 	Show Cross Hairs	십자선 보기
 	Show Video Safe Areas	비디오 안전 영역 보기
@@ -4611,6 +4612,7 @@ theme	Appearance	외관
 @msg	{label}…	{label}…
 @msg	no blend options	혼합 옵션이 없습니다
 @msg	bad color {v}	잘못된 색상 {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel`은 null, 레이어 색상 이름 또는 #rrggbb입니다
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio은(는) 0.1에서 10 사이의 숫자여야 합니다
 @msg	the Color Picker is not open	색상 피커가 열려 있지 않습니다
 @msg	the Simplify slider is not open	단순화 슬라이더가 열려 있지 않습니다

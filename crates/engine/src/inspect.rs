@@ -133,13 +133,17 @@ pub fn document(s: &Session) -> Value {
     document_opts(s, SummaryOpts::default())
 }
 
-/// An artboard's name and rectangle, its background color (`#rrggbb`) when it has one,
+/// An artboard's name and rectangle, its background color (`#rrggbb`) when it has one, its guide
+/// label (a layer color's name or `#rrggbb`) when it has one,
 /// `locked: true` when it is locked, `showCenterMark: true`, `showCrossHairs: true` and
 /// `showVideoSafeAreas: true` when it shows them, and `videoRulerPixelAspectRatio` when it isn't 1.
 fn artboard_summary(a: &vectorcraft_doc::Artboard) -> Value {
     let mut v = json!({"name": a.name, "x": a.rect.x0, "y": a.rect.y0, "width": a.rect.width(), "height": a.rect.height()});
     if let Some(c) = a.color {
         v["color"] = json!(c.to_hex());
+    }
+    if let Some(c) = a.guide_label {
+        v["guideLabel"] = json!(c.label_text());
     }
     for (key, on) in [
         ("locked", a.locked),

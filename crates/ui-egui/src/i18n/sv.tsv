@@ -278,6 +278,7 @@ font-technology	Variable	Variabla
 	Average…	Medelvärde…
 	Axis:	Axel:
 	Background Color:	Bakgrundsfärg:
+	Guide Label:	Stödlinjeetikett:
 	Show Center Mark	Visa mittmarkering
 	Show Cross Hairs	Visa hårkors
 	Show Video Safe Areas	Visa videosäkra områden
@@ -4194,6 +4195,7 @@ axis	Both	Båda
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis måste vara "vertical", "horizontal" eller en vinkel i grader, inte `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black eller en färg som "#ff8800"
 @msg	bad color {v}	ogiltig färg {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` är null, namnet på en lagerfärg eller #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio måste vara ett tal från 0,1 till 10
 @msg	bad colour `{hex}` (#rrggbb)	ogiltig färg `{hex}` (#rrggbb)
 @msg	bad page tree	ogiltigt sidträd

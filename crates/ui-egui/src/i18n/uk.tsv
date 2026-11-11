@@ -283,6 +283,7 @@ font-technology	Variable	Варіативні
 	Average…	Усереднити…
 	Axis:	Вісь:
 	Background Color:	Колір тла:
+	Guide Label:	Мітка напрямних:
 	Show Center Mark	Показати центральну позначку
 	Show Cross Hairs	Показати перехрестя
 	Show Video Safe Areas	Показати безпечні зони відео
@@ -4312,6 +4313,7 @@ axis	Both	Обидві
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` має бути null, назвою кольору шару або #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio має бути числом від 0,1 до 10
 @msg	the Color Picker is not open	палітра кольорів не відкрита
 @msg	the Simplify slider is not open	повзунок «Спростити» не відкрито

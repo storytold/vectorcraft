@@ -289,6 +289,7 @@ font-technology	Variable	Variabili
 	Average…	Media…
 	Axis:	Asse:
 	Background Color:	Colore di sfondo:
+	Guide Label:	Etichetta delle guide:
 	Show Center Mark	Mostra segno centrale
 	Show Cross Hairs	Mostra mirino
 	Show Video Safe Areas	Mostra aree sicure video
@@ -4328,6 +4329,7 @@ axis	Both	Entrambi
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis deve essere "vertical", "horizontal" o un angolo in gradi, non `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	sfondo {other}: transparent, white, black o un colore come "#ff8800"
 @msg	bad color {v}	colore non valido {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` è null, il nome di un colore di livello o #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio deve essere un numero da 0,1 a 10
 @msg	the Color Picker is not open	il Selettore colore non è aperto
 @msg	the Simplify slider is not open	il cursore Semplifica non è aperto

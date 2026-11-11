@@ -497,6 +497,7 @@ antiAlias	Sharp	शार्प
 	B5	B5
 	Back	वापस
 	Background Color:	बैकग्राउंड रंग:
+	Guide Label:	गाइड लेबल:
 	Background Contents	बैकग्राउंड सामग्री
 	Background Level	बैकग्राउंड स्तर
 	Background:	बैकग्राउंड:
@@ -6040,6 +6041,7 @@ antiAlias	Sharp	शार्प
 @msg	bad base64	बुरा आधार64
 @msg	bad color {c}	बुरा रंग {c}
 @msg	bad color {v}	बुरा रंग {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` null, किसी लेयर रंग का नाम या #rrggbb होता है
 @msg	bad colour	बुरा रंग
 @msg	bad colour {v}	बुरा रंग {v}
 @msg	bad colour {v} in groupColors	groupColors में अमान्य रंग {v}

@@ -312,6 +312,7 @@ font-technology	Variable	Biến thiên
 	Axis:	Trục:
 	Back	Sau
 	Background Color:	Màu nền:
+	Guide Label:	Nhãn đường căn:
 	Show Center Mark	Hiện dấu tâm
 	Show Cross Hairs	Hiện đường chữ thập
 	Show Video Safe Areas	Hiện vùng an toàn video
@@ -4482,6 +4483,7 @@ theme	Appearance	Giao diện
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis phải là "vertical", "horizontal" hoặc góc theo độ, không phải `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black hoặc màu như "#ff8800"
 @msg	bad color {v}	màu không hợp lệ {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` là null, tên một màu lớp hoặc #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio phải là một số từ 0,1 đến 10
 @msg	the Color Picker is not open	Bộ chọn màu chưa được mở
 @msg	the Simplify slider is not open	Thanh trượt Đơn giản hóa chưa được mở
