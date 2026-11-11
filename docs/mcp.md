@@ -7464,7 +7464,9 @@ grant in the store. A stored module that is disabled, or not read in Safe Mode, 
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
-under its id. One that lists `settings` or `cache` keeps settings or a cache of its own in the `Plug-ins` folder
+under its id. With a desktop app connected, `plugin.dialog` runs such a filter (one without a `commandAllowlist`) in the
+background when it runs at once or OK runs it with Preview off, and returns `{background: true, status}`;
+`plugin.cancelRuns` stops it. One that lists `settings` or `cache` keeps settings or a cache of its own in the `Plug-ins` folder
 (VectorCraft's own caps: 256 settings and 1 MiB, 512 MiB of cache): `plugin.list` and `plugin.info` give the cache's
 size as `cacheBytes`, `plugin.clearCache {id?}` empties the cache of one plug-in or of all of them and returns
 `{cleared: [id], bytesFreed}`, replacing a plug-in keeps both, and `plugin.remove` deletes both (also for an id that

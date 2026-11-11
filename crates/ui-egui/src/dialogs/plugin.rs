@@ -6,7 +6,10 @@
 //! declared parameter (fields named after them; `__plugin` is the plug-in id) with a live
 //! Preview, and OK keeps the run as one undo step (`plugin.run`). A filter without parameters runs
 //! at once. A heavy filter (its manifest's `budget`) has no Preview, since a run may take minutes:
-//! it runs in the background ([`crate::plugin_runs`]). A filter or live effect with commands of
+//! it runs in the background ([`crate::plugin_runs`]). A light filter that reports its progress
+//! (plug-in API level 2 with the `progress` permission) and calls no commands runs in the
+//! background too, with its progress and Cancel, when it runs at once or when OK runs it without a
+//! kept preview ([`in_background`]). A filter or live effect with commands of
 //! its own is a submenu named after it, holding its item and then its commands; a command with
 //! parameters opens the same dialog for them ([`open_command`]). Exporters are formats of File › Export ›
 //! Export As; one with parameters opens dialog `pluginExport` once the file is picked, and its
@@ -200,12 +203,19 @@ fn params(d: &Dialog) -> Value {
     }
 }
 
-/// Runs filter `plugin` with `plugin.run`'s params `p`: at once, or in the background when it is
-/// heavy.
+/// Does filter `m` run in the background ([`crate::plugin_runs`]) rather than on the UI thread? A
+/// heavy one does, and so does a light one that reports its progress (the `progress` permission)
+/// unless it calls commands, which run only in the session.
+fn in_background(m: &Manifest) -> bool {
+    m.budget == Budget::Heavy || (m.permissions().contains(&permissions::Permission::Progress) && m.command_allowlist.is_empty())
+}
+
+/// Runs filter `plugin` with `plugin.run`'s params `p`: at once, or in the background
+/// ([`in_background`]).
 fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, String> {
-    match plugin.manifest().budget {
-        Budget::Light => app.run(CMD, p),
-        Budget::Heavy => crate::plugin_runs::start(app, p),
+    match in_background(plugin.manifest()) {
+        false => app.run(CMD, p),
+        true => crate::plugin_runs::start(app, p),
     }
 }
 
@@ -234,11 +244,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// OK: a filter keeps its previewed run as one undo step; a heavy one, which has no preview, starts
-/// in the background ([`run`]) and the dialog closes.
+/// OK: a filter keeps its previewed run as one undo step; a heavy one, which has no preview, and a
+/// light one that runs in the background ([`in_background`]) with Preview off, start in the
+/// background ([`run`]) and the dialog closes. A preview still shown when Preview was just turned
+/// off is rolled back first.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let own_run = d.str("__command").is_empty();
+    let kept = |plugin: &Plugin| plugin.manifest().budget == Budget::Light && d.bool("preview") && app.session.in_interaction();
     match registry::get(&d.str("__plugin")) {
-        Some(plugin) if plugin.manifest().budget == Budget::Heavy => {
+        Some(plugin) if own_run && in_background(plugin.manifest()) && !kept(&plugin) => {
+            if d.fields.contains_key(form::PREVIEWED) && app.session.in_interaction() {
+                let _ = app.session.cancel_interaction();
+            }
             let r = run(app, &plugin, params(d));
             if r.is_ok() {
                 app.ui.dialog = None;

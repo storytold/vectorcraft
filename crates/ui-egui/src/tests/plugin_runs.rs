@@ -1,6 +1,7 @@
 //! Heavy plug-in filters in the app ([`crate::plugin_runs`]): installing one asks first, its dialog
 //! has no Preview, and it runs off the UI thread, its result applied as one undo step once it is
-//! done, unless the document changed meanwhile. Cancel stops it; its progress window shows it.
+//! done, unless the document changed meanwhile. Cancel stops it; its progress window shows it. A
+//! light filter that reports its progress runs there too.
 
 use std::time::{Duration, Instant};
 
@@ -212,6 +213,130 @@ fn a_filter_that_reports_progress_shows_a_bar_and_sees_cancel() {
     }
     assert_eq!(app.session.doc().unwrap().doc, doc);
     assert_eq!(app.ui.status, vectorcraft_engine::EngineError::Cancelled.to_string());
+}
+
+/// The triangle the light test filters return.
+const TRIANGLE: &str = r#"{"objects":[{"path":{"subpaths":[{"anchors":[{"p":[0,0]},{"p":[30,0]},{"p":[15,20]}]}]}}]}"#;
+
+/// Installs a light filter `id` of plug-in API level 2 with `params` that returns [`TRIANGLE`],
+/// granted as the user would grant it. With `progress` it lists the `progress` permission, and its
+/// `vc_run` first runs `first`, which may report its progress.
+fn install_light(app: &mut VectorcraftApp, id: &str, progress: bool, params: &str, first: &str) {
+    let may: &[&str] = if progress { &["doc.read", "doc.write", "progress"] } else { &["doc.read", "doc.write"] };
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{},"params":{params}}}"#, json!(may));
+    // Without `progress` the module may not import the host functions.
+    let src = if progress { tpl::reporting(&manifest, first, TRIANGLE) } else { tpl::returning(&manifest, TRIANGLE) };
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+    app.run("plugin.install", json!({"dataBase64": data, "grant": may})).unwrap();
+}
+
+/// Applies the runs' results as the frames would, until none is left (each run ends: it returns,
+/// or its budget stops it).
+fn finish_runs(app: &mut VectorcraftApp) {
+    while !app.plugin_runs.running.is_empty() {
+        plugin_runs::poll(app);
+        std::thread::yield_now();
+    }
+}
+
+/// A light filter that may report its progress runs off the UI thread when it runs at once, as a
+/// heavy one does: the status bar says so, and its result is one undo step named after it.
+#[test]
+fn a_light_filter_that_reports_progress_runs_off_the_ui_thread() {
+    let mut app = app();
+    let id = "test.ui.light.progress.run";
+    install_light(&mut app, id, true, "{}", "(call $vc_progress (i64.const 1) (i64.const 2))");
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let r = app.run("plugin.dialog", json!({"id": id})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    assert_eq!(app.ui.status, format!("Running “Test {id}”…"));
+    finish_runs(&mut app);
+    let st = app.session.doc().unwrap();
+    assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(st.history.undo.last().unwrap().label, format!("Test {id}"));
+    assert_eq!(st.selection.objects.len(), 1, "the triangle it added, selected");
+}
+
+/// A light filter that reports its progress shows it in the progress window, and Cancel there
+/// makes its `vc_cancelled` return 1: it stops, changing nothing.
+#[test]
+fn a_light_filter_s_progress_window_shows_its_share_and_cancel_stops_it() {
+    let mut app = app();
+    let id = "test.ui.light.progress.cancel";
+    let first = "(call $vc_progress (i64.const 250) (i64.const 1000)) (block $stop (loop $l (br_if $stop (call $vc_cancelled)) (br $l)))";
+    install_light(&mut app, id, true, "{}", first);
+    let doc = app.session.doc().unwrap().doc.clone();
+    assert_eq!(app.run("plugin.dialog", json!({"id": id})).unwrap()["background"], true);
+    // Waits for the run's thread to report the share (a handshake: the thread never stops before
+    // it is cancelled or its budget runs out, and a run that ended leaves the loop).
+    loop {
+        plugin_runs::poll(&mut app);
+        match app.plugin_runs.running.first() {
+            Some(r) if r.progress.counts() != (250, 1000) => std::thread::yield_now(),
+            _ => break,
+        }
+    }
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    progress(&mut app, &ctx, 0.0);
+    progress(&mut app, &ctx, 1.0);
+    let shown = progress(&mut app, &ctx, 1.1);
+    assert!(shown.contains(&format!("Running “Test {id}”…")) && shown.contains("25 %") && shown.contains("Cancel"), "{shown}");
+    assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap()["cancelled"], 1);
+    finish_runs(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, doc);
+    assert_eq!(app.ui.status, vectorcraft_engine::EngineError::Cancelled.to_string());
+}
+
+/// In the dialog of a light filter that reports its progress, OK with Preview off runs it in the
+/// background, also right after Preview was turned off; with Preview on, OK keeps the previewed
+/// run, as for any light filter.
+#[test]
+fn ok_runs_a_light_progress_filter_in_the_background_without_a_preview() {
+    let mut app = app();
+    let id = "test.ui.light.progress.dialog";
+    install_light(&mut app, id, true, r#"{"size":{"type":"number","min":1,"max":9,"default":3}}"#, "");
+    let undo = app.session.doc().unwrap().history.undo.len();
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
+    frame(&mut app);
+    assert!(!app.session.in_interaction(), "nothing previewed");
+    dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.plugin_runs.running.len(), 1, "running in the background");
+    finish_runs(&mut app);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    // Preview on: OK keeps the previewed run, and nothing runs in the background.
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("preview"), Some(&json!(true)));
+    frame(&mut app);
+    assert!(app.session.in_interaction(), "previewed");
+    dialogs::confirm(&mut app).unwrap();
+    assert!(app.plugin_runs.running.is_empty());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2);
+    // Preview turned off after a preview and OK before the next frame: the preview is rolled back
+    // and the run goes to the background.
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    frame(&mut app);
+    assert!(app.session.in_interaction(), "previewed");
+    app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
+    dialogs::confirm(&mut app).unwrap();
+    assert!(!app.session.in_interaction(), "the preview was rolled back");
+    assert_eq!(app.plugin_runs.running.len(), 1, "running in the background");
+    finish_runs(&mut app);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 3);
+}
+
+/// A light filter without the `progress` permission still runs at once, on the UI thread.
+#[test]
+fn a_light_filter_that_does_not_report_progress_runs_at_once() {
+    let mut app = app();
+    let id = "test.ui.light.plain";
+    install_light(&mut app, id, false, "{}", "");
+    let r = app.run("plugin.dialog", json!({"id": id})).unwrap();
+    assert!(r.get("background").is_none(), "{r}");
+    assert!(app.plugin_runs.running.is_empty());
+    assert_eq!(app.session.doc().unwrap().selection.objects.len(), 1, "the triangle, added at once");
 }
 
 /// `CRAFT_UI_HEAVY_FILTER_WASM=<folder>` writes a heavy test filter to install in the app

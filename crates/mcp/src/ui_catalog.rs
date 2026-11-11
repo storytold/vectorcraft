@@ -1493,7 +1493,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.dialog",
         "Plug-in…",
         "",
-        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step)",
+        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns)",
     ),
     (
         "ui.installPlugin",
@@ -1505,13 +1505,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.cancelRuns",
         "Cancel Plug-in Run",
         "",
-        "{} stop every heavy filter running in the background (its progress window's Cancel): it stops at the next slice of its budget and changes nothing → {cancelled: n}",
+        "{} stop every filter running in the background (its progress window's Cancel): it stops at the next slice of its budget and changes nothing → {cancelled: n}",
     ),
     (
         "plugin.hideRuns",
         "Continue in Background",
         "",
-        "{} close the progress window of the heavy filters running in the background; they go on, shown in the status bar → {hidden: n}",
+        "{} close the progress window of the filters running in the background; they go on, shown in the status bar → {hidden: n}",
     ),
     (
         "imageTrace.cancelRuns",
