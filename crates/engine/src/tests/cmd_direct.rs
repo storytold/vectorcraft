@@ -157,3 +157,38 @@ fn cmd_shift_keeps_the_selection_tool() {
     assert_eq!(s.tool_id(), "selection");
     s.pointer(&ev(PointerKind::Up, 100.0, 100.0, both), v).unwrap();
 }
+
+#[test]
+fn cmd_over_a_path_inside_a_selected_group_lends_direct_selection() {
+    let v = view();
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![group], "the group is selected, not its members");
+    s.select_tool("selection", v).unwrap();
+    // On an anchor of a member, with Select Behind on: the group has no path of its own.
+    let corner = Point::new(100.0, 100.0);
+    assert_ne!(s.cursor(corner, CMD, v), s.cursor(corner, NONE, v), "Direct Selection's pointer");
+    s.pointer(&ev(PointerKind::Down, corner.x, corner.y, CMD), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection", "lent over a member's anchor");
+    s.pointer(&ev(PointerKind::Up, corner.x, corner.y, CMD), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    // Away from the members, it is still Select Behind's.
+    let away = Point::new(250.0, 150.0);
+    assert_eq!(s.cursor(away, CMD, v), s.cursor(away, NONE, v));
+}
+
+#[test]
+fn press_lends_tool_knows_the_position() {
+    let v = view();
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    let down = |x, y, m| ev(PointerKind::Down, x, y, m);
+    assert!(s.press_lends_tool(&down(100.0, 100.0, CMD), v), "over an anchor");
+    assert!(!s.press_lends_tool(&down(150.0, 150.0, CMD), v), "Select Behind's, inside the object");
+    assert!(!s.press_lends_tool(&down(100.0, 100.0, NONE), v), "no Cmd");
+    assert!(!s.press_lends_tool(&ev(PointerKind::Drag, 100.0, 100.0, CMD), v), "only a press");
+}

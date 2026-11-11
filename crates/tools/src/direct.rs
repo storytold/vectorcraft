@@ -529,20 +529,27 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
 }
 
 /// Is `p` on a part of a selected object that Direct Selection edits: an anchor, the end of a
-/// direction handle or a segment, within the selection tolerance? The Selection tool asks it while
-/// Cmd/Ctrl is held: there the key lends Direct Selection even with Select Behind on, so a selected
-/// path's anchors and segments can be dragged without choosing the tool.
+/// direction handle or a segment, within the selection tolerance? A selected group or compound
+/// path counts through the editable paths inside it. The Selection tool asks it while Cmd/Ctrl is
+/// held: there the key lends Direct Selection even with Select Behind on, so a selected path's
+/// anchors and segments can be dragged without choosing the tool.
 pub fn over_selected_part(cx: &ToolContext, p: Point) -> bool {
     let tol = cx.point_tol();
     if hit_handle(cx, p, tol).is_some() {
         return true;
     }
     let seg_tol = cx.pick_tol();
+    let editable = cx.doc.editable();
     cx.selection.objects.iter().any(|&id| {
-        cx.doc
-            .node(id)
-            .and_then(editable_path)
-            .is_some_and(|pd| nearest_anchor(&pd, p, tol, None).is_some() || pd.nearest(p).is_some_and(|(.., d)| d <= seg_tol))
+        let Some(root) = cx.doc.node(id) else { return false };
+        let mut over = false;
+        root.walk(&mut |n| {
+            over = over
+                || (editable(n.id)
+                    && editable_path(n)
+                        .is_some_and(|pd| nearest_anchor(&pd, p, tol, None).is_some() || pd.nearest(p).is_some_and(|(.., d)| d <= seg_tol)));
+        });
+        over
     })
 }
 

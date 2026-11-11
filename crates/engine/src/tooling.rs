@@ -241,6 +241,12 @@ impl Session {
         self.lent_tool(self.tool.id(), mods)
     }
 
+    /// Would the press `ev` be lent a selection tool ([`Self::lend_selection_tool`])? The frontend
+    /// asks it before the press, to tell a gesture of the tool in hand from one of a lent tool.
+    pub fn press_lends_tool(&mut self, ev: &PointerEvent, view: ViewInfo) -> bool {
+        ev.kind == PointerKind::Down && ev.mods.cmd && self.lender.is_none() && self.lent_tool_at(self.tool.id(), &ev.mods, ev.pos, view).is_some()
+    }
+
     /// A press with Cmd held (Ctrl elsewhere) and any other tool than a selection tool: the
     /// selection tool [`Self::lent_tool`] takes the gesture, pressing without Cmd (a plain click,
     /// not Select Behind). The tool lent to stays as it was, unaware, until the release.
