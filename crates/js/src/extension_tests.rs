@@ -159,6 +159,15 @@ fn script_items_read_the_global_object_the_last_error_the_line_and_the_stack() {
     let source = "var before = h.error; try { null.x; } catch (e) {} var caught = h.error; try { throw 'text'; } catch (e) {}
         [before === null, caught instanceof TypeError, h.error === caught].join()";
     assert_eq!(text(&mut r, source), "true,true,true");
+    let source = "try { try { throw new RangeError('first'); } finally { try { throw new TypeError('second'); } catch (e) {} } } catch (e) {}
+        h.error.message";
+    assert_eq!(text(&mut r, source), "second", "an exception a finally block passes on is not thrown again");
+    let source = "try { [1].map(function () { try { throw new RangeError('first'); } finally { try { throw new TypeError('second'); } catch (e) {} } }); } catch (e) {}
+        h.error.message";
+    assert_eq!(text(&mut r, source), "second", "nor is one that leaves a built-in's callback");
+    let source = "var kept; try { throw new RangeError('first'); } catch (e) { kept = e; } try { throw new TypeError('second'); } catch (e) {}
+        try { throw kept; } catch (e) {} h.error.message";
+    assert_eq!(text(&mut r, source), "first", "throwing a caught error again makes it the last one");
     assert_eq!(r.run("h.error").unwrap(), JsValue::Null, "each run starts without one");
     assert_eq!(r.run("\n\n  h.line").unwrap(), JsValue::Number(3.0));
     let source = "function outer() {\n  return inner();\n}\nfunction inner() {\n  return h.stack;\n}\nvar f = function () { return outer(); };\nf()";

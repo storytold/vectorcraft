@@ -258,6 +258,7 @@ impl Realm {
         interp.temp_roots.clear();
         interp.join_stack.clear();
         interp.waiting = false;
+        interp.passing = Value::Undefined;
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use crate::script::TEST_ELAPSED;
+use crate::script::{TEST_ELAPSED, TEST_NO_CLOCK};
 use crate::*;
 
 /// The values `source` gives `vc.log`, in a run of its text.
@@ -231,4 +231,17 @@ fn sleep_throws_where_the_run_cannot_wait_instead_of_running_on() {
     TEST_ELAPSED.set(None);
     let message = "Error: $.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code";
     assert_eq!(r["log"], json!([message, message, "done"]));
+}
+
+#[test]
+fn sleep_throws_where_the_run_cannot_wait_without_a_clock_too() {
+    let mut s = Session::new();
+    TEST_NO_CLOCK.set(true);
+    let source = "var o = {}; Object.defineProperty(o, 'x', { get: function () { $.sleep(250); return 1; } });
+        try { o.x; vc.log('no error'); } catch (e) { vc.log(e.name); }
+        $.sleep(250);
+        vc.log('done');";
+    let log = logged(&mut s, source);
+    TEST_NO_CLOCK.set(false);
+    assert_eq!(log, json!(["Error", "done"]), "the script's own code does not wait without a clock");
 }

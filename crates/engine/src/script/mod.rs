@@ -592,6 +592,10 @@ impl Host {
     /// The time since the run started; none without a clock.
     fn elapsed(&self) -> Option<std::time::Duration> {
         #[cfg(test)]
+        if TEST_NO_CLOCK.with(Cell::get) {
+            return None;
+        }
+        #[cfg(test)]
         if let Some(d) = TEST_ELAPSED.with(Cell::get) {
             return Some(d);
         }
@@ -600,17 +604,18 @@ impl Host {
 
     /// `$.sleep`: ends the slice, and the run does not go on until `d` has passed. Without a clock
     /// it does not wait. A getter, a conversion, a built-in's callback or a file `$.evalFile` runs
-    /// cannot stop at the call, so a wait there is an error.
+    /// cannot stop at the call, so a wait there is an error, with or without a clock.
     fn sleep(&self, d: std::time::Duration) -> std::result::Result<(), HostError> {
-        if let Some(now) = self.elapsed()
-            && !d.is_zero()
-        {
-            if !self.can_wait.get() {
-                return Err(HostError::Error(
-                    "$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code"
-                        .into(),
-                ));
-            }
+        if d.is_zero() {
+            return Ok(());
+        }
+        if !self.can_wait.get() {
+            return Err(HostError::Error(
+                "$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code"
+                    .into(),
+            ));
+        }
+        if let Some(now) = self.elapsed() {
             self.wake_at.set(Some(now.saturating_add(d)));
             self.pause.set(true);
         }
@@ -1752,4 +1757,6 @@ thread_local! {
     pub(crate) static TEST_JSINCLUDE: RefCell<Option<Vec<std::path::PathBuf>>> = const { RefCell::new(None) };
     /// Tests: the time since a run started, in place of its clock's.
     pub(crate) static TEST_ELAPSED: Cell<Option<std::time::Duration>> = const { Cell::new(None) };
+    /// Tests: runs have no clock, as in a wasm build.
+    pub(crate) static TEST_NO_CLOCK: Cell<bool> = const { Cell::new(false) };
 }

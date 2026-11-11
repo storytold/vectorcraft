@@ -166,6 +166,9 @@ pub(crate) struct Interp {
     pub(crate) last_thrown: Value,
     /// The last `Error` object thrown in this run, caught or not, or `null` (`$.error`).
     pub(crate) last_error: Value,
+    /// An exception passed on rather than thrown again: one a `finally` block restores, or one
+    /// leaving a nested run. [`Interp::unwind`] does not make it [`Interp::last_error`] again.
+    pub(crate) passing: Value,
     /// The locale `localize` and `Object.prototype.toString` read.
     pub(crate) localization: Rc<crate::builtins::extensions::Localization>,
     /// The state of `Math.random`'s generator.
@@ -386,6 +389,7 @@ impl Interp {
             throw_site: None,
             last_thrown: Value::Undefined,
             last_error: Value::Null,
+            passing: Value::Undefined,
             localization: Rc::default(),
             random: random_seed(),
             join_stack: Vec::new(),
@@ -562,6 +566,7 @@ impl Interp {
         roots.values.extend(self.temp_roots.iter());
         roots.values.push(&self.last_thrown);
         roots.values.push(&self.last_error);
+        roots.values.push(&self.passing);
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -647,7 +652,9 @@ impl Interp {
     /// boundary frame. Returns the exception when no handler takes it before the boundary frame.
     fn unwind(&mut self, v: Value) -> JsResult<()> {
         self.note_site();
-        if let Value::Object(o) = v
+        let passed = matches!((&v, std::mem::replace(&mut self.passing, Value::Undefined)), (Value::Object(a), Value::Object(b)) if *a == b);
+        if !passed
+            && let Value::Object(o) = v
             && self.heap.object(o).is_some_and(|o| matches!(o.class, Class::Error))
         {
             self.last_error = v.clone();
@@ -674,6 +681,7 @@ impl Interp {
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
             if frame.boundary {
+                self.passing = v.clone();
                 return Err(Abrupt::Throw(v));
             }
         }
@@ -868,7 +876,9 @@ impl Interp {
             return self.pop().map(drop);
         }
         if kind == 1.0 {
-            return Err(Abrupt::Throw(self.pop()?));
+            let v = self.pop()?;
+            self.passing = v.clone();
+            return Err(Abrupt::Throw(v));
         }
         let k = (kind - 2.0) as usize;
         let target = self.frame()?.code.finally_tables.get(table as usize).and_then(|t| t.get(k)).copied();
