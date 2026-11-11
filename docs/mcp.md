@@ -482,7 +482,7 @@ opens the picker through `run_command` with the remote backend.
 | `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
 | `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. The options are below. |
-| `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. `line`: `x1,y1,x2,y2`. |
+| `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. Polygons and stars take `rotation` in degrees clockwise (0: a corner or point straight up). `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. Returns `{applied, objects}`: `objects` is the number of objects painted, as the `objects` of the `paint.setFill`, `paint.setStroke` and `stroke.set` replies (the largest of them): a selected group counts the objects inside it. When it is 0, a `note` says that only the paint for new art changed. |
 | `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool (digits too: `5` while dragging with the Perspective Selection tool; `e` while dragging a Selection or Group Selection marquee; `c` and `f` while dragging out an arc; `f`, `v`, `x` and `c` while dragging out a rectangular or polar grid). |
 | `type_text` | `{text}` | Remote only. |
@@ -496,7 +496,7 @@ opens the picker through `run_command` with the remote backend.
 | `add_text` | `{text, x?, y?, width?, height?, fit?, fitMinPercent?, path?, mode?, pathEffect?, size?, font?, color?, justify?, vertical?}` | Point type at (x, y) (`justify`: `left`, `center` or `right` starts, centres or ends each line on x); area type with `width`/`height` (`fit`: `none`, `autoHeight`, `shrinkText`, as `text.areaOptions`); or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`; SVG export writes type on a path with any effect other than `rainbow` as outlines, with a warning); `justify` (also `auto`, `justifyAll`) aligns the paragraphs of every kind, as `text.setStyle` does later. `vertical: true` uses the existing vertical writing mode for every kind (default `false`, horizontal). Returns `{id}`, with `overflow: true` when the text doesn't fit its frame or path. |
 | `apply_effect` | `{effect?, params?, ids?}` | Appends a live effect. Without `effect`, returns the effect catalogue with parameters and defaults. |
 | `pathfinder` | `{operation, ids?}` | `unite`, `minusFront`, `intersect`, `exclude`, `divide`, `trim`, `merge`, `crop`, `outline`, `minusBack`. For a live version, apply the `pathfinder.*` effect to a group (`effect.apply` groups several loose selected objects first). In remote desktop mode, `run_command` and `invoke_menu` can both call `pathfinder.repeat` with `{}`. Successful panel operations, direct `object.pathfinder.*` commands, and `command.batch` steps (including Actions panel playback) set its history. Repeat applies it to the current selection using current Pathfinder Options. Trap, compound-shape edits, live effects and `action.batch` do not set history. With no history it returns "no Pathfinder operation applied yet". |
-| `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. With `copy`, the first step duplicates. |
+| `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. `rotate` is in degrees counter-clockwise; a positive `shear` moves the top to the right. With `copy`, the first step duplicates. |
 | `create_graph` | `{type?, x, y, width, height, csv? \| series?, categories?, rows?}` | The nine Illustrator graph types: column, stacked column, bar, stacked bar, line, area, scatter, pie and radar. An empty CSV cell or a `null` in `rows` is a blank value; a number in straight quotes is a label. Edit later with `graph.setData` / `graph.setType` via `run_command`. `graph.column {design, columnType: vertical\|uniform\|repeating\|sliding, each, fractions: chop\|scale}` draws the columns or bars of the series picked with Group Selection (or `seriesIndexes`, or all of them) with a graph design saved by `graph.design`; with no `design` it returns the series' current design and options. Type in the design that holds a `%` followed by two digits shows each column's value, with at least the first digit's places before the decimal point and the second digit's places after it. |
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. |
 | `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. `inspect_document` lists the undo steps as `history`. `run_command` with `edit.clearHistory` removes every undo and redo step of the active document and returns `{cleared}`, the number of steps removed; the document stays as it is, and the command records no undo step. `run_command` with `edit.newDocumentFromState` and `{index?, created?}` makes a new document holding the art as it was at that state and makes it the active document, and returns `{index, title}`. `index` is a row of the History panel, with 0 the oldest state kept, and an omitted `index` uses the current state. An `index` that names no state is an error and changes nothing. `created` is File Info's created date in Unix seconds or null, and defaults to now. The new document takes the next `Untitled-N` name, is marked unsaved, has nothing selected and has no steps to undo or redo. It is out of symbol, opacity-mask and pattern editing, and the art drawn in a pattern's tile is stored in the pattern, as `object.pattern.done` stores it. The source document and its steps stay as they are, except that typing or a drag in progress is first kept as a step. While the Type tool edits type, `undo` and `redo` put its caret, with no characters selected, at the end of the text the step changed: after the text it puts back or retypes, or where the text it takes out was. A step that changes no characters, such as a formatting change, leaves the caret and the selection where they are. |
@@ -1486,9 +1486,9 @@ path to a value inside a list or an object, and the document and its undo histor
 
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
 were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
-more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 2
+more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 3
 (`vectorcraft_engine::schemas::API_VERSION`); a change to any of them raises the level. Level 2 added
-`engine.apiReference`. Commands that plug-ins add have no schema here.
+`engine.apiReference`; level 3 says that `rotation` in `view.saved.new` and `view.saved.list` turns clockwise. Commands that plug-ins add have no schema here.
 
 `engine.apiReference {}` → `{markdown}` returns the command API reference, written from these schemas each time it
 runs; no file of it is kept. It needs no open document and changes nothing. The reference has a `##` section for each
@@ -1731,6 +1731,8 @@ VectorCraft sets these limits itself:
 | A dialog's message, title and prompt preset | 16 KiB, 256 bytes and 16 KiB |
 | `answers` | 10,000 answers and 1 MiB as JSON |
 | `dialogs` in the report | 10,000 dialogs and 1 MiB as JSON |
+| Files `File.open` reads | 8 MiB a file, 32 MiB in a run, 256 open at once |
+| `Folder.getFiles` | 2,048 entries, 65,536 names looked at |
 | Growth before a person is asked | 100,000 objects and 512 MiB of new document data |
 
 In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
@@ -1743,7 +1745,9 @@ another file than the script) and `fuelLeft`.
 
 - `runTimeMs` is the time the script ran, its commands included. Waits between frames and for a person's answer are
   left out. `timingAvailable` is false on the web, where `runTimeMs` is 0.
-- `hostCallCounts` is `{vcRun, documentReads, commandListReads, vcLog, consoleWrites}`.
+- `hostCallCounts` is `{vcRun, documentReads, commandListReads, vcLog, consoleWrites, fileCalls, fileExecutes}`.
+  `fileCalls` counts the calls `File` and `Folder` make to the app, and `fileExecutes` the `execute` calls, which open
+  nothing.
 - `slowestCommands` lists at most 5 commands as `{id, calls, totalMs, maxMs}`, the longest in all first, then by id.
 - `console` is `{lines, droppedLines, truncatedLines}`: the run's own output, `vc.log` lines and uncaught error, as
   text.
@@ -1801,6 +1805,54 @@ empty object are the same.
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "if (confirm(\"Add a frame?\")) vc.log(prompt(\"Name\", \"Frame\"));", "answers": [{"kind": "confirm", "value": true}, {"kind": "prompt", "value": "Border"}]}'
 ```
+
+The help pages https://extendscript.docsforadobe.dev/file-system-access/file-object/ and
+https://extendscript.docsforadobe.dev/file-system-access/folder-object/ describe the `File` and `Folder` objects. A
+script reads files with them:
+
+- `new File(path)` and `new Folder(path)` name a path without looking it up. A path is a platform path or a URI
+  path: a relative path is taken from `Folder.current`, which starts at the script's folder, `~` is the home folder,
+  `%xx` escapes are read as UTF-8, and on Windows `/` and `\` both separate names and `/c/` names drive C. `File(path)`
+  without `new` gives a `Folder` for an existing folder, and `Folder(path)` gives a `File` for an existing file. Two
+  objects for the same path are different objects.
+- `name`, `displayName`, `fsName`, `absoluteURI`, `fullName`, `relativeURI`, `path`, `parent` and `toString()` come
+  from the path. `exists`, `length`, `created`, `modified`, `hidden`, `readonly` and `alias` read the file system.
+  `File.encode`, `File.decode` and `File.isEncodingAvailable` (and the same on `Folder`), `File.fs`, and the folders
+  `Folder.temp`, `Folder.desktop`, `Folder.myDocuments`, `Folder.userData` and the others are there too.
+- `open('r')` opens a file to read, and `read([chars])`, `readln()`, `readch()`, `seek(pos[, mode])`, `tell()`, `eof`
+  and `close()` read it. `read`, `readln` and `readch` count characters, and `seek` and `tell` count bytes. `readln`
+  and `readch` take CR, LF, CRLF and LF CR as one line end. `folder.getFiles([mask])` lists a folder, sorted by name;
+  the mask matches `*` and `?` without regard to case, and a function as the mask keeps the entries it returns true
+  for.
+- A method that fails returns `false`, `null` or an empty string and sets `error`, such as `Script file access
+  denied`, `Script file does not exist` or `Script file is not open`. A count or a position that is not a finite
+  number, or a negative count, throws a `RangeError`.
+
+VectorCraft reads files by these rules of its own:
+
+- A script run from a file reads only in that file's folder and the folders below it, as its includes are read, and
+  a script given as `source` reads no files. When automation read roots are set, as for a run over MCP or the command
+  line, the files must also be inside them. A path outside, a Windows network path (`\\host\share`) and a device path
+  (`\\?\`, `\\.\`) are refused before anything is looked up: `exists` is `false`, the dates and `getFiles` give `null`,
+  and `error` is `Script file access denied`. A path that leads out through a link or a junction is refused too, and
+  `getFiles` leaves such an entry out.
+- `open` reads the whole file. A file larger than 8 MiB is refused from its size before any of it is read, with
+  `Script file exceeds 8 MiB`, and a run that opens more than 32 MiB in all ends with an error. A run has at most 256
+  files open at once; another `open` returns `false` with `Script has 256 files open` until one is closed.
+- The encoding is the one the file's byte order mark gives (UTF-8, UTF-16LE or UTF-16BE), otherwise the `encoding`
+  the script set before `open`, otherwise UTF-8 when the bytes are valid UTF-8, otherwise CP1252. `BINARY` reads each
+  byte as one character. A byte the encoding cannot read, such as one above 127 in `ASCII`, fails the read with
+  `Script file cannot be decoded` and leaves the position where it was.
+- `getFiles` gives at most 2,048 entries and looks at most 65,536 names; past that it gives `null` with `Script folder
+  has more than 2,048 entries`. A mask that takes more than 16,777,216 steps to match against the names of one
+  folder gives `null` with `Script folder mask takes too many steps to match`.
+- A path longer than 32,767 characters throws a `RangeError` (`Script file path exceeds 32,767 characters`) when a
+  `File` or `Folder` is made from it.
+- Writing is not available yet: `open('w')`, `open('e')`, `open('a')`, `write`, `writeln`, `copy`, `remove`,
+  `rename`, `create` and `createAlias` return `false` with `Script file writing is not available`, and setting
+  `length`, `hidden` or `readonly` sets `error` to that message and changes nothing. The file
+  and folder dialogs return `null`, and `execute` opens nothing and returns `false`. In the web build every lookup
+  fails with `Script file access is unavailable on the web`.
 
 Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
 `$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message` (or `name: file:line:column: message` when the error is in another
@@ -2173,7 +2225,7 @@ repeated names, and ids the document doesn't have are dropped.
 
 View → New View… keeps a view under a name, in the document: `view.saved.new {name?, center: [x, y], zoom,
 rotation?}` (the desktop app fills in its current view; default the first free "View N"; at most 25 per document,
-names up to 255 characters, each name once) → `{name, index}`, one undo step. `view.saved.list` →
+names up to 255 characters, each name once; `rotation` is in degrees clockwise on screen, as `view.rotate` turns the view) → `{name, index}`, one undo step. `view.saved.list` →
 `{views: [{name, center, zoom, rotation}…]}` in menu order. Edit Views… renames and deletes:
 `view.saved.edit {name, newName?, delete?}`, or several at once as `{edits: [{name, newName?, delete?}…]}` in one
 undo step (→ `{views}`), where every `name` is the name before the edit and the names must stay unique; it is
@@ -2214,7 +2266,11 @@ kept with the workspace, and built-in workspaces and workspaces saved without it
 
 ## Ruler guides
 
-Ruler guides are numbered in the order they were made. `guide.add {vertical, pos, artboard?}` makes one (the x of a
+Each ruler guide is an object of a layer or sublayer, directly in it and above its art, and takes an id from the
+document's object ids. Ruler guides are numbered by id, which is the order they were made (a guide read from an `.ai`
+file takes its place in the file). An object command given a ruler guide's id (in `ids` or `id`) fails with an error,
+and `node.move` cannot put a ruler guide into a group or out of its layers; the guide commands below take guides by
+number. `guide.add {vertical, pos, artboard?}` makes one (the x of a
 vertical guide, the y of a horizontal one, in points) → `{index}`. With `artboard` (an artboard's index) it is an
 artboard guide: it runs across that artboard only, moves with it (`artboard.move`, a pure move in
 `artboard.setProps`, `artboard.rearrange`), scales with it (`artboard.setProps {scaleArt}`), is copied with it (`artboard.duplicate`, `artboard.move {copy}`) and is
@@ -2238,8 +2294,8 @@ with guides unlocked, as the preference is off until `prefs.set` turns it on.
 `view.guides.release {index?, ids?}` (View › Guides › Release Guides) turns guides into paths → `{count}`. With
 `index` it releases that ruler guide, and with `ids` it releases those guide paths (and the guide paths inside them).
 Otherwise it releases the selected guide paths and ruler guides, and with no guide selected it releases every guide
-path. A released ruler guide becomes a straight path with no fill or stroke, at the top of the guide's layer (or where
-new art goes, for a guide on no layer). An artboard guide becomes a line across its artboard, and a canvas guide
+path. A released ruler guide becomes a straight path with no fill or stroke, at the top of the art of the guide's
+layer. An artboard guide becomes a line across its artboard, and a canvas guide
 becomes a line across the bounds of all the artboards. `index` and `ids` are refused while guides are locked. The
 release is one undo step, and the released paths are selected. With the Selection, Direct Selection or Group
 Selection tool, a double-click with Cmd/Ctrl and Shift held releases the ruler guide or guide path under the pointer
@@ -3165,8 +3221,8 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: five generated in code (Art Ribbons, Calligraphic Nibs, Pattern
-Borders, Scatter Shapes, Game Trails), the `.vectorcraft` files in the user library folder of the desktop app (User
+Brush libraries are read-only sets of brushes: six generated in code (Art Ribbons, Calligraphic Nibs, Pattern
+Borders, Scatter Shapes, Game Trails, Energy Beams), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
 `brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).

@@ -17,19 +17,43 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rectangle",
             [],
             None,
-            "{x, y, width, height, radius?: pt, rotation?: deg (about centre)} → {id}",
+            "{x, y, width, height, radius?: pt, rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             rectangle
         ),
-        cmd!("shape.ellipse", "Ellipse", [], None, "{x, y, width, height, rotation?: deg (about centre)} → {id}", has_doc, ellipse),
-        cmd!("shape.polygon", "Polygon", [], None, "{cx, cy, radius, sides=6, rotation?: deg} → {id}", has_doc, polygon),
-        cmd!("shape.star", "Star", [], None, "{cx, cy, radius1, radius2, points=5, rotation?: deg} → {id}", has_doc, star),
+        cmd!(
+            "shape.ellipse",
+            "Ellipse",
+            [],
+            None,
+            "{x, y, width, height, rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            has_doc,
+            ellipse
+        ),
+        cmd!(
+            "shape.polygon",
+            "Polygon",
+            [],
+            None,
+            "{cx, cy, radius, sides=6, rotation?: deg clockwise (0: a corner straight up)} → {id}",
+            has_doc,
+            polygon
+        ),
+        cmd!(
+            "shape.star",
+            "Star",
+            [],
+            None,
+            "{cx, cy, radius1, radius2, points=5, rotation?: deg clockwise (0: a point straight up)} → {id}",
+            has_doc,
+            star
+        ),
         cmd!(
             "shape.flare",
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg), seed?} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?} → {id}",
             has_doc,
             flare
         ),
@@ -49,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rectangular Grid",
             [],
             None,
-            "{x, y, width, height, rows=5, columns=5, rowSkew=0, columnSkew=0 (−500…500 %: + crowds the horizontal dividers toward the top, the vertical ones toward the right), frame=true (the outside as one rectangle, else its four sides), fill=false (the current fill, else none), rotation?: deg (about centre)} → {id}",
+            "{x, y, width, height, rows=5, columns=5, rowSkew=0, columnSkew=0 (−500…500 %: + crowds the horizontal dividers toward the top, the vertical ones toward the right), frame=true (the outside as one rectangle, else its four sides), fill=false (the current fill, else none), rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             rect_grid
         ),
@@ -58,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Polar Grid",
             [],
             None,
-            "{x, y, width, height, concentric=5, radial=5, concentricSkew=0, radialSkew=0 (−500…500 %: + crowds the ellipses toward the outside, the radial dividers clockwise of the top one), compound=false (the ellipses pair up into compound-path rings), fill=false (the current fill, else none), rotation?: deg (about centre)} → {id}",
+            "{x, y, width, height, concentric=5, radial=5, concentricSkew=0, radialSkew=0 (−500…500 %: + crowds the ellipses toward the outside, the radial dividers clockwise of the top one), compound=false (the ellipses pair up into compound-path rings), fill=false (the current fill, else none), rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             polar_grid
         ),
@@ -85,7 +109,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),

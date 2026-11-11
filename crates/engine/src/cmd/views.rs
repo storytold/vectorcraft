@@ -23,7 +23,9 @@ static NEW_VIEW: ParamSchema = ParamSchema::new(
         Param::new("name", Type::String).default_note("the first free \"View N\"").null_omitted(),
         Param::new("center", Type::Point),
         Param::new("zoom", Type::Number { min: Some(Bound::Exclusive(0.0)), max: None, unit: None }).doc("1 = 100%"),
-        Param::new("rotation", Type::Number { min: None, max: None, unit: Some("deg") }).defaults_to("0"),
+        Param::new("rotation", Type::Number { min: None, max: None, unit: Some("deg") })
+            .defaults_to("0")
+            .doc("clockwise on screen, as view.rotate turns the view"),
     ],
     "save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once)",
 )
@@ -46,7 +48,8 @@ static EDIT_VIEWS: ParamSchema = ParamSchema::new(
     "rename or delete saved views, all in one undo step; names are those before the edit and must stay unique; no params → {views}",
 );
 
-static LIST_VIEWS: ParamSchema = ParamSchema::new(&[], "").returns("{views: [{name, center, zoom, rotation}]}").writes(Writes::Nothing);
+static LIST_VIEWS: ParamSchema =
+    ParamSchema::new(&[], "").returns("{views: [{name, center, zoom, rotation (degrees clockwise)}]}").writes(Writes::Nothing);
 
 static TRANSPARENCY_GRID: ParamSchema = ParamSchema::new(
     &[Param::new("on", Type::Boolean).default_note("toggle").null_omitted()],
@@ -86,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New View…",
             ["View"],
             None,
-            "{name?: string (default: the first free \"View N\"), center: [x, y], zoom: number > 0 (1 = 100%), rotation?: number deg (default: 0)} save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once) → {name, index}",
+            "{name?: string (default: the first free \"View N\"), center: [x, y], zoom: number > 0 (1 = 100%), rotation?: number deg (default: 0) (clockwise on screen, as view.rotate turns the view)} save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once) → {name, index}",
             has_doc,
             new_view,
             schema: &NEW_VIEW
@@ -101,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             edit_views,
             schema: &EDIT_VIEWS
         ),
-        cmd!(query "view.saved.list", "Saved Views", [], None, "{} → {views: [{name, center, zoom, rotation}]}", has_doc, list_views, schema: &LIST_VIEWS),
+        cmd!(query "view.saved.list", "Saved Views", [], None, "{} → {views: [{name, center, zoom, rotation (degrees clockwise)}]}", has_doc, list_views, schema: &LIST_VIEWS),
         cmd!(
             query "view.transparencyGrid",
             "Show Transparency Grid",

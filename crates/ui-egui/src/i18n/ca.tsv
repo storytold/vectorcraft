@@ -368,6 +368,11 @@ antiAlias	Sharp	Nítid
 	Dash Trail	Estela discontínua
 	Speed Line	Línia de velocitat
 	Game Trails	Esteles de joc
+	Energy Beams	Feixos d'energia
+	Laser Bolt	Projectil làser
+	Plasma Arc	Arc de plasma
+	Charge Wave	Ona de càrrega
+	Spark Trail	Estela d'espurnes
 	Art using a deleted global swatch keeps its colour.	L’art que utilitza una mostra global suprimida conserva el seu color.
 	Artboard	Tauler
 	Artboard Options	Opcions del tauler
@@ -5524,6 +5529,8 @@ digits	Malayalam	Malaiàlam
 @msg	no such document	no existeix aquest document
 @msg	no such layer or object	no existeix aquesta capa o objecte
 @msg	no such object id {value}	no existeix l’id d’objecte {value}
+@msg	id {value} is a ruler guide, not an object	l’id {value} és una guia, no un objecte
+@msg	a ruler guide goes only directly in a layer or sublayer	una guia només pot anar directament en una capa o subcapa
 @msg	no such object {0}	no existeix l’objecte {0}
 @msg	no such perspective grid preset	no existeix aquest preajust de quadrícula de perspectiva
 @msg	no such recent file	no existeix aquest fitxer recent

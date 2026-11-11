@@ -402,6 +402,20 @@ impl Realm {
         }
     }
 
+    /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
+    /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
+    /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
+    /// `encode`, `decode`, `encodingAvailable`, `current` and `locations`, with the values `system`
+    /// and `lineFeed` and the messages `text.notOpen`, `text.noWrites`, `text.noPicker` and
+    /// `text.badMode`. Each object keeps its path, its `error` text, its open file's id, its
+    /// encoding and its line feed in properties that are not enumerable.
+    pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
+        match crate::file_classes::install(&mut self.interp, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Adds the script extensions: the global `localize(object, ...values)`, which gives a
     /// localization object's text for the locale of [`Realm::localization`], the global
     /// `toSource(value)` and `Object.prototype.toSource()`, which write plain data as source text,
