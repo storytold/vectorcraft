@@ -152,6 +152,7 @@ mod saveoptions;
 mod scalestrokes;
 mod script_console;
 mod script_dialogs;
+mod script_dollar;
 mod script_folder;
 mod script_include;
 mod script_run;
