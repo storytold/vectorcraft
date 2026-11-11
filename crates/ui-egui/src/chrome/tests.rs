@@ -505,6 +505,56 @@ fn a_tabs_close_box_sits_where_the_platform_puts_it() {
     assert!(super::CLOSE_BEFORE_TITLE == cfg!(target_os = "macos"));
 }
 
+/// A middle-click on a document tab closes it as the × does (#6506): a saved document closes, and
+/// a modified one asks to save first instead of losing its changes.
+#[test]
+fn a_middle_click_on_a_tab_closes_it_as_the_close_box_does() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    for _ in 0..3 {
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    }
+    // The second document has unsaved changes; the third stays the current one.
+    app.session.set_active(1);
+    app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    app.session.set_active(2);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 200.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::doc_tabs(app, ui));
+        out.textures_delta.clear();
+        let mut titles = vec![];
+        for c in &out.shapes {
+            if let egui::Shape::Text(t) = &c.shape
+                && t.visual_bounding_rect().width() > 30.0
+            {
+                titles.push(t.visual_bounding_rect());
+            }
+        }
+        titles.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        titles
+    };
+    let middle_click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Middle, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)])
+    };
+    let titles = frame(&mut app, vec![]);
+    assert_eq!(titles.len(), 3, "{titles:?}");
+    // The modified document's tab: the save prompt comes up and the document stays open.
+    let titles = middle_click(&mut app, titles[1].center());
+    assert_eq!(app.session.documents().len(), 3, "a modified document is not closed without asking");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::unsaved::KIND), "a modified document asks first");
+    app.ui.dialog = None;
+    // The first, saved document's tab: it closes, and the others stay open.
+    let uid = |app: &crate::VectorcraftApp, i: usize| app.session.documents()[i].uid;
+    let (second, third) = (uid(&app, 1), uid(&app, 2));
+    middle_click(&mut app, titles[0].center());
+    assert_eq!(app.session.documents().len(), 2, "the middle-click closed the first document");
+    assert_eq!((uid(&app, 0), uid(&app, 1)), (second, third));
+    assert!(app.ui.dialog.is_none(), "a saved document closes without asking");
+}
+
 /// One headless frame of the status bar; returns the artboard navigator's buttons, left to
 /// right: first, previous, next, last.
 fn navigator(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::Rect> {

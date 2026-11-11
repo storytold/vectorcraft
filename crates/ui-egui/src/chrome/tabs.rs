@@ -136,7 +136,7 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
 /// strip shows is the highlighted one. A tab dragged more than [`crate::doc_windows::TEAR_OFF`]
 /// above or below the strip floats its view in a window under the pointer; one dragged along the
 /// strip moves its document among the others (`document.move`, #5663), a line marking where it
-/// will go.
+/// will go. A middle-click on a tab closes it, as its × does (#6506).
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     /// The width of the » button.
     const MORE: f32 = 30.0;
@@ -200,7 +200,9 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
         ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley.clone(), t.text);
         hovering_art |= crate::document_drag::hover_tab(app, &resp, win, xr.expand(3.0));
-        if xresp.clicked() {
+        // A middle-click anywhere on the tab closes it as the × does (#6506), so a modified
+        // document still asks to save first.
+        if xresp.clicked() || resp.middle_clicked() || xresp.middle_clicked() {
             close = Some(win);
         } else if resp.clicked() {
             activate = Some(win);

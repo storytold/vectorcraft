@@ -363,6 +363,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 |---|---|---|
 | Selection artwork drag hovers a visible document tab to activate it, then drops editable artwork on its canvas | done | `tests_document_drag`, `edit.dropSelection`, lossless resource and one-step Undo regressions; overflow and cross-window drag remain separate |
 | A document tab dragged along the tab strip moves its document; a line marks where it goes, the current document and every document's view stay as they were, and a drag off the strip still floats it | done | #5663, [public source](https://helpx.adobe.com/illustrator/using/customizing-workspace.html); `document.move`; `tests::tab_reorder`, `chrome::tests` (drop index with floating and view tabs), `engine` `tests::document_move` |
+| A middle-click on a document tab closes it as its × does; a modified document asks to save first (VectorCraft addition, as in PhotoCraft) | done | #6506; `chrome::tests::a_middle_click_on_a_tab_closes_it_as_the_close_box_does`; not scored |
 
 | Behaviour | Status | Notes |
 |---|---|---|
