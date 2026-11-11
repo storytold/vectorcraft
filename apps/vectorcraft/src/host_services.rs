@@ -139,6 +139,8 @@ fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest, parent: &Parent) 
 /// Show the dialog for `request` over `parent` now → the paths picked.
 #[cfg(not(target_os = "macos"))]
 fn pick_now(request: PickRequest, parent: &Parent) -> Vec<String> {
+    // The dialog waits for the user: not a stall for the hang report (`hang_watch`).
+    let _mark = vectorcraft_ui_egui::hang_beacon::BEACON.activity(vectorcraft_ui_egui::hang_beacon::Activity::Dialog);
     show_dialog(file_dialog(&request, parent), &request, parent)
 }
 
@@ -363,7 +365,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
             fileio::write_file_with(p, fill).map_err(|e| e.to_string())
         })),
         // Every format Copy offers and Paste reads (menu-bar Paste never sees egui's Paste event).
-        system_clipboard: Some(clipboard::system_clipboard(clip)),
+        // Its calls are marked for the hang report (`hang_watch`).
+        system_clipboard: Some(Box::new(vectorcraft_ui_egui::hang_beacon::Marked(clipboard::system_clipboard(clip)))),
         // Linux checks whether Paste has something to take on a background thread: an X11 clipboard
         // owner that never answers holds a read for up to 4 s. Windows only asks which formats the
         // clipboard holds and macOS asks the pasteboard server, so they check in line.

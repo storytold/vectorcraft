@@ -6880,6 +6880,11 @@ font-script	Japanese	იაპონური
 @msg	only an exporter or an importer declares `extensions`	`extensions`-ს მხოლოდ ექსპორტის ან იმპორტის პლაგინი აცხადებს
 @msg	an importer always gets an import's budget: leave `budget` out	იმპორტის პლაგინი ყოველთვის იღებს იმპორტის ბიუჯეტს: გამოტოვეთ `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	პრობლემების მოგვარების ინფორმაციის კოპირება
+@msg	Copied the troubleshooting info	პრობლემების მოგვარების ინფორმაცია კოპირებულია
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft-ის ბოლო სესიამ დახურვამდე პასუხის გაცემა შეწყვიტა. დახმარება › პრობლემების მოგვარების ინფორმაციის კოპირება აკოპირებს დეტალებს შეცდომის ანგარიშისთვის
+
 # Safe Mode
 	Safe Mode…	უსაფრთხო რეჟიმი…
 	Safe Mode	უსაფრთხო რეჟიმი

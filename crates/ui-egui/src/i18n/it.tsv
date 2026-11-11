@@ -6392,6 +6392,11 @@ breakText	Glyphs	Glifi
 @msg	only an exporter or an importer declares `extensions`	solo un plug-in di esportazione o di importazione dichiara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un plug-in di importazione riceve sempre il budget di un’importazione: ometti `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copia informazioni per la risoluzione dei problemi
+@msg	Copied the troubleshooting info	Informazioni per la risoluzione dei problemi copiate
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	L’ultima sessione di VectorCraft ha smesso di rispondere prima di chiudersi. Aiuto › Copia informazioni per la risoluzione dei problemi copia i dettagli per una segnalazione di bug
+
 # Safe Mode
 	Safe Mode…	Modalità provvisoria…
 	Safe Mode	Modalità provvisoria

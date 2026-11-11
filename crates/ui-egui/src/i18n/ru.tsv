@@ -6860,6 +6860,11 @@ shape	Open	Открытый
 @msg	only an exporter or an importer declares `extensions`	`extensions` объявляет только модуль экспорта или импорта
 @msg	an importer always gets an import's budget: leave `budget` out	модуль импорта всегда получает бюджет импорта: не указывайте `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копировать сведения для устранения неполадок
+@msg	Copied the troubleshooting info	Сведения для устранения неполадок скопированы
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Последний сеанс VectorCraft перестал отвечать перед закрытием. Справка › Копировать сведения для устранения неполадок копирует подробности для отчёта об ошибке
+
 # Safe Mode
 	Safe Mode…	Безопасный режим…
 	Safe Mode	Безопасный режим

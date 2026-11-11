@@ -9,6 +9,7 @@ use super::{App, VectorcraftApp, file_access, window};
 #[cfg(target_os = "macos")]
 use super::{mac_menu, mac_window, open_documents};
 use vectorcraft_ui_egui::dialogs::safe_mode;
+use vectorcraft_ui_egui::hang_beacon::{self, BEACON, FrameTime, Stage};
 
 /// The parts of [`App::raw_input_hook`] that every window needs, for the OS windows of floating
 /// panels: a click or Escape that closes the macOS menu bar's open menu, and the pen barrel
@@ -34,12 +35,16 @@ impl eframe::App for App {
     // control channel asks for, and the frames carrying input it injected, to the automation roots
     // (`VectorcraftApp::with_automation_roots`), which are in force elsewhere in the process.
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        BEACON.enter(Stage::Logic);
         file_access::unconfined(|| self.logic_frame(ctx, frame));
         self.app.finish_ime_logic(ctx);
+        BEACON.enter(Stage::Idle);
     }
     /// Restore the borderless caption, apply platform menu and pen input, and hand the frame to the
     /// app's raw-input hook while the keyboard user is unconfined.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        BEACON.enter(Stage::Input);
+        self.frame_start = Some(std::time::Instant::now());
         // winit gives the window its caption back when it changes the window's flags (maximize,
         // restore, …): take it off again before the frame is laid out (#1758).
         if let Some(window_frame) = self.window_frame.as_mut() {
@@ -60,9 +65,10 @@ impl eframe::App for App {
         // that no mouse button is down.
         #[cfg(target_os = "macos")]
         self.app.release_lost_buttons(ctx, raw, objc2_app_kit::NSEvent::pressedMouseButtons() != 0);
+        BEACON.enter(Stage::Idle);
     }
-    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        BEACON.enter(Stage::Interface);
         #[cfg(target_os = "macos")]
         {
             let bar = vectorcraft_ui_egui::chrome::APP_BAR_HEIGHT;
@@ -89,8 +95,13 @@ impl eframe::App for App {
         if !self.app.file_dialog_open() && self.app.take_ime_discard() {
             discard_marked_text();
         }
+        self.end_frame(ui.ctx(), frame);
     }
     fn on_exit(&mut self) {
+        // The window is closing: saving and teardown are not timed for the hang report, and a report
+        // of a stall the interface came back from is removed.
+        let log_dir = super::prefs::log_dir().filter(|_| super::prefs::prefs_enabled());
+        super::hang_watch::closing(log_dir.as_deref(), &super::hang_watch::CLOSING, &BEACON);
         file_access::unconfined(|| save_prefs(&self.app));
         // A ready update installs once the process has exited. The macOS exit below skips
         // dropping the app, so the helper is started here.
@@ -102,6 +113,27 @@ impl eframe::App for App {
 }
 
 impl App {
+    /// The frame's times for the hang report, and its last stage ([`hang_beacon::after_frame`]): a
+    /// focused, shown window whose windows had input waits for the renderer and the next frame,
+    /// which the input asks for at once; any other frame leaves the interface thread idle
+    /// (`hang_watch`).
+    fn end_frame(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        // A pass egui discards and runs again is not the frame's end: the pass after it is.
+        if ctx.will_discard() {
+            return;
+        }
+        if let Some(start) = self.frame_start.take() {
+            let work_ms = start.elapsed().as_secs_f32() * 1000.0;
+            let previous_total_ms = frame.info().cpu_usage.map(|s| s * 1000.0);
+            BEACON.frame(FrameTime { work_ms, previous_total_ms }, self.app.session.documents().len());
+        }
+        // Hide on macOS hides the window at once, before the window reports losing focus.
+        let shown = ctx.input(|i| i.focused && i.viewport().minimized != Some(true))
+            && self.winit_window.as_ref().is_none_or(|w| w.is_visible() != Some(false));
+        let input = BEACON.take_input();
+        BEACON.enter(ctx.viewport(|vp| hang_beacon::after_frame(input, shown, &vp.commands)));
+    }
+
     fn logic_frame(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         #[cfg(target_os = "macos")]
         if self.winit_window.as_ref().is_some_and(|w| !w.has_focus() || w.is_visible() == Some(false) || w.is_minimized() == Some(true)) {

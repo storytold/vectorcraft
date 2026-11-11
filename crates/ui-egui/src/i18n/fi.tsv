@@ -6806,6 +6806,11 @@ breakText	Glyphs	Merkit
 @msg	only an exporter or an importer declares `extensions`	vain vienti- tai tuontilaajennus ilmoittaa `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	tuontilaajennus saa aina tuonnin budjetin: jätä `budget` pois
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopioi vianmääritystiedot
+@msg	Copied the troubleshooting info	Vianmääritystiedot kopioitiin
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraftin edellinen istunto lakkasi vastaamasta ennen kuin se suljettiin. Ohje › Kopioi vianmääritystiedot kopioi tiedot virheraporttia varten
+
 # Safe Mode
 	Safe Mode…	Vikasietotila…
 	Safe Mode	Vikasietotila
