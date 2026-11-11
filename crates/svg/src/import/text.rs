@@ -950,7 +950,9 @@ fn lines(
     // A line's characters take its spacing as leading unless it is their auto leading.
     for (k, b) in breaks.iter().enumerate() {
         let end = breaks.get(k + 1).map_or(n, |nb| nb.at);
-        if cells[b.at..end].iter().any(|c| (c.style.effective_leading() - b.leading).abs() > 0.01) {
+        // 0.01 absolute, but never more than a thousandth of the spacing itself (tiny type has tiny gaps).
+        let tolerance = 0.01_f64.min(b.leading.abs() * 1e-3);
+        if cells[b.at..end].iter().any(|c| (c.style.effective_leading() - b.leading).abs() > tolerance) {
             for c in &mut cells[b.at..end] {
                 c.style.leading = Some(b.leading);
             }

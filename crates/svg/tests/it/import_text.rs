@@ -233,6 +233,15 @@ fn per_character_positions_with_middle_anchor() {
 }
 
 #[test]
+fn a_small_line_gap_in_tiny_type_keeps_its_leading() {
+    // 0.0085 against an auto leading of 0.006 differs by less than 0.01 but is not a whole multiple of it.
+    let d = open(r#"<text x="1" y="1" font-size="0.005">One<tspan x="1" dy="0.0085">Two</tspan></text>"#);
+    let t = only_text(&d);
+    let two = t.runs.iter().find(|r| r.text.contains("Two")).unwrap().style.leading;
+    assert!(two.is_some_and(|l| close(l, 0.0085, 1e-9)), "{two:?}");
+}
+
+#[test]
 fn tspan_lines_dx_and_baseline_shift() {
     let d = open(
         r#"<text x="10" y="20" font-size="10">One<tspan x="10" dy="20">Two</tspan><tspan x="10" dy="12">Three</tspan>
