@@ -112,7 +112,7 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     }
     // Colour adjustments: the object recoloured (inside it too), then baked as it is.
     if has_adjustment(n)
-        && let Some(m) = adjust_in_document(d, n)
+        && let Some(m) = adjust_in_document(d, n, None)
     {
         return Some(bake_node(d, &m).unwrap_or(m));
     }

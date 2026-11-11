@@ -1549,7 +1549,7 @@ describes that menu item. Pass exactly one of `path` and `source`. A `path` must
 case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
 not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and
 `ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. The script reaches the
-app through the global object `vc`, and writes to the Script Console through `$`:
+app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
   catch. The documents and the session state the command changed, preferences included, go back, and any file it
@@ -1561,8 +1561,40 @@ app through the global object `vc`, and writes to the Script Console through `$`
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
+- `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
+  environment, so its functions and variables stay defined, and returns its last value (`undefined` for an empty
+  file). Its preprocessor lines are read as the script's are. `timeout` is a number of milliseconds from 0; the file
+  is read at once and `timeout` is not waited on. The run's fuel and limits apply to the file. An empty path, a
+  missing file and a refused path throw errors the script can catch.
+- `$.fileName` is the file being run, which is the file `$.evalFile` is running while it runs, and is empty for a
+  script given as `source`. `$.includePath` is the current `#includepath` list, separated by `;`.
 - `vc.args` is the `args` object.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+Before any of the script runs, its preprocessor lines are read. The help page
+https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and
+https://extendscript.docsforadobe.dev/extendscript-tools-features/dollar-object/ describes `$.evalFile`, `$.fileName`
+and `$.includePath`. A line counts when it starts with `#` or `//@`, after blanks only, outside strings and comments.
+VectorCraft reads them by these rules of its own:
+
+- `#include "file"` and `//@include "file"` put the text of that file in place of the line. A value with spaces or
+  punctuation goes in single or double quotes. The file is looked for beside the file that includes it, then in each
+  `#includepath` folder in turn, then in each folder of the `JSINCLUDE` environment variable (absolute folders
+  separated by `;`). The included file must be a whole script on its own. A file may be included again after its
+  earlier inclusion has ended, and a file that includes itself, directly or through others, is an error.
+- `#includepath "a;b"` sets the folders `#include` looks in, separated by `;`. A relative folder is relative to the
+  folder of the file that includes. A later `#includepath` replaces the list.
+- `#script "name"` names the run in the report and the Script Console, unless `name` is given. A `#script` line in an
+  included file does not rename the run.
+- `#target` takes any value and does not change how the script runs. `#strict off` is taken.
+- `#strict on`, `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name`
+  with an unknown-directive error. A `//@` line with another name is a comment.
+- A script run from a file reads its included files and the files `$.evalFile` runs only in that file's folder and
+  the folders below it. A path with a `..` name, a path that leads out of the folder through a link or a junction, a
+  Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
+  `source`. A `JSINCLUDE` folder outside the script's folder is passed over.
+- A missing or refused included file ends the run before any of it runs. An error in an included file or a file `$.evalFile`
+  ran is reported at that file's line and column, and the report's `file` names the file.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records
@@ -1590,7 +1622,8 @@ VectorCraft sets these limits itself:
 
 | Limit | Value |
 |-------|-------|
-| Source text | 8 MiB |
+| Source text | 8 MiB a file, 32 MiB in all |
+| Included and evaluated files | 64 in all, 16 levels deep, 1,024 paths looked up |
 | Heap | 256 MiB (128 MiB on the web) |
 | Host calls | 2,000,000 |
 | `maxFuel`, instructions in all | 1 to 100,000,000,000; 1,000,000,000 by default |
@@ -1607,7 +1640,8 @@ In the app, a script past the growth limit stops at a question to continue or to
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
 runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console}`. In the app the reply is `{running: true,
 name}`, and the report appears later as `scriptReport` in `ui.inspect`. The report of a failed run has the same
-fields after `kind`, `message`, `line`, `column` and `fuelLeft`. `answers` takes only an empty object, since scripts
+fields after `kind`, `message`, `line`, `column`, `file` (when the error is in another file than the script) and
+`fuelLeft`. `answers` takes only an empty object, since scripts
 have no prompts yet.
 
 - `runTimeMs` is the time the script ran, its commands included. Waits between frames and for a person's answer are
@@ -1626,7 +1660,8 @@ vectorcraft-cli run --cmd script.run --params '{"path": "Tidy Layers.js", "args"
 ```
 
 Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
-`$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message`, its end, and a report of
+`$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message` (or `name: file:line:column: message` when the error is in another
+file), its end, and a report of
 its time, host calls and slowest commands. Each line shows the run's number and the script's name. Line feeds,
 carriage returns and the two together break lines, and other control characters show as their Unicode Control
 Pictures. The console keeps at most 2,048 lines and 1 MiB of text and drops the oldest lines past that. A line longer
@@ -3724,14 +3759,18 @@ the canvas (coordinates out of range)".
 `path.setHandle`, `path.moveAnchor` and `path.insertAnchor` edit subpath 0 when `subpath` is absent or null, and refuse a `subpath` that
 is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `subpath`"); `path.split` refuses such
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
+`path.insertAnchor` keeps the direct-selected anchors and selected segments of the path on the same points: those
+after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
+selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
+the selection in one step.
 
 `path.reshape {id, x, y, dx, dy, tol?, focal?, radius?}` (a Reshape tool drag) grabs the path at `x`, `y`, adding an
 anchor there unless one lies within `tol` (3 by default), and moves that point by `dx`, `dy`.
 [Adjust path segments](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/adjust-path-segments.html)
 has the Reshape tool stretch part of a path from the dragged point without losing the path's general form, with every
 highlighted focal point pulling the path. Which anchors stay, how far the stretch reaches and the share of the drag each
-point takes are VectorCraft's own rule. The grabbed point and the anchors that `focal` lists as `[subpath, anchor]` pairs are focal
-points and move by the whole drag; a pair that names no anchor of the path is refused ("`focal` names [0, 7], which is
+point takes are VectorCraft's own rule. When `focal` is given (an empty list included), the grabbed point and the
+anchors that `focal` lists as `[subpath, anchor]` pairs are focal points and move by the whole drag; a pair that names no anchor of the path is refused ("`focal` names [0, 7], which is
 not an anchor of the path"). Anchors that are not direct-selected stay in place (on a path selected whole, or not
 selected, every anchor is selected), and so do the two ends of an open path unless they are focal points. A selected
 anchor between two focal points moves by the whole drag. A selected anchor between a focal point and an anchor that
@@ -3744,8 +3783,11 @@ point does not move. An anchor added on a segment of a partly selected path is s
 anchors stay selected. With `radius`, only the grabbed point's subpath changes, whatever the selection: the anchors
 within `radius` of the grabbed point along the path follow with a smooth falloff and the others stay; a negative
 `radius` is refused ("`radius` must be 0 or more"), and so is `radius` given with `focal` ("`focal` and `radius`
-cannot be used together"). A drag of no length on an anchor (`dx` and `dy` 0 or left out) leaves the path as it is
-and records no undo step.
+cannot be used together"). Without `focal` (or with `focal` null) and without `radius`, the earlier rule applies, so
+steps recorded before focal points play as they did: the selection does not matter, an open path stretches from the
+grabbed point to its two ends as above, and on a closed path the anchors within half the diagonal of the subpath's
+bounding box follow with the smooth falloff. The Reshape tool always sends `focal`. A drag of no length on an anchor
+(`dx` and `dy` 0 or left out) leaves the path as it is and records no undo step.
 
 With the Reshape tool, a click on an anchor of a selected path makes it the focal point, and a click on a segment adds
 an anchor there (one undo step) that becomes the focal point. Shift-click adds an anchor or a point on a segment to the
@@ -6487,8 +6529,9 @@ with binding punctuation (`Tg`) on, which opens as `forced`. `none` isn't saved.
 `text.setFormat` and `text.setRangeStyle {tcyUpDown?, tcyLeftRight?}` set the Character panel menu's Tate-chu-yoko
 Settings of the characters, in points from -1296 to 1296 (document points, as `baselineShift`). In vertical type a
 block of tate-chu-yoko characters (`tateChuYoko`) moves up by a positive Up/Down and down by a negative one, and right
-by a positive Left/Right and left by a negative one. The block moves as one piece with the values of its first
-character, and keeps its one em down the column, its caret positions and its hit region. Two or three digits set
+by a positive Left/Right and left by a negative one. On a vertical path, a positive Up/Down moves the block toward the
+path's start and a positive Left/Right moves it to the path's left, with every path effect. The block moves as one piece
+with the values of its first character, and keeps its one em down the column, its caret positions and its hit region. Two or three digits set
 across the column without the mark do not move, and horizontal type keeps the values without moving the characters.
 Neither value turns `tateChuYoko` on. Both are 0 by default and saved only when not 0, and character styles carry
 them. A value that is not a number is refused with `` `tcyUpDown` must be a number ``, and one outside the range with

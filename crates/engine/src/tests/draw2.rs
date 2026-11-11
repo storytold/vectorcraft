@@ -2380,6 +2380,82 @@ fn add_anchor_point_selects_the_path_it_was_added_to() {
     assert!(selected_anchors(&s, kept).is_empty(), "a path selected as a whole stays so");
 }
 
+fn path_from(s: &mut Session, d: &str) -> NodeId {
+    NodeId(s.execute("path.create", &json!({ "d": d })).unwrap()["id"].as_u64().unwrap())
+}
+
+fn selected_segments(s: &Session, id: NodeId) -> Vec<(usize, usize)> {
+    s.doc().unwrap().selection.segments.get(&id).map(|set| set.iter().copied().collect()).unwrap_or_default()
+}
+
+fn selected_points(s: &Session, id: NodeId) -> Vec<Point> {
+    let pd = path(s, id);
+    selected_anchors(s, id).iter().filter_map(|&(si, ai)| pd.subpaths.get(si)?.anchors.get(ai)).map(|a| a.p).collect()
+}
+
+#[test]
+fn add_anchor_point_keeps_the_same_anchors_selected() {
+    // The direct-selected anchors after the one added are numbered one higher, so the selection
+    // stays on the same points; one undo step restores the path and the selection.
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L70 0 L140 0 L210 0 L280 0 L350 0 L420 0");
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [0, 5]], "mode": "set"})).unwrap();
+    let before = selected_points(&s, id);
+    let r = s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 2, "t": 0.5})).unwrap();
+    assert_eq!(r["anchor"], 3);
+    assert_eq!(selected_anchors(&s, id), [(0, 1), (0, 6)], "the anchor at 350 is now number 6");
+    assert_eq!(selected_points(&s, id), before);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 7);
+    assert_eq!(selected_anchors(&s, id), [(0, 1), (0, 5)]);
+}
+
+#[test]
+fn add_anchor_point_on_a_selected_segment_keeps_both_halves_and_the_new_anchor_selected() {
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L70 0 L140 0 L210 0 L280 0 L350 0 L420 0");
+    s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 2], [0, 4]], "mode": "set"})).unwrap();
+    s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 2, "t": 0.5})).unwrap();
+    assert_eq!(selected_segments(&s, id), [(0, 2), (0, 3), (0, 5)]);
+    assert_eq!(selected_anchors(&s, id), [(0, 2), (0, 3), (0, 4), (0, 5), (0, 6)], "the new anchor is selected with the segment's ends");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 7);
+    assert_eq!(selected_segments(&s, id), [(0, 2), (0, 4)]);
+}
+
+#[test]
+fn add_anchor_point_on_the_closing_segment_keeps_it_selected_as_two_halves() {
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L100 0 L100 100 L0 100 Z");
+    s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 3]], "mode": "set"})).unwrap();
+    let r = s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 3, "t": 0.5})).unwrap();
+    assert_eq!(r["anchor"], 4);
+    assert_eq!(selected_segments(&s, id), [(0, 3), (0, 4)]);
+    assert_eq!(selected_anchors(&s, id), [(0, 0), (0, 3), (0, 4)]);
+    assert_eq!(selected_points(&s, id), [Point::new(0.0, 0.0), Point::new(0.0, 100.0), Point::new(0.0, 50.0)]);
+}
+
+#[test]
+fn add_anchor_point_renumbers_only_the_subpath_it_was_added_to() {
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L100 0 L200 0 M0 100 L100 100 L200 100");
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2], [1, 1], [1, 2]], "mode": "set"})).unwrap();
+    let before = selected_points(&s, id);
+    s.execute("path.insertAnchor", &json!({"id": id.0, "subpath": 1, "segment": 0, "t": 0.5})).unwrap();
+    assert_eq!(selected_anchors(&s, id), [(0, 2), (1, 2), (1, 3)]);
+    assert_eq!(selected_points(&s, id), before);
+}
+
+#[test]
+fn add_anchor_point_with_a_selected_anchor_index_past_the_end_does_not_panic() {
+    // `select.anchors` takes any index, so a selected one can name no anchor.
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L70 0 L140 0 L210 0");
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [0, usize::MAX]], "mode": "set"})).unwrap();
+    s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 0, "t": 0.5})).unwrap();
+    assert_eq!(selected_anchors(&s, id), [(0, 2), (0, usize::MAX)]);
+}
+
 fn selected_anchors(s: &Session, id: NodeId) -> Vec<(usize, usize)> {
     s.doc().unwrap().selection.anchors.get(&id).map(|set| set.iter().copied().collect()).unwrap_or_default()
 }

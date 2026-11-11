@@ -1386,6 +1386,31 @@ fn break_link_leaves_art_in_hidden_or_locked_groups_unselected() {
     assert!(!a.contains(&hidden) && !a.contains(&locked), "{a:?}");
 }
 
+/// Break Link to Symbol on an instance just placed on a locked artboard selects the art that
+/// replaces it, which stays new art there. The art of an older instance there, named by id, is not
+/// selected.
+#[test]
+fn break_link_keeps_new_art_on_a_locked_artboard_selected() {
+    let mut s = session();
+    let (old, name, _) = make_symbol(&mut s);
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    select(&mut s, &[old]);
+    s.execute("object.move", &json!({"dx": 1000, "dy": 0})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "moved onto the locked artboard");
+    let inst = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 1100, "y": 100})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [inst], "placed art is selected");
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    let art: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(art.len(), 1, "{r}");
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), art, "the art that replaces it");
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), art, "the art stays editable");
+    let r = s.execute("symbol.breakLink", &json!({"ids": [old.0]})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 1, "{r}");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the older instance's art");
+}
+
 /// Delete Symbol, expanding the instances, keeps a hidden instance's art hidden and a locked
 /// instance's art locked.
 #[test]

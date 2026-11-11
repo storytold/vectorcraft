@@ -373,7 +373,10 @@ impl Node {
             NodeKind::SymbolInstance { symbol, xf } => {
                 let b = match symbols.and_then(|s| Some((s, s.art(symbol)?))) {
                     Some((s, art)) if !s.art_strokes() => xf.transform_rect_bbox(art.geometric),
-                    Some((_, art)) if moves_only(*xf) => xf.transform_rect_bbox(art.visual),
+                    // A symbol drawn at other than its natural size goes through its 9-slice guides.
+                    Some((s, art)) if moves_only(*xf) && s.document().symbol_slice_map_of(symbol, art.geometric, *xf).is_none() => {
+                        xf.transform_rect_bbox(art.visual)
+                    }
                     Some((s, art)) => {
                         let placed = xf.transform_rect_bbox(art.geometric);
                         match s.placed_visual(symbol, *xf).or_else(|| s.sliced_visual(symbol, *xf)) {
