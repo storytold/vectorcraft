@@ -48,15 +48,19 @@ pub(super) fn label_style(styles: &vectorcraft_doc::LabelStyles, role: Role) -> 
 /// The paragraph attributes labels of `role` are set with: the kept ones, else the defaults. The caller sets the
 /// alignment.
 pub(super) fn label_para(styles: &vectorcraft_doc::LabelStyles, role: Role) -> vectorcraft_doc::ParaStyle {
-    let kept = match role {
-        Role::Value => &styles.values_para,
-        Role::Category => &styles.categories_para,
-        Role::Legend => &styles.legend_para,
-    };
-    let mut para = kept.clone().unwrap_or_default();
+    let mut para = kept_para(styles, role).cloned().unwrap_or_default();
     // A file's attributes within the limits the Paragraph controls keep to (they are copied onto every label).
     para.keep_spacing_in_range();
     para
+}
+
+/// The paragraph attributes labels of `role` keep, if any.
+fn kept_para(styles: &vectorcraft_doc::LabelStyles, role: Role) -> Option<&vectorcraft_doc::ParaStyle> {
+    match role {
+        Role::Value => styles.values_para.as_ref(),
+        Role::Category => styles.categories_para.as_ref(),
+        Role::Legend => styles.legend_para.as_ref(),
+    }
 }
 
 /// The anti-aliasing method labels of `role` are drawn with: the kept one, else Sharp.
@@ -85,6 +89,11 @@ impl Gen<'_> {
         self.path(PathData::from_bezpath(&bp), Paint::None, Paint::solid(Color::BLACK), 0.5)
     }
     pub(super) fn text(&mut self, role: Role, at: Point, s: &str, justify: Justify) -> Arc<Node> {
+        let t = self.text_object(role, at, s, justify);
+        Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
+    }
+    /// Label `s` of `role` set at `at` and laid out, not yet in the document.
+    fn text_object(&self, role: Role, at: Point, s: &str, justify: Justify) -> TextObject {
         let style = label_style(self.styles, role);
         let mut t = TextObject::point(at, s, style);
         t.para = label_para(self.styles, role);
@@ -92,14 +101,25 @@ impl Gen<'_> {
         t.para.justify = justify;
         t.system_layout = self.d.setup.system_layout;
         refresh_bounds(&mut t);
-        Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
+        t
     }
     /// A category or series label: a `|` in it starts a new line (Add graph labels). `middle`: the lines are centred
     /// on `at` (labels beside an axis or in a wedge) instead of running down from it.
     pub(super) fn label(&mut self, role: Role, at: Point, s: &str, justify: Justify, middle: bool) -> Arc<Node> {
         let lines = s.split('|').count();
-        let at = if middle { Point::new(at.x, at.y - (lines - 1) as f64 * label_size(self.styles, role) * 1.2 / 2.0) } else { at };
-        self.text(role, at, &s.replace('|', "\n"), justify)
+        // Default leading puts the first and last baselines this far above and below `at`.
+        let half = (lines - 1) as f64 * label_size(self.styles, role) * 1.2 / 2.0;
+        let start = if middle { Point::new(at.x, at.y - half) } else { at };
+        let mut t = self.text_object(role, start, &s.replace('|', "\n"), justify);
+        // Kept leading or paragraph spacing moves the lines: put the middle of the first and last baselines on `at`. An
+        // empty first or last line has no baseline, and such a label stays where the default leading puts it.
+        if middle && kept_para(self.styles, role).is_some() {
+            let ys: Vec<f64> = t.baselines().map(|(a, _)| a.y).collect();
+            if let (Some(first), Some(last), true) = (ys.first(), ys.last(), ys.len() == lines) {
+                t.xf = Affine::translate((0.0, half - (first + last) / 2.0)) * t.xf;
+            }
+        }
+        Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
     }
     pub(super) fn group(&mut self, name: &str, children: Vec<Arc<Node>>) -> Arc<Node> {
         let mut g = Node::group(self.d.alloc_id(), children);

@@ -4345,6 +4345,32 @@ fn a_legend_across_top_spaces_its_labels_by_their_kept_paragraph_settings() {
 }
 
 #[test]
+fn a_centered_label_with_kept_leading_stays_centered_when_the_graph_is_drawn_again() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ|1,3,2\nQ2,5,4\nQ3,-1,6";
+    let id = NodeId(
+        s.execute("graph.create", &json!({"type": "bar", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let middle = |s: &Session| {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let label = group(&n, "Axes").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == "Q\n1")).unwrap();
+        let b = label.geometric_bounds().unwrap();
+        (b.y0 + b.y1) / 2.0
+    };
+    let before = middle(&s);
+    let l = text_id(&s, id, "Axes", "Q\n1");
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    s.execute("text.setFormat", &json!({"autoLeading": 400, "spaceBefore": 6})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let after = middle(&s);
+    assert!((after - before).abs() < 0.01, "the two-line category label keeps its middle: {before} {after}");
+}
+
+#[test]
 fn a_legend_across_top_measures_its_labels_with_system_layout() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
