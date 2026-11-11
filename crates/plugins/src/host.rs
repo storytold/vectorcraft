@@ -318,6 +318,9 @@ pub struct Report {
     pub truncated: bool,
 }
 
+/// The limit a run past its wall-clock deadline exceeded ([`Error::Limit`]).
+pub(crate) const TIME_BUDGET: &str = "time budget";
+
 /// When a run must stop (native: a wall-clock deadline).
 #[derive(Clone, Copy)]
 pub(crate) struct Deadline {
@@ -344,7 +347,7 @@ impl Deadline {
     }
 
     pub(crate) fn check(&self) -> Result<()> {
-        if self.passed() { Err(Error::Limit("time budget".into())) } else { Ok(()) }
+        if self.passed() { Err(Error::Limit(TIME_BUDGET.into())) } else { Ok(()) }
     }
 }
 

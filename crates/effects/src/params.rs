@@ -161,7 +161,8 @@ pub fn any_plugin_paints_output() -> bool {
     vectorcraft_plugins::registry::list().iter().any(|p| vectorcraft_plugins::effect::paints_output(&p.manifest().id))
 }
 
-/// The plug-in registry's revision, which changes whenever a plug-in is installed or removed.
+/// Changes whenever a plug-in is installed or removed (the registry's revision), and when deferred
+/// live-effect plug-in stages give results ([`vectorcraft_plugins::deferred::revision`]).
 pub fn plugin_revision() -> u64 {
-    vectorcraft_plugins::registry::revision()
+    vectorcraft_plugins::registry::revision() ^ vectorcraft_plugins::deferred::revision().rotate_left(32)
 }
