@@ -253,7 +253,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         }
         "transform" => {
             // Validate all numeric steps before the handler changes selection or runs a step.
-            for field in ["rotate", "scale", "scaleX", "scaleY", "shear"] {
+            for field in ["dx", "dy", "rotate", "scale", "scaleX", "scaleY", "shear"] {
                 if a.get(field).is_some_and(|value| !value.is_null() && value.as_f64().is_none()) {
                     return Err(format!("`{field}` must be a number"));
                 }
