@@ -233,6 +233,9 @@ impl Realm {
         interp.host_abort = None;
         interp.waiting = false;
         interp.error_tag = UNKNOWN_SOURCE;
+        interp.thrown_mark = None;
+        interp.finally_marks.clear();
+        interp.error_mark = None;
         let strict = interp.options.strict;
         interp.source_tag = 0;
         let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
@@ -253,6 +256,8 @@ impl Realm {
         let site = interp.throw_site.take();
         interp.error_tag = site.as_ref().map_or(UNKNOWN_SOURCE, |(code, _)| code.source.tag);
         let (line, column) = site.map_or((0, 0), |(code, pc)| code.line_column(pc));
+        interp.error_mark = interp.thrown_mark.take().filter(|_| matches!(result, Err(Abrupt::Throw(_) | Abrupt::Limit(LimitKind::Host))));
+        interp.finally_marks.clear();
         interp.stack.clear();
         interp.frames.clear();
         interp.temp_roots.clear();
@@ -367,6 +372,12 @@ impl Realm {
     /// [`crate::HostItem::Evaluator`] gave in this realm, and [`UNKNOWN_SOURCE`] otherwise.
     pub fn error_source(&self) -> u32 {
         self.interp.error_tag
+    }
+
+    /// The mark of the host error ([`crate::HostError::Marked`]) the last run ended with, when no
+    /// `catch` clause took that error's exception on its way out; `None` otherwise.
+    pub fn error_mark(&self) -> Option<u32> {
+        self.interp.error_mark
     }
 
     /// Fuel the run has left.

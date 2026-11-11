@@ -64,6 +64,11 @@ pub enum HostError {
     /// it only while [`crate::Realm::wait_flag`] is set; otherwise the run ends with an internal
     /// error.
     Wait,
+    /// `error`, with a mark the host chose. When the run ends with the exception `error` throws,
+    /// or with the limit it ends the run with, [`crate::Realm::error_mark`] gives `mark`. A `catch`
+    /// clause that takes the exception drops the mark, so a `throw` of the caught value later
+    /// raises it without one; a `finally` block that ends normally keeps it.
+    Marked { error: Box<HostError>, mark: u32 },
 }
 
 /// A function the host gives a script, with its arguments converted.
@@ -450,6 +455,11 @@ impl Interp {
             HostError::Type(message) => self.throw_host(ErrorType::Type, &message),
             HostError::Range(message) => self.throw_host(ErrorType::Range, &message),
             HostError::Syntax(message) => self.throw_host(ErrorType::Syntax, &message),
+            HostError::Marked { error, mark } => {
+                let abrupt = self.host_error(*error)?;
+                self.thrown_mark = Some(mark);
+                Ok(abrupt)
+            }
         }
     }
 

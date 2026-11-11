@@ -204,6 +204,16 @@ pub(crate) struct Interp {
     pub(crate) evaluated: u32,
     /// The tag of the source the last run's error was raised in.
     pub(crate) error_tag: u32,
+    /// The mark of the host error ([`crate::HostError::Marked`]) whose exception or limit is
+    /// propagating.
+    pub(crate) thrown_mark: Option<u32>,
+    /// The marked exceptions `finally` blocks are running for, innermost last, each with its mark,
+    /// which the block's end throws it on with, and the stack slot that holds it while the block
+    /// runs. An entry whose slot no longer holds its exception belongs to a block that `break`,
+    /// `continue` or `return` left, and [`Self::drop_left_finally_marks`] removes it.
+    pub(crate) finally_marks: Vec<(ObjId, u32, usize)>,
+    /// The mark of the host error the last run ended with.
+    pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
     pub(crate) strict_writes: bool,
 }
@@ -406,6 +416,9 @@ impl Interp {
             source_tag: crate::realm::UNKNOWN_SOURCE,
             evaluated: 0,
             error_tag: crate::realm::UNKNOWN_SOURCE,
+            thrown_mark: None,
+            finally_marks: Vec::new(),
+            error_mark: None,
             strict_writes: false,
         };
         crate::builtins::install(&mut interp);
@@ -560,13 +573,22 @@ impl Interp {
         Ok(())
     }
 
+    /// Removes the [`Self::finally_marks`] entries of `finally` blocks that `break`, `continue` or
+    /// `return` left: those whose stack slot no longer holds their exception.
+    fn drop_left_finally_marks(&mut self) {
+        let stack = &self.stack;
+        self.finally_marks.retain(|&(id, _, slot)| matches!(stack.get(slot), Some(Value::Object(o)) if *o == id));
+    }
+
     pub(crate) fn collect_garbage(&mut self) {
+        self.drop_left_finally_marks();
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
         roots.values.push(&self.last_thrown);
         roots.values.push(&self.last_error);
         roots.values.push(&self.passing);
+        roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -662,6 +684,8 @@ impl Interp {
         loop {
             let Some(frame) = self.frames.last_mut() else { return Err(Abrupt::Throw(v)) };
             if let Some(h) = frame.code.handler(frame.pc.saturating_sub(1)) {
+                // A catch clause starts with `PushCatch`; every other handler is a `finally` block's.
+                let caught = matches!(frame.code.ops.get(h.target as usize), Some(Op::PushCatch(_)));
                 let target_len = frame.base + h.depth as usize;
                 while frame.env_depth > h.env_depth {
                     let outer = self.heap.env(frame.env).and_then(Env::outer);
@@ -674,6 +698,10 @@ impl Interp {
                     return internal("handler stack deeper than the stack");
                 }
                 self.stack.truncate(target_len);
+                self.drop_left_finally_marks();
+                if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
+                    self.finally_marks.push((*id, mark, target_len));
+                }
                 self.stack.push(v);
                 self.throw_site = None;
                 return Ok(());
@@ -794,7 +822,10 @@ impl Interp {
             Op::Jump(t) => self.jump_to(t),
             Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => self.op_branch(t, matches!(op, Op::JumpIfTrue(_)), false),
             Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => self.op_branch(t, matches!(op, Op::JumpIfTrueKeep(_)), true),
-            Op::Throw => Err(Abrupt::Throw(self.pop()?)),
+            Op::Throw => {
+                self.thrown_mark = None;
+                Err(Abrupt::Throw(self.pop()?))
+            }
             Op::ThrowReferenceError(i) => self.op_throw_reference_error(i),
             Op::EndFinally(t) => self.op_end_finally(t),
             Op::NewObject => self.op_new_object(),
@@ -878,6 +909,12 @@ impl Interp {
         if kind == 1.0 {
             let v = self.pop()?;
             self.passing = v.clone();
+            if let Value::Object(o) = v
+                && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, _)| id == o)
+            {
+                self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
+                self.finally_marks.truncate(i);
+            }
             return Err(Abrupt::Throw(v));
         }
         let k = (kind - 2.0) as usize;

@@ -509,3 +509,57 @@ fn script_dialogs_in_included_and_evaluated_files() {
     assert_eq!(report["dialogs"][0]["answer"], true, "{report}");
     let _ = std::fs::remove_dir_all(base);
 }
+
+/// The line, column and file name of a failed run's report, and its console error line (the only
+/// line of a run without output that starts with the script's name).
+fn place(report: &Value) -> (u64, u64, Option<&str>, &str) {
+    let file = report.get("file").map(|f| f.as_str().unwrap().rsplit(['/', '\\']).next().unwrap());
+    let lines = report["console"]["lines"].as_array().unwrap();
+    let error = lines.iter().filter_map(Value::as_str).find(|l| l.starts_with("main.jsx")).unwrap();
+    (report["line"].as_u64().unwrap(), report["column"].as_u64().unwrap(), file, error)
+}
+
+#[test]
+fn script_eval_file_error_caught_and_thrown_again_is_at_the_new_throw() {
+    let base = folder("rethrow");
+    write(&base.join("main/sub/broken.jsx"), "var a = 1;\n\nvar = 2;");
+    write(&base.join("main/sub/directive.jsx"), "\n#frobnicate 1");
+    write(&base.join("main/sub/rethrow.jsx"), "var r = 1;\n  throw saved;");
+    write(&base.join("main/sub/outer.jsx"), "var q = 1;\n$.evalFile('broken.jsx');");
+    write(&base.join("main/sub/outer2.jsx"), "try { $.evalFile('broken.jsx'); } catch (e) {\n\n    throw e;\n}");
+    let caught = "var saved;\ntry { $.evalFile('sub/broken.jsx'); } catch (e) { saved = e; }\n";
+    let cases = [
+        // Thrown again in the script, or in another file $.evalFile runs.
+        (format!("{caught}var b = 2;\n  throw saved;"), (4, 3, None)),
+        (format!("{caught}$.evalFile('sub/rethrow.jsx');"), (2, 3, Some("rethrow.jsx"))),
+        // A new error whose message holds the failure's text, or is the same text.
+        (format!("{caught}throw new Error(saved.message);"), (3, 1, None)),
+        (format!("{caught}throw new SyntaxError(saved.message);"), (3, 1, None)),
+        // A second failure, caught, does not move the first one.
+        (format!("{caught}try {{ $.evalFile('sub/directive.jsx'); }} catch (e) {{}}\n throw saved;"), (4, 2, None)),
+        // A second failure, uncaught, is at its own file's place.
+        (format!("{caught}$.evalFile('sub/directive.jsx');"), (2, 1, Some("directive.jsx"))),
+        // An uncaught failure is at the file's place, through a finally block and from a nested file.
+        ("var a = 1;\ntry { $.evalFile('sub/broken.jsx'); } finally { a = 2; }".to_string(), (3, 5, Some("broken.jsx"))),
+        ("$.evalFile('sub/outer.jsx');".to_string(), (3, 5, Some("broken.jsx"))),
+        // Caught in a nested file and thrown again there.
+        ("$.evalFile('sub/outer2.jsx');".to_string(), (3, 5, Some("outer2.jsx"))),
+        // A failure caught in a run after one that failed with it, and a different error.
+        ("try { $.evalFile('sub/broken.jsx'); } catch (e) {}\nthrow new Error('other');".to_string(), (2, 1, None)),
+    ];
+    let mut s = Session::new();
+    let main = base.join("main/main.jsx");
+    for (text, (line, column, file)) in cases {
+        write(&main, &text);
+        assert!(s.execute("script.run", &json!({"path": main.to_string_lossy()})).is_err(), "{text}");
+        let report = s.script_report().unwrap().clone();
+        let (l, c, f, error) = place(&report);
+        assert_eq!((report["kind"].as_str(), l, c, f), (Some("thrown"), line, column, file), "{text}\n{report}");
+        let at = match file {
+            Some(f) => format!("{f}:{line}:{column}: "),
+            None => format!("main.jsx:{line}:{column}: "),
+        };
+        assert!(error.starts_with("main.jsx") && error.contains(&at), "{error}");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
