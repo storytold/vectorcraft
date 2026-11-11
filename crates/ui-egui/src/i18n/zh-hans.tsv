@@ -5966,6 +5966,12 @@ axis	Y Axis	Y 轴
 	Crosshair	准星
 	Checkpoint	检查点
 	Inventory Icons	物品栏图标
+	Skill Icons	技能图标
+	Attack	攻击
+	Defend	防御
+	Heal	治疗
+	Buff	增益
+	Ult	终极技
 	Sword	剑
 	Shield	盾
 	Potion	药水

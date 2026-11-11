@@ -6151,6 +6151,12 @@ axis	Y Axis	Y-axel
 	Crosshair	Hårkors
 	Checkpoint	Kontrollpunkt
 	Inventory Icons	Inventarieikoner
+	Skill Icons	Färdighetsikoner
+	Attack	Attack
+	Defend	Försvar
+	Heal	Läkning
+	Buff	Buff
+	Ult	Ult
 	Sword	Svärd
 	Shield	Sköld
 	Potion	Dryck

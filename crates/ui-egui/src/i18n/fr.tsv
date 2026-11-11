@@ -6123,6 +6123,12 @@ axis	Y Axis	Axe Y
 	Crosshair	Réticule
 	Checkpoint	Point de contrôle
 	Inventory Icons	Icônes d’inventaire
+	Skill Icons	Icônes de compétences
+	Attack	Attaque
+	Defend	Défense
+	Heal	Soin
+	Buff	Bonus
+	Ult	Ult
 	Sword	Épée
 	Shield	Bouclier
 	Potion	Potion

@@ -5900,6 +5900,12 @@ axis	Y Axis	Y ос
 	Crosshair	Мерник
 	Checkpoint	Контролна точка
 	Inventory Icons	Икони на инвентара
+	Skill Icons	Икони на умения
+	Attack	Атака
+	Defend	Защита
+	Heal	Лечение
+	Buff	Усилване
+	Ult	Улт
 	Sword	Меч
 	Shield	Щит
 	Potion	Отвара

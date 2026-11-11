@@ -5739,6 +5739,12 @@ axis	Y Axis	Ось Y
 	Crosshair	Прицел
 	Checkpoint	Контрольная точка
 	Inventory Icons	Иконки инвентаря
+	Skill Icons	Иконки навыков
+	Attack	Атака
+	Defend	Защита
+	Heal	Лечение
+	Buff	Усиление
+	Ult	Ульт
 	Sword	Меч
 	Shield	Щит
 	Potion	Зелье

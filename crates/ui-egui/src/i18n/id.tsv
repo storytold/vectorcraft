@@ -5915,6 +5915,12 @@ axis	Y Axis	Sumbu Y
 	Crosshair	Bidik silang
 	Checkpoint	Pos pemeriksaan
 	Inventory Icons	Ikon Inventaris
+	Skill Icons	Ikon Keahlian
+	Attack	Serang
+	Defend	Bertahan
+	Heal	Pulihkan
+	Buff	Buff
+	Ult	Ult
 	Sword	Pedang
 	Shield	Perisai
 	Potion	Ramuan

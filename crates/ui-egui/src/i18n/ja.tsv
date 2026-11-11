@@ -5810,6 +5810,12 @@ axis	Y Axis	Y 軸
 	Crosshair	クロスヘア
 	Checkpoint	チェックポイント
 	Inventory Icons	インベントリアイコン
+	Skill Icons	スキルアイコン
+	Attack	攻撃
+	Defend	防御
+	Heal	回復
+	Buff	バフ
+	Ult	必殺
 	Sword	剣
 	Shield	盾
 	Potion	ポーション

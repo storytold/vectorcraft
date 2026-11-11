@@ -5966,6 +5966,12 @@ axis	Y Axis	Y-as
 	Crosshair	Vizier
 	Checkpoint	Controlepunt
 	Inventory Icons	Inventarisiconen
+	Skill Icons	Vaardigheidsiconen
+	Attack	Aanval
+	Defend	Verdediging
+	Heal	Genezen
+	Buff	Buff
+	Ult	Ult
 	Sword	Zwaard
 	Shield	Schild
 	Potion	Drank
