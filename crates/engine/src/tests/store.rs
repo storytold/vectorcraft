@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::cms;
 
 use crate::Session;
-use crate::store::{MAX_PRESET_FILE, file_stem};
+use crate::store::{MAX_PRESET_FILE, file_stem, holds};
 
 fn fresh_dir(tag: &str) -> std::path::PathBuf {
     let dir = vectorcraft_testkit::temp_dir(&format!("store-{tag}"));
@@ -126,6 +126,47 @@ fn a_folder_that_does_not_exist_yet_takes_the_presets_the_preferences_held() {
     let mut b = Session::new();
     b.attach_pdf_preset_store(dir);
     assert_eq!(saved_names(&mut b), ["From Preferences"]);
+}
+
+/// Serves `0` bytes without end and counts how many were read.
+struct Endless(u64);
+
+impl std::io::Read for Endless {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.0 > 1 << 24 {
+            return Err(std::io::Error::other("read too far"));
+        }
+        buf.fill(0);
+        self.0 += buf.len() as u64;
+        Ok(buf.len())
+    }
+}
+
+#[test]
+fn a_write_reads_the_file_it_replaces_only_one_byte_past_the_new_length() {
+    let mut old = Endless(0);
+    assert!(!holds(&mut old, &[0; 10]));
+    assert_eq!(old.0, 11);
+    assert!(holds(&[1, 2, 3][..], &[1, 2, 3]));
+    assert!(!holds(&[1, 2, 3, 4][..], &[1, 2, 3]));
+    assert!(!holds(&[1, 2][..], &[1, 2, 3]));
+    assert!(holds(&[][..], &[]));
+}
+
+#[test]
+fn a_saved_preset_replaces_an_oversized_file_in_its_place() {
+    let dir = fresh_dir("oversized-put").join("PDF Presets");
+    let mut a = Session::new();
+    a.attach_pdf_preset_store(dir.clone());
+    a.execute("pdf.preset.save", &json!({"name": "Web"})).unwrap();
+    let file = dir.join(format!("{}.vcpdfpresets", file_stem("Web")));
+    let saved = std::fs::read(&file).unwrap();
+    let mut oversized = saved.clone();
+    oversized.resize(usize::try_from(MAX_PRESET_FILE).unwrap() * 2, b' ');
+    std::fs::write(&file, &oversized).unwrap();
+
+    a.execute("pdf.preset.save", &json!({"name": "Web"})).unwrap();
+    assert_eq!(std::fs::read(&file).unwrap(), saved);
 }
 
 #[test]

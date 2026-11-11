@@ -135,11 +135,18 @@ fn too_large(max: u64) -> String {
     format!("larger than {max} bytes")
 }
 
+/// Whether `old` holds exactly `bytes`. It is read no further than one byte past their length, so a
+/// large file is not read into memory.
+pub(crate) fn holds(old: impl Read, bytes: &[u8]) -> bool {
+    let mut read = vec![];
+    old.take(bytes.len() as u64 + 1).read_to_end(&mut read).is_ok() && read == bytes
+}
+
 /// Write `bytes` to `dir/file`, making the folder; nothing is written when the file has them
 /// already. A failure is logged: remembering is best effort and never fails the command.
 fn put(dir: &Path, file: &str, bytes: &[u8]) -> bool {
     let path = dir.join(file);
-    if std::fs::read(&path).is_ok_and(|old| old == bytes) {
+    if std::fs::File::open(&path).is_ok_and(|old| holds(old, bytes)) {
         return true;
     }
     let written = std::fs::create_dir_all(dir).and_then(|()| write_atomic(&path, bytes));
