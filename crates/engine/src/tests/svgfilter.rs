@@ -259,6 +259,31 @@ fn pasted_art_keeps_a_filter_another_of_its_name_would_replace() {
     assert_eq!(both, [("Shift".to_string(), SHIFT_MORE.to_string()), ("Shift".to_string(), SHIFT_MORE.to_string())]);
 }
 
+/// A pasted filter at the size limit, which "Shift 2" would make too long to draw, keeps its own
+/// definition under a free name no longer than its own (a free letter for a one-letter name), and
+/// its id is that name.
+#[test]
+fn pasted_art_with_a_filter_at_the_size_limit_still_draws_when_renamed() {
+    for (name, held, renamed) in [("Shift", SHIFT, "Shif"), ("S", r#"<filter id="S"><feOffset dx="3" dy="3"/></filter>"#, "a")] {
+        let mut s = session();
+        run(&mut s, "svgFilter.define", json!({"xml": held}));
+        let (open, close) = (format!(r#"<filter id="{name}"><feOffset dx="9" dy="9" result=""#), r#""/></filter>"#);
+        let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+        assert!(vectorcraft_render::effects::svg_filter::check(&big).is_ok());
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#{name})"/></svg>"#
+        );
+        run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+        run(&mut s, "edit.pasteInPlace", json!({}));
+        let pasted = filter_effects(&s);
+        assert_eq!(pasted.len(), 1);
+        assert_eq!(pasted[0].0, renamed, "renamed: {}", pasted[0].0);
+        assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok(renamed.to_string()), "the pasted filter draws under its name");
+        assert!(pasted[0].1.contains("dx=\"9\""), "its own filter");
+        assert_eq!(names(&mut s), [name]);
+    }
+}
+
 /// Art in a symbol's definition that uses a filter follows its edits too.
 #[test]
 fn a_symbols_art_follows_a_filter_edit() {
