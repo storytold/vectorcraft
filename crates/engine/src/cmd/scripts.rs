@@ -64,6 +64,15 @@ pub fn specs() -> Vec<CommandSpec> {
             console_clear
         ),
         cmd!(
+            query "script.listInstalled",
+            "List Installed Scripts",
+            [],
+            None,
+            "{} list the .js and .jsx files of the Scripts folder next to the settings, which File › Scripts lists, each subfolder as a submenu, in menu order; only names are read, never a script's text; links, hidden files, names starting with a dot and folders without a script are left out. VectorCraft's own limits: 2048 folder entries looked at, 512 scripts, 128 subfolders, 4 levels of subfolders, names of 255 bytes, labels of 128 characters, 250 ms → {folder: the Scripts folder's path | null (a session without one, and the web), scripts: [{path, label: the file name without its extension (the whole file name when another row of its folder has that label), folders: [the labels of the subfolders it is in]}], truncated: a limit was reached or a subfolder could not be read, unreadable: the folder is there and could not be read, or is a link}",
+            always,
+            list_installed
+        ),
+        cmd!(
             query "script.check",
             "Check Script",
             [],
@@ -171,6 +180,52 @@ fn console_lines(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn console_clear(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({"cleared": s.clear_script_console()}))
+}
+
+/// The error for a script that File › Scripts listed and that [`script::folder::read`] no longer
+/// reads.
+pub const NOT_LISTED: &str = "the script is no longer in the Scripts folder";
+
+impl Session {
+    /// Have File › Scripts and `script.listInstalled` list the scripts of the folder `dir`. The
+    /// folder is only read, and never made.
+    pub fn attach_scripts_dir(&mut self, dir: std::path::PathBuf) {
+        self.scripts_dir = Some(dir);
+    }
+
+    /// The Scripts folder ([`Session::attach_scripts_dir`]); none on the web, which has no folders.
+    pub fn scripts_dir(&self) -> Option<&std::path::Path> {
+        self.scripts_dir.as_deref().filter(|_| !cfg!(target_arch = "wasm32"))
+    }
+
+    /// The text of the script at `path`, which a listing of the Scripts folder gave
+    /// ([`script::folder::read`]), checked as `script.run` checks a file's.
+    pub fn installed_script(&self, path: &str) -> Result<String> {
+        let root = self.scripts_dir().ok_or_else(|| EngineError::Other(NOT_LISTED.to_string()))?;
+        crate::file_access::check_read(path).map_err(EngineError::Other)?;
+        // One byte more than a script may have shows that the file is too large.
+        let bytes = script::folder::read(root, std::path::Path::new(path), script::MAX_SOURCE_BYTES + 1)
+            .ok_or_else(|| EngineError::Other(NOT_LISTED.to_string()))?;
+        if bytes.len() > script::MAX_SOURCE_BYTES {
+            return Err(EngineError::Other(TOO_LARGE.to_string()));
+        }
+        script_text(&bytes)
+    }
+}
+
+fn list_installed(s: &mut Session, _: &Value) -> Result<Value> {
+    let Some(root) = s.scripts_dir() else {
+        return Ok(json!({"folder": null, "scripts": [], "truncated": false, "unreadable": false}));
+    };
+    let folder = root.to_string_lossy();
+    crate::file_access::check_read(&folder).map_err(EngineError::Other)?;
+    let listing = script::folder::list(root);
+    let scripts: Vec<Value> = listing
+        .scripts()
+        .into_iter()
+        .map(|(folders, label, path)| json!({"path": path.to_string_lossy(), "label": label, "folders": folders}))
+        .collect();
+    Ok(json!({"folder": folder, "scripts": scripts, "truncated": listing.truncated, "unreadable": listing.unreadable}))
 }
 
 /// The folder a script is in, which its included files are read from.

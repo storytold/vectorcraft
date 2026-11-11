@@ -66,6 +66,7 @@ pub mod recovery;
 pub mod render_worker;
 pub mod screen_color;
 pub mod script_runs;
+pub mod scripts_menu;
 mod scrub;
 pub mod shortcut_editor;
 pub mod shortcuts;

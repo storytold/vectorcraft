@@ -975,6 +975,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "imageTrace.hideRuns" => Ok(crate::trace_runs::hide_all(app)),
         "ui.checkScript" => crate::dialogs::script_check::command(app, p),
         "ui.runScript" => crate::dialogs::script_run::command(app, p),
+        crate::scripts_menu::COMMAND => crate::scripts_menu::run(app, p),
         "ui.perspectiveGridDialog" => crate::dialogs::perspective_grid::open(app),
         "ui.perspectivePresetsDialog" => {
             crate::dialogs::perspective_presets::open(app, s("selected").as_deref());
