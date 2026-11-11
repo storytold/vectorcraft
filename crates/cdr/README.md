@@ -10,7 +10,7 @@ CorelDRAW (`.cdr`) compatibility for VectorCraft.
   sizes and object count; a file that fails is not written.
 
 The binary format is handled by the `tracedraw-cdr` and `tracedraw-core` crates of
-[TraceDraw](https://github.com/igtoth/tracedraw) (MIT OR Apache-2.0, clean-room, pinned to a
+[TraceDraw](https://github.com/tracedraw/tracedraw) (MIT OR Apache-2.0, clean-room, pinned to a
 commit). This crate does the conversion between the two document models, the limits for untrusted
 files, the containment of third-party failures and the diagnostics. The compatibility matrix:
 [`docs/cdr-compatibility.md`](../../docs/cdr-compatibility.md).

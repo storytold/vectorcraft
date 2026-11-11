@@ -5848,7 +5848,7 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 [[package]]
 name = "tracedraw-cdr"
 version = "0.9.3"
-source = "git+https://github.com/igtoth/tracedraw?rev=4fe0109e3fca04b697c8c55b09f4587e8c316ce7#4fe0109e3fca04b697c8c55b09f4587e8c316ce7"
+source = "git+https://github.com/tracedraw/tracedraw?rev=4fe0109e3fca04b697c8c55b09f4587e8c316ce7#4fe0109e3fca04b697c8c55b09f4587e8c316ce7"
 dependencies = [
  "encoding_rs",
  "flate2",
@@ -5862,7 +5862,7 @@ dependencies = [
 [[package]]
 name = "tracedraw-core"
 version = "0.9.3"
-source = "git+https://github.com/igtoth/tracedraw?rev=4fe0109e3fca04b697c8c55b09f4587e8c316ce7#4fe0109e3fca04b697c8c55b09f4587e8c316ce7"
+source = "git+https://github.com/tracedraw/tracedraw?rev=4fe0109e3fca04b697c8c55b09f4587e8c316ce7#4fe0109e3fca04b697c8c55b09f4587e8c316ce7"
 dependencies = [
  "base64 0.22.1",
  "i_overlay",

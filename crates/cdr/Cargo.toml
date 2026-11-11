@@ -21,8 +21,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # TraceDraw's clean-room CDR reader and writer (MIT OR Apache-2.0), pinned to a commit: versions 7
 # to 22 in RIFF and ZIP. See crates/cdr/README.md and NOTICE.
-tracedraw-cdr = { git = "https://github.com/igtoth/tracedraw", rev = "4fe0109e3fca04b697c8c55b09f4587e8c316ce7" }
-tracedraw-core = { git = "https://github.com/igtoth/tracedraw", rev = "4fe0109e3fca04b697c8c55b09f4587e8c316ce7" }
+tracedraw-cdr = { git = "https://github.com/tracedraw/tracedraw", rev = "4fe0109e3fca04b697c8c55b09f4587e8c316ce7" }
+tracedraw-core = { git = "https://github.com/tracedraw/tracedraw", rev = "4fe0109e3fca04b697c8c55b09f4587e8c316ce7" }
 
 [dev-dependencies]
 vectorcraft-text = { workspace = true, features = ["bundled-fonts"] }
