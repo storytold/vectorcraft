@@ -203,10 +203,11 @@ pub(crate) fn whole_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<
     }
 }
 
-/// Run a command's implementation without the enablement check or journaling.
+/// Run a command's implementation without the enablement check or journaling. A command with a
+/// parameter schema runs with its params checked ([`super::run_checked`]).
 pub(crate) fn run_raw(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
     let c = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
-    super::run_spec(s, c, p)
+    super::run_checked(s, c, p)
 }
 
 /// Merge the undo entries pushed since the history had `from` entries into one labelled step.
@@ -952,6 +953,40 @@ fn polygon_path(pts: &[Point]) -> PathData {
     PathData::single(vectorcraft_geom::SubPath::new(pts.iter().map(|p| Anchor::corner(*p)).collect(), true))
 }
 
+/// The part of an image under `r` (in document space) copied out of its pixels, as PNG bytes, with its size and
+/// placement. `None` when the image can't be cut that way (turned or skewed, CMYK, pixels that can't be read, or
+/// `r` not on the pixel grid), so the caller draws it instead.
+fn crop_pixels(doc: &vectorcraft_doc::Document, im: &ImageObject, r: Rect) -> Option<(Vec<u8>, u32, u32, Affine)> {
+    let blob = doc.images.get(&im.key)?;
+    let [a, b, c, d, _, _] = im.xf.as_coeffs();
+    if blob.is_cmyk() || b.abs() > 1e-9 || c.abs() > 1e-9 || a.abs() < 1e-9 || d.abs() < 1e-9 {
+        return None;
+    }
+    let inv = im.xf.inverse();
+    let (p0, p1) = (inv * Point::new(r.x0, r.y0), inv * Point::new(r.x1, r.y1));
+    // Only a rect on the pixel grid is cut from the pixels; one between pixels keeps its exact bounds by being drawn.
+    // Checked before decoding, so an off-grid crop of a large image doesn't decode it for nothing.
+    let on_grid = |v: f64| (v - v.round()).abs() < 1e-3;
+    if ![p0.x, p0.y, p1.x, p1.y].into_iter().all(on_grid) {
+        return None;
+    }
+    let px = decode_rgba("object.cropImage", blob).ok()?;
+    let (w, h) = px.dimensions();
+    if w == 0 || h == 0 || (w, h) != (im.width, im.height) {
+        return None;
+    }
+    let lo = |v: f64, max: u32| v.round().clamp(0.0, f64::from(max)) as u32;
+    let (x0, x1) = (lo(p0.x.min(p1.x), w), lo(p0.x.max(p1.x), w));
+    let (y0, y1) = (lo(p0.y.min(p1.y), h), lo(p0.y.max(p1.y), h));
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    let cut = image::imageops::crop_imm(&px, x0, y0, x1 - x0, y1 - y0).to_image();
+    let mut png = Vec::new();
+    cut.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    Some((png, x1 - x0, y1 - y0, im.xf * Affine::translate((f64::from(x0), f64::from(y0)))))
+}
+
 fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.cropImage";
     let st = s.doc()?;
@@ -992,6 +1027,11 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     if (r.x0 - ib.x0).abs() < 1e-6 && (r.y0 - ib.y0).abs() < 1e-6 && (r.x1 - ib.x1).abs() < 1e-6 && (r.y1 - ib.y1).abs() < 1e-6 {
         return Err(bad(C, "nothing to crop"));
     }
+    // A plain, axis-aligned raster is cut straight from its pixels, so nothing is resampled.
+    if let Some((png, cw, ch, xf)) = crop_pixels(&st.doc, im, r) {
+        put_pixels(s, id, png, cw, ch, xf)?;
+        return Ok(json!({ "id": id.0, "width": cw, "height": ch }));
+    }
     // Keep the image's pixel density.
     let scale = (im.width as f64 / ib.width().max(1e-9)).max(im.height as f64 / ib.height().max(1e-9));
     let mut bare = node.clone();
@@ -1026,6 +1066,27 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// The image's pixels as RGBA, held to the allowance opening a raster has.
+fn decode_rgba(c: &str, blob: &vectorcraft_doc::ImageBlob) -> Result<image::RgbaImage> {
+    // Print rasters run to gigabytes decoded: the same allowance opening them has.
+    let reader = || {
+        image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
+            .with_guessed_format()
+            .map_err(|_| bad(c, "the image's pixels can't be read"))
+    };
+    // The image's size as RGBA, read from its header, is held to that allowance before anything
+    // is decoded (#1717).
+    let (w, h) = reader()?.into_dimensions().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?;
+    if u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4 {
+        return Err(bad(c, format!("an image of {w} × {h} pixels is too large to draw")));
+    }
+    let mut reader = reader()?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(crate::cmd::fileio::MAX_RASTER_ALLOC);
+    reader.limits(limits);
+    Ok(reader.decode().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?.to_rgba8())
+}
+
 /// Crop Image's trim: the image cut to the box of its pixels that aren't fully transparent, the
 /// pixels copied as they are (no resampling) and placed where they were.
 fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
@@ -1036,23 +1097,7 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
     if blob.is_cmyk() {
         return Ok(json!({ "id": id.0, "width": im.width, "height": im.height, "trimmed": false }));
     }
-    // Print rasters run to gigabytes decoded: the same allowance opening them has.
-    let reader = || {
-        image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
-            .with_guessed_format()
-            .map_err(|_| bad(C, "the image's pixels can't be read"))
-    };
-    // The image's size as RGBA, read from its header, is held to that allowance before anything
-    // is decoded (#1717).
-    let (w, h) = reader()?.into_dimensions().map_err(|e| bad(C, format!("the image's pixels can't be read: {e}")))?;
-    if u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4 {
-        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to draw")));
-    }
-    let mut reader = reader()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(crate::cmd::fileio::MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    let px = reader.decode().map_err(|e| bad(C, format!("the image's pixels can't be read: {e}")))?.to_rgba8();
+    let px = decode_rgba(C, blob)?;
     let (w, h) = px.dimensions();
     let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
     for (x, y, p) in px.enumerate_pixels() {
@@ -1071,23 +1116,22 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
     let mut png = Vec::new();
     cut.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad(C, e.to_string()))?;
     let (cw, ch) = (x1 - x0, y1 - y0);
+    put_pixels(s, id, png, cw, ch, im.xf * Affine::translate((f64::from(x0), f64::from(y0))))?;
+    Ok(json!({ "id": id.0, "width": cw, "height": ch, "trimmed": true }))
+}
+
+/// Crop Image's edit for a cut made from the image's own pixels: `png` (`w` × `h` px) takes the
+/// image's place, mapped into the document by `xf`.
+fn put_pixels(s: &mut Session, id: NodeId, png: Vec<u8>, w: u32, h: u32, xf: Affine) -> Result<()> {
     s.edit("Crop Image", |d, _| {
         let key = unique_key(d, "crop");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         if let Some(n) = d.node_mut(id) {
-            n.kind = NodeKind::Image(Box::new(ImageObject {
-                key,
-                width: cw,
-                height: ch,
-                xf: im.xf * Affine::translate((f64::from(x0), f64::from(y0))),
-                link: None,
-                placement: Default::default(),
-                pixels: None,
-            }));
+            n.kind = NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None }));
         }
         Ok(())
     })?;
-    Ok(json!({ "id": id.0, "width": cw, "height": ch, "trimmed": true }))
+    Ok(())
 }
 
 /// The Control bar's Mask for an image: a clip group of the image and a clipping path on its
@@ -1275,6 +1319,7 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             });
             converted.push(id);
         }

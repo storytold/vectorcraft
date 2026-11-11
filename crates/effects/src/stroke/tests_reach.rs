@@ -57,6 +57,28 @@ fn check(bp: &BezPath, st: &StrokeLayer, what: &str) {
 }
 
 #[test]
+fn a_butt_capped_open_path_is_measured_where_it_paints() {
+    let mut vertical = BezPath::new();
+    vertical.move_to((50.0, 10.0));
+    vertical.line_to((50.0, 90.0));
+    let mut diagonal = BezPath::new();
+    diagonal.move_to((10.0, 10.0));
+    diagonal.line_to((40.0, 50.0));
+    let mut arc = BezPath::new();
+    arc.move_to((10.0, 50.0));
+    arc.curve_to((10.0, 22.4), (32.4, 0.0), (60.0, 0.0));
+    let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 4.0);
+    stroke.cap = LineCap::Butt;
+    for (name, bp) in [("vertical", vertical), ("diagonal", diagonal), ("arc", arc)] {
+        let painted = outline_region(&PathData::from_bezpath(&bp), FillRule::NonZero, &stroke).to_bezpath().bounding_box();
+        let bounds = stroke.bounds_on(&bp, bp.bounding_box());
+        for (got, want) in [(bounds.x0, painted.x0), (bounds.y0, painted.y0), (bounds.x1, painted.x1), (bounds.y1, painted.y1)] {
+            assert!((got - want).abs() < 0.05, "{name}: measured {bounds:?}, paints {painted:?}");
+        }
+    }
+}
+
+#[test]
 fn bounds_and_clicks_cover_what_every_stroke_paints() {
     let profiles = [None, Some(WidthProfile::lens()), Some(WidthProfile { points: vec![(0.0, 2.0, 0.5), (0.6, 0.8, 1.6), (1.0, 1.2, 0.3)] })];
     for (pi, bp) in paths().iter().enumerate() {

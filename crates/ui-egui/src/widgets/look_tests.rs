@@ -459,17 +459,25 @@ fn a_spinner_field_has_square_joints_and_the_schemes_outer_corners() {
 }
 
 /// #4267: a click on a spinner arrow steps once; an arrow held down steps again and again after a
-/// pause, and letting go of it doesn't step once more.
+/// pause even past the click timeout (#6307), and letting go doesn't step once more.
 #[test]
 fn a_held_spinner_arrow_repeats() {
     let ctx = themed(Default::default());
     let value = std::cell::Cell::new(5.0);
+    let scroll = std::cell::Cell::new(0.0);
+    let spinner_rect = std::cell::Cell::new(Rect::NOTHING);
     let mut add = |ui: &mut Ui| {
-        ui.horizontal(|ui| {
-            if let Some(v) = spin_plain(ui, "repeat", value.get(), "", 0, 100.0, 1.0, 0.0, &[]) {
-                value.set(v);
-            }
+        let area = egui::ScrollArea::vertical().max_height(100.0).scroll_source(egui::scroll_area::ScrollSource::DRAG).show(ui, |ui| {
+            ui.add_space(35.0);
+            let row = ui.horizontal(|ui| {
+                if let Some(v) = spin_plain(ui, "repeat", value.get(), "", 0, 100.0, 1.0, 0.0, &[]) {
+                    value.set(v);
+                }
+            });
+            spinner_rect.set(Rect::from_min_size(row.response.rect.min, vec2(16.0, 26.0)));
+            ui.add_space(150.0);
         });
+        scroll.set(area.state.clamped_offset().y);
     };
     let shapes = frame(&ctx, 0.0, vec![], &mut add);
     let spinner = shapes
@@ -490,13 +498,31 @@ fn a_held_spinner_arrow_repeats() {
     frame(&ctx, 1.0, vec![button(true)], &mut add);
     frame(&ctx, 1.3, vec![], &mut add);
     assert_eq!(value.get(), 6.0, "no step before the pause");
-    for (i, t) in [1.5, 1.6, 1.7].into_iter().enumerate() {
+    for i in 0..17 {
+        let t = 1.5 + f64::from(i) * 0.1;
         frame(&ctx, t, vec![], &mut add);
-        assert_eq!(value.get(), 7.0 + i as f64, "a step every repeat at {t}");
+        assert_eq!(value.get(), 7.0 + f64::from(i), "a step every repeat at {t}");
     }
-    frame(&ctx, 1.75, vec![button(false)], &mut add);
-    frame(&ctx, 1.8, vec![], &mut add);
-    assert_eq!(value.get(), 9.0, "letting go doesn't step once more");
+    frame(&ctx, 3.2, vec![button(false)], &mut add);
+    frame(&ctx, 3.3, vec![], &mut add);
+    assert_eq!(value.get(), 23.0, "letting go doesn't step once more");
+
+    let down = spinner_rect.get().center_bottom() - vec2(0.0, 6.0);
+    let modifiers = egui::Modifiers::SHIFT;
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    frame(&ctx, 3.9, vec![egui::Event::PointerMoved(down)], &mut add);
+    frame(&ctx, 4.0, vec![egui::Event::ModifiersChanged(modifiers), button(down, true)], &mut add);
+    frame(&ctx, 4.5, vec![], &mut add);
+    assert_eq!(value.get(), 13.0, "Shift+down steps by ten: press {down:?}, current {:?}", spinner_rect.get());
+    frame(&ctx, 4.9, vec![], &mut add);
+    assert_eq!(value.get(), 3.0, "Shift+down repeats past the click timeout");
+
+    let outside = down - vec2(0.0, 45.0);
+    frame(&ctx, 5.0, vec![egui::Event::PointerMoved(outside)], &mut add);
+    frame(&ctx, 5.1, vec![], &mut add);
+    frame(&ctx, 5.2, vec![button(outside, false)], &mut add);
+    assert_eq!(value.get(), 3.0, "dragging away and releasing doesn't step");
+    assert!(scroll.get() > 0.0, "a drag starting on the spinner can still scroll the panel");
 }
 
 // Regression test for #4567: numbers and text in input fields (numeric fields, dash/gap fields,

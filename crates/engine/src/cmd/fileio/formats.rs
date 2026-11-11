@@ -125,7 +125,7 @@ const BACKGROUND: FormatOption = FormatOption {
     name: "background",
     ty: "string",
     default: "\"transparent\"",
-    description: "transparent, white, black or a colour such as \"#ff8800\" (JPEG: white when transparent)",
+    description: "transparent, white, black or a colour such as \"#ff8800\" (JPEG: white when transparent); drawn under the finished art, so blend modes do not read it",
 };
 
 const ANTI_ALIAS: FormatOption = FormatOption {

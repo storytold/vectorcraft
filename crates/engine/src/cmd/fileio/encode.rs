@@ -373,6 +373,7 @@ pub(crate) fn with_single_artboard(mut d: Document, rect: Rect, name: &str) -> D
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     }];
     d
 }

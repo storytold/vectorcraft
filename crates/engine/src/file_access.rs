@@ -85,6 +85,12 @@ impl AutomationRoots {
         Ok(Some(Arc::new(Self { read: open(read, Access::Read)?, write: open(write, Access::Write)? })))
     }
 
+    /// Roots that grant no access of either kind: inside [`confine`] with them, every path a
+    /// command reads or writes is refused.
+    pub(crate) fn none() -> Arc<Self> {
+        Arc::new(Self { read: Vec::new(), write: Vec::new() })
+    }
+
     /// May the file or folder at `path` be read (or written)? It must lie inside one of the roots
     /// of that kind. `Err` says why not.
     pub fn check(&self, path: &str, access: Access) -> Result<(), String> {
@@ -208,7 +214,40 @@ pub fn check_read(path: &str) -> Result<(), String> {
 
 /// May `path` be written here? Always, without roots in force.
 pub fn check_write(path: &str) -> Result<(), String> {
-    current().map_or(Ok(()), |r| r.check(path, Access::Write))
+    current().map_or(Ok(()), |r| r.check(path, Access::Write))?;
+    WRITES.with(|w| {
+        if let Some(paths) = w.borrow_mut().as_mut()
+            && !paths.iter().any(|(p, _)| p == path)
+        {
+            paths.push((path.to_string(), stamp(path)));
+        }
+    });
+    Ok(())
+}
+
+/// A file's modification time and length; `None` when there is no file at `path`.
+type Stamp = Option<(Option<std::time::SystemTime>, u64)>;
+
+fn stamp(path: &str) -> Stamp {
+    std::fs::metadata(path).ok().filter(std::fs::Metadata::is_file).map(|m| (m.modified().ok(), m.len()))
+}
+
+thread_local! {
+    /// The paths [`check_write`] allowed on this thread while they are being recorded, each with
+    /// its file's stamp at that moment.
+    static WRITES: std::cell::RefCell<Option<Vec<(String, Stamp)>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Starts recording the paths [`check_write`] allows on this thread.
+pub(crate) fn start_recording_writes() {
+    WRITES.with(|w| *w.borrow_mut() = Some(Vec::new()));
+}
+
+/// Ends recording → the recorded paths whose file exists now: after a command that `succeeded`,
+/// all of them; after one that failed, those made or changed since they were allowed.
+pub(crate) fn finish_recording_writes(succeeded: bool) -> Vec<String> {
+    let recorded = WRITES.with(|w| w.borrow_mut().take()).unwrap_or_default();
+    recorded.into_iter().filter(|(path, before)| stamp(path).is_some_and(|now| succeeded || Some(now) != *before)).map(|(path, _)| path).collect()
 }
 
 /// `path` made absolute with its links followed; for a path that doesn't exist (yet), its nearest

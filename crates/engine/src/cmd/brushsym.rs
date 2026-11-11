@@ -208,7 +208,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Link to Symbol",
             [],
             None,
-            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask → {ids}",
+            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask; a hidden or locked instance's art stays hidden or locked and is not selected → {ids}",
             has_selection,
             symbol_break_link
         ),
@@ -272,7 +272,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Symbol Instance Part",
             [],
             None,
-            "{id, path: [i…] (as symbol.instance.setAppearance)} select one path, compound path or type object of a dynamic symbol instance's art, as a Direct Selection click on it does: the instance is selected alone, and until the selection changes paint.setFill and paint.setStroke with a solid color or none, paint.invert and paint.complement on a solid color (without ids, id or item; type whose characters differ in color is refused) and appearance.copyFrom with a solid fill and stroke (the Eyedropper, without ids, reverse or append; options that pick up neither color are refused) change that object's fill or stroke for this instance only; gradients and patterns are refused, and so are the commands that change the selected objects without ids (transparency.set, the gradient commands, object.group, edit.cut and edit.clear among them); edit.copy copies the instance whole, and selection exports, artboard.fitToSelection, object.liquify, object.isolate, library.add and select.save use the instance (docs/mcp.md); selectPart itself is refused for a static symbol, a path naming no object, a group, image or other kind of object, a hidden, locked or template object or one inside such a group, and a hidden or locked instance → {id, path}",
+            "{id, path: [i…] (as symbol.instance.setAppearance)} select one path, compound path or type object of a dynamic symbol instance's art, as a Direct Selection click on it does: the instance is selected alone, and until the selection changes paint.setFill and paint.setStroke (solid, none, gradient or pattern), transparency.set with opacity and/or blend, paint.invert and paint.complement on a solid color (without ids, id or item; type whose characters differ in color is refused) and appearance.copyFrom (the Eyedropper, without ids, reverse or append; options that pick up neither color are refused; a gradient or pattern fill or stroke is taken) change that object for this instance only; the gradient annotator commands, isolate/knockout on transparency.set, object.group, edit.cut and edit.clear among the commands that change the selected objects without ids are refused; edit.copy copies the instance whole, and selection exports, artboard.fitToSelection, object.liquify, object.isolate, library.add and select.save use the instance (docs/mcp.md); selectPart itself is refused for a static symbol, a path naming no object, a group, image or other kind of object, a hidden, locked or template object or one inside such a group, and a hidden or locked instance → {id, path}",
             has_doc,
             symbol_instance_select_part
         ),

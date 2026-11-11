@@ -25,6 +25,12 @@ pub const MAX_COMMANDS: usize = 32;
 /// Longest command id, in characters.
 pub const MAX_COMMAND_ID: usize = 32;
 
+/// Most commands a manifest's `commandAllowlist` names.
+pub const MAX_ALLOWED_COMMANDS: usize = 256;
+
+/// Longest command id a manifest's `commandAllowlist` names, in bytes.
+pub const MAX_ALLOWED_ID: usize = 128;
+
 /// What a plug-in is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -337,6 +343,11 @@ pub struct Manifest {
     /// The menu commands it adds, in menu order (a filter or a live effect only).
     #[serde(default, deserialize_with = "ordered_commands", skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<Command>,
+    /// The VectorCraft commands a run may call with `vc_call` (exact command ids, such as
+    /// `object.transform`): only a filter with the usual budget whose `permissions` list `commands`
+    /// lists any ([`Manifest::validate`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub command_allowlist: Vec<String>,
 }
 
 impl Manifest {
@@ -371,6 +382,7 @@ impl Manifest {
             budget: Budget::Light,
             paint_output: false,
             commands: Vec::new(),
+            command_allowlist: Vec::new(),
         }
     }
 
@@ -427,7 +439,40 @@ impl Manifest {
             }
         }
         self.validate_params()?;
-        self.validate_commands()
+        self.validate_commands()?;
+        self.validate_allowlist()
+    }
+
+    /// `commandAllowlist` lists at most [`MAX_ALLOWED_COMMANDS`] distinct command ids
+    /// ([`valid_allowed_id`]), and only a filter with the usual budget lists any: a heavy one runs in
+    /// the background, away from the document its commands would change. A list needs the
+    /// permission `commands`, and `commands` needs a list.
+    fn validate_allowlist(&self) -> Result<()> {
+        let listed = self.permissions.as_ref().is_some_and(|p| p.iter().any(|n| n == Permission::Commands.name()));
+        if self.command_allowlist.is_empty() == listed {
+            return Err(Error::Manifest("`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`".into()));
+        }
+        if self.command_allowlist.is_empty() {
+            return Ok(());
+        }
+        if self.kind != Kind::Filter || self.budget == Budget::Heavy {
+            return Err(Error::Manifest("only a filter with the usual budget declares `commandAllowlist`".into()));
+        }
+        if self.command_allowlist.len() > MAX_ALLOWED_COMMANDS {
+            return Err(Error::Manifest(format!("at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`")));
+        }
+        for (i, id) in self.command_allowlist.iter().enumerate() {
+            if !valid_allowed_id(id) || self.command_allowlist.get(..i).is_some_and(|before| before.contains(id)) {
+                let shown = permissions::display_text(id, permissions::MAX_SHOWN_FIELD);
+                return Err(Error::Manifest(format!("`commandAllowlist` names `{shown}`, which is not a command id or is listed twice")));
+            }
+        }
+        Ok(())
+    }
+
+    /// May a run call command `id` ([`Manifest::command_allowlist`])?
+    pub fn allows_call(&self, id: &str) -> bool {
+        self.command_allowlist.iter().any(|a| a == id)
     }
 
     /// Checks each parameter and its dialog layout.
@@ -808,6 +853,15 @@ fn params_as_object<S: serde::Serializer>(p: &[(String, Param)], s: S) -> std::r
         m.serialize_entry(k, v)?;
     }
     m.end()
+}
+
+/// A command id as a `commandAllowlist` names it: 1 to [`MAX_ALLOWED_ID`] bytes from
+/// `A-Za-z0-9._-`, starting with a letter, with no empty part between dots.
+pub fn valid_allowed_id(id: &str) -> bool {
+    (1..=MAX_ALLOWED_ID).contains(&id.len())
+        && id.bytes().next().is_some_and(|b| b.is_ascii_alphabetic())
+        && id.split('.').all(|part| !part.is_empty())
+        && id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
 /// `[A-Za-z0-9._-]{1,64}`.

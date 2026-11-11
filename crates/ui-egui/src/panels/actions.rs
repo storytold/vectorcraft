@@ -1377,6 +1377,7 @@ enum InclusionChange {
     Step(usize, usize, usize, bool),
 }
 
+/// Draw action sets, steps and playback controls, keeping the list above a pinned footer.
 pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     // The selected action as (set, action). Read as the type it is stored as: egui keeps a
@@ -1398,7 +1399,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let mut expanded: BTreeSet<u64> = pstate(ui.ctx(), "actions-expanded");
     let mut inclusion_changes = Vec::new();
     let mut play_req = None;
-    egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+    let list_height = widgets::panel_list_height(ui, 260.0, 0.0).min(260.0);
+    egui::ScrollArea::vertical().max_height(list_height).min_scrolled_height(list_height.min(64.0)).show(ui, |ui| {
         for (si, set) in app.ui.action_sets.iter().enumerate() {
             let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::click());
             if sets_selected.contains(&si) && selected.is_none() {
@@ -1551,9 +1553,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     set_pstate(ui.ctx(), SELECTED_STEP, step_selected);
     app.ui.action_set = current;
     app.ui.action_sets_selected = sets_selected;
-    widgets::divider(ui);
+    if app.ui.action_sets.is_empty() {
+        dim_label(ui, tl!("No actions. Press ● to record."));
+    }
     // Bottom bar: stop, record, play, new set, new action, delete.
-    ui.horizontal(|ui| {
+    widgets::bottom_bar(ui, |ui| {
         let recording = app.ui.recording.is_some();
         if widgets::icon_button(ui, "square", tl!("Stop Playing/Recording"), false, 24.0).clicked()
             && let Err(e) = app.run(STOP_RECORDING, json!({}))
@@ -1598,15 +1602,63 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.status(e);
     }
     let _ = icons::exists;
-    if app.ui.action_sets.is_empty() {
-        dim_label(ui, tl!("No actions. Press ● to record."));
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
+
+    /// A short sized panel clips the list above its footer and can scroll to select its final row.
+    #[test]
+    fn a_short_actions_panel_keeps_its_last_row_reachable_above_the_footer() {
+        use egui::{Event, PointerButton, Rect, UiBuilder, UiStackInfo, pos2, vec2};
+        for height in [60.0, 120.0] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            let ctx = egui::Context::default();
+            let mut time = 0.0;
+            let mut frame = |app: &mut VectorcraftApp, events| {
+                time += 0.1;
+                let input = egui::RawInput {
+                    time: Some(time),
+                    screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(300.0, height))),
+                    events,
+                    ..Default::default()
+                };
+                let mut output = ctx.run_ui(input, |ui| {
+                    let info = UiStackInfo::default().with_tag_value(widgets::PANEL_FOOTER, Some(height));
+                    ui.scope_builder(UiBuilder::new().ui_stack_info(info), |ui| show(app, ui));
+                });
+                output.textures_delta.clear();
+                output.shapes
+            };
+            let last_row = |shapes: &[egui::epaint::ClippedShape]| {
+                shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.text() == "Reflect Horizontal" => Some((text.visual_bounding_rect(), shape.clip_rect)),
+                        _ => None,
+                    })
+                    .expect("the final action is drawn")
+            };
+            for _ in 0..3 {
+                let shapes = frame(&mut app, vec![]);
+                assert!(last_row(&shapes).1.bottom() <= height - 31.0, "height={height}: the list overlaps its footer");
+            }
+            for _ in 0..12 {
+                frame(&mut app, crate::toolbar::tests::wheel(pos2(100.0, 12.0), 1000.0));
+            }
+            let shapes = frame(&mut app, vec![]);
+            let (row, clip) = last_row(&shapes);
+            assert!(clip.contains_rect(row), "height={height}: the final row {row:?} is outside {clip:?}");
+            let at = row.center();
+            let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            for events in [vec![Event::PointerMoved(at)], vec![button(true)], vec![button(false)]] {
+                frame(&mut app, events);
+            }
+            assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((0, 5)));
+        }
+    }
 
     #[test]
     fn defaults_are_valid_commands() {

@@ -187,6 +187,26 @@ fn an_ai_with_an_artboard_past_14400_pt_reopens_at_its_size() {
     assert_eq!(size(&s), (20_000.0, 10_000.0));
 }
 
+/// A page that a PDF 1.3 file can't hold (a side past 32,767 pt that isn't a whole number of
+/// points) fails the export before the thumbnails, the editing data and the flattening: the editing data is never asked for, and the flattener options, which the
+/// flattening would refuse, are never read.
+#[test]
+fn a_page_too_long_for_pdf_1_3_fails_before_the_flattening() {
+    let doc = vectorcraft_doc::Document::new(40_000.5, 300.0);
+    let p = json!({"compatibility": "1.3", "thumbnails": true, "preserveEditing": true, "flattener": {"balance": 500}});
+    let asked = std::cell::Cell::new(false);
+    let native = || {
+        asked.set(true);
+        Ok(vec![])
+    };
+    let e = super::pdf::encode_carrying("document.exportPdf", &doc, &p, native, || Ok(None)).unwrap_err();
+    assert!(
+        e.to_string().contains("PDF 1.3 files hold real numbers up to 32,767, and the page of artboard 1, 40001 pt long, needs larger ones"),
+        "{e}"
+    );
+    assert!(!asked.get(), "the editing data is not made");
+}
+
 #[test]
 fn ait_templates_open_their_document_untitled() {
     let mut s = rich();

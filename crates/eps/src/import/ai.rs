@@ -37,6 +37,7 @@ use crate::ps;
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 #[cfg(test)]
 pub(crate) use envelope::MAX_CHECKED;
+pub(crate) use envelope::TYPE_DRAWN as ENVELOPE_TYPE_DRAWN;
 pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 pub(crate) use frames::text_frames;
 pub use obj::{NameEncoding, Names};

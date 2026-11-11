@@ -1,5 +1,5 @@
 //! Arrowheads. A head of weight `hw` (stroke weight × scale) fits a box `4·hw` long and `4·hw`
-//! wide. Hollow kinds are rings (`hw/2` walls) or, for the open arrow, a chevron with `hw` arms.
+//! wide; the line arrow's arms reach twice as far out ([`Arrowhead::half_width`]). Hollow kinds are rings (`hw/2` walls) or, for the open arrow, a chevron with `hw` arms.
 //! The stroke ends under the head at the head's *inset* from the tip: halfway into solid heads,
 //! in the back wall of hollow ones (with the cap kept out of the hole) and at the chevron's inner
 //! corner. With [`ArrowAlign::Tip`] the tip sits on the end point and the stroke is shortened by
@@ -8,7 +8,7 @@
 
 use std::borrow::Cow;
 
-use std::f64::consts::{FRAC_PI_2, PI};
+use std::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, PI};
 
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen, PathSeg, Point, Shape, Vec2};
 use vectorcraft_doc::{ArrowAlign, Arrowhead, StrokeLayer};
@@ -252,6 +252,7 @@ const HEX: f64 = 2.0 * 1.732_050_807_568_877_2;
 /// Flattening tolerance of the curved local heads, in units.
 const LOCAL_TOL: f64 = 1e-3;
 
+/// Where the stroke ends under a head drawn in local units ([`local`]), in those units.
 fn local_stop(kind: Arrowhead) -> Stop {
     match kind {
         Arrowhead::Target | Arrowhead::TagOpen | Arrowhead::DiamondOpen => Stop::Wall(4.0),
@@ -261,7 +262,7 @@ fn local_stop(kind: Arrowhead) -> Stop {
         Arrowhead::Fork => Stop::At(2.7),
         Arrowhead::HalfArrowLeft | Arrowhead::HalfArrowRight | Arrowhead::Feather => Stop::At(1.3),
         Arrowhead::Swallowtail => Stop::At(1.4),
-        Arrowhead::Chevron => Stop::At(1.0),
+        Arrowhead::Chevron | Arrowhead::LineArrow => Stop::At(1.0),
         Arrowhead::Slash => Stop::At(1.2),
         Arrowhead::DoubleSlash => Stop::At(1.05),
         Arrowhead::DoubleArrow => Stop::At(1.7),
@@ -273,8 +274,9 @@ fn local_stop(kind: Arrowhead) -> Stop {
 }
 
 /// The outline of a head added after the first ten, in local units: x from the tip (0) back
-/// along the line (to at most 4), y across it (−2 to 2, positive to the right of the direction
-/// the head points). Every shape is generated here.
+/// along the line (to at most 4; the line arrow's square-cut arms 4.71), y across it (−2 to 2,
+/// the line arrow −4 to 4; positive to the right of the direction the head points). Every shape
+/// is generated here.
 fn local(kind: Arrowhead) -> BezPath {
     let mut p = BezPath::new();
     let poly = |p: &mut BezPath, pts: &[(f64, f64)]| polygon(p, &pts.iter().map(|&q| Point::from(q)).collect::<Vec<_>>());
@@ -363,6 +365,14 @@ fn local(kind: Arrowhead) -> BezPath {
             poly(&mut p, &[(0.0, 2.0), (0.6, 2.0), (0.6, 0.25), (4.0, 1.8), (4.0, -1.8), (0.6, -0.25), (0.6, -2.0), (0.0, -2.0)])
         }
         Arrowhead::Oval => p.extend(kurbo::Ellipse::new((2.0, 0.0), (2.0, 1.2), 0.0).path_elements(LOCAL_TOL)),
+        Arrowhead::LineArrow => {
+            // Arms one unit thick (the head's weight: the line's at 100 % for lines of 0.25 pt or
+            // more) at right angles to each other, from a sharp tip to their outer corners at
+            // (4, ±4), cut square across: a unit across an arm at 45° is ½√2 along each axis, and
+            // the arms' inner edges meet √2 behind the tip.
+            let t = FRAC_1_SQRT_2;
+            poly(&mut p, &[(0.0, 0.0), (4.0, 4.0), (4.0 + t, 4.0 - t), (2.0 * t, 0.0), (4.0 + t, t - 4.0), (4.0, -4.0)]);
+        }
         // The first ten are drawn by `shape`.
         Arrowhead::Triangle
         | Arrowhead::TriangleOpen

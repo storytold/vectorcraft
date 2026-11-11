@@ -8,7 +8,7 @@ use craft_pdf::syntax::Pdf;
 use craft_pdf::syntax::object::{Array, Name, Object, Stream};
 use serde_json::json;
 use vectorcraft_color::cms::{self, DEVICE_CMYK, GENERIC_CMYK, SRGB};
-use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{Appearance, ColorMode, Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
@@ -512,6 +512,103 @@ fn freeform_gradients_of_cmyk_points_are_written_as_cmyk_images() {
     let w = written(&export_with_report(&d, &opts(json!({"output": {"conversion": "destination", "destination": SRGB}}))).unwrap().bytes);
     assert_eq!(w.len(), 1, "{w:?}");
     assert_ne!(w[0].space, "DeviceCMYK", "converted to RGB");
+}
+
+/// A 100 × 100 pt document of `mode` whose square is filled with `g`, at one pixel a point.
+fn gradient_doc(mode: ColorMode, g: Gradient) -> Document {
+    let mut d = Document::new_with_mode(100.0, 100.0, mode);
+    d.raster_effects_ppi = 72.0;
+    let square = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)),
+        Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(g))), Paint::None, 0.0),
+    );
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, square).unwrap();
+    d
+}
+
+/// A gradient of `stops`, dithered or Perceptual.
+fn drawn_as_pixels(kind: GradientKind, stops: Vec<GradientStop>, dither: bool) -> Gradient {
+    let method = if dither { GradientMethod::Classic } else { GradientMethod::Perceptual };
+    Gradient { dither, method, ..Gradient::new(kind, stops) }
+}
+
+fn cyan_to_black() -> Vec<GradientStop> {
+    vec![GradientStop::new(0.0, Color::cmyk(1.0, 0.0, 0.0, 0.0)), GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 1.0))]
+}
+
+#[test]
+fn dithered_and_perceptual_gradients_of_cmyk_stops_are_written_as_cmyk_images() {
+    for mode in [ColorMode::Cmyk, ColorMode::Rgb] {
+        for kind in [GradientKind::Linear, GradientKind::Radial] {
+            for dither in [true, false] {
+                let d = gradient_doc(mode, drawn_as_pixels(kind, cyan_to_black(), dither));
+                let out = export_with_report(&d, &opts(json!({}))).unwrap();
+                let w = written(&out.bytes);
+                assert_eq!(w.len(), 1, "{mode:?} {kind:?} dither {dither}: opaque, no soft mask: {w:?}");
+                assert_eq!(w[0].space, "DeviceCMYK", "{mode:?} {kind:?} dither {dither}");
+                let back = import(&out.bytes).unwrap();
+                let inks = all_images(&back)[0].cmyk().unwrap();
+                assert_eq!((inks.width, inks.height), (100, 100));
+                assert!(inks.data.chunks(4).all(|p| p[1] == 0 && p[2] == 0), "{mode:?} {kind:?} dither {dither}: only cyan and black");
+                if kind == GradientKind::Linear {
+                    let row = &inks.data[50 * 400..51 * 400];
+                    assert!(close(&row[..4], &[254, 0, 0, 1], 3), "{mode:?} dither {dither}: {:?}", &row[..4]);
+                    assert!(close(&row[396..], &[1, 0, 0, 254], 3), "{mode:?} dither {dither}: {:?}", &row[396..]);
+                    if dither {
+                        assert!(close(&row[50 * 4..50 * 4 + 4], &[127, 0, 0, 128], 3), "{mode:?}: {:?}", &row[50 * 4..50 * 4 + 4]);
+                    }
+                }
+            }
+        }
+    }
+    // Opacity goes in a soft mask, and the inks stay.
+    let mut stops = cyan_to_black();
+    stops[1].opacity = 0.5;
+    let w = written(
+        &export_with_report(&gradient_doc(ColorMode::Cmyk, drawn_as_pixels(GradientKind::Linear, stops, true)), &opts(json!({}))).unwrap().bytes,
+    );
+    assert_eq!(w.len(), 2, "the image and its soft mask: {w:?}");
+    assert!(w.iter().any(|i| i.space == "DeviceCMYK") && w.iter().any(|i| i.space == "DeviceGray"), "{w:?}");
+    // The Output settings convert the inks like any CMYK image's.
+    let d = gradient_doc(ColorMode::Cmyk, drawn_as_pixels(GradientKind::Linear, cyan_to_black(), true));
+    let w = written(&export_with_report(&d, &opts(json!({"output": {"conversion": "destination", "destination": SRGB}}))).unwrap().bytes);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert_ne!(w[0].space, "DeviceCMYK", "converted to RGB");
+}
+
+/// A stop in another model, or linked to a spot swatch, keeps the RGB image.
+#[test]
+fn gradients_with_a_stop_that_is_not_process_cmyk_stay_rgb_images() {
+    let cyan = || GradientStop::new(0.0, Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    let others = [Color::rgb(1.0, 0.0, 0.0), Color::gray(0.5), Color::lab(50.0, 10.0, 10.0)];
+    for mode in [ColorMode::Cmyk, ColorMode::Rgb] {
+        for other in others {
+            for dither in [true, false] {
+                let d = gradient_doc(mode, drawn_as_pixels(GradientKind::Linear, vec![cyan(), GradientStop::new(1.0, other)], dither));
+                let w = written(&export_with_report(&d, &opts(json!({}))).unwrap().bytes);
+                assert_eq!(w.len(), 1, "{mode:?} {other:?}: {w:?}");
+                assert_eq!(w[0].space, "DeviceRGB", "{mode:?} {other:?} dither {dither}");
+            }
+        }
+    }
+    // A stop of a spot swatch whose color is CMYK: a dithered fill is an RGB image with a warning.
+    let gold = Color::cmyk(0.0, 0.2, 0.8, 0.1);
+    let mut stop = GradientStop::new(1.0, gold);
+    stop.swatch = Some("Gold".into());
+    let mut d = gradient_doc(ColorMode::Cmyk, drawn_as_pixels(GradientKind::Linear, vec![cyan(), stop.clone()], true));
+    d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(gold), global: true, spot: true });
+    let out = export_with_report(&d, &opts(json!({}))).unwrap();
+    let w = written(&out.bytes);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert_eq!(w[0].space, "DeviceRGB");
+    assert!(out.warnings.iter().any(|m| m.contains("written in process colors")), "{:?}", out.warnings);
+    // A stop of a global process swatch is written as its CMYK color.
+    let mut d = gradient_doc(ColorMode::Cmyk, drawn_as_pixels(GradientKind::Linear, vec![cyan(), stop], true));
+    d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(gold), global: true, spot: false });
+    let w = written(&export_with_report(&d, &opts(json!({}))).unwrap().bytes);
+    assert_eq!(w[0].space, "DeviceCMYK", "{w:?}");
 }
 
 #[test]
