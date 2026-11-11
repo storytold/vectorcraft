@@ -3859,6 +3859,8 @@ font-technology	Variable	Variable
 	Preferences	Præferencer
 	Previous	Forrige
 	Restore every preference to its default (applied on OK)	Gendan alle præferencer til standard (anvendes ved OK)
+	Reset all preferences to their defaults?	Nulstil alle præferencer til standard?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardværdierne anvendes, når du klikker på OK i Præferencer. Annullér der beholder dine nuværende præferencer.
 	Smaller ↔ Larger	Mindre ↔ Større
 	Smart Guides (View → Smart Guides)	Smarte hjælpelinjer (Vis → Smarte hjælpelinjer)
 	Couldn't save recovery data: {e}	Kunne ikke gemme gendannelsesdata: {e}

@@ -2859,6 +2859,8 @@ mark-style	Japanese	日本式
 	Restore	復元
 	Restore Recovered Documents	復帰したドキュメントを復元
 	Restore every preference to its default (applied on OK)	すべての環境設定を初期値に戻す (OK で適用)
+	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
 	Restrict printing, editing and other tasks	印刷、編集などの操作を制限
 	Reverse Gradient	グラデーションを反転

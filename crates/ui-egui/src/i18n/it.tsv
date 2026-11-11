@@ -2875,6 +2875,8 @@ digits	Malayalam	Malayalam
 	Responsive	Adattivo
 	Restore	Ripristina
 	Restore every preference to its default (applied on OK)	Ripristina tutte le preferenze ai valori predefiniti (applicato con OK)
+	Reset all preferences to their defaults?	Ripristinare tutte le preferenze ai valori predefiniti?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	I valori predefiniti vengono applicati quando fai clic su OK in Preferenze. Annulla lì mantiene le preferenze attuali.
 	Restore Recovered Documents	Ripristina documenti recuperati
 	Restored documents open unsaved: save them to keep them.	I documenti ripristinati si aprono senza essere salvati: salvali per conservarli.
 	Restrict printing, editing and other tasks	Limita la stampa, la modifica e altre operazioni

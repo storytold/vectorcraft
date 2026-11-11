@@ -3859,6 +3859,8 @@ font-technology	Variable	Variabel
 	Preferences	Preferensi
 	Previous	Sebelumnya
 	Restore every preference to its default (applied on OK)	Kembalikan semua preferensi ke defaultnya (diterapkan saat OK)
+	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
 	Smart Guides (View → Smart Guides)	Panduan pintar (Tampilan → Panduan pintar)
 	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}

@@ -221,23 +221,39 @@ pub(crate) fn len_param(p: &Value, key: &str) -> Option<f64> {
     }
 }
 
-/// The number `p` gives `cmd` for `key`, as [`num_param`] reads it, or `None` when `p` leaves it out
-/// or gives null. Any other value, such as `true` or `"wide"`, is an error: "`{key}` must be a
-/// number, not {v}".
+/// The number `p` gives `cmd` for `key`, or `None` when `p` leaves it out or gives null. A string
+/// counts only when all of it is a number (`"20"`). Any other value, such as `true`, `"wide"` or
+/// `"20abc"`, is an error: "`{key}` must be a number, not {v}".
 pub(crate) fn number_given(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
     match p.get(key) {
         None | Some(Value::Null) => Ok(None),
-        Some(v) => num_param(p, key).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
+        Some(v) => match v {
+            Value::String(s) => whole_number(s),
+            _ => num_param(p, key),
+        }
+        .map(Some)
+        .ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
     }
 }
 
-/// The distance `p` gives `cmd` for `key`, as [`len_param`] reads it (`"5 mm"` included), or `None`
-/// when `p` leaves it out or gives null. Any other value is an error, as [`number_given`] gives it.
+/// The distance `p` gives `cmd` for `key`, or `None` when `p` leaves it out or gives null. A string
+/// counts only when all of it is a length that [`vectorcraft_doc::Unit::parse`] reads (`"5 mm"`) or a
+/// number. Any other value, such as `"20abc"`, is an error, as [`number_given`] gives it.
 pub(crate) fn length_given(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
     match p.get(key) {
         None | Some(Value::Null) => Ok(None),
-        Some(v) => len_param(p, key).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
+        Some(v) => match v {
+            Value::String(s) => vectorcraft_doc::Unit::Points.parse(s).filter(|v| v.is_finite()).or_else(|| whole_number(s)),
+            _ => num_param(p, key),
+        }
+        .map(Some)
+        .ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
     }
+}
+
+/// `s` as a finite number when all of it, spaces around it aside, is one.
+fn whole_number(s: &str) -> Option<f64> {
+    s.trim().parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 fn ids_json(ids: &[NodeId]) -> Value {

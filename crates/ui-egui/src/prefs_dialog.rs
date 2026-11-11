@@ -426,13 +426,6 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
     });
-    if reset {
-        for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
-            d.fields.insert(k, v);
-        }
-        // OK resets the Units ▸ General preference and leaves the open document's units alone.
-        d.fields.insert(RESET_UNITS.into(), d.fields.get("unitsGeneral").cloned().unwrap_or(Value::Null));
-    }
     if let Some(v) = d.fields.get("unitsGeneral").cloned() {
         note_set(&mut d, "unitsGeneral", &v);
     }
@@ -447,7 +440,21 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.dialog = None;
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
+    } else if reset && !ok {
+        crate::dialogs::confirm::ask_reset_prefs(app);
     }
+}
+
+/// Reset Preferences, once its question is confirmed: every preference in the Preferences dialog
+/// `d` takes its default value. The category, the search and the UI-only rows stay as they were;
+/// nothing is applied until OK, which leaves the open document's units alone unless Units ›
+/// General is changed after the reset.
+pub(crate) fn reset_fields(d: &mut Dialog) {
+    for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
+        d.fields.insert(k, v);
+    }
+    // OK resets the Units ▸ General preference and leaves the open document's units alone.
+    d.fields.insert(RESET_UNITS.into(), d.fields.get("unitsGeneral").cloned().unwrap_or(Value::Null));
 }
 
 fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, cat: &str) {

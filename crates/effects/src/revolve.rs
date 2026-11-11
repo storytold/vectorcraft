@@ -463,22 +463,19 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
 
 /// The members' `surfaces`, or runs of their faces, in order, from the [`Scope`] at `level` of each
 /// one's `Profile::scopes` inward: consecutive surfaces that share a scope go in one group with its
-/// opacity and blending mode, so each applies once, to the faces it holds together.
-fn scoped(id: NodeId, surfaces: Vec<(&[Scope], Arc<Node>)>, level: usize) -> Vec<Arc<Node>> {
-    fn close(id: NodeId, run: &mut Vec<(&[Scope], Arc<Node>)>, scope: Option<Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
+/// opacity, blending mode and opacity mask, so each applies once, to the faces it holds together.
+pub(crate) fn scoped<'a>(id: NodeId, surfaces: Vec<(&'a [Scope], Arc<Node>)>, level: usize) -> Vec<Arc<Node>> {
+    fn close(id: NodeId, run: &mut Vec<(&[Scope], Arc<Node>)>, scope: Option<&Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
         if let Some(scope) = scope {
-            let mut group = Node::group(id, scoped(id, std::mem::take(run), level + 1));
-            group.opacity = scope.opacity;
-            group.blend = scope.blend;
-            out.push(Arc::new(group));
+            out.push(Arc::new(scope.group(id, scoped(id, std::mem::take(run), level + 1))));
         }
     }
     let mut out = vec![];
     let mut run = vec![];
-    let mut scope = None;
+    let mut scope: Option<&'a Scope> = None;
     for (scopes, s) in surfaces {
-        let at = scopes.get(level).copied();
-        if at.map(|a| a.key) != scope.map(|s: Scope| s.key) {
+        let at = scopes.get(level);
+        if at.map(|a| a.key) != scope.map(|s| s.key) {
             close(id, &mut run, scope, level, &mut out);
             scope = at;
         }

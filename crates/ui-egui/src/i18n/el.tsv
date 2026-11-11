@@ -3424,6 +3424,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reshape Type Area	Αναδιαμόρφωση περιοχής κειμένου
 	Responsive	Αποκρινόμενο
 	Restore every preference to its default (applied on OK)	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους (εφαρμογή με το Εντάξει)
+	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Οι προεπιλογές εφαρμόζονται όταν κάνετε κλικ στο Εντάξει στις Προτιμήσεις. Το Ακύρωση εκεί διατηρεί τις τρέχουσες προτιμήσεις σας.
 	Restore Recovered Documents	Επαναφορά ανακτημένων εγγράφων
 	Restored documents open unsaved: save them to keep them.	Τα ανακτημένα έγγραφα ανοίγουν χωρίς να είναι αποθηκευμένα: αποθηκεύστε τα για να τα διατηρήσετε.
 	Restrict printing, editing and other tasks	Περιορισμός εκτύπωσης, επεξεργασίας και άλλων ενεργειών

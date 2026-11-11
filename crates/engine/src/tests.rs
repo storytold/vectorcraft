@@ -3244,12 +3244,214 @@ fn reshape_falloff_follows_arc_length_on_open_paths() {
             .as_u64()
             .unwrap(),
     );
-    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 0.0, "dx": 0.0, "dy": 100.0, "radius": 250.0})).unwrap();
     let pts: Vec<_> = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect();
     assert!((pts[3].y - 100.0).abs() < 1e-6, "grabbed end moves full delta: {pts:?}");
     assert!(pts[0].y.abs() < 1e-6, "far end stays put: {pts:?}");
     assert!(pts[2].y > 1.0 && pts[2].y < 100.0, "mid-anchor moves partially: {pts:?}");
     assert!(pts[1].y < pts[2].y, "nearer anchors move more: {pts:?}");
+}
+
+/// An open path for the Reshape tests.
+fn reshape_open_path(s: &mut Session, anchors: Value) -> NodeId {
+    NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].as_u64().unwrap())
+}
+
+/// The anchors of the path's first subpath.
+fn reshape_anchors(s: &Session, id: NodeId) -> Vec<vectorcraft_geom::Anchor> {
+    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.clone()
+}
+
+/// The share of the drag an anchor takes at `u` of the way from an end to the grabbed point.
+fn reshape_share(u: f64) -> f64 {
+    u * u * (3.0 - 2.0 * u)
+}
+
+/// Six anchors 100 apart along a zigzag 300 wide and 80 high.
+fn reshape_zigzag() -> Value {
+    json!([{"x": 0, "y": 0}, {"x": 60, "y": 80}, {"x": 120, "y": 0}, {"x": 180, "y": 80}, {"x": 240, "y": 0}, {"x": 300, "y": 80}])
+}
+
+#[test]
+fn reshape_of_an_end_stretches_an_open_path_to_its_other_end() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    let before = reshape_anchors(&s, id);
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 20.0, "dy": 50.0})).unwrap();
+    let after = reshape_anchors(&s, id);
+    assert_eq!(after.len(), 6);
+    let moved: Vec<vectorcraft_geom::Vec2> = after.iter().zip(&before).map(|(a, b)| a.p - b.p).collect();
+    assert_eq!(moved[0], vectorcraft_geom::Vec2::ZERO, "the other end stays in place: {moved:?}");
+    for (i, m) in moved.iter().enumerate() {
+        let share = reshape_share(i as f64 / 5.0);
+        assert!((m.x - 20.0 * share).abs() < 1e-9 && (m.y - 50.0 * share).abs() < 1e-9, "anchor {i} takes {share} of the drag: {moved:?}");
+    }
+    assert!(moved.windows(2).all(|w| w[0].y < w[1].y), "each anchor moves less than the one after it: {moved:?}");
+    // The path has no handles, and gets none.
+    assert!(after.iter().all(|a| a.h_in == a.p && a.h_out == a.p), "{after:?}");
+}
+
+#[test]
+fn reshape_of_a_middle_anchor_leaves_both_ends_of_an_open_path_in_place() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0}, {"x": 30, "y": 0}, {"x": 200, "y": 0}, {"x": 230, "y": 0}, {"x": 400, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(y.len(), 5, "the grab was on an anchor, so none is added");
+    assert_eq!((y[0], y[2], y[4]), (0.0, 100.0, 0.0), "{y:?}");
+    // Each side is measured from its own end: 30 of 200 on the left, 170 of 200 on the right.
+    assert!((y[1] - 100.0 * reshape_share(0.15)).abs() < 1e-9, "{y:?}");
+    assert!((y[3] - 100.0 * reshape_share(0.85)).abs() < 1e-9, "{y:?}");
+}
+
+#[test]
+fn reshape_keeps_the_handles_of_a_smooth_anchor_in_line() {
+    let mut s = session();
+    let id = reshape_open_path(
+        &mut s,
+        json!([
+            {"x": 0, "y": 0, "out": [40, 0]},
+            {"x": 100, "y": 0, "in": [60, 0], "out": [140, 0], "smooth": true},
+            {"x": 200, "y": 0, "in": [160, 0]}
+        ]),
+    );
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    // The control polygon is 200 long and the middle anchor is halfway: it takes half the drag,
+    // and its handles, 40 either side, take 0.2 and 0.8 of it.
+    assert!((a[1].p.y - 50.0).abs() < 1e-9 && (a[1].h_in.y - 20.0).abs() < 1e-9 && (a[1].h_out.y - 80.0).abs() < 1e-9, "{a:?}");
+    let (to_in, to_out) = (a[1].h_in - a[1].p, a[1].h_out - a[1].p);
+    assert!(to_in.cross(to_out).abs() < 1e-9 && to_in.dot(to_out) < 0.0, "the handles stay opposite each other: {a:?}");
+    // The end that stays keeps its handle, and the grabbed end's handle moves with it.
+    assert_eq!((a[0].p, a[0].h_out), (Point::new(0.0, 0.0), Point::new(40.0, 0.0)));
+    assert_eq!((a[2].p, a[2].h_in), (Point::new(200.0, 100.0), Point::new(160.0, 100.0)));
+}
+
+/// A `radius` still bounds the reach on an open path, as it did before the path stretched to its ends.
+#[test]
+fn reshape_with_a_radius_moves_only_the_anchors_within_it() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 0.0, "dy": 50.0, "radius": 150.0})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(&y[..4], &[0.0, 80.0, 0.0, 80.0], "anchors 200 or more along the path stay: {y:?}");
+    assert!(y[4] > 0.0 && y[4] < 50.0 && y[5] == 130.0, "{y:?}");
+}
+
+#[test]
+fn reshape_measures_an_open_path_along_its_control_polygon() {
+    let mut s = session();
+    // The first segment's control polygon is 60 + 100 + 60 long, its chord 100 and its arc 150 to
+    // 160; the second segment is a line 100 long.
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0, "out": [0, 60]}, {"x": 100, "y": 0, "in": [100, 60]}, {"x": 200, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    let u: f64 = 220.0 / 320.0;
+    assert!((a[1].p.y - 100.0 * reshape_share(u)).abs() < 1e-9, "{a:?}");
+    // The in handle lies 160 along the polygon, and takes the share on the tangent line at its anchor.
+    let handle = reshape_share(u) + 6.0 * u * (1.0 - u) * (160.0 / 320.0 - u);
+    assert!((a[1].h_in.y - 60.0 - 100.0 * handle).abs() < 1e-9, "{a:?}");
+    // The end that stays keeps its handle.
+    assert_eq!((a[0].p, a[0].h_out), (Point::new(0.0, 0.0), Point::new(0.0, 60.0)));
+}
+
+#[test]
+fn reshape_of_a_point_on_a_segment_stretches_an_open_path_from_the_new_anchor() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 200, "y": 0}, {"x": 300, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 250.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let p: Vec<Point> = reshape_anchors(&s, id).iter().map(|a| a.p).collect();
+    assert_eq!(p.len(), 5, "the grab adds an anchor: {p:?}");
+    assert_eq!((p[0], p[3], p[4]), (Point::new(0.0, 0.0), Point::new(250.0, 100.0), Point::new(300.0, 0.0)), "{p:?}");
+    assert!((p[1].y - 100.0 * reshape_share(0.4)).abs() < 1e-9 && (p[2].y - 100.0 * reshape_share(0.8)).abs() < 1e-9, "{p:?}");
+}
+
+#[test]
+fn reshape_of_an_end_of_a_two_anchor_path_moves_only_that_end() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0, "out": [30, 0]}, {"x": 100, "y": 0, "in": [70, 0]}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 100.0, "y": 0.0, "dx": 10.0, "dy": 50.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    assert_eq!((a[0].p, a[0].h_out), (Point::new(0.0, 0.0), Point::new(30.0, 0.0)));
+    assert_eq!((a[1].p, a[1].h_in), (Point::new(110.0, 50.0), Point::new(80.0, 50.0)));
+}
+
+#[test]
+fn reshape_keeps_smooth_anchors_on_both_sides_of_the_grabbed_one_in_line() {
+    let mut s = session();
+    // Smooth anchors with handles of unequal length, on a curve, before and after the grabbed anchor.
+    let id = reshape_open_path(
+        &mut s,
+        json!([
+            {"x": 0, "y": 0},
+            {"x": 100, "y": 50, "in": [80, 40], "out": [160, 80], "smooth": true},
+            {"x": 250, "y": 0, "in": [220, 0], "out": [290, 0], "smooth": true},
+            {"x": 400, "y": 60, "in": [340, 90], "out": [420, 50], "smooth": true},
+            {"x": 500, "y": 0}
+        ]),
+    );
+    let before = reshape_anchors(&s, id);
+    s.execute("path.reshape", &json!({"id": id.0, "x": 250.0, "y": 0.0, "dx": 35.0, "dy": -80.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    let drag = vectorcraft_geom::Vec2::new(35.0, -80.0);
+    assert_eq!((a[2].p - before[2].p, a[2].h_in - before[2].h_in, a[2].h_out - before[2].h_out), (drag, drag, drag));
+    for i in [1, 3] {
+        let (to_in, to_out) = (a[i].h_in - a[i].p, a[i].h_out - a[i].p);
+        assert!(to_in.cross(to_out).abs() < 1e-9 && to_in.dot(to_out) < 0.0, "anchor {i}'s handles stay opposite each other: {a:?}");
+        let moved = a[i].p - before[i].p;
+        assert!(
+            moved.cross(drag).abs() < 1e-9 && moved.hypot() > 1.0 && moved.hypot() < drag.hypot() - 1.0,
+            "anchor {i} takes part of the drag: {a:?}"
+        );
+        // The handle on the grabbed anchor's side moves farther than its anchor, and the other one less.
+        let (h_in, h_out) = ((a[i].h_in - before[i].h_in).hypot(), (a[i].h_out - before[i].h_out).hypot());
+        let (nearer, farther) = if i == 1 { (h_out, h_in) } else { (h_in, h_out) };
+        assert!(nearer > moved.hypot() + 1.0 && farther < moved.hypot() - 1.0, "anchor {i}: {a:?}");
+    }
+    assert_eq!((a[0].p, a[4].p), (before[0].p, before[4].p));
+}
+
+#[test]
+fn reshape_moves_a_long_handle_against_the_drag_to_keep_its_anchor_smooth() {
+    let mut s = session();
+    let id =
+        reshape_open_path(&mut s, json!([{"x": 0, "y": 0}, {"x": 100, "y": 0, "in": [10, 0], "out": [190, 0], "smooth": true}, {"x": 400, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 400.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    // The anchor is a quarter of the way along and takes 0.15625 of the drag. The tangent line
+    // there has slope 1.125, and each handle lies 0.225 of the way from the anchor: the in handle
+    // takes 0.15625 - 0.253125, a share below 0, and the out handle 0.15625 + 0.253125.
+    assert!((a[1].p.y - 15.625).abs() < 1e-9 && (a[1].h_in.y + 9.6875).abs() < 1e-9 && (a[1].h_out.y - 40.9375).abs() < 1e-9, "{a:?}");
+    let (to_in, to_out) = (a[1].h_in - a[1].p, a[1].h_out - a[1].p);
+    assert!(to_in.cross(to_out).abs() < 1e-9 && to_in.dot(to_out) < 0.0, "the handles stay opposite each other: {a:?}");
+}
+
+#[test]
+fn reshape_refuses_a_negative_radius() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    let before = reshape_anchors(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    let e = s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 0.0, "dy": 50.0, "radius": -50.0})).unwrap_err();
+    assert!(e.to_string().contains("`radius` must be 0 or more"), "{e}");
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+#[test]
+fn reshape_by_no_distance_on_an_anchor_records_no_undo_step() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    let before = reshape_anchors(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    for params in [json!({"id": id.0, "x": 300.0, "y": 80.0}), json!({"id": id.0, "x": 120.0, "y": 0.0, "dx": 0.0, "dy": 0.0, "radius": 40.0})] {
+        s.execute("path.reshape", &params).unwrap();
+    }
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // A drag that moves the anchor is still one step.
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 0.0, "dy": 1.0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
 }
 
 #[test]

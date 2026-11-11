@@ -2646,6 +2646,8 @@ digits	Malayalam	Malayalam
 	Responsive	duyarlı
 	Restore	Geri yükle
 	Restore every preference to its default (applied on OK)	Her tercihi varsayılana geri yükleyin (Tamam'a uygulanır)
+	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle
 	Restored documents open unsaved: save them to keep them.	Geri yüklenen belgeler kaydedilmeden açılır: saklamak için kaydedin.
 	Restrict printing, editing and other tasks	Yazdırmayı, düzenlemeyi ve diğer görevleri kısıtlayın

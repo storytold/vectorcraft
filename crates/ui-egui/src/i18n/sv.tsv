@@ -2777,6 +2777,8 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Återställ
 	Restore every preference to its default (applied on OK)	Återställ alla inställningar till standard (verkställs vid OK)
+	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument
 	Restored documents open unsaved: save them to keep them.	Återställda dokument öppnas osparade: spara dem för att behålla dem.
 	Restrict printing, editing and other tasks	Begränsa utskrift, redigering och andra åtgärder

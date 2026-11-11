@@ -1371,7 +1371,7 @@ naming the key, and change nothing: `radius` in `shape.rectangle`; `sides` and `
 in `shape.flare`; `decay` and `segments` in `shape.spiral`; `rows` and `columns` in `shape.rectangularGrid`; `concentric`
 and `radial` in `shape.polarGrid`; `size` and the `width`, `height` and `fitMinPercent` of `area` in `text.create`;
 `size` and `fitMinPercent` in `text.createInPath`; `start`, `end`, `size`, `tracking`,
-`baselineShift`, `hScale`, `vScale`, `rotation` and `strokeWidth` in `text.setRangeStyle`; `start` and `end` in
+`baselineShift`, `hScale`, `vScale`, `rotation` and `strokeWidth` in `text.setRangeStyle`; `strokeWidth` in `text.setStyle`; `start` and `end` in
 `text.editRange` and `text.getRange`; `at` in `text.startList`; `start`, `hScale`, `vScale` and `rotation` in `text.touchType`; `start` in
 `text.glyphAlternates` and `text.setGlyphAlternate`; `by`, `start` and
 `end` in `type.step`; `by` in `type.size.increase` and `type.size.decrease`; `size` in `type.ruby`; `width`, `height`
@@ -1382,6 +1382,15 @@ and `amount` in `color.harmony`; `angle` in `paint.editGradient` and in the `gra
 `paint.freeform.splitLine`; `tolerance` and `gap` in `shapeBuilder.merge`; `gap` in `shapeBuilder.regions`; and
 `width` and `tolerance` in `livePaint.strokeEdge`. A null is read as a key left out. A gradient stop that names a
 swatch refuses a `tint` that is not a number with `` stop 0: `tint` must be a number ``.
+
+`text.setStyle` refuses a `size` that is neither a number nor a length with a unit (`"12 pt"`, `"5 mm"`) with
+`` `size` must be a number, not true ``, and a `tracking` that is neither a number nor a number written as a string
+(`"20"`) with `` `tracking` must be a number, not false ``. It and `text.setRangeStyle` refuse a `font` or `style` that is not a string
+with `` `font` must be a string ``, and a `features` list with an entry that is not a string with
+`features must be a list of tags`; `text.setStyle` refuses such a `justify` too. `type.ruby` refuses a `text`,
+`position` or `align` that is not a string, and `text.setPathHandle` refuses a `which` other than `in` or `out` with
+`` `which` must be one of in, out ``. Each leaves the document, the selection and the undo history as they were, also
+when the call gives another param it could apply. A null is read as a key left out.
 
 A byte offset must be a whole number of at least 0. `at` in `text.startList`, and `start` and `end` in
 `text.editRange`, `text.getRange` and `text.setRangeStyle`, and in `type.step` and `addon.type.textTweaker` given an `id`,
@@ -2650,7 +2659,8 @@ Every 3D type, `threeD.classicExtrude` and `threeD.revolve` included, also appli
 symbol instance, alone or in a group, and builds from the art it shows, the same way for the canvas, exports and
 `assets.add3D` ([three-d.md](three-d.md#clipping-groups-blends-and-symbol-instances)); like a group, it takes the
 effect on the object itself, not on a fill or stroke. An image, alone or in a group, is refused with "trace it first
-with Object › Image Trace › Make", and nothing changes.
+with Object › Image Trace › Make", and nothing changes. On a group, an opacity mask on a member, or on a group inside
+it, masks that member's solids ([three-d.md](three-d.md#groups)).
 
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
@@ -3665,6 +3675,22 @@ the canvas (coordinates out of range)".
 is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `subpath`"); `path.split` refuses such
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
 
+`path.reshape {id, x, y, dx, dy, tol?, radius?}` (a Reshape tool drag) grabs the path at `x`, `y`, adding an anchor
+there unless one lies within `tol` (3 by default), and moves that point by `dx`, `dy`.
+[Adjust path segments](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/adjust-path-segments.html)
+has the Reshape tool stretch part of a path from the dragged point without losing the path's general form. How far
+the stretch reaches and the share of the drag each point takes are VectorCraft's own rule. An open path stretches from
+the grabbed point to its two ends: the two end anchors stay in place, and each anchor between an end and the grabbed
+point takes `u² (3 - 2u)` of the drag, where `u` is its distance from that end along the path's control polygon
+(anchor, out handle, the next in handle, the next anchor) divided by the grabbed point's distance from that end. A
+handle takes the share on the tangent line of that curve at its anchor, so the handles of a smooth anchor stay in line
+with it; a handle that is long beside the distance from the end to the grabbed point takes a share below 0 or above 1,
+and moves against the drag or farther than the grabbed point. On a closed path, or when `radius` is given, the anchors
+within `radius` of the grabbed point along the path follow with a smooth falloff and the others stay; `radius`
+defaults to half the diagonal of the subpath's bounding box, and a negative `radius` is refused ("`radius` must be 0
+or more"). A drag of no length on an anchor (`dx` and `dy` 0 or left out) leaves the path as it is and records no undo
+step.
+
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
 naming the key; the document does not change and no undo step is recorded: `t`, `dx` and `dy` in
 `path.reshapeSegment` and `object.blend.spine.reshapeSegment`; `x`, `y` and `t` in `path.curvatureEdit`; `x` and `y`
@@ -4574,7 +4600,10 @@ a string with a unit. Unit names: `Points`, `Picas`, `Inches`, `Millimeters`, `C
 settings whose label, section or category contains it, ignoring case, in the interface language or in English, or by
 "No settings found". Choosing a setting sets `__category` to its category, sets `__found` to its key (the row is
 highlighted until another category is shown) and clears `__search`. Cmd/Ctrl+F focuses the field again; Escape in the
-field with text clears it, and Escape in the empty field closes the dialog.
+field with text clears it, and Escape in the empty field closes the dialog. Its Reset Preferences button opens a
+`resetPreferences` question (fields `message`, `detail`) over Preferences: `ui.dialog.cancel` shows Preferences again
+as it was, and `ui.dialog.confirm` shows it again with every preference at its default value, applied by OK in
+Preferences. `prefs.reset` resets the preferences at once, without the question.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
@@ -7536,8 +7565,12 @@ bounding-box handles scale it in plane space (`perspective.transform`; Shift kee
 centre), and `press_key` `5` during a drag switches the move to perpendicular to the plane (press again to switch
 back). Holding Shift during an in-plane move constrains each object's displacement to an axis or 45° diagonal of its
 own plane. `perspective.move` accepts `constrain: true` (default false) and adjusts Snap to Grid along the constrained
-direction on the first object's plane and depth. With Snap to Grid, every object on the first object's plane moves
-by the same plane offset, whatever its depth, and the edge of their joint bounds nearer a gridline lands on it.
+direction on the first object's plane and depth. With Snap to Grid, an in-plane move moves every object on the first
+object's plane by the same plane offset, whatever its depth. Without `constrain`, on each axis, the edge of their joint
+bounds nearer a gridline lands on it when that edge ends within a quarter cell of the gridline. With `constrain`, an
+edge also lands only when it ends within a quarter cell of a gridline: a horizontal or vertical move can land only an
+edge on its own axis, and a 45° move lands the edge on the axis whose nonzero correction is smaller. When no edge on
+those axes is that close, the move does not snap. A perpendicular move does not snap.
 `press_key` Escape during a move, a resize or a plane widget drag cancels it and puts the objects and the
 grid back. The arrow keys nudge a selection in perspective by the keyboard increment (`perspective.nudge`; Shift ×10, Alt
 copies). Object › Transform › Transform Again repeats the last perspective move or scale in plane space.

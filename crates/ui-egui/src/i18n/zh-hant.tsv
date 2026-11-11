@@ -3800,6 +3800,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Responsive	回應式
 	Restore	還原
 	Restore every preference to its default (applied on OK)	將所有偏好設定還原為預設值 (按下確定後套用)
+	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在偏好設定中按下確定後才會套用預設值。在那裡按下取消會保留目前的偏好設定。
 	Restore Recovered Documents	還原找回的文件
 	Restored documents open unsaved: save them to keep them.	還原的文件會以未儲存狀態開啟：請儲存以保留。
 	Restrict printing, editing and other tasks	限制列印、編輯及其他操作

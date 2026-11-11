@@ -2848,6 +2848,8 @@ mark-style	Japanese	일본식
 	Restore	복원
 	Restore Recovered Documents	복구된 문서 복원
 	Restore every preference to its default (applied on OK)	모든 환경 설정을 기본값으로 복원(확인 시 적용)
+	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
 	Restrict printing, editing and other tasks	인쇄, 편집 등의 작업 제한
 	Reverse Gradient	그레이디언트 반전
