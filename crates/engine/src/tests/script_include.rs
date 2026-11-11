@@ -304,6 +304,13 @@ fn script_included_error_has_local_file_and_line() {
     assert!(report.get("file").is_none(), "{report}");
     let report = failed(&base, "#include \"five.jsxinc\"\nvar = 1;");
     assert_eq!((report["kind"].as_str(), report["line"].as_u64()), (Some("syntax"), Some(2)), "{report}");
+    // An included file that ends in a carriage return does not join the script's next line ending.
+    write(&base.join("main/cr.jsxinc"), "1;\r2;\r");
+    let report = failed(&base, "#include \"cr.jsxinc\"\n\n  throw new Error('after');");
+    assert_eq!((report["line"].as_u64(), report["column"].as_u64()), (Some(3), Some(3)), "{report}");
+    assert!(report.get("file").is_none(), "{report}");
+    let report = failed(&base, "#include \"cr.jsxinc\"\r\nvar = 1;");
+    assert_eq!((report["kind"].as_str(), report["line"].as_u64()), (Some("syntax"), Some(2)), "{report}");
     // An uncaught error in a file $.evalFile ran is at that file's line.
     let report = failed(&base, "var a = 1;\n$.evalFile('sub/thrower.jsx');");
     assert_eq!(report["line"], 3, "{report}");
