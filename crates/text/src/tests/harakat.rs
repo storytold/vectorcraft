@@ -171,6 +171,7 @@ fn paint_only_keeps_every_nonpaint_attribute_and_partial_equality() {
         b.stroke_dash = a.stroke_dash.clone();
         b.stroke_align = a.stroke_align;
         b.style_name = a.style_name.clone();
+        b.kerning_before = a.kerning_before;
         *a == b
     }
 
@@ -203,6 +204,7 @@ fn paint_only_keeps_every_nonpaint_attribute_and_partial_equality() {
     field!(leading, Some(60.0), false);
     field!(tracking, 20.0, false);
     field!(kerning, Some(0.0), false);
+    field!(kerning_before, 250.0, true);
     field!(optical_kerning, true, false);
     field!(baseline_shift, 1.0, false);
     field!(h_scale, 90.0, false);
@@ -312,6 +314,26 @@ fn harakat_ranges_normalise_their_range() {
 /// the same way, and only a character in that glyph's shaping cluster: repeated glyph ids alone
 /// don't do. A later in-cluster owner is kept only for a GDEF mark glyph on a harakat character;
 /// everything else stays at the cluster start (conservative).
+/// A space before the line's first letter (#5111), set on the letter alone as the Type tool's caret
+/// sets it, keeps the letter's harakat coloured apart attached and in their own colour. Right to
+/// left the space is past the letter's right side, so every glyph stays where it was.
+#[test]
+fn a_space_before_the_first_letter_keeps_its_coloured_harakat() {
+    let Some(face) = arabic_face("a_space_before_the_first_letter_keeps_its_coloured_harakat") else {
+        return;
+    };
+    const WORD: &str = "بَبَب"; // ب 0, fatha 2, ب 4, fatha 6, ب 8
+    let db = FontDb::global();
+    let coloured = text_with_harakat(WORD, &face.family, Some(red()));
+    let mut spaced = coloured.clone();
+    crate::edit::style_range(&mut spaced.runs, 0, 2, |st| st.kerning_before = 250.0);
+    let (a, b) = (layout(db, &coloured), layout(db, &spaced));
+    let placed = |l: &TextLayout| l.glyphs.iter().map(|g| (g.font_id, g.gid, g.byte, g.xf.as_coeffs().map(f64::to_bits))).collect::<Vec<_>>();
+    assert_eq!(placed(&a), placed(&b), "the same glyphs where they were");
+    assert_eq!(painted(&spaced, &b, &red()), painted(&coloured, &a, &red()), "the harakat keep their colour");
+    assert!(painted(&spaced, &b, &red()) > 0, "harakat painted apart");
+}
+
 #[test]
 fn own_chars_need_the_same_setting_and_each_character_in_its_cluster() {
     // بَبَب right to left: final beh (cluster 8), fatha and medial beh (cluster 4), fatha and

@@ -38,7 +38,8 @@ pub(crate) fn is_harakat(c: char) -> bool {
 
 /// Do character styles `a` and `b` differ, if at all, only in paint: fill, stroke and how the
 /// stroke is drawn, overprint, and the character style name? Those are not read by the shaper
-/// and change no glyph, advance or position. Stricter than [`crate::shape`]'s `shapes_alike`
+/// and change no glyph, advance or position. Nor is the space before a line's first character
+/// inside a cluster, which takes it from its first character (#5111), so it is ignored too. Stricter than [`crate::shape`]'s `shapes_alike`
 /// (which also ignores baseline shift, tracking, underline, …).
 pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
     // Exhaustive: a new attribute must explicitly keep or relax this boundary rule.
@@ -51,7 +52,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         leading,
         tracking,
         kerning,
-        kerning_before,
+        kerning_before: _,
         optical_kerning,
         baseline_shift,
         h_scale,
@@ -101,7 +102,6 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         && leading == &b.leading
         && tracking == &b.tracking
         && kerning == &b.kerning
-        && kerning_before == &b.kerning_before
         && optical_kerning == &b.optical_kerning
         && baseline_shift == &b.baseline_shift
         && h_scale == &b.h_scale
