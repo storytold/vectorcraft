@@ -112,10 +112,12 @@ impl Gen<'_> {
         let start = if middle { Point::new(at.x, at.y - half) } else { at };
         let mut t = self.text_object(role, start, &s.replace('|', "\n"), justify);
         // Kept leading or paragraph spacing moves the lines: put the middle of the first and last baselines on `at`. An
-        // empty first or last line has no baseline, and such a label stays where the default leading puts it.
+        // empty line has no baseline: an empty first or last line leaves the label where the default leading puts it.
         if middle && kept_para(self.styles, role).is_some() {
             let ys: Vec<f64> = t.baselines().map(|(a, _)| a.y).collect();
-            if let (Some(first), Some(last), true) = (ys.first(), ys.last(), ys.len() == lines) {
+            let ends_set = s.split('|').next().is_some_and(|l| !l.is_empty()) && s.split('|').next_back().is_some_and(|l| !l.is_empty());
+            let set = s.split('|').filter(|l| !l.is_empty()).count();
+            if let (Some(first), Some(last), true) = (ys.first(), ys.last(), ends_set && ys.len() == set) {
                 t.xf = Affine::translate((0.0, half - (first + last) / 2.0)) * t.xf;
             }
         }

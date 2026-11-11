@@ -690,7 +690,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G6 Automation and scripting
 
-- **Missing:** the document object model for scripts and script directives (#1183 is
+- **Missing:** the document object model for scripts and the `#targetengine` and `#engine` script directives (#1183 is
   open). File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry,
   File › Scripts lists the scripts of the Scripts folder, and
   Window › Script Console shows their output, errors and run reports. Actions, Batch, Variables (text, visibility, image and graph), data set CSV import and
