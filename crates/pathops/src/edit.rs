@@ -146,8 +146,9 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
             // ends and those lines enclose an area: with straight lines they are the result, and without
             // them the loop stays as it is. When no split within those limits encloses an area, the loop
             // stays as it is, or with straight lines each curved segment becomes the lines between its
-            // samples, up to `MAX_RUN_RESULT` lines in all. A loop whose points are all in line keeps the
-            // lines of the refit.
+            // samples, up to `MAX_RUN_RESULT` lines in all with the line segments; when that leaves no
+            // line for some curved segment, the loop stays as it is. A loop whose points are all in line
+            // keeps the lines of the refit.
             let near = |c: &CubicBez| [c.p1, c.p2].iter().all(|&p| Line::new(c.p0, c.p3).nearest(p, 1e-9).distance_sq.sqrt() <= opts.tolerance);
             let curved = segs.iter().filter(|s| !s.line).count();
             for k in 1..=10u32 {
@@ -174,7 +175,9 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
             if !opts.straight_lines {
                 return Some(sp.clone());
             }
-            let room = (MAX_RUN_RESULT / curved.max(1)).min(MAX_SEGMENT_SAMPLES);
+            let Some(room) = sample_room(curved, n - curved) else {
+                return Some(sp.clone());
+            };
             let mut lines: Vec<Seg> = Vec::new();
             for s in &segs {
                 if s.line {
@@ -190,6 +193,17 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     }
     let s = segs_to_subpath(&result, sp.closed)?;
     Some(if opts.straight_lines { s } else { no_worse(sp, s) })
+}
+
+/// Most lines between samples of each of `curved` segments, so that they and the `kept` line segments
+/// make at most [`MAX_RUN_RESULT`] lines, and each has at most [`MAX_SEGMENT_SAMPLES`]. `None` when
+/// that leaves no line for some curved segment.
+fn sample_room(curved: usize, kept: usize) -> Option<usize> {
+    let left = MAX_RUN_RESULT.checked_sub(kept)?;
+    if curved > left {
+        return None;
+    }
+    Some((left / curved.max(1)).min(MAX_SEGMENT_SAMPLES))
 }
 
 /// How far a segment may be from the lines between its samples, as a share of the tolerance.
@@ -1154,6 +1168,18 @@ mod tests {
         let mut work = 0;
         smooth_points_counted(&pts, 1000.0, &mut work);
         assert!(work <= 400 * pts.len(), "{work} steps for {} samples", pts.len());
+    }
+
+    #[test]
+    fn the_samples_of_a_flat_loop_and_its_line_segments_stay_within_the_result_limit() {
+        for (curved, kept) in [(1, 0), (32, 1), (40, 1_000_000), (1_000, MAX_RUN_RESULT - 1_000), (3, MAX_RUN_RESULT - 7)] {
+            let room = sample_room(curved, kept).unwrap_or_else(|| panic!("{curved} curved, {kept} kept: no room"));
+            assert!((1..=MAX_SEGMENT_SAMPLES).contains(&room), "{curved} curved, {kept} kept: room {room}");
+            assert!(curved * room + kept <= MAX_RUN_RESULT, "{curved} curved, {kept} kept: room {room}");
+        }
+        assert_eq!(sample_room(32, 0), Some(MAX_SEGMENT_SAMPLES));
+        assert_eq!(sample_room(2, MAX_RUN_RESULT - 1), None);
+        assert_eq!(sample_room(1, MAX_RUN_RESULT + 5), None);
     }
 
     #[test]
