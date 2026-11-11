@@ -394,11 +394,18 @@ A live effect runs while the art draws, so keep the entries it uses small.
   write leaves in the `cache` folder does not count toward the caps, and clearing the cache removes it.
 - A plug-in reaches only the storage of its own id. Replacing it with another module of the same id
   (`plugin.install` with `replace: true`, after the user agreed) keeps the storage; `plugin.remove` deletes it, and a run of the plug-in still going gets `-5` from every storage call after that.
-  `plugin.remove` first renames the folder (adding `.removed` to its name). When that fails, `plugin.remove` fails
-  and the plug-in stays installed with its storage as it was. Files that can't be deleted after the rename stay in the
-  `.removed` folder, where no plug-in reaches them. A later `plugin.remove` tries again to delete them when a plug-in
-  with that id is installed or a storage folder for the id exists, and that deletion can fail too. For an id that
-  isn't installed and has only a `.removed` folder, `plugin.remove` does not delete the folder and fails as not found.
+  `plugin.remove` first renames the folder, adding `.removed` to its name (or `.removing` while a `.removed` folder
+  holds settings an earlier removal kept). When that fails, `plugin.remove` fails and the plug-in stays installed with
+  its storage as it was. Before VectorCraft deletes a renamed folder, it writes an empty file beside it with `.delete`
+  added to the folder's name, and removes that file once the folder is gone. When that file can't be written, the
+  folder is not deleted and is treated like any renamed folder without a `.delete` file (see below). Files that can't be deleted stay in the
+  renamed folder with the `.delete` file beside it, where no plug-in reaches them. A later `plugin.remove` tries again
+  to delete them when a plug-in with that id is installed or a storage folder for the id exists, and that deletion can
+  fail too. For an id that isn't installed and has only such a folder, `plugin.remove` does not delete it and fails as
+  not found. When `plugin.remove` can't remove the grant and can't rename the folder back either, its error names the
+  renamed folder. The next load, install or `plugin.remove` of the plug-in renames a renamed folder that has no
+  `.delete` file back while the plug-in has no folder of its own; when it has one, that folder is used and the renamed
+  folder stays until `plugin.remove` deletes both.
   `plugin.remove` with the id of a plug-in that isn't installed deletes the storage kept for that id, when there is
   any.
   `plugin.clearCache` empties the cache and leaves the settings, and `plugin.list` and

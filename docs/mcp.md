@@ -7543,7 +7543,9 @@ with other bytes has `needsApproval: true` and needs a new one even when it list
 forgets the approval, and so does installing a module that lists no permissions under that id: the earlier bytes then
 need a new approval. A refused install keeps the grant. A failed write of the module to the plug-in store leaves the
 grant in the store. A stored module that is disabled, or not read in Safe Mode, keeps the grant for its id. When
-`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed. A
+`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed.
+When the plug-in's settings and cache can't be moved back from their `.removed` folder then either, the error names
+that folder, and the next load, install or `plugin.remove` of the plug-in moves them back. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
@@ -7553,8 +7555,8 @@ size as `cacheBytes`, `plugin.clearCache {id?}` empties the cache of one plug-in
 `{cleared: [id], bytesFreed}`, replacing a plug-in keeps both, and `plugin.remove` deletes both (also for an id that
 isn't installed but still has them). Files it can't delete stay in the plug-in's folder renamed with `.removed`, where
 no plug-in reaches them. A later `plugin.remove` tries again to delete them when a plug-in with that id is installed or
-a storage folder for the id exists, and that deletion can fail too; for an id with only a `.removed` folder it does
-not ([plugins.md](plugins.md#settings-and-cache)). A module with other bytes than the plug-in installed with its id, or, with none
+a storage folder for the id exists, and that deletion can fail too; for an id with only such a folder (marked by a
+`.delete` file beside it) it does not ([plugins.md](plugins.md#settings-and-cache)). A module with other bytes than the plug-in installed with its id, or, with none
 installed, one whose id has settings or a cache in the
 `Plug-ins` folder (`needsReplace: true` in its `plugin.inspect` entry), installs only with `replace: true`: ask the
 user first, since it takes that plug-in's place and gets its settings and cache. Without it, `plugin.install` returns
