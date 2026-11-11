@@ -97,6 +97,7 @@ pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level 
 pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is written as outlines";
 pub const ROTATED_TYPE: &str = "type with rotated characters is written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate characters)";
 pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, manual kerning, optical kerning, small caps, superscript and subscript, OpenType features, Variable Font settings, optical margin alignment, System Layout, fractional widths off, area type options, type on a path's effect, alignment and spacing, an end bracket short of the path's end, subpaths after the first in an area type frame or a type path, space after paragraphs, tabs, bulleted and numbered lists) are left out";
+pub const DYNAMIC_TEXT: &str = "Dynamic Text is written as the sizes the type is drawn at (legacy .ai files don't have it)";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
 pub const HIDDEN_SHOWN: &str = "hidden objects are written visible (legacy .ai files can hide only layers)";

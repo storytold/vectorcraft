@@ -1233,6 +1233,36 @@ fn a_font_height_reference_is_written_as_the_size_drawn() {
     assert!((size - 20.0).abs() < 1e-6, "{size}");
 }
 
+/// Type on a path with Dynamic Text is written at the sizes it is drawn at, with a warning that
+/// the setting itself is not written; without Dynamic Text there is no warning.
+#[test]
+fn dynamic_text_is_written_at_its_drawn_sizes_with_a_warning() {
+    let mut doc = typed();
+    assert!(!write(&doc).warnings.iter().any(|w| w == DYNAMIC_TEXT));
+    let id = texts(&doc).into_iter().find(|(_, t)| matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. })).unwrap().0.id;
+    let mut drawn = 0.0;
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.size = 4.0;
+        t.dynamic_text = true;
+        drawn = 4.0 * vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale;
+    }
+    assert!(drawn > 4.0, "{drawn}");
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == DYNAMIC_TEXT), "{:?}", out.warnings);
+    let imported = crate::import(&out.bytes).unwrap();
+    let (_, back) = texts(&imported.document).into_iter().find(|(_, t)| t.runs.iter().any(|r| r.text.contains("path"))).unwrap();
+    assert!(!back.dynamic_text);
+    assert!((back.runs[0].style.size - drawn).abs() < 1e-3, "{} vs {drawn}", back.runs[0].style.size);
+    // Type written as outlines loses the setting too, and says so.
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].text.push('\u{2192}');
+    }
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == TYPE) && out.warnings.iter().any(|w| w == DYNAMIC_TEXT), "{:?}", out.warnings);
+    let out = write_with(&doc, LegacyAiOptions { outline_text: true, ..LegacyAiOptions::default() });
+    assert!(out.warnings.iter().any(|w| w == DYNAMIC_TEXT), "{:?}", out.warnings);
+}
+
 /// Characters with Auto leading are written with their paragraph's Auto Leading share of the
 /// size: 18 pt type in paragraphs at 150% is written with 27 pt leading.
 #[test]

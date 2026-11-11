@@ -3,8 +3,8 @@ use super::encoding::{
     unit, writable,
 };
 use super::{
-    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule, Gradient,
-    GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, DYNAMIC_TEXT, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
+    Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
     LAYER_NAME, LIVE, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection, ParaStyle, PathData,
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
@@ -666,6 +666,10 @@ impl<'a> Writer<'a> {
         }
         let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
         let t = &*resolved;
+        // Written as text or as outlines, the type keeps its drawn sizes but not the setting.
+        if t.dynamic_text && matches!(t.kind, TextKind::OnPath { .. }) {
+            self.warn(DYNAMIC_TEXT);
+        }
         if !self.outline_text {
             if writable(self.doc, t) {
                 return self.text_object(t);

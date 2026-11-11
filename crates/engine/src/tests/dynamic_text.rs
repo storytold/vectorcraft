@@ -238,6 +238,26 @@ fn svg_export_writes_the_drawn_size() {
     assert!(!sizes.iter().any(|v| (v - 12.0).abs() < 1e-3), "the stored size is not written: {sizes:?}");
 }
 
+#[test]
+fn release_type_on_a_path_keeps_the_drawn_size() {
+    let mut s = session();
+    let id = on_line(&mut s, "Release");
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let size = 12.0 * fit(&s, id);
+    assert!(size > 24.0, "the text grows on the long line: {size}");
+    let r = s.execute("addon.type.releasePath", &json!({"ids": [id.0], "mode": "text"})).unwrap();
+    let released = NodeId(r["texts"][0].as_u64().unwrap());
+    let t = text(&s, released);
+    assert!(!t.dynamic_text, "point type does not keep Dynamic Text");
+    assert!((t.runs[0].style.size - size).abs() < 1e-9, "{} vs the drawn {size}", t.runs[0].style.size);
+    assert_eq!(fit(&s, released), 1.0);
+    // Type on a path without Dynamic Text keeps its stored size.
+    let plain = on_line(&mut s, "Plain");
+    let r = s.execute("addon.type.releasePath", &json!({"ids": [plain.0], "mode": "text"})).unwrap();
+    let t = text(&s, NodeId(r["texts"][0].as_u64().unwrap()));
+    assert!(!t.dynamic_text && t.runs[0].style.size == 12.0);
+}
+
 /// The id of the first text object in `s`'s document.
 fn first_text(s: &Session) -> NodeId {
     let mut found = None;
