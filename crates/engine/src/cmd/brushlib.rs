@@ -496,7 +496,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // nothing to apply is no edit, and a click that only applies brushes the document has is
     // named for that.
     let mut probe = (*st.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let doc_names: Vec<String> = picked.iter().map(|n| target(&imported.renamed, n)).collect();
     let paths = if apply { brush_targets(&st.doc, &roots(s, p)?) } else { vec![] };
     let paint = stroke_paint(s);

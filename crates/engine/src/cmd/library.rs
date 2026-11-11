@@ -1303,7 +1303,7 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
     let choices = SwatchChoices::default();
     // The pattern's name in the document, worked out on a copy: nothing to add is no edit.
     let mut probe = (*s.doc()?.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let renamed = imported.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name.as_str()).and_then(|r| r["to"].as_str());
     let target = renamed.unwrap_or(&name).to_string();
     let paint = vectorcraft_doc::pattern::pattern_paint(&target);
@@ -1315,7 +1315,7 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
     in_one_step(s, |s| {
         if added {
             s.edit("Add to Swatches", |d, _| {
-                clip.import_into(d, &choices, false);
+                clip.import_into(d, &choices, false)?;
                 if !has_swatch(d) {
                     let swatch = d.free_swatch_name(&target);
                     d.swatches.push(vectorcraft_color::Swatch { name: swatch, paint: paint.clone(), global: false, spot: false });
