@@ -1497,6 +1497,7 @@ font-technology	Variable	Değişken
 	Include Linked Files	Bağlantılı Dosyaları Ekle
 	Include Metadata	Meta Verileri Ekle
 	Include non-printing layers	Yazdırılmayan katmanları dahil et
+	Write pages longer than 200 in at full size in points	200 in'den uzun sayfaları tam boyutta, punto olarak yaz
 	Include SVG Code	SVG Kodunu Ekle
 	Include Swatches for Tints	Renk Tonları için Renk Örneklerini Ekle
 	Inflate…	Şişir…
@@ -2145,6 +2146,8 @@ shape	Open	Açık
 	Open…	Aç…
 	Optical	Optik
 	Optical Margin Alignment	Optik Kenar Boşluğu Hizalaması
+	Dynamic Text	Dinamik Metin
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	zincirli metindeki yol üzerindeki yazı dinamik metin kullanamaz: {frames}
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
 	Options	Seçenekler
@@ -5672,6 +5675,8 @@ theme	Appearance	Görünüm
 @msg	invalid object id {value}: expected a non-negative integer	geçersiz nesne kimliği {value}: negatif olmayan bir tam sayı bekleniyordu
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` içindeki {index} dizinli öğe {value}, negatif olmayan tam sayı bir nesne kimliği değil
 @msg	no such object id {value}	böyle bir nesne kimliği yok: {value}
+@msg	id {value} is a ruler guide, not an object	bu kimlik bir nesneye değil, bir kılavuza ait: {value}
+@msg	a ruler guide goes only directly in a layer or sublayer	bir kılavuz yalnızca doğrudan bir katmanda veya alt katmanda bulunabilir
 @msg	id {value} is a layer, not an object	{value} kimliği bir katmana ait, bir nesneye değil
 @msg	id {value} is a layer, not an object; move layers with layer.move	{value} kimliği bir katmana ait, bir nesneye değil; katmanları layer.move ile taşıyın
 @msg	{key} must be Unix seconds (an integer) or null	{key}, Unix saniyesi (bir tam sayı) veya null olmalıdır
@@ -6084,6 +6089,12 @@ axis	Y Axis	Y ekseni
 	Crosshair	Nişangah
 	Checkpoint	Kontrol noktası
 	Inventory Icons	Envanter Simgeleri
+	Skill Icons	Yetenek Simgeleri
+	Attack	Saldırı
+	Defend	Savunma
+	Heal	İyileştirme
+	Buff	Güçlendirme
+	Ult	Ult
 	Sword	Kılıç
 	Shield	Kalkan
 	Potion	İksir
@@ -6148,6 +6159,11 @@ axis	Y Axis	Y ekseni
 	Dash Trail	Kesik iz
 	Speed Line	Hız çizgisi
 	Game Trails	Oyun izleri
+	Energy Beams	Enerji Işınları
+	Laser Bolt	Lazer Mermisi
+	Plasma Arc	Plazma Yayı
+	Charge Wave	Şarj Dalgası
+	Spark Trail	Kıvılcım İzi
 	Calligraphic Nibs	Kaligrafi Uçları
 	Pattern Borders	Desen Kenarlıkları
 	Scatter Shapes	Dağılım Şekilleri
@@ -6751,8 +6767,14 @@ breakText	Glyphs	Glifler
 	Ended at a limit	Bir sınırda sona erdi
 	Stopped	Durduruldu
 	Ended by an internal fault	Bir iç hata nedeniyle sona erdi
-	{ms} ms, {calls} host calls	{ms} ms, {calls} ana bilgisayar çağrısı
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eski satır atıldı, {cut} satır kesildi
+	time unavailable	süre kullanılamıyor
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	en yavaşlar: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} ana bilgisayar çağrısı
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eski satır atıldı
+@plural	{n} line cut|{n} lines cut	{n} satır kesildi
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli
 
 # Deferred plug-in effects

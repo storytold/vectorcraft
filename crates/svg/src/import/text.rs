@@ -1060,6 +1060,7 @@ impl Ctx {
         } else if obj.plain_text().split('\n').any(|p| vectorcraft_text::paragraph_is_rtl(p, None)) {
             obj.edit_paras(None, |pa| pa.direction = Some(ParaDirection::LeftToRight));
         }
+        keep_reader_anchors(&mut obj);
         // The placeholder covers the text (laid out when a paint server needs its bounding box).
         let b = if paints.is_empty() { obj.bounds() } else { Some(obj.xf.transform_rect_bbox(measure(&obj).bounds)) }.unwrap_or_default();
         let marker = Rect::new(b.x0, b.y0, b.x1.max(b.x0 + 1.0), b.y1.max(b.y0 + 1.0));
@@ -1262,6 +1263,55 @@ fn lines(
         }
     }
     (Justify::Left, left, None)
+}
+
+/// Centred and right-aligned lines of point type `obj` where a reader draws them. `text-anchor`
+/// aligns a line's advance, which ends after the letter spacing of its last character (SVG
+/// export anchors lines so); VectorCraft aligns a line without that tracking
+/// ([`vectorcraft_text::LineInfo::trailing`]). Each such line moves back by its share of it: the
+/// type moves when every line moves alike, otherwise each paragraph's right indent takes the
+/// tracking (a line of imported point type is a paragraph). Browsers add that letter spacing
+/// today; CSS WG issue 1518 and Firefox bugs 1907305 and 1913554 may drop it at a line's end.
+fn keep_reader_anchors(obj: &mut TextObject) {
+    let share = |j: Justify| match j {
+        Justify::Center => 0.5,
+        Justify::Right => 1.0,
+        _ => 0.0,
+    };
+    // Laid out only when a line may move: tracked type with a centred or right-aligned paragraph.
+    if !matches!(obj.kind, TextKind::Point)
+        || obj.vertical
+        || obj.runs.iter().all(|r| r.style.tracking == 0.0)
+        || obj.paragraph_styles().iter().all(|p| share(p.justify) == 0.0)
+    {
+        return;
+    }
+    let plain = obj.plain_text();
+    // Each line's paragraph, its tracking left out and how far that moves it.
+    let lines: Vec<(usize, f64, f64)> = measure(obj)
+        .lines
+        .iter()
+        .map(|l| {
+            let para = plain.get(..l.start).map_or(0, |before| before.matches('\n').count());
+            let trailing = if l.trailing.is_finite() { l.trailing } else { 0.0 };
+            (para, trailing, share(obj.para_at(para).justify) * trailing)
+        })
+        .collect();
+    let Some(&(_, _, first)) = lines.first() else { return };
+    if first == 0.0 && lines.iter().all(|l| l.2 == 0.0) {
+        return;
+    }
+    if lines.iter().all(|l| (l.2 - first).abs() < 1e-9) {
+        obj.xf *= Affine::translate((-first, 0.0));
+        return;
+    }
+    let mut styles = obj.paragraph_styles();
+    for &(para, trailing, moves) in &lines {
+        if let Some(style) = styles.get_mut(para).filter(|_| moves != 0.0) {
+            style.right_indent += trailing;
+        }
+    }
+    obj.set_paragraph_styles(styles);
 }
 
 /// A left-aligned point text of `runs` at the origin (for measuring).

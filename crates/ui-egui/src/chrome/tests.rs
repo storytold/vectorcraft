@@ -64,6 +64,18 @@ use crate::theme::Tokens;
 use serde_json::json;
 use vectorcraft_engine::Session;
 
+/// `layers` without their ruler guides: the art.
+fn art_of(layers: &[Arc<vectorcraft_doc::Node>]) -> Vec<vectorcraft_doc::Node> {
+    layers
+        .iter()
+        .map(|l| {
+            let mut l = vectorcraft_doc::Node::clone(l);
+            l.strip_ruler_guides();
+            l
+        })
+        .collect()
+}
+
 #[test]
 fn help_bar_and_status_bar_render_independently() {
     for (help, status, screen_mode) in [(true, true, 0), (false, true, 0), (true, false, 0), (false, false, 0), (true, true, 3)] {
@@ -163,22 +175,7 @@ fn status_readout_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, wi
 
 /// Collect status-bar text, positions, clips and elision state with explicit pointer events.
 fn status_readout_frame_events(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32, events: Vec<egui::Event>) -> Vec<StatusText> {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 300.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::status_bar(app, ui));
-    out.textures_delta.clear();
-    out.shapes
-        .iter()
-        .filter_map(|s| match &s.shape {
-            egui::Shape::Text(t) => Some(StatusText {
-                text: t.galley.job.text.clone(),
-                at: t.pos,
-                clip: s.clip_rect,
-                bounds: egui::Rect::from_min_size(t.pos, t.galley.size()),
-                elided: t.galley.elided,
-            }),
-            _ => None,
-        })
-        .collect()
+    bar_frame(app, ctx, width, None, events, super::status_bar).0
 }
 
 /// Find a required text record by prefix, failing the test when it is absent.
@@ -373,6 +370,127 @@ fn narrow_status_bars_preserve_the_message_and_hide_optional_readouts() {
     assert!(message.clip.left() >= status_text(&texts, "Selection").bounds.right());
 }
 
+/// A function that draws one of the bars at the bottom of the window.
+type DrawBar = fn(&mut crate::VectorcraftApp, &mut egui::Ui);
+
+/// The texts (positions, clips and elision state) and the screen-reader tree of one frame of
+/// `draw` in a window `width` points wide, at `time` with `events`.
+fn bar_frame(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    width: f32,
+    time: Option<f64>,
+    events: Vec<egui::Event>,
+    draw: DrawBar,
+) -> (Vec<StatusText>, Vec<egui::accesskit::Node>) {
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 300.0));
+    let input = egui::RawInput { screen_rect: Some(screen), time, events, ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| draw(app, ui));
+    out.textures_delta.clear();
+    let texts = out
+        .shapes
+        .iter()
+        .filter_map(|s| match &s.shape {
+            egui::Shape::Text(t) => Some(StatusText {
+                text: t.galley.job.text.clone(),
+                at: t.pos,
+                clip: s.clip_rect,
+                bounds: egui::Rect::from_min_size(t.pos, t.galley.size()),
+                elided: t.galley.elided,
+            }),
+            _ => None,
+        })
+        .collect();
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
+    (texts, nodes)
+}
+
+/// The texts of `draw` with the pointer away, the screen-reader tree, and the texts after the
+/// pointer has rested on the first text that starts with `prefix` for longer than the tooltip delay.
+fn bar_hover(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    width: f32,
+    prefix: &str,
+    draw: DrawBar,
+) -> (Vec<StatusText>, Vec<egui::accesskit::Node>, Vec<StatusText>) {
+    let t = ctx.input(|i| i.time) + 1.0;
+    bar_frame(app, ctx, width, Some(t), vec![egui::Event::PointerGone], draw);
+    let (texts, nodes) = bar_frame(app, ctx, width, Some(t + 0.1), vec![], draw);
+    let at = status_text(&texts, prefix);
+    let pos = at.clip.intersect(at.bounds).center();
+    bar_frame(app, ctx, width, Some(t + 1.0), vec![egui::Event::PointerMoved(pos)], draw);
+    bar_frame(app, ctx, width, Some(t + 3.0), vec![], draw);
+    let (hovered, _) = bar_frame(app, ctx, width, Some(t + 3.1), vec![], draw);
+    (texts, nodes, hovered)
+}
+
+/// Checks the field whose full text is `full`: in a window `narrow` wide it ends in an ellipsis
+/// inside the window, screen readers get the full text, and resting the pointer on it shows the
+/// full text in a tooltip no wider than the window; in a window `wide` wide it shows in full with no
+/// tooltip.
+fn assert_clipped_text_shows_on_hover(app: &mut crate::VectorcraftApp, ctx: &egui::Context, full: &str, narrow: f32, wide: f32, draw: DrawBar) {
+    let prefix: String = full.chars().take(4).collect();
+    let (texts, nodes, hovered) = bar_hover(app, ctx, narrow, &prefix, draw);
+    let field = status_text(&texts, &prefix);
+    assert_eq!(field.text, full);
+    assert!(field.elided, "{narrow}: the text is clipped: {field:?}");
+    assert!(field.bounds.right() <= narrow, "{narrow}: the ellipsis is inside the window: {field:?}");
+    assert!(nodes.iter().any(|n| n.value() == Some(full)), "{narrow}: screen readers receive the full text");
+    let tip: Vec<_> = hovered.iter().filter(|t| t.text == full && !t.elided).collect();
+    assert_eq!(tip.len(), 1, "{narrow}: the tooltip shows the full text: {hovered:?}");
+    assert!(tip[0].bounds.left() >= 0.0 && tip[0].bounds.right() <= narrow, "{narrow}: the tooltip wraps within the window: {tip:?}");
+
+    let (texts, _, hovered) = bar_hover(app, ctx, wide, &prefix, draw);
+    assert!(!status_text(&texts, &prefix).elided, "{wide}: the text fits");
+    assert_eq!(hovered.iter().filter(|t| t.text == full).count(), 1, "{wide}: no tooltip: {hovered:?}");
+}
+
+/// A status message too long for the bar ends in an ellipsis and shows in full on hover, in a
+/// tooltip that wraps within the window (#6622).
+#[test]
+fn a_clipped_status_message_shows_in_full_on_hover() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    let long = format!("Saved recovery data for {}illustration.vectorcraft", "a-long-folder-name/".repeat(12));
+    app.ui.status = long.clone();
+    assert_clipped_text_shows_on_hover(&mut app, &ctx, &long, 700.0, 20000.0, super::status_bar);
+    app.ui.status = "Saved recovery data for Untitled-1".to_owned();
+    let (texts, _, hovered) = bar_hover(&mut app, &ctx, 700.0, "Saved", super::status_bar);
+    assert!(!status_text(&texts, "Saved").elided);
+    assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Saved")).count(), 1, "a message that fits has no tooltip: {hovered:?}");
+}
+
+/// The Help Bar's hint ends in an ellipsis when it is wider than the window and shows in full on
+/// hover, in a tooltip that wraps within the window (#6622). The Dimension tool's hint is wider
+/// than the smallest main window (800 points); 400 points is that window at UI Scaling 2.0.
+#[test]
+fn a_clipped_help_bar_hint_shows_in_full_on_hover() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    app.select_tool("dimension");
+    let hint: String = super::hint_segments(app.session.tool_id()).into_iter().map(|(s, _)| s).collect();
+    for narrow in [800.0, 400.0] {
+        assert_clipped_text_shows_on_hover(&mut app, &ctx, &hint, narrow, 3000.0, super::hint_bar);
+    }
+}
+
+/// In a narrow status bar the tool name ends in an ellipsis, shows in full on hover, and leaves
+/// the status message its room (#6622). 640 and 500 points are the smallest main window (800
+/// points) at UI Scaling 1.25 and 1.6.
+#[test]
+fn a_clipped_tool_name_shows_in_full_on_hover() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    for narrow in [640.0, 500.0] {
+        assert_clipped_text_shows_on_hover(&mut app, &ctx, "Selection", narrow, 1400.0, super::status_bar);
+        let (texts, _) = bar_frame(&mut app, &ctx, narrow, None, vec![], super::status_bar);
+        let tool = status_text(&texts, "Selection");
+        let message = status_text(&texts, "Saved recovery data");
+        assert!(message.clip.left() >= tool.bounds.right() && message.clip.width() >= 24.0, "{narrow}: the message keeps room: {texts:?}");
+    }
+}
+
 /// Busy-job transitions preserve message placement, labels and accessibility.
 #[test]
 fn background_activity_keeps_the_status_message_origin() {
@@ -503,6 +621,65 @@ fn a_tabs_close_box_sits_where_the_platform_puts_it() {
     frame(&mut app, vec![press(false)]);
     assert_eq!(app.session.documents().len(), 1, "the × closed the first document");
     assert!(super::CLOSE_BEFORE_TITLE == cfg!(target_os = "macos"));
+}
+
+/// A middle-click on a document tab closes it as the × does (#6506): a saved document closes, and
+/// a modified one asks to save first instead of losing its changes.
+#[test]
+fn a_middle_click_on_a_tab_closes_it_as_the_close_box_does() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    for _ in 0..3 {
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    }
+    // The second document has unsaved changes; the third stays the current one.
+    app.session.set_active(1);
+    app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    app.session.set_active(2);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 200.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::doc_tabs(app, ui));
+        out.textures_delta.clear();
+        let mut titles = vec![];
+        for c in &out.shapes {
+            if let egui::Shape::Text(t) = &c.shape
+                && t.visual_bounding_rect().width() > 30.0
+            {
+                titles.push(t.visual_bounding_rect());
+            }
+        }
+        titles.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        titles
+    };
+    let middle_click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Middle, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)])
+    };
+    let titles = frame(&mut app, vec![]);
+    assert_eq!(titles.len(), 3, "{titles:?}");
+    // The modified document's tab: the save prompt comes up and the document stays open.
+    let titles = middle_click(&mut app, titles[1].center());
+    assert_eq!(app.session.documents().len(), 3, "a modified document is not closed without asking");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::unsaved::KIND), "a modified document asks first");
+    app.ui.dialog = None;
+    // The first, saved document's tab: it closes, and the others stay open.
+    let uid = |app: &crate::VectorcraftApp, i: usize| app.session.documents()[i].uid;
+    let (second, third) = (uid(&app, 1), uid(&app, 2));
+    middle_click(&mut app, titles[0].center());
+    assert_eq!(app.session.documents().len(), 2, "the middle-click closed the first document");
+    assert_eq!((uid(&app, 0), uid(&app, 1)), (second, third));
+    assert!(app.ui.dialog.is_none(), "a saved document closes without asking");
+    // A middle-click on the × itself closes too: the third, saved document's.
+    let titles = frame(&mut app, vec![]);
+    assert_eq!(titles.len(), 2, "{titles:?}");
+    let title = titles[1];
+    let x = if super::CLOSE_BEFORE_TITLE { title.left() - 16.0 } else { title.right() + 20.0 };
+    middle_click(&mut app, egui::pos2(x, title.center().y));
+    assert_eq!(app.session.documents().len(), 1, "the middle-click on the × closed the third document");
+    assert_eq!(uid(&app, 0), second);
+    assert!(app.ui.dialog.is_none(), "a saved document closes without asking");
 }
 
 /// One headless frame of the status bar; returns the artboard navigator's buttons, left to
@@ -1497,8 +1674,8 @@ fn artboard_document_tab_roundtrip_properties_delete_uses_shown_board() {
     assert_eq!(selected_before_delete, json!([1]));
     assert_eq!(active_before_delete, json!(1));
     assert_eq!(st.doc.artboards, vec![before.artboards[0].clone()], "the original first board survives");
-    assert_eq!(st.doc.guides, vec![before.guides[0].clone()], "only the deleted board's guide is removed");
-    assert_eq!(st.doc.layers, before.layers, "artwork and symbol instances stay unchanged");
+    assert_eq!(st.doc.ruler_guides(), vec![before.ruler_guides()[0].clone()], "only the deleted board's guide is removed");
+    assert_eq!(art_of(&st.doc.layers), art_of(&before.layers), "artwork and symbol instances stay unchanged");
     assert_eq!(st.doc.symbols, before.symbols, "symbol definitions stay unchanged");
     assert_eq!(st.selection, selection);
     assert_eq!(app.run_count, commands.wrapping_add(1), "one command from the actual Properties control");
@@ -1794,9 +1971,9 @@ fn delete_shown_board(app: &mut crate::VectorcraftApp, ctx: &egui::Context, base
         "ARTBOARD_CLOSE_TARGET_WRONG_SURVIVOR: Properties showing Shown must delete Shown after closing B"
     );
     assert_eq!(st.doc.as_ref(), expected, "only Shown and its attached guide may be removed from the full document");
-    assert_eq!(st.doc.layers, before.layers, "all artwork and symbol instances stay unchanged");
+    assert_eq!(art_of(&st.doc.layers), art_of(&before.layers), "all artwork and symbol instances stay unchanged");
     assert_eq!(st.doc.symbols, before.symbols);
-    assert_eq!(st.doc.guides, vec![before.guides[0].clone()]);
+    assert_eq!(st.doc.ruler_guides(), vec![before.ruler_guides()[0].clone()]);
     assert_eq!(&st.selection, selection);
     assert_eq!(st.uid, *uid);
     assert_eq!(st.revision, revision + 1);
@@ -1856,13 +2033,14 @@ fn artboard_close_active_tab_properties_delete_uses_shown_board() {
     let history_before = history_of(st);
     let history_limits = (st.history.limit, st.history.byte_budget);
     assert_eq!(before.artboards.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["Keep", "Shown"]);
-    assert_eq!(before.guides.len(), 2);
+    assert_eq!(before.ruler_guides().len(), 2);
     assert!(!selection.objects.is_empty());
     assert!(history_before.1.is_empty());
     assert!(!st.is_dirty());
     let mut expected = before.as_ref().clone();
     expected.artboards = vec![before.artboards[0].clone()];
-    expected.guides = vec![before.guides[0].clone()];
+    let keep = before.ruler_guides()[0].id;
+    expected.retain_guides(&mut vectorcraft_doc::Selection::default(), |g| g.id == keep);
     let base = Baseline { uid, revision, before, selection, history_before, history_limits, expected };
     close_b_tab(&mut app, &ctx, &base);
     delete_shown_board(&mut app, &ctx, &base);

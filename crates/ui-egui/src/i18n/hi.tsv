@@ -427,6 +427,11 @@ antiAlias	Sharp	शार्प
 	Dash Trail	डैश ट्रेल
 	Speed Line	स्पीड लाइन
 	Game Trails	गेम ट्रेल्स
+	Energy Beams	ऊर्जा किरणें
+	Laser Bolt	लेज़र बोल्ट
+	Plasma Arc	प्लाज़्मा चाप
+	Charge Wave	चार्ज तरंग
+	Spark Trail	चिंगारी पथ
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -527,6 +532,12 @@ antiAlias	Sharp	शार्प
 	Crosshair	क्रॉसहेयर
 	Checkpoint	चेकपॉइंट
 	Inventory Icons	इन्वेंटरी आइकन
+	Skill Icons	कौशल आइकन
+	Attack	आक्रमण
+	Defend	रक्षा
+	Heal	उपचार
+	Buff	बफ़
+	Ult	अल्ट
 	Sword	तलवार
 	Shield	ढाल
 	Potion	औषधि
@@ -2257,6 +2268,7 @@ antiAlias	Sharp	शार्प
 	Include Linked Files	लिंक्ड फ़ाइलें शामिल करें
 	Include Metadata	मेटाडाटा शामिल
 	Include non-printing layers	गैर-प्रिंटिंग लेयर्स को शामिल करें
+	Write pages longer than 200 in at full size in points	200 in से लंबे पेज पूरे आकार में, पॉइंट में लिखें
 	Include Objects On Canvas	कैनवास पर ऑब्जेक्ट्स शामिल करें
 	Include SVG Code	SVG कोड शामिल करें
 	Include Swatches for Tints	टिंट्स के लिए स्वॉचेस शामिल करें
@@ -3125,6 +3137,8 @@ antiAlias	Sharp	शार्प
 	OpenType Features	ओपन टाइप सुविधाएँ
 	Optical	ऑप्टिकल
 	Optical Margin Alignment	ऑप्टिकल मार्जिन संरेखण
+	Dynamic Text	डायनैमिक टेक्स्ट
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	थ्रेडेड टेक्स्ट में पाथ पर टाइप डायनैमिक टेक्स्ट का उपयोग नहीं कर सकता: {frames}
 	Optimize for fast web view	तेजी से वेब दृश्य के लिए ऑप्टिमाइज़
 	Optimized	ऑप्टिमाइज़्ड
 	Options	ऑप्शन्स
@@ -6944,6 +6958,8 @@ antiAlias	Sharp	शार्प
 @msg	no such layer or object	ऐसी कोई लेयर या ऑब्जेक्ट नहीं
 @msg	no such object {0}	ऐसी कोई ऑब्जेक्ट नहीं {0}
 @msg	no such object id {value}	ऐसी कोई ऑब्जेक्ट नहीं id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} एक गाइड है, ऑब्जेक्ट नहीं
+@msg	a ruler guide goes only directly in a layer or sublayer	गाइड केवल सीधे किसी लेयर या सबलेयर में हो सकता है
 @msg	no such objects	ऐसी कोई ऑब्जेक्ट नहीं
 @msg	no such path anchor, or the path would reach past the canvas	इस तरह के कोई पाथ एंकर नहीं, या पाथ कैनवास तक पहुंच जाएगा
 @msg	no such perspective grid preset	ऐसा कोई पर्सपेक्टिव ग्रिड पूर्व निर्धारित नहीं है
@@ -8236,8 +8252,14 @@ theme	Appearance	अपीयरेंस
 	Ended at a limit	सीमा पर समाप्त
 	Stopped	रोका गया
 	Ended by an internal fault	आंतरिक त्रुटि से समाप्त
-	{ms} ms, {calls} host calls	{ms} ms, {calls} होस्ट कॉल
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} पुरानी पंक्तियाँ हटाई गईं, {cut} पंक्तियाँ काटी गईं
+	time unavailable	समय उपलब्ध नहीं
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	सबसे धीमे: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} होस्ट कॉल|{n} होस्ट कॉल
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} पुरानी पंक्ति हटाई गई|{n} पुरानी पंक्तियाँ हटाई गईं
+@plural	{n} line cut|{n} lines cut	{n} पंक्ति काटी गई|{n} पंक्तियाँ काटी गईं
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में
 
 # Deferred plug-in effects

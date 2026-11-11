@@ -403,6 +403,8 @@
 	Smart Punctuation…	Älykäs välimerkitys…
 	Create Outlines	Muunna ääriviivoiksi
 	Optical Margin Alignment	Optinen reunustasaus
+	Dynamic Text	Dynaaminen teksti
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	ketjutetun tekstin polkuteksti ei voi käyttää dynaamista tekstiä: {frames}
 	Fill with Placeholder Text	Täytä paikkamerkkitekstillä
 	Insert Inline Symbol	Lisää tekstinsisäinen symboli
 	Show Hidden Characters	Näytä piilotetut merkit
@@ -2852,6 +2854,7 @@ antiAlias	Sharp	Terävä
 	General › Thumbnails	Yleiset › Pikkukuvat
 	Grayscale images	Harmaasävykuvat
 	Include non-printing layers	Sisällytä tulostumattomat tasot
+	Write pages longer than 200 in at full size in points	Kirjoita yli 200 in pitkät sivut täysikokoisina pisteinä
 	Left:	Vasen:
 	Mark as trapped	Merkitse ylitäytetyksi
 	Marks and Bleeds	Merkit ja leikkuuvarat
@@ -5109,6 +5112,8 @@ imageTrace	Outline	Ääriviiva
 @msg	invalid object id {value}: expected a non-negative integer	virheellinen objektitunnus {value}: odotettiin ei-negatiivista kokonaislukua
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}`-luettelon kohde {index} on {value}, ei objektitunnus (ei-negatiivinen kokonaisluku)
 @msg	no such object id {value}	objektia tunnuksella {value} ei ole
+@msg	id {value} is a ruler guide, not an object	tunnus {value} on apuviivan, ei objektin
+@msg	a ruler guide goes only directly in a layer or sublayer	apuviiva voi olla vain suoraan tasossa tai alatasossa
 @msg	id {value} is a layer, not an object	tunnus {value} on taso, ei objekti
 @msg	id {value} is a layer, not an object; move layers with layer.move	tunnus {value} on taso, ei objekti; siirrä tasoja komennolla layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automaation tiedostojärjestelmäkäyttöä ei ole myönnetty: lukuoikeus puuttuu: {path}
@@ -6158,6 +6163,12 @@ axis	Y Axis	Y-akseli
 	Crosshair	Tähtäin
 	Checkpoint	Tarkastuskohta
 	Inventory Icons	Inventaarioikonit
+	Skill Icons	Taitoikonit
+	Attack	Hyökkäys
+	Defend	Puolustus
+	Heal	Parannus
+	Buff	Buffi
+	Ult	Ult
 	Sword	Miekka
 	Shield	Kilpi
 	Potion	Taikajuoma
@@ -6222,6 +6233,11 @@ axis	Y Axis	Y-akseli
 	Dash Trail	Katkoviiva
 	Speed Line	Nopeusviiva
 	Game Trails	Pelijäljet
+	Energy Beams	Energiasäteet
+	Laser Bolt	Laserpultti
+	Plasma Arc	Plasma-kaari
+	Charge Wave	Latausaalto
+	Spark Trail	Kipinävanne
 	Calligraphic Nibs	Kalligrafiakärjet
 	Pattern Borders	Kuvioreunukset
 	Scatter Shapes	Sirontamuodot
@@ -6830,8 +6846,14 @@ breakText	Glyphs	Merkit
 	Ended at a limit	Päättyi rajaan
 	Stopped	Pysäytetty
 	Ended by an internal fault	Päättyi sisäiseen virheeseen
-	{ms} ms, {calls} host calls	{ms} ms, {calls} isäntäkutsua
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} aiempaa riviä poistettu, {cut} riviä katkaistu
+	time unavailable	aika ei käytettävissä
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	hitaimmat: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} isäntäkutsu|{n} isäntäkutsua
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} aiempi rivi poistettu|{n} aiempaa riviä poistettu
+@plural	{n} line cut|{n} lines cut	{n} rivi katkaistu|{n} riviä katkaistu
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ja `last` on oltava konsolin säilyttämien rivien numeroita, `first` ennen arvoa `last`
 
 # Deferred plug-in effects

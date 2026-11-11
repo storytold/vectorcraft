@@ -77,6 +77,14 @@ fn names(d: &Document) -> Vec<String> {
     d.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect()
 }
 
+/// The ruler guides of `d` by their line, artboard and layer.
+fn guide_lines(d: &Document) -> Vec<vectorcraft_doc::Guide> {
+    d.ruler_guides()
+        .into_iter()
+        .map(|g| vectorcraft_doc::Guide { artboard: g.artboard, layer: g.layer, ..vectorcraft_doc::Guide::new(g.vertical, g.pos) })
+        .collect()
+}
+
 #[test]
 fn ruler_units_in_the_program_header_alone_are_kept() {
     let art = layer("Art", true, &square(10, 10));
@@ -2219,11 +2227,11 @@ fn an_ai_files_ruler_guides_come_in_on_their_layers() {
         assert!(read, "{w:?}");
         let jig = d.layers[0].id;
         let want = [
-            vectorcraft_doc::Guide { vertical: false, pos: 60.0 * k, artboard: None, layer: Some(jig) },
-            vectorcraft_doc::Guide { vertical: true, pos: 20.0 * k, artboard: Some(d.artboards[0].id), layer: Some(jig) },
+            vectorcraft_doc::Guide { layer: Some(jig), ..vectorcraft_doc::Guide::new(false, 60.0 * k) },
+            vectorcraft_doc::Guide { artboard: Some(d.artboards[0].id), layer: Some(jig), ..vectorcraft_doc::Guide::new(true, 20.0 * k) },
         ];
-        assert_eq!(d.guides, want);
-        assert_eq!(d.layers[0].children().map_or(0, |c| c.len()), 1, "the square alone");
+        assert_eq!(guide_lines(&d), want);
+        assert_eq!(d.layers[0].children().map_or(0, |c| c.iter().filter(|c| !c.is_ruler_guide()).count()), 1, "the square alone");
     }
 }
 
@@ -2241,7 +2249,10 @@ fn an_eps_of_its_art_box_keeps_the_guides_of_its_first_artboard() {
     assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
     assert_eq!(r.document.artboards.len(), 1);
     let (board, layer) = (r.document.artboards[0].id, r.document.layers[0].id);
-    assert_eq!(r.document.guides, [vectorcraft_doc::Guide { vertical: true, pos: 25.0, artboard: Some(board), layer: Some(layer) }]);
+    assert_eq!(
+        guide_lines(&r.document),
+        [vectorcraft_doc::Guide { artboard: Some(board), layer: Some(layer), ..vectorcraft_doc::Guide::new(true, 25.0) }]
+    );
 }
 
 /// A PDF part read from a `UserUnit` page cropped to the art: the art's box, not the artboard, is
@@ -5844,6 +5855,67 @@ fn a_warp_of_type_without_a_saved_grid_keeps_its_drawn_art() {
     assert!(envelopes.is_empty(), "{envelopes:?}");
     assert_eq!(loose, [("FLUX".to_string(), false)], "{:?}", r.warnings);
     assert_eq!(super::tests::program_warnings(&r.warnings), [crate::import::ai::ENVELOPE_TYPE_DRAWN], "{:?}", r.warnings);
+}
+
+/// [`type_envelope_on`] while its contents are edited: the text object in the group before its
+/// dictionary, and `shape` in its contents' block, where the editing data then saves the mesh.
+fn type_envelope_editing(keys: &str, shape: &str, drawn: &str) -> String {
+    let hidden = |s: &str| -> String { s.lines().map(|l| format!("%_{l}\n")).collect() };
+    format!(
+        "{}{}%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_1 /Int (AIDeformStyle) ,\n%_;\n%_\n%_9 () XW\nu\n{drawn}U\n9 () XW\n(Adobe Deform Plugin) 1 0 0 XP\n",
+        hidden(&format!("u\n{}U\n", text_object(0))),
+        hidden(&format!("/ArtDictionary :\n{}", keys.replace("0 /Bool (AIDeformEditModeKey)", "1 /Bool (AIDeformEditModeKey)"))),
+        hidden(&format!("0 g\n{shape}")),
+    )
+}
+
+/// While the contents of an envelope of type are edited, its grid is kept in its dictionary, and in
+/// some files it lies away from the drawn art by a move, the type with the drawn art. A warp of type
+/// whose saved grid draws the type as large as its drawn art but elsewhere opens live as a mesh
+/// envelope on that grid moved onto the drawn art (#3179).
+#[test]
+fn a_warp_of_type_in_edit_contents_whose_grid_stayed_behind_opens_on_its_drawn_art() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    let Some(family) = installed_family() else { return };
+    let doc = type_envelope_text(&family, None);
+    let mut text = made_envelope_type(&doc);
+    text.visible = true;
+    // The drawn art is the grid's moved 10 points left and 25 down.
+    let by = kurbo::Vec2::new(-10.0, 25.0);
+    let EnvelopeKind::Mesh { rows, cols, points, handles } = rising_kind() else { panic!("a mesh") };
+    let want: Vec<kurbo::Point> = points.iter().map(|p| *p + by).collect();
+    let kind = EnvelopeKind::Mesh { rows, cols, points: want.clone(), handles };
+    let options = vectorcraft_doc::live::EnvelopeOptions::NEW;
+    let shaped = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope {
+            content: vec![std::sync::Arc::new(text)],
+            kind: Box::new(kind),
+            fidelity: 50.0,
+            editing: false,
+            options,
+            frame: Box::default(),
+        },
+    );
+    let (drawn, page) = drawn_envelope(&shaped);
+    let art = native_with_text(
+        &layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_editing(&arc_keys(0.3), &rising_grid(), &drawn))),
+        &doc,
+    );
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
+    let mut live = None;
+    r.document.walk(|n| {
+        if let NodeKind::Envelope { kind, editing, .. } = &n.kind {
+            live = Some(((**kind).clone(), *editing));
+        }
+    });
+    let Some((EnvelopeKind::Mesh { points, .. }, true)) = live else { panic!("not a mesh envelope in Edit Contents: {live:?}") };
+    assert!(points.iter().zip(&want).all(|(p, q)| (*p - *q).hypot() < 0.05), "{points:?}");
 }
 
 /// A warp of type tried again on its saved grid leaves a check for each envelope of type still to

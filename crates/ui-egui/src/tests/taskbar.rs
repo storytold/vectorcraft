@@ -184,6 +184,30 @@ fn type_on_a_path_offers_its_options() {
     assert_eq!(d.fields.get("effect"), Some(&json!("skew")));
 }
 
+/// Type on a path offers Dynamic Text, which turns it on and off; type in a thread does not.
+#[test]
+fn type_on_a_path_offers_dynamic_text() {
+    let mut app = app();
+    let path = id(app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap());
+    let t = id(app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap());
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    select(&mut app, &[t]);
+    let dynamic = |app: &VectorcraftApp| matches!(kind(app, t), NodeKind::Text(ref t) if t.dynamic_text);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Dynamic Text"), "{texts:?}");
+    click(&mut app, "Dynamic Text");
+    assert!(dynamic(&app));
+    click(&mut app, "Dynamic Text");
+    assert!(!dynamic(&app));
+    // Threaded, it is not offered.
+    let frame = id(app.run("shape.rectangle", json!({"x": 60, "y": 200, "width": 200, "height": 100})).unwrap());
+    select(&mut app, &[t, frame]);
+    app.run("text.thread.create", json!({})).unwrap();
+    select(&mut app, &[t]);
+    let (_, texts) = bar(&mut app);
+    assert!(!has(&texts, "Dynamic Text"), "{texts:?}");
+}
+
 /// The path's anchors (its first subpath).
 fn anchors(app: &VectorcraftApp, id: u64) -> Vec<vectorcraft_geom::Anchor> {
     match kind(app, id) {

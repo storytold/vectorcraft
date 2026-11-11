@@ -621,7 +621,7 @@ pub(crate) fn flatten_expanded(doc: &Document, o: &FlattenOptions) -> Result<Opt
     let mut roots = vec![];
     for l in doc.layers.iter().filter(|l| l.visible && !matches!(l.kind, NodeKind::Layer { template: true, .. })) {
         let children = l.children().map_or(&[][..], Vec::as_slice);
-        roots.extend(children.iter().skip(usize::from(l.clips())).filter(|c| c.visible).map(|c| c.id));
+        roots.extend(children.iter().skip(usize::from(l.clips())).filter(|c| c.visible && !c.is_ruler_guide()).map(|c| c.id));
     }
     let plan = plan(doc, &roots, o, true)?;
     if plan.flat.is_empty() && !plan.kept.iter().any(|id| doc.node(*id).is_some_and(|n| kept_work(n, o))) {
@@ -640,6 +640,8 @@ pub(super) fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan
     // The groups replace their objects in one pass at the end. When an object is listed twice or
     // lies inside another listed one, each group replaces its objects as it is made instead.
     let one_pass = separate(d, &plan.flat.iter().flat_map(|f| f.roots.iter().copied()).collect::<Vec<_>>());
+    // A sublayer that becomes flat art gives its ruler guides to the layer that held it.
+    let guides = held_guides(d, plan.flat.iter().flat_map(|f| f.roots.iter().copied()));
     for f in plan.flat {
         // A group always has objects.
         let Some(top) = place_of(d, &f.roots) else { continue };
@@ -703,6 +705,9 @@ pub(super) fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan
     if !flat.is_empty() {
         d.insert_beside(flat, true)?;
     }
+    for (layer, guide) in guides {
+        d.insert(Some(layer), usize::MAX, guide)?;
+    }
     let brushes = if o.strokes_to_outlines { vectorcraft_brush::library(d) } else { vec![] };
     for mut id in plan.kept {
         if o.text_to_outlines {
@@ -745,6 +750,23 @@ fn place_of(d: &Document, roots: &[NodeId]) -> Option<NodeId> {
     let place =
         roots.iter().zip(&all).rev().find(|(r, mine)| shared(mine) && !leaves_fill(mine) && layer_state(d, **r) == state && !leaves_compositing(**r));
     Some(place.map_or(top, |(r, _)| *r))
+}
+
+/// The ruler guides of each of `roots` that is a sublayer (in its sublayers too), with the layer
+/// that holds it, in order. Other objects hold none.
+fn held_guides(d: &Document, roots: impl IntoIterator<Item = NodeId>) -> Vec<(NodeId, Node)> {
+    let mut out = vec![];
+    for id in roots {
+        let (Some(n), Some(parent)) = (d.node(id), d.parent_of(id)) else { continue };
+        if n.holds_ruler_guides() {
+            n.walk(&mut |c| {
+                if c.is_ruler_guide() {
+                    out.push((parent, c.clone()));
+                }
+            });
+        }
+    }
+    out
 }
 
 /// An image of `r` (in a clip group when it is clipped).
@@ -827,5 +849,32 @@ fn drop_overprints(n: &mut Node) {
         for c in ch {
             drop_overprints(Arc::make_mut(c));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::Session;
+
+    #[test]
+    fn a_flattened_sublayer_gives_its_ruler_guides_to_its_layer() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let sub = NodeId(s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap()["id"].as_u64().unwrap());
+        s.execute("layer.setCurrent", &json!({"id": sub.0})).unwrap();
+        let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        s.execute("transparency.set", &json!({"ids": [r], "opacity": 50})).unwrap();
+        let d = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let g = Node::new(d.alloc_id(), NodeKind::RulerGuide { vertical: true, pos: 5.0, artboard: None });
+        let g = d.insert(Some(sub), usize::MAX, g).unwrap();
+        let flat = flatten_document(&s.doc().unwrap().doc, &FlattenOptions::default()).unwrap().unwrap();
+        assert!(flat.node(sub).is_none(), "the sublayer became flat art");
+        assert!(flat.node(g).is_some_and(Node::is_ruler_guide), "its guide is kept");
+        assert_eq!(flat.parent_of(g), Some(layer));
+        assert_eq!(flat.children(Some(layer)).and_then(|c| c.last()).map(|c| c.id), Some(g));
     }
 }

@@ -210,7 +210,9 @@ fn has_key(app: &VectorcraftApp) -> bool {
 /// The first selected ruler guide while objects are selected too: the one Align to Key Object
 /// makes the key when there is no other object to be it.
 fn guide_for_key(app: &VectorcraftApp) -> Option<usize> {
-    app.session.active().filter(|st| !st.selection.is_empty()).and_then(|st| st.selection.guides.first().copied())
+    let st = app.session.active().filter(|st| !st.selection.is_empty())?;
+    let first = st.selection.guides.first().copied()?;
+    vectorcraft_engine::cmd::guide_indexes(&st.doc, &[first]).first().copied()
 }
 
 /// The number of selected ruler guides, which Distribute spaces with the objects (#1597).

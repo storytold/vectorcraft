@@ -12,6 +12,12 @@ workspace = true
 [dependencies]
 chrono = { workspace = true }
 unicode-general-category = "1"
+# The seed of Math.random (interp.rs).
+getrandom = "0.4"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+# The browser's crypto.getRandomValues.
+getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
 proptest = { workspace = true }

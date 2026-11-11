@@ -427,6 +427,8 @@ digits	Malayalam	말라얄람어
 	Smart Punctuation…	스마트 문장 부호…
 	Create Outlines	윤곽선 만들기
 	Optical Margin Alignment	시각적 여백 정렬
+	Dynamic Text	동적 텍스트
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	연결된 문자의 패스 위 문자에는 동적 텍스트를 사용할 수 없습니다: {frames}
 	Fill with Placeholder Text	자리 표시 문자로 채우기
 	Insert Inline Symbol	인라인 심볼 삽입
 	Show Hidden Characters	숨겨진 문자 표시
@@ -2031,6 +2033,7 @@ antiAlias	Sharp	날카롭게
 	Include SVG Code	SVG 코드 포함
 	Include Swatches for Tints	농도별 견본 포함
 	Include non-printing layers	인쇄되지 않는 레이어 포함
+	Write pages longer than 200 in at full size in points	200 in보다 긴 페이지를 실제 크기의 포인트로 기록
 	Ink	잉크
 	Insert Character	문자 삽입
 	Inspect Document	문서 검사
@@ -4936,6 +4939,8 @@ theme	Appearance	외관
 @msg	invalid object id {value}: expected a non-negative integer	개체 id {value}이(가) 올바르지 않습니다: 음이 아닌 정수여야 합니다
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}`의 항목 {index}은(는) {value}이며, 음이 아닌 정수인 개체 id가 아닙니다
 @msg	no such object id {value}	id가 {value}인 개체가 없습니다
+@msg	id {value} is a ruler guide, not an object	id {value}은(는) 개체가 아니라 안내선입니다
+@msg	a ruler guide goes only directly in a layer or sublayer	안내선은 레이어나 하위 레이어 바로 아래에만 둘 수 있습니다
 @msg	id {value} is a layer, not an object	id {value}은(는) 개체가 아닌 레이어입니다
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value}은(는) 개체가 아닌 레이어입니다. 레이어는 layer.move로 이동하세요
 @msg	automation filesystem access is not granted: read authority is absent: {path}	자동화 파일 시스템 접근이 허용되지 않았습니다: 읽기 권한이 없습니다: {path}
@@ -5706,6 +5711,12 @@ axis	Y Axis	Y축
 	Crosshair	십자선
 	Checkpoint	체크포인트
 	Inventory Icons	인벤토리 아이콘
+	Skill Icons	스킬 아이콘
+	Attack	공격
+	Defend	방어
+	Heal	치유
+	Buff	버프
+	Ult	궁극기
 	Sword	검
 	Shield	방패
 	Potion	포션
@@ -5770,6 +5781,11 @@ axis	Y Axis	Y축
 	Dash Trail	대시 트레일
 	Speed Line	스피드 라인
 	Game Trails	게임 트레일
+	Energy Beams	에너지 빔
+	Laser Bolt	레이저 볼트
+	Plasma Arc	플라즈마 아크
+	Charge Wave	차지 웨이브
+	Spark Trail	스파크 트레일
 	Calligraphic Nibs	서예 펜촉
 	Pattern Borders	패턴 테두리
 	Scatter Shapes	흩뿌리기 모양
@@ -6377,8 +6393,14 @@ breakText	Glyphs	글리프
 	Ended at a limit	한도에서 종료됨
 	Stopped	중지됨
 	Ended by an internal fault	내부 오류로 종료됨
-	{ms} ms, {calls} host calls	{ms} ms, 호스트 호출 {calls}회
-	{dropped} earlier lines dropped, {cut} lines cut	이전 줄 {dropped}개 삭제됨, 줄 {cut}개 잘림
+	time unavailable	시간 정보 없음
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	가장 느린 명령: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	호스트 호출 {n}회
+@plural	{n} earlier line dropped|{n} earlier lines dropped	이전 줄 {n}개 삭제됨
+@plural	{n} line cut|{n} lines cut	줄 {n}개 잘림
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다
 
 # Deferred plug-in effects

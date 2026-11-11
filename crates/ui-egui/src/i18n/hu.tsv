@@ -2069,6 +2069,7 @@ file-filter	Templates	Sablonok
 	Include Linked Files	Csatolt fájlok hozzáadása
 	Include Metadata	Metaadatok hozzáadása
 	Include non-printing layers	Nem nyomtatandó rétegek hozzáadása
+	Write pages longer than 200 in at full size in points	200 in-nél hosszabb oldalak írása teljes méretben, pontban
 	Include SVG Code	SVG-kód hozzáadása
 	Include Swatches for Tints	Tónusok színmintáinak felvétele
 	Include tagged source profiles	Címkézett forrásprofilok beágyazása
@@ -2821,6 +2822,8 @@ file-filter	Templates	Sablonok
 	Open…	Megnyitás…
 	Optical	Optikai
 	Optical Margin Alignment	Optikai margóigazítás
+	Dynamic Text	Dinamikus szöveg
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	a láncolt szövegben lévő útvonalszöveg nem használhat dinamikus szöveget: {frames}
 	Optimize for fast web view	Optimalizálás gyors webes megtekintéshez
 	Optimized	Optimalizált
 	Options	Beállítások
@@ -5222,6 +5225,8 @@ imageTrace	Outline	Körvonal
 @msg	invalid object id {value}: expected a non-negative integer	érvénytelen objektumazonosító: {value} (nemnegatív egész szám kell)
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` {index} indexű eleme {value}, nem objektumazonosító (nemnegatív egész szám kell)
 @msg	no such object id {value}	nincs ilyen objektumazonosító: {value}
+@msg	id {value} is a ruler guide, not an object	ez az azonosító segédvonalé, nem objektumé: {value}
+@msg	a ruler guide goes only directly in a layer or sublayer	segédvonal csak közvetlenül rétegben vagy alrétegben lehet
 @msg	id {value} is a layer, not an object	a(z) {value} azonosító egy réteg, nem objektum
 @msg	id {value} is a layer, not an object; move layers with layer.move	a(z) {value} azonosító egy réteg, nem objektum; a rétegeket a layer.move paranccsal helyezheti át
 @msg	object {0} cannot have children	ennek az objektumnak nem lehetnek gyermekei: {0}
@@ -6111,6 +6116,12 @@ axis	Y Axis	Y tengely
 	Crosshair	Célkereszt
 	Checkpoint	Ellenőrzőpont
 	Inventory Icons	Leltári ikonok
+	Skill Icons	Képességikonok
+	Attack	Támadás
+	Defend	Védelem
+	Heal	Gyógyítás
+	Buff	Erősítés
+	Ult	Ult
 	Sword	Kard
 	Shield	Pajzs
 	Potion	Bájital
@@ -6175,6 +6186,11 @@ axis	Y Axis	Y tengely
 	Dash Trail	Szaggatott nyom
 	Speed Line	Sebességvonal
 	Game Trails	Játéknyomok
+	Energy Beams	Energianyalábok
+	Laser Bolt	Lézervillám
+	Plasma Arc	Plazmaív
+	Charge Wave	Töltéshullám
+	Spark Trail	Szikracsík
 	Calligraphic Nibs	Kalligrafikus tollhegyek
 	Pattern Borders	Mintázatszegélyek
 	Scatter Shapes	Szórt alakzatok
@@ -6779,8 +6795,14 @@ breakText	Glyphs	Glifák
 	Ended at a limit	Korlátnál ért véget
 	Stopped	Leállítva
 	Ended by an internal fault	Belső hiba miatt ért véget
-	{ms} ms, {calls} host calls	{ms} ms, {calls} gazdahívás
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} korábbi sor elvetve, {cut} sor levágva
+	time unavailable	az idő nem érhető el
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	leglassabbak: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} gazdahívás
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} korábbi sor elvetve
+@plural	{n} line cut|{n} lines cut	{n} sor levágva
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt
 
 # Deferred plug-in effects

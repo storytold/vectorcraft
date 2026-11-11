@@ -209,9 +209,77 @@ fn tool_schemas_are_valid() {
         "export",
         "undo",
         "redo",
+        "command_list",
+        "command_run",
+        "command_batch",
+        "doc_inspect",
+        "render_preview",
+        "ui_inspect",
+        "ui_screenshot",
+        "type_text",
+        "answer_dialog",
+        "add_text",
+        "apply_effect",
+        "pathfinder",
+        "transform",
+        "create_graph",
+        "text_wrap",
     ] {
         assert!(names.contains(want), "missing tool {want}");
     }
+    assert_eq!(tools.len(), 33, "parity docs and #6460 expect 33 MCP tools");
+}
+
+/// Headless `command_list` must expose engine commands that a stale release CLI used to omit (#6460).
+#[test]
+fn headless_command_list_includes_post_022_engine_commands() {
+    let mut s = server();
+    rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
+    s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    let want = [
+        "actionSet.read",
+        "engine.apiReference",
+        "script.run",
+        "script.stop",
+        "text.spelling.check",
+        "document.move",
+        "document.compare",
+        "edit.newDocumentFromState",
+    ];
+    for (n, id) in want.iter().enumerate() {
+        let r = call(&mut s, 10 + n as u64, "command_list", json!({"filter": id, "brief": true}));
+        assert_eq!(r["isError"], false, "{id}: {r}");
+        let list: Value = serde_json::from_str(&text_of(&r)).unwrap();
+        assert!(list.as_array().unwrap().iter().any(|c| c["id"] == *id), "missing {id} in {list}");
+    }
+}
+
+/// Headless `command_list` lists desktop UI commands with `ui: true` (#6460).
+#[test]
+fn headless_command_list_includes_ui_commands() {
+    let mut s = server();
+    rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
+    s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    let want = [
+        "addon.arrange.zoomSelection",
+        "file.newDialog",
+        "view.fitArtboard",
+        "view.rotateReset",
+        "app.quit",
+        "window.arrange.tile",
+        "align.horizontalLeft",
+        "ui.action.play",
+    ];
+    for (n, id) in want.iter().enumerate() {
+        let r = call(&mut s, 20 + n as u64, "command_list", json!({"filter": id, "brief": true}));
+        assert_eq!(r["isError"], false, "{id}: {r}");
+        let list: Value = serde_json::from_str(&text_of(&r)).unwrap();
+        let entry = list.as_array().unwrap().iter().find(|c| c["id"] == *id).unwrap_or_else(|| panic!("missing {id} in {list}"));
+        assert_eq!(entry["ui"], true, "{entry}");
+    }
+    let r = call(&mut s, 40, "command_run", json!({"id": "view.fitArtboard", "params": {}}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains("--connect"), "{r}");
 }
 
 // ---------- headless end-to-end ----------

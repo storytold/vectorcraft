@@ -525,6 +525,51 @@ fn many_objects_of_one_name_are_numbered_in_turn() {
     assert!(text.contains("(Dot_00000000000000019999_)"));
 }
 
+/// A document with one top-level layer for each of the 27 layer colour presets, named after its
+/// position.
+fn every_layer_preset() -> Document {
+    let mut doc = Document::new(100.0, 100.0);
+    doc.layers.clear();
+    for i in 0..vectorcraft_doc::LAYER_COLORS.len() {
+        let id = doc.alloc_id();
+        doc.layers.push(Arc::new(Node::layer(id, &format!("P{i}"), LayerColor::Preset(u8::try_from(i).unwrap()))));
+    }
+    doc
+}
+
+/// #6502: Yellow, Magenta and Cyan (presets 4, 5 and 6) are written as the file's indexes 6, 4
+/// and 5, with their own RGB beside them; every other preset keeps its position.
+#[test]
+fn layer_presets_are_written_with_the_files_colour_index() {
+    let text = program(&every_layer_preset());
+    for (i, (_, [r, g, b])) in vectorcraft_doc::LAYER_COLORS.iter().enumerate() {
+        let index = match i {
+            4 => 6,
+            5 => 4,
+            6 => 5,
+            i => i,
+        };
+        let want = format!(" {index} {r} {g} {b} 0 50 0 Lb\n(P{i}) Ln\n");
+        assert!(text.contains(&want), "missing {want:?}");
+    }
+}
+
+/// #6502: every preset comes back as itself after a save and an open.
+#[test]
+fn layer_presets_survive_a_round_trip() {
+    let doc = read_back(&every_layer_preset());
+    let colors: Vec<LayerColor> = doc
+        .layers
+        .iter()
+        .map(|l| match l.kind {
+            NodeKind::Layer { color, .. } => color,
+            _ => panic!("{:?}", l.kind),
+        })
+        .collect();
+    let want: Vec<LayerColor> = (0..27u8).map(LayerColor::Preset).collect();
+    assert_eq!(colors, want);
+}
+
 #[test]
 fn layers_have_fourteen_operands() {
     let text = program(&sample());
@@ -4291,6 +4336,36 @@ fn scaled_area_type_and_type_on_a_path_stay_type() {
     doc.insert(Some(layer), usize::MAX, first).unwrap();
     doc.insert(Some(layer), usize::MAX, second).unwrap();
     assert!(!program(&doc).contains("/AI11Text"));
+}
+
+/// Type on a path with Dynamic Text is written as type at the sizes it is drawn at, with a warning
+/// that the setting is not written.
+#[test]
+fn dynamic_text_is_written_at_its_drawn_sizes() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let mut doc = Document::new(600.0, 300.0);
+    let layer = doc.layers[0].id;
+    let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Grow", style(12.0, Color::BLACK));
+    t.kind = TextKind::OnPath {
+        path: shapes::line(vectorcraft_geom::Point::new(50.0, 200.0), vectorcraft_geom::Point::new(550.0, 200.0)),
+        start: 0.0,
+        end: None,
+    };
+    t.xf = Affine::IDENTITY;
+    t.dynamic_text = true;
+    let drawn = 12.0 * vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).fit_scale;
+    assert!(drawn > 50.0, "{drawn}");
+    let node = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, node).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::DYNAMIC_TEXT), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let texts: Vec<&TextObject> =
+        back.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.as_ref()) } else { None }).collect();
+    assert_eq!(texts.len(), 1);
+    assert!(!texts[0].dynamic_text);
+    let k = texts[0].xf.as_coeffs()[0];
+    assert_eq!(r3(texts[0].runs[0].style.size * k), r3(drawn));
 }
 
 /// See-through type with the knockout shape flag comes back with the flag and writes no warning.

@@ -92,6 +92,7 @@
 	Spelling	მართლწერა
 	Auto Spell Check	მართლწერის ავტომატური შემოწმება
 	Check Spelling…	მართლწერის შემოწმება…
+	Check Spelling	მართლწერის შემოწმება
 	Edit Custom Dictionary…	მომხმარებლის ლექსიკონის რედაქტირება…
 	Edit Colors	ფერების რედაქტირება
 	Recolor Artwork…	ნახატის ხელახლა შეფერადება…
@@ -331,6 +332,8 @@
 	Smart Punctuation…	ჭკვიანი პუნქტუაცია…
 	Create Outlines	კონტურებად გარდაქმნა
 	Optical Margin Alignment	ოპტიკური არშიის სწორება
+	Dynamic Text	დინამიკური ტექსტი
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ გამოიყენებს დინამიკურ ტექსტს: {frames}
 	Fill with Placeholder Text	შემავსებელი ტექსტით შევსება
 	Insert Inline Symbol	ჩადგმული სიმბოლოს ჩასმა
 	Show Hidden Characters	დამალული სიმბოლოების ჩვენება
@@ -362,6 +365,8 @@
 	Stroke Pattern	კონტურის პატერნი
 	Patterns	პატერნები
 	Stroke Weight	კონტურის სისქე
+	Stroke Weight Up	კონტურის სისქის გაზრდა
+	Stroke Weight Down	კონტურის სისქის შემცირება
 	Graphic Style	გრაფიკული სტილი
 	Symbol Instance	სიმბოლოს ეგზემპლარი
 	Link Block Series	დაკავშირებული ბლოკების სერია
@@ -451,6 +456,13 @@
 	Feather…	კიდეების შერბილება…
 	SVG Filters	SVG ფილტრები
 	Apply SVG Filter…	SVG ფილტრის გამოყენება…
+	Apply SVG Filter	SVG ფილტრის გამოყენება
+	SVG Filter	SVG ფილტრი
+	New SVG Filter	ახალი SVG ფილტრი
+	Edit SVG Filter	SVG ფილტრის რედაქტირება
+	Delete SVG Filter	SVG ფილტრის წაშლა
+	Import SVG Filter	SVG ფილტრის იმპორტირება
+	Import SVG Filter…	SVG ფილტრის იმპორტირება…
 	Warp	გაღუნვა
 	Arc…	რკალი…
 	Arc Lower…	ქვედა რკალი…
@@ -1515,6 +1527,13 @@ digits	Malayalam	მალაიალამური
 	Radial Gradient	რადიალური გრადიენტი
 	Reset to White, Black	თეთრზე და შავზე დაბრუნება
 	Reverse Gradient	გრადიენტის შებრუნება
+	Gradient Presets	გრადიენტის პრესეტები
+	Apply Gradient Preset	გრადიენტის პრესეტის გამოყენება
+	Save Gradient Preset	გრადიენტის პრესეტის შენახვა
+	Save Gradient Preset…	გრადიენტის პრესეტის შენახვა…
+	Delete Gradient Preset	გრადიენტის პრესეტის წაშლა
+	Show Presets	პრესეტების ჩვენება
+	Hide Presets	პრესეტების დამალვა
 	Save to Swatches	ფერის ნიმუშებში შენახვა
 	Delete Graphic Style (Alt-click: without asking)	გრაფიკული სტილის წაშლა (Alt-დაწკაპუნებით: დაუკითხავად)
 	Delete the graphic style “{name}”?	წაიშალოს გრაფიკული სტილი „{name}“?
@@ -1553,6 +1572,7 @@ digits	Malayalam	მალაიალამური
 	Rename Preset	პრესეტის სახელის შეცვლა
 	Save Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის შენახვა
 	Delete Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის წაშლა
+	Cancel Image Trace	გამოსახულების ვექტორიზაციის გაუქმება
 	Method:	მეთოდი:
 	Mode:	რეჟიმი:
 	Noise	ხმაური
@@ -2572,6 +2592,7 @@ antiAlias	Sharp	მკვეთრი
 	General › Thumbnails	ზოგადი › ესკიზები
 	Grayscale images	ნაცრისფერი გამოსახულებები
 	Include non-printing layers	არაბეჭდვადი შრეების ჩართვა
+	Write pages longer than 200 in at full size in points	200 in-ზე გრძელი გვერდების სრული ზომით, პუნქტებში ჩაწერა
 	Left:	მარცხნივ:
 	Mark as trapped	ტრაპინგის მარკირება
 	Marks and Bleeds	ნიშნები და ჭრისპირა არეები
@@ -2946,6 +2967,7 @@ theme	Appearance	იერსახე
 	Reshape Segment	სეგმენტის ფორმის შეცვლა
 	Split Path	ტრაექტორიის გაყოფა
 	Activate Document	დოკუმენტის გააქტიურება
+	Move Document	დოკუმენტის გადატანა
 	Delete	წაშლა
 	Document JSON	დოკუმენტის JSON
 	Duplicate	დუბლირება
@@ -2961,6 +2983,8 @@ theme	Appearance	იერსახე
 	Effects	ეფექტები
 	Move Effect	ეფექტის გადატანა
 	Remove Effect	ეფექტის წაშლა
+	Duplicate Effects	ეფექტების დუბლირება
+	Remove Effects	ეფექტების წაშლა
 	Expand Options	გაშლის პარამეტრები
 	File Info	ფაილის ინფორმაცია
 	Batch	პაკეტური დამუშავება
@@ -3364,6 +3388,7 @@ theme	Appearance	იერსახე
 	Use Japanese Crop Marks	იაპონური ჭრის ნიშნების გამოყენება
 	Use Low Resolution Proxy for Linked EPS	დაბალი გარჩევადობის პროქსის გამოყენება დაკავშირებული EPS-ისთვის
 	Use Precise Cursors	ზუსტი კურსორების გამოყენება
+	Caps Lock Cursor State	Caps Lock-ის მდგომარეობა (კურსორი)
 	Use Preview Bounds	გადახედვის საზღვრების გამოყენება
 	When pasting text	ტექსტის ჩასმისას
 	XML ID	XML ID
@@ -3520,6 +3545,8 @@ axis	Both	ორივე
 	List Folder	საქაღალდის სია
 	Area Type Options	არის ტექსტის პარამეტრები
 	Reshape Type Area	ტექსტის არის ფორმის შეცვლა
+	Reshape Type Path	ტექსტის ტრაექტორიის ფორმის შეცვლა
+	Move Type Path Handle	ტექსტის ტრაექტორიის სახელურის გადაადგილება
 	Scale	მასშტაბი
 	Feet & Inches	ფუტები და დუიმები
 	Pixels	პიქსელები
@@ -3765,6 +3792,7 @@ font-technology	Variable	ცვლადი
 	Flip	არეკვლა
 	Couldn't {} {name}: {e}	ვერ მოხერხდა {}: {name}: {e}
 	Delete Character Style	სიმბოლოს სტილის წაშლა
+	Edit Character Style	სიმბოლოს სტილის რედაქტირება
 	Delete Layer	შრის წაშლა
 	Delete Paragraph Style	აბზაცის სტილის წაშლა
 	Duplicate Character Style	სიმბოლოს სტილის დუბლირება
@@ -4599,6 +4627,8 @@ font-technology	Variable	ცვლადი
 @msg	invalid object id {value}: expected a non-negative integer	ობიექტის არასწორი id {value}: მოსალოდნელია არაუარყოფითი მთელი რიცხვი
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}`-ის ელემენტი {index} არის {value} და არა ობიექტის id (არაუარყოფითი მთელი რიცხვი)
 @msg	no such object id {value}	ობიექტი id-ით {value} არ არსებობს
+@msg	id {value} is a ruler guide, not an object	id {value} დამხმარე ხაზისაა და არა ობიექტის
+@msg	a ruler guide goes only directly in a layer or sublayer	დამხმარე ხაზი შეიძლება იყოს მხოლოდ უშუალოდ შრეში ან ქვეშრეში
 @msg	id {value} is a layer, not an object	id {value} შრეა და არა ობიექტი
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} შრეა და არა ობიექტი; შრეების გადასატანად გამოიყენეთ layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	ავტომატიზაციას ფაილურ სისტემაზე წვდომა არ აქვს: წაკითხვის უფლება არ არის: {path}
@@ -5183,6 +5213,7 @@ mark-style	Japanese	იაპონური
 imageTrace	Outline	კონტური
 	Run	გაშვება
 	Run Script	სკრიპტის გაშვება
+	List Installed Scripts	დაინსტალირებული სკრიპტების სია
 	Stop Script	სკრიპტის შეჩერება
 	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
 	A Script Is Running	სკრიპტი მუშაობს
@@ -5204,7 +5235,7 @@ imageTrace	Outline	კონტური
 	Some scripts were not listed	ზოგიერთი სკრიპტი არ არის ჩამოთვლილი
 	The Scripts folder cannot be read	Scripts საქაღალდის წაკითხვა შეუძლებელია
 @msg	the script's run is no longer available	სკრიპტის გაშვება აღარ არის ხელმისაწვდომი
-@msg	a failed command changed undo steps that could not be put back, so the script was stopped	წარუმატებელმა ბრძანებამ შეცვალა გაუქმების ნაბიჯები, რომელთა აღდგენა ვერ მოხერხდა, ამიტომ სკრიპტი შეჩერდა
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	წარუმატებელმა ბრძანებამ დაბრუნების ნაბიჯები შეცვალა და მათი პირვანდელ მდგომარეობაში მოყვანა ვერ მოხერხდა, ამიტომ სკრიპტი შეჩერდა
 @msg	a recovery copy could not be written, so the script was not run	აღდგენის ასლის ჩაწერა ვერ მოხერხდა, ამიტომ სკრიპტი არ გაეშვა
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
@@ -5722,7 +5753,7 @@ imageTrace	Outline	კონტური
 @msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	ბრტყელი ლოგოს რეჟიმი keepColors-ს არ იყენებს: ის ვექტორიზებს logoColors-ში მითითებულ ფერებს ან მის მიერ ნაპოვნ ფერებს.
 @msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	არაფერი ვექტორიზდა: ვექტორიზაციის მიერ ნაპოვნი არცერთი ფერი არ შეესაბამება keepColors-ს ({_1}).
 @msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	არაფერი ვექტორიზდა: ფერის იგნორირება გამოტოვებს keepColors-ში ჩამოთვლილი ფერების ყველა არეს.
-@msg	Nothing was traced: the colors that match keepColors produce no paths.	არაფერი ვექტორიზდა: keepColors-ის შესაბამისი ფერებიდან არცერთი კონტური არ მიიღება.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	არაფერი ვექტორიზდა: keepColors-ის შესაბამისი ფერებიდან არცერთი ტრაექტორია არ მიიღება.
 @msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ვექტორიზაციის მიერ ნაპოვნი არცერთი ფერი არ შეესაბამება {c}-ს, ამიტომ მისგან არაფერი ვექტორიზდება.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup`-ს სჭირდება `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup`-ს სჭირდება `palette: "documentLibrary"`
@@ -5776,6 +5807,8 @@ imageTrace	Outline	კონტური
 	Clear History	ისტორიის გასუფთავება
 	New Document from State	ახალი დოკუმენტი მდგომარეობიდან
 	Continue in Background	ფონურ რეჟიმში გაგრძელება
+	Cancel Opening	გახსნის გაუქმება
+	Reading the file…	ფაილი იკითხება…
 	Artboard {n} of {total}	სამუშაო დაფა {n} / {total}
 	File {n} of {total}	ფაილი {n} / {total}
 	Auto Leading:	ავტომატური სტრიქონთა დაშორება:
@@ -6051,6 +6084,12 @@ axis	Y Axis	Y ღერძი
 	Crosshair	სამიზნე
 	Checkpoint	საკონტროლო წერტილი
 	Inventory Icons	ინვენტარის ხატულები
+	Skill Icons	უნარების ხატულები
+	Attack	შეტევა
+	Defend	თავდაცვა
+	Heal	განკურნება
+	Buff	გაძლიერება
+	Ult	ულტი
 	Sword	მახვილი
 	Shield	ფარი
 	Potion	წამალი
@@ -6115,6 +6154,11 @@ axis	Y Axis	Y ღერძი
 	Dash Trail	წყვეტილი კვალი
 	Speed Line	სიჩქარის ხაზი
 	Game Trails	თამაშის კვალი
+	Energy Beams	ენერგიის სხივები
+	Laser Bolt	ლაზერული ჭავლი
+	Plasma Arc	პლაზმის რკალი
+	Charge Wave	მუხტის ტალღა
+	Spark Trail	ნაპერწკლის კვალი
 	Calligraphic Nibs	კალიგრაფიული წვერები
 	Pattern Borders	პატერნის ბორდიურები
 	Scatter Shapes	გაბნეული ფიგურები
@@ -6325,6 +6369,7 @@ anchor	Points:	წერტილები:
 	Parametric Shape Tool	პარამეტრული ფიგურის ხელსაწყო
 	Parametric Shape	პარამეტრული ფიგურა
 	Edit Parametric Shape	პარამეტრული ფიგურის რედაქტირება
+	Configure Shape	ფიგურის პარამეტრების შეცვლა
 	Convert to Parametric Shape	პარამეტრულ ფიგურად გარდაქმნა
 	Ring	რგოლი
 	Heart	გული
@@ -6605,10 +6650,28 @@ breakText	Glyphs	გლიფები
 	Malayalam	მალაიალამური
 	Odia	ორია
 	Urdu	ურდუ
+	Assamese	ასამური
+	Sanskrit	სანსკრიტი
+	German: Swiss	გერმანული: შვეიცარია
+	Catalan	კატალანური
+	Danish	დანიური
+	Swedish	შვედური
+	Finnish	ფინური
+	Norwegian	ნორვეგიული
+	Polish	პოლონური
+	Czech	ჩეხური
+	Russian	რუსული
+	Bulgarian	ბულგარული
+	Serbian: Cyrillic	სერბული: კირილიცა
+	Serbian: Latin	სერბული: ლათინიცა
+	Croatian	ხორვატული
+	Turkish	თურქული
+	Chinese	ჩინური
 	VectorCraft {release} and later (version {n})	VectorCraft {release} და უფრო ახალი (ვერსია {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	ყველა ღია დოკუმენტის ექსპორტი PDF-ად
 	Export All Open Documents as SVG	ყველა ღია დოკუმენტის ექსპორტი SVG-ად
+	Export All Open Documents	ყველა ღია დოკუმენტის ექსპორტირება
 @msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
 # Document Tools add-on: Batch Trace Folder (#4921).
@@ -6622,6 +6685,7 @@ breakText	Glyphs	გლიფები
 	Static Symbol	სტატიკური სიმბოლო
 	Symbol Instance Appearance	სიმბოლოს ეგზემპლარის იერსახე
 	Reset Symbol Instance	სიმბოლოს ეგზემპლარის ჩამოყრა
+	Select Symbol Instance Part	სიმბოლოს ეგზემპლარის ნაწილის მონიშვნა
 @msg	type must be static or dynamic, not {v}	type უნდა იყოს static ან dynamic და არა {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` სტატიკური სიმბოლოა: ჯერ სიმბოლოს ტიპად დააყენეთ „დინამიკური“
 @msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	სიმბოლოს ეგზემპლარში მონიშნული მრუდის, შედგენილი მრუდის ან ტექსტის მხოლოდ შევსება, კონტური, გამჭვირვალობა და შერევა შეიძლება შეიცვალოს
@@ -6841,7 +6905,12 @@ font-script	Japanese	იაპონური
 	Ignore All	ყველას იგნორირება
 	Add to Dictionary	ლექსიკონში დამატება
 	No Suggestions	შემოთავაზებები არ არის
+	Copies per Sheet (as many as fit, in a grid)	ასლები ფურცელზე (რამდენიც დაეტევა, ბადედ)
 	Edit Custom Dictionary	მომხმარებლის ლექსიკონის რედაქტირება
+	Add to Custom Dictionary	მომხმარებლის ლექსიკონში დამატება
+	Change in Custom Dictionary	მომხმარებლის ლექსიკონში შეცვლა
+	Delete from Custom Dictionary	მომხმარებლის ლექსიკონიდან წაშლა
+	Spelling Suggestions	მართლწერის შეთავაზებები
 	Entry:	ჩანაწერი:
 # Script Console
 	Script Console	სკრიპტების კონსოლი
@@ -6856,8 +6925,14 @@ font-script	Japanese	იაპონური
 	Ended at a limit	დასრულდა ლიმიტზე
 	Stopped	შეჩერდა
 	Ended by an internal fault	დასრულდა შიდა შეცდომის გამო
-	{ms} ms, {calls} host calls	{ms} ms, ჰოსტის {calls} გამოძახება
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ძველი სტრიქონი წაიშალა, {cut} სტრიქონი შემოკლდა
+	time unavailable	დრო მიუწვდომელია
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	ყველაზე ნელი: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	ჰოსტის {n} გამოძახება
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ძველი სტრიქონი წაიშალა
+@plural	{n} line cut|{n} lines cut	{n} სტრიქონი შემოკლდა
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
 
 # Deferred plug-in effects

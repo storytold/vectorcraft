@@ -129,10 +129,17 @@ impl Headless {
     fn exec(&mut self, id: &str, params: &Value) -> Result<Value, String> {
         // A key the command's description doesn't name is an error, not a default (#1442).
         match HOST_COMMANDS.iter().find(|c| c.0 == id) {
-            Some((_, _, doc)) => vectorcraft_engine::check_keys(id, doc, params),
-            None => self.session.check_params(id, params),
+            Some((_, _, doc)) => vectorcraft_engine::check_keys(id, doc, params).map_err(|e| e.to_string())?,
+            None if vectorcraft_engine::find_command(id).is_some() => {
+                self.session.check_params(id, params).map_err(|e| e.to_string())?;
+            }
+            None if crate::ui_catalog::UI_COMMANDS.iter().any(|(cid, ..)| *cid == id) => {
+                return Err(format!(
+                    "`{id}` is a desktop UI command (`ui: true`); start `vectorcraft --control 7979` and use `vectorcraft-cli mcp --connect`"
+                ));
+            }
+            None => self.session.check_params(id, params).map_err(|e| e.to_string())?,
         }
-        .map_err(|e| e.to_string())?;
         match id {
             "file.open" => self.open(params),
             "file.save" => self.save(params),
@@ -146,8 +153,29 @@ impl Headless {
 
     fn commands(&self) -> Value {
         let mut v: Vec<Value> = self.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();
+        let mut seen: std::collections::HashSet<String> = v.iter().filter_map(|c| c.get("id").and_then(Value::as_str).map(str::to_owned)).collect();
         for (id, label, params) in HOST_COMMANDS {
+            if !seen.insert((*id).to_owned()) {
+                continue;
+            }
             v.push(json!({"id": id, "label": label, "menu": [], "shortcut": null, "params": params, "enabled": true, "host": true}));
+        }
+        // Desktop menu commands (`UI_COMMANDS`): listed for discovery with `ui: true`. Running one
+        // that only the desktop app implements still needs `--connect` (see `exec`).
+        for (id, label, shortcut, params) in crate::ui_catalog::UI_COMMANDS {
+            if !seen.insert((*id).to_owned()) {
+                continue;
+            }
+            let sc = if shortcut.is_empty() { Value::Null } else { json!(shortcut) };
+            v.push(json!({
+                "id": id,
+                "label": label,
+                "menu": [],
+                "shortcut": sc,
+                "params": params,
+                "enabled": true,
+                "ui": true,
+            }));
         }
         Value::Array(v)
     }

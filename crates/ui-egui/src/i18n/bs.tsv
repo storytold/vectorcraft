@@ -399,6 +399,7 @@
 	Smart Punctuation…	Pametna interpunkcija…
 	Create Outlines	Kreiraj obrise
 	Optical Margin Alignment	Optičko poravnanje margina
+	Dynamic Text	Dinamički tekst
 	Fill with Placeholder Text	Ispuni tekstom čuvara mjesta
 	Insert Inline Symbol	Umetni simbol u redu
 	Show Hidden Characters	Prikaži skrivene znakove
@@ -2878,6 +2879,7 @@ antiAlias	Sharp	Oštro
 	General › Thumbnails	Općenito › Sličice
 	Grayscale images	Slike u nijansama sive
 	Include non-printing layers	Uključi slojeve koji se ne štampaju
+	Write pages longer than 200 in at full size in points	Upiši stranice duže od 200 in u punoj veličini, u tačkama
 	Left:	Lijevo:
 	Mark as trapped	Označi kao zarobljeno
 	Marks and Bleeds	Oznake i napusti
@@ -5110,6 +5112,8 @@ imageTrace	Outline	Obris
 @msg	invalid object id {value}: expected a non-negative integer	nevažeći ID objekta {value}: očekuje se nenegativan cijeli broj
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	stavka {index} u `{key}` je {value}, a ne ID objekta (nenegativan cijeli broj)
 @msg	no such object id {value}	nema objekta s ID-om {value}
+@msg	id {value} is a ruler guide, not an object	ID {value} je vodilica, a ne objekat
+@msg	a ruler guide goes only directly in a layer or sublayer	vodilica može biti samo direktno u sloju ili podsloju
 @msg	id {value} is a layer, not an object	id {value} je sloj, a ne objekat
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} je sloj, a ne objekat; slojeve pomjerajte s layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	pristup datotečnom sistemu za automatizaciju nije odobren: nema ovlaštenja za čitanje: {path}
@@ -5944,6 +5948,12 @@ axis	Y Axis	Y osa
 	Crosshair	Nišan
 	Checkpoint	Kontrolna tačka
 	Inventory Icons	Ikone inventara
+	Skill Icons	Ikone vještina
+	Attack	Napad
+	Defend	Odbrana
+	Heal	Iscjeljenje
+	Buff	Pojačanje
+	Ult	Ult
 	Sword	Mač
 	Shield	Štit
 	Potion	Napitak
@@ -6008,6 +6018,11 @@ axis	Y Axis	Y osa
 	Dash Trail	Isprekidani trag
 	Speed Line	Linija brzine
 	Game Trails	Tragovi igre
+	Energy Beams	Energetski snopovi
+	Laser Bolt	Laserski metak
+	Plasma Arc	Plazma luk
+	Charge Wave	Talas naboja
+	Spark Trail	Trag iskri
 	Calligraphic Nibs	Kaligrafski vrhovi
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici
@@ -6572,8 +6587,14 @@ shape	Open	Otvoren
 	Ended at a limit	Završeno na ograničenju
 	Stopped	Zaustavljeno
 	Ended by an internal fault	Završeno zbog interne greške
-	{ms} ms, {calls} host calls	{ms} ms, {calls} poziva hosta
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ranijih redova uklonjeno, {cut} redova skraćeno
+	time unavailable	vrijeme nije dostupno
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	najsporije: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} poziv hosta|{n} poziva hosta|{n} poziva hosta
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} raniji red uklonjen|{n} ranija reda uklonjena|{n} ranijih redova uklonjeno
+@plural	{n} line cut|{n} lines cut	{n} red skraćen|{n} reda skraćena|{n} redova skraćeno
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte

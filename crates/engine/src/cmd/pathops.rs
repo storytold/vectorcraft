@@ -719,7 +719,7 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
 /// Pathfinder panel › Trap ([`vectorcraft_render::effects::trap`]): the traps between the selected
 /// objects' leaf shapes, as one group of overprinting paths above the topmost selected object.
 fn trap(s: &mut Session, p: &Value) -> Result<Value> {
-    use vectorcraft_render::effects::trap::{TRAP_LABEL, TrapOptions, TrapSource, trap_appearance, traps};
+    use vectorcraft_render::effects::trap::{TRAP_LABEL, TrapOptions, TrapSource, trap_appearance, try_traps};
     const ID: &str = "object.pathfinder.trap";
     let mut q = p.clone();
     if let Some(t) = length_given(p, "thickness", ID)? {
@@ -758,7 +758,12 @@ fn trap(s: &mut Session, p: &Value) -> Result<Value> {
         if sources.iter().filter(|s| s.fill.color().is_some()).count() < 2 {
             return Err(EngineError::Other("Trap: select two or more objects filled with solid colours".into()));
         }
-        let made = traps(&sources, &options);
+        let Some(made) = try_traps(&sources, &options) else {
+            return Err(EngineError::Other(format!(
+                "Trap: more than {} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time",
+                vectorcraft_render::effects::trap::MAX_NEAR_PAIRS
+            )));
+        };
         if made.is_empty() {
             return Err(EngineError::Other("Trap: no edges of different colours meet among the selected objects".into()));
         }
@@ -1346,7 +1351,9 @@ fn split_into_grid(s: &mut Session, p: &Value) -> Result<Value> {
             let node = shape_node(d, c, Some(&top));
             out.push(d.insert(par, idx + k, node)?);
         }
-        d.guides.extend(edges.iter().map(|&(vertical, pos)| vectorcraft_doc::Guide { layer, ..vectorcraft_doc::Guide::new(vertical, pos) }));
+        for &(vertical, pos) in &edges {
+            d.add_ruler_guide(&vectorcraft_doc::Guide { layer, ..vectorcraft_doc::Guide::new(vertical, pos) });
+        }
         sel.set(out.iter().copied());
         Ok(out)
     })?;

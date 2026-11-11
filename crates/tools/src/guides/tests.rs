@@ -22,6 +22,25 @@ fn snaps_to_anchor_and_alignment() {
     assert_eq!(p.y, 200.0);
 }
 
+/// #4312: a Shift move slides the selection along its line onto a ruler guide, but not far to
+/// meet one a nearly parallel line only reaches a long way off.
+#[test]
+fn a_slide_along_a_line_lands_the_bounds_on_a_ruler_guide_within_reach() {
+    let t = Targets { rulers: vec![Ruler { vertical: true, pos: 300.0, span: None }], ..Targets::default() };
+    let r = Rect::new(248.0, 10.0, 298.0, 40.0);
+    let p = Point::new(270.0, 25.0);
+    // Level: the right edge is 2 short of the guide, which is the way along the line.
+    assert_eq!(t.snap_moved_along_to_rulers(p, r, Vec2::new(1.0, 0.0), 4.0).0, Vec2::new(2.0, 0.0));
+    // On the diagonal it is 2.8 along.
+    let (d, ov) = t.snap_moved_along_to_rulers(p, r, Vec2::new(1.0, 1.0), 4.0);
+    assert!((d - Vec2::new(2.0, 2.0)).hypot() < 1e-9 && !ov.is_empty(), "{d:?}");
+    // Nearly upright, it would take about 118 along the line to meet the guide.
+    assert_eq!(t.snap_moved_along_to_rulers(p, r, Vec2::new(0.017, 1.0), 4.0).0, Vec2::ZERO);
+    // A guide of an artboard needs the selection to run past it.
+    let bounded = Targets { rulers: vec![Ruler { vertical: true, pos: 300.0, span: Some((100.0, 200.0)) }], ..Targets::default() };
+    assert_eq!(bounded.snap_moved_along_to_rulers(p, r, Vec2::new(1.0, 0.0), 4.0).0, Vec2::ZERO);
+}
+
 #[test]
 fn rect_snap_aligns_edges() {
     let (d, id) = doc_with_rect();
@@ -423,9 +442,9 @@ fn drawn_points_land_on_intersections() {
         let id = d.alloc_id();
         d.insert(Some(l), 1, Node::path(id, path, Appearance::default_art())).unwrap();
     }
-    d.guides.push(vectorcraft_doc::Guide::new(true, 400.0));
-    d.guides.push(vectorcraft_doc::Guide::new(false, 300.0));
-    d.guides.push(vectorcraft_doc::Guide::new(false, 150.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 400.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 300.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 150.0));
     let (s, p) = (Selection::default(), paint());
     let c = ToolContext { guides: true, ..cx(&d, &s, &p) };
     let t = Targets::for_drawing(&d, &[], None, None).styled(&c).with_rulers(&c);
@@ -593,8 +612,8 @@ fn bisection_finds_what_a_scan_finds() {
 #[test]
 fn drawn_points_snap_to_ruler_guides_with_smart_guides_on() {
     let (mut d, _) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 313.0));
-    d.guides.push(vectorcraft_doc::Guide::new(true, 331.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 313.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 331.0));
     let (s, p) = (Selection::default(), paint());
     let c = cx(&d, &s, &p);
     let mut snap = DrawSnap::default();

@@ -1456,6 +1456,7 @@ antiAlias	Sharp	Nítido
 	Include SVG Code	Incluir Código SVG
 	Include Swatches for Tints	Incluir Amostras para Tons
 	Include non-printing layers	Incluir camadas de não impressão
+	Write pages longer than 200 in at full size in points	Gravar páginas com mais de 200 in em tamanho real, em pontos
 	Inflate…	Inflar…
 	Info	Informações
 	Ink	Tinta
@@ -1930,6 +1931,8 @@ antiAlias	Sharp	Nítido
 	Open…	Abrir…
 	Optical	Óptico
 	Optical Margin Alignment	Alinhamento de Margem Óptica
+	Dynamic Text	Texto Dinâmico
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	o texto em um caminho de um texto encadeado não pode usar Texto Dinâmico: {frames}
 	Optimize for fast web view	Otimizar para visualização rápida na web
 	Optimized	Otimizado
 	Options	Opções
@@ -4433,6 +4436,8 @@ axis	Both	Ambos
 @msg	invalid object id {value}: expected a non-negative integer	id de objeto inválido {value}: era esperado um inteiro não negativo
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	a entrada {index} de `{key}` é {value}, não um id de objeto (inteiro não negativo)
 @msg	no such object id {value}	não existe objeto com o id {value}
+@msg	id {value} is a ruler guide, not an object	o id {value} é de uma guia, não de um objeto
+@msg	a ruler guide goes only directly in a layer or sublayer	uma guia só pode ficar diretamente em uma camada ou subcamada
 @msg	id {value} is a layer, not an object	o id {value} é uma camada, não um objeto
 @msg	id {value} is a layer, not an object; move layers with layer.move	o id {value} é uma camada, não um objeto; mova camadas com layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	o acesso da automação ao sistema de arquivos não foi concedido: falta autorização de leitura: {path}
@@ -6043,6 +6048,12 @@ axis	Y Axis	Eixo Y
 	Crosshair	Mira
 	Checkpoint	Ponto de verificação
 	Inventory Icons	Ícones de inventário
+	Skill Icons	Ícones de habilidade
+	Attack	Ataque
+	Defend	Defesa
+	Heal	Cura
+	Buff	Buff
+	Ult	Ult
 	Sword	Espada
 	Shield	Escudo
 	Potion	Poção
@@ -6107,6 +6118,11 @@ axis	Y Axis	Eixo Y
 	Dash Trail	Rastro tracejado
 	Speed Line	Linha de velocidade
 	Game Trails	Rastros de jogo
+	Energy Beams	Feixes de energia
+	Laser Bolt	Raio laser
+	Plasma Arc	Arco de plasma
+	Charge Wave	Onda de carga
+	Spark Trail	Rastro de faíscas
 	Calligraphic Nibs	Penas Caligráficas
 	Pattern Borders	Bordas de Padrão
 	Scatter Shapes	Formas de Dispersão
@@ -6868,8 +6884,14 @@ swatch	Yellow Green	Verde-amarelado
 	Ended at a limit	Encerrado em um limite
 	Stopped	Interrompido
 	Ended by an internal fault	Encerrado por um erro interno
-	{ms} ms, {calls} host calls	{ms} ms, {calls} chamadas ao host
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} linhas anteriores descartadas, {cut} linhas cortadas
+	time unavailable	tempo indisponível
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	mais lentos: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} chamada ao host|{n} chamadas ao host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} linha anterior descartada|{n} linhas anteriores descartadas
+@plural	{n} line cut|{n} lines cut	{n} linha cortada|{n} linhas cortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`
 
 # Deferred plug-in effects

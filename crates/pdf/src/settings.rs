@@ -236,6 +236,10 @@ pub struct PdfSettings {
     /// Keep the layers whose Print option is off (they are left out otherwise, unless
     /// `create_layers` is on).
     pub include_non_printing: bool,
+    /// Write a page with a side longer than 14,400 pt (200 in) at its size in points, without a
+    /// `UserUnit`, at every PDF version (off: PDF 1.6 and later files that aren't PDF/X files
+    /// write it with a `UserUnit`, and PDF 1.5 files are written as PDF 1.6 for it).
+    pub long_pages_in_points: bool,
     pub compression: CompressionSettings,
     pub marks: MarkSettings,
     pub bleed: BleedSettings,

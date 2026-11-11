@@ -1683,6 +1683,7 @@ file-filter	Templates	Шаблоны
 	Include Linked Files	Включать связанные файлы
 	Include Metadata	Включать метаданные
 	Include non-printing layers	Включать непечатаемые слои
+	Write pages longer than 200 in at full size in points	Записывать страницы длиннее 200 in в полном размере, в пунктах
 	Include SVG Code	Включать код SVG
 	Include Swatches for Tints	Включать образцы для оттенков
 	Inflate…	Надувание…
@@ -2359,6 +2360,8 @@ file-filter	Templates	Шаблоны
 	Open…	Открыть…
 	Optical	Оптический
 	Optical Margin Alignment	Оптическое выравнивание полей
+	Dynamic Text	Динамический текст
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст по контуру в связанном тексте не может использовать динамический текст: {frames}
 	Optimize for fast web view	Оптимизировать для быстрого просмотра в web
 	Optimized	Оптимизировано
 	Options	Параметры
@@ -4964,6 +4967,8 @@ axis	Both	Оба
 @msg	invalid object id {value}: expected a non-negative integer	недопустимый идентификатор объекта {value}: ожидается неотрицательное целое число
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	элемент {index} в `{key}` равен {value}, а не идентификатору объекта (неотрицательному целому числу)
 @msg	no such object id {value}	объект с идентификатором {value} не существует
+@msg	id {value} is a ruler guide, not an object	идентификатор {value} принадлежит направляющей, а не объекту
+@msg	a ruler guide goes only directly in a layer or sublayer	направляющая может находиться только непосредственно в слое или подслое
 @msg	id {value} is a layer, not an object	идентификатор {value} относится к слою, а не к объекту
 @msg	id {value} is a layer, not an object; move layers with layer.move	идентификатор {value} относится к слою, а не к объекту; перемещайте слои с помощью layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	у автоматизации нет доступа к файловой системе: нет права на чтение: {path}
@@ -5739,6 +5744,12 @@ axis	Y Axis	Ось Y
 	Crosshair	Прицел
 	Checkpoint	Контрольная точка
 	Inventory Icons	Иконки инвентаря
+	Skill Icons	Иконки навыков
+	Attack	Атака
+	Defend	Защита
+	Heal	Лечение
+	Buff	Усиление
+	Ult	Ульт
 	Sword	Меч
 	Shield	Щит
 	Potion	Зелье
@@ -5803,6 +5814,11 @@ axis	Y Axis	Ось Y
 	Dash Trail	Пунктирный след
 	Speed Line	Линия скорости
 	Game Trails	Игровые следы
+	Energy Beams	Энергетические лучи
+	Laser Bolt	Лазерный заряд
+	Plasma Arc	Плазменная дуга
+	Charge Wave	Волна заряда
+	Spark Trail	Искра-след
 	Calligraphic Nibs	Каллиграфические перья
 	Pattern Borders	Узорные каймы
 	Scatter Shapes	Рассеянные фигуры
@@ -6884,8 +6900,14 @@ shape	Open	Открытый
 	Ended at a limit	Завершено на лимите
 	Stopped	Остановлено
 	Ended by an internal fault	Завершено из-за внутренней ошибки
-	{ms} ms, {calls} host calls	{ms} мс, вызовов хоста: {calls}
-	{dropped} earlier lines dropped, {cut} lines cut	Отброшено прежних строк: {dropped}, обрезано строк: {cut}
+	time unavailable	время недоступно
+	{ms} ms	{ms} мс
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	самые медленные: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} вызов хоста|{n} вызова хоста|{n} вызовов хоста
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} прежняя строка отброшена|{n} прежние строки отброшены|{n} прежних строк отброшено
+@plural	{n} line cut|{n} lines cut	{n} строка обрезана|{n} строки обрезаны|{n} строк обрезано
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`
 
 # Deferred plug-in effects

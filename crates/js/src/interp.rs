@@ -72,6 +72,12 @@ pub(crate) struct Intrinsics {
     pub(crate) error_protos: [ObjId; 7],
     pub(crate) eval: ObjId,
     pub(crate) throw_type_error: ObjId,
+    /// The `XML` constructor, which holds the XML settings.
+    pub(crate) xml_ctor: ObjId,
+    pub(crate) xml_proto: ObjId,
+    pub(crate) xml_list_proto: ObjId,
+    pub(crate) namespace_proto: ObjId,
+    pub(crate) qname_proto: ObjId,
 }
 
 impl Intrinsics {
@@ -89,6 +95,11 @@ impl Intrinsics {
             error_protos: [o; 7],
             eval: o,
             throw_type_error: o,
+            xml_ctor: o,
+            xml_proto: o,
+            xml_list_proto: o,
+            namespace_proto: o,
+            qname_proto: o,
         }
     }
 
@@ -117,6 +128,11 @@ impl Intrinsics {
             self.date_proto,
             self.eval,
             self.throw_type_error,
+            self.xml_ctor,
+            self.xml_proto,
+            self.xml_list_proto,
+            self.namespace_proto,
+            self.qname_proto,
         ];
         v.extend(self.error_protos);
         v
@@ -128,8 +144,8 @@ pub(crate) struct Frame {
     pub(crate) pc: usize,
     /// Where this frame's operands start on the operand stack.
     base: usize,
-    env: EnvId,
-    var_env: EnvId,
+    pub(crate) env: EnvId,
+    pub(crate) var_env: EnvId,
     /// `with` and catch environments entered and not yet left.
     env_depth: u32,
     this: Value,
@@ -164,6 +180,13 @@ pub(crate) struct Interp {
     pub(crate) throw_site: Option<ThrowSite>,
     /// The last exception a run did not catch.
     pub(crate) last_thrown: Value,
+    /// The last `Error` object thrown in this run, caught or not, or `null` (`$.error`).
+    pub(crate) last_error: Value,
+    /// An exception passed on rather than thrown again: one a `finally` block restores, or one
+    /// leaving a nested run. [`Interp::unwind`] does not make it [`Interp::last_error`] again.
+    pub(crate) passing: Value,
+    /// The locale `localize` and `Object.prototype.toString` read.
+    pub(crate) localization: Rc<crate::builtins::extensions::Localization>,
     /// The state of `Math.random`'s generator.
     pub(crate) random: u64,
     /// The objects `Array.prototype.join` and `toLocaleString` are joining, innermost last: a
@@ -175,10 +198,14 @@ pub(crate) struct Interp {
     pub(crate) held_bytes: usize,
     /// Why installing the built-ins failed; a realm with this set runs no script.
     pub(crate) install_error: Option<String>,
+    /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
+    pub(crate) files: Option<crate::file_classes::Classes>,
     /// The clock and time zone `Date` reads.
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
     pub(crate) held: Rc<HeldCount>,
+    /// The global code's default XML namespace URI (ECMA-357 section 12.1).
+    pub(crate) xml_default_uri: Key,
     /// Set by the host to end the current slice of a resumable run at the next safe point.
     pub(crate) pause: Rc<std::cell::Cell<bool>>,
     /// The outermost loop of a resumable run is running ([`crate::Realm::advance`]).
@@ -205,6 +232,13 @@ pub(crate) struct Interp {
     /// runs. An entry whose slot no longer holds its exception belongs to a block that `break`,
     /// `continue` or `return` left, and [`Self::drop_left_finally_marks`] removes it.
     pub(crate) finally_marks: Vec<(ObjId, u32, usize)>,
+    /// Where the exceptions `finally` blocks are running for were raised, innermost last, each with
+    /// the stack slot that holds the exception while the block runs. The block's end throws the
+    /// exception on from that site. An entry whose slot is at or above the stack's length belongs to
+    /// a block that was left, and [`Self::drop_left_finally_sites`] removes it. [`Self::unwind`]
+    /// removes the entries at or above a handler's slot before it adds one, so the slots rise and
+    /// the list is never longer than the stack.
+    pub(crate) finally_sites: Vec<(ThrowSite, usize)>,
     /// The mark of the host error the last run ended with.
     pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
@@ -280,13 +314,16 @@ fn index_keys_bytes(len: usize) -> usize {
     total
 }
 
-/// A seed for `Math.random` that differs from realm to realm, from the standard library's
-/// randomly keyed hasher; never zero.
+/// A seed for `Math.random` that differs from realm to realm and from run to run, from the OS
+/// random source (the browser's crypto on the web), or the standard library's randomly keyed
+/// hasher when that fails; never zero.
 fn random_seed() -> u64 {
     use std::hash::{BuildHasher, Hasher};
-    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-    h.write_u64(0x9e37_79b9_7f4a_7c15);
-    h.finish() | 1
+    getrandom::u64().unwrap_or_else(|_| {
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u64(0x9e37_79b9_7f4a_7c15);
+        h.finish()
+    }) | 1
 }
 
 /// The estimated bytes of a binding or property named by `len` code units.
@@ -391,12 +428,17 @@ impl Interp {
             source_units: 0,
             throw_site: None,
             last_thrown: Value::Undefined,
+            last_error: Value::Null,
+            passing: Value::Undefined,
+            localization: Rc::default(),
             random: random_seed(),
             join_stack: Vec::new(),
             held_bytes: 0,
             install_error: None,
+            files: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
+            xml_default_uri: Rc::from(Vec::new()),
             pause: Rc::default(),
             in_slice: false,
             can_wait: Rc::default(),
@@ -408,6 +450,7 @@ impl Interp {
             error_tag: crate::realm::UNKNOWN_SOURCE,
             thrown_mark: None,
             finally_marks: Vec::new(),
+            finally_sites: Vec::new(),
             error_mark: None,
             strict_writes: false,
         };
@@ -453,11 +496,11 @@ impl Interp {
         Ok(())
     }
 
-    fn frame(&self) -> JsResult<&Frame> {
+    pub(crate) fn frame(&self) -> JsResult<&Frame> {
         self.frames.last().ok_or_else(|| Abrupt::Internal("no frame".into()))
     }
 
-    fn frame_mut(&mut self) -> JsResult<&mut Frame> {
+    pub(crate) fn frame_mut(&mut self) -> JsResult<&mut Frame> {
         self.frames.last_mut().ok_or_else(|| Abrupt::Internal("no frame".into()))
     }
 
@@ -465,7 +508,7 @@ impl Interp {
         self.frames.last().map_or(0, |f| f.base)
     }
 
-    fn pop(&mut self) -> JsResult<Value> {
+    pub(crate) fn pop(&mut self) -> JsResult<Value> {
         if self.stack.len() <= self.base() {
             return internal("operand stack underflow");
         }
@@ -473,7 +516,7 @@ impl Interp {
     }
 
     /// The value `n` places below the top (0 is the top).
-    fn peek(&self, n: usize) -> JsResult<Value> {
+    pub(crate) fn peek(&self, n: usize) -> JsResult<Value> {
         let len = self.stack.len();
         match len.checked_sub(n + 1).filter(|&i| i >= self.base()) {
             Some(i) => self.stack.get(i).cloned().ok_or_else(|| Abrupt::Internal("operand stack underflow".into())),
@@ -493,7 +536,7 @@ impl Interp {
     }
 
     /// Replaces the top `n` values with `v`.
-    fn replace(&mut self, n: usize, v: Value) -> JsResult<()> {
+    pub(crate) fn replace(&mut self, n: usize, v: Value) -> JsResult<()> {
         self.drop_n(n)?;
         self.push(v)
     }
@@ -570,13 +613,23 @@ impl Interp {
         self.finally_marks.retain(|&(id, _, slot)| matches!(stack.get(slot), Some(Value::Object(o)) if *o == id));
     }
 
+    /// Removes the [`Self::finally_sites`] entries whose stack slot is at or above `len`: those of
+    /// `finally` blocks that were left.
+    fn drop_left_finally_sites(&mut self, len: usize) {
+        self.finally_sites.retain(|&(_, slot)| slot < len);
+    }
+
     pub(crate) fn collect_garbage(&mut self) {
         self.drop_left_finally_marks();
+        self.drop_left_finally_sites(self.stack.len());
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
         roots.values.push(&self.last_thrown);
+        roots.values.push(&self.last_error);
+        roots.values.push(&self.passing);
         roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
+        roots.codes.extend(self.finally_sites.iter().map(|((code, _), _)| &**code));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -587,6 +640,7 @@ impl Interp {
         }
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
+        roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
@@ -662,6 +716,13 @@ impl Interp {
     /// boundary frame. Returns the exception when no handler takes it before the boundary frame.
     fn unwind(&mut self, v: Value) -> JsResult<()> {
         self.note_site();
+        let passed = matches!((&v, std::mem::replace(&mut self.passing, Value::Undefined)), (Value::Object(a), Value::Object(b)) if *a == b);
+        if !passed
+            && let Value::Object(o) = v
+            && self.heap.object(o).is_some_and(|o| matches!(o.class, Class::Error))
+        {
+            self.last_error = v.clone();
+        }
         loop {
             let Some(frame) = self.frames.last_mut() else { return Err(Abrupt::Throw(v)) };
             if let Some(h) = frame.code.handler(frame.pc.saturating_sub(1)) {
@@ -680,19 +741,30 @@ impl Interp {
                 }
                 self.stack.truncate(target_len);
                 self.drop_left_finally_marks();
+                self.drop_left_finally_sites(target_len);
                 if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
                     self.finally_marks.push((*id, mark, target_len));
                 }
                 self.stack.push(v);
-                self.throw_site = None;
+                let site = self.throw_site.take();
+                if let (false, Some(site)) = (caught, site) {
+                    self.finally_sites.push((site, target_len));
+                }
                 return Ok(());
             }
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
             if frame.boundary {
+                self.passing = v.clone();
                 return Err(Abrupt::Throw(v));
             }
         }
+    }
+
+    /// Each running frame of script code, outermost first: its code, the index of its next
+    /// instruction, and whether it runs a function (not global or eval code).
+    pub(crate) fn script_frames(&self) -> impl Iterator<Item = (&Rc<Code>, usize, bool)> {
+        self.frames.iter().map(|f| (&f.code, f.pc, f.callee.is_some()))
     }
 
     fn abort_to_boundary(&mut self) {
@@ -718,7 +790,7 @@ impl Interp {
         Ok(None)
     }
 
-    fn jump_to(&mut self, target: u32) -> JsResult<()> {
+    pub(crate) fn jump_to(&mut self, target: u32) -> JsResult<()> {
         self.frame_mut()?.pc = target as usize;
         Ok(())
     }
@@ -825,6 +897,17 @@ impl Interp {
                 let v = self.frame()?.completion.clone();
                 self.push(v)
             }
+            Op::XmlMakeName { attribute, qualified } => self.op_xml_make_name(attribute, qualified),
+            Op::XmlDescendants => self.op_xml_descendants(),
+            Op::XmlEscape(kind) => self.op_xml_escape(kind),
+            Op::XmlLiteral { parts, list } => self.op_xml_literal(parts, list),
+            Op::XmlScopeGet => self.op_xml_scope_get(),
+            Op::XmlFilterStart => self.op_xml_filter_start(),
+            Op::XmlFilterNext(t) => self.op_xml_filter_next(t),
+            Op::XmlFilterTest => self.op_xml_filter_test(),
+            Op::XmlFilterEnd => self.op_xml_filter_end(),
+            Op::ForEachValue => self.op_for_each_value(),
+            Op::SetDefaultNamespace => self.op_set_default_namespace(),
             Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
         }
     }
@@ -882,11 +965,17 @@ impl Interp {
         }
         if kind == 1.0 {
             let v = self.pop()?;
+            self.passing = v.clone();
             if let Value::Object(o) = v
                 && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, _)| id == o)
             {
                 self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
                 self.finally_marks.truncate(i);
+            }
+            let slot = self.stack.len();
+            if let Some(i) = self.finally_sites.iter().rposition(|&(_, s)| s == slot) {
+                self.throw_site = self.finally_sites.get(i).map(|(site, _)| site.clone());
+                self.finally_sites.truncate(i);
             }
             return Err(Abrupt::Throw(v));
         }
@@ -900,7 +989,7 @@ impl Interp {
 
     // ---- variables ----
 
-    fn resolve(&self, name: &[u16]) -> JsResult<Resolved> {
+    fn resolve(&mut self, name: &[u16]) -> JsResult<Resolved> {
         let mut cur = Some(self.frame()?.env);
         while let Some(e) = cur {
             match self.heap.env(e) {
@@ -910,11 +999,11 @@ impl Interp {
                     }
                     cur = *outer;
                 }
-                Some(Env::Obj { object, with_this, outer }) => {
-                    if self.has_property(*object, name)? {
-                        return Ok(Resolved::Obj { object: *object, with_this: *with_this });
+                Some(&Env::Obj { object, with_this, outer }) => {
+                    if self.scope_has(object, name)? {
+                        return Ok(Resolved::Obj { object, with_this });
                     }
-                    cur = *outer;
+                    cur = outer;
                 }
                 None => return internal("environment out of range"),
             }
@@ -944,7 +1033,7 @@ impl Interp {
         match r {
             Resolved::Decl(e) => Ok((self.binding_value(e, name)?, Value::Undefined)),
             Resolved::Obj { object, with_this } => {
-                let v = self.get_from(object, name, &Value::Object(object))?;
+                let v = self.get_value(&Value::Object(object), name)?;
                 Ok((v, if with_this { Value::Object(object) } else { Value::Undefined }))
             }
             Resolved::Unresolved => Err(self.not_defined(name)),
@@ -971,6 +1060,9 @@ impl Interp {
                     _ => Ok(()),
                 }
             }
+            Resolved::Obj { object, .. } if self.options.e4x && self.is_xml(&Value::Object(object)) => {
+                self.put_value(&Value::Object(object), name.clone(), v)
+            }
             Resolved::Obj { object, .. } => {
                 let throw = self.strict_writes();
                 self.put(object, name.clone(), v, throw)
@@ -985,6 +1077,13 @@ impl Interp {
 
     fn op_get_var(&mut self, n: u32, with_this: bool) -> JsResult<()> {
         let name = self.name(n)?;
+        if with_this
+            && self.options.e4x
+            && let Some((f, this)) = self.xml_scope_method(&name)?
+        {
+            self.push(f)?;
+            return self.push(this);
+        }
         let (v, this) = self.get_var(&name)?;
         self.push(v)?;
         if with_this { self.push(this) } else { Ok(()) }
@@ -1161,6 +1260,9 @@ impl Interp {
 
     /// `base[k]` for any value (GetValue, section 8.7.1).
     pub(crate) fn get_value(&mut self, base: &Value, k: &[u16]) -> JsResult<Value> {
+        if self.options.e4x && self.is_xml(base) {
+            return self.xml_get(base, &Value::String(Str::from_units(k.to_vec())));
+        }
         if let Value::String(s) = base {
             if is(k, "length") {
                 return Ok(Value::Number(s.len() as f64));
@@ -1507,6 +1609,9 @@ impl Interp {
 
     /// PutValue on a property reference (section 8.7.2), whose base may be a primitive.
     fn put_value(&mut self, base: &Value, k: Key, v: Value) -> JsResult<()> {
+        if self.options.e4x && self.is_xml(base) {
+            return self.xml_put(base, &Value::String(Str::from_rc(k)), &v);
+        }
         let strict = self.strict();
         match base {
             Value::Object(o) => {
@@ -1535,6 +1640,11 @@ impl Interp {
     fn op_get_member(&mut self, n: u32, with_this: bool) -> JsResult<()> {
         let name = self.name(n)?;
         let base = self.peek(0)?;
+        if with_this && self.options.e4x && self.is_xml(&base) {
+            let (f, this) = self.xml_method(&base, &name)?;
+            self.replace(1, f)?;
+            return self.push(this);
+        }
         let v = self.get_value(&base, &name)?;
         self.replace(1, v)?;
         if with_this { self.push(base) } else { Ok(()) }
@@ -1563,6 +1673,9 @@ impl Interp {
     fn op_to_key(&mut self) -> JsResult<()> {
         let k = self.peek(0)?;
         let base = self.peek(1)?;
+        if self.is_xml_access(&base, &k) {
+            return Ok(());
+        }
         self.check_coercible(&base, &[])?;
         let name = self.to_key(&k)?;
         self.replace(1, Value::String(Str::from_rc(name)))
@@ -1571,6 +1684,16 @@ impl Interp {
     fn op_get_index(&mut self, with_this: bool) -> JsResult<()> {
         let k = self.peek(0)?;
         let base = self.peek(1)?;
+        if self.is_xml_access(&base, &k) {
+            if with_this {
+                let name = self.xml_method_key(&k)?;
+                let (f, this) = self.xml_method(&base, &name)?;
+                self.replace(2, f)?;
+                return self.push(this);
+            }
+            let v = self.xml_get(&base, &k)?;
+            return self.replace(2, v);
+        }
         self.check_coercible(&base, &[])?;
         let name = self.to_key(&k)?;
         let v = self.get_value(&base, &name)?;
@@ -1582,6 +1705,10 @@ impl Interp {
         let v = self.peek(0)?;
         let k = self.peek(1)?;
         let base = self.peek(2)?;
+        if self.is_xml_access(&base, &k) {
+            self.xml_put(&base, &k, &v)?;
+            return self.replace(3, v);
+        }
         let name = self.to_key(&k)?;
         self.put_value(&base, name, v.clone())?;
         self.replace(3, v)
@@ -1590,6 +1717,10 @@ impl Interp {
     fn op_delete_member(&mut self, n: u32) -> JsResult<()> {
         let name = self.name(n)?;
         let base = self.peek(0)?;
+        if self.options.e4x && self.is_xml(&base) {
+            let r = self.xml_delete(&base, &Value::String(Str::from_rc(name)))?;
+            return self.replace(1, Value::Bool(r));
+        }
         let o = self.to_object(&base)?;
         let strict = self.strict();
         let r = self.delete(o, &name, strict)?;
@@ -1599,6 +1730,10 @@ impl Interp {
     fn op_delete_index(&mut self) -> JsResult<()> {
         let k = self.peek(0)?;
         let base = self.peek(1)?;
+        if self.is_xml_access(&base, &k) {
+            let r = self.xml_delete(&base, &k)?;
+            return self.replace(2, Value::Bool(r));
+        }
         self.check_coercible(&base, &[])?;
         let name = self.to_key(&k)?;
         let o = self.to_object(&base)?;
@@ -1625,6 +1760,13 @@ impl Interp {
     fn op_inc_index(&mut self, prefix: bool, dec: bool) -> JsResult<()> {
         let k = self.peek(0)?;
         let base = self.peek(1)?;
+        if self.is_xml_access(&base, &k) {
+            let v = self.xml_get(&base, &k)?;
+            let old = self.to_number(&v)?;
+            let new = if dec { old - 1.0 } else { old + 1.0 };
+            self.xml_put(&base, &k, &Value::Number(new))?;
+            return self.replace(2, Value::Number(if prefix { new } else { old }));
+        }
         self.check_coercible(&base, &[])?;
         let name = self.to_key(&k)?;
         let r = self.inc_property(&base, name, prefix, dec)?;
@@ -1790,6 +1932,9 @@ impl Interp {
     /// For a String object, the heap budget for all its index names is checked before any is
     /// built. Each index name and each property visited takes a unit of fuel.
     fn enumerable_keys(&mut self, id: ObjId) -> JsResult<Vec<Key>> {
+        if self.options.e4x && self.is_xml(&Value::Object(id)) {
+            return self.xml_enumerate(id);
+        }
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut cur = Some(id);
@@ -1856,7 +2001,7 @@ impl Interp {
             state.pos += 1;
             let object = state.object;
             if let Some(o) = object
-                && self.has_property(o, &k)?
+                && self.scope_has(o, &k)?
             {
                 return self.push(Value::String(Str::from_rc(k)));
             }
@@ -2365,6 +2510,7 @@ impl Interp {
             Value::Bool(_) => "boolean",
             Value::Number(_) => "number",
             Value::String(_) => "string",
+            Value::Object(_) if self.options.e4x && self.is_xml(v) => "xml",
             Value::Object(_) if self.is_callable(v) => "function",
             Value::Object(_) => "object",
         }
@@ -2526,6 +2672,9 @@ impl Interp {
             BinaryOp::StrictNotEq => Ok(Value::Bool(!strict_eq(a, b))),
             BinaryOp::Instanceof => self.instance_of(a, b).map(Value::Bool),
             BinaryOp::In => {
+                if self.options.e4x && self.is_xml(b) {
+                    return self.xml_has(b, a).map(Value::Bool);
+                }
                 let Value::Object(o) = b else { return Err(self.type_error("the right side of 'in' is not an object")) };
                 let k = self.to_key(a)?;
                 self.has_property(*o, &k).map(Value::Bool)
@@ -2537,6 +2686,9 @@ impl Interp {
     fn add(&mut self, a: &Value, b: &Value) -> JsResult<Value> {
         if let (Value::Number(x), Value::Number(y)) = (a, b) {
             return Ok(Value::Number(x + y));
+        }
+        if self.options.e4x && self.is_xml(a) && self.is_xml(b) {
+            return self.xml_concat(a, b);
         }
         let pa = self.to_primitive(a, Hint::Default)?;
         let pb = self.to_primitive(b, Hint::Default)?;
@@ -2570,7 +2722,12 @@ impl Interp {
     }
 
     /// The abstract equality comparison (section 11.9.3).
-    fn loose_eq(&mut self, a: &Value, b: &Value) -> JsResult<bool> {
+    pub(crate) fn loose_eq(&mut self, a: &Value, b: &Value) -> JsResult<bool> {
+        if self.options.e4x
+            && let Some(r) = self.xml_loose_eq(a, b)?
+        {
+            return Ok(r);
+        }
         let (mut x, mut y) = (a.clone(), b.clone());
         loop {
             match (&x, &y) {
