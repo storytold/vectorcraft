@@ -1686,6 +1686,7 @@ file-filter	Templates	Modelli
 	Include Linked Files	Includi file collegati
 	Include Metadata	Includi metadati
 	Include non-printing layers	Includi livelli non stampabili
+	Write pages longer than 200 in at full size in points	Scrivi le pagine più lunghe di 200 in a grandezza reale, in punti
 	Include SVG Code	Includi codice SVG
 	Include Swatches for Tints	Includi campioni per tinte
 	Inflate…	Gonfia…

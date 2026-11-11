@@ -1655,6 +1655,7 @@ file-filter	Templates	Vorlagen
 	Include Linked Files	Verknüpfte Dateien einschließen
 	Include Metadata	Metadaten einschließen
 	Include non-printing layers	Nicht druckende Ebenen einschließen
+	Write pages longer than 200 in at full size in points	Seiten über 200 in in voller Größe in Punkt schreiben
 	Include SVG Code	SVG-Code einschließen
 	Include Swatches for Tints	Farbfelder für Tonwerte einschließen
 	Inflate…	Aufblasen…

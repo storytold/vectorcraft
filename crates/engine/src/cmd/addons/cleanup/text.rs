@@ -806,7 +806,7 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // The characters a Type tool has selected (after Select All in threaded text, all the text of
     // every frame of the story), else all the text of the selected type.
-    let editing = if p.get("ids").is_some() { None } else { editing_range(s)?.filter(|(_, a, b)| a != b) };
+    let editing = if p.get("ids").is_some_and(|v| !v.is_null()) { None } else { editing_range(s)?.filter(|(_, a, b)| a != b) };
     let story = if editing.is_some() { editing_story(s) } else { vec![] };
     let d = &s.doc()?.doc;
     // Each type object with the breaks that go from it.

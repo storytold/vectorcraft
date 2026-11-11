@@ -15,7 +15,7 @@ use proptest::prelude::*;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat as tpl;
-use vectorcraft_plugins::{Error, Kind, Limits, Plugin};
+use vectorcraft_plugins::{BYTES_COPIED_PER_FUEL, Error, FUEL_SLICE, Kind, Limits, Plugin};
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::rich_session;
 
@@ -187,9 +187,6 @@ fn arb_paint() -> impl Strategy<Value = Value> {
 /// Bytes in the passive data segment that bulk memory cases initialize memory from.
 const SEGMENT_LEN: u32 = 4096;
 
-/// Fuel the host hands a run per slice (`FUEL_SLICE` in `vectorcraft_plugins`' runtime).
-const FUEL_SLICE: u64 = 20_000_000;
-
 /// Where a bulk memory plug-in keeps its output (the manifest sits at 16).
 const BULK_OUTPUT_AT: u32 = 0x8000;
 
@@ -319,10 +316,10 @@ impl BulkCase {
         }
     }
 
-    /// A generous estimate of the fuel the instructions use: a unit per 64 bytes moved, and a few
-    /// per pass.
+    /// A generous estimate of the fuel the instructions use: a unit per [`BYTES_COPIED_PER_FUEL`]
+    /// bytes moved, and a few per pass.
     fn fuel(self) -> u64 {
-        u64::from(self.runs()) * (u64::from(self.len) / 64 + 16)
+        u64::from(self.runs()) * (u64::from(self.len) / u64::from(BYTES_COPIED_PER_FUEL) + 16)
     }
 
     /// The plug-in module in WAT, with `manifest`.
@@ -352,11 +349,12 @@ impl BulkCase {
     }
 }
 
-/// Lengths: zero, a byte, around the 64 bytes a unit of fuel pays for, the data segment's length,
-/// a page, a mebibyte, or anything up to four pages.
+/// Lengths: zero, a byte, around the bytes a unit of fuel pays for, the data segment's length, a
+/// page, a mebibyte, or anything up to four pages.
 fn arb_bulk_len() -> impl Strategy<Value = u32> {
+    let per = BYTES_COPIED_PER_FUEL;
     prop_oneof![
-        3 => prop::sample::select(vec![0u32, 1, 63, 64, 65, SEGMENT_LEN - 1, SEGMENT_LEN, SEGMENT_LEN + 1, 0xffff, 0x1_0000, 0x1_0001, 1 << 20]),
+        3 => prop::sample::select(vec![0u32, 1, per - 1, per, per + 1, SEGMENT_LEN - 1, SEGMENT_LEN, SEGMENT_LEN + 1, 0xffff, 0x1_0000, 0x1_0001, 1 << 20]),
         1 => 0u32..0x4_0000,
     ]
 }
@@ -394,7 +392,7 @@ fn arb_bulk_case() -> impl Strategy<Value = BulkCase> {
             let repeat = match repeat {
                 Repeat::Times(n) => n,
                 Repeat::AroundSlice(k) => {
-                    let slice = (FUEL_SLICE * 64 / u64::from(len.max(1))) as i64;
+                    let slice = (FUEL_SLICE * u64::from(BYTES_COPIED_PER_FUEL) / u64::from(len.max(1))) as i64;
                     (slice + k).clamp(1, 2_000) as u32
                 }
             };

@@ -268,6 +268,99 @@ fn names_written_with_escapes_are_read_as_the_names_they_spell() {
     assert_eq!(r.lines, 3);
 }
 
+/// `src` with the escapes in its names written as the characters they stand for.
+fn unescaped(src: &str) -> String {
+    let limits = Limits::default();
+    crate::analyze::unescaped(std::borrow::Cow::Borrowed(src), &mut crate::report::Acc::new(&limits)).into_owned()
+}
+
+#[test]
+fn names_are_made_of_the_unicode_identifier_characters() {
+    // U+2118 (Other_ID_Start) starts a name, and U+203F (connector punctuation), U+00B7
+    // (Other_ID_Continue) and the zero width non-joiner and joiner continue one.
+    for name in ["\u{2118}a", "a\u{203F}b", "a\u{B7}b", "a\u{200C}b", "a\u{200D}b", "_\u{2118}", "$_a1", "\u{E9}t\u{E9}"] {
+        assert_eq!(tokens(name), [(T::Ident, name)], "{name:?}");
+    }
+    for (src, want) in [
+        // Characters that only continue a name, and digits, don't start one.
+        ("\u{203F}a", [(T::Other, "\u{203F}"), (T::Ident, "a")]),
+        ("\u{B7}a", [(T::Other, "\u{B7}"), (T::Ident, "a")]),
+        ("\u{200C}a", [(T::Other, "\u{200C}"), (T::Ident, "a")]),
+        ("0a", [(T::Number, "0"), (T::Ident, "a")]),
+        // A superscript digit (category No) and a letter that is Pattern_Syntax are in no name.
+        ("a\u{B2}", [(T::Ident, "a"), (T::Other, "\u{B2}")]),
+        ("a\u{2E2F}", [(T::Ident, "a"), (T::Other, "\u{2E2F}")]),
+        ("\u{2E2F}a", [(T::Other, "\u{2E2F}"), (T::Ident, "a")]),
+        // `#` and a name away from the start of a line, and a regular expression's flags.
+        ("a #\u{2118}b", [(T::Ident, "a"), (T::Other, "#\u{2118}b")]),
+        ("=/a/g\u{B2}", [(T::RegExp, "/a/g"), (T::Other, "\u{B2}")]),
+    ] {
+        let mut got = tokens(src);
+        if src.starts_with('=') {
+            got.remove(0);
+        }
+        assert_eq!(got, want, "{src:?}");
+    }
+    assert_eq!(tokens("a #\u{B2}"), [(T::Ident, "a"), (T::Other, "#"), (T::Other, "\u{B2}")]);
+    assert_eq!(tokens("=/a/g\u{200D}"), [(T::Punct, "="), (T::RegExp, "/a/g\u{200D}")]);
+    // The code in an XML literal's braces reads names by the same rule.
+    assert!(tokens("var x = <a>{\u{2118}b + c\u{203F}d}</a>;").iter().filter(|t| t.0 == T::Ident).any(|t| t.1 == "c\u{203F}d"));
+    assert!(tokens("var x = <a>{\u{2118}b}</a>;").contains(&(T::Ident, "\u{2118}b")));
+}
+
+#[test]
+fn an_escape_stands_for_a_character_only_where_a_name_may_hold_it() {
+    for (src, want) in [
+        ("\\u2118a", "\u{2118}a"),
+        ("a\\u203Fb", "a\u{203F}b"),
+        ("a\\u00B7b", "a\u{B7}b"),
+        ("a\\u200Cb", "a\u{200C}b"),
+        ("a\\u200Db", "a\u{200D}b"),
+        ("a\\u0030", "a0"),
+        ("\\u0024\\u005F", "$_"),
+        // Not at the start of a name.
+        ("\\u0030abc", "\\u0030abc"),
+        ("\\u203Fa", "\\u203Fa"),
+        ("\\u00B7a", "\\u00B7a"),
+        // In no name.
+        ("a\\u00B2", "a\\u00B2"),
+        ("a\\u2E2F", "a\\u2E2F"),
+        ("\\u2E2F", "\\u2E2F"),
+        // Malformed escapes and a lone surrogate.
+        ("\\u", "\\u"),
+        ("a\\u12;", "a\\u12;"),
+        ("a\\uZZZZ", "a\\uZZZZ"),
+        ("a\\uD800", "a\\uD800"),
+        ("", ""),
+    ] {
+        assert_eq!(unescaped(src), want, "{src:?}");
+    }
+    let r = report("\\u0061pp.a\\u203Fb;\napp.\\u2118c;\n");
+    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(members, ["app.a\u{203F}b", "app.\u{2118}c"]);
+    // An escape a name may not hold where it stands, or a malformed one, is not part of a name.
+    for (src, want) in [
+        ("\\u0030a", [(T::Other, "\\"), (T::Ident, "u0030a")]),
+        ("a\\u00B2", [(T::Ident, "a"), (T::Other, "\\")]),
+        ("a\\u12", [(T::Ident, "a"), (T::Other, "\\")]),
+        ("a\\uD800", [(T::Ident, "a"), (T::Other, "\\")]),
+    ] {
+        assert_eq!(tokens(src).get(..2), Some(&want[..]), "{src:?}");
+    }
+    assert_eq!(tokens("a\\u0030\\u200C"), [(T::Ident, "a\\u0030\\u200C")]);
+    let r = report("app.\\u0030abc;\napp.a\\u00B2;\n");
+    assert!(r.members.iter().all(|m| !m.name.contains('\\') && !m.name.contains("0abc")), "{:?}", r.members);
+}
+
+#[test]
+fn malformed_escapes_in_bulk_are_read_once_through() {
+    let src = format!("{}\n{}\nalert(1);\n", "\\u\\uD800\\u12\\u0030\\u2118".repeat(20_000), "a\u{203F}".repeat(20_000));
+    let r = report(&src);
+    assert_eq!(r.lines, 3);
+    assert_eq!(feature(&r, "notify").map(|f| f.lines.as_slice()), Some(&[3][..]));
+    assert!(r.steps <= 5 * src.len() + 16, "{} steps for {} bytes", r.steps, src.len());
+}
+
 #[test]
 fn the_scripts_own_platform_names_are_not_the_platforms() {
     let r = report(concat!(
