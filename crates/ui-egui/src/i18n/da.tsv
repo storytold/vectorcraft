@@ -4110,6 +4110,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Stop script
 	Show External Script Warning	Vis advarsel om eksterne scripts
 	A Script Is Running	Et script kører
+	Script Alert	Scriptadvarsel
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
 	Do not show this warning again	Vis ikke denne advarsel igen
 	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.

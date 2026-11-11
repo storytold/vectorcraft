@@ -4091,6 +4091,7 @@ axis	Both	Les deux
 	Stop Script	Arrêter le script
 	Show External Script Warning	Afficher l’avertissement des scripts externes
 	A Script Is Running	Un script est en cours d’exécution
+	Script Alert	Alerte de script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script peut modifier les documents ouverts et écrire des fichiers au moyen des commandes qu’il exécute. N’exécutez que des scripts de confiance.
 	Do not show this warning again	Ne plus afficher cet avertissement
 	Stop the script and undo what it did? Then quit again.	Arrêter le script et annuler ce qu’il a fait ? Quittez ensuite à nouveau.

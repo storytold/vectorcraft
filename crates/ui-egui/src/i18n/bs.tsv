@@ -4356,6 +4356,7 @@ imageTrace	Outline	Obris
 	Stop Script	Zaustavi skriptu
 	Show External Script Warning	Prikaži upozorenje za vanjske skripte
 	A Script Is Running	Skripta se izvršava
+	Script Alert	Upozorenje skripte
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skripta može mijenjati otvorene dokumente i pisati datoteke putem naredbi koje pokreće. Pokrećite samo skripte kojima vjerujete.
 	Do not show this warning again	Ne prikazuj više ovo upozorenje
 	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.

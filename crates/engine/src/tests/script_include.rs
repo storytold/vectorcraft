@@ -332,3 +332,59 @@ fn script_included_error_has_local_file_and_line() {
     assert!(error.starts_with("main.jsx: ") && error.contains("lib.jsxinc:3:5: Error: boom"), "{error}");
     let _ = std::fs::remove_dir_all(base);
 }
+
+/// Pumps the run in the app until it ends or waits at a dialog (`None`).
+fn pump(s: &mut Session) -> Option<Result<Value>> {
+    for _ in 0..10_000 {
+        if s.script_dialog().is_some() {
+            return None;
+        }
+        if let Some(r) = s.script_pump() {
+            return Some(r);
+        }
+    }
+    panic!("the run neither ended nor waited");
+}
+
+#[test]
+fn script_dialogs_in_included_and_evaluated_files() {
+    let base = folder("dialogs");
+    write(&base.join("main/ask.jsxinc"), "var a = confirm('inc');\n");
+    write(&base.join("main/ev.jsx"), "alert('ev'); 7");
+    let text = "#include \"ask.jsxinc\"\nvar m = '';\ntry { m = $.evalFile('ev.jsx'); } catch (e) { m = e.message; }\nvc.log([a, m]);";
+    let main = base.join("main/main.jsx");
+    write(&main, text);
+    let path = main.to_string_lossy().to_string();
+    // In the app, an included file's dialog waits as the script's own does; one in a file
+    // $.evalFile runs cannot wait there and throws an error the script can catch.
+    let mut s = Session::new();
+    s.script_frames = true;
+    assert_eq!(s.execute("script.run", &json!({"path": path})).unwrap()["running"], true);
+    assert!(pump(&mut s).is_none());
+    assert_eq!(s.script_dialog().unwrap().message, "inc");
+    assert!(s.script_answer(crate::script::DialogAnswer::Confirm(true)));
+    let r = pump(&mut s).unwrap().unwrap();
+    let m = r["log"][0][1].as_str().unwrap_or_default();
+    assert_eq!(r["log"][0][0], true, "{r}");
+    assert!(m.contains("alert") && m.contains("$.evalFile"), "the error names the call and why: {r}");
+    assert_eq!(r["dialogCount"], 1, "{r}");
+    // A run with nobody to ask takes both answers in order.
+    let mut s = Session::new();
+    let answers = json!([{"kind": "confirm", "value": false}, {"kind": "alert", "value": "ok"}]);
+    let r = s.execute("script.run", &json!({"path": path, "answers": answers})).unwrap();
+    assert_eq!((r["log"].clone(), r["dialogCount"].clone()), (json!([[false, 7]]), json!(2)), "{r}");
+    // An error in an included file after its dialog is at that file's line, and the report keeps
+    // both the file and the dialog.
+    write(&base.join("main/ask.jsxinc"), "var a = confirm('inc');\nif (a) throw new Error('after');\n");
+    let mut s = Session::new();
+    s.script_frames = true;
+    s.execute("script.run", &json!({"path": path})).unwrap();
+    assert!(pump(&mut s).is_none());
+    assert!(s.script_answer(crate::script::DialogAnswer::Confirm(true)));
+    assert!(pump(&mut s).unwrap().is_err());
+    let report = s.script_report().unwrap();
+    assert_eq!(report["line"], 2, "{report}");
+    assert!(report["file"].as_str().unwrap().ends_with("ask.jsxinc"), "{report}");
+    assert_eq!(report["dialogs"][0]["answer"], true, "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}

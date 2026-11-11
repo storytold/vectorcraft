@@ -2258,6 +2258,7 @@ axis	Both	Και τα δύο
 	Stop Script	Διακοπή σεναρίου
 	Show External Script Warning	Εμφάνιση προειδοποίησης για εξωτερικά σενάρια
 	A Script Is Running	Εκτελείται ένα σενάριο
+	Script Alert	Ειδοποίηση σεναρίου
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
 	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
 	Stop the script and undo what it did? Then quit again.	Διακοπή του σεναρίου και αναίρεση όσων έκανε; Έπειτα κάντε ξανά έξοδο.
