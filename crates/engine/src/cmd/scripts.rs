@@ -161,7 +161,9 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         _ => return Err(param("give exactly one of `path` and `source`")),
     };
     let name = given_name.map(str::to_string).or_else(|| path.map(super::fileio::file_name)).unwrap_or_else(|| "script".to_string());
-    let request = script::Request { name, name_given: given_name.is_some(), file: path.map(str::to_string), source: text, args, fuel, answers };
+    let locale = script::dollar::ui_locale(s.ui_language.as_deref().unwrap_or(&s.prefs.interface_language));
+    let request =
+        script::Request { name, name_given: given_name.is_some(), file: path.map(str::to_string), source: text, args, fuel, locale, answers };
     let name = s.script_start(request)?;
     if s.script_frames {
         return Ok(json!({"running": true, "name": name}));

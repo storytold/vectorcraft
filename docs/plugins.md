@@ -170,7 +170,7 @@ much there is only once the run has ended.
   Cancel (also Esc) and Continue in Background (`plugin.cancelRuns`, `plugin.hideRuns`). When it is done its result is
   applied as `plugin.run` with the same parameters and objects, as one undo step, unless the document or the plug-in
   changed meanwhile: then nothing changes, and the status bar says to run it again. On the web, which has no threads,
-  it runs at once; the instruction budget alone bounds it there.
+  it runs at once, under the same instruction budget and 300 s limit.
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
 

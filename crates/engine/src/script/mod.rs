@@ -31,7 +31,8 @@
 //! A run writes to the Script Console with `$.write` and `$.writeln`, and `vc.log` adds a line
 //! there too. The session's console gets a start line, the run's output, its uncaught error, an end
 //! line and a report line; the run's report holds its own output and error, its time, its host
-//! calls by kind and its slowest commands.
+//! calls by kind and its slowest commands. The rest of `$`, and the global `localize` and
+//! `toSource`, are in [`dollar`].
 //!
 //! `alert`, `confirm` and `prompt` open dialogs ([`dialogs`]): in the app the run waits for the
 //! person's answer, and a run with nobody to ask takes its answers from `script.run`'s `answers`.
@@ -40,6 +41,7 @@
 
 pub mod console;
 pub mod dialogs;
+pub mod dollar;
 pub mod include;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
@@ -97,7 +99,7 @@ const MAX_BRIDGE_BYTES: u64 = 4 << 30;
 /// The version `vc.api.version` gives.
 pub const API_VERSION: &str = "1.0";
 /// The features `vc.api.has` knows.
-pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs"];
+pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs", "dollar"];
 /// The most commands a run's report lists in `slowestCommands`.
 pub const SLOWEST_COMMANDS: usize = 5;
 
@@ -156,6 +158,8 @@ pub(crate) struct Request {
     pub source: String,
     pub args: Map<String, Value>,
     pub fuel: u64,
+    /// The locale the run starts with (`$.locale`).
+    pub locale: String,
     /// The answers to the dialogs of a run with nobody to ask, in order.
     pub answers: Vec<DialogAnswer>,
 }
@@ -169,21 +173,27 @@ thread_local! {
 static NEXT_JOB: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// A session's hold on its running job: while one exists the lease is held. Dropping it ends the job.
+/// It keeps the run's number and its name as console lines give it, so the run's console entry can
+/// end when the job is gone.
 #[derive(Debug)]
-pub struct JobKey(u64);
+pub struct JobKey {
+    id: u64,
+    run: u64,
+    name: Arc<str>,
+}
 
 impl Drop for JobKey {
     fn drop(&mut self) {
         let _ = JOBS.try_with(|jobs| {
             if let Ok(mut jobs) = jobs.try_borrow_mut() {
-                jobs.remove(&self.0);
+                jobs.remove(&self.id);
             }
         });
     }
 }
 
 fn with_job<T>(key: &JobKey, f: impl FnOnce(&mut Job) -> T) -> Option<T> {
-    JOBS.with(|jobs| jobs.borrow_mut().get_mut(&key.0).map(f))
+    JOBS.with(|jobs| jobs.borrow_mut().get_mut(&key.id).map(f))
 }
 
 /// The state a script changes that a rollback puts back.
@@ -504,6 +514,12 @@ struct Host {
     /// The file, line and column of each error `$.evalFile` raised for a file it could not run, in
     /// order: the error's mark ([`HostError::Marked`]) is its index.
     eval_failures: RefCell<Vec<(Arc<str>, u32, u32)>>,
+    /// When the run started, where the platform has a clock.
+    started: Option<std::time::Instant>,
+    /// The time since [`Host::started`] at which a `$.sleep` ends.
+    wake_at: Cell<Option<std::time::Duration>>,
+    /// Set while a host function runs where the run can stop at the call ([`Realm::wait_flag`]).
+    can_wait: Rc<Cell<bool>>,
     /// What the last `#strict` line of the file `$.evalFile` last gave set (`None` without one).
     eval_strict: Cell<Option<bool>>,
 }
@@ -586,6 +602,51 @@ impl Host {
             pending.end_line(|line, cut| self.line(console::Entry::Output(line), cut));
         }
     }
+
+    /// The time since the run started; none without a clock.
+    fn elapsed(&self) -> Option<std::time::Duration> {
+        #[cfg(test)]
+        if TEST_NO_CLOCK.with(Cell::get) {
+            return None;
+        }
+        #[cfg(test)]
+        if let Some(d) = TEST_ELAPSED.with(Cell::get) {
+            return Some(d);
+        }
+        self.started.map(|s| s.elapsed())
+    }
+
+    /// `$.sleep`: ends the slice, and the run does not go on until `d` has passed. Without a clock
+    /// it does not wait. A getter, a conversion, a built-in's callback or a file `$.evalFile` runs
+    /// cannot stop at the call, so a wait there is an error, with or without a clock.
+    fn sleep(&self, d: std::time::Duration) -> std::result::Result<(), HostError> {
+        if d.is_zero() {
+            return Ok(());
+        }
+        if !self.can_wait.get() {
+            return Err(HostError::Error(
+                "$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code"
+                    .into(),
+            ));
+        }
+        if let Some(now) = self.elapsed() {
+            self.wake_at.set(Some(now.saturating_add(d)));
+            self.pause.set(true);
+        }
+        Ok(())
+    }
+
+    /// The time left of a `$.sleep`, or none when the run is not asleep.
+    fn asleep(&self) -> Option<std::time::Duration> {
+        let wake = self.wake_at.get()?;
+        let left = self.elapsed().map_or(std::time::Duration::ZERO, |now| wake.saturating_sub(now));
+        if left.is_zero() {
+            self.wake_at.set(None);
+            return None;
+        }
+        Some(left)
+    }
+
     fn over(&self, limit: &str) -> HostError {
         HostError::Abort(limit.to_string())
     }
@@ -953,8 +1014,9 @@ fn each_line(text: &str, mut done: impl FnMut(String, bool)) {
 /// The `$` object: `$.write(...values)` writes the values to the Script Console as `String(value)`
 /// gives them, one after another, and `$.writeln(...values)` does the same and ends the line.
 /// `$.evalFile(path[, timeout])` runs a file and gives its last value, `$.fileName` is the file
-/// being run and `$.includePath` the `#includepath` list.
-fn dollar_object(host: &Rc<Host>) -> Vec<(String, HostItem)> {
+/// being run and `$.includePath` the `#includepath` list. Its other members are
+/// [`dollar::members`].
+fn dollar_object(host: &Rc<Host>, info: dollar::RunInfo, localization: &Rc<vectorcraft_js::Localization>) -> Vec<(String, HostItem)> {
     let writer = |end: bool| {
         let h = host.clone();
         HostItem::TextFunction(function(move |a| {
@@ -983,13 +1045,15 @@ fn dollar_object(host: &Rc<Host>) -> Vec<(String, HostItem)> {
             strict_writes: Rc::new(move || strict.eval_strict.get()),
         }
     };
-    vec![
+    let mut items = vec![
         ("write".into(), writer(false)),
         ("writeln".into(), writer(true)),
         ("evalFile".into(), eval_file),
         ("fileName".into(), getter(include::Files::file_name)),
         ("includePath".into(), getter(include::Files::include_path)),
-    ]
+    ];
+    items.extend(dollar::members(host, info, localization));
+    items
 }
 
 /// `$.evalFile(path[, timeout])`: the source of the file `path` names, relative to the file being
@@ -1197,6 +1261,15 @@ impl Session {
         !self.script_stop.is_set() && self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.waiting.get())).unwrap_or(false)
     }
 
+    /// The time left of the running script's `$.sleep`, or none when it is not asleep. A run asked
+    /// to stop is not asleep: the next [`Session::script_pump`] ends it.
+    pub fn script_sleep_left(&self) -> Option<std::time::Duration> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.asleep())).flatten()
+    }
+
     /// The dialog (`alert`, `confirm` or `prompt`) the running script waits at for the person's
     /// answer. A run asked to stop no longer waits: the next [`Session::script_pump`] ends it.
     pub fn script_dialog(&self) -> Option<ScriptDialog> {
@@ -1246,12 +1319,8 @@ impl Session {
     /// ([`Self::script_report`]). False with none running.
     pub fn script_abandon(&mut self) -> bool {
         let Some(key) = self.script_key.take() else { return false };
-        let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.0)) else {
-            drop(key);
-            raise_ids(self);
-            self.script_stop.clear();
-            self.reset_tool();
-            cmd::compositefonts::sync(self);
+        let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
+            self.script_gone(key, console::Ending::Stopped);
             return true;
         };
         drop(key);
@@ -1259,6 +1328,19 @@ impl Session {
         let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
         let _ = self.script_failed(job, &e);
         true
+    }
+
+    /// Ends the run whose job is no longer held: its console entry ends with `ending`, with no
+    /// report line, since its time and host calls went with the job, and the session's state is
+    /// put back as at the end of any run.
+    fn script_gone(&mut self, key: JobKey, ending: console::Ending) {
+        let line = console::ConsoleLine { run: key.run, name: key.name.clone(), entry: console::Entry::End(ending) };
+        self.script_console.push(line, false);
+        drop(key);
+        raise_ids(self);
+        self.script_stop.clear();
+        self.reset_tool();
+        cmd::compositefonts::sync(self);
     }
 
     /// A script can't start while a document holds a drag in progress or an undo group, which its
@@ -1294,6 +1376,7 @@ impl Session {
         };
         let limits = Limits { fuel: request.fuel, heap_bytes: HEAP_BYTES, ..Limits::default() };
         let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), ..Options::default() };
+        let strict = options.strict;
         let mut realm = Realm::with_options(options, limits);
         realm.share_interrupt(&self.script_stop);
         realm.set_data_limits(DataLimits::default());
@@ -1327,20 +1410,26 @@ impl Session {
             script_map: RefCell::default(),
             eval_maps: RefCell::default(),
             eval_failures: RefCell::default(),
+            started: clock(),
+            wake_at: Cell::new(None),
+            can_wait: realm.wait_flag(),
             eval_strict: Cell::new(None),
         });
         let args = to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0))
             .map_err(|place| EngineError::BadParams { cmd: "script.run".into(), msg: format!("`args{place}` is nested more than 64 levels deep") })?;
         let line = console::ConsoleLine { run: host.run, name: host.name.clone(), entry: console::Entry::Start };
         self.script_console.push(line, false);
+        let info = dollar::RunInfo { locale: request.locale, strict };
+        let localization = realm.localization();
         let started = match expanded {
             Err(f) => Err(preprocessor_error(f)),
             Ok(expanded) => {
                 *host.script_map.borrow_mut() = expanded.map;
                 realm.set_strict_writes(expanded.strict == Some(true));
                 realm
-                    .define_host_object("vc", vc_object(&host, args))
-                    .and_then(|()| realm.define_host_object("$", dollar_object(&host)))
+                    .add_script_extensions()
+                    .and_then(|()| realm.define_host_object("vc", vc_object(&host, args)))
+                    .and_then(|()| realm.define_host_object("$", dollar_object(&host, info, &localization)))
                     .and_then(|()| dialogs::install(&mut realm, &host))
                     .and_then(|()| files::install(&mut realm, &host))
                     .and_then(|()| realm.start(&expanded.source))
@@ -1355,10 +1444,11 @@ impl Session {
             return Err(EngineError::Other(message));
         }
         let scope = crate::file_access::ScopeHandle::capture();
+        let (run, line_name) = (host.run, host.name.clone());
         let job = Job { realm, host, world: World::working(self), start_uids: open, name: name.clone(), scope };
         let id = NEXT_JOB.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         JOBS.with(|jobs| jobs.borrow_mut().insert(id, job));
-        self.script_key = Some(JobKey(id));
+        self.script_key = Some(JobKey { id, run, name: line_name });
         Ok(name)
     }
 
@@ -1366,14 +1456,15 @@ impl Session {
     /// run has ended: its report, or the error that ended it, with the documents put back.
     pub fn script_pump(&mut self) -> Option<Result<Value>> {
         let key = self.script_key.take()?;
-        let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.0)) else {
+        let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
+            self.script_gone(key, console::Ending::Internal);
             return Some(Err(EngineError::Other(JOB_GONE.to_string())));
         };
         if let Some(e) = job.host.dialogs.take_failure() {
             return Some(self.script_failed(job, &e));
         }
-        if (job.host.waiting.get() || job.host.dialogs.is_waiting()) && !self.script_stop.is_set() {
-            JOBS.with(|jobs| jobs.borrow_mut().insert(key.0, job));
+        if (job.host.waiting.get() || job.host.asleep().is_some() || job.host.dialogs.is_waiting()) && !self.script_stop.is_set() {
+            JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
             self.script_key = Some(key);
             return None;
         }
@@ -1395,7 +1486,7 @@ impl Session {
             }
             Ok(Err(e)) => Some(self.script_failed(job, &e)),
             Ok(Ok(Progress::Paused)) => {
-                JOBS.with(|jobs| jobs.borrow_mut().insert(key.0, job));
+                JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
                 self.script_key = Some(key);
                 None
             }
@@ -1513,6 +1604,11 @@ impl Session {
             }
             if self.script_waiting() || self.script_dialog().is_some() {
                 self.script_stop.set();
+            }
+            // A `$.sleep` waits here, where nothing is drawn, instead of turning the loop over.
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(left) = self.script_sleep_left() {
+                std::thread::sleep(left.min(std::time::Duration::from_millis(100)));
             }
         }
     }
@@ -1666,6 +1762,13 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     r
 }
 
+/// Tests: removes the session's running job while the session keeps its hold on it. → whether a
+/// job was removed.
+#[cfg(test)]
+pub(crate) fn forget_job(s: &Session) -> bool {
+    s.script_key.as_ref().is_some_and(|k| JOBS.with(|jobs| jobs.borrow_mut().remove(&k.id)).is_some())
+}
+
 /// The objects a run may add before it is asked to continue or stop.
 fn growth_objects() -> u64 {
     #[cfg(test)]
@@ -1694,4 +1797,8 @@ thread_local! {
     pub(crate) static TEST_GROWTH: Cell<Option<u64>> = const { Cell::new(None) };
     /// Tests: the `JSINCLUDE` folders in place of the environment's.
     pub(crate) static TEST_JSINCLUDE: RefCell<Option<Vec<std::path::PathBuf>>> = const { RefCell::new(None) };
+    /// Tests: the time since a run started, in place of its clock's.
+    pub(crate) static TEST_ELAPSED: Cell<Option<std::time::Duration>> = const { Cell::new(None) };
+    /// Tests: runs have no clock, as in a wasm build.
+    pub(crate) static TEST_NO_CLOCK: Cell<bool> = const { Cell::new(false) };
 }

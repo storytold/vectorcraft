@@ -8280,8 +8280,14 @@ digits	Hindi	Hindi
 	Ended at a limit	Avslutades vid en gräns
 	Stopped	Stoppad
 	Ended by an internal fault	Avslutades av ett internt fel
-	{ms} ms, {calls} host calls	{ms} ms, {calls} värdanrop
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidigare rader borttagna, {cut} rader avkortade
+	time unavailable	tid ej tillgänglig
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	långsammast: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} värdanrop|{n} värdanrop
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} tidigare rad borttagen|{n} tidigare rader borttagna
+@plural	{n} line cut|{n} lines cut	{n} rad avkortad|{n} rader avkortade
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`
 
 # Deferred plug-in effects

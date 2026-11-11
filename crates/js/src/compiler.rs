@@ -1193,6 +1193,7 @@ impl<'a> FnCompiler<'a> {
             max_stack: 0,
             strict: self.strict,
             self_name: meta.self_name,
+            decl_name: meta.decl_name,
             params: meta.params,
             vars: hoisted.vars,
             fun_decls: hoisted.fun_decls,
@@ -1209,6 +1210,7 @@ impl<'a> FnCompiler<'a> {
 #[derive(Default)]
 struct Meta {
     self_name: Option<Key>,
+    decl_name: Option<Key>,
     params: Vec<Key>,
     span: (u32, u32),
 }
@@ -1231,6 +1233,7 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
     c.emit(Op::Return);
     let name = f.name.as_ref().map(|n| key_of(&n.name));
     let meta = Meta {
+        decl_name: if f.kind == FunctionKind::Declaration { name.clone() } else { None },
         self_name: if bind_name && f.kind == FunctionKind::Expression { name } else { None },
         params: f.params.iter().map(|p| key_of(&p.name)).collect(),
         span: (f.span.start, f.span.end),

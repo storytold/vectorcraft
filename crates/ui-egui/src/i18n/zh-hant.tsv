@@ -6431,8 +6431,14 @@ breakText	Glyphs	字符
 	Ended at a limit	在限制處結束
 	Stopped	已停止
 	Ended by an internal fault	因內部錯誤結束
-	{ms} ms, {calls} host calls	{ms} 毫秒，主機呼叫 {calls} 次
-	{dropped} earlier lines dropped, {cut} lines cut	已捨棄 {dropped} 行較早內容，已截斷 {cut} 行
+	time unavailable	時間無法取得
+	{ms} ms	{ms} 毫秒
+	{time}, {calls}	{time}，{calls}
+	slowest: {commands}	最慢的命令：{commands}
+	{dropped}, {cut}	{dropped}，{cut}
+@plural	{n} host call|{n} host calls	主機呼叫 {n} 次
+@plural	{n} earlier line dropped|{n} earlier lines dropped	已捨棄 {n} 行較早內容
+@plural	{n} line cut|{n} lines cut	已截斷 {n} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後
 
 # Deferred plug-in effects

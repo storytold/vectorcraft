@@ -529,7 +529,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(flags);
         }
         let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
-        for k in keys.chain(&code.self_name) {
+        for k in keys.chain(&code.self_name).chain(&code.decl_name) {
             strings.add_key(k);
         }
         stack.extend(code.functions.iter().map(|f| &**f));

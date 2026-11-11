@@ -6776,8 +6776,14 @@ breakText	Glyphs	Glifs
 	Ended at a limit	Acabat en un límit
 	Stopped	Aturat
 	Ended by an internal fault	Acabat per un error intern
-	{ms} ms, {calls} host calls	{ms} ms, {calls} crides a l’amfitrió
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} línies anteriors descartades, {cut} línies tallades
+	time unavailable	temps no disponible
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	més lentes: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} crida a l’amfitrió|{n} crides a l’amfitrió
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} línia anterior descartada|{n} línies anteriors descartades
+@plural	{n} line cut|{n} lines cut	{n} línia tallada|{n} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
 
 # Deferred plug-in effects
