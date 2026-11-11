@@ -4,7 +4,7 @@
 >
 > Vector Halftone preview update (2026-11-10): temporary dot selection marks are hidden, and the bounding box stays available (#6369).
 >
-> **Eraser fill update (2026-11-11):** filled open paths and compound holes use filled-area cutting (#6582); stroke-closure follow-up remains open; scores and estimates unchanged.
+> **Eraser fill update (2026-11-11):** ordinary filled open paths retain fill and explicit strokes outside the sweep (#6582); clipping sources and live effects retain legacy behavior; scores and estimates unchanged.
 >
 > Numeric spinner update (2026-11-10): held mouse arrows repeat past the click timeout; scores and estimates unchanged (#6307).
 
@@ -160,7 +160,7 @@ tools, never checked side by side) isn't captured row by row.
 | Anchor Point and Curvature tools' own cursors | done | the caret on the anchor it converts; the pen nib with a curve badge |
 | Free Transform's Cmd/Ctrl side-shear cursor | done | two arrows passing along the side (ShearH, ShearV), instead of the resize arrow across it |
 | Cursors of their own for Lasso, Magic Wand, the freehand tools, Shaper, Live Paint Bucket, Measure, Print Tiling, the symbolism tools, vertical type, Scissors (over a segment and away), Mesh and Puppet Warp | partial | each tool returns its own cursor and Use Precise Cursors turns them into the crosshair; until they're drawn they borrow the crosshair, the I-beam, the Pen's add cursor or not-allowed |
-| Eraser: filled open paths and compound holes | partial | Area cutting preserves fill outside the swept region (#6582); zero-area open lines retain outline splitting. Original engine integration regressions cover rendered pixels, geometry, holes and mixed strokes. Stroke closure and canceled-fill follow-ups remain open; see G11 in [gaps.md](gaps.md#g11-correctness-bugs-in-core-tools). |
+| Eraser: filled open paths and compound holes | partial | Area cutting preserves fill outside the swept region (#6582). Ordinary filled open paths preserve explicit strokes, paint order, opacity and canceled fill with separate fill/stroke geometry; zero-area open lines retain outline splitting. Thirteen engine integration tests cover rendered pixels, geometry, holes, masks, mixed strokes and history. Clipping-source/live-effect correction remains open; see G11 in [gaps.md](gaps.md#g11-correctness-bugs-in-core-tools). |
 | Blob Brush and Eraser: the tip's outline at the pointer | done | before a press and while painting, the outline of the tip (its size, angle and roundness, at the zoom) follows the pointer, black on a white halo, round a small centre dot; `[` / `]` and Tool Options change it at once; precise cursors (Caps Lock) show only the crosshair; it goes when the pointer leaves the canvas, while Cmd/Ctrl lends a selection tool and while Alt lends the Blob Brush the Smooth tool (#4977); `crates/tools/src/draw2/gesture.rs` and its tests While the button is down a round Blob Brush shows the outline of the area it will add, rounded at both ends, not a line as wide as the brush that ends square (#4343). |
 | Busy cursor during long operations | done | Background open, save and export show the system progress cursor (gap G1) |
 | Each anchor snaps to Smart Guides and construction angles | done | `DrawSnap` |
@@ -514,7 +514,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-11 | minor | Eraser: filled open contours and compound holes use area cutting; zero-area open lines retain outline splitting (#6582). Scores and estimates unchanged. |
+| 2026-11-11 | minor | Eraser: filled open contours and compound holes use area cutting; ordinary fills and explicit strokes keep separate geometry; clipping sources and live effects retain legacy behavior (#6582). Scores and estimates unchanged. |
 | 2026-11-11 | minor | Outline view: a click on a path's outline selects it through an image or a gradient mesh in front, which Outline draws as a frame or mesh lines (#6437). |
 | 2026-11-11 | minor | A middle-click on a document tab (or its ×) closes it as the × does; closing a document's last view with unsaved changes asks to save first (#6506). VectorCraft addition; scores and estimates unchanged. |
 | 2026-11-03 | minor | A double-click on a ruler adds a guide at the pointer (#5239): a vertical one on the top ruler, a horizontal one on the left ruler; scores and estimates unchanged. |

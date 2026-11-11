@@ -4,7 +4,7 @@
 
 ## Feature submission evidence
 
-> **Eraser fill update (2026-11-11):** filled open paths and compound holes use filled-area cutting (#6582); stroke-closure follow-up remains open; scores and estimates unchanged.
+> **Eraser fill update (2026-11-11):** ordinary filled open paths retain fill and explicit strokes outside the sweep (#6582); clipping sources and live effects retain legacy behavior; scores and estimates unchanged.
 
 **Feature evidence last updated:** 2026-11-03.
 
@@ -307,7 +307,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G11 Correctness bugs in core tools
 
-- **Improved (#6582):** the Eraser subtracts its swept area from filled open contours, preserving fill outside the stroke. Open compound members keep their holes under either fill rule; zero-area open lines keep outline splitting. Original engine integration regressions check rendered pixels, retained geometry, mixed paths and history. Review follow-up: filled open paths with a visible stroke can gain a stroke on their implicit closing edge; separate fill/stroke geometry and clipping-source handling remain unresolved. A single twice-traced contour with canceled Even-Odd fill can also reveal fill after outline splitting. Scores and estimates unchanged.
+- **Improved (#6582):** the Eraser subtracts its swept area from filled open contours, preserving fill outside the stroke. Open compound members keep their holes under either fill rule; zero-area open lines keep outline splitting. Ordinary filled open paths with visible strokes keep separate fill and explicit-stroke geometry in their original paint order, preserving missing closing edges, Even-Odd cancellation and object opacity. Thirteen engine integration regressions check rendered pixels, geometry, paint order, masks, mixed paths and history. Clipping-source subtrees and paths with visible appearance effects on themselves or an ancestor retain the existing route; its stroke-closure and canceled-fill limitations remain open pending the scope decision. Scores and estimates unchanged.
 
 - **Export-only improvement (#6309):** PDF export keeps harakat and zero-advance Noto Arabic dot glyphs in one compatible batch per layout line, with per-glyph vertical offsets (#6309). `crates/pdf/src/tests/realtext.rs` (`mark_text_*`) checks decoded cluster mappings, mixed Arabic/Latin/digits, contour placement against outline export, vertical columns, differing path rotations and PDF/X-1a/3/4. Editable-text import preserves authored ActualText separately (#6165), with cross-line/style layout limits; separately styled or differently rotated clusters and external viewer search/copy remain outside this export-only evidence. Broader G11 scope, scores and estimates unchanged.
 
@@ -861,7 +861,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 | 2026-11-11 | minor | G5: built-in Energy Beams brush library (Laser Bolt, Plasma Arc, Charge Wave, Spark Trail); Missing trimmed; estimate 5–15 → 4–14 h; MCP Brush libraries list Energy Beams. |
 | 2026-11-11 | minor | G5: built-in Skill Icons symbol library (Attack, Defend, Heal, Buff, Ult); Missing trimmed; estimate 6–16 → 5–15 h; MCP Symbol libraries list Skill Icons. |
 | 2026-11-10 | minor | G6: MCP catalogue (#6460): headless lists `UI_COMMANDS` (`ui: true`), eight prompts, effect vs command ids, 33 tools, commands/reference; estimate unchanged. |
-| 2026-11-11 | minor | Eraser: filled open contours and compound holes use area cutting; zero-area open lines retain outline splitting (#6582). Scores and estimates unchanged. |
+| 2026-11-11 | minor | Eraser: filled open contours and compound holes use area cutting; ordinary fills and explicit strokes keep separate geometry; clipping sources and live effects retain legacy behavior (#6582). Scores and estimates unchanged. |
 | 2026-11-11 | minor | G5: built-in Status Effects graphic style library (Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade, Shield Buff); Missing trimmed; estimate 7–17 → 6–16 h; MCP docs list UI Frames and Map Markers under Symbol libraries. |
 | 2026-11-11 | minor | G5: built-in Inventory Icons symbol library (Sword, Shield, Potion, Key, Gem; no default 9-slice); Missing trimmed; estimate 8–18 → 7–17 h. |
 | 2026-11-10 | minor | G4 type: Edit › Edit Custom Dictionary… adds, deletes and changes the custom dictionary's words, #4936; the Check Spelling dialog remains; scores and estimates unchanged. |
