@@ -2002,6 +2002,7 @@ antiAlias	Sharp	シャープ
 	Include SVG Code	SVG コードを含める
 	Include Swatches for Tints	ティント用のスウォッチを含める
 	Include non-printing layers	印刷しないレイヤーを含む
+	Write pages longer than 200 in at full size in points	200 in より長いページを実寸のポイントで書き出す
 	Ink	インキ
 	Insert Character	文字を挿入
 	Inspect Document	ドキュメントを調査

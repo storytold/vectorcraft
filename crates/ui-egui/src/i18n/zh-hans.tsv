@@ -1613,6 +1613,7 @@ file-filter	Templates	模板
 	Include Linked Files	包含链接文件
 	Include Metadata	包含元数据
 	Include non-printing layers	包含非打印图层
+	Write pages longer than 200 in at full size in points	以实际尺寸（点）写入长于 200 in 的页面
 	Include SVG Code	包含 SVG 代码
 	Include Swatches for Tints	包含淡色色板
 	Inflate…	膨胀…

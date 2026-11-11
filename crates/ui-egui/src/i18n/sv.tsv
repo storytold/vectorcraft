@@ -1617,6 +1617,7 @@ font-technology	Variable	Variabla
 	Include Linked Files	Inkludera länkade filer
 	Include Metadata	Inkludera metadata
 	Include non-printing layers	Inkludera lager som inte skrivs ut
+	Write pages longer than 200 in at full size in points	Skriv sidor längre än 200 in i full storlek i punkter
 	Include SVG Code	Inkludera SVG-kod
 	Include Swatches for Tints	Inkludera färgrutor för nyanser
 	Inflate…	Blås upp…

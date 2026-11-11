@@ -2031,6 +2031,7 @@ antiAlias	Sharp	날카롭게
 	Include SVG Code	SVG 코드 포함
 	Include Swatches for Tints	농도별 견본 포함
 	Include non-printing layers	인쇄되지 않는 레이어 포함
+	Write pages longer than 200 in at full size in points	200 in보다 긴 페이지를 실제 크기의 포인트로 기록
 	Ink	잉크
 	Insert Character	문자 삽입
 	Inspect Document	문서 검사
