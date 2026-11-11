@@ -19,6 +19,9 @@ pub const UI_FIELDS: &[(&str, &str, &str)] = &[
     ("__taskBar", "General", "Enable Contextual Task Bar"),
 ];
 
+/// The Units ▸ General value Reset Preferences put in the dialog, while it is still the field's value.
+const RESET_UNITS: &str = "__resetUnits";
+
 /// Whether User Interface shows VectorCraft Title Bar on Every Desktop (`appTitleBar`): Linux and the
 /// BSDs, where the desktop may draw the window's frame. macOS and Windows never read it.
 const APP_TITLE_BAR_SHOWN: bool = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
@@ -194,12 +197,21 @@ fn found_paint(ui: &mut egui::Ui, d: &mut Dialog, mark: Option<(egui::layers::Sh
     }
 }
 
+/// `field` of the Preferences dialog `d` is about to be `value` (a frame's edit or `ui.dialog.set`):
+/// choosing another General unit after Reset Preferences makes OK set the document's units again.
+pub(crate) fn note_set(d: &mut Dialog, field: &str, value: &Value) {
+    if field == "unitsGeneral" && d.fields.get(RESET_UNITS).is_some_and(|v| v != value) {
+        d.fields.remove(RESET_UNITS);
+    }
+}
+
 /// OK: validate and apply every preference in the dialog (nothing changes on error).
 pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     let values: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
-    app.run("prefs.set", json!({ "values": values }))?;
+    let document_units = d.fields.get(RESET_UNITS).is_none_or(|v| values.get("unitsGeneral") != Some(v));
+    app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
     if touch_ws.is_some() {
         crate::workspaces::sync_touch_workspace(app, app.touch_screen);
     }
@@ -418,6 +430,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
             d.fields.insert(k, v);
         }
+        // OK resets the Units ▸ General preference and leaves the open document's units alone.
+        d.fields.insert(RESET_UNITS.into(), d.fields.get("unitsGeneral").cloned().unwrap_or(Value::Null));
+    }
+    if let Some(v) = d.fields.get("unitsGeneral").cloned() {
+        note_set(&mut d, "unitsGeneral", &v);
     }
     // The setting a search went to stays highlighted until another category is shown.
     let found = d.str("__found");

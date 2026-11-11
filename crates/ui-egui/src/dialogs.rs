@@ -504,6 +504,9 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == layer_options::KIND {
         layer_options::note_set(d, &field, &value);
     }
+    if d.kind == "preferences" {
+        crate::prefs_dialog::note_set(d, &field, &value);
+    }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     d.fields.insert(field, value);
     if let Some(field) = dxf {

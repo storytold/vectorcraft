@@ -1112,3 +1112,184 @@ fn mirror_axis_hidden_controls_and_other_repeat_kinds_do_not_capture_drags() {
         assert_eq!(node(&s, id), before);
     }
 }
+
+/// The document, its revision, the undo and redo stacks and the selection: what a refused call
+/// must leave as it was.
+fn untouched(s: &Session) -> (std::sync::Arc<vectorcraft_doc::Document>, u64, (usize, usize, bool), Vec<NodeId>) {
+    let st = s.doc().unwrap();
+    (st.doc.clone(), st.revision, crate::tests::history(s), st.selection.objects.to_vec())
+}
+
+/// Each call in `calls` is refused with the parameter error `want` and changes nothing.
+fn refused(s: &mut Session, calls: Vec<(&str, Value, String)>) {
+    let before = untouched(s);
+    for (cmd, p, want) in calls {
+        let r = s.execute(cmd, &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}, want {want:?}");
+        assert!(untouched(s) == before, "{cmd} {p}: nothing changes");
+    }
+}
+
+fn number(k: &str, v: Value) -> String {
+    format!("`{k}` must be a number, not {v}")
+}
+
+fn switch(k: &str) -> String {
+    format!("`{k}` must be true or false")
+}
+
+fn string(k: &str) -> String {
+    format!("`{k}` must be a string")
+}
+
+/// Radial, Grid, Mirror and Repeat Options refuse a param of the wrong type with an error naming
+/// it, and change nothing; a distance given as text with a unit is refused like any other string.
+/// Null counts as a param left out, which keeps its default.
+#[test]
+fn repeat_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let r = rect(&mut s, 100.0, 100.0, 60.0, 80.0);
+    sel(&mut s, &[r]);
+    refused(
+        &mut s,
+        vec![
+            ("object.repeat.radial", json!({"instances": "8"}), number("instances", json!("8"))),
+            ("object.repeat.radial", json!({"radius": true}), number("radius", json!(true))),
+            ("object.repeat.radial", json!({"radius": "5 mm"}), number("radius", json!("5 mm"))),
+            ("object.repeat.radial", json!({"radius": -5}), "`radius` must be a number not below 0".into()),
+            ("object.repeat.grid", json!({"hSpacing": "5 mm"}), number("hSpacing", json!("5 mm"))),
+            ("object.repeat.grid", json!({"vSpacing": [1]}), number("vSpacing", json!([1]))),
+            ("object.repeat.grid", json!({"rows": "3"}), number("rows", json!("3"))),
+            ("object.repeat.grid", json!({"cols": false}), number("cols", json!(false))),
+            ("object.repeat.mirror", json!({"angle": "45"}), number("angle", json!("45"))),
+            ("object.repeat.mirror", json!({"offset": {}}), number("offset", json!({}))),
+        ],
+    );
+    // Null params keep the defaults: each repeat matches the one made with `{}`.
+    for (cmd, nulls) in [
+        ("object.repeat.radial", json!({"instances": null, "radius": null})),
+        ("object.repeat.grid", json!({"hSpacing": null, "vSpacing": null, "rows": null, "cols": null})),
+        ("object.repeat.mirror", json!({"angle": null, "offset": null})),
+    ] {
+        let made = |p: &Value| {
+            let mut s = session();
+            let r = rect(&mut s, 100.0, 100.0, 60.0, 80.0);
+            sel(&mut s, &[r]);
+            let id = id_of(&s.execute(cmd, p).unwrap());
+            node(&s, id)
+        };
+        assert_eq!(made(&nulls), made(&json!({})), "{cmd}");
+    }
+    // A grid's rows and cols take any number, as Repeat Options does: 2.5 rows are 2.
+    let id = id_of(&s.execute("object.repeat.grid", &json!({"rows": 2.5, "cols": 4})).unwrap());
+    assert!(matches!(node(&s, id).kind, NodeKind::Repeat(ref r) if matches!(r.kind, RepeatKind::Grid { rows: 2, cols: 4, .. })));
+    // `brickOffset` alone sets the offset of a brick grid, and leaves a plain grid as it is.
+    let grid_type = |s: &Session| match node(s, id).kind {
+        NodeKind::Repeat(r) => match r.kind {
+            RepeatKind::Grid { grid_type, .. } => grid_type,
+            other => panic!("not a grid: {other:?}"),
+        },
+        other => panic!("not a repeat: {other:?}"),
+    };
+    s.execute("object.repeat.options", &json!({"brickOffset": 0.25})).unwrap();
+    assert_eq!(grid_type(&s), TileType::Grid);
+    s.execute("object.repeat.options", &json!({"gridType": "brickByRow"})).unwrap();
+    s.execute("object.repeat.options", &json!({"brickOffset": 0.25})).unwrap();
+    assert_eq!(grid_type(&s), TileType::BrickByRow { offset: 0.25 });
+
+    // Repeat Options checks every param, whichever kind the selected repeat is.
+    s.execute("object.repeat.radial", &json!({"instances": 4, "radius": 50})).unwrap();
+    let kind = |s: &Session| match node(s, id).kind {
+        NodeKind::Repeat(r) => r.kind,
+        other => panic!("not a repeat: {other:?}"),
+    };
+    let radial = kind(&s);
+    refused(
+        &mut s,
+        vec![
+            ("object.repeat.options", json!({"instances": "4"}), number("instances", json!("4"))),
+            ("object.repeat.options", json!({"radius": "50 pt"}), number("radius", json!("50 pt"))),
+            ("object.repeat.options", json!({"startAngle": true}), number("startAngle", json!(true))),
+            ("object.repeat.options", json!({"endAngle": "x"}), number("endAngle", json!("x"))),
+            ("object.repeat.options", json!({"hSpacing": "1"}), number("hSpacing", json!("1"))),
+            ("object.repeat.options", json!({"vSpacing": [1]}), number("vSpacing", json!([1]))),
+            ("object.repeat.options", json!({"rows": "2"}), number("rows", json!("2"))),
+            ("object.repeat.options", json!({"cols": [2]}), number("cols", json!([2]))),
+            ("object.repeat.options", json!({"brickOffset": "0.5"}), number("brickOffset", json!("0.5"))),
+            ("object.repeat.options", json!({"angle": "10"}), number("angle", json!("10"))),
+            ("object.repeat.options", json!({"reverseOverlap": "true"}), switch("reverseOverlap")),
+            ("object.repeat.options", json!({"flipRows": 1}), switch("flipRows")),
+            ("object.repeat.options", json!({"flipCols": "no"}), switch("flipCols")),
+            ("object.repeat.options", json!({"gridType": 3}), string("gridType")),
+            ("object.repeat.options", json!({"center": [1]}), "center must be [x, y] with finite coordinates".into()),
+            ("object.repeat.options", json!({"center": "0, 0"}), "center must be [x, y] with finite coordinates".into()),
+        ],
+    );
+    let all_null = json!({"instances": null, "radius": null, "startAngle": null, "endAngle": null, "reverseOverlap": null, "center": null});
+    s.execute("object.repeat.options", &all_null).unwrap();
+    assert_eq!(kind(&s), radial, "null params keep the options");
+    s.execute("object.repeat.options", &json!({"instances": 6, "reverseOverlap": true, "center": [10, 20]})).unwrap();
+    assert!(matches!(kind(&s), RepeatKind::Radial { instances: 6, reverse_overlap: true, .. }));
+}
+
+/// Make, Edit Pattern, Save a Copy, Pattern Options and Delete Pattern refuse a param of the wrong
+/// type (and Pattern Options an `overlap` side it doesn't know) with an error naming it, and change
+/// nothing. Null counts as a param left out, which keeps its default.
+#[test]
+fn pattern_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let r = make_dots(&mut s);
+    sel(&mut s, &[r]);
+    let options = |p: Value| {
+        let mut p = p;
+        p["name"] = json!("Dots");
+        p
+    };
+    refused(
+        &mut s,
+        vec![
+            ("object.pattern.make", json!({"name": 5}), string("name")),
+            ("object.pattern.make", json!({"tileType": 2}), string("tileType")),
+            ("object.pattern.make", json!({"brickOffset": "0.5"}), number("brickOffset", json!("0.5"))),
+            ("object.pattern.make", json!({"width": "20"}), number("width", json!("20"))),
+            ("object.pattern.make", json!({"height": true}), number("height", json!(true))),
+            ("object.pattern.make", json!({"edit": "false"}), switch("edit")),
+            ("object.pattern.edit", json!({"name": 5}), string("name")),
+            ("pattern.options", json!({"name": ["Dots"]}), string("name")),
+            ("pattern.options", options(json!({"newName": 5})), string("newName")),
+            ("pattern.options", options(json!({"tileType": []})), string("tileType")),
+            ("pattern.options", options(json!({"width": "20"})), number("width", json!("20"))),
+            ("pattern.options", options(json!({"hSpacing": "1"})), number("hSpacing", json!("1"))),
+            ("pattern.options", options(json!({"vSpacing": true})), number("vSpacing", json!(true))),
+            ("pattern.options", options(json!({"copies": "5"})), number("copies", json!("5"))),
+            ("pattern.options", options(json!({"dimCopies": "50"})), number("dimCopies", json!("50"))),
+            ("pattern.options", options(json!({"sizeTileToArt": "true"})), switch("sizeTileToArt")),
+            ("pattern.options", options(json!({"showTileEdge": 1})), switch("showTileEdge")),
+            ("pattern.options", options(json!({"showSwatchBounds": "no"})), switch("showSwatchBounds")),
+            ("pattern.options", options(json!({"overlap": "right"})), "`overlap` must be an object, not \"right\"".into()),
+            ("pattern.options", options(json!({"overlap": {"h": "center"}})), "`overlap.h` must be one of left, right".into()),
+            ("pattern.options", options(json!({"overlap": {"v": 1}})), "`overlap.v` must be one of top, bottom".into()),
+            ("pattern.delete", json!({"name": 5}), string("name")),
+        ],
+    );
+    // Null params keep the defaults: a new pattern named "New Pattern 1", a grid tile the size of
+    // the art, edited.
+    let made = s
+        .execute("object.pattern.make", &json!({"name": null, "tileType": null, "brickOffset": null, "width": null, "height": null, "edit": null}))
+        .unwrap();
+    assert_eq!(made["name"], "New Pattern 1");
+    let def = doc(&s).pattern("New Pattern 1").unwrap().clone();
+    assert_eq!(def.tile_type, TileType::Grid);
+    assert!((def.tile.width() - 10.0).abs() < 1e-6, "{:?}", def.tile);
+    assert_eq!(doc(&s).pattern_edit.as_ref().map(|e| e.pattern.as_str()), Some("New Pattern 1"));
+    // In editing mode: Save a Copy refuses a name that isn't a string, and Pattern Options with
+    // null params keeps the edited pattern's options.
+    refused(&mut s, vec![("object.pattern.saveCopy", json!({"name": 5}), string("name"))]);
+    s.execute("pattern.options", &json!({"name": null, "overlap": {"h": null, "v": null}, "copies": null, "sizeTileToArt": null})).unwrap();
+    assert!(doc(&s).pattern("New Pattern 1").unwrap() == &def);
+    s.execute("pattern.options", &json!({"overlap": {"h": "right"}})).unwrap();
+    assert!(doc(&s).pattern("New Pattern 1").unwrap().overlap.right_in_front);
+    assert_eq!(s.execute("object.pattern.saveCopy", &json!({"name": null})).unwrap()["name"], "New Pattern 1 copy");
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    assert!(s.execute("pattern.delete", &json!({"name": null})).is_err(), "no name given");
+}

@@ -16,6 +16,7 @@ use crate::{MAX_FACES, MAX_SOLID_FACES, Revolve, V3, eye_distance, perspective_s
 mod build;
 mod inflate;
 mod membrane;
+mod outline;
 mod rings;
 
 #[cfg(test)]
@@ -253,6 +254,9 @@ pub struct Facet {
     pub normal: [f64; 3],
     /// Smooth lighting on an inflated triangle, before clipping individual RGB channels.
     pub rgb_gradient: Option<crate::RgbGradient>,
+    /// The facet's outline with the profile's curves kept as cubics, for [`Facet::path`]. The
+    /// contours stay the polygon that visibility and depth use.
+    pub outline: Option<PathData>,
     /// The contours in view space, before projection, for tests that measure depths.
     #[cfg(test)]
     view: Vec<Vec<V3>>,
@@ -268,7 +272,11 @@ impl Facet {
         if perimeter > 0.0 { 2.0 * area / perimeter } else { 0.0 }
     }
 
+    /// The facet's outline: its curved outline when it has one, else its contours.
     pub fn path(&self) -> PathData {
+        if let Some(path) = &self.outline {
+            return path.clone();
+        }
         let mut bp = BezPath::new();
         for c in &self.contours {
             let Some(first) = c.first() else { continue };

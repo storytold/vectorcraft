@@ -5,7 +5,7 @@
 
 use serde_json::{Map, Value, json};
 
-use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, str_param};
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, str_param, switch_or};
 use crate::Prefs;
 use crate::units::Measure;
 use vectorcraft_doc::{GridPrefs, Unit};
@@ -764,7 +764,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Preference",
             [],
             None,
-            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step; the eyedropper group takes a partial object, as eyedropper.setOptions; a new recoveryFolder must be a folder that can be listed and written in, and a new pluginsFolder a folder that can be listed: otherwise an error, and nothing changes; an empty value is not checked)",
+            "{key, value} or {values: {key: value, …}, documentUnits?: bool=true} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step, unless documentUnits is false; the eyedropper group takes a partial object, as eyedropper.setOptions; a new recoveryFolder must be a folder that can be listed and written in, and a new pluginsFolder a folder that can be listed: otherwise an error, and nothing changes; an empty value is not checked)",
             always,
             set
         ),
@@ -790,6 +790,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     if values.is_empty() {
         return Err(bad("prefs.set", "give {key, value} or {values}"));
     }
+    let document_units = switch_or(p, "documentUnits", true, "prefs.set")?;
     let mut next = s.prefs.clone();
     next.set_values(&values).map_err(|e| bad("prefs.set", e))?;
     if let Some(e) = s.prefs.keep_folders(&mut next).into_iter().next() {
@@ -798,7 +799,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     s.prefs.check_folders(&values).map_err(EngineError::Other)?;
     s.apply_prefs(next);
     // Units ▸ General is also the open document's units (as Document Setup sets them).
-    if values.contains_key("unitsGeneral") && s.active().is_some() {
+    if document_units && values.contains_key("unitsGeneral") && s.active().is_some() {
         s.set_document_units(s.default_units())?;
     }
     let all = s.prefs.to_json();
