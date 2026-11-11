@@ -285,3 +285,54 @@ fn the_tool_draws_a_path_one_step_per_anchor_and_closes_it() {
     assert_eq!(path(&s, id).subpaths[0].anchors.len(), 3);
     assert_eq!(steps(&s), n + 8);
 }
+
+/// #6634: the tool's closing drag on the first anchor sets that anchor's incoming handle to the
+/// mirror of the pointer and does not give it symmetric handles: a corner keeps its outgoing
+/// handle, a smooth anchor turns it to stay in line at its own length, and Alt pressed mid-drag
+/// keeps it where the drag had turned it.
+#[test]
+fn the_tools_closing_drag_does_not_make_the_first_anchor_symmetric() {
+    // An open path whose first anchor, at (50, 50), has the handles `first`, drawn on from its last
+    // anchor; the closing gesture is then up to the caller.
+    let draw = |first: Value| {
+        let mut s = session();
+        let mut a = json!({"x": 50, "y": 50});
+        a.as_object_mut().unwrap().extend(first.as_object().unwrap().clone());
+        let anchors = json!([a, {"x": 150, "y": 50}, {"x": 150, "y": 150}]);
+        let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+        s.select_tool("smartPen", view()).unwrap();
+        gesture(&mut s, &[(150.0, 150.0)], Mods::default());
+        (s, id)
+    };
+    let first = |s: &Session, id: NodeId| {
+        let sp = &path(s, id).subpaths[0];
+        assert!(sp.closed, "{sp:?}");
+        sp.anchors[0]
+    };
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+
+    // A corner: the first segment keeps its shape.
+    let (mut s, id) = draw(json!({"out": [80, 30]}));
+    gesture(&mut s, &[(50.0, 50.0), (50.0, 100.0)], Mods::default());
+    let a = first(&s, id);
+    assert_eq!((a.h_in, a.h_out, a.kind), (Point::new(50.0, 0.0), Point::new(80.0, 30.0), AnchorKind::Corner), "{a:?}");
+
+    // A smooth anchor: the outgoing handle turns opposite the incoming one, keeping its length 30.
+    let (mut s, id) = draw(json!({"in": [20, 50], "out": [80, 50]}));
+    assert_eq!(path(&s, id).subpaths[0].anchors[0].kind, AnchorKind::Smooth);
+    gesture(&mut s, &[(50.0, 50.0), (50.0, 100.0)], Mods::default());
+    let a = first(&s, id);
+    assert_eq!((a.h_in, a.kind), (Point::new(50.0, 0.0), AnchorKind::Smooth), "{a:?}");
+    assert!(near(a.h_out, Point::new(50.0, 80.0)), "{a:?}");
+
+    // Alt pressed mid-drag: a corner, its outgoing handle where the drag had turned it.
+    let (mut s, id) = draw(json!({"in": [20, 50], "out": [80, 50]}));
+    let alt = Mods { alt: true, ..Mods::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 50.0), view()).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 50.0, 100.0), view()).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 80.0, 100.0).with_mods(alt), view()).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 80.0, 100.0).with_mods(alt), view()).unwrap();
+    let a = first(&s, id);
+    assert_eq!((a.h_in, a.kind), (Point::new(20.0, 0.0), AnchorKind::Corner), "{a:?}");
+    assert!(near(a.h_out, Point::new(50.0, 80.0)), "{a:?}");
+}
