@@ -64,6 +64,18 @@ use crate::theme::Tokens;
 use serde_json::json;
 use vectorcraft_engine::Session;
 
+/// `layers` without their ruler guides: the art.
+fn art_of(layers: &[Arc<vectorcraft_doc::Node>]) -> Vec<vectorcraft_doc::Node> {
+    layers
+        .iter()
+        .map(|l| {
+            let mut l = vectorcraft_doc::Node::clone(l);
+            l.strip_ruler_guides();
+            l
+        })
+        .collect()
+}
+
 #[test]
 fn help_bar_and_status_bar_render_independently() {
     for (help, status, screen_mode) in [(true, true, 0), (false, true, 0), (true, false, 0), (false, false, 0), (true, true, 3)] {
@@ -1556,8 +1568,8 @@ fn artboard_document_tab_roundtrip_properties_delete_uses_shown_board() {
     assert_eq!(selected_before_delete, json!([1]));
     assert_eq!(active_before_delete, json!(1));
     assert_eq!(st.doc.artboards, vec![before.artboards[0].clone()], "the original first board survives");
-    assert_eq!(st.doc.guides, vec![before.guides[0].clone()], "only the deleted board's guide is removed");
-    assert_eq!(st.doc.layers, before.layers, "artwork and symbol instances stay unchanged");
+    assert_eq!(st.doc.ruler_guides(), vec![before.ruler_guides()[0].clone()], "only the deleted board's guide is removed");
+    assert_eq!(art_of(&st.doc.layers), art_of(&before.layers), "artwork and symbol instances stay unchanged");
     assert_eq!(st.doc.symbols, before.symbols, "symbol definitions stay unchanged");
     assert_eq!(st.selection, selection);
     assert_eq!(app.run_count, commands.wrapping_add(1), "one command from the actual Properties control");
@@ -1853,9 +1865,9 @@ fn delete_shown_board(app: &mut crate::VectorcraftApp, ctx: &egui::Context, base
         "ARTBOARD_CLOSE_TARGET_WRONG_SURVIVOR: Properties showing Shown must delete Shown after closing B"
     );
     assert_eq!(st.doc.as_ref(), expected, "only Shown and its attached guide may be removed from the full document");
-    assert_eq!(st.doc.layers, before.layers, "all artwork and symbol instances stay unchanged");
+    assert_eq!(art_of(&st.doc.layers), art_of(&before.layers), "all artwork and symbol instances stay unchanged");
     assert_eq!(st.doc.symbols, before.symbols);
-    assert_eq!(st.doc.guides, vec![before.guides[0].clone()]);
+    assert_eq!(st.doc.ruler_guides(), vec![before.ruler_guides()[0].clone()]);
     assert_eq!(&st.selection, selection);
     assert_eq!(st.uid, *uid);
     assert_eq!(st.revision, revision + 1);
@@ -1915,13 +1927,14 @@ fn artboard_close_active_tab_properties_delete_uses_shown_board() {
     let history_before = history_of(st);
     let history_limits = (st.history.limit, st.history.byte_budget);
     assert_eq!(before.artboards.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["Keep", "Shown"]);
-    assert_eq!(before.guides.len(), 2);
+    assert_eq!(before.ruler_guides().len(), 2);
     assert!(!selection.objects.is_empty());
     assert!(history_before.1.is_empty());
     assert!(!st.is_dirty());
     let mut expected = before.as_ref().clone();
     expected.artboards = vec![before.artboards[0].clone()];
-    expected.guides = vec![before.guides[0].clone()];
+    let keep = before.ruler_guides()[0].id;
+    expected.retain_guides(&mut vectorcraft_doc::Selection::default(), |g| g.id == keep);
     let base = Baseline { uid, revision, before, selection, history_before, history_limits, expected };
     close_b_tab(&mut app, &ctx, &base);
     delete_shown_board(&mut app, &ctx, &base);

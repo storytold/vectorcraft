@@ -137,7 +137,7 @@ fn path_param(p: &Value, art: &Node, cmd: &str) -> Result<Vec<u32>> {
 /// stroke has a Convert to Shape or Outline Object effect.
 fn paint_refusal(n: &Node, key: &str, cmd: &str) -> Option<EngineError> {
     Some(match &n.kind {
-        NodeKind::Path { guide: true, .. } => bad(cmd, format!("{key} cannot be set on a guide")),
+        NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => bad(cmd, format!("{key} cannot be set on a guide")),
         NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_) | NodeKind::Group { .. } | NodeKind::Layer { .. } => return None,
         NodeKind::Image(_) => {
             let effects = if key == "fill" { n.appearance.fill().map(|f| &f.effects) } else { n.appearance.stroke().map(|s| &s.effects) };

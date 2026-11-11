@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Parametric Shape",
             [],
             None,
-            "{id, kind?, center?, width?, height?, rotation?, count?, a?, b?, radius?} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; with none, or the same ones, nothing changes → {id, shape (its numbers now)}",
+            "{id, kind?, center?, width?, height?, rotation?: degrees clockwise (0: upright), count?, a?, b?, radius?} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; with none, or the same ones, nothing changes → {id, shape (its numbers now)}",
             has_doc,
             set
         ),

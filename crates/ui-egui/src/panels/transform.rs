@@ -223,7 +223,7 @@ pub(crate) fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Opti
         return None;
     }
     let least = |vertical: bool| {
-        st.selection.guides.iter().filter_map(|i| st.doc.guides.get(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
+        st.selection.guides.iter().filter_map(|i| st.doc.ruler_guide(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
     };
     Some((least(true), least(false)))
 }

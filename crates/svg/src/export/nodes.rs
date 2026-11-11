@@ -633,6 +633,10 @@ impl Writer<'_> {
 
     /// An object, inside `<a>` when it links to a URL (Attributes panel).
     pub(super) fn node(&mut self, n: &Node) {
+        // Ruler guides are not written, not even as a link.
+        if n.is_ruler_guide() {
+            return;
+        }
         let layer = usize::from(n.is_layer());
         self.layer_nest += layer;
         match n.url().filter(|_| n.visible && !self.anonymous) {
@@ -717,7 +721,7 @@ impl Writer<'_> {
                     self.line("</g>");
                 }
             }
-            NodeKind::Path { guide: true, .. } => {}
+            NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => {}
             NodeKind::Path { path, rule, .. } => {
                 if path.is_empty() {
                     return;
