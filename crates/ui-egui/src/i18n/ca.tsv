@@ -5196,6 +5196,7 @@ digits	Malayalam	Malaiàlam
 	Stop Script	Atura l'script
 	Show External Script Warning	Mostra l'avís dels scripts externs
 	A Script Is Running	S'està executant un script
+	Script Alert	Avís de l'script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
 	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
