@@ -242,7 +242,7 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     let to = GradientTo::parse(p)?;
     let from = s.doc()?.history.undo.len();
     let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
-    // Before anything expands: outlining the art a dimension measures would remove the dimension.
+    // Before anything expands: outlining the art a dimension measures would leave the dimension unlinked.
     let before = s.doc()?.doc.clone();
     let mut ended = vec![];
     end_dimension_links(s, &mut ended)?;

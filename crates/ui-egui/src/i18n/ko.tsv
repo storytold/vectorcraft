@@ -3878,6 +3878,8 @@ file-filter	Templates	템플릿
 	Text Wrap Options	텍스트 감싸기 옵션
 	Tile Full Pages	전체 페이지 타일링
 	Tint	색조
+	Fill Tint	칠 색조
+	Stroke Tint	선 색조
 	Tip extends past the end point	끝이 끝점을 지나 연장됨
 	Tip on the end point	끝이 끝점에 위치
 	Top	위쪽
@@ -5313,6 +5315,7 @@ lighting	Light	광원
 @msg	Invalid drawing scale	잘못된 도면 축척
 @msg	Invalid real scale	잘못된 실제 축척
 @msg	Measured anchor no longer exists	측정한 고정점이 더 이상 없습니다
+@msg	Invalid measured point	측정한 점이 잘못되었습니다
 @msg	Measured segment no longer exists	측정한 세그먼트가 더 이상 없습니다
 @msg	Non-finite dimension	유한하지 않은 치수
 @msg	Only linear dimensions are horizontal or vertical	선형 치수만 가로 또는 세로로 지정할 수 있습니다

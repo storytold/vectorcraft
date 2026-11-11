@@ -426,6 +426,29 @@ fn an_instance_is_culled_by_the_art_nested_9_slice_guides_move() {
 }
 
 #[test]
+fn an_instance_that_only_moves_is_culled_by_the_art_its_9_slice_guides_move() {
+    // A symbol made in the app: art in the 20 × 20 square, a natural size of 2 × 2, and guides a
+    // quarter in. An instance that only moves draws it at 20 × 20, ten times its natural size. The
+    // bar from x −9.9 to 0.1 crosses the left guide and is placed by the middle column's map,
+    // x → 1.9x: moved 115 pt right, it draws from x 96.19 to 115.19 while its art box starts at
+    // x 105, out of view.
+    let mut d = Document::new(100.0, 100.0);
+    let bar = rect_node(&mut d, Rect::new(-9.9, -1.0, 0.1, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(bar) });
+    let frame = rect_node(&mut d, Rect::new(-10.0, -10.0, 10.0, 10.0), Paint::None, Paint::None, 0.0);
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(inner)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.into(), serde_json::json!({ "Panel": [2.0, 2.0] }));
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((115.0, 50.0));
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(98, 50), [255, 0, 0, 255]);
+}
+
+#[test]
 fn an_instance_with_a_geometry_effect_is_culled_by_its_reshaped_art() {
     // The art, (0, 0) to (20, 20), drawn from (-100, 10) is out of view, and the Transform effect
     // moves it 150 pt right, into view.

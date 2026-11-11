@@ -55,6 +55,8 @@ pub enum HostError {
     Type(String),
     /// Thrown to the script as a `RangeError`.
     Range(String),
+    /// Thrown to the script as a `SyntaxError`.
+    Syntax(String),
     /// Ends the run with [`LimitKind::Host`] and this message. The script cannot catch it.
     Abort(String),
 }
@@ -74,6 +76,16 @@ pub enum HostItem {
     Getter(HostFunction),
     /// A frozen object with these members.
     Object(Vec<(String, HostItem)>),
+    /// A function whose host function gives JavaScript source as a string, which then runs as
+    /// global code in the realm, as an indirect `eval` runs it, with the run's fuel and limits:
+    /// the call gives that code's completion value, and its declarations become globals. A result
+    /// that is not a string is the call's result. `end` is called when the source has run,
+    /// normally or not. Each source given has the next tag of [`crate::Realm::error_source`],
+    /// from 1.
+    Evaluator {
+        source: HostFunction,
+        end: Rc<dyn Fn()>,
+    },
 }
 
 enum Step {
@@ -280,6 +292,39 @@ impl Interp {
     /// Calls host function `f`: reads its arguments (with `text`, each as the string `String(value)`
     /// gives), runs it, and gives its result to the script.
     pub(crate) fn call_data(&mut self, f: &crate::heap::DataFn, name: &Rc<str>, args: &[Value], text: bool) -> JsResult<Value> {
+        let data = self.read_args(name, args, text)?;
+        match f(data) {
+            Ok(d) => self.write_data(d, 0, false),
+            Err(e) => Err(self.host_error(e)?),
+        }
+    }
+
+    /// Calls evaluator `f` ([`HostItem::Evaluator`]): reads its arguments, runs it, and runs the
+    /// source it gives as global code, as an indirect `eval` does, giving that code's completion
+    /// value. A result that is not a string is given to the script as it is. `end` is called once
+    /// the source has run, normally or not.
+    pub(crate) fn call_evaluator(&mut self, f: &crate::heap::DataFn, end: &Rc<dyn Fn()>, name: &Rc<str>, args: &[Value]) -> JsResult<Value> {
+        let data = self.read_args(name, args, false)?;
+        let source = match f(data) {
+            Ok(Data::String(source)) => source,
+            Ok(d) => return self.write_data(d, 0, false),
+            Err(e) => return Err(self.host_error(e)?),
+        };
+        self.evaluated = self.evaluated.saturating_add(1);
+        let tag = std::mem::replace(&mut self.source_tag, self.evaluated);
+        let code = self.encode_source(&source).and_then(|units| self.compile_source(&units, false, crate::bytecode::CodeKind::Eval));
+        self.source_tag = tag;
+        let r = match code {
+            Ok(code) => self.run_global(code, true),
+            Err(e) => Err(self.compile_error_to_abrupt(e)),
+        };
+        end();
+        r
+    }
+
+    /// The arguments of host function `name` as [`Data`] (with `text`, each as the string
+    /// `String(value)` gives).
+    fn read_args(&mut self, name: &Rc<str>, args: &[Value], text: bool) -> JsResult<Vec<Data>> {
         let mut reading = Reading { limits: self.data_limits, bytes: 0, entries: 0, ancestors: Vec::new(), path: Vec::new(), function: name.clone() };
         let mut data = Vec::with_capacity(args.len());
         // A conversion can run the script's own `toString`, which may collect garbage.
@@ -302,15 +347,20 @@ impl Interp {
         }
         self.temp_roots.truncate(mark);
         read?;
-        match f(data) {
-            Ok(d) => self.write_data(d, 0, false),
-            Err(HostError::Abort(message)) => {
+        Ok(data)
+    }
+
+    /// What host error `e` throws, or the limit it ends the run with.
+    fn host_error(&mut self, e: HostError) -> JsResult<Abrupt> {
+        match e {
+            HostError::Abort(message) => {
                 self.host_abort = Some(message);
-                Err(Abrupt::Limit(LimitKind::Host))
+                Ok(Abrupt::Limit(LimitKind::Host))
             }
-            Err(HostError::Error(message)) => Err(self.throw_host(ErrorType::Error, &message)?),
-            Err(HostError::Type(message)) => Err(self.throw_host(ErrorType::Type, &message)?),
-            Err(HostError::Range(message)) => Err(self.throw_host(ErrorType::Range, &message)?),
+            HostError::Error(message) => self.throw_host(ErrorType::Error, &message),
+            HostError::Type(message) => self.throw_host(ErrorType::Type, &message),
+            HostError::Range(message) => self.throw_host(ErrorType::Range, &message),
+            HostError::Syntax(message) => self.throw_host(ErrorType::Syntax, &message),
         }
     }
 
@@ -361,6 +411,11 @@ impl Interp {
             HostItem::TextFunction(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, true)), flags: ENUMERABLE },
             HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, false)), set: None, flags: ENUMERABLE },
             HostItem::Object(items) => Prop::Data { value: Value::Object(self.host_object(&full, items)?), flags: ENUMERABLE },
+            HostItem::Evaluator { source, end } => {
+                let proto = self.intrinsics.function_proto;
+                let f = self.heap.alloc_object(Object::new(Class::Function(Func::Eval { f: source, end, name: full.into() }), Some(proto)));
+                Prop::Data { value: Value::Object(f), flags: ENUMERABLE }
+            }
         };
         self.define(o, key(&name), prop)
     }

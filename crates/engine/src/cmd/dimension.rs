@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Dimension",
             [],
             None,
-            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
+            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}, freeA?, freeB?: a point that is not an anchor, {kind: onSegment, edge: {node,subpath,segment}, t: 0..1 (curve parameter)}|{kind: anchors, node, anchors: [{subpath,anchor,part?: point|in|out (the anchor, default, or its in or out handle),weight}] (2 or 3 points of one path whose weights add up to 1), across?: (2 anchors only: times the first-to-second anchor vector (x,y) turned to (-y,x), which points down when the vector points right)} (an end is an anchor or a free point, not both)}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
             has_doc,
             create
         ),
@@ -231,9 +231,10 @@ fn apply_to_all(s: &mut Session, p: &Value) -> Result<Value> {
 fn replace(doc: &mut Document, id: NodeId, dim: Dimension) -> Result<()> {
     let old: Vec<NodeId> = doc.node(id).and_then(Node::children).map(|ch| ch.iter().map(|n| n.id).collect()).unwrap_or_default();
     let children = artwork(doc, &dim, &old)?;
+    let name = format!("Dimension · {}", dim.label().map_err(error)?);
     if let Some(n) = doc.node_mut(id) {
         n.kind = NodeKind::Group { children, clip: false };
-        n.name = Some(format!("Dimension · {}", dim.label().map_err(error)?));
+        n.name = Some(name);
         n.extras_mut().dimension = Some(Box::new(dim));
     }
     Ok(())
@@ -272,7 +273,8 @@ impl EndedLink {
 
 /// The [`reached`] dimensions become plain groups, whose art does not redraw or follow what it
 /// measured. A command that replaces art calls this before it changes anything, since replacing
-/// the art a dimension measures would remove the dimension, and then [`restore_unchanged`].
+/// the art a dimension measures would otherwise leave the dimension unlinked, and then
+/// [`restore_unchanged`].
 pub(crate) fn end_links(doc: &mut Document, roots: &[NodeId]) -> Vec<EndedLink> {
     let mut ended = Vec::new();
     for id in reached(doc, roots) {
@@ -315,18 +317,37 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
         let mut next = old.clone();
         let moved = next.moved.take();
         if next.source.as_ref().is_some_and(|s| s.topology_changed(before, doc)) || next.resolve(doc).is_err() {
-            // A deleted/degenerate source has no valid measurement. Remove its annotation in
-            // this same undo step instead of keeping a silently wrong number.
-            doc.remove(id)?;
+            // The art it measured was deleted, or rebuilt with other anchors, or no longer fits
+            // (an ellipse that was a circle): it stays where it was, no longer linked, in this
+            // same undo step, rather than attaching to a different edge.
+            let mut unlinked = old.clone();
+            unlinked.source = None;
+            unlinked.moved = None;
+            if let Some(v) = moved {
+                let mut shifted = unlinked.clone();
+                (shifted.a, shifted.b, shifted.vertex) = (shifted.a + v, shifted.b + v, shifted.vertex + v);
+                if shifted.validate().is_ok() {
+                    unlinked = shifted;
+                }
+            }
+            if replace(doc, id, unlinked).is_err()
+                && let Some(n) = doc.node_mut(id)
+            {
+                // Its recipe cannot be drawn again: its art stays as it is, as a plain group.
+                n.extras_mut().dimension = None;
+            }
             changed = true;
             continue;
         }
         next.keep_gap(&old);
+        if let Some(xf) = next.source.as_ref().and_then(|s| s.reflection(before, doc)) {
+            next.mirror_line(&old, xf * old.handle());
+        }
         // Moved on its own (the art it measures stayed put): it keeps its new place.
         if let Some(v) = moved
             && (next.a, next.b, next.vertex) == (old.a, old.b, old.vertex)
         {
-            next.place(next.handle() + v);
+            next.place(old.handle() + v);
             if next.resolve(doc).is_err() {
                 next = old.clone();
                 next.moved = None;
