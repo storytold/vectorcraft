@@ -526,6 +526,18 @@ type FileRead = (LinkInfo, RasterImage);
 /// instead of each keeping a copy.
 type ImageReads = BTreeMap<String, (String, RasterImage)>;
 
+/// The most encoded bytes of images `ImageReads` keeps: past it the earlier ones are let go (a
+/// later group over a file read before reads it again).
+const MAX_KEPT_READS: usize = 256 << 20;
+
+fn remember(reads: &mut ImageReads, path: &str, hash: String, img: RasterImage) {
+    let kept: usize = reads.values().map(|(_, i)| i.blob.bytes.len()).sum();
+    if kept.saturating_add(img.blob.bytes.len()) > MAX_KEPT_READS {
+        reads.clear();
+    }
+    reads.insert(path.to_string(), (hash, img));
+}
+
 /// The file at `f` read for a link like `base` (its image decoded, or the one `reads` holds for
 /// the same file content).
 fn read_image(f: &mut Found, base: &LinkInfo, reads: &mut ImageReads) -> Result<FileRead> {
@@ -535,7 +547,7 @@ fn read_image(f: &mut Found, base: &LinkInfo, reads: &mut ImageReads) -> Result<
         Some((h, img)) if *h == hash => img.clone(),
         _ => {
             let img = linked_image(&bytes)?;
-            reads.insert(f.path.clone(), (hash.clone(), img.clone()));
+            remember(reads, &f.path, hash.clone(), img.clone());
             img
         }
     };
@@ -930,13 +942,11 @@ impl Resolved {
 /// file's bytes are gone isn't showing a preview. Nothing here is an undo step.
 pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps: bool) -> Resolved {
     let mut out = Resolved::default();
-    // The image (with its preview) and hash of each file read for a preview here, by path: images
-    // of other keys linking to the same file share them, rather than each reading, decoding and
-    // keeping a copy of its own.
-    let mut read_images: BTreeMap<String, (ImageBlob, String)> = BTreeMap::new();
     // (the path as it was, the content shown, a placed document?, the link now) of each file found
     // away from its path or read again.
     let mut moved: Vec<(String, String, bool, LinkInfo)> = vec![];
+    // The image (with its preview) and hash of each file read here, by path: images of other keys
+    // linking to the same file share them, rather than each reading, decoding and keeping a copy.
     let mut image_reads = ImageReads::new();
     for g in groups(d, None) {
         let row = rows(std::iter::once(&g), base.doc);
@@ -981,8 +991,8 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
             }
             (Status::Ok, Some(mut f)) => {
                 let preview = previewing(d, &g.key);
-                if let Some((blob, hash)) = read_images.get(&f.path).filter(|_| preview && !eps_preview).cloned() {
-                    store_image(d, &g.key, blob, true);
+                if let Some((hash, img)) = image_reads.get(&f.path).filter(|_| preview && !eps_preview).cloned() {
+                    store_image(d, &g.key, img.blob, true);
                     let link = f.link_hashed(hash, &g.link);
                     if link != g.link {
                         set_links(d, &g.ids, &link);
@@ -997,9 +1007,8 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
                         out.missing.extend(row);
                         continue;
                     };
-                    let blob = img.blob;
-                    read_images.insert(f.path.clone(), (blob.clone(), hash_bytes(b)));
-                    store_image(d, &g.key, blob, true);
+                    store_image(d, &g.key, img.blob.clone(), true);
+                    remember(&mut image_reads, &f.path, hash_bytes(b), img);
                 } else if let Some(b) = d.images.get(&g.key).filter(|b| b.proxy.is_none()) {
                     // Linked before links kept a preview.
                     let b = b.clone().with_proxy();
@@ -1960,5 +1969,11 @@ mod tests {
         write(&path, &png(40, 20, [1, 2, 3]));
         let c = read();
         assert!(!Arc::ptr_eq(&a.blob.bytes, &c.blob.bytes));
+        // The kept reads stay within MAX_KEPT_READS: a read that would pass it empties them first.
+        let mut reads = ImageReads::new();
+        let big = RasterImage { blob: ImageBlob::new("image/png", vec![0; MAX_KEPT_READS / 2 + 1]), ..c.clone() };
+        remember(&mut reads, "a", "h".into(), big.clone());
+        remember(&mut reads, "b", "h".into(), big);
+        assert_eq!(reads.len(), 1);
     }
 }
