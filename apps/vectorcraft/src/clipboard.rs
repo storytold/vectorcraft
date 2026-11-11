@@ -14,7 +14,7 @@
 //!   text only. A clipboard that can't be opened is tried again after a wait that grows to a
 //!   minute, not each time Paste asks. On Linux and the BSDs a read waits 2 s at most for the app
 //!   that copied to send its data (a bitmap 10 s), and until that app answers, later reads fail at
-//!   once.
+//!   once; a paste then waits for that read's answer off the UI thread.
 //! - Everywhere: files copied in a file manager paste as the first one that is art (SVG, PDF, EPS,
 //!   a metafile or a bitmap), before the clipboard's other formats (the files' paths as text).
 
@@ -343,9 +343,8 @@ mod win {
     allow(dead_code)
 )]
 mod loads {
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex, PoisonError, Weak, mpsc};
     use std::time::{Duration, Instant};
 
     /// The longest a read waits for the clipboard's owner to send its data.
@@ -355,17 +354,72 @@ mod loads {
 
     /// Requests of type `R` answered with `A` on a worker thread.
     pub(super) struct Loads<R, A> {
+        /// The worker's requests; the worker stops once this is dropped.
+        line: Arc<Line<R, A>>,
+        /// Disconnected once the worker has let go of what its `load` holds.
+        done: mpsc::Receiver<()>,
+        /// How long after it was sent dropping `Loads` waits for an unanswered read to end.
+        finish: Duration,
+    }
+
+    /// Where requests go to a [`Loads`] worker.
+    struct Line<R, A> {
         /// Each request goes with the channel its answer is sent on.
         requests: mpsc::Sender<(R, mpsc::Sender<A>)>,
         /// Requests sent and not answered yet, counted down by the worker: while one is open,
         /// reads don't queue behind it.
         open: Arc<AtomicUsize>,
-        /// When the last request was sent.
-        sent: Option<Instant>,
-        /// Disconnected once the worker has let go of what its `load` holds.
-        done: mpsc::Receiver<()>,
-        /// How long after it was sent dropping `Loads` waits for an unanswered read to end.
-        finish: Duration,
+        /// When the last request was sent, and whether the `Loads` has stopped taking requests:
+        /// requests are sent with this locked.
+        sent: Mutex<Sent>,
+    }
+
+    #[derive(Default)]
+    struct Sent {
+        at: Option<Instant>,
+        closed: bool,
+    }
+
+    impl<R, A> Line<R, A> {
+        /// A line whose worker has stopped.
+        fn dead() -> Arc<Self> {
+            Arc::new(Self { requests: mpsc::channel().0, open: Arc::default(), sent: Mutex::default() })
+        }
+
+        /// `request` sent to the worker ([`Loads::ask`]).
+        fn ask(&self, request: R) -> Result<mpsc::Receiver<A>, String> {
+            let mut sent = self.sent.lock().unwrap_or_else(PoisonError::into_inner);
+            if sent.closed {
+                return Err(GONE.into());
+            }
+            if self.open.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+                return Err("the clipboard's owner hasn't answered an earlier read".into());
+            }
+            let (reply, answer) = mpsc::channel();
+            sent.at = Some(Instant::now());
+            if self.requests.send((request, reply)).is_err() {
+                self.open.fetch_sub(1, Ordering::SeqCst);
+                return Err(GONE.into());
+            }
+            Ok(answer)
+        }
+
+        /// Stops taking requests → when the one still unanswered was sent.
+        fn close(&self) -> Option<Instant> {
+            let mut sent = self.sent.lock().unwrap_or_else(PoisonError::into_inner);
+            sent.closed = true;
+            sent.at.filter(|_| self.open.load(Ordering::SeqCst) > 0)
+        }
+    }
+
+    /// Sends requests to a [`Loads`] worker from another thread while the `Loads` is open.
+    pub(super) struct Asker<R, A>(Weak<Line<R, A>>);
+
+    impl<R, A> Asker<R, A> {
+        /// [`Loads::ask`]; Err also once the `Loads` has been dropped.
+        pub(super) fn ask(&self, request: R) -> Result<mpsc::Receiver<A>, String> {
+            self.0.upgrade().ok_or_else(|| GONE.to_string())?.ask(request)
+        }
     }
 
     /// When dropping `Loads` stops waiting for its worker: `finish` after the unanswered read
@@ -397,24 +451,24 @@ mod loads {
                 drop(alive);
             };
             std::thread::Builder::new().name(name.into()).spawn(work).ok()?;
-            Some(Self { requests, open, sent: None, done, finish })
+            Some(Self { line: Arc::new(Line { requests, open, sent: Mutex::default() }), done, finish })
         }
 
         /// `request` sent to the worker; its answer comes on the channel returned, for
         /// [`wait_for_answer`] here or on another thread. Err when an earlier request is still
         /// unanswered or the worker has stopped.
         pub(super) fn ask(&mut self, request: R) -> Result<mpsc::Receiver<A>, String> {
-            if self.open.load(Ordering::SeqCst) > 0 {
-                return Err("the clipboard's owner hasn't answered an earlier read".into());
-            }
-            let (reply, answer) = mpsc::channel();
-            self.open.fetch_add(1, Ordering::SeqCst);
-            self.sent = Some(Instant::now());
-            if self.requests.send((request, reply)).is_err() {
-                self.open.fetch_sub(1, Ordering::SeqCst);
-                return Err(GONE.into());
-            }
-            Ok(answer)
+            self.line.ask(request)
+        }
+
+        /// Whether a request sent is still unanswered.
+        pub(super) fn waiting(&self) -> bool {
+            self.line.open.load(Ordering::SeqCst) > 0
+        }
+
+        /// A handle that sends requests from another thread until this is dropped.
+        pub(super) fn asker(&self) -> Asker<R, A> {
+            Asker(Arc::downgrade(&self.line))
         }
 
         /// The answer to `request`, or why there is none, after `wait` at most.
@@ -437,9 +491,9 @@ mod loads {
         /// [`stop_by`] at most: on X11 the last arboard handle dropped hands what the app copied to
         /// the clipboard manager, and the app's own handle must be that one.
         fn drop(&mut self) {
-            let (stop, _) = mpsc::channel();
-            drop(std::mem::replace(&mut self.requests, stop));
-            let pending = self.sent.filter(|_| self.open.load(Ordering::SeqCst) > 0);
+            // No `Asker` sends after this, and one that holds the line lets go once it has sent.
+            let pending = self.line.close();
+            drop(std::mem::replace(&mut self.line, Line::dead()));
             let end = stop_by(pending, Instant::now(), self.finish);
             // Nothing is sent on `done`: this ends when the worker drops `alive`, or at `end`.
             let _ = self.done.recv_timeout(end.saturating_duration_since(Instant::now()));
@@ -495,9 +549,21 @@ mod loads {
         fn a_read_after_the_worker_stops_says_so() {
             let mut loads = Loads::spawn("test", Duration::ZERO, |()| String::new()).unwrap();
             // The worker ends when its requests stop: cut them off by hand.
-            let (dead, _) = mpsc::channel();
-            drop(std::mem::replace(&mut loads.requests, dead));
+            drop(std::mem::replace(&mut loads.line, Line::dead()));
             assert_eq!(loads.get((), Duration::from_millis(50)), Err(GONE.to_string()));
+        }
+
+        #[test]
+        fn another_threads_reads_stop_with_the_reads() {
+            let loads = Loads::spawn("test", Duration::ZERO, |()| 1).unwrap();
+            let asker = loads.asker();
+            assert_eq!(asker.ask(()).and_then(|a| wait_for_answer(&a, Duration::from_secs(600))), Ok(1));
+            drop(loads);
+            assert_eq!(asker.ask(()).err(), Some(GONE.to_string()));
+            // Closed while an asker still holds the line: nothing more is sent.
+            let line = Line::<(), ()>::dead();
+            assert_eq!(line.close(), None);
+            assert_eq!(line.ask(()).err(), Some(GONE.to_string()));
         }
 
         #[test]
@@ -558,13 +624,14 @@ mod portable {
     use super::{BITMAP, ClipboardRead, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, text_of};
 
     /// What our last write put on the clipboard.
+    #[derive(Clone)]
     enum Ours {
         Text(String),
         Image(usize, usize),
     }
 
     /// A read of arboard's clipboard.
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq, Eq)]
     enum Request {
         Text,
         Image,
@@ -588,6 +655,19 @@ mod portable {
                 Request::Text => Self::Text(Err(why)),
                 Request::Image => Self::Image(Err(why)),
                 Request::Files => Self::Files(vec![]),
+            }
+        }
+
+        /// The request this answers.
+        #[cfg_attr(
+            not(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")),
+            allow(dead_code)
+        )]
+        fn request(&self) -> Request {
+            match self {
+                Self::Text(_) => Request::Text,
+                Self::Image(_) => Request::Image,
+                Self::Files(_) => Request::Files,
             }
         }
 
@@ -623,17 +703,15 @@ mod portable {
     }
 
     /// `request` read on `reads`' worker, waiting `wait` at most.
-    #[cfg_attr(
-        not(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")),
-        allow(dead_code)
-    )]
+    #[cfg(test)]
     fn read_within(reads: &mut super::loads::Loads<Request, Answer>, request: Request, wait: Duration) -> Answer {
         reads.get(request, wait).unwrap_or_else(|why| Answer::failed(request, why))
     }
 
     /// The longest a paste's bitmap read of arboard's waits for the app that copied, off the UI
-    /// thread: the bitmap's transfer and its PNG decoding happen within the read. Text, file lists
-    /// and the UI thread's bitmap check wait [`LOAD_WAIT`](super::loads::LOAD_WAIT).
+    /// thread: the bitmap's transfer and its PNG decoding happen within the read. A paste waits as
+    /// long, from when it was sent, for a read that got no answer in its wait. Text, file lists and
+    /// the UI thread's bitmap check wait [`LOAD_WAIT`](super::loads::LOAD_WAIT).
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
     const IMAGE_WAIT: Duration = Duration::from_secs(10);
 
@@ -678,8 +756,83 @@ mod portable {
         /// hands what the app copied to the clipboard manager.
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
         reads: super::loads::Loads<Request, Answer>,
+        /// The last read that got no answer in its wait, until a paste takes it or the next read
+        /// is sent.
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        unanswered: Option<Unanswered>,
         /// Writes, and elsewhere reads.
         cb: C,
+    }
+
+    /// A read on arboard's worker that got no answer in its wait.
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    struct Unanswered {
+        request: Request,
+        answer: std::sync::mpsc::Receiver<Answer>,
+        sent: Instant,
+        /// The worker, for the paste's other reads.
+        reads: super::loads::Asker<Request, Answer>,
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    impl Unanswered {
+        /// Whether a paste of one of `mimes` can take this read's answer: files paste as any of
+        /// them.
+        fn fits(&self, mimes: &[&'static str]) -> bool {
+            match self.request {
+                Request::Text => mimes.contains(&TEXT),
+                Request::Image => mimes.contains(&BITMAP),
+                Request::Files => true,
+            }
+        }
+
+        /// What a paste of one of `mimes` takes, once this read's answer comes, waiting for it until
+        /// [`IMAGE_WAIT`] after it was sent, as long as a paste's bitmap read waits. `None`, so the
+        /// paste takes the internal clipboard, when the answer is what `ours` put on the clipboard
+        /// or doesn't come. Otherwise the clipboard is read as [`Clipboard::read_now_or_later`] and
+        /// the paste read it, this answer standing in for the read it answers: copied files, else
+        /// text, else the bitmap, and the bitmap when the text is blank or only names a picture
+        /// (`adopt_system_clipboard_or_defer` in `vectorcraft-ui-egui`).
+        fn paste(self, ours: Option<&Ours>, mimes: &[&'static str]) -> Option<Flavour> {
+            let wait = (self.sent + IMAGE_WAIT).saturating_duration_since(Instant::now());
+            let answer = super::loads::wait_for_answer(&self.answer, wait).ok()?;
+            let held = match (&answer, ours) {
+                (Answer::Text(Ok(now)), Some(Ours::Text(t))) => now == t,
+                (Answer::Image(Ok(now)), Some(Ours::Image(w, h))) => (now.width, now.height) == (*w, *h),
+                _ => false,
+            };
+            if held {
+                return None;
+            }
+            let mut answer = Some(answer);
+            let mut read = |request: Request| match answer.take_if(|a| a.request() == request) {
+                Some(answer) => answer,
+                None => self
+                    .reads
+                    .ask(request)
+                    .and_then(|a| super::loads::wait_for_answer(&a, wait_for(request)))
+                    .unwrap_or_else(|why| Answer::failed(request, why)),
+            };
+            if let Some(f) = copied_file(read(Request::Files).files(), mimes) {
+                return Some(f);
+            }
+            let text = if mimes.contains(&TEXT) { read(Request::Text).text().ok().filter(|t| !t.is_empty()) } else { None };
+            let bitmap = |read: &mut dyn FnMut(Request) -> Answer| image_flavour(read(Request::Image).image().ok()?);
+            match text {
+                Some(t) if t.trim().is_empty() || vectorcraft_engine::cmd::clipboard::names_a_picture(&t) => {
+                    bitmap(&mut read).or(Some(Flavour { mime: TEXT, data: t.into_bytes() }))
+                }
+                Some(t) => Some(Flavour { mime: TEXT, data: t.into_bytes() }),
+                None if mimes.contains(&BITMAP) => bitmap(&mut read),
+                None => None,
+            }
+        }
+    }
+
+    /// arboard's bitmap as a PNG flavour.
+    fn image_flavour(img: arboard::ImageData<'static>) -> Option<Flavour> {
+        let (width, height) = (u32::try_from(img.width).ok()?, u32::try_from(img.height).ok()?);
+        png_flavour(&image::RgbaImage::from_raw(width, height, img.bytes.into_owned())?)
     }
 
     impl Arboard {
@@ -690,7 +843,7 @@ mod portable {
                 let mut reader = arboard::Clipboard::new().map_err(|e| e.to_string())?;
                 let reads = super::loads::Loads::spawn("clipboard-read", finish(on_data_control()), move |request| answer(&mut reader, request))
                     .ok_or("the clipboard's reader didn't start")?;
-                Ok(Self { reads, cb })
+                Ok(Self { reads, unanswered: None, cb })
             }
             #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")))]
             Ok(Self { cb })
@@ -706,20 +859,55 @@ mod portable {
     impl<C> Arboard<C> {
         /// Reads on the worker; the write handle `C` is not used.
         fn read(&mut self, request: Request) -> Answer {
-            read_within(&mut self.reads, request, wait_for(request))
+            self.read_waiting(request, wait_for(request))
         }
 
         /// A bitmap read on the worker that waits [`LOAD_WAIT`](super::loads::LOAD_WAIT) at most, for
         /// a check on the UI thread.
         fn image_now(&mut self) -> Result<arboard::ImageData<'static>, String> {
-            read_within(&mut self.reads, Request::Image, super::loads::LOAD_WAIT).image()
+            self.read_waiting(Request::Image, super::loads::LOAD_WAIT).image()
+        }
+
+        /// `request` read on the worker, waiting `wait` at most. A read that gets no answer in that
+        /// time is kept ([`Self::unanswered`]) for a paste to wait for off the UI thread.
+        fn read_waiting(&mut self, request: Request, wait: Duration) -> Answer {
+            let sent = Instant::now();
+            let answer = match self.ask(request) {
+                Ok(answer) => answer,
+                Err(why) => return Answer::failed(request, why),
+            };
+            match super::loads::wait_for_answer(&answer, wait) {
+                Ok(answer) => answer,
+                Err(why) => {
+                    if why != super::loads::GONE {
+                        self.unanswered = Some(Unanswered { request, answer, sent, reads: self.reads.asker() });
+                    }
+                    Answer::failed(request, why)
+                }
+            }
+        }
+
+        /// `request` sent to the worker. A read sent means the one kept unanswered has been
+        /// answered, and its answer is dropped.
+        fn ask(&mut self, request: Request) -> Result<std::sync::mpsc::Receiver<Answer>, String> {
+            let answer = self.reads.ask(request)?;
+            self.unanswered = None;
+            Ok(answer)
         }
 
         /// A bitmap read sent to the worker now; the work returned waits [`IMAGE_WAIT`] at most for
         /// it, so the caller can wait off the UI thread. Err when the read can't be sent.
         fn image_later(&mut self) -> Result<ImageWork, String> {
-            let answer = self.reads.ask(Request::Image)?;
+            let answer = self.ask(Request::Image)?;
             Ok(Box::new(move || super::loads::wait_for_answer(&answer, IMAGE_WAIT).and_then(Answer::image)))
+        }
+
+        /// The read that got no answer in its wait, while its answer has still not come and a paste
+        /// of one of `mimes` can take it: what the clipboard holds is not known until it comes. Once
+        /// it has come the answer may be old, and it is dropped: a new read is made.
+        fn unanswered(&mut self, mimes: &[&'static str]) -> Option<Unanswered> {
+            let unanswered = self.unanswered.take_if(|u| u.fits(mimes))?;
+            self.reads.waiting().then_some(unanswered)
         }
     }
 
@@ -828,6 +1016,27 @@ mod portable {
                     cb.set_text("");
                     Ok(())
                 }
+            }
+        }
+
+        /// arboard's read that got no answer in its wait, when a paste of one of `mimes` can take
+        /// its answer ([`Arboard::unanswered`]).
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        fn unanswered(&mut self, mimes: &[&'static str]) -> Option<Unanswered> {
+            match self {
+                Self::Arboard(cb) => cb.unanswered(mimes),
+                #[cfg(target_os = "linux")]
+                Self::Wayland(_) => None,
+            }
+        }
+
+        /// Drops arboard's read that got no answer in its wait: a paste no longer takes its answer.
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        fn forget_unanswered(&mut self) {
+            match self {
+                Self::Arboard(cb) => cb.unanswered = None,
+                #[cfg(target_os = "linux")]
+                Self::Wayland(_) => {}
             }
         }
 
@@ -958,6 +1167,38 @@ mod portable {
             let window = self.window.as_ref();
             self.cb.get(asker, Instant::now(), || Backend::open(window), Backend::name).ok_or_else(|| "no system clipboard".to_string())
         }
+
+        /// The work that pastes the answer to arboard's read that got no answer in its wait
+        /// ([`Unanswered::paste`]), while that answer has not come.
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        fn paste_unanswered(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
+            let ours = self.ours.clone();
+            let unanswered = self.cb(Asker::User).ok()?.unanswered(mimes)?;
+            let mimes = mimes.to_vec();
+            Some(ClipboardRead::Later(Box::new(move || unanswered.paste(ours.as_ref(), &mimes))))
+        }
+
+        /// Text and copied files are read here, and work that reads arboard's image comes back.
+        fn read_now_or_later(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
+            let cb = self.cb(Asker::User).ok()?;
+            if let Some(f) = copied_file(cb.file_list(), mimes) {
+                return Some(ClipboardRead::Now(f));
+            }
+            mimes.iter().find_map(|m| {
+                #[cfg(target_os = "macos")]
+                if let Some(f) = super::mac::read(m) {
+                    return Some(ClipboardRead::Now(f));
+                }
+                match *m {
+                    TEXT => cb.get_text().ok().filter(|t| !t.is_empty()).map(|t| ClipboardRead::Now(Flavour { mime: TEXT, data: t.into_bytes() })),
+                    BITMAP => {
+                        let read = cb.image_later().ok()?;
+                        Some(ClipboardRead::Later(Box::new(move || image_flavour(read().ok()?))))
+                    }
+                    _ => None,
+                }
+            })
+        }
     }
 
     impl SystemClipboard for Clipboard {
@@ -983,6 +1224,9 @@ mod portable {
                     None
                 }
             };
+            // What a read got late was on the clipboard before this write.
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            cb.forget_unanswered();
             self.ours = ours;
             Ok(())
         }
@@ -997,33 +1241,25 @@ mod portable {
         }
 
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
-            self.read_deferred(mimes)?.flavour()
+            self.read_now_or_later(mimes)?.flavour()
         }
 
-        /// arboard's image is read here and encoded as PNG by the work that comes back.
+        /// arboard's image is read here and encoded as PNG by the work that comes back. On Linux and
+        /// the BSDs, after a read that got no answer in its wait (such as the check whether the
+        /// clipboard still holds what was copied here, or one of the reads here), the work waits for
+        /// that read's answer instead and pastes from it, or nothing when it is what was copied here.
         fn read_deferred(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
-            let cb = self.cb(Asker::User).ok()?;
-            if let Some(f) = copied_file(cb.file_list(), mimes) {
-                return Some(ClipboardRead::Now(f));
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            if let Some(read) = self.paste_unanswered(mimes) {
+                return Some(read);
             }
-            mimes.iter().find_map(|m| {
-                #[cfg(target_os = "macos")]
-                if let Some(f) = super::mac::read(m) {
-                    return Some(ClipboardRead::Now(f));
-                }
-                match *m {
-                    TEXT => cb.get_text().ok().filter(|t| !t.is_empty()).map(|t| ClipboardRead::Now(Flavour { mime: TEXT, data: t.into_bytes() })),
-                    BITMAP => {
-                        let read = cb.image_later().ok()?;
-                        Some(ClipboardRead::Later(Box::new(move || {
-                            let img = read().ok()?;
-                            let (width, height) = (u32::try_from(img.width).ok()?, u32::try_from(img.height).ok()?);
-                            png_flavour(&image::RgbaImage::from_raw(width, height, img.bytes.into_owned())?)
-                        })))
-                    }
-                    _ => None,
-                }
-            })
+            let read = self.read_now_or_later(mimes);
+            // One of these reads got no answer in its wait, and the ones after it failed at once.
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            if read.is_none() {
+                return self.paste_unanswered(mimes);
+            }
+            read
         }
 
         /// Text, and on macOS vector art or a bitmap (by the pasteboard's types). Linux has no
@@ -1207,7 +1443,7 @@ mod portable {
             })
             .unwrap();
             // `()` for writes: a read made through the write handle wouldn't build.
-            let mut cb = Arboard { reads, cb: () };
+            let mut cb = Arboard { reads, unanswered: None, cb: () };
             assert_eq!(cb.read(Request::Text).text(), Ok("read on the worker".to_string()));
             assert_eq!(wait_for(Request::Text), super::super::loads::LOAD_WAIT);
             assert_eq!(wait_for(Request::Files), super::super::loads::LOAD_WAIT);
@@ -1230,7 +1466,7 @@ mod portable {
                 _ => Answer::failed(request, "not asked".into()),
             })
             .unwrap();
-            let mut cb = Arboard { reads, cb: () };
+            let mut cb = Arboard { reads, unanswered: None, cb: () };
             // The read is sent and the UI thread goes on without its answer.
             let work = cb.image_later().unwrap();
             // A check on the UI thread meanwhile fails at once instead of waiting behind it.
@@ -1238,6 +1474,95 @@ mod portable {
             let paste = std::thread::spawn(work);
             release.send(()).unwrap();
             assert_eq!(paste.join().ok().and_then(Result::ok).map(|i| (i.width, i.height)), Some((2, 1)));
+        }
+
+        /// An arboard clipboard whose owner answers each read with `answer` only once the sender
+        /// returned is used or dropped.
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        fn slow_owner(answer: impl Fn(Request) -> Answer + Send + 'static) -> (Arboard<()>, std::sync::mpsc::Sender<()>) {
+            let (release, gate) = std::sync::mpsc::channel::<()>();
+            let reads = Loads::spawn("test", Duration::ZERO, move |request| {
+                let _ = gate.recv();
+                answer(request)
+            })
+            .unwrap();
+            (Arboard { reads, unanswered: None, cb: () }, release)
+        }
+
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        #[test]
+        fn a_paste_after_an_unanswered_ownership_check_waits_for_its_answer() {
+            let image = |width: usize| Answer::Image(Ok(arboard::ImageData { width, height: 1, bytes: Cow::Owned(vec![0; width * 4]) }));
+            // A 2×1 bitmap was copied here; the clipboard's owner sends a `width`×1 one late.
+            let paste_after_check = |width: usize| {
+                let (mut cb, release) = slow_owner(move |_| image(width));
+                // The check whether the clipboard still holds what was copied here gets no answer
+                // in its wait (2 s on the UI thread, none here).
+                assert!(cb.read_waiting(Request::Image, Duration::ZERO).image().is_err());
+                // The paste's own reads fail at once while the owner hasn't answered.
+                assert!(cb.read(Request::Files).files().is_empty());
+                assert!(cb.read(Request::Text).text().is_err());
+                assert!(cb.image_later().is_err());
+                // The paste waits for the check's answer off the UI thread instead.
+                let unanswered = cb.unanswered(&vectorcraft_engine::cmd::clipboard::PASTE_ORDER).expect("the check's read is kept for the paste");
+                let paste = std::thread::spawn(move || unanswered.paste(Some(&Ours::Image(2, 1)), &[BITMAP]));
+                drop(release);
+                paste.join().ok().flatten()
+            };
+            // Another app's bitmap is pasted, not the art copied here.
+            let pasted = paste_after_check(3).expect("the new bitmap is pasted");
+            assert_eq!((pasted.mime, decode_png(&pasted.data).map(|i| i.dimensions())), (PNG, Some((3, 1))));
+            // The bitmap copied here: the paste takes the internal clipboard.
+            assert!(paste_after_check(2).is_none());
+        }
+
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        #[test]
+        fn a_late_answer_to_an_ownership_check_is_pasted_only_while_it_is_awaited() {
+            // Text was copied here; the clipboard's owner answers the check with `text` late, and
+            // has a 3×1 bitmap.
+            let paste_after_check = |text: &'static str| {
+                let (mut cb, release) = slow_owner(move |request| match request {
+                    Request::Text => Answer::Text(Ok(text.into())),
+                    Request::Image => Answer::Image(Ok(arboard::ImageData { width: 3, height: 1, bytes: Cow::Owned(vec![0; 12]) })),
+                    Request::Files => Answer::Files(vec![]),
+                });
+                assert!(cb.read_waiting(Request::Text, Duration::ZERO).text().is_err());
+                // A paste of a bitmap alone can't take a text read's answer: the read stays kept.
+                assert!(cb.unanswered(&[BITMAP]).is_none());
+                let unanswered = cb.unanswered(&vectorcraft_engine::cmd::clipboard::PASTE_ORDER).expect("the check's read is kept for the paste");
+                let ours = Ours::Text("copied here".into());
+                let paste = std::thread::spawn(move || unanswered.paste(Some(&ours), &vectorcraft_engine::cmd::clipboard::PASTE_ORDER));
+                drop(release);
+                paste.join().ok().flatten()
+            };
+            let pasted = paste_after_check("copied elsewhere").expect("the other app's text is pasted");
+            assert_eq!((pasted.mime, pasted.data), (TEXT, b"copied elsewhere".to_vec()));
+            // Text that only names a picture goes with it: the picture is pasted, as at once.
+            let pasted = paste_after_check("<img src=\"art.png\">").expect("the picture is pasted");
+            assert_eq!((pasted.mime, decode_png(&pasted.data).map(|i| i.dimensions())), (PNG, Some((3, 1))));
+            // The text copied here: the paste takes the internal clipboard.
+            assert!(paste_after_check("copied here").is_none());
+
+            // A paste's own file-list read that gets no answer: once it comes, the text is read.
+            let (mut cb, release) = slow_owner(|request| match request {
+                Request::Text => Answer::Text(Ok("late text".into())),
+                _ => Answer::failed(request, "none".into()),
+            });
+            assert!(cb.read_waiting(Request::Files, Duration::ZERO).files().is_empty());
+            let unanswered = cb.unanswered(&[TEXT]).expect("the file-list read is kept for the paste");
+            let paste = std::thread::spawn(move || unanswered.paste(None, &[TEXT]));
+            drop(release);
+            assert_eq!(paste.join().ok().flatten().map(|f| f.data), Some(b"late text".to_vec()));
+
+            // An answer that came before the paste may be old: it is dropped, not pasted.
+            let (mut cb, release) = slow_owner(|request| Answer::failed(request, "not asked".into()));
+            assert!(cb.read_waiting(Request::Text, Duration::ZERO).text().is_err());
+            drop(release);
+            while cb.reads.waiting() {
+                std::thread::yield_now();
+            }
+            assert!(cb.unanswered(&[TEXT]).is_none());
         }
 
         #[test]
