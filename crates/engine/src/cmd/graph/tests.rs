@@ -4345,6 +4345,33 @@ fn a_legend_across_top_spaces_its_labels_by_their_kept_paragraph_settings() {
 }
 
 #[test]
+fn a_legend_across_top_measures_its_labels_with_system_layout() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    s.execute("type.systemLayout", &json!({"on": true})).unwrap();
+    // Each `i` at 2 pt advances a whole point with System Layout, far more than its own width.
+    let name = "i".repeat(60);
+    let csv = format!(",{name},2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6");
+    let id = NodeId(
+        s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("graph.setType", &json!({"legendAcrossTop": true})).unwrap();
+    let l = text_id(&s, id, "Legend", &name);
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"size": 2})).unwrap();
+    s.execute("text.setFormat", &json!({"leftIndent": 1})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let label = group(&n, "Legend").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == name)).unwrap();
+    let label = label.geometric_bounds().unwrap();
+    let next = series_parts(&s, id, 1).last().unwrap().geometric_bounds().unwrap();
+    assert!(next.x0 >= label.x1, "the next swatch starts after the label set with System Layout: {label:?} {next:?}");
+}
+
+#[test]
 fn a_legend_label_with_a_kept_negative_indent_stays_clear_of_its_swatch() {
     for across_top in [true, false] {
         let mut s = Session::new();

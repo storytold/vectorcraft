@@ -902,7 +902,7 @@ impl<'a> Plot<'a> {
 
     fn legend_label(&mut self, (x, y): (f64, f64), label: &str) -> Arc<Node> {
         let ls = self.ls;
-        let (dx, dy) = label_shift(&self.g.label_styles, label);
+        let (dx, dy) = label_shift(&self.g.label_styles, label, self.b.d.setup.system_layout);
         let (x, y) = (x + dx, y + dy);
         self.b.label(Role::Legend, Point::new(x + 12.0, y + 7.5 + (ls - LABEL_SIZE) * 0.35), label, Justify::Left, false)
     }
@@ -910,13 +910,13 @@ impl<'a> Plot<'a> {
     /// Add Legend Across Top: swatch and label after swatch and label, in rows as wide as the plot, the last row
     /// just above it.
     fn legend_across_top(&mut self) -> Vec<Arc<Node>> {
-        let (g, r, ls) = (self.g, self.r, self.ls);
+        let (g, r, ls, system_layout) = (self.g, self.r, self.ls, self.b.d.setup.system_layout);
         let entries: Vec<(usize, String)> = (0..self.legend_series()).map(|s| (s, self.legend_text(s))).filter(|(_, l)| !blank_label(l)).collect();
         let mut rows: Vec<Vec<(usize, String, f64, f64)>> = vec![vec![]];
         let mut used = 0.0;
         for (s, label) in entries {
-            let w = 12.0 + label_width(&g.label_styles, &label) + 12.0;
-            let h = ls * 1.8 * label.split('|').count() as f64 + label_extra_height(&g.label_styles, &label);
+            let w = 12.0 + label_width(&g.label_styles, &label, system_layout) + 12.0;
+            let h = ls * 1.8 * label.split('|').count() as f64 + label_extra_height(&g.label_styles, &label, system_layout);
             // The gap after an entry may run past the plot's edge.
             if used + w - 12.0 > r.width() && rows.last().is_some_and(|row| !row.is_empty()) {
                 rows.push(vec![]);
@@ -958,7 +958,7 @@ impl<'a> Plot<'a> {
                 y += ls * 1.8;
                 continue;
             }
-            y += ls * 1.8 * label.split('|').count() as f64 + label_extra_height(&self.g.label_styles, &label);
+            y += ls * 1.8 * label.split('|').count() as f64 + label_extra_height(&self.g.label_styles, &label, self.b.d.setup.system_layout);
             self.legend_swatch(s, (x, row_y));
             labels.push(self.legend_label((x, row_y), &label));
         }
