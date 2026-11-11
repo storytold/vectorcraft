@@ -81,10 +81,12 @@ pub enum HostItem {
     /// the call gives that code's completion value, and its declarations become globals. A result
     /// that is not a string is the call's result. `end` is called when the source has run,
     /// normally or not. Each source given has the next tag of [`crate::Realm::error_source`],
-    /// from 1.
+    /// from 1. `strict_writes`, called after `source`, gives [`crate::Realm::set_strict_writes`]
+    /// for that source alone; with `None` it takes the calling code's.
     Evaluator {
         source: HostFunction,
         end: Rc<dyn Fn()>,
+        strict_writes: Rc<dyn Fn() -> Option<bool>>,
     },
 }
 
@@ -302,17 +304,26 @@ impl Interp {
     /// Calls evaluator `f` ([`HostItem::Evaluator`]): reads its arguments, runs it, and runs the
     /// source it gives as global code, as an indirect `eval` does, giving that code's completion
     /// value. A result that is not a string is given to the script as it is. `end` is called once
-    /// the source has run, normally or not.
-    pub(crate) fn call_evaluator(&mut self, f: &crate::heap::DataFn, end: &Rc<dyn Fn()>, name: &Rc<str>, args: &[Value]) -> JsResult<Value> {
+    /// the source has run, normally or not. `strict_writes` gives the source's
+    /// [`crate::bytecode::Source::strict_writes`], or `None` for the calling code's.
+    pub(crate) fn call_evaluator(
+        &mut self,
+        f: &crate::heap::DataFn,
+        end: &Rc<dyn Fn()>,
+        strict_writes: &Rc<dyn Fn() -> Option<bool>>,
+        name: &Rc<str>,
+        args: &[Value],
+    ) -> JsResult<Value> {
         let data = self.read_args(name, args, false)?;
         let source = match f(data) {
             Ok(Data::String(source)) => source,
             Ok(d) => return self.write_data(d, 0, false),
             Err(e) => return Err(self.host_error(e)?),
         };
+        let writes = strict_writes().unwrap_or_else(|| self.writes_mode());
         self.evaluated = self.evaluated.saturating_add(1);
         let tag = std::mem::replace(&mut self.source_tag, self.evaluated);
-        let code = self.encode_source(&source).and_then(|units| self.compile_source(&units, false, crate::bytecode::CodeKind::Eval));
+        let code = self.encode_source(&source).and_then(|units| self.compile_source_writes(&units, false, writes, crate::bytecode::CodeKind::Eval));
         self.source_tag = tag;
         let r = match code {
             Ok(code) => self.run_global(code, true),
@@ -411,9 +422,10 @@ impl Interp {
             HostItem::TextFunction(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, true)), flags: ENUMERABLE },
             HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, false)), set: None, flags: ENUMERABLE },
             HostItem::Object(items) => Prop::Data { value: Value::Object(self.host_object(&full, items)?), flags: ENUMERABLE },
-            HostItem::Evaluator { source, end } => {
+            HostItem::Evaluator { source, end, strict_writes } => {
                 let proto = self.intrinsics.function_proto;
-                let f = self.heap.alloc_object(Object::new(Class::Function(Func::Eval { f: source, end, name: full.into() }), Some(proto)));
+                let func = Func::Eval { f: source, end, strict_writes, name: full.into() };
+                let f = self.heap.alloc_object(Object::new(Class::Function(func), Some(proto)));
                 Prop::Data { value: Value::Object(f), flags: ENUMERABLE }
             }
         };

@@ -1587,9 +1587,20 @@ VectorCraft reads them by these rules of its own:
   folder of the file that includes. A later `#includepath` replaces the list.
 - `#script "name"` names the run in the report and the Script Console, unless `name` is given. A `#script` line in an
   included file does not rename the run.
-- `#target` takes any value and does not change how the script runs. `#strict off` is taken.
-- `#strict on`, `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name`
-  with an unknown-directive error. A `//@` line with another name is a comment.
+- `#target` takes any value and does not change how the script runs.
+- `#strict on` turns on the checks the dollar-object help page gives for `$.strict`: an assignment to a read-only
+  property throws a `TypeError`, and so does adding a property to an object that takes no new ones. By VectorCraft's
+  own rules, an assignment to a property with only a getter is checked as a read-only one, and the objects that take
+  no new properties are those that are not extensible: objects passed to `Object.preventExtensions`, `Object.seal` or
+  `Object.freeze`, and the frozen `vc` and `$` objects. Other objects take new properties as before. The rest of ES5
+  strict mode (`with`, undeclared variables, `this` in a plain call) is unchanged; a script asks for it with
+  `'use strict'`. `#strict off` turns the checks off, and they are off in a script without either line.
+- The last `#strict` line of the script and the files it includes sets the checks for the whole run. Code that `eval`
+  and `Function` compile takes the checks of the code that compiles it. A file `$.evalFile` runs takes the checks of
+  its own last `#strict` line, for its code and the functions it defines, or the caller's when it has none; the
+  caller's code keeps its own. Any value other than `on` or `off` ends the run with `#strict takes on or off`.
+- `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name` with an
+  unknown-directive error. A `//@` line with another name is a comment.
 - A script run from a file reads its included files and the files `$.evalFile` runs only in that file's folder and
   the folders below it. A path with a `..` name, a path that leads out of the folder through a link or a junction, a
   Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
