@@ -143,15 +143,25 @@ the suite) keep the agent to the folders you give it:
   `file.openRecentN` for a file outside the roots ends with `no such recent file`, as an empty slot does.
 - `ui_inspect` (the control channel's `ui.inspect`) leaves out the paths outside the read roots: in `opening`, the
   documents still being read; in `ui.recent_files`, the recent files; a library panel's `path` in `ui.library_panels`;
-  and the folder preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
+  in a recorded action's steps in `ui.action_sets`, also in a batch step's commands, the `path` and `folder` params,
+  a param whose name ends in `Folder` (`destinationFolder`) and the entries of a `paths` param; and the folder
+  preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
   (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
   empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
   roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
-  Color Guide's `ui.color_guide_limit` and a closed panel's key in `ui.docking_hidden`, also when its panel is
-  closed. When another hidden library has the same file name, the libraries take `loaded/<file name>`,
-  `loaded/<file name> (2)`, `(3)` and so on in the order of their full ids (the libraries loaded in this session
-  first, then those only the UI state names), and each one keeps its id in both replies and in the library
-  commands below. The other entries keep their order, and the app's own state is not changed.
+  Color Guide's `ui.color_guide_limit`, a closed panel's key in `ui.docking_hidden` and the `library` and `panel`
+  params of a recorded action's steps in `ui.action_sets`, also when its panel is closed. A path written with
+  either separator counts as a path, also one saved on another platform. When another hidden library has the same
+  file name, the libraries take `loaded/<file name>`, `loaded/<file name> (2)`, `(3)` and so on in the order of
+  their full ids (the libraries loaded in this session first, then those only the UI state names), and each one
+  keeps its id in both replies and in the library commands below. A hidden library skips an id that a library
+  loaded without a path already has. The other entries keep their order, and the app's own state is not
+  changed. A request may name such a library or its panel by the id
+  shown in a `panel`, `library` or `panels` param, in a docking destination (`anchor`, `before`, `onto`, `above`,
+  `below`) and in `window.panel.layout`'s `action` (`ui.set {panel: "library:swatches:loaded/<file name>"}`
+  reopens its panel), and the reply to such a request, an error included, shows that id too. `ui_inspect` rewrites only whole ids, and only in the fields that hold library and panel ids:
+  a longer id that begins with a hidden one, the status text (`ui.status`), the command palette query
+  (`ui.palette_query`) and a script's report (`scriptReport`) keep their text.
 - `swatch.library.list`, `brush.libraries`, `symbol.libraries` and `graphicStyle.libraries` list every library
   but leave out the paths outside the read roots: a library's `path` and the user library folder in `userFolder`
   are `null` there. A library loaded from a file outside the roots is listed as `loaded/<file name>`, numbered
