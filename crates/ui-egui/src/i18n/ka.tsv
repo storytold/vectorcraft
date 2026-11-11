@@ -4658,7 +4658,13 @@ font-technology	Variable	ცვლადი
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC ან HEIF ფაილი შეიცავს გამოსახულების ტიპს, რომლის წაკითხვაც შეუძლებელია
 @msg	HEIC and HEIF images can't be opened in this build	ამ ვერსიაში HEIC და HEIF გამოსახულებების გახსნა შეუძლებელია
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 32-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
+@msg	zipped 1-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 1-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD ფაილის შრეების მონაცემები უცნობ შეკუმშვას იყენებს ({m})
+@msg	the PSD file's layer records are damaged	PSD ფაილის შრეების ჩანაწერები დაზიანებულია
+@msg	the PSD file's layer groups are nested too deeply	PSD ფაილის შრეების ჯგუფები ზედმეტად ღრმადაა ჩადგმული
+@msg	a layer of the PSD file is too large to read	PSD ფაილის შრე ზედმეტად დიდია წასაკითხად
+@msg	the PSD file's layers take more memory to read than allowed	PSD ფაილის შრეების წასაკითხად დაშვებულზე მეტი მეხსიერებაა საჭირო
+@msg	the layers can't be read ({e}): the file opened as its merged image	შრეების წაკითხვა ვერ ხერხდება ({e}): ფაილი გაიხსნა როგორც მისი გაერთიანებული გამოსახულება
 @msg	{depth}-bit PSD files in this colour mode can't be read	ამ ფერის რეჟიმში {depth}-ბიტიანი PSD ფაილების წაკითხვა ვერ ხერხდება
 @msg	the PSD file is cut short	PSD ფაილი შეკვეცილია
 @msg	the PSD file's header is damaged	PSD ფაილის სათაური დაზიანებულია

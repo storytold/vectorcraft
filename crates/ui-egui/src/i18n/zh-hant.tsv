@@ -2556,7 +2556,13 @@ file-filter	Templates	範本
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 檔案包含無法讀取的影像類型
 @msg	HEIC and HEIF images can't be opened in this build	此版本無法開啟 HEIC 和 HEIF 影像
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
-@msg	zipped 32-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 32 位元 PSD 影像資料
+@msg	zipped 1-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 1 位元 PSD 影像資料
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD 檔案的圖層資料使用了不明的壓縮方式 ({m})
+@msg	the PSD file's layer records are damaged	PSD 檔案的圖層記錄已損毀
+@msg	the PSD file's layer groups are nested too deeply	PSD 檔案的圖層群組巢狀過深
+@msg	a layer of the PSD file is too large to read	PSD 檔案的某個圖層過大，無法讀取
+@msg	the PSD file's layers take more memory to read than allowed	讀取 PSD 檔案的圖層所需記憶體超過允許值
+@msg	the layers can't be read ({e}): the file opened as its merged image	無法讀取圖層 ({e})：檔案已以合併影像開啟
 @msg	{depth}-bit PSD files in this colour mode can't be read	無法讀取此色彩模式的 {depth} 位元 PSD 檔案
 @msg	the PSD file is cut short	PSD 檔案不完整
 @msg	the PSD file's header is damaged	PSD 檔頭已損毀

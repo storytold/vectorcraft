@@ -4704,7 +4704,13 @@ axis	Both	Her İkisi
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC veya HEIF dosyası okunamayan türde bir görüntü içeriyor
 @msg	HEIC and HEIF images can't be opened in this build	HEIC ve HEIF görüntüleri bu derlemede açılamıyor
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 32 bit PSD görüntü verileri okunamıyor
+@msg	zipped 1-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 1 bit PSD görüntü verileri okunamıyor
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD dosyasının katman verileri bilinmeyen bir sıkıştırma kullanıyor ({m})
+@msg	the PSD file's layer records are damaged	PSD dosyasının katman kayıtları hasarlı
+@msg	the PSD file's layer groups are nested too deeply	PSD dosyasının katman grupları çok derin iç içe geçmiş
+@msg	a layer of the PSD file is too large to read	PSD dosyasının bir katmanı okunamayacak kadar büyük
+@msg	the PSD file's layers take more memory to read than allowed	PSD dosyasının katmanlarını okumak izin verilenden fazla bellek gerektiriyor
+@msg	the layers can't be read ({e}): the file opened as its merged image	katmanlar okunamıyor ({e}): dosya birleştirilmiş görüntüsü olarak açıldı
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz
 @msg	the PSD file is cut short	PSD dosyası kısa kesildi
 @msg	the PSD file's header is damaged	PSD dosyasının başlığı hasarlı

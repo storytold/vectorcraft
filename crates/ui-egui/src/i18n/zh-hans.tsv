@@ -4747,7 +4747,13 @@ imageTrace	Outline	轮廓
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 文件包含无法读取的图像类型
 @msg	HEIC and HEIF images can't be opened in this build	此版本无法打开 HEIC 和 HEIF 图像
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
-@msg	zipped 32-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 32 位 PSD 图像数据
+@msg	zipped 1-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 1 位 PSD 图像数据
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD 文件的图层数据使用了未知的压缩方式 ({m})
+@msg	the PSD file's layer records are damaged	PSD 文件的图层记录已损坏
+@msg	the PSD file's layer groups are nested too deeply	PSD 文件的图层组嵌套过深
+@msg	a layer of the PSD file is too large to read	PSD 文件的某个图层过大，无法读取
+@msg	the PSD file's layers take more memory to read than allowed	读取 PSD 文件的图层所需内存超过允许值
+@msg	the layers can't be read ({e}): the file opened as its merged image	无法读取图层 ({e})：文件已作为合并图像打开
 @msg	{depth}-bit PSD files in this colour mode can't be read	无法读取此颜色模式下的 {depth} 位 PSD 文件
 @msg	the PSD file is cut short	PSD 文件不完整
 @msg	the PSD file's header is damaged	PSD 文件头已损坏

@@ -4834,7 +4834,13 @@ imageTrace	Outline	Contour
 @msg	the PSD file has an unknown colour mode ({m})	het PSD-bestand heeft een onbekende kleurmodus ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	de afbeeldingsgegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	de PSD-afbeelding is te groot om te lezen ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	gezipte 32-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	zipped 1-bit PSD image data with prediction can't be read	gezipte 1-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	the PSD file's layer data uses an unknown compression ({m})	de laaggegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
+@msg	the PSD file's layer records are damaged	de laagrecords van het PSD-bestand zijn beschadigd
+@msg	the PSD file's layer groups are nested too deeply	de laaggroepen van het PSD-bestand zijn te diep genest
+@msg	a layer of the PSD file is too large to read	een laag van het PSD-bestand is te groot om te lezen
+@msg	the PSD file's layers take more memory to read than allowed	de lagen van het PSD-bestand hebben meer geheugen nodig om te lezen dan toegestaan
+@msg	the layers can't be read ({e}): the file opened as its merged image	de lagen kunnen niet worden gelezen ({e}): het bestand is geopend als zijn samengevoegde afbeelding
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bits PSD-bestanden in deze kleurmodus kunnen niet worden gelezen
 @msg	the PSD file is cut short	het PSD-bestand is afgekapt
 @msg	the PSD file's header is damaged	de header van het PSD-bestand is beschadigd

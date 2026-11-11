@@ -4875,7 +4875,13 @@ axis	Both	Båda
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC- eller HEIF-filen innehåller en typ av bild som inte kan läsas
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- och HEIF-bilder kan inte öppnas i den här versionen
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zippad 32-bitars PSD-bilddata med prediktion kan inte läsas
+@msg	zipped 1-bit PSD image data with prediction can't be read	zippad 1-bitars PSD-bilddata med prediktion kan inte läsas
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD-filens lagerdata använder en okänd komprimering ({m})
+@msg	the PSD file's layer records are damaged	PSD-filens lagerposter är skadade
+@msg	the PSD file's layer groups are nested too deeply	PSD-filens lagergrupper är kapslade för djupt
+@msg	a layer of the PSD file is too large to read	ett lager i PSD-filen är för stort för att läsas
+@msg	the PSD file's layers take more memory to read than allowed	PSD-filens lager kräver mer minne för att läsas än vad som tillåts
+@msg	the layers can't be read ({e}): the file opened as its merged image	lagren kan inte läsas ({e}): filen öppnades som sin sammanslagna bild
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitars PSD-filer i det här färgläget kan inte läsas
 @msg	the PSD file is cut short	PSD-filen är avkortad
 @msg	the PSD file's header is damaged	PSD-filens huvud är skadat
