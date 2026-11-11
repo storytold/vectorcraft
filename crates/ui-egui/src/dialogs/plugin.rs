@@ -245,12 +245,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 /// OK: a filter keeps its previewed run as one undo step; a heavy one, which has no preview, and a
-/// light one that runs in the background ([`in_background`]) with Preview off, start in the
-/// background ([`run`]) and the dialog closes. A preview still shown when Preview was just turned
-/// off is rolled back first.
+/// light one that runs in the background ([`in_background`]) with Preview off or a failed preview,
+/// start in the background ([`run`]) and the dialog closes. A preview still shown when Preview was
+/// just turned off, or a preview that failed, is rolled back first.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let own_run = d.str("__command").is_empty();
-    let kept = |plugin: &Plugin| plugin.manifest().budget == Budget::Light && d.bool("preview") && app.session.in_interaction();
+    let kept = |plugin: &Plugin| {
+        plugin.manifest().budget == Budget::Light && d.bool("preview") && app.session.in_interaction() && !d.fields.contains_key(form::REFUSED)
+    };
     match registry::get(&d.str("__plugin")) {
         Some(plugin) if own_run && in_background(plugin.manifest()) && !kept(&plugin) => {
             if d.fields.contains_key(form::PREVIEWED) && app.session.in_interaction() {

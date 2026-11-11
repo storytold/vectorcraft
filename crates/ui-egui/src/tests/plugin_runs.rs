@@ -327,6 +327,26 @@ fn ok_runs_a_light_progress_filter_in_the_background_without_a_preview() {
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 3);
 }
 
+/// In the dialog of a light filter that reports its progress, a failed preview is not kept: OK
+/// rolls it back and runs the filter in the background instead of again on the UI thread.
+#[test]
+fn ok_after_a_failed_preview_runs_a_light_progress_filter_in_the_background() {
+    let mut app = app();
+    let id = "test.ui.light.progress.fails";
+    install_light(&mut app, id, true, r#"{"size":{"type":"number","min":1,"max":9,"default":3}}"#, "(unreachable)");
+    let doc = app.session.doc().unwrap().doc.clone();
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    frame(&mut app);
+    assert!(app.session.in_interaction(), "the preview's interaction");
+    assert!(app.ui.dialog.as_ref().unwrap().fields.contains_key("__refused"), "the preview failed");
+    dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert!(!app.session.in_interaction(), "the failed preview was rolled back");
+    assert_eq!(app.plugin_runs.running.len(), 1, "running in the background");
+    finish_runs(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, doc);
+}
+
 /// A light filter without the `progress` permission still runs at once, on the UI thread.
 #[test]
 fn a_light_filter_that_does_not_report_progress_runs_at_once() {
