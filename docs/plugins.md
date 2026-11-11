@@ -240,7 +240,9 @@ capability model proposed for PhotoCraft plug-ins
   records the new hash. When the new module or its grant can't be written to the `Plug-ins` folder, the folder keeps
   the old module and its grant, and the old module loads at the next start. If the write that puts the old module back
   fails as well, the folder holds the new module with the old grant, the grant does not cover that module, and the
-  plug-in is skipped at the next start until it is approved again. A grant whose hash is not 64 lower-case
+  plug-in is skipped at the next start until it is approved again. When the folder held no module for that id, that
+  write removes the new module; when the removal fails, the folder holds the new module and no grant covers it. In
+  both cases a disabled plug-in is turned on, as for any install the folder holds. A grant whose hash is not 64 lower-case
   hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
   module that lists no permissions under that id, so the earlier bytes need a new approval. When `plugin.remove` can't
   remove the grant from `grants.json`, it returns an error, the plug-in stays installed, and a second `plugin.remove`

@@ -7593,7 +7593,9 @@ pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {
 off for the next launch, as Help › Safe Mode's Enable on Re-launch does; it does not load, unload or uninstall anything
 now, and `plugin.install` of a disabled plug-in turns it on. Turning a plug-in on by `id` or by installing it also turns
 on the file it is stored in, which names it when it stopped a launch while loading; when the new version can't be saved
-over that file, the plug-in stays disabled. `plugin.list` reports `safeMode` and `disabled`, and
+over that file, the plug-in stays disabled. When the new version is saved but its grant can't be, and the file can't be
+returned to what it held before (the old module, or no file), the plug-in is turned on, and the next launch skips it
+until it is approved. `plugin.list` reports `safeMode` and `disabled`, and
 `plugin.reload` skips disabled plug-ins. A change to the disabled list is saved on top of the list the file holds at
 that moment, so a change another window saved to the same preferences meanwhile is kept. When the list file can't be
 read (it is too large) or holds another format or version, it is left as it is; a file that isn't JSON is replaced.

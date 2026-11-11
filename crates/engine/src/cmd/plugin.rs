@@ -741,17 +741,16 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
     // grant only once it is there; when the grant can't be written, the store gets the module it
-    // held back. A failed write of that module is only logged, and the grant then doesn't cover
-    // the new module. A stored module that can't be read back isn't replaced by one that needs a
-    // grant.
+    // held back. A failed write of that module is only logged: the store then holds the new module,
+    // which the grant doesn't cover. A stored module that can't be read back isn't replaced by one
+    // that needs a grant.
     let previous = s.stored_plugin_bytes(plugin.id());
     let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
     if m.asks_permissions() {
         let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
         registry::grant(g.clone());
         if stored && !s.store_grant(&m.id, Some(g)) {
-            s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
-            stored = false;
+            stored = !s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
         }
     } else {
         // This module takes the id over, so nothing the user approved for the id applies any more.

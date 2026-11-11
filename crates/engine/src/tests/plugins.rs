@@ -2178,6 +2178,109 @@ fn a_failed_store_write_keeps_the_stored_module_with_its_grant() {
     vectorcraft_plugins::registry::revoke(id);
 }
 
+/// Runs the test `name` of this module again in a process of its own → whether this is that
+/// process. The list of disabled plug-ins is kept for the whole process, and the other tests here
+/// read it again each time they attach a plug-in store.
+fn in_own_process(name: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_PLUGIN_DISABLED_LIST";
+    if std::env::var_os(CHILD).is_some() {
+        return true;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", &format!("tests::plugins::{name}"), "--nocapture"])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{name} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
+}
+
+/// An update whose grant can't be written, and whose old module can't be put back either, stays in
+/// the store: a disabled plug-in is turned on, as for any update the store holds. The old grant
+/// doesn't cover the new module, so the next start skips it until it is approved.
+#[test]
+fn an_update_left_in_the_store_by_a_failed_put_back_turns_a_disabled_plugin_on() {
+    if !in_own_process("an_update_left_in_the_store_by_a_failed_put_back_turns_a_disabled_plugin_on") {
+        return;
+    }
+    use vectorcraft_plugins::{permissions::sha256_hex, registry, safe_mode};
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-put-back-update");
+    let id = "test.engine.permissions.putbackupdate";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read","doc.write"]"#, &json!({"objects": []}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    run(&mut s, "plugin.setEnabled", json!({"id": id, "enabled": false}));
+    let grants = folder.0.join("grants.json");
+    let recorded = std::fs::read(&grants).unwrap();
+    std::fs::remove_file(&grants).unwrap();
+    std::fs::create_dir_all(grants.join("block")).unwrap();
+
+    crate::store::PUT_BACK_FAILS.set(true);
+    let update = json!({"dataBase64": vectorcraft_format::base64_encode(&changed), "grant": ["doc.read", "doc.write"], "replace": true});
+    let installed = s.execute("plugin.install", &update);
+    crate::store::PUT_BACK_FAILS.set(false);
+    assert_eq!(installed.unwrap()["hash"], sha256_hex(&changed), "the new module runs in this session");
+    assert_eq!(registry::get(id).map(|p| p.hash().to_string()), Some(sha256_hex(&changed)));
+    assert_eq!(std::fs::read(s.stored_plugin_file(id).unwrap()).unwrap(), changed, "the store holds the new module");
+    assert!(safe_mode::disabled().is_empty(), "the module the store holds is turned on");
+    let saved = std::fs::read(folder.0.join(crate::store::DISABLED_FILE)).unwrap();
+    assert!(safe_mode::parse_disabled_file(&saved).is_empty(), "nothing disabled is saved");
+
+    std::fs::remove_dir_all(&grants).unwrap();
+    std::fs::write(&grants, &recorded).unwrap();
+    registry::remove(id);
+    registry::revoke(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert!(registry::get(id).is_none(), "the old grant doesn't cover the new module");
+    safe_mode::set_disabled(vec![]);
+}
+
+/// A first install whose grant can't be written, and whose module can't be taken out of the store
+/// again, stays in the store: the plug-in's file is turned on. No grant covers the module, so the
+/// next start skips it until it is approved.
+#[test]
+fn a_first_install_left_in_the_store_by_a_failed_put_back_turns_its_file_on() {
+    if !in_own_process("a_first_install_left_in_the_store_by_a_failed_put_back_turns_its_file_on") {
+        return;
+    }
+    use vectorcraft_plugins::{registry, safe_mode};
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-put-back-first");
+    let id = "test.engine.permissions.putbackfirst";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    let module = s.stored_plugin_file(id).unwrap();
+    run(&mut s, "plugin.setEnabled", json!({"file": module, "enabled": false}));
+    let grants = folder.0.join("grants.json");
+    std::fs::create_dir_all(grants.join("block")).unwrap();
+
+    crate::store::PUT_BACK_FAILS.set(true);
+    let installed = s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    crate::store::PUT_BACK_FAILS.set(false);
+    installed.unwrap();
+    assert!(registry::get(id).is_some(), "the module runs in this session");
+    assert_eq!(std::fs::read(&module).unwrap(), first, "the store holds the module");
+    assert!(safe_mode::disabled().is_empty(), "the file the store holds is turned on");
+    let saved = std::fs::read(folder.0.join(crate::store::DISABLED_FILE)).unwrap();
+    assert!(safe_mode::parse_disabled_file(&saved).is_empty(), "nothing disabled is saved");
+
+    std::fs::remove_dir_all(&grants).unwrap();
+    registry::remove(id);
+    registry::revoke(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert!(registry::get(id).is_none(), "no grant covers the module");
+    safe_mode::set_disabled(vec![]);
+}
+
 /// A plug-in folder reports a changed module as needing approval and still loads the other files;
 /// granted on its own, the changed module loads from the folder. A session without a store uses the
 /// grants held by the process.
