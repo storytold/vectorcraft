@@ -523,19 +523,17 @@ fn an_opacity_mask_on_a_member_or_a_group_in_a_three_d_group_masks_its_solids() 
     }
 }
 
-/// The leaf faces of `art`, and how many of them are drawn inside a group with blending mode `mode`.
-fn faces_in_mode(art: &Node, mode: BlendMode) -> (usize, usize) {
-    fn walk(n: &Node, inside: bool, mode: BlendMode, out: &mut (usize, usize)) {
+/// The leaf faces of `art` that draw something, each with its visual bounds and whether it is drawn
+/// inside a group with blending mode `mode`.
+fn faces_in_mode(art: &Node, mode: BlendMode) -> Vec<(Rect, bool)> {
+    fn walk(n: &Node, inside: bool, mode: BlendMode, out: &mut Vec<(Rect, bool)>) {
         let inside = inside || (n.children().is_some() && n.blend == mode);
         match n.children() {
             Some(children) => children.iter().for_each(|c| walk(c, inside, mode, out)),
-            None => {
-                out.0 += 1;
-                out.1 += usize::from(inside);
-            }
+            None => out.extend(n.visual_bounds().map(|b| (b, inside))),
         }
     }
-    let mut out = (0, 0);
+    let mut out = Vec::new();
     walk(art, false, mode, &mut out);
     out
 }
@@ -559,9 +557,14 @@ fn a_blending_mode_on_a_member_or_a_group_in_a_three_d_group_applies_to_its_soli
     for (what, g) in cases {
         for id in TYPES {
             let g = with(g.clone(), id, json!({}));
-            let (faces, multiplied) = faces_in_mode(&art(&d, &g, id).expect("drawn"), BlendMode::Multiply);
-            assert!(multiplied > 0, "{id}: the faces of {what} are drawn in Multiply");
-            assert!(multiplied < faces, "{id}: the other member's faces are not ({multiplied} of {faces})");
+            // The member spans y 100 to 200 and the other member y 600 to 650, and every type keeps
+            // its faces near those heights (Revolve turns them around a vertical axis): a face whose
+            // center is above y 400 belongs to the member.
+            let (mine, others): (Vec<_>, Vec<_>) =
+                faces_in_mode(&art(&d, &g, id).expect("drawn"), BlendMode::Multiply).into_iter().partition(|(b, _)| b.center().y < 400.0);
+            assert!(!mine.is_empty() && !others.is_empty(), "{id}: both members draw faces ({} and {})", mine.len(), others.len());
+            assert!(mine.iter().all(|(_, m)| *m), "{id}: every face of {what} is drawn in Multiply");
+            assert!(others.iter().all(|(_, m)| !m), "{id}: no face of the other member is drawn in Multiply");
         }
     }
 }
