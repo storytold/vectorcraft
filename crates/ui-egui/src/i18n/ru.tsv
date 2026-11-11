@@ -287,6 +287,7 @@ font-technology	Variable	Вариативные
 	Average…	Усреднить…
 	Axis:	Ось:
 	Background Color:	Цвет фона:
+	Guide Label:	Метка направляющих:
 	Show Center Mark	Показать центральную метку
 	Show Cross Hairs	Показать перекрестие
 	Show Video Safe Areas	Показать безопасные зоны видео
@@ -4325,6 +4326,7 @@ axis	Both	Оба
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis должно быть "vertical", "horizontal" или углом в градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black или цвет, например "#ff8800"
 @msg	bad color {v}	недопустимый цвет {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` должен быть null, именем цвета слоя или #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio должно быть числом от 0,1 до 10
 @msg	the Color Picker is not open	палитра цветов не открыта
 @msg	the Simplify slider is not open	ползунок «Упростить» не открыт
@@ -6852,3 +6854,19 @@ shape	Open	Открытый
 	No Suggestions	Нет вариантов
 	Edit Custom Dictionary	Редактировать пользовательский словарь
 	Entry:	Запись:
+# Script Console
+	Script Console	Консоль скриптов
+	Clear Script Console	Очистить консоль скриптов
+	Copy Script Console	Копировать консоль скриптов
+	Copy All	Копировать всё
+	Copy Selected	Копировать выделенное
+	Finished	Завершено
+	Ended with an error	Завершено с ошибкой
+	Out of fuel	Исчерпан лимит инструкций
+	Ended at a host limit	Завершено на лимите хоста
+	Ended at a limit	Завершено на лимите
+	Stopped	Остановлено
+	Ended by an internal fault	Завершено из-за внутренней ошибки
+	{ms} ms, {calls} host calls	{ms} мс, вызовов хоста: {calls}
+	{dropped} earlier lines dropped, {cut} lines cut	Отброшено прежних строк: {dropped}, обрезано строк: {cut}
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`

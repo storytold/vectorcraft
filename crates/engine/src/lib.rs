@@ -262,6 +262,10 @@ pub struct Session {
     pub(crate) script_stop: vectorcraft_js::Interrupt,
     /// The report of the run that ended last.
     pub(crate) script_report: Option<Value>,
+    /// The Script Console's lines ([`script::console`]).
+    pub(crate) script_console: script::console::Console,
+    /// The runs started in this session, which numbers each run's console lines.
+    pub(crate) script_runs: u64,
     /// `script.run` starts the job and returns, and the frontend advances it once per frame
     /// ([`Session::script_pump`]). Off, `script.run` advances it to its end.
     pub script_frames: bool,

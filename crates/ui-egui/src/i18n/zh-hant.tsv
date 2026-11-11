@@ -248,6 +248,7 @@ font-technology	Variable	可變
 	Average…	平均…
 	Axis:	軸：
 	Background Color:	背景顏色：
+	Guide Label:	參考線標籤：
 	Show Center Mark	顯示中心標記
 	Show Cross Hairs	顯示十字線
 	Show Video Safe Areas	顯示視訊安全區域
@@ -2224,6 +2225,7 @@ file-filter	Templates	範本
 @msg	{label}…	{label}…
 @msg	no blend options	沒有漸變選項
 @msg	bad color {v}	顏色 {v} 無效
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` 應為 null、圖層顏色名稱或 #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必須是 0.1 到 10 之間的數字
 @msg	the Color Picker is not open	「顏色選擇器」未開啟
 @msg	the Simplify slider is not open	「簡化」滑桿未開啟
@@ -6399,3 +6401,19 @@ breakText	Glyphs	字符
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`
 	Edit Custom Dictionary	編輯自訂字典
 	Entry:	項目：
+# Script Console
+	Script Console	指令碼主控台
+	Clear Script Console	清除指令碼主控台
+	Copy Script Console	複製指令碼主控台
+	Copy All	全部複製
+	Copy Selected	複製所選內容
+	Finished	已完成
+	Ended with an error	因錯誤結束
+	Out of fuel	已用盡指令上限
+	Ended at a host limit	在主機限制處結束
+	Ended at a limit	在限制處結束
+	Stopped	已停止
+	Ended by an internal fault	因內部錯誤結束
+	{ms} ms, {calls} host calls	{ms} 毫秒，主機呼叫 {calls} 次
+	{dropped} earlier lines dropped, {cut} lines cut	已捨棄 {dropped} 行較早內容，已截斷 {cut} 行
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後

@@ -1321,6 +1321,53 @@ fn break_link_counts_the_instances_mask_art() {
     assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }), "it stays an instance");
 }
 
+/// A hidden, a locked and a plain instance of one symbol in a group, the group selected.
+fn group_with_hidden_and_locked_instances(s: &mut Session) -> (NodeId, String) {
+    let (shown, name, _) = make_symbol(s);
+    let hidden = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    let locked = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 100})).unwrap()["id"].as_u64().unwrap());
+    select(s, &[shown, hidden, locked]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(hidden).unwrap().visible = false;
+    doc.node_mut(locked).unwrap().locked = true;
+    select(s, &[group]);
+    (group, name)
+}
+
+/// The visibility and lock state of the children of `group`, in paint order.
+fn shown_and_locked(s: &Session, group: NodeId) -> Vec<(bool, bool)> {
+    let g = node(s, group);
+    let NodeKind::Group { children, .. } = &g.kind else { panic!("a group: {}", g.kind_label()) };
+    assert!(children.iter().all(|c| !matches!(c.kind, NodeKind::SymbolInstance { .. })), "every instance is expanded");
+    children.iter().map(|c| (c.visible, c.locked)).collect()
+}
+
+/// Break Link to Symbol on a selected group keeps a hidden instance's art hidden and a locked
+/// instance's art locked, and selects only the art that can be selected.
+#[test]
+fn break_link_keeps_hidden_and_locked_instances_hidden_and_locked() {
+    let mut s = session();
+    let (group, _) = group_with_hidden_and_locked_instances(&mut s);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 3, "{r}");
+    assert_eq!(shown_and_locked(&s, group), vec![(true, false), (false, false), (true, true)]);
+    let d = &s.doc().unwrap().doc;
+    let selected: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(selected.len(), 1, "{selected:?}");
+    assert!(selected.iter().all(|id| d.node(*id).is_some_and(|n| n.visible && !n.locked)), "{selected:?}");
+}
+
+/// Delete Symbol, expanding the instances, keeps a hidden instance's art hidden and a locked
+/// instance's art locked.
+#[test]
+fn delete_symbol_keeps_hidden_and_locked_instances_hidden_and_locked() {
+    let mut s = session();
+    let (group, name) = group_with_hidden_and_locked_instances(&mut s);
+    s.execute("symbol.delete", &json!({"name": name})).unwrap();
+    assert_eq!(shown_and_locked(&s, group), vec![(true, false), (false, false), (true, true)]);
+}
+
 #[test]
 fn delete_duplicate_and_replace_symbols() {
     let mut s = session();

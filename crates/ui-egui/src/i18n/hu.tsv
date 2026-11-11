@@ -385,6 +385,7 @@ font-technology	Variable	Változó
 	B4	B4
 	B5	B5
 	Background Color:	Háttérszín:
+	Guide Label:	Segédvonalak címkéje:
 	Show Center Mark	Középjel megjelenítése
 	Show Cross Hairs	Szálkereszt megjelenítése
 	Show Video Safe Areas	Biztonságos videoterületek megjelenítése
@@ -4833,6 +4834,7 @@ imageTrace	Outline	Körvonal
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	az axis értéke "vertical", "horizontal" vagy fokban megadott szög lehet, ez nem az: `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black vagy egy szín, például "#ff8800"
 @msg	bad color {v}	hibás szín: {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	a `guideLabel` értéke null, egy rétegszín neve vagy #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio: 0,1 és 10 közötti szám kell
 @msg	the Color Picker is not open	a Színválasztó nincs megnyitva
 @msg	the Simplify slider is not open	az Egyszerűsítés csúszka nincs megnyitva
@@ -6747,3 +6749,19 @@ breakText	Glyphs	Glifák
 	No Suggestions	Nincs javaslat
 	Edit Custom Dictionary	Egyéni szótár szerkesztése
 	Entry:	Bejegyzés:
+# Script Console
+	Script Console	Parancsfájlkonzol
+	Clear Script Console	Parancsfájlkonzol törlése
+	Copy Script Console	Parancsfájlkonzol másolása
+	Copy All	Összes másolása
+	Copy Selected	Kijelölés másolása
+	Finished	Befejeződött
+	Ended with an error	Hibával ért véget
+	Out of fuel	Elfogyott az utasításkeret
+	Ended at a host limit	Gazdakorlátnál ért véget
+	Ended at a limit	Korlátnál ért véget
+	Stopped	Leállítva
+	Ended by an internal fault	Belső hiba miatt ért véget
+	{ms} ms, {calls} host calls	{ms} ms, {calls} gazdahívás
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} korábbi sor elvetve, {cut} sor levágva
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt

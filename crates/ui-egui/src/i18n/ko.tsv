@@ -1067,6 +1067,7 @@ antiAlias	Sharp	날카롭게
 	Average	평균
 	BLANK DOCUMENT PRESETS	빈 문서 프리셋
 	Background Color:	배경색:
+	Guide Label:	안내선 레이블:
 	Show Center Mark	중심 표시 보기
 	Show Cross Hairs	십자선 보기
 	Show Video Safe Areas	비디오 안전 영역 보기
@@ -4611,6 +4612,7 @@ theme	Appearance	외관
 @msg	{label}…	{label}…
 @msg	no blend options	혼합 옵션이 없습니다
 @msg	bad color {v}	잘못된 색상 {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel`은 null, 레이어 색상 이름 또는 #rrggbb입니다
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio은(는) 0.1에서 10 사이의 숫자여야 합니다
 @msg	the Color Picker is not open	색상 피커가 열려 있지 않습니다
 @msg	the Simplify slider is not open	단순화 슬라이더가 열려 있지 않습니다
@@ -6345,3 +6347,19 @@ breakText	Glyphs	글리프
 	No Suggestions	제안 없음
 	Edit Custom Dictionary	사용자 사전 편집
 	Entry:	항목:
+# Script Console
+	Script Console	스크립트 콘솔
+	Clear Script Console	스크립트 콘솔 지우기
+	Copy Script Console	스크립트 콘솔 복사
+	Copy All	모두 복사
+	Copy Selected	선택 항목 복사
+	Finished	완료됨
+	Ended with an error	오류로 종료됨
+	Out of fuel	명령 한도에 도달함
+	Ended at a host limit	호스트 한도에서 종료됨
+	Ended at a limit	한도에서 종료됨
+	Stopped	중지됨
+	Ended by an internal fault	내부 오류로 종료됨
+	{ms} ms, {calls} host calls	{ms} ms, 호스트 호출 {calls}회
+	{dropped} earlier lines dropped, {cut} lines cut	이전 줄 {dropped}개 삭제됨, 줄 {cut}개 잘림
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다

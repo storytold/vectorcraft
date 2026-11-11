@@ -2654,6 +2654,7 @@ digits	Malayalam	Malajálamské
 	File Dimensions	Rozměry souboru
 	Transforms	Transformace
 	Background Color:	Barva pozadí:
+	Guide Label:	Štítek vodítek:
 	Show Center Mark	Zobrazit středovou značku
 	Show Cross Hairs	Zobrazit nitkový kříž
 	Show Video Safe Areas	Zobrazit bezpečné oblasti videa
@@ -4597,6 +4598,7 @@ imageTrace	Outline	Obrys
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musí být "vertical", "horizontal" nebo úhel ve stupních, ne `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	pozadí {other}: transparent, white, black nebo barva jako "#ff8800"
 @msg	bad color {v}	chybná barva {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` je null, název barvy vrstvy nebo #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musí být číslo od 0,1 do 10
 @msg	the Color Picker is not open	Výběr barvy není otevřený
 @msg	the Simplify slider is not open	Posuvník Zjednodušit není otevřený
@@ -6763,3 +6765,19 @@ breakText	Glyphs	Glyfy
 	No Suggestions	Žádné návrhy
 	Edit Custom Dictionary	Upravit vlastní slovník
 	Entry:	Položka:
+# Script Console
+	Script Console	Konzole skriptů
+	Clear Script Console	Vymazat konzoli skriptů
+	Copy Script Console	Kopírovat konzoli skriptů
+	Copy All	Kopírovat vše
+	Copy Selected	Kopírovat vybrané
+	Finished	Dokončeno
+	Ended with an error	Ukončeno s chybou
+	Out of fuel	Vyčerpán limit instrukcí
+	Ended at a host limit	Ukončeno na limitu hostitele
+	Ended at a limit	Ukončeno na limitu
+	Stopped	Zastaveno
+	Ended by an internal fault	Ukončeno vnitřní chybou
+	{ms} ms, {calls} host calls	{ms} ms, {calls} volání hostitele
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} starších řádků zahozeno, {cut} řádků zkráceno
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` a `last` musí být čísla řádků, které konzole uchovává, `first` před `last`

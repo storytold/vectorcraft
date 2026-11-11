@@ -2598,6 +2598,7 @@ digits	Malayalam	Malajalam
 	File Dimensions	Tiedoston mitat
 	Transforms	Muunnokset
 	Background Color:	Taustaväri:
+	Guide Label:	Apuviivojen tunniste:
 	Show Center Mark	Näytä keskimerkki
 	Show Cross Hairs	Näytä hiusristikko
 	Show Video Safe Areas	Näytä videon turva-alueet
@@ -4510,6 +4511,7 @@ imageTrace	Outline	Ääriviiva
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis-arvon on oltava "vertical", "horizontal" tai kulma asteina, ei `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tausta {other}: transparent, white, black tai väri, kuten "#ff8800"
 @msg	bad color {v}	virheellinen väri {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` on null, tasovärin nimi tai #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio on oltava luku väliltä 0,1–10
 @msg	bad colour `{hex}` (#rrggbb)	virheellinen väri `{hex}` (#rrggbb)
 @msg	bad page tree	virheellinen sivupuu
@@ -6798,3 +6800,19 @@ breakText	Glyphs	Merkit
 	No Suggestions	Ei ehdotuksia
 	Edit Custom Dictionary	Muokkaa omaa sanastoa
 	Entry:	Merkintä:
+# Script Console
+	Script Console	Komentosarjakonsoli
+	Clear Script Console	Tyhjennä komentosarjakonsoli
+	Copy Script Console	Kopioi komentosarjakonsoli
+	Copy All	Kopioi kaikki
+	Copy Selected	Kopioi valitut
+	Finished	Valmis
+	Ended with an error	Päättyi virheeseen
+	Out of fuel	Käskyraja täyttyi
+	Ended at a host limit	Päättyi isännän rajaan
+	Ended at a limit	Päättyi rajaan
+	Stopped	Pysäytetty
+	Ended by an internal fault	Päättyi sisäiseen virheeseen
+	{ms} ms, {calls} host calls	{ms} ms, {calls} isäntäkutsua
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} aiempaa riviä poistettu, {cut} riviä katkaistu
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ja `last` on oltava konsolin säilyttämien rivien numeroita, `first` ennen arvoa `last`

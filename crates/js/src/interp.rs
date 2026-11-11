@@ -1846,10 +1846,10 @@ impl Interp {
                     self.temp_roots.truncate(mark);
                     return Ok(Prepared::Done(r?));
                 }
-                Func::Data { f, name } => {
+                Func::Data { f, name, text } => {
                     // The arguments are read before the function runs, and a result being built
                     // keeps itself reachable.
-                    return Ok(Prepared::Done(self.call_data(&f, &name, &args)?));
+                    return Ok(Prepared::Done(self.call_data(&f, &name, &args, text)?));
                 }
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();

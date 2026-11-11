@@ -275,6 +275,7 @@ antiAlias	Sharp	Nítido
 	Average…	Média…
 	BLANK DOCUMENT PRESETS	PREDEFINIDOS DE DOCUMENTO EM BRANCO
 	Background Color:	Cor do Plano de Fundo:
+	Guide Label:	Rótulo das Guias:
 	Show Center Mark	Mostrar Marca Central
 	Show Cross Hairs	Mostrar Linhas Cruzadas
 	Show Video Safe Areas	Mostrar Áreas Seguras de Vídeo
@@ -3841,6 +3842,7 @@ axis	Both	Ambos
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	nesta escala o desenho tem {w} × {h} pt, mais do que a tela comporta: escolha uma escala menor ou ajuste-o à prancheta
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	plano de fundo {other}: transparent, white, black ou uma cor como "#ff8800"
 @msg	bad color {v}	cor inválida {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` é null, o nome de uma cor de camada ou #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio deve ser um número de 0,1 a 10
 @msg	bad colour `{hex}` (#rrggbb)	cor inválida `{hex}` (#rrggbb)
 @msg	bad page tree	árvore de páginas inválida
@@ -6836,3 +6838,19 @@ swatch	Yellow Green	Verde-amarelado
 	No Suggestions	Nenhuma Sugestão
 	Edit Custom Dictionary	Editar Dicionário Personalizado
 	Entry:	Entrada:
+# Script Console
+	Script Console	Console de scripts
+	Clear Script Console	Limpar console de scripts
+	Copy Script Console	Copiar console de scripts
+	Copy All	Copiar tudo
+	Copy Selected	Copiar seleção
+	Finished	Concluído
+	Ended with an error	Encerrado com um erro
+	Out of fuel	Limite de instruções esgotado
+	Ended at a host limit	Encerrado em um limite do host
+	Ended at a limit	Encerrado em um limite
+	Stopped	Interrompido
+	Ended by an internal fault	Encerrado por um erro interno
+	{ms} ms, {calls} host calls	{ms} ms, {calls} chamadas ao host
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} linhas anteriores descartadas, {cut} linhas cortadas
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`

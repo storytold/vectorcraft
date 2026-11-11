@@ -235,6 +235,7 @@ antiAlias	Sharp	锐利
 	Average…	平均…
 	Axis:	轴：
 	Background Color:	背景颜色：
+	Guide Label:	参考线标签：
 	Show Center Mark	显示中心标记
 	Show Cross Hairs	显示十字线
 	Show Video Safe Areas	显示视频安全区域
@@ -4396,6 +4397,7 @@ imageTrace	Outline	轮廓
 @msg	{label}…	{label}…
 @msg	no blend options	没有混合选项
 @msg	bad color {v}	颜色 {v} 无效
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` 应为 null、图层颜色名称或 #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必须是 0.1 到 10 之间的数字
 @msg	the Color Picker is not open	拾色器未打开
 @msg	the Simplify slider is not open	简化滑块未打开
@@ -6601,3 +6603,19 @@ breakText	Glyphs	字形
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`
 	Edit Custom Dictionary	编辑自定义词典
 	Entry:	条目：
+# Script Console
+	Script Console	脚本控制台
+	Clear Script Console	清除脚本控制台
+	Copy Script Console	复制脚本控制台
+	Copy All	全部复制
+	Copy Selected	复制所选内容
+	Finished	已完成
+	Ended with an error	因错误结束
+	Out of fuel	已用尽指令上限
+	Ended at a host limit	在宿主限制处结束
+	Ended at a limit	在限制处结束
+	Stopped	已停止
+	Ended by an internal fault	因内部错误结束
+	{ms} ms, {calls} host calls	{ms} 毫秒，宿主调用 {calls} 次
+	{dropped} earlier lines dropped, {cut} lines cut	已丢弃 {dropped} 行较早内容，已截断 {cut} 行
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必须是控制台保留的行号，且 `first` 不能在 `last` 之后

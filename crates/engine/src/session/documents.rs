@@ -136,6 +136,8 @@ impl Session {
             script_key: None,
             script_stop: vectorcraft_js::Interrupt::new(),
             script_report: None,
+            script_console: Default::default(),
+            script_runs: 0,
             script_frames: false,
             script_high_water: Default::default(),
             script_in_run: false,

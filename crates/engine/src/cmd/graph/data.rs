@@ -50,6 +50,10 @@ pub(super) fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<Option<
         .map(|l| l.trim_end_matches('\r'))
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
+            // A lone `""` line is a single blank value (`to_csv` writes it so the row isn't dropped as empty).
+            if l.trim() == "\"\"" {
+                return vec![Cell { text: String::new(), quoted: false }];
+            }
             let tabs = split_unquoted(l, '\t');
             let parts = if tabs.len() > 1 { tabs } else { split_unquoted(l, ',') };
             parts.into_iter().map(cell).collect()

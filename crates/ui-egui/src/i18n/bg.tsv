@@ -276,6 +276,7 @@ font-technology	Variable	Променливи
 	Average…	Усредняване…
 	Axis:	Ос:
 	Background Color:	Цвят на фона:
+	Guide Label:	Етикет на водачите:
 	Show Center Mark	Показване на централен знак
 	Show Cross Hairs	Показване на кръстосани линии
 	Show Video Safe Areas	Показване на безопасните видеозони
@@ -6490,3 +6491,18 @@ breakText	Glyphs	Глифи
 @msg	side is left or right, not `{s}`	side е left или right, а не `{s}`
 	Edit Custom Dictionary	Редактиране на потребителски речник
 	Entry:	Запис:
+# Script Console
+	Script Console	Конзола за скриптове
+	Clear Script Console	Изчистване на конзолата за скриптове
+	Copy Script Console	Копиране на конзолата за скриптове
+	Copy All	Копиране на всичко
+	Copy Selected	Копиране на избраното
+	Finished	Завършен
+	Ended with an error	Прекратен с грешка
+	Out of fuel	Достигнат лимит на инструкциите
+	Ended at a host limit	Прекратен при лимит на хоста
+	Ended at a limit	Прекратен при лимит
+	Stopped	Спрян
+	Ended by an internal fault	Прекратен поради вътрешна грешка
+	{ms} ms, {calls} host calls	{ms} ms, {calls} извиквания към хоста
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} по-ранни реда премахнати, {cut} реда съкратени

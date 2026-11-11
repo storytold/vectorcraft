@@ -264,6 +264,7 @@ font-technology	Variable	Variabel
 	Average…	Durchschnitt berechnen…
 	Axis:	Achse:
 	Background Color:	Hintergrundfarbe:
+	Guide Label:	Farbmarkierung der Hilfslinien:
 	Show Center Mark	Mittelpunktmarke einblenden
 	Show Cross Hairs	Fadenkreuz einblenden
 	Show Video Safe Areas	Videosichere Bereiche einblenden
@@ -4204,6 +4205,7 @@ theme	Appearance	Erscheinungsbild
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis muss "vertical", "horizontal" oder ein Winkel in Grad sein, nicht `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black oder eine Farbe wie "#ff8800"
 @msg	bad color {v}	ungültige Farbe {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` ist null, der Name einer Ebenenfarbe oder #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio muss eine Zahl von 0,1 bis 10 sein
 @msg	the Color Picker is not open	der Farbwähler ist nicht geöffnet
 @msg	the Simplify slider is not open	der Regler „Vereinfachen“ ist nicht geöffnet
@@ -6350,3 +6352,19 @@ breakText	Glyphs	Glyphen
 	No Suggestions	Keine Vorschläge
 	Edit Custom Dictionary	Benutzerwörterbuch bearbeiten
 	Entry:	Eintrag:
+# Script Console
+	Script Console	Skriptkonsole
+	Clear Script Console	Skriptkonsole leeren
+	Copy Script Console	Skriptkonsole kopieren
+	Copy All	Alles kopieren
+	Copy Selected	Auswahl kopieren
+	Finished	Beendet
+	Ended with an error	Mit einem Fehler beendet
+	Out of fuel	Anweisungslimit erreicht
+	Ended at a host limit	An einem Host-Limit beendet
+	Ended at a limit	An einem Limit beendet
+	Stopped	Gestoppt
+	Ended by an internal fault	Durch einen internen Fehler beendet
+	{ms} ms, {calls} host calls	{ms} ms, {calls} Host-Aufrufe
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ältere Zeilen verworfen, {cut} Zeilen gekürzt
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` und `last` müssen Nummern von Zeilen sein, die die Konsole enthält, `first` vor `last`

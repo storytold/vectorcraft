@@ -2343,6 +2343,7 @@ digits	Malayalam	მალაიალამური
 	File Dimensions	ფაილის ზომები
 	Transforms	გარდაქმნები
 	Background Color:	ფონის ფერი:
+	Guide Label:	დამხმარე ხაზების იარლიყი:
 	Show Center Mark	ცენტრის ნიშნის ჩვენება
 	Show Cross Hairs	ჯვარედინი ხაზების ჩვენება
 	Show Video Safe Areas	ვიდეოს უსაფრთხო არეების ჩვენება
@@ -4042,6 +4043,7 @@ font-technology	Variable	ცვლადი
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis უნდა იყოს "vertical", "horizontal" ან კუთხე გრადუსებში და არა `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	ფონი {other}: transparent, white, black ან ფერი, მაგალითად "#ff8800"
 @msg	bad color {v}	არასწორი ფერი {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` არის null, ფენის ფერის სახელი ან #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio უნდა იყოს რიცხვი 0,1-დან 10-მდე
 @msg	bad colour `{hex}` (#rrggbb)	არასწორი ფერი `{hex}` (#rrggbb)
 @msg	bad page tree	გვერდების არასწორი ხე
@@ -6824,3 +6826,19 @@ font-script	Japanese	იაპონური
 	No Suggestions	შემოთავაზებები არ არის
 	Edit Custom Dictionary	მომხმარებლის ლექსიკონის რედაქტირება
 	Entry:	ჩანაწერი:
+# Script Console
+	Script Console	სკრიპტების კონსოლი
+	Clear Script Console	სკრიპტების კონსოლის გასუფთავება
+	Copy Script Console	სკრიპტების კონსოლის კოპირება
+	Copy All	ყველაფრის კოპირება
+	Copy Selected	მონიშნულის კოპირება
+	Finished	დასრულდა
+	Ended with an error	დასრულდა შეცდომით
+	Out of fuel	ინსტრუქციების ლიმიტი ამოიწურა
+	Ended at a host limit	დასრულდა ჰოსტის ლიმიტზე
+	Ended at a limit	დასრულდა ლიმიტზე
+	Stopped	შეჩერდა
+	Ended by an internal fault	დასრულდა შიდა შეცდომის გამო
+	{ms} ms, {calls} host calls	{ms} ms, ჰოსტის {calls} გამოძახება
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ძველი სტრიქონი წაიშალა, {cut} სტრიქონი შემოკლდა
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ

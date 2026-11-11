@@ -977,6 +977,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{highlight?: none|rasterizedRegions|transparentObjects|allAffected|expandedPatterns|outlinedStrokes|outlinedText|allRasterized, overprints?: preserve|simulate|discard, preset?: name (loads its options), options?: {option keys, over the preset's}, showOptions?} set the Flattener Preview panel (ui.inspect: ui.flattener_preview), show it and refresh its snapshot → what flattener.preview answers for it",
     ),
     (
+        "ui.copyScriptConsole",
+        "Copy Script Console",
+        "",
+        "{first?, last?: numbers of lines the Script Console holds, both or neither} copy those lines of the Script Console to the clipboard as the panel shows them, each with its run's number and script name; without them every line, after a line counting the lines it dropped and cut when it dropped or cut any, which n does not count (Script Console panel: Copy Selected, Copy All; script.console gives the lines) → {lines: n}",
+    ),
+    (
         "window.graphicStyleLibrary",
         "Graphic Style Library",
         "",

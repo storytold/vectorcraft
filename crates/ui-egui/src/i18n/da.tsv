@@ -2444,6 +2444,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Fildimensioner
 	Transforms	Transformationer
 	Background Color:	Baggrundsfarve:
+	Guide Label:	Hjælpelinjeetiket:
 	Show Center Mark	Vis midtermærke
 	Show Cross Hairs	Vis trådkors
 	Show Video Safe Areas	Vis sikre videoområder
@@ -6504,3 +6505,18 @@ breakText	Glyphs	Glyffer
 @msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`
 	Edit Custom Dictionary	Redigér egen ordliste
 	Entry:	Opslag:
+# Script Console
+	Script Console	Scriptkonsol
+	Clear Script Console	Ryd scriptkonsollen
+	Copy Script Console	Kopiér scriptkonsollen
+	Copy All	Kopiér alt
+	Copy Selected	Kopiér markeret
+	Finished	Færdig
+	Ended with an error	Afsluttet med en fejl
+	Out of fuel	Instruktionsgrænsen er nået
+	Ended at a host limit	Afsluttet ved en værtsgrænse
+	Ended at a limit	Afsluttet ved en grænse
+	Stopped	Stoppet
+	Ended by an internal fault	Afsluttet af en intern fejl
+	{ms} ms, {calls} host calls	{ms} ms, {calls} værtskald
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidligere linjer fjernet, {cut} linjer afkortet

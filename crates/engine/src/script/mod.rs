@@ -20,7 +20,15 @@
 //! The values here are VectorCraft's own limits: [`MAX_SOURCE_BYTES`], [`DEFAULT_FUEL`],
 //! [`MAX_FUEL`], [`SLICE_FUEL`], [`HEAP_BYTES`], [`MAX_HOST_CALLS`], [`GROWTH_OBJECTS`],
 //! [`GROWTH_BYTES`], [`MAX_CONTINUES`], [`MAX_LOG_LINES`], [`MAX_LOG_BYTES`], [`MAX_ARGS_BYTES`],
-//! and the 64 levels, 16 MiB and 1,048,576 entries of [`vectorcraft_js::DataLimits`]'s default.
+//! and the 64 levels, 16 MiB and 1,048,576 entries of [`vectorcraft_js::DataLimits`]'s default,
+//! and the console's ([`console`]).
+//!
+//! A run writes to the Script Console with `$.write` and `$.writeln`, and `vc.log` adds a line
+//! there too. The session's console gets a start line, the run's output, its uncaught error, an end
+//! line and a report line; the run's report holds its own output and error, its time, its host
+//! calls by kind and its slowest commands.
+
+pub mod console;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -74,7 +82,9 @@ const MAX_BRIDGE_BYTES: u64 = 4 << 30;
 /// The version `vc.api.version` gives.
 pub const API_VERSION: &str = "1.0";
 /// The features `vc.api.has` knows.
-pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args"];
+pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console"];
+/// The most commands a run's report lists in `slowestCommands`.
+pub const SLOWEST_COMMANDS: usize = 5;
 
 /// What the step of a run's one undo step is called.
 pub const STEP_LABEL: &str = "Run Script";
@@ -448,9 +458,92 @@ struct Host {
     log: RefCell<Vec<Value>>,
     log_bytes: Cell<usize>,
     written: RefCell<Vec<String>>,
+    /// The run's number in its session, and the script's name, which its console lines carry.
+    run: u64,
+    name: Arc<str>,
+    /// The run's own output and error, for its report.
+    console: RefCell<console::Console>,
+    /// The line `$.write` has not ended yet.
+    pending: RefCell<console::Pending>,
+    counts: Counts,
+    /// Each command `vc.run` ran: its calls, its total time and its longest call, in nanoseconds.
+    commands: RefCell<HashMap<&'static str, (u64, u128, u128)>>,
+    /// The time the run's slices took, in nanoseconds.
+    run_nanos: Cell<u128>,
+}
+
+/// A run's host calls by kind, as its report gives them in `hostCallCounts`.
+#[derive(Default)]
+struct Counts {
+    vc_run: Cell<u64>,
+    document_reads: Cell<u64>,
+    command_list_reads: Cell<u64>,
+    vc_log: Cell<u64>,
+    console_writes: Cell<u64>,
+}
+
+impl Counts {
+    fn json(&self) -> Value {
+        json!({
+            "vcRun": self.vc_run.get(),
+            "documentReads": self.document_reads.get(),
+            "commandListReads": self.command_list_reads.get(),
+            "vcLog": self.vc_log.get(),
+            "consoleWrites": self.console_writes.get(),
+        })
+    }
+}
+
+fn bump(c: &Cell<u64>) {
+    c.set(c.get().saturating_add(1));
+}
+
+/// Now, where the platform has a clock (not in a wasm build).
+fn clock() -> Option<std::time::Instant> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Some(std::time::Instant::now())
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        None
+    }
+}
+
+/// Whole milliseconds, rounded down.
+fn millis(nanos: u128) -> u64 {
+    u64::try_from(nanos / 1_000_000).unwrap_or(u64::MAX)
+}
+
+/// The [`SLOWEST_COMMANDS`] commands of `times` that took longest in all, longest first and then by
+/// id.
+pub(crate) fn slowest(times: &HashMap<&'static str, (u64, u128, u128)>) -> Vec<console::Slow> {
+    let mut all: Vec<(&&str, &(u64, u128, u128))> = times.iter().collect();
+    all.sort_by(|a, b| b.1.1.cmp(&a.1.1).then_with(|| a.0.cmp(b.0)));
+    all.into_iter()
+        .take(SLOWEST_COMMANDS)
+        .map(|(id, &(calls, total, max))| console::Slow { id: (*id).to_string(), calls, total_ms: millis(total), max_ms: millis(max) })
+        .collect()
 }
 
 impl Host {
+    /// Adds a line to the run's console and, during a slice, to the session's.
+    fn line(&self, entry: console::Entry, cut: bool) {
+        let line = console::ConsoleLine { run: self.run, name: self.name.clone(), entry };
+        if let Ok(mut s) = self.session.try_borrow_mut() {
+            s.script_console.push(line.clone(), cut);
+        }
+        self.console.borrow_mut().push(line, cut);
+    }
+
+    /// `$.write` and `$.writeln`: `text`, then with `end` a line break.
+    fn write(&self, text: &str, end: bool) {
+        let mut pending = self.pending.borrow_mut();
+        pending.write(text, |line, cut| self.line(console::Entry::Output(line), cut));
+        if end {
+            pending.end_line(|line, cut| self.line(console::Entry::Output(line), cut));
+        }
+    }
     fn over(&self, limit: &str) -> HostError {
         HostError::Abort(limit.to_string())
     }
@@ -708,11 +801,20 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
     };
     let bytes = args.iter().map(data_size).sum();
     host.charge_call(bytes)?;
+    bump(&host.counts.vc_run);
     let session = host.session.clone();
+    let started = clock();
     let r = {
         let mut s = session.borrow_mut();
         step(&mut s, host, &id, &params)
     };
+    // Only commands that exist are timed, so the table holds at most one row per command.
+    if let (Some(started), Some(spec)) = (started, crate::find_command(&id)) {
+        let nanos = started.elapsed().as_nanos();
+        let mut times = host.commands.borrow_mut();
+        let row = times.entry(spec.id).or_insert((0, 0, 0));
+        *row = (row.0 + 1, row.1.saturating_add(nanos), row.2.max(nanos));
+    }
     let (value, objects, added, save) = match r {
         Ok(done) => done,
         // A bug is not something a script can handle, and neither is a request to stop.
@@ -780,8 +882,37 @@ fn vc_log(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostError> 
         return Err(HostError::Range(LOG_FULL.to_string()));
     }
     host.log_bytes.set(host.log_bytes.get() + bytes);
-    host.log.borrow_mut().push(to_json(entry));
+    let value = to_json(entry);
+    let text = match &value {
+        Value::String(s) => s.clone(),
+        v => v.to_string(),
+    };
+    host.log.borrow_mut().push(value);
+    each_line(&text, |line, cut| host.line(console::Entry::Log(line), cut));
     Ok(Data::Undefined)
+}
+
+/// Calls `done` with each console line of `text` and whether that line was cut, one at a time.
+fn each_line(text: &str, mut done: impl FnMut(String, bool)) {
+    let mut pending = console::Pending::default();
+    pending.write(text, &mut done);
+    pending.end_line(done);
+}
+
+/// The `$` object: `$.write(...values)` writes the values to the Script Console as `String(value)`
+/// gives them, one after another, and `$.writeln(...values)` does the same and ends the line.
+fn dollar_object(host: &Rc<Host>) -> Vec<(String, HostItem)> {
+    let writer = |end: bool| {
+        let h = host.clone();
+        HostItem::TextFunction(function(move |a| {
+            let text: String = a.iter().map(|d| if let Data::String(s) = d { s.as_str() } else { "" }).collect();
+            h.charge_call(text.len() as u64 + 2)?;
+            bump(&h.counts.console_writes);
+            h.write(&text, end);
+            Ok(Data::Undefined)
+        }))
+    };
+    vec![("write".into(), writer(false)), ("writeln".into(), writer(true))]
 }
 
 fn function(f: impl Fn(Vec<Data>) -> std::result::Result<Data, HostError> + 'static) -> HostFunction {
@@ -797,6 +928,7 @@ fn vc_object(host: &Rc<Host>, args: Data) -> Vec<(String, HostItem)> {
         let h = host.clone();
         function(move |_| {
             h.charge_call(64)?;
+            bump(&h.counts.document_reads);
             vc_document(&h)
         })
     };
@@ -806,6 +938,7 @@ fn vc_object(host: &Rc<Host>, args: Data) -> Vec<(String, HostItem)> {
         let size = data_size(&list);
         function(move |_| {
             h.charge_call(size)?;
+            bump(&h.counts.command_list_reads);
             Ok((*list).clone())
         })
     };
@@ -813,6 +946,7 @@ fn vc_object(host: &Rc<Host>, args: Data) -> Vec<(String, HostItem)> {
         let h = host.clone();
         function(move |a| {
             h.charge_call(data_size(a.first().unwrap_or(&Data::Undefined)))?;
+            bump(&h.counts.vc_log);
             vc_log(&h, a)
         })
     };
@@ -843,8 +977,7 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 
 /// `message`, with what to do about a failure that comes from a script written for another program.
 fn explained(kind: &RunErrorKind, message: &str, source: &str, line: u32) -> String {
-    const HOST_OBJECTS: &[&str] =
-        &["app", "$", "alert", "confirm", "prompt", "File", "Folder", "Window", "BridgeTalk", "activeDocument", "documents"];
+    const HOST_OBJECTS: &[&str] = &["app", "alert", "confirm", "prompt", "File", "Folder", "Window", "BridgeTalk", "activeDocument", "documents"];
     let names_host_object =
         message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
     let directive =
@@ -873,6 +1006,19 @@ impl Session {
     /// The report of the run that ended last (`script.run`'s result, or its failure).
     pub fn script_report(&self) -> Option<&Value> {
         self.script_report.as_ref()
+    }
+
+    /// The Script Console: the lines of this session's runs, oldest first.
+    pub fn script_console(&self) -> &console::Console {
+        &self.script_console
+    }
+
+    /// Empties the Script Console and sets its counts to zero. The last run's report, and the
+    /// report of a running script, keep their lines. → the lines removed.
+    pub fn clear_script_console(&mut self) -> usize {
+        let n = self.script_console.lines().len();
+        self.script_console.clear();
+        n
     }
 
     /// The error text of the last run when it failed: its name, place, message and kind, and the
@@ -964,6 +1110,7 @@ impl Session {
         let mut realm = Realm::with_options(options, limits);
         realm.share_interrupt(&self.script_stop);
         realm.set_data_limits(DataLimits::default());
+        self.script_runs += 1;
         let host = Rc::new(Host {
             session: Rc::new(RefCell::new(Session::new())),
             pause: realm.pause_flag(),
@@ -980,12 +1127,25 @@ impl Session {
             log: RefCell::new(Vec::new()),
             log_bytes: Cell::new(0),
             written: RefCell::new(Vec::new()),
+            run: self.script_runs,
+            name: console::line_name(&request.name),
+            console: RefCell::default(),
+            pending: RefCell::default(),
+            counts: Counts::default(),
+            commands: RefCell::default(),
+            run_nanos: Cell::new(0),
         });
         let args = to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0))
             .map_err(|place| EngineError::BadParams { cmd: "script.run".into(), msg: format!("`args{place}` is nested more than 64 levels deep") })?;
-        let started = realm.define_host_object("vc", vc_object(&host, args)).and_then(|()| realm.start(&request.source));
+        let line = console::ConsoleLine { run: host.run, name: host.name.clone(), entry: console::Entry::Start };
+        self.script_console.push(line, false);
+        let started = realm
+            .define_host_object("vc", vc_object(&host, args))
+            .and_then(|()| realm.define_host_object("$", dollar_object(&host)))
+            .and_then(|()| realm.start(&request.source));
         if let Err(e) = started {
-            let report = failure_report(&request.name, &e, &request.source, &host, 0);
+            let mut report = failure_report(&request.name, &e, &request.source, &host, 0, 0);
+            close_run(self, &host, &mut report, ending(&e.kind));
             let message = failure_text(&report);
             self.script_report = Some(report);
             return Err(EngineError::Other(message));
@@ -1035,7 +1195,9 @@ impl Session {
     }
 
     fn script_failed(&mut self, job: Job, e: &RunError) -> Result<Value> {
-        let report = failure_report(&job.name, e, "", &job.host, job.realm.fuel_left());
+        let fuel_left = job.realm.fuel_left();
+        let mut report = failure_report(&job.name, e, "", &job.host, fuel_left, job.realm.limits().fuel.saturating_sub(fuel_left));
+        close_run(self, &job.host, &mut report, ending(&e.kind));
         drop(job);
         raise_ids(self);
         self.script_stop.clear();
@@ -1108,7 +1270,7 @@ impl Session {
         self.reset_tool();
         cmd::compositefonts::sync(self);
         let host = &job.host;
-        let report = json!({
+        let mut report = json!({
             "ok": true,
             "name": job.name,
             "changed": changed_names,
@@ -1117,6 +1279,7 @@ impl Session {
             "fuelUsed": job.realm.limits().fuel - job.realm.fuel_left(),
             "hostCalls": host.calls.get(),
         });
+        close_run(self, host, &mut report, console::Ending::Finished);
         self.script_report = Some(report.clone());
         Ok(report)
     }
@@ -1149,7 +1312,7 @@ const LOG_FULL: &str = "vc.log: the log of this run is full";
 const NO_RECOVERY_COPY: &str = "a recovery copy could not be written, so the script was not run";
 
 /// The report of a run that failed.
-fn failure_report(name: &str, e: &RunError, source: &str, host: &Host, fuel_left: u64) -> Value {
+fn failure_report(name: &str, e: &RunError, source: &str, host: &Host, fuel_left: u64, fuel_used: u64) -> Value {
     json!({
         "ok": false,
         "kind": kind_id(&e.kind),
@@ -1160,7 +1323,65 @@ fn failure_report(name: &str, e: &RunError, source: &str, host: &Host, fuel_left
         "written": *host.written.borrow(),
         "log": *host.log.borrow(),
         "fuelLeft": fuel_left,
+        "fuelUsed": fuel_used,
+        "hostCalls": host.calls.get(),
     })
+}
+
+/// How the run that failed with `kind` ended, as its console end line gives it.
+fn ending(kind: &RunErrorKind) -> console::Ending {
+    match kind {
+        RunErrorKind::Syntax | RunErrorKind::Thrown => console::Ending::Error,
+        RunErrorKind::Limit(LimitKind::Fuel) => console::Ending::Fuel,
+        RunErrorKind::Limit(LimitKind::Host) => console::Ending::HostLimit,
+        RunErrorKind::Limit(LimitKind::Interrupted) => console::Ending::Stopped,
+        RunErrorKind::Limit(_) => console::Ending::Limit,
+        RunErrorKind::Internal => console::Ending::Internal,
+    }
+}
+
+/// Adds a line of `host`'s run to the session's console and to the run's own.
+fn line_to(s: &mut Session, host: &Host, entry: console::Entry, cut: bool) {
+    let line = console::ConsoleLine { run: host.run, name: host.name.clone(), entry };
+    s.script_console.push(line.clone(), cut);
+    host.console.borrow_mut().push(line, cut);
+}
+
+/// Ends the console lines of `host`'s run: the line `$.write` left unended, then for a failed run
+/// (`report["ok"]` false) its error as `name:line:column: message`, then an end line and a report
+/// line in the session's console. Adds the run's time, host calls by kind, slowest commands and
+/// console to `report`.
+fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::Ending) {
+    let mut pending = std::mem::take(&mut *host.pending.borrow_mut());
+    if !pending.is_empty() {
+        let mut last = None;
+        pending.end_line(|line, cut| last = Some((line, cut)));
+        if let Some((line, cut)) = last {
+            line_to(s, host, console::Entry::Output(line), cut);
+        }
+    }
+    if report["ok"] == false {
+        let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
+        let message = report["message"].as_str().unwrap_or_default();
+        let text =
+            if line > 0 { format!("{}:{line}:{column}: {message}", host.name) } else { format!("{}: location unavailable: {message}", host.name) };
+        each_line(&text, |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+    }
+    let timing = clock().is_some();
+    let ms = millis(host.run_nanos.get());
+    let slow = slowest(&host.commands.borrow());
+    let slow_json: Vec<Value> = slow.iter().map(|c| json!({"id": c.id, "calls": c.calls, "totalMs": c.total_ms, "maxMs": c.max_ms})).collect();
+    let line = |entry| console::ConsoleLine { run: host.run, name: host.name.clone(), entry };
+    s.script_console.push(line(console::Entry::End(ending)), false);
+    let summary = console::Entry::Report { ms: timing.then_some(ms), host_calls: host.calls.get(), slowest: slow };
+    s.script_console.push(line(summary), false);
+    if let Some(o) = report.as_object_mut() {
+        o.insert("runTimeMs".into(), json!(if timing { ms } else { 0 }));
+        o.insert("timingAvailable".into(), json!(timing));
+        o.insert("hostCallCounts".into(), host.counts.json());
+        o.insert("slowestCommands".into(), Value::Array(slow_json));
+        o.insert("console".into(), host.console.borrow().report());
+    }
 }
 
 /// The text of a failed run's error.
@@ -1189,6 +1410,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     std::mem::swap(s, &mut *cell.borrow_mut());
     let scope = job.scope.clone();
     let realm = &mut job.realm;
+    let started = clock();
     let r = scope.run(|| {
         guard::catch_panic(|| {
             #[cfg(test)]
@@ -1198,6 +1420,9 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
             realm.advance(SLICE_FUEL)
         })
     });
+    if let Some(started) = started {
+        job.host.run_nanos.set(job.host.run_nanos.get().saturating_add(started.elapsed().as_nanos()));
+    }
     std::mem::swap(s, &mut *cell.borrow_mut());
     s.script_in_run = false;
     job.world.swap(s);

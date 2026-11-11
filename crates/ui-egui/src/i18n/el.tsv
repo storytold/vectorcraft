@@ -267,6 +267,7 @@ font-technology	Variable	Μεταβλητές
 	Average…	Μέσος όρος…
 	Axis:	Άξονας:
 	Background Color:	Χρώμα φόντου:
+	Guide Label:	Ετικέτα οδηγών:
 	Show Center Mark	Εμφάνιση σημαδιού κέντρου
 	Show Cross Hairs	Εμφάνιση σταυρονήματος
 	Show Video Safe Areas	Εμφάνιση ασφαλών περιοχών βίντεο
@@ -4248,6 +4249,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	το axis πρέπει να είναι "vertical", "horizontal" ή γωνία σε μοίρες, όχι `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	φόντο {other}: transparent, white, black ή χρώμα όπως "#ff8800"
 @msg	bad color {v}	μη έγκυρο χρώμα {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	το `guideLabel` είναι null, όνομα χρώματος επιπέδου ή #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	Το videoRulerPixelAspectRatio πρέπει να είναι αριθμός από 0,1 έως 10
 @msg	bad colour `{hex}` (#rrggbb)	μη έγκυρο χρώμα `{hex}` (#rrggbb)
 @msg	bad page tree	μη έγκυρο δέντρο σελίδων
@@ -6715,3 +6717,19 @@ breakText	Glyphs	Γλύφοι
 	No Suggestions	Καμία πρόταση
 	Edit Custom Dictionary	Επεξεργασία προσαρμοσμένου λεξικού
 	Entry:	Λήμμα:
+# Script Console
+	Script Console	Κονσόλα σεναρίων
+	Clear Script Console	Εκκαθάριση κονσόλας σεναρίων
+	Copy Script Console	Αντιγραφή κονσόλας σεναρίων
+	Copy All	Αντιγραφή όλων
+	Copy Selected	Αντιγραφή επιλεγμένων
+	Finished	Ολοκληρώθηκε
+	Ended with an error	Τερματίστηκε με σφάλμα
+	Out of fuel	Εξαντλήθηκε το όριο εντολών
+	Ended at a host limit	Τερματίστηκε σε όριο του κεντρικού συστήματος
+	Ended at a limit	Τερματίστηκε σε όριο
+	Stopped	Διακόπηκε
+	Ended by an internal fault	Τερματίστηκε λόγω εσωτερικού σφάλματος
+	{ms} ms, {calls} host calls	{ms} ms, {calls} κλήσεις προς το κεντρικό σύστημα
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} παλαιότερες γραμμές απορρίφθηκαν, {cut} γραμμές περικόπηκαν
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	Τα `first` και `last` πρέπει να είναι αριθμοί γραμμών που κρατά η κονσόλα, το `first` πριν από το `last`

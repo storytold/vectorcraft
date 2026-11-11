@@ -1319,6 +1319,7 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             });
             converted.push(id);
         }

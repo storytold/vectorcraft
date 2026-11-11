@@ -428,6 +428,7 @@ antiAlias	Sharp	Nítid
 	B5	B5
 	Back	Enrere
 	Background Color:	Color de fons:
+	Guide Label:	Etiqueta de les guies:
 	Background Contents	Contingut del fons
 	Background Level	Nivell de fons
 	Background:	Fons:
@@ -5129,6 +5130,7 @@ digits	Malayalam	Malaiàlam
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis ha de ser "vertical", "horizontal" o un angle en graus, no `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	fons {other}: transparent, blanc, negre o un color com "#ff8800"
 @msg	bad color {v}	color incorrecte {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` és null, el nom d’un color de capa o #rrggbb
 @msg	bad colour `{hex}` (#rrggbb)	color incorrecte `{hex}` (#rrggbb)
 @msg	bad page tree	arbre de pàgines incorrecte
 @msg	bad shortcut	drecera incorrecta
@@ -6744,3 +6746,19 @@ breakText	Glyphs	Glifs
 	No Suggestions	No hi ha suggeriments
 	Edit Custom Dictionary	Edita el diccionari personalitzat
 	Entry:	Entrada:
+# Script Console
+	Script Console	Consola d’scripts
+	Clear Script Console	Esborra la consola d’scripts
+	Copy Script Console	Copia la consola d’scripts
+	Copy All	Copia-ho tot
+	Copy Selected	Copia la selecció
+	Finished	Acabat
+	Ended with an error	Acabat amb un error
+	Out of fuel	Límit d’instruccions esgotat
+	Ended at a host limit	Acabat en un límit de l’amfitrió
+	Ended at a limit	Acabat en un límit
+	Stopped	Aturat
+	Ended by an internal fault	Acabat per un error intern
+	{ms} ms, {calls} host calls	{ms} ms, {calls} crides a l’amfitrió
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} línies anteriors descartades, {cut} línies tallades
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`

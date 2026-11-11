@@ -2458,6 +2458,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Bestandsafmetingen
 	Transforms	Transformaties
 	Background Color:	Achtergrondkleur:
+	Guide Label:	Hulplijnlabel:
 	Show Center Mark	Middenmarkering tonen
 	Show Cross Hairs	Dradenkruis tonen
 	Show Video Safe Areas	Veilige videogebieden tonen
@@ -6555,3 +6556,18 @@ breakText	Glyphs	Glyphs
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
 	Edit Custom Dictionary	Aangepast woordenboek bewerken
 	Entry:	Item:
+# Script Console
+	Script Console	Scriptconsole
+	Clear Script Console	Scriptconsole wissen
+	Copy Script Console	Scriptconsole kopiëren
+	Copy All	Alles kopiëren
+	Copy Selected	Selectie kopiëren
+	Finished	Voltooid
+	Ended with an error	Beëindigd met een fout
+	Out of fuel	Instructielimiet bereikt
+	Ended at a host limit	Beëindigd bij een hostlimiet
+	Ended at a limit	Beëindigd bij een limiet
+	Stopped	Gestopt
+	Ended by an internal fault	Beëindigd door een interne fout
+	{ms} ms, {calls} host calls	{ms} ms, {calls} host-aanroepen
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eerdere regels verwijderd, {cut} regels ingekort

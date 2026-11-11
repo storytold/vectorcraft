@@ -289,6 +289,7 @@ font-technology	Variable	Variables
 	Average…	Promediar…
 	Axis:	Eje:
 	Background Color:	Color de fondo:
+	Guide Label:	Etiqueta de las guías:
 	Show Center Mark	Mostrar marca central
 	Show Cross Hairs	Mostrar líneas en cruz
 	Show Video Safe Areas	Mostrar áreas seguras de video
@@ -4288,6 +4289,7 @@ axis	Both	Ambos
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis debe ser "vertical", "horizontal" o un ángulo en grados, no `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	fondo {other}: transparent, white, black o un color como "#ff8800"
 @msg	bad color {v}	color no válido {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` es null, el nombre de un color de capa o #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio debe ser un número de 0,1 a 10
 @msg	the Color Picker is not open	el Selector de color no está abierto
 @msg	the Simplify slider is not open	el regulador de Simplificar no está abierto
@@ -6706,3 +6708,19 @@ breakText	Glyphs	Glifos
 	No Suggestions	No hay sugerencias
 	Edit Custom Dictionary	Editar diccionario personalizado
 	Entry:	Entrada:
+# Script Console
+	Script Console	Consola de scripts
+	Clear Script Console	Borrar consola de scripts
+	Copy Script Console	Copiar consola de scripts
+	Copy All	Copiar todo
+	Copy Selected	Copiar selección
+	Finished	Terminado
+	Ended with an error	Terminado con un error
+	Out of fuel	Límite de instrucciones agotado
+	Ended at a host limit	Terminado en un límite del host
+	Ended at a limit	Terminado en un límite
+	Stopped	Detenido
+	Ended by an internal fault	Terminado por un error interno
+	{ms} ms, {calls} host calls	{ms} ms, {calls} llamadas al host
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} líneas anteriores descartadas, {cut} líneas recortadas
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` y `last` deben ser números de líneas que la consola conserva, `first` antes que `last`

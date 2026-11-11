@@ -274,6 +274,7 @@ font-technology	Variable	Değişken
 	Average…	Ortalama…
 	Axis:	Eksen:
 	Background Color:	Arka Plan Rengi:
+	Guide Label:	Kılavuz Etiketi:
 	Show Center Mark	Merkez İşaretini Göster
 	Show Cross Hairs	Artı Çizgilerini Göster
 	Show Video Safe Areas	Video Güvenli Alanlarını Göster
@@ -4053,6 +4054,7 @@ axis	Both	Her İkisi
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis "vertical", "horizontal" veya derece cinsinden bir açı olmalıdır, `{v}` değil
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	arka plan {other}: şeffaf, beyaz, siyah veya "#ff8800" gibi bir renk
 @msg	bad color {v}	kötü renk {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` null, bir katman renginin adı veya #rrggbb olur
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 0,1 ile 10 arasında bir sayı olmalıdır
 @msg	the Color Picker is not open	Renk Seçici açık değil
 @msg	the screen color sampler is already open	ekran rengi örnekleyici zaten açık
@@ -6719,3 +6721,19 @@ breakText	Glyphs	Glifler
 	No Suggestions	Öneri Yok
 	Edit Custom Dictionary	Özel Sözlüğü Düzenle
 	Entry:	Giriş:
+# Script Console
+	Script Console	Betik Konsolu
+	Clear Script Console	Betik Konsolunu Temizle
+	Copy Script Console	Betik Konsolunu Kopyala
+	Copy All	Tümünü Kopyala
+	Copy Selected	Seçileni Kopyala
+	Finished	Bitti
+	Ended with an error	Bir hatayla sona erdi
+	Out of fuel	Komut sınırına ulaşıldı
+	Ended at a host limit	Bir ana bilgisayar sınırında sona erdi
+	Ended at a limit	Bir sınırda sona erdi
+	Stopped	Durduruldu
+	Ended by an internal fault	Bir iç hata nedeniyle sona erdi
+	{ms} ms, {calls} host calls	{ms} ms, {calls} ana bilgisayar çağrısı
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eski satır atıldı, {cut} satır kesildi
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli
