@@ -2510,6 +2510,61 @@ fn translated_messages_keep_the_keys_and_values_their_english_names() {
     assert!(missing.is_empty(), "{} rows drop a key or value their English names:\n{}", missing.len(), missing.join("\n"));
 }
 
+/// The command ids that `s` names outside its backticked spans, such as `assets.list` or
+/// `window.panel.dock`: words of two or more dot-separated parts, each an ASCII letter or digit
+/// run that starts with a lowercase letter.
+fn command_ids(s: &str) -> Vec<&str> {
+    let mut ids = Vec::new();
+    for part in s.split('`').step_by(2) {
+        for word in part.split(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '_')) {
+            let word = word.trim_end_matches('.');
+            let segments: Vec<&str> = word.split('.').collect();
+            let dotted = segments.len() > 1
+                && segments
+                    .iter()
+                    .all(|seg| seg.chars().next().is_some_and(|c| c.is_ascii_lowercase()) && seg.chars().all(|c| c.is_ascii_alphanumeric()));
+            if dotted && word != "e.g" && word != "i.e" {
+                ids.push(word);
+            }
+        }
+    }
+    ids
+}
+
+#[test]
+fn command_ids_finds_dotted_ids_outside_backticks() {
+    assert_eq!(command_ids("no slice {n} in the image (see slice.list)"), ["slice.list"]);
+    assert_eq!(command_ids("use window.panel.dock."), ["window.panel.dock"]);
+    assert_eq!(command_ids("output.destination: {e}"), ["output.destination"]);
+    assert_eq!(command_ids("(assets.list.old देखें)"), ["assets.list.old"]);
+    assert_eq!(command_ids("see `plugin.list`, e.g. 1.5 or {name}.svg"), Vec::<&str>::new());
+}
+
+/// A translated status or error message keeps each command id its English text names without
+/// backticks, spelled as the English spells it, since that is the id a script or the command
+/// palette runs.
+#[test]
+fn translated_messages_keep_the_command_ids_their_english_names() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                let kept: Vec<&str> = command_ids(form).into_iter().chain(backticked(form)).collect();
+                for id in command_ids(english) {
+                    if !kept.contains(&id) {
+                        missing.push(format!("{}: {id} in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a command id their English names:\n{}", missing.len(), missing.join("\n"));
+}
+
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
