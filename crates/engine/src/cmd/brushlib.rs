@@ -172,6 +172,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
+    BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
 ];
 
 /// Built-in library `id`, made once.
@@ -414,6 +415,35 @@ fn game_trails() -> BrushLibrary {
         art("Zigzag", black(zigzag), Colorization::Tints),
     ];
     built("Game Trails", Document::new(100.0, 100.0), brushes)
+}
+
+/// Energy Beams: art brushes for laser, plasma and charge strokes (original game VFX art).
+fn energy_beams() -> BrushLibrary {
+    let laser = {
+        let n = 32;
+        let half = |x: f64| 1.6 * (1.0 - (x / 100.0 - 0.5).abs() * 1.6).max(0.12);
+        let xs = |i: usize| 100.0 * i as f64 / n as f64;
+        let mut pts: Vec<Point> = (0..=n).map(xs).map(|x| Point::new(x, -half(x))).collect();
+        pts.extend((0..n).rev().map(xs).map(|x| Point::new(x, half(x))));
+        PathData::single(SubPath::polyline(&pts, true))
+    };
+    let plasma = band(100.0, 2.2, 48, |x| 4.0 * (x / 100.0 * std::f64::consts::PI).sin());
+    let charge = band(100.0, 1.6, 56, |x| 3.5 * (x / 100.0 * std::f64::consts::TAU).sin());
+    let spark = group(vec![
+        black(shapes::rounded_rectangle(Rect::new(0.0, -1.2, 10.0, 1.2), 0.8)),
+        black(shapes::rounded_rectangle(Rect::new(18.0, -0.9, 28.0, 0.9), 0.7)),
+        black(shapes::rounded_rectangle(Rect::new(36.0, -1.4, 48.0, 1.4), 0.9)),
+        black(shapes::rounded_rectangle(Rect::new(56.0, -0.8, 66.0, 0.8), 0.6)),
+        black(shapes::rounded_rectangle(Rect::new(74.0, -1.1, 86.0, 1.1), 0.8)),
+        black(shapes::rounded_rectangle(Rect::new(92.0, -0.7, 100.0, 0.7), 0.5)),
+    ]);
+    let brushes = vec![
+        art("Laser Bolt", black(laser), Colorization::Tints),
+        art("Plasma Arc", black(plasma), Colorization::Tints),
+        art("Charge Wave", black(charge), Colorization::Tints),
+        art("Spark Trail", spark, Colorization::Tints),
+    ];
+    built("Energy Beams", Document::new(100.0, 100.0), brushes)
 }
 
 // ---------- commands ----------
