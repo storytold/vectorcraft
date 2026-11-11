@@ -86,20 +86,15 @@ pub struct Refreshed {
     pub failed: usize,
 }
 
-/// Milliseconds on a monotonic clock, `None` where there is none (the web build).
+/// Milliseconds on a monotonic clock, `None` from a clock that cannot be read.
 pub type Clock = Arc<dyn Fn() -> Option<u64> + Send + Sync>;
 
-/// Milliseconds since the first reading in this process (native builds); `None` on the web build,
-/// whose `std` has no monotonic clock.
+/// Milliseconds since the first reading in this process, from `web_time::Instant`: the system's
+/// monotonic clock on the desktop and the page's `performance.now()` in the web build.
 fn monotonic() -> Option<u64> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
-        let start = START.get_or_init(std::time::Instant::now);
-        Some(u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX))
-    }
-    #[cfg(target_arch = "wasm32")]
-    None
+    static START: std::sync::OnceLock<web_time::Instant> = std::sync::OnceLock::new();
+    let start = START.get_or_init(web_time::Instant::now);
+    Some(u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -577,6 +572,14 @@ mod tests {
             assert!(matches!(d.allowance(), Allowance::Unlimited));
             vec![]
         });
+    }
+
+    /// The default clock, which the web build also reads, gives the first view its budget.
+    #[test]
+    fn the_default_clock_gives_the_first_view_a_budget() {
+        let d = Deferrals::new();
+        assert!(matches!(d.allowance(), Allowance::Until { ms: OPENING_BUDGET_MS, .. }));
+        assert!(!d.passed(u64::MAX));
     }
 
     /// A stage drawn with several inputs (the paths of a group) holds one record for each, and is
