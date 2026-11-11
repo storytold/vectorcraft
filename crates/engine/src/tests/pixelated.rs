@@ -82,6 +82,12 @@ fn pixelated_sets_multiple_images_and_undoes() {
 
     assert!(!pixelated(&s, a));
     assert!(pixelated(&s, b));
+
+    // Updating a mixed selection applies the same value to both images.
+    s.execute("object.setProps", &json!({"ids": [b.0, a.0], "pixelated": true})).unwrap();
+
+    assert!(pixelated(&s, a));
+    assert!(pixelated(&s, b));
 }
 
 #[test]
