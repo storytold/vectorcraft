@@ -690,6 +690,111 @@ fn escape_clears_the_search_then_closes_the_dialog() {
     assert!(a.ui.dialog.is_none(), "Escape in the empty field closes the dialog");
 }
 
+/// One frame of the open dialog as the app draws it, keys first, a quarter second after the last
+/// (a window takes a sizing frame and fades in). → The texts it painted, with their rectangles.
+fn dialog_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    let time = ctx.input(|i| i.time) + 0.25;
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+    let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::shortcuts::handle(a, ui.ctx());
+        crate::dialogs::show(a, ui.ctx());
+    });
+    out.textures_delta.clear();
+    fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => v.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
+            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
+            _ => {}
+        }
+    }
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+    v
+}
+
+/// Click the text `label` in the open dialog with the pointer.
+fn click_text(a: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    dialog_frame(a, ctx, vec![]);
+    let texts = dialog_frame(a, ctx, vec![]);
+    let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"));
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    dialog_frame(a, ctx, vec![egui::Event::PointerMoved(at)]);
+    dialog_frame(a, ctx, vec![press(true)]);
+    dialog_frame(a, ctx, vec![press(false)]);
+}
+
+/// Preferences with an edited Keyboard Increment, the Units category and a search, over a stored
+/// Keyboard Increment of 5.
+fn edited_preferences() -> VectorcraftApp {
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    open(&mut a, Some("Units"));
+    let d = a.ui.dialog.as_mut().unwrap();
+    d.fields.insert("keyboardIncrement".into(), json!(7));
+    d.fields.insert("__search".into(), json!("grid"));
+    a
+}
+
+/// Reset Preferences asks first, over Preferences. Escape, or Cancel, shows Preferences again as it
+/// was: its edits, category and search kept, and nothing applied.
+#[test]
+fn reset_preferences_asks_first_and_cancel_returns_to_preferences() {
+    let mut a = edited_preferences();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    for way_back in ["Escape", "Cancel"] {
+        click_text(&mut a, &ctx, "Reset Preferences");
+        let d = a.ui.dialog.clone().expect("a question is open");
+        assert_eq!(d.kind, crate::dialogs::confirm::RESET_PREFS, "Reset Preferences asks first");
+        let under = crate::dialogs::parent(&d).expect("the question is over Preferences");
+        assert_eq!((under.kind.as_str(), under.fields["keyboardIncrement"].clone()), ("preferences", json!(7)), "Preferences is unchanged");
+        dialog_frame(&mut a, &ctx, vec![]);
+        let shown: Vec<String> = dialog_frame(&mut a, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        assert!(shown.iter().any(|t| t == "Reset all preferences to their defaults?"), "{shown:?}");
+        if way_back == "Escape" {
+            dialog_frame(&mut a, &ctx, key_press(egui::Key::Escape, egui::Modifiers::NONE));
+        } else {
+            click_text(&mut a, &ctx, "Cancel");
+        }
+        let d = a.ui.dialog.as_ref().unwrap_or_else(|| panic!("{way_back}: Preferences is open again"));
+        assert_eq!(d.kind, "preferences", "{way_back}");
+        assert_eq!(d.fields["keyboardIncrement"], json!(7), "{way_back}: the edit is kept");
+        assert_eq!((d.str("__category").as_str(), d.str("__search").as_str()), ("Units", "grid"), "{way_back}: category and search kept");
+        assert_eq!(a.session.prefs.keyboard_increment, 5.0, "{way_back}: nothing applied");
+    }
+}
+
+/// OK on the question shows Preferences again with every preference at its default, its category
+/// and search kept; nothing is applied until OK in Preferences, and Preferences' Cancel keeps the
+/// stored preferences.
+#[test]
+fn confirming_reset_fills_preferences_and_applies_nothing_until_ok() {
+    let mut a = edited_preferences();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let default = Prefs::default().to_json()["keyboardIncrement"].clone();
+    click_text(&mut a, &ctx, "Reset Preferences");
+    click_text(&mut a, &ctx, "OK");
+    let d = a.ui.dialog.as_ref().expect("Preferences is open again");
+    assert_eq!(d.kind, "preferences");
+    assert_eq!(d.fields["keyboardIncrement"], default, "the working copy holds the defaults");
+    assert_eq!((d.str("__category").as_str(), d.str("__search").as_str()), ("Units", "grid"));
+    assert_eq!(a.session.prefs.keyboard_increment, 5.0, "nothing applied yet");
+    click_text(&mut a, &ctx, "Cancel");
+    assert!(a.ui.dialog.is_none());
+    assert_eq!(a.session.prefs.keyboard_increment, 5.0, "Cancel in Preferences keeps the preferences");
+
+    // `ui.dialog.confirm` answers the question as OK does; OK in Preferences then applies the defaults.
+    let mut a = edited_preferences();
+    click_text(&mut a, &ctx, "Reset Preferences");
+    crate::dialogs::confirm(&mut a).unwrap();
+    assert_eq!(a.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("preferences"));
+    crate::dialogs::confirm(&mut a).unwrap();
+    assert!(a.ui.dialog.is_none());
+    assert_eq!(a.session.prefs.keyboard_increment, Prefs::default().keyboard_increment);
+}
+
 /// Units › Numbers Without Units Are Points (#394): the preference reaches the fields when it
 /// changes, and its checkbox is dimmed unless a unit is Picas.
 #[test]

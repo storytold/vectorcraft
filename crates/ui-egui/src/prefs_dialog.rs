@@ -414,11 +414,6 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
     });
-    if reset {
-        for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
-            d.fields.insert(k, v);
-        }
-    }
     // The setting a search went to stays highlighted until another category is shown.
     let found = d.str("__found");
     if !found.is_empty() && settings().find(|s| s.key == found).is_none_or(|s| s.category != d.str("__category")) {
@@ -430,6 +425,17 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.dialog = None;
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
+    } else if reset && !ok {
+        crate::dialogs::confirm::ask_reset_prefs(app);
+    }
+}
+
+/// Reset Preferences, once its question is confirmed: every preference in the Preferences dialog
+/// `d` takes its default value. The category, the search and the UI-only rows stay as they were;
+/// nothing is applied until OK.
+pub(crate) fn reset_fields(d: &mut Dialog) {
+    for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
+        d.fields.insert(k, v);
     }
 }
 

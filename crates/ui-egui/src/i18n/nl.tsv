@@ -3871,6 +3871,8 @@ font-technology	Variable	Variabel
 	Preferences	Voorkeuren
 	Previous	Vorige
 	Restore every preference to its default (applied on OK)	Elke voorkeur terugzetten naar de standaard (toegepast bij OK)
+	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	De standaardwaarden worden toegepast wanneer u in Voorkeuren op OK klikt. Annuleren daar behoudt uw huidige voorkeuren.
 	Smaller ↔ Larger	Kleiner ↔ Groter
 	Smart Guides (View → Smart Guides)	Slimme hulplijnen (Beeld → Slimme hulplijnen)
 	Couldn't save recovery data: {e}	Kon herstelgegevens niet opslaan: {e}

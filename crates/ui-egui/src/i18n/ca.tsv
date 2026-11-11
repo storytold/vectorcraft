@@ -3511,6 +3511,8 @@ digits	Malayalam	Malaiàlam
 	Responsive	Adaptatiu
 	Restore	Restaura
 	Restore every preference to its default (applied on OK)	Restaura cada preferència al seu valor predeterminat (s’aplica en prémer D’acord)
+	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
 	Restore Recovered Documents	Restaura els documents recuperats
 	Restored documents open unsaved: save them to keep them.	Els documents restaurats s’obren sense desar: desa’ls per conservar-los.
 	Restrict printing, editing and other tasks	Restringeix la impressió, l’edició i altres tasques

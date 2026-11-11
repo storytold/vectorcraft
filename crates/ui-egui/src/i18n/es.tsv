@@ -2841,6 +2841,8 @@ digits	Malayalam	Malayálam
 	Responsive	Adaptable
 	Restore	Restaurar
 	Restore every preference to its default (applied on OK)	Restaurar todas las preferencias a sus valores predeterminados (se aplica al Aceptar)
+	Reset all preferences to their defaults?	¿Restablecer todas las preferencias a sus valores predeterminados?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Los valores predeterminados se aplican al hacer clic en Aceptar en Preferencias. Cancelar ahí conserva sus preferencias actuales.
 	Restore Recovered Documents	Restaurar documentos recuperados
 	Restored documents open unsaved: save them to keep them.	Los documentos restaurados se abren sin guardar: guárdalos para conservarlos.
 	Restrict printing, editing and other tasks	Restringir la impresión, la edición y otras tareas
