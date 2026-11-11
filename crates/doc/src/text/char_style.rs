@@ -22,10 +22,10 @@ pub struct CharStyle {
     /// Leading in points; None = Auto (120% of size).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub leading: Option<f64>,
-    /// Tracking in 1/1000 em.
+    /// Tracking in 1/1000 em; in horizontal type, of the em as [`Self::h_scale`] draws it.
     #[serde(default)]
     pub tracking: f64,
-    /// Manual pair spacing in 1/1000 em; None uses the automatic mode.
+    /// Manual pair spacing in 1/1000 em, as [`Self::tracking`]; None uses the automatic mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kerning: Option<f64>,
     /// Use glyph shapes for automatic pair spacing; false uses font metrics.
