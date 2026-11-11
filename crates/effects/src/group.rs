@@ -726,12 +726,12 @@ fn sublayer_guides(n: &Node) -> bool {
 
 /// Move the ruler guides of the sublayers among the members of `n`, and among its groups'
 /// members, to `out`, in order. A guide taken from a hidden or locked sublayer, or from one inside
-/// such a sublayer, is hidden or locked itself. Only containers holding one are copied.
+/// such a sublayer or group, is hidden or locked itself. Only containers holding one are copied.
 fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, hidden: bool, locked: bool) {
     let Some(ch) = n.children_mut() else { return };
     for c in ch.iter_mut().filter(|c| c.holds_ruler_guides() || (!c.is_layer() && sublayer_guides(c))) {
         let c = Arc::make_mut(c);
-        let (hidden, locked) = if c.is_layer() { (hidden || !c.visible, locked || c.locked) } else { (hidden, locked) };
+        let (hidden, locked) = (hidden || !c.visible, locked || c.locked);
         if c.is_layer()
             && let Some(lc) = c.children_mut()
         {

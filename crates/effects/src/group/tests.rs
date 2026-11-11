@@ -903,3 +903,29 @@ fn a_sublayers_ruler_guides_survive_its_layers_effects() {
         }
     }
 }
+
+/// A sublayer's ruler guide inside a hidden or locked group stays hidden or locked when its layer's
+/// Pathfinder effect moves it onto the layer, as the group made it.
+#[test]
+fn a_sublayers_ruler_guide_in_a_hidden_or_locked_group_stays_hidden_or_locked() {
+    use vectorcraft_doc::LayerColor;
+    for (hidden, locked) in [(true, false), (false, true), (false, false)] {
+        let mut sub = Node::layer(NodeId(11), "Sub", LayerColor::Preset(1));
+        if let Some(ch) = sub.children_mut() {
+            *ch = vec![
+                sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0)),
+                Arc::new(Node::new(NodeId(20), NodeKind::RulerGuide { vertical: true, pos: 3.0, artboard: None })),
+            ];
+        }
+        let mut group = Node::group(NodeId(12), vec![Arc::new(sub)]);
+        (group.visible, group.locked) = (!hidden, locked);
+        let mut l = Node::layer(NodeId(10), "Layer 1", LayerColor::Preset(0));
+        if let Some(ch) = l.children_mut() {
+            *ch = vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), Arc::new(group)];
+        }
+        l.appearance.effects.push(Effect { id: "pathfinder.add".into(), params: serde_json::json!({}), visible: true });
+        let art = evaluate_container(None, &l).unwrap();
+        let guides: Vec<_> = art.children().into_iter().flatten().filter(|c| c.is_ruler_guide()).map(|c| (c.id, c.visible, c.locked)).collect();
+        assert_eq!(guides, [(NodeId(20), !hidden, locked)], "hidden {hidden}, locked {locked}");
+    }
+}
