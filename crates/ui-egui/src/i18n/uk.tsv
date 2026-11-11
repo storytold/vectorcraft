@@ -6334,3 +6334,19 @@ breakText	Glyphs	Гліфи
 	No Suggestions	Немає варіантів
 	Edit Custom Dictionary	Редагувати словник користувача
 	Entry:	Запис:
+# Script Console
+	Script Console	Консоль скриптів
+	Clear Script Console	Очистити консоль скриптів
+	Copy Script Console	Копіювати консоль скриптів
+	Copy All	Копіювати все
+	Copy Selected	Копіювати виділене
+	Finished	Завершено
+	Ended with an error	Завершено з помилкою
+	Out of fuel	Вичерпано ліміт інструкцій
+	Ended at a host limit	Завершено на ліміті хоста
+	Ended at a limit	Завершено на ліміті
+	Stopped	Зупинено
+	Ended by an internal fault	Завершено через внутрішню помилку
+	{ms} ms, {calls} host calls	{ms} мс, викликів хоста: {calls}
+	{dropped} earlier lines dropped, {cut} lines cut	Відкинуто попередніх рядків: {dropped}, обрізано рядків: {cut}
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` і `last` мають бути номерами рядків, які зберігає консоль, причому `first` не пізніше `last`

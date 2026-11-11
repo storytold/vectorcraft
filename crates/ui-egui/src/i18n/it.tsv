@@ -6354,3 +6354,19 @@ breakText	Glyphs	Glifi
 	No Suggestions	Nessun suggerimento
 	Edit Custom Dictionary	Modifica dizionario personalizzato
 	Entry:	Voce:
+# Script Console
+	Script Console	Console script
+	Clear Script Console	Cancella console script
+	Copy Script Console	Copia console script
+	Copy All	Copia tutto
+	Copy Selected	Copia selezione
+	Finished	Terminato
+	Ended with an error	Terminato con un errore
+	Out of fuel	Limite di istruzioni esaurito
+	Ended at a host limit	Terminato a un limite dell'host
+	Ended at a limit	Terminato a un limite
+	Stopped	Interrotto
+	Ended by an internal fault	Terminato per un errore interno
+	{ms} ms, {calls} host calls	{ms} ms, {calls} chiamate all'host
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} righe precedenti scartate, {cut} righe tagliate
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`

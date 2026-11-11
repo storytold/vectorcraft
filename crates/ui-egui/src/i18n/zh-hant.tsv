@@ -6369,3 +6369,19 @@ breakText	Glyphs	字符
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`
 	Edit Custom Dictionary	編輯自訂字典
 	Entry:	項目：
+# Script Console
+	Script Console	指令碼主控台
+	Clear Script Console	清除指令碼主控台
+	Copy Script Console	複製指令碼主控台
+	Copy All	全部複製
+	Copy Selected	複製所選內容
+	Finished	已完成
+	Ended with an error	因錯誤結束
+	Out of fuel	已用盡指令上限
+	Ended at a host limit	在主機限制處結束
+	Ended at a limit	在限制處結束
+	Stopped	已停止
+	Ended by an internal fault	因內部錯誤結束
+	{ms} ms, {calls} host calls	{ms} 毫秒，主機呼叫 {calls} 次
+	{dropped} earlier lines dropped, {cut} lines cut	已捨棄 {dropped} 行較早內容，已截斷 {cut} 行
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後

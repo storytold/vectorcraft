@@ -6335,3 +6335,19 @@ breakText	Glyphs	Glyph
 	No Suggestions	Không có gợi ý
 	Edit Custom Dictionary	Chỉnh sửa từ điển tùy chỉnh
 	Entry:	Mục nhập:
+# Script Console
+	Script Console	Bảng điều khiển tập lệnh
+	Clear Script Console	Xóa bảng điều khiển tập lệnh
+	Copy Script Console	Sao chép bảng điều khiển tập lệnh
+	Copy All	Sao chép tất cả
+	Copy Selected	Sao chép mục đã chọn
+	Finished	Đã xong
+	Ended with an error	Kết thúc do lỗi
+	Out of fuel	Đã hết giới hạn lệnh
+	Ended at a host limit	Kết thúc ở giới hạn của máy chủ
+	Ended at a limit	Kết thúc ở giới hạn
+	Stopped	Đã dừng
+	Ended by an internal fault	Kết thúc do lỗi nội bộ
+	{ms} ms, {calls} host calls	{ms} ms, {calls} lệnh gọi máy chủ
+	{dropped} earlier lines dropped, {cut} lines cut	Đã bỏ {dropped} dòng cũ, đã cắt {cut} dòng
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` và `last` phải là số thứ tự của các dòng mà bảng điều khiển đang giữ, `first` đứng trước `last`

@@ -6717,3 +6717,19 @@ breakText	Glyphs	Glifák
 	No Suggestions	Nincs javaslat
 	Edit Custom Dictionary	Egyéni szótár szerkesztése
 	Entry:	Bejegyzés:
+# Script Console
+	Script Console	Parancsfájlkonzol
+	Clear Script Console	Parancsfájlkonzol törlése
+	Copy Script Console	Parancsfájlkonzol másolása
+	Copy All	Összes másolása
+	Copy Selected	Kijelölés másolása
+	Finished	Befejeződött
+	Ended with an error	Hibával ért véget
+	Out of fuel	Elfogyott az utasításkeret
+	Ended at a host limit	Gazdakorlátnál ért véget
+	Ended at a limit	Korlátnál ért véget
+	Stopped	Leállítva
+	Ended by an internal fault	Belső hiba miatt ért véget
+	{ms} ms, {calls} host calls	{ms} ms, {calls} gazdahívás
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} korábbi sor elvetve, {cut} sor levágva
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt

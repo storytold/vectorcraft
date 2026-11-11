@@ -68,6 +68,8 @@ pub enum HostItem {
     /// A read-only copy of a value.
     Value(Data),
     Function(HostFunction),
+    /// A function whose arguments arrive as strings, each the string `String(value)` gives.
+    TextFunction(HostFunction),
     /// A property whose value the function gives each time it is read.
     Getter(HostFunction),
     /// A frozen object with these members.
@@ -275,15 +277,31 @@ impl Interp {
         Ok(Value::Object(id))
     }
 
-    /// Calls host function `f`: reads its arguments, runs it, and gives its result to the script.
-    pub(crate) fn call_data(&mut self, f: &crate::heap::DataFn, name: &Rc<str>, args: &[Value]) -> JsResult<Value> {
+    /// Calls host function `f`: reads its arguments (with `text`, each as the string `String(value)`
+    /// gives), runs it, and gives its result to the script.
+    pub(crate) fn call_data(&mut self, f: &crate::heap::DataFn, name: &Rc<str>, args: &[Value], text: bool) -> JsResult<Value> {
         let mut reading = Reading { limits: self.data_limits, bytes: 0, entries: 0, ancestors: Vec::new(), path: Vec::new(), function: name.clone() };
         let mut data = Vec::with_capacity(args.len());
+        // A conversion can run the script's own `toString`, which may collect garbage.
+        let mark = self.temp_roots.len();
+        if text {
+            self.temp_roots.extend(args.iter().cloned());
+        }
+        let mut read = Ok(());
         for (i, a) in args.iter().enumerate() {
             reading.path.push(Step::Index(u32::try_from(i).unwrap_or(u32::MAX)));
-            data.push(self.read_data(a, &mut reading)?);
+            let d = if text { self.read_text(a, &mut reading) } else { self.read_data(a, &mut reading) };
+            match d {
+                Ok(d) => data.push(d),
+                Err(e) => {
+                    read = Err(e);
+                    break;
+                }
+            }
             reading.path.pop();
         }
+        self.temp_roots.truncate(mark);
+        read?;
         match f(data) {
             Ok(d) => self.write_data(d, 0, false),
             Err(HostError::Abort(message)) => {
@@ -294,6 +312,13 @@ impl Interp {
             Err(HostError::Type(message)) => Err(self.throw_host(ErrorType::Type, &message)?),
             Err(HostError::Range(message)) => Err(self.throw_host(ErrorType::Range, &message)?),
         }
+    }
+
+    /// `v` as the string `String(v)` gives, within the limits of a crossing.
+    fn read_text(&mut self, v: &Value, r: &mut Reading) -> JsResult<Data> {
+        let s = self.to_str(v)?;
+        self.charge_reading(r, s.len().saturating_mul(3).saturating_add(2))?;
+        Ok(Data::String(s.to_rust_string()))
     }
 
     /// The exception for a host error, charged to the heap.
@@ -332,16 +357,17 @@ impl Interp {
         let full = format!("{path}.{name}");
         let prop = match item {
             HostItem::Value(d) => Prop::Data { value: self.write_data(d, 0, true)?, flags: ENUMERABLE },
-            HostItem::Function(f) => Prop::Data { value: Value::Object(self.host_function(f, &full)), flags: ENUMERABLE },
-            HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full)), set: None, flags: ENUMERABLE },
+            HostItem::Function(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, false)), flags: ENUMERABLE },
+            HostItem::TextFunction(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, true)), flags: ENUMERABLE },
+            HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, false)), set: None, flags: ENUMERABLE },
             HostItem::Object(items) => Prop::Data { value: Value::Object(self.host_object(&full, items)?), flags: ENUMERABLE },
         };
         self.define(o, key(&name), prop)
     }
 
-    fn host_function(&mut self, f: HostFunction, name: &str) -> ObjId {
+    fn host_function(&mut self, f: HostFunction, name: &str, text: bool) -> ObjId {
         let proto = self.intrinsics.function_proto;
-        self.heap.alloc_object(Object::new(Class::Function(Func::Data { f, name: name.into() }), Some(proto)))
+        self.heap.alloc_object(Object::new(Class::Function(Func::Data { f, name: name.into(), text }), Some(proto)))
     }
 }
 

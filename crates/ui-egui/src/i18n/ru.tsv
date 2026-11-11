@@ -6822,3 +6822,19 @@ shape	Open	Открытый
 	No Suggestions	Нет вариантов
 	Edit Custom Dictionary	Редактировать пользовательский словарь
 	Entry:	Запись:
+# Script Console
+	Script Console	Консоль скриптов
+	Clear Script Console	Очистить консоль скриптов
+	Copy Script Console	Копировать консоль скриптов
+	Copy All	Копировать всё
+	Copy Selected	Копировать выделенное
+	Finished	Завершено
+	Ended with an error	Завершено с ошибкой
+	Out of fuel	Исчерпан лимит инструкций
+	Ended at a host limit	Завершено на лимите хоста
+	Ended at a limit	Завершено на лимите
+	Stopped	Остановлено
+	Ended by an internal fault	Завершено из-за внутренней ошибки
+	{ms} ms, {calls} host calls	{ms} мс, вызовов хоста: {calls}
+	{dropped} earlier lines dropped, {cut} lines cut	Отброшено прежних строк: {dropped}, обрезано строк: {cut}
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`

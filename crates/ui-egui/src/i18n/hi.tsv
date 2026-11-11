@@ -8174,3 +8174,19 @@ theme	Appearance	अपीयरेंस
 	No Suggestions	कोई सुझाव नहीं
 	Edit Custom Dictionary	कस्टम शब्दकोश संपादित करें
 	Entry:	प्रविष्टि:
+# Script Console
+	Script Console	स्क्रिप्ट कंसोल
+	Clear Script Console	स्क्रिप्ट कंसोल साफ़ करें
+	Copy Script Console	स्क्रिप्ट कंसोल कॉपी करें
+	Copy All	सब कॉपी करें
+	Copy Selected	चयनित कॉपी करें
+	Finished	पूरा हुआ
+	Ended with an error	त्रुटि के साथ समाप्त
+	Out of fuel	निर्देश सीमा समाप्त
+	Ended at a host limit	होस्ट सीमा पर समाप्त
+	Ended at a limit	सीमा पर समाप्त
+	Stopped	रोका गया
+	Ended by an internal fault	आंतरिक त्रुटि से समाप्त
+	{ms} ms, {calls} host calls	{ms} ms, {calls} होस्ट कॉल
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} पुरानी पंक्तियाँ हटाई गईं, {cut} पंक्तियाँ काटी गईं
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में

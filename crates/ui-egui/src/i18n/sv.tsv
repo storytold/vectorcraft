@@ -8218,3 +8218,19 @@ digits	Hindi	Hindi
 	No Suggestions	Inga förslag
 	Edit Custom Dictionary	Redigera egen ordlista
 	Entry:	Post:
+# Script Console
+	Script Console	Skriptkonsol
+	Clear Script Console	Rensa skriptkonsolen
+	Copy Script Console	Kopiera skriptkonsolen
+	Copy All	Kopiera allt
+	Copy Selected	Kopiera markerade
+	Finished	Klar
+	Ended with an error	Avslutades med ett fel
+	Out of fuel	Instruktionsgränsen nåddes
+	Ended at a host limit	Avslutades vid en värdgräns
+	Ended at a limit	Avslutades vid en gräns
+	Stopped	Stoppad
+	Ended by an internal fault	Avslutades av ett internt fel
+	{ms} ms, {calls} host calls	{ms} ms, {calls} värdanrop
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidigare rader borttagna, {cut} rader avkortade
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`

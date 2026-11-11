@@ -6315,3 +6315,19 @@ breakText	Glyphs	글리프
 	No Suggestions	제안 없음
 	Edit Custom Dictionary	사용자 사전 편집
 	Entry:	항목:
+# Script Console
+	Script Console	스크립트 콘솔
+	Clear Script Console	스크립트 콘솔 지우기
+	Copy Script Console	스크립트 콘솔 복사
+	Copy All	모두 복사
+	Copy Selected	선택 항목 복사
+	Finished	완료됨
+	Ended with an error	오류로 종료됨
+	Out of fuel	명령 한도에 도달함
+	Ended at a host limit	호스트 한도에서 종료됨
+	Ended at a limit	한도에서 종료됨
+	Stopped	중지됨
+	Ended by an internal fault	내부 오류로 종료됨
+	{ms} ms, {calls} host calls	{ms} ms, 호스트 호출 {calls}회
+	{dropped} earlier lines dropped, {cut} lines cut	이전 줄 {dropped}개 삭제됨, 줄 {cut}개 잘림
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다

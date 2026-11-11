@@ -6320,3 +6320,19 @@ breakText	Glyphs	Glyphen
 	No Suggestions	Keine Vorschläge
 	Edit Custom Dictionary	Benutzerwörterbuch bearbeiten
 	Entry:	Eintrag:
+# Script Console
+	Script Console	Skriptkonsole
+	Clear Script Console	Skriptkonsole leeren
+	Copy Script Console	Skriptkonsole kopieren
+	Copy All	Alles kopieren
+	Copy Selected	Auswahl kopieren
+	Finished	Beendet
+	Ended with an error	Mit einem Fehler beendet
+	Out of fuel	Anweisungslimit erreicht
+	Ended at a host limit	An einem Host-Limit beendet
+	Ended at a limit	An einem Limit beendet
+	Stopped	Gestoppt
+	Ended by an internal fault	Durch einen internen Fehler beendet
+	{ms} ms, {calls} host calls	{ms} ms, {calls} Host-Aufrufe
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ältere Zeilen verworfen, {cut} Zeilen gekürzt
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` und `last` müssen Nummern von Zeilen sein, die die Konsole enthält, `first` vor `last`

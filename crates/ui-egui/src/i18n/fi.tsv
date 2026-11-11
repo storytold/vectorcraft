@@ -6768,3 +6768,19 @@ breakText	Glyphs	Merkit
 	No Suggestions	Ei ehdotuksia
 	Edit Custom Dictionary	Muokkaa omaa sanastoa
 	Entry:	Merkintä:
+# Script Console
+	Script Console	Komentosarjakonsoli
+	Clear Script Console	Tyhjennä komentosarjakonsoli
+	Copy Script Console	Kopioi komentosarjakonsoli
+	Copy All	Kopioi kaikki
+	Copy Selected	Kopioi valitut
+	Finished	Valmis
+	Ended with an error	Päättyi virheeseen
+	Out of fuel	Käskyraja täyttyi
+	Ended at a host limit	Päättyi isännän rajaan
+	Ended at a limit	Päättyi rajaan
+	Stopped	Pysäytetty
+	Ended by an internal fault	Päättyi sisäiseen virheeseen
+	{ms} ms, {calls} host calls	{ms} ms, {calls} isäntäkutsua
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} aiempaa riviä poistettu, {cut} riviä katkaistu
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ja `last` on oltava konsolin säilyttämien rivien numeroita, `first` ennen arvoa `last`
