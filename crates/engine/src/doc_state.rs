@@ -110,6 +110,9 @@ pub struct DocState {
     /// paths the document links to are looked at within them later too, when the Links panel
     /// asks about a link outside any caller's scope.
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
+    /// The live-effect plug-in stages deferred while the document is drawn on screen, and the time
+    /// budget of its first view ([`vectorcraft_plugins::deferred`]). Not saved.
+    pub plugin_effects: vectorcraft_plugins::deferred::Deferrals,
     /// What [`DocState::any_empty_artboards`] last measured. Not saved.
     empty_artboards: std::cell::RefCell<EmptyArtboards>,
     /// What [`DocState::any_art_to_fit`] last measured. Not saved.
@@ -326,6 +329,7 @@ impl DocState {
             last_perspective: None,
             opened_by: file_access::current(),
             empty_artboards: Default::default(),
+            plugin_effects: Default::default(),
             art_to_fit: Default::default(),
         }
     }

@@ -573,7 +573,7 @@ fn as_art_opts(
         }
         _ => outline_art_with(symbols, paint_doc, n, symbol_art, outline, nodes, apart)?,
     };
-    reshape_leaves_apart(&mut art, &fx, Budget::EFFECTS, apart, paint_doc);
+    reshape_leaves_apart(&mut art, &fx, &n.appearance.effects, Budget::EFFECTS, apart, paint_doc);
     if apart {
         hoist_copies(&mut art);
     }
@@ -636,21 +636,22 @@ pub(crate) fn geometry_effects(n: &Node) -> Vec<&Effect> {
 /// effects leave them as they are (a raster follows a non-affine map only as a mesh warp). The
 /// paths keep to one [`Budget::EFFECTS`] together (or to what they cost, when that is more): a path
 /// whose effect would pass what the others leave of it keeps its shape. The swatches and patterns
-/// that live-effect plug-ins painting their pieces name are looked up in `doc`
-/// ([`reshape_leaves_apart`]).
-pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect], doc: Option<&Document>) {
-    reshape_leaves_within(art, fx, Budget::EFFECTS, doc);
+/// that live-effect plug-ins painting their pieces name are looked up in `doc`, and a deferred one
+/// is listed by its index in `owner`, the effect list `fx` was taken from ([`reshape_leaves_apart`]).
+pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect], owner: &[Effect], doc: Option<&Document>) {
+    reshape_leaves_apart(art, fx, owner, Budget::EFFECTS, false, doc);
 }
 
 /// [`reshape_leaves`], and how gradients that paint the art as a whole (a group's own fills and
 /// strokes) follow the effects ([`crate::Carry`]).
-pub(crate) fn reshape_leaves_carrying(art: &mut Node, fx: &[&Effect], doc: Option<&Document>) -> crate::Carry {
-    reshape_leaves_within(art, fx, Budget::EFFECTS, doc)
+pub(crate) fn reshape_leaves_carrying(art: &mut Node, fx: &[&Effect], owner: &[Effect], doc: Option<&Document>) -> crate::Carry {
+    reshape_leaves_apart(art, fx, owner, Budget::EFFECTS, false, doc)
 }
 
 /// [`reshape_leaves_carrying`] whose paths keep to `budget` together, or to what they cost.
+#[cfg(test)]
 pub(crate) fn reshape_leaves_within(art: &mut Node, fx: &[&Effect], budget: Budget, doc: Option<&Document>) -> crate::Carry {
-    reshape_leaves_apart(art, fx, budget, false, doc)
+    reshape_leaves_apart(art, fx, &[], budget, false, doc)
 }
 
 /// `art`, the group of the one piece a path's copies are made from ([`outline_art_with`]), holding
@@ -669,12 +670,15 @@ fn hoist_copies(art: &mut Node) {
     }
 }
 
-/// [`reshape_leaves_within`]; with `apart`, a Transform effect's copies of each path are objects
+/// [`reshape_leaves_carrying`] whose paths keep to `budget` together, or to what they cost; with
+/// `apart`, a Transform effect's copies of each path are objects
 /// of their own ([`copy_leaf`]) whatever paints them, as Expand Appearance makes them. A live-effect
 /// plug-in that paints what it returns makes each path a group of its pieces ([`paint_leaf`]),
 /// whose swatches and patterns must be in `doc` (without one, pieces that name one are refused).
-/// Returns how gradients that paint the art as a whole follow the effects.
-fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: bool, doc: Option<&Document>) -> crate::Carry {
+/// Returns how gradients that paint the art as a whole follow the effects. A deferred live-effect
+/// plug-in is listed by its index in `owner`, the effect list `fx` was taken from, or in `fx` when
+/// `owner` does not hold it.
+fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget: Budget, apart: bool, doc: Option<&Document>) -> crate::Carry {
     let mut whole = crate::Carry::default();
     if fx.is_empty() {
         return whole;
@@ -693,6 +697,7 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
     });
     let art_stroke = art.appearance.stroke().is_some_and(|s| !s.paint.is_none() && s.width > 0.0);
     let style_safe = leaves_safe && !art_stroke;
+    let listed = fx;
     let opt_fx = crate::geometry::optimize_geometry_effects(fx, style_safe);
     let fx = opt_fx.as_slice();
     let seed = art.id.0;
@@ -703,12 +708,15 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
     for e in fx {
         let Some(bounds) = art.geometric_bounds() else { break };
         let params = merged_params(&e.id, &e.params);
+        // Where a live-effect plug-in sits, which it is listed by when it is deferred.
+        let effect = owner.iter().position(|x| std::ptr::eq(x, *e)).or_else(|| listed.iter().position(|x| std::ptr::eq(*x, *e)));
         if let Some(plugin) = painted_plugin(e) {
+            let at = effect.map(|effect| vectorcraft_plugins::deferred::Stage { object: seed, effect, item: None });
             for_each_leaf(art, &mut |leaf| {
                 let Some((path, _)) = leaf_geometry(leaf) else { return };
                 let before = Budget::of(&path);
                 let room = max.minus(used.minus(before));
-                if let Some(made) = paint_leaf(leaf, plugin, &params, bounds, room, doc) {
+                if let Some(made) = paint_leaf(leaf, plugin, &params, bounds, room, doc, at) {
                     used = used.minus(before).plus(made);
                 }
             });
@@ -778,7 +786,8 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
                     return;
                 }
             }
-            let Some(out) = apply_one(&e.id, &params, &path, bounds, &GeomContext { seed, ..GeomContext::of(leaf) }, room) else {
+            let stage = effect.map(|effect| vectorcraft_plugins::deferred::Stage { object: seed, effect, item: None });
+            let Some(out) = apply_one(&e.id, &params, &path, bounds, &GeomContext { seed, stage, ..GeomContext::of(leaf) }, room) else {
                 kept_ids.insert(leaf.id);
                 return;
             };
@@ -1056,10 +1065,18 @@ fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling
 /// its own ([`vectorcraft_plugins::painted::appearance`]). The swatches and patterns the pieces
 /// name must be in `doc`, and without one the pieces may name none. Returns what the pieces cost
 /// ([`piece_cost`]); `None` (the leaf stays as it is) when the plug-in fails, the pieces are
-/// refused, or they would pass `budget`.
-fn paint_leaf(leaf: &mut Node, plugin: &str, params: &serde_json::Value, bounds: Rect, budget: Budget, doc: Option<&Document>) -> Option<Budget> {
+/// refused, or they would pass `budget`. A deferred run is listed by `at`.
+fn paint_leaf(
+    leaf: &mut Node,
+    plugin: &str,
+    params: &serde_json::Value,
+    bounds: Rect,
+    budget: Budget,
+    doc: Option<&Document>,
+    at: Option<vectorcraft_plugins::deferred::Stage>,
+) -> Option<Budget> {
     let (path, rule) = leaf_geometry(leaf)?;
-    let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&leaf.appearance), item: None };
+    let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&leaf.appearance), item: None, at };
     let pieces = vectorcraft_plugins::effect::apply_painted(plugin, params, &path, bounds, rule, paints, doc)?;
     let made = pieces.iter().map(|p| piece_cost(&p.path)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus);
     if !budget.fits(made) {
@@ -1097,18 +1114,18 @@ fn piece_cost(path: &PathData) -> Budget {
 /// other fills and strokes; one that gives none keeps the leaf's. Returns
 /// what the paths cost ([`piece_cost`]); `None` (the leaf stays as it is) when the plug-in fails,
 /// the pieces are refused (a swatch or pattern not in `doc`, or any without one), or they would pass
-/// `budget`.
+/// `budget`. A deferred run is listed by `at`.
 fn paint_piece(
     leaf: &mut Node,
     item: &AppearanceItem,
-    plugin: &str,
-    params: &serde_json::Value,
+    (plugin, params): (&str, &serde_json::Value),
     bounds: Rect,
     budget: Budget,
     doc: Option<&Document>,
+    at: Option<vectorcraft_plugins::deferred::Stage>,
 ) -> Option<Budget> {
     let (path, rule) = leaf_geometry(leaf)?;
-    let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&leaf.appearance), item: Some(0) };
+    let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&leaf.appearance), item: Some(0), at };
     let pieces = vectorcraft_plugins::effect::apply_painted(plugin, params, &path, bounds, rule, paints, doc)?;
     let made = pieces.iter().map(|p| piece_cost(&p.path)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus);
     if !budget.fits(made) {
@@ -1241,6 +1258,8 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         };
         let Some(tb) = g.bounds() else { continue };
         let params = merged_params(&fx[at].id, &fx[at].params);
+        // Where each effect the piece keeps sits among the item's effects.
+        let kept: Vec<usize> = (0..at).filter(|&k| !is_geometry(&fx[k].id)).chain(at + 1..fx.len()).collect();
         if let Some(plugin) = painted_plugin(&fx[at]) {
             let mut it = item.clone();
             let rest: Vec<Effect> = before.iter().filter(|e| !is_geometry(&e.id)).chain(&fx[at + 1..]).cloned().collect();
@@ -1250,7 +1269,8 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
                 carry.apply(&mut one);
             }
             let it = one.items.pop().unwrap_or(it);
-            let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&original.appearance), item: Some(i) };
+            let stage = vectorcraft_plugins::deferred::Stage { object: ctx.seed, effect: at, item: Some(i) };
+            let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&original.appearance), item: Some(i), at: Some(stage) };
             let painted = vectorcraft_plugins::effect::apply_painted(plugin, &params, &g, tb, rule, paints, doc)
                 .map(|pieces| pieces.iter().map(|p| (p.path.clone(), p.rule, vectorcraft_plugins::painted::items(&it, p))).collect::<Vec<_>>())
                 .filter(|pieces| room.fits(pieces.iter().map(|(p, ..)| piece_cost(p)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus)));
@@ -1264,7 +1284,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
                 group.push(Arc::new(p));
             }
             let mut p = Node::group(leaf.id, group);
-            transform_piece(&mut p, ctx.seed, limit, used, doc);
+            transform_piece(&mut p, (ctx.seed, i, &kept), limit, used, doc);
             pieces.push(Arc::new(p));
             continue;
         }
@@ -1281,7 +1301,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         set_geometry(&mut p, g.clone(), rule);
         let (made, _) = transform_leaf(&mut p, &g, map, copies, options, room);
         *used = used.plus(made);
-        transform_piece(&mut p, ctx.seed, limit, used, doc);
+        transform_piece(&mut p, (ctx.seed, i, &kept), limit, used, doc);
         pieces.push(Arc::new(p));
     }
     if !plain.is_empty() {
@@ -1297,14 +1317,17 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
 /// Apply the visible geometry effects left on the one fill or stroke of each path under `p` (a
 /// transformed piece of [`transform_item_leaf`] and its copies) to all of `p`'s paths as one piece:
 /// each effect takes the bounds of all the paths as its reference box and `seed`, as an object's
-/// own effects reshape all its paths ([`reshape_leaves_within`]). Each path applies its own copy of
+/// own effects reshape all its paths ([`reshape_leaves_carrying`]). Each path applies its own copy of
 /// the effect, whose distances its Scale Strokes & Effects scaled. A Transform effect with
 /// Transform Patterns or Scale Strokes & Effects on transforms each path as [`transform_leaf`] does.
 /// A live-effect plug-in that paints what it returns ([`painted_plugin`]) makes each path one path
 /// for each piece it returns ([`paint_piece`]). The geometry effects then leave the fills and
 /// strokes; their other effects stay. The paths keep to `max` together with the rest of the art
-/// (`used`), and the swatches and patterns painted pieces name must be in `doc`.
-fn transform_piece(p: &mut Node, seed: u64, max: Budget, used: &mut Budget, doc: Option<&Document>) {
+/// (`used`), and the swatches and patterns painted pieces name must be in `doc`. `(seed, source,
+/// kept)`: the object's seed, the index in the object's appearance of the fill or stroke the
+/// piece was made from, and the index among that item's effects of each effect the piece kept,
+/// which a deferred live-effect plug-in is listed by.
+fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), max: Budget, used: &mut Budget, doc: Option<&Document>) {
     let mut count = 0;
     for_each_leaf(p, &mut |l| {
         if let Some(item) = l.appearance.items.first() {
@@ -1320,8 +1343,9 @@ fn transform_piece(p: &mut Node, seed: u64, max: Budget, used: &mut Budget, doc:
             // What the other paths leave of the budget.
             let before = Budget::of(&path);
             let room = max.minus(used.minus(before));
+            let stage = vectorcraft_plugins::deferred::Stage { object: seed, effect: kept.get(j).copied().unwrap_or(j), item: Some(source) };
             if let Some(plugin) = painted_plugin(&e) {
-                if let Some(made) = paint_piece(leaf, &item, plugin, &merged_params(&e.id, &e.params), bounds, room, doc) {
+                if let Some(made) = paint_piece(leaf, &item, (plugin, &merged_params(&e.id, &e.params)), bounds, room, doc, Some(stage)) {
                     *used = used.minus(before).plus(made);
                 }
                 return;
@@ -1340,7 +1364,7 @@ fn transform_piece(p: &mut Node, seed: u64, max: Budget, used: &mut Budget, doc:
                 AppearanceItem::Stroke(s) => Some(s),
                 AppearanceItem::Fill(_) => None,
             };
-            let ctx = GeomContext { stroke, rule, seed, appearance: Some(&appearance), item: Some(0), doc };
+            let ctx = GeomContext { stroke, rule, seed, appearance: Some(&appearance), item: Some(0), doc, stage: Some(stage) };
             let mut carry = crate::Carry::default();
             let out = crate::geometry::apply_geometry_carrying_within(std::slice::from_ref(&e), &path, bounds, &ctx, room, Some(&mut carry));
             *used = used.minus(before).plus(Budget::of(&out));
