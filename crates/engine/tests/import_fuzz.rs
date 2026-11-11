@@ -327,7 +327,9 @@ proptest! {
 
     #[test]
     fn cdr_garbage_opens_and_places_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
-        let mut bytes = b"RIFF\0\0\0\0CDRB".to_vec();
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend(((4 + tail.len()) as u32).to_le_bytes());
+        bytes.extend(b"CDRB");
         bytes.extend(tail);
         survive("CDR garbage", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
         let r = catch_quiet(|| {
