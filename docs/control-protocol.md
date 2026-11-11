@@ -691,7 +691,8 @@ In the desktop app a Paste from the menus or the keys (`ui.key`) decodes a bitma
 `edit.paste*` reads it at once.
 
 File menu details: `file.openRecent1`…`file.openRecent30` open the recent files the `recentFilesCount` preference
-lists (0 hides them all; `file.recentFiles` returns the listed paths), `file.reveal` shows the document's file in the
+lists (0 hides them all; `file.recentFiles` returns the listed paths; under a read root, `ui.menu.list` and
+`file.recentFiles` leave out the files outside it and `file.openRecentN` answers `no such recent file` for one), `file.reveal` shows the document's file in the
 system file manager (desktop only; answers `{path}`), and `file.newFromTemplate` without params opens a file picker
 in the Templates folder (preference `templatesFolder`). Older native files open as "<name> [Converted]" (preference
 `appendConverted`), so their Save asks for a new `.vectorcraft` name. Native files reopen at the view they were saved
