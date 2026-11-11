@@ -4001,6 +4001,7 @@ axis	Both	Båda
 	Stop Script	Stoppa skript
 	Show External Script Warning	Visa varning för externa skript
 	A Script Is Running	Ett skript körs
+	Script Alert	Skriptmeddelande
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
 	Do not show this warning again	Visa inte den här varningen igen
 	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.

@@ -4401,6 +4401,7 @@ imageTrace	Outline	Obrys
 	Stop Script	Zastavit skript
 	Show External Script Warning	Zobrazit upozornění u externích skriptů
 	A Script Is Running	Běží skript
+	Script Alert	Upozornění skriptu
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skript může měnit otevřené dokumenty a prostřednictvím příkazů, které spouští, zapisovat soubory. Spouštějte jen skripty, kterým důvěřujete.
 	Do not show this warning again	Toto upozornění již nezobrazovat
 	Stop the script and undo what it did? Then quit again.	Zastavit skript a vrátit jeho změny? Potom aplikaci ukončete znovu.
