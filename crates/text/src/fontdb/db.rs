@@ -274,6 +274,20 @@ impl FontDb {
         self.add_font_from(bytes, None)
     }
 
+    /// Add user fonts (the bytes of TTF, OTF, TTC or OTC files) as [`FontDb::add_font`] adds one,
+    /// all of them at once → the faces added, as (family, style), in the order the files hold them.
+    /// A face already loaded (the same family, style and version) is not added again.
+    pub fn add_font_files(&self, files: Vec<Vec<u8>>) -> Vec<(String, String)> {
+        self.add_faces(files.into_iter().map(|bytes| (bytes, None)))
+    }
+
+    /// The faces the font file `data` holds, as (family, style): those [`FontDb::add_font`] adds
+    /// unless they are loaded already. None when `data` is no TrueType or OpenType font or
+    /// collection.
+    pub fn faces_in(data: &[u8]) -> Vec<(String, String)> {
+        enumerate_faces(data).into_iter().map(|(_, face)| (face.family, face.style)).collect()
+    }
+
     /// [`FontDb::add_font`] for the bytes of the file at `path` (when known).
     pub(super) fn add_font_from(&self, bytes: Vec<u8>, path: Option<&Path>) -> usize {
         self.add_fonts([(bytes, path.map(Path::to_path_buf))])
@@ -284,6 +298,11 @@ impl FontDb {
     /// loaded, whose nearest style it would take instead (Arial Bold Italic, the first of Arial's
     /// files, for upright Regular text). Returns the number of faces added.
     pub(super) fn add_fonts(&self, files: impl IntoIterator<Item = (Vec<u8>, Option<PathBuf>)>) -> usize {
+        self.add_faces(files).len()
+    }
+
+    /// [`FontDb::add_fonts`] → the faces added, as (family, style).
+    fn add_faces(&self, files: impl IntoIterator<Item = (Vec<u8>, Option<PathBuf>)>) -> Vec<(String, String)> {
         // Another version of a family and style is kept: a document may name it (the first one
         // loaded stays the one the family and style alone resolve to).
         let same = |f: &FontFace, family: &str, style: &str, version: &str| {
@@ -304,18 +323,18 @@ impl FontDb {
             }
         }
         let mut faces = self.faces.write().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let before = faces.len();
+        let mut added = Vec::new();
         for f in made {
             // Another thread may have added the same face meanwhile.
             if !faces.iter().any(|g| same(g, &f.family, &f.style, &f.version)) {
+                added.push((f.family.clone(), f.style.clone()));
                 faces.push(Arc::new(f));
             }
         }
-        let added = faces.len() - before;
         drop(faces);
         #[cfg(test)]
         faces_published();
-        if added > 0 {
+        if !added.is_empty() {
             self.changed();
         }
         added

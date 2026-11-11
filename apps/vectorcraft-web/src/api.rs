@@ -14,6 +14,7 @@
 //! await vectorcraft.commands()                                 // command list
 //! const {data} = await vectorcraft.screenshot()                // the canvas as PNG (base64)
 //! await vectorcraft.openFile("logo.svg", bytes)               // opened as a dropped file is
+//! await vectorcraft.addFonts([{name: "Brand.otf", bytes}])     // text.addFonts → {added, kept, skipped, families}
 //! vectorcraft.captureDownloads(true)                           // saves stay in the page…
 //! vectorcraft.files(); await vectorcraft.readFile("logo.png")  // …to be read back
 //! ```
@@ -29,6 +30,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use craft_web_api::methods::Methods;
 use craft_web_api::page::{PageApi, Request};
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::fontfiles::MAX_FONT_FILE;
 use vectorcraft_ui_egui::{ControlRequest, ControlTicket as Ticket};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
@@ -155,6 +157,40 @@ fn set_fn(obj: &js_sys::Object, name: &str, f: JsValue) -> Result<(), JsValue> {
     js_sys::Reflect::set(obj, &name.into(), &f).map(|_| ())
 }
 
+/// `addFonts`'s argument, `[{name, bytes}]` (`bytes` a `Uint8Array` or an `ArrayBuffer`, from this
+/// window or the embedding page's), as `text.addFonts`'s `fonts`. Files larger in all than the
+/// command takes are refused before their bytes are copied; the command checks the rest.
+fn font_files(fonts: &JsValue) -> Result<Vec<Value>, String> {
+    let list = fonts.dyn_ref::<js_sys::Array>().ok_or("addFonts takes an array of {name, bytes}")?;
+    let (mut out, mut total) = (Vec::new(), 0u64);
+    for (i, font) in list.iter().enumerate() {
+        let get = |key: &str| js_sys::Reflect::get(&font, &key.into()).unwrap_or(JsValue::UNDEFINED);
+        // Read by `byteLength` and `new Uint8Array(bytes)`, not checked with `dyn_ref`: that is
+        // `instanceof`, which refuses the arrays of a page that embeds the app in an iframe, made in
+        // that page's window.
+        let bytes = get("bytes");
+        let size = Some(&bytes)
+            .filter(|b| b.is_object())
+            .and_then(|b| js_sys::Reflect::get(b, &"byteLength".into()).ok())
+            .and_then(|n| n.as_f64())
+            .filter(|n| *n >= 1.0);
+        let Some(size) = size else {
+            return Err(format!("addFonts: font {i}'s bytes must be a Uint8Array or an ArrayBuffer of the font file"));
+        };
+        total = total.saturating_add(size as u64);
+        if total > MAX_FONT_FILE {
+            return Err("addFonts: the fonts come to more than 256 MB: add fewer at a time".into());
+        }
+        let bytes = js_sys::Uint8Array::new(&bytes);
+        let mut file = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes.to_vec())});
+        if let Some(name) = get("name").as_string() {
+            file["name"] = json!(name);
+        }
+        out.push(file);
+    }
+    Ok(out)
+}
+
 /// Install `window.vectorcraft`: the crate's functions, then VectorCraft's own (`inspect` is its
 /// `ui.inspect`).
 pub fn install() -> Result<(), JsValue> {
@@ -179,6 +215,18 @@ pub fn install() -> Result<(), JsValue> {
             });
             repaint();
             JsValue::from_bool(queued)
+        })
+        .into_js_value(),
+    )?;
+    set_fn(
+        &obj,
+        "addFonts",
+        Closure::<dyn Fn(JsValue) -> js_sys::Promise>::new(|fonts: JsValue| {
+            let fonts = font_files(&fonts);
+            future_to_promise(async move {
+                let fonts = fonts.map_err(|e| JsValue::from(js_sys::Error::new(&e)))?;
+                outcome(&send("engine.execute", json!({"command": "text.addFonts", "params": {"fonts": fonts}})).await)
+            })
         })
         .into_js_value(),
     )?;

@@ -134,8 +134,8 @@ fn a_drop_without_a_position_opens_documents_and_places_pictures() {
 }
 
 /// Swatch libraries and color books, graphic style libraries, Libraries panel files, presets,
-/// plug-ins and scripts open as File → Open opens them, dropped with or without a position, on the
-/// canvas too.
+/// plug-ins, scripts and font files open as File → Open opens them, dropped with or without a
+/// position, on the canvas too.
 #[test]
 fn libraries_presets_and_plugins_open_wherever_they_are_dropped() {
     let mut app = app();
@@ -145,7 +145,8 @@ fn libraries_presets_and_plugins_open_wherever_they_are_dropped() {
     let libraries = ["a.vcswatches", "a.gpl", "a.ase", "a.acb", "a.vcstyles", "a.vclibrary"];
     let presets_and_plugins =
         ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.vcexportpresets", "a.wasm", "a.jsx", "a.jsxinc", "a.jsxbin"];
-    for name in libraries.into_iter().chain(presets_and_plugins) {
+    let fonts = ["a.ttf", "a.OTF", "a.ttc", "a.otc", "a.woff", "a.woff2"];
+    for name in libraries.into_iter().chain(presets_and_plugins).chain(fonts) {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
         assert_eq!(app.drop_target(name, Some(on_canvas), true), DropTarget::Open, "{name} on the canvas");
     }

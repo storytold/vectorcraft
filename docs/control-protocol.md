@@ -1,6 +1,6 @@
 # Control protocol
 
-> **Last updated:** 2026-11-07 · **Change:** text style commands take a feature with a value (`"features": ["salt=2"]`), the font's alternate number, and shape runs that differ only in features as one piece of text; previously: Confining file access refuses a `:` in a name after the drive on Windows, an NTFS alternate data stream such as `x.svg:evil` (#3604); previously: Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
+> **Last updated:** 2026-11-12 · **Change:** `window.vectorcraft.addFonts`: the page adds font files to the session (`text.addFonts`), and `openFile` adds a `.ttf`, `.otf`, `.ttc` or `.otc` (#1164); previously: text style commands take a feature with a value (`"features": ["salt=2"]`), the font's alternate number, and shape runs that differ only in features as one piece of text
 
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
 from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
@@ -1099,19 +1099,29 @@ app:
 | `vectorcraft.docInspect(params)` / `vectorcraft.uiInspect(params)` | `document.inspect` / `ui.inspect` |
 | `vectorcraft.inspect()` | `ui.inspect` (the name before `uiInspect`) |
 | `vectorcraft.screenshot(params)` | `ui.screenshot` (no `path`: the PNG comes back inline, as `data` and as `pngBase64`) |
-| `vectorcraft.openFile(name, bytes)` | opens the bytes the way a dropped file opens, as automation: a plug-in install it asks for has to be started by the person (returns `true` once queued) |
+| `vectorcraft.openFile(name, bytes)` | opens the bytes the way a dropped file opens, as automation: a plug-in install it asks for has to be started by the person (returns `true` once queued); a `.ttf`, `.otf`, `.ttc` or `.otc` file is added to the session as `addFonts` adds it |
+| `vectorcraft.addFonts([{name, bytes}])` | `text.addFonts` with those font files (`bytes`: a `Uint8Array` or an `ArrayBuffer`, at most 256 MB in all) → `{added: [{family, style}], kept, skipped, families}` |
 | `vectorcraft.captureDownloads(on)` | while on, a save or export is kept in the page instead of downloaded |
 | `vectorcraft.files()` / `vectorcraft.readFile(name)` | the kept files (`{path, size}`) / one of them as a `Uint8Array` |
 
 Errors reject with an `Error` carrying the method's message. Requests run on the UI's next frame, so a
 hidden tab (whose frames the browser pauses) answers when it is shown again.
 
-`request`, `execute`, `commands`, `docInspect`, `uiInspect` and `screenshot` come from [`craft-web-api`](https://github.com/storytold/craft-libs/tree/main/crates/web-api) (storytold/craft-libs#413), the same shape in every Craft app. A call the app does not answer within 30 seconds rejects, and the app drops it unrun if it had not started it. `openFile`, `captureDownloads`, `files`, `readFile` and `inspect` are VectorCraft's own.
+`request`, `execute`, `commands`, `docInspect`, `uiInspect` and `screenshot` come from [`craft-web-api`](https://github.com/storytold/craft-libs/tree/main/crates/web-api) (storytold/craft-libs#413), the same shape in every Craft app. A call the app does not answer within 30 seconds rejects, and the app drops it unrun if it had not started it. `openFile`, `addFonts`, `captureDownloads`, `files`, `readFile` and `inspect` are VectorCraft's own.
+
+A page that embeds the app gives it the fonts its documents use, which the browser build can't find on the system, with `addFonts` once the app is running (before that, a call rejects with `VectorCraft is not running yet`). The fonts last until the page is reloaded, and type set in them redraws at once:
+
+```js
+const fonts = await Promise.all(["Brand-Regular.otf", "Brand-Bold.otf"].map(async name =>
+  ({name, bytes: new Uint8Array(await (await fetch(`fonts/${name}`)).arrayBuffer())})));
+const {added, skipped} = await vectorcraft.addFonts(fonts);   // added: [{family: "Brand", style: "Regular"}, …]
+```
 
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-12 | minor | `window.vectorcraft.addFonts([{name, bytes}])` adds font files to the session (`text.addFonts`); `openFile` adds a `.ttf`, `.otf`, `.ttc` or `.otc` the same way (#1164). |
 | 2026-11-07 | minor | Documented OpenType feature values in text commands (`"salt=2"`, the font's alternate number) and that runs differing only in features shape as one piece of text. |
 | 2026-10-31 | minor | Confining file access: on Windows a `:` in a name after the drive (an NTFS alternate data stream) is refused with the device names (#3604). |
 | 2026-10-25 | minor | Panel docking on craft-ui's layout: `ui.docking`, the floating and dock parameters, native floating windows. |

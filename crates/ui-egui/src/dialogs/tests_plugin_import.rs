@@ -230,7 +230,7 @@ fn a_dropped_file_only_an_importer_reads_opens() {
 #[test]
 fn importer_filters_leave_out_what_file_open_opens_as_something_else() {
     use vectorcraft_engine::cmd::{self, fileio};
-    let lists: [&[&str]; 11] = [
+    let lists: [&[&str]; 12] = [
         cmd::plugin::EXTS,
         cmd::shortcutset::EXTS,
         cmd::scripts::EXTS,
@@ -242,6 +242,7 @@ fn importer_filters_leave_out_what_file_open_opens_as_something_else() {
         cmd::compositefonts::EXTS,
         cmd::library::LIBRARY_EXTS,
         cmd::swatchlib::LIBRARY_EXTS,
+        cmd::fontfiles::EXTS,
     ];
     for ext in lists.iter().flat_map(|l| l.iter().copied()).chain([vectorcraft_doc::style_libs::STYLES_EXT]) {
         assert!(crate::io::opens_as(&format!("a.{ext}")).is_some(), "{ext}");

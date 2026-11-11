@@ -390,9 +390,9 @@ fn open_exts_cover_every_readable_format() {
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
     assert_eq!(
         filters.len(),
-        13 + FORMATS.iter().filter(|f| f.read).count(),
+        14 + FORMATS.iter().filter(|f| f.read).count(),
         "and swatch and graphic style libraries, libraries, flattener, PDF, print, perspective grid and export presets, composite \
-         fonts, shortcut sets, scripts, plug-ins"
+         fonts, fonts, shortcut sets, scripts, plug-ins"
     );
     let at = |label: &str| filters.iter().position(|f| f.0 == label).unwrap_or_else(|| panic!("File › Open has no {label} filter"));
     let styles: &[&str] = &[vectorcraft_doc::style_libs::STYLES_EXT];
@@ -405,6 +405,7 @@ fn open_exts_cover_every_readable_format() {
         assert!(!filters[0].1.contains(e), "All readable files lists documents only, not .{e}");
     }
     assert!(filters.contains(&("Export presets", SCREEN_EXPORT_PRESET_EXTS)), "File › Open imports export presets");
+    assert!(filters.contains(&("Fonts", crate::cmd::fontfiles::EXTS)), "File › Open adds font files to the session");
     assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
 }

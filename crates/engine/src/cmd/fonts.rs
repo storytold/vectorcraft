@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Font List",
             [],
             None,
-            "{family?, style?} → {families: [names]} sorted: the bundled fonts, fonts added and the fonts installed on the system (none on the web), each the family's English (canonical) name for `text.setStyle` and documents (without the system's hidden families, whose names start with a dot; they still resolve by name). Preferences › Type › Show Font Names in English only changes the UI menu labels, not this list; with family: {family, styles: [names] (upright styles by weight, then italics; an error when the family isn't available), axes: [{tag, name, min, default, max, value, hidden}] (a variable font's variation axes, the Character panel's Variable Font sliders, with `value` the setting of `style`, else of the first style; empty for a static font; `hidden`: the font asks for the axis not to be shown)}",
+            "{family?, style?} → {families: [names]} sorted: the bundled fonts, the fonts added to the session (text.addFonts) and the fonts installed on the system (none on the web), each the family's English (canonical) name for `text.setStyle` and documents (without the system's hidden families, whose names start with a dot; they still resolve by name). Preferences › Type › Show Font Names in English only changes the UI menu labels, not this list; with family: {family, styles: [names] (upright styles by weight, then italics; an error when the family isn't available), axes: [{tag, name, min, default, max, value, hidden}] (a variable font's variation axes, the Character panel's Variable Font sliders, with `value` the setting of `style`, else of the first style; empty for a static font; `hidden`: the font asks for the axis not to be shown)}",
             always,
             font_list
         ),
@@ -1173,10 +1173,16 @@ pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
     let faces = db.load_system_fonts();
     #[cfg(target_arch = "wasm32")]
     let faces = 0;
-    // The canvas redraws type in the fonts available now (renderers lay it out again when the
-    // fonts change), and the bounds follow, also of the type in opacity masks and in the art of
-    // symbols and patterns; that isn't an edit to save. The type in art is laid out first, and the
-    // inline graphics of the type on the layers then take the new bounds of their symbols' art.
+    fonts_changed(s);
+    Ok(json!({ "families": db.menu_family_list().len(), "faces": faces }))
+}
+
+/// The fonts available changed (scanned again, or added to the session): the canvas redraws type
+/// in the fonts available now (renderers lay it out again when the fonts change), and the bounds
+/// follow, also of the type in opacity masks and in the art of symbols and patterns; that isn't an
+/// edit to save. The type in art is laid out first, and the inline graphics of the type on the
+/// layers then take the new bounds of their symbols' art.
+pub(crate) fn fonts_changed(s: &mut Session) {
     for d in &mut s.docs {
         let mut texts = vec![];
         d.doc.walk(|n| {
@@ -1199,7 +1205,6 @@ pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
         }
         d.revision += 1;
     }
-    Ok(json!({ "families": db.menu_family_list().len(), "faces": faces }))
 }
 
 #[cfg(test)]
