@@ -123,9 +123,9 @@ pub struct CacheKey {
     /// [`vectorcraft_render::placed_document::generation`]: placed documents' bitmaps made since.
     pub placed: u64,
     /// The plug-in revision ([`vectorcraft_render::effects::plugin_revision`]) of the last plug-in
-    /// install or removal after which the document drew a plug-in effect
-    /// ([`vectorcraft_render::draws_plugin_effects`]): a frame drawn before it draws those effects
-    /// as the plug-ins installed then did. 0 until then.
+    /// install or removal, or of the last time deferred plug-in effect stages gave results, after
+    /// which the document drew a plug-in effect ([`vectorcraft_render::draws_plugin_effects`]): a
+    /// frame drawn before it draws those effects as the plug-ins installed then did. 0 until then.
     pub plugins: u64,
     /// View › Pixel Preview: the document pixels rendered (x0, y0, x1, y1), one per point, shown
     /// with hard edges. None: the art is rendered for the screen.

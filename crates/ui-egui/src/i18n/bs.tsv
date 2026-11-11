@@ -6574,3 +6574,7 @@ shape	Open	Otvoren
 	Ended by an internal fault	Završeno zbog interne greške
 	{ms} ms, {calls} host calls	{ms} ms, {calls} poziva hosta
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ranijih redova uklonjeno, {cut} redova skraćeno
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Osvježi odgođene efekte
+	Deferred Effects	Odgođeni efekti
