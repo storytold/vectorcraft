@@ -382,6 +382,36 @@ fn blob_brush_drag_shows_scrub_length_measurement_labels() {
     assert!(!quiet.overlays(&off).iter().any(|o| matches!(o, Overlay::Measure { .. })));
 }
 
+/// #4343: while it is dragged, a round Blob Brush shows the outline of the area `path.blob` adds,
+/// which reaches half the brush beyond the ends of the stroke (round tips), not a line as wide as
+/// the brush that ends square at them.
+#[test]
+fn blob_brush_preview_is_the_outline_of_the_area_with_round_tips() {
+    use vectorcraft_geom::kurbo::Shape;
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = GestureTool::new("blobBrush");
+    t.size = 20.0;
+    assert_eq!(t.roundness, 100.0, "a round tip by default");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 300.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 300.0));
+    let outlines: Vec<_> =
+        t.overlays(&cx).into_iter().filter_map(|o| if let Overlay::Path { path, width, .. } = o { Some((path, width)) } else { None }).collect();
+    assert!(outlines.iter().all(|(_, width)| f64::from(*width) < t.size / 2.0), "no line as wide as the brush: {outlines:?}");
+    // The stroke's outline is the widest one (the tip at the pointer is another).
+    let Some((path, _)) = outlines.iter().max_by(|a, b| a.0.bounding_box().width().total_cmp(&b.0.bounding_box().width())) else {
+        panic!("no outline")
+    };
+    let b = path.bounding_box();
+    assert!((b.x0 - 40.0).abs() < 0.5 && (b.x1 - 160.0).abs() < 0.5, "round tips reach half the size past the ends: {b:?}");
+    assert!((b.y0 - 290.0).abs() < 0.5 && (b.y1 - 310.0).abs() < 0.5, "{b:?}");
+    // Round, not square: the corner of the box a square-ended line would fill is outside the area.
+    assert!(!path.contains(vectorcraft_geom::Point::new(41.0, 291.0)));
+    assert!(path.contains(vectorcraft_geom::Point::new(45.0, 300.0)));
+}
+
 /// The Blob Brush has Keep selected and Merge only with selection, both off by default, and its
 /// stroke sends both.
 #[test]

@@ -6586,8 +6586,14 @@ breakText	Glyphs	Glyphs
 	Ended at a limit	Beëindigd bij een limiet
 	Stopped	Gestopt
 	Ended by an internal fault	Beëindigd door een interne fout
-	{ms} ms, {calls} host calls	{ms} ms, {calls} host-aanroepen
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eerdere regels verwijderd, {cut} regels ingekort
+	time unavailable	tijd niet beschikbaar
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	traagste: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} host-aanroep|{n} host-aanroepen
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eerdere regel verwijderd|{n} eerdere regels verwijderd
+@plural	{n} line cut|{n} lines cut	{n} regel ingekort|{n} regels ingekort
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uitgestelde effecten vernieuwen

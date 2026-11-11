@@ -1617,7 +1617,9 @@ VectorCraft reads them by these rules of its own:
   Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
   `source`. A `JSINCLUDE` folder outside the script's folder is passed over.
 - A missing or refused included file ends the run before any of it runs. An error in an included file or a file `$.evalFile`
-  ran is reported at that file's line and column, and the report's `file` names the file.
+  ran is reported at that file's line and column, and the report's `file` names the file. So is an error `$.evalFile`
+  throws for a file it cannot run, such as a syntax error, when no `catch` takes it. When a `catch` takes that error
+  and a later `throw` raises it again, the error is reported where that `throw` is, as any other thrown error is.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records
@@ -1742,7 +1744,12 @@ at the bottom of the panel and in its menu. Output goes on while the panel is cl
 
 - `script.console {}` returns `{lines: [{run, name, kind, text}], droppedLines, truncatedLines}`. `run` is the
   run's number in the session, and `kind` is `start`, `output`, `log`, `error`, `end` or `report`. An end line's text
-  is `ended:`, a space, and then `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`.
+  is `ended:`, a space, and then `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`. A report
+  line's text is the run's time (`12 ms`, or `time unavailable` on a platform without a clock), a comma and its host
+  calls (`1 host call`, `2 host calls`), then `; slowest:` and the slowest commands when any were timed. The panel
+  shows the same text in the interface language. Every run that starts gets an end line. When a run is no longer
+  available, its end line is `stopped` if the run was abandoned and `internal` if the next slice found it missing, and
+  no report line follows.
 - `script.console.clear {}` empties the console, sets its counts to zero and returns `{cleared}`. A running script
   goes on writing, and `scriptReport` keeps the last run's console.
 - `ui.copyScriptConsole {first?, last?}` copies lines `first` to `last` to the clipboard as the panel shows them, or
