@@ -124,7 +124,7 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     if let Some(m) = crate::addons::halftone::halftone_art(d, n) {
         return Some(bake_pieces(d, m));
     }
-    if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {
+    if let Some(m) = crate::revolve_art_in(Some(d), n).or_else(|| crate::solid_art_in(Some(d), n)) {
         let m = evaluate_container(Some(d), &m).unwrap_or(m);
         return Some(bake_pieces(d, m));
     }
@@ -481,7 +481,7 @@ pub type StrokeArt<'a> = &'a mut dyn FnMut(&mut Document, &PathData, FillRule, &
 /// without transparency or effects of its own takes `n`'s place itself. Hidden fills, strokes and
 /// effects are dropped. `None` for other kinds of objects.
 pub fn expand_leaf(d: &mut Document, n: &Node, stroke_art: StrokeArt) -> Option<Node> {
-    if let Some(m) = crate::revolve::expand_revolve_art(n).or_else(|| crate::solid_art(n)) {
+    if let Some(m) = crate::revolve::expand_revolve_art_in(Some(d), n).or_else(|| crate::solid_art_in(Some(d), n)) {
         let m = evaluate_container(Some(d), &m).unwrap_or(m);
         return Some(bake_pieces(d, m));
     }
@@ -551,7 +551,7 @@ pub fn expand_art(d: &mut Document, n: &mut Node, stroke_art: StrokeArt) {
 /// painting their pieces name are looked up in `doc`. `None` when it has neither a stroke to
 /// outline nor a geometry effect, so bending first changes nothing.
 pub fn bake_appearance(doc: Option<&Document>, n: &Node) -> Option<Node> {
-    if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {
+    if let Some(m) = crate::revolve_art_in(doc, n).or_else(|| crate::solid_art_in(doc, n)) {
         return Some(m);
     }
     if !matches!(n.kind, NodeKind::Path { clipping: false, guide: false, .. } | NodeKind::Compound { .. }) {

@@ -392,7 +392,7 @@ fn named_cidfonts_over_unicode_cmaps_set_their_characters_as_type() {
             .collect()
     };
     let r = super::tests::read("/Ryumin-Light-UniJIS-UCS2-H findfont 20 scalefont setfont 10 20 moveto <4e2d0041> show");
-    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
     let t = texts(&r);
     assert_eq!(t.len(), 1, "{:?}", all(&r.document));
     assert_eq!(t[0].plain_text(), "\u{4e2d}A");

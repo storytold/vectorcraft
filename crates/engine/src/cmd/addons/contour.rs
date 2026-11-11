@@ -12,8 +12,8 @@ use vectorcraft_doc::NodeKind;
 use vectorcraft_render::effects;
 
 use super::super::edit::{copy_above, selected_roots};
-use super::super::pathops::{len_param, num_param};
-use super::super::{CommandSpec, EngineError, NodeId, Result, Session, bad, cmd, has_selection, str_param};
+use super::super::pathops::{length_given, number_given};
+use super::super::{CommandSpec, EngineError, NodeId, Result, Session, bad, cmd, has_selection, text_param};
 
 const C: &str = "addon.contour.set";
 /// The live effect that does the offsetting (the one Effect › Path › Offset Path applies).
@@ -44,12 +44,12 @@ fn joins_for(corners: Option<&str>) -> Result<&'static str> {
 }
 
 fn contour(s: &mut Session, p: &Value) -> Result<Value> {
-    let offset = len_param(p, "offset").ok_or_else(|| bad(C, "missing `offset` (a distance in points)"))?;
+    let offset = length_given(p, "offset", C)?.ok_or_else(|| bad(C, "missing `offset` (a distance in points)"))?;
     if offset.abs() > MAX_OFFSET {
         return Err(bad(C, "offset out of range"));
     }
-    let joins = joins_for(str_param(p, "corners"))?;
-    let miter = num_param(p, "miterLimit").unwrap_or(4.0).clamp(1.0, 500.0);
+    let joins = joins_for(text_param(p, "corners", C)?)?;
+    let miter = number_given(p, "miterLimit", C)?.unwrap_or(4.0).clamp(1.0, 500.0);
     let effect = effects::new_effect(EFFECT, &json!({"offset": offset, "joins": joins, "miterLimit": miter}))
         .ok_or_else(|| EngineError::Other("Contour: the Offset Path effect is not available".into()))?;
     let roots = selected_roots(s)?;

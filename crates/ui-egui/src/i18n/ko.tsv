@@ -622,6 +622,8 @@ digits	Malayalam	말라얄람어
 	Guides	안내선
 	Hide Guides	안내선 숨기기
 	Lock Guides	안내선 잠그기
+	Lock Guides by Default	기본적으로 안내선 잠그기
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Cmd/Ctrl + 눈금자 드래그로 아트보드 안내선
 	Make Guides	안내선 만들기
 	Release Guides	안내선 해제
 	Clear Guides	안내선 지우기
@@ -791,6 +793,13 @@ digits	Malayalam	말라얄람어
 	Other Library…	다른 라이브러리…
 	Graphic Style Libraries	그래픽 스타일 라이브러리
 	Shadows and Glows	그림자와 광선
+	Game HUD	게임 HUD
+	Health Fill	체력
+	Mana Glow	마나
+	Damage Flash	피해
+	Quest Outline	퀘스트
+	Coin Shine	코인
+	Boss Alert	보스
 	Outlines and Rules	윤곽선과 괘선
 	Hand-Drawn	손그림
 	Gradient Finishes	그레이디언트 마감
@@ -1058,6 +1067,7 @@ antiAlias	Sharp	날카롭게
 	Average	평균
 	BLANK DOCUMENT PRESETS	빈 문서 프리셋
 	Background Color:	배경색:
+	Guide Label:	안내선 레이블:
 	Show Center Mark	중심 표시 보기
 	Show Cross Hairs	십자선 보기
 	Show Video Safe Areas	비디오 안전 영역 보기
@@ -1066,7 +1076,6 @@ antiAlias	Sharp	날카롭게
 	Update While Dragging	드래그하는 동안 업데이트
 	Hide Video Rulers	비디오 눈금자 숨기기
 	Background Contents	배경 내용
-	Background Contents:	배경 내용:
 	Background:	배경:
 	Bar Graph Tool	막대 그래프 도구
 	Baseline Shift	기준선 이동
@@ -1243,6 +1252,7 @@ antiAlias	Sharp	날카롭게
 	Coming soon — tracked in the parity plan	곧 제공 예정 — 기능 동등성 계획에서 관리 중
 	Command Click to Select Objects Behind	Command-클릭으로 뒤쪽 개체 선택
 	Command Dialog	명령 대화상자
+	Command API Reference	명령 API 참조
 	Community	커뮤니티
 	Compatibility:	호환성:
 	Compatible Gradient and Gradient Mesh Printing	호환 그레이디언트 및 그레이디언트 메시 인쇄
@@ -1292,7 +1302,6 @@ antiAlias	Sharp	날카롭게
 	Corners…	모퉁이…
 	Chamfer	모따기
 	Create Clipping Mask	클리핑 마스크 만들기
-	Create Document	문서 만들기
 	Create From:	만들기 기준:
 	Create Graph	그래프 만들기
 	Create New Layer	새 레이어 만들기
@@ -2352,7 +2361,6 @@ antiAlias	Sharp	날카롭게
 	New Symbol…	새 심볼…
 	New Workspace	새 작업 영역
 	New file	새 파일
-	New from Template	템플릿에서 새로 만들기
 	New theme from the current color	현재 색상으로 새 테마 만들기
 	New {kind} Style…	새 {kind} 스타일…
 	Next	다음
@@ -2826,6 +2834,12 @@ mark-style	Japanese	일본식
 	Reset OpenType Features	OpenType 기능 재설정
 	Reset Panel	패널 재설정
 	Reset Preferences	환경 설정 재설정
+	Export Preferences…	환경 설정 내보내기…
+	Import Preferences…	환경 설정 가져오기…
+	Save the applied preferences to a JSON file	적용된 환경 설정을 JSON 파일로 저장
+	Apply the preferences in a file Export Preferences saved	환경 설정 내보내기로 저장한 파일의 환경 설정 적용
+	Export Preferences	환경 설정 내보내기
+	Import Preferences	환경 설정 가져오기
 	Search Preferences	환경 설정 검색
 	No settings found	설정을 찾을 수 없음
 	Reset Profiles	프로필 재설정
@@ -2842,6 +2856,8 @@ mark-style	Japanese	일본식
 	Restore	복원
 	Restore Recovered Documents	복구된 문서 복원
 	Restore every preference to its default (applied on OK)	모든 환경 설정을 기본값으로 복원(확인 시 적용)
+	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
 	Restrict printing, editing and other tasks	인쇄, 편집 등의 작업 제한
 	Reverse Gradient	그레이디언트 반전
@@ -2894,6 +2910,7 @@ mark-style	Japanese	일본식
 	Save PDF Preset	PDF 사전 설정 저장
 	Save Perspective Grid Preset	원근 격자 사전 설정 저장
 	Save Preset	사전 설정 저장
+	Save Document Preset	문서 사전 설정 저장
 	Preset {number}	사전 설정 {number}
 	Save Preset…	사전 설정 저장…
 	Save Print Preset	인쇄 사전 설정 저장
@@ -3242,7 +3259,6 @@ mark-style	Japanese	일본식
 	Target Contents	대상 내용
 	Target:	대상:
 	Templates Folder	템플릿 폴더
-	Templates…	템플릿…
 	Text Displayed in Cell:	셀에 표시할 텍스트:
 	Text Export Options	텍스트 내보내기 옵션
 	Text Import Options	텍스트 가져오기 옵션
@@ -3621,6 +3637,7 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Preferences	환경 설정
 file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG
 file-filter	PDF-compatible .ai	PDF 호환 .ai
@@ -4348,6 +4365,20 @@ theme	Appearance	외관
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`은(는) {min}에서 {max} 사이여야 합니다({x} 입력됨)
 @msg	`{key}` must be one of {_1}	`{key}`은(는) {_1} 중 하나여야 합니다
 @msg	unknown preference `{key}`	알 수 없는 환경 설정 `{key}`
+@msg	Preferences imported.	환경 설정을 가져왔습니다.
+@msg	not a preferences file: {e}	환경 설정 파일이 아닙니다: {e}
+@msg	not a preferences file: no JSON object	환경 설정 파일이 아닙니다: JSON 개체가 없습니다
+@msg	not a preferences file (format `{format}`)	환경 설정 파일이 아닙니다(형식 `{format}`)
+@msg	not a preferences file: no `format`	환경 설정 파일이 아닙니다: `format`이 없습니다
+@msg	not a preferences file: no `version`	환경 설정 파일이 아닙니다: `version`이 없습니다
+@msg	not a preferences file: no `prefs`	환경 설정 파일이 아닙니다: `prefs`가 없습니다
+@msg	the file was saved by a newer version of VectorCraft (version {v})	더 새로운 버전의 VectorCraft에서 저장한 파일입니다(버전 {v})
+@msg	the file holds no preferences	파일에 환경 설정이 없습니다
+@msg	`{key}` names a folder, which preferences files leave out	`{key}`은(는) 폴더를 지정하며, 환경 설정 파일에는 폴더가 포함되지 않습니다
+@msg	the file is larger than 1 MB	파일이 1MB보다 큽니다
+@msg	give `path` or `data`	`path` 또는 `data`를 지정하세요
+@msg	`{key}` must be an object	`{key}`은(는) 개체여야 합니다
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import`은(는) 일괄 처리 단계가 아니라 단독으로 실행됩니다
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	데이터 복구에 복사본을 보관할 곳이 없습니다. 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
 @msg	Data Recovery can't keep copies in {path}: {e}	데이터 복구가 {path}에 복사본을 보관할 수 없습니다: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	{path}에서 플러그인을 불러올 수 없습니다: {e}
@@ -4528,6 +4559,11 @@ theme	Appearance	외관
 @msg	artboard {0} does not exist	아트보드 {0}이(가) 없습니다
 @msg	cannot read PDF: {0}	PDF를 읽을 수 없습니다: {0}
 @msg	invalid PDF setting: {0}	잘못된 PDF 설정: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: UserUnit {unit}(으)로 기록되므로 UserUnit을 무시하는 앱에서는 그 배수만큼 작게 표시됩니다
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: {label} 페이지는 UserUnit 없이 포인트 단위로 기록되며, 한도를 지키는 앱은 페이지를 200 in으로 자릅니다
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5에는 14,400 pt (200 in)보다 긴 페이지가 크기를 유지하는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	아트보드 {n}의 페이지는 {size}로, PDF 페이지 변 3에서 14,400 단위에 비해 너무 길고 좁습니다: 짧은 변을 3 단위 이상으로 유지하는 UserUnit {unit}로 기록되며, 한도를 지키는 앱은 긴 변을 14,400 단위로 자릅니다
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 파일은 실수를 최대 {max}까지 담는데 아트보드 {n}의 {side} pt 페이지에는 더 큰 값이 필요합니다: PDF/X 표준 없이 PDF 1.6 이상을 선택하거나 더 작은 아트보드를 사용하세요
 @msg	page {0} does not exist (the PDF has {1})	페이지 {0}이(가) 없습니다(PDF의 페이지 수: {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: 페이지 {n}이(가) 없습니다(파일의 페이지 수: 1)
 @msg	the PDF has no pages	PDF에 페이지가 없습니다
@@ -4576,6 +4612,7 @@ theme	Appearance	외관
 @msg	{label}…	{label}…
 @msg	no blend options	혼합 옵션이 없습니다
 @msg	bad color {v}	잘못된 색상 {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel`은 null, 레이어 색상 이름 또는 #rrggbb입니다
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio은(는) 0.1에서 10 사이의 숫자여야 합니다
 @msg	the Color Picker is not open	색상 피커가 열려 있지 않습니다
 @msg	the Simplify slider is not open	단순화 슬라이더가 열려 있지 않습니다
@@ -4730,6 +4767,7 @@ theme	Appearance	외관
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}”을(를) 불러왔습니다. 단계 {n}개를 제외했습니다
 @msg	not an action set file	액션 세트 파일이 아닙니다
 @msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: 참조가 {MAX_BYTES}바이트보다 커집니다
 @msg	the action set file holds more than 1,000 actions	액션 세트 파일의 액션이 1,000개를 넘습니다
 @msg	the action set file needs a later version of VectorCraft	이 액션 세트 파일을 열려면 최신 버전의 VectorCraft가 필요합니다
 @msg	an action in the action set file has more than 10,000 steps	액션 세트 파일에 단계가 10,000개를 넘는 액션이 있습니다
@@ -4746,6 +4784,31 @@ theme	Appearance	외관
 @msg	the library item is damaged	라이브러리 항목이 손상되었습니다
 @msg	{_1} font families available	사용 가능한 글꼴 패밀리 {_1}개
 @msg	{_1} has no {_2} style	{_1}에는 {_2} 스타일이 없습니다
+	Run	실행
+	Run Script	스크립트 실행
+	Stop Script	스크립트 중지
+	Show External Script Warning	외부 스크립트 경고 표시
+	A Script Is Running	스크립트 실행 중
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
+	Do not show this warning again	이 경고를 다시 표시하지 않음
+	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	이 스크립트가 매우 많은 개체를 추가했습니다. 계속할까요, 아니면 중지하고 변경 내용을 취소할까요?
+@msg	Choose a .js or .jsx script	.js 또는 .jsx 스크립트를 선택하세요
+@msg	Ran {name}	{name} 실행됨
+@msg	The script was stopped and its changes were undone	스크립트를 중지하고 변경 내용을 취소했습니다
+@msg	a script is running: stop it or wait for it to finish	스크립트 실행 중: 중지하거나 끝날 때까지 기다리세요
+@msg	this is a compiled script, which cannot be run; use its source text	컴파일된 스크립트이므로 실행할 수 없습니다. 소스 텍스트를 사용하세요
+@msg	the script is not UTF-8 text	스크립트가 UTF-8 텍스트가 아닙니다
+@msg	the script is too large to run	스크립트가 너무 커서 실행할 수 없습니다
+@msg	a drag or an undo group is open; finish it before running a script	드래그 또는 실행 취소 그룹이 열려 있습니다. 스크립트를 실행하기 전에 완료하세요
+@msg	the script left a document that cannot be kept	스크립트가 유지할 수 없는 문서를 남겼습니다
+@msg	the script is no longer in the Scripts folder	스크립트가 더 이상 Scripts 폴더에 없습니다
+	Some scripts were not listed	일부 스크립트가 나열되지 않았습니다
+	The Scripts folder cannot be read	Scripts 폴더를 읽을 수 없습니다
+@msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
+@msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다
+@msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
@@ -5157,7 +5220,8 @@ lighting	Light	광원
 	Bevel both sides	양면 베벨
 	Presets	사전 설정
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	오브젝트에는 3D 효과를 하나만 적용할 수 있습니다. 기존 효과의 옵션을 편집하거나 먼저 제거하십시오.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}에는 현재 패스 또는 컴파운드 패스가 필요합니다. 문자, 이미지 및 그룹을 먼저 패스로 변환하십시오.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label}에는 현재 패스, 컴파운드 패스, 문자, 그룹, 블렌드 또는 심볼 인스턴스가 필요합니다. 기타 개체를 먼저 확장하십시오.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}은(는) 이미지로 입체를 만들 수 없습니다. 먼저 개체 › 이미지 추적 › 만들기로 추적하십시오.
 @msg	{label} requires a shape with at least two anchors	{label}에는 고정점이 두 개 이상인 모양이 필요합니다
 @msg	The shape is too complex for a 3D effect	모양이 너무 복잡하여 3D 효과를 적용할 수 없습니다
 @msg	The 3D surface is too complex; simplify the shape	3D 표면이 너무 복잡합니다. 모양을 단순화하십시오
@@ -5165,6 +5229,11 @@ lighting	Light	광원
 @msg	unknown parameter `{key}`; did you mean `{near}`?	알 수 없는 매개변수 `{key}`: `{near}`을(를) 의미하셨습니까?
 @msg	unknown parameter `{key}`; the command takes no parameters	알 수 없는 매개변수 `{key}`: 이 명령에는 매개변수가 없습니다
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
+@msg	the params must be an object, not {got}	매개변수는 객체여야 합니다({got} 사용 불가)
+@msg	unknown parameter `{path}`; the object takes no keys	알 수 없는 매개변수 `{path}`: 이 객체는 키를 받지 않습니다
+@msg	unknown parameter `{path}`; it takes: {keys}	알 수 없는 매개변수 `{path}`: 받는 매개변수: {keys}
+@msg	missing `{path}`	`{path}`이(가) 없습니다
+@msg	`{path}` must be {expected}, not {got}	`{path}`은(는) {expected}이어야 합니다({got} 사용 불가)
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF 또는 BMP 이미지가 아닙니다
@@ -5211,6 +5280,7 @@ lighting	Light	광원
 	Preview (1 inch on the page)	미리 보기 (페이지의 1인치)
 	Set as Default	기본값으로 설정
 	 out from a highlighted edge to place its dimension  |  	 강조된 가장자리에서 바깥쪽으로 끌어 치수 배치  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 으로 두 점을 지정한 다음 이동하고 클릭하여 정렬, 가로 또는 세로 치수 배치  |  
 	 cancels  |  Double-click the tool for options	 취소  |  도구를 두 번 클릭하면 옵션
 	Linear	선형
 	Angular	각도
@@ -5245,12 +5315,14 @@ lighting	Light	광원
 @msg	Measured anchor no longer exists	측정한 고정점이 더 이상 없습니다
 @msg	Measured segment no longer exists	측정한 세그먼트가 더 이상 없습니다
 @msg	Non-finite dimension	유한하지 않은 치수
+@msg	Only linear dimensions are horizontal or vertical	선형 치수만 가로 또는 세로로 지정할 수 있습니다
 @msg	Scale Text Attributes: selected type has no scale to bake	텍스트 속성 크기 조절: 선택한 텍스트에 적용할 크기 조절이 없습니다
 @msg	Scale must be drawing:real, for example 1:10	축척은 도면:실제 형식이어야 합니다(예: 1:10)
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	축척 비율은 1:1000000에서 1000000:1 사이여야 합니다
 @msg	Second measured segment no longer exists	두 번째 측정 세그먼트가 더 이상 없습니다
 @msg	Unknown dimension mode	알 수 없는 치수 모드
 @msg	Unknown dimension option {k}	알 수 없는 치수 옵션 {k}
+@msg	Unknown dimension orientation	알 수 없는 치수 방향
 @msg	Unknown dimension style	알 수 없는 치수 스타일
 @msg	Unknown unit	알 수 없는 단위
 # Revolve cap description
@@ -5514,6 +5586,20 @@ axis	Y Axis	Y축
 	Show its progress, see Cancel and write log lines	진행률 표시, 취소 감지 및 로그 줄 쓰기
 	Keep settings of its own	자체 설정 보관
 	Keep a cache of its own, which you can clear	지울 수 있는 자체 캐시 보관
+	Run these commands on the document: {ids}	문서에서 다음 명령 실행: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}”의 `commandAllowlist`에 플러그인이 호출할 수 없는 `{id}`가 있습니다
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: 매니페스트의 `commandAllowlist`에 없습니다
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID 또는 인수가 모듈의 메모리 밖에 있습니다
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID 또는 인수가 UTF-8이 아닙니다
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: 인수가 JSON 객체가 아닙니다
+@msg	only a filter with the usual budget declares `commandAllowlist`	보통 예산의 필터만 `commandAllowlist`를 선언할 수 있습니다
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	명령 호출(실행당 {MAX_CALLS}회, {MAX_CALL_BYTES}바이트)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	명령 호출 크기(vc_call `{shown}`: {len}바이트, 제한 {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist`의 명령은 최대 {MAX_ALLOWED_COMMANDS}개입니다
+@msg	a plug-in may not call this command	플러그인은 이 명령을 호출할 수 없습니다
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist`에는 `commands` 권한이 필요하고, `commands`에는 `commandAllowlist`가 필요합니다
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist`의 `{shown}`은(는) 명령 ID가 아니거나 두 번 나열되었습니다
 	Clear Plug-in Cache	플러그인 캐시 지우기
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`{permission}` 권한에는 플러그인 API 수준 {PROGRESS_API}이(가) 필요합니다. `api` {PROGRESS_API}을(를) 지정하십시오
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	모듈이 `env.{name}`을(를) 호스트와 다른 형식으로 가져옵니다. 호스트의 형식은 {signature}입니다
@@ -5600,6 +5686,14 @@ axis	Y Axis	Y축
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
 	Add to Symbols	심볼에 추가
 	Basic Shapes	기본 모양
+	Button	버튼
+	Panel	패널
+	UI Frames	UI 프레임
+	Map Markers	지도 마커
+	Pin	핀
+	Flag	깃발
+	Crosshair	십자선
+	Checkpoint	체크포인트
 	Open Symbol Library	심볼 라이브러리 열기
 	Save Symbol Library	심볼 라이브러리 저장
 	Save Symbol Library…	심볼 라이브러리 저장…
@@ -5654,6 +5748,11 @@ axis	Y Axis	Y축
 	User Brush Library 9	사용자 브러시 라이브러리 9
 	User Brush Library 10	사용자 브러시 라이브러리 10
 	Art Ribbons	아트 리본
+	Zigzag	지그재그
+	Burst Ray	버스트 레이
+	Dash Trail	대시 트레일
+	Speed Line	스피드 라인
+	Game Trails	게임 트레일
 	Calligraphic Nibs	서예 펜촉
 	Pattern Borders	패턴 테두리
 	Scatter Shapes	흩뿌리기 모양
@@ -5674,6 +5773,8 @@ axis	Y Axis	Y축
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	포인트 문자
 	Area Text	영역 문자
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기
@@ -6091,7 +6192,7 @@ breakText	Glyphs	글리프
 	Reset Symbol Instance	심볼 인스턴스 재설정
 @msg	type must be static or dynamic, not {v}	type은 static 또는 dynamic이어야 합니다({v}는 안 됨)
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}`은(는) 정적 심볼입니다. 먼저 심볼 유형을 동적으로 설정하세요
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	심볼 인스턴스에서 선택한 패스, 컴파운드 패스 또는 문자는 칠과 선의 단색만 변경할 수 있습니다
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	심볼 인스턴스에서 선택한 패스, 복합 패스 또는 텍스트는 칠, 선, 불투명도, 혼합만 변경할 수 있습니다
 @msg	path must be a list of child indices	path는 자식 인덱스 목록이어야 합니다
 @msg	no object at path {shown} in the symbol's art	심볼 아트의 경로 {shown}에 개체가 없습니다
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity 및/또는 blend를 지정하세요
@@ -6241,3 +6342,24 @@ breakText	Glyphs	글리프
 	Align to Pixel Grid	픽셀 격자에 정렬
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
+	Ignore All	모두 무시
+	Add to Dictionary	사전에 추가
+	No Suggestions	제안 없음
+	Edit Custom Dictionary	사용자 사전 편집
+	Entry:	항목:
+# Script Console
+	Script Console	스크립트 콘솔
+	Clear Script Console	스크립트 콘솔 지우기
+	Copy Script Console	스크립트 콘솔 복사
+	Copy All	모두 복사
+	Copy Selected	선택 항목 복사
+	Finished	완료됨
+	Ended with an error	오류로 종료됨
+	Out of fuel	명령 한도에 도달함
+	Ended at a host limit	호스트 한도에서 종료됨
+	Ended at a limit	한도에서 종료됨
+	Stopped	중지됨
+	Ended by an internal fault	내부 오류로 종료됨
+	{ms} ms, {calls} host calls	{ms} ms, 호스트 호출 {calls}회
+	{dropped} earlier lines dropped, {cut} lines cut	이전 줄 {dropped}개 삭제됨, 줄 {cut}개 잘림
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다

@@ -9,6 +9,7 @@ use serde_json::json;
 use vectorcraft_color::cms;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::colormgmt::{PROFILES_KEY, doc_profiles};
+use vectorcraft_engine::store::MAX_PRESET_FILE;
 use vectorcraft_geom::Affine;
 use vectorcraft_render::{RenderOptions, Renderer};
 use vectorcraft_testkit::fixtures::{exec, id_of, rect, select, session};
@@ -425,4 +426,109 @@ fn loading_the_working_rgb_profile_again_takes_effect_at_once() {
     assert!(in_p3.iter().zip(want).any(|(a, b)| (a - b).abs() > 0.05), "Display P3 {in_p3:?} vs ProPhoto {want:?}");
     assert!(after.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-4), "after the reload {after:?}, want {want:?}");
     assert!(redrawn, "the canvas redraws");
+}
+
+/// A folder of its own for the test `tag`, empty.
+fn fresh_dir(tag: &str) -> std::path::PathBuf {
+    let dir = vectorcraft_testkit::temp_dir(&format!("color-settings-{tag}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    dir
+}
+
+/// An ICC file of an RGB profile named `name` (a built-in one with its description replaced by a
+/// name of the same length).
+#[allow(clippy::unwrap_used, reason = "a test helper: a missing built-in profile fails the test")]
+fn icc_named(name: &str) -> Vec<u8> {
+    let builtin = cms::DISPLAY_P3;
+    assert_eq!(builtin.len(), name.len());
+    let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+    let mut bytes = cms::icc_bytes(builtin).unwrap().to_vec();
+    let (from, to) = (utf16(builtin), utf16(name));
+    let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+    bytes[at..at + to.len()].copy_from_slice(&to);
+    bytes
+}
+
+/// Puts the default Color Settings back, unregisters `profile` and deletes `paths` when dropped,
+/// also after a failed assertion, so the next test starts from the defaults.
+struct ColorSettingsReset {
+    profile: Option<&'static str>,
+    paths: Vec<std::path::PathBuf>,
+}
+
+impl Drop for ColorSettingsReset {
+    /// The defaults back, the profile unregistered and the paths deleted.
+    fn drop(&mut self) {
+        let _ = cms::set_active(&cms::ColorSettings::default());
+        if let Some(name) = self.profile {
+            cms::unregister_icc(name);
+        }
+        for path in &self.paths {
+            let _ = std::fs::remove_dir_all(path).or_else(|_| std::fs::remove_file(path));
+        }
+    }
+}
+
+/// #6335: Edit › Color Settings come back in the next session: the working spaces (a loaded
+/// profile among them, registered again by the profile store first), the intent and black point
+/// compensation. A session nobody attached a file to keeps nothing, and nothing is written before
+/// the settings change.
+#[test]
+fn color_settings_come_back_in_the_next_session() {
+    let _g = settings();
+    let root = fresh_dir("color-settings");
+    let (profiles, file) = (root.join("Color Profiles"), root.join("Color Settings.json"));
+    let loaded = "StoreRGB-6";
+    let icc = vectorcraft_testkit::temp_dir("store-color-settings").join("loaded.icc");
+    let _reset = ColorSettingsReset { profile: Some(loaded), paths: vec![root.clone(), icc.clone()] };
+    std::fs::write(&icc, icc_named(loaded)).unwrap();
+
+    let mut a = Session::new();
+    a.attach_profile_store(profiles.clone());
+    a.attach_color_settings(file.clone());
+    a.execute("color.loadProfile", &json!({"path": icc.to_str().unwrap()})).unwrap();
+    a.execute("edit.colorSettings", &json!({})).unwrap();
+    assert!(!file.exists(), "nothing to keep before the settings change");
+    a.execute("edit.colorSettings", &json!({"rgb": loaded, "cmyk": cms::DEVICE_CMYK, "intent": "perceptual", "bpc": false})).unwrap();
+    let chosen = cms::ColorSettings { rgb: loaded.into(), cmyk: cms::DEVICE_CMYK.into(), intent: cms::Intent::Perceptual, bpc: false };
+    assert_eq!(cms::active_settings(), chosen);
+
+    // The next start begins with the defaults and without the loaded profile, which the profile
+    // store registers again before the settings name it.
+    cms::set_active(&cms::ColorSettings::default()).unwrap();
+    assert!(cms::unregister_icc(loaded));
+    let mut b = Session::new();
+    b.attach_profile_store(profiles);
+    b.attach_color_settings(file.clone());
+    assert_eq!(cms::active_settings(), chosen, "the saved settings are the active ones again");
+
+    // Without a file, a change is kept only for the process.
+    let mut c = Session::new();
+    c.execute("edit.colorSettings", &json!({"bpc": true})).unwrap();
+    let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert_eq!(saved, chosen, "the file is left alone");
+}
+
+/// #6335: saved Color Settings that can't be used (a profile that is gone, a damaged or oversized
+/// file) leave the defaults and the file as it is; the next change writes over it.
+#[test]
+fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
+    let _g = settings();
+    let dir = fresh_dir("color-settings-bad");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    let file = dir.join("Color Settings.json");
+    std::fs::create_dir_all(&dir).unwrap();
+    let gone = json!({"rgb": cms::SRGB, "cmyk": "A Profile That Is Gone", "intent": "perceptual", "bpc": false}).to_string().into_bytes();
+    let oversized = vec![b' '; MAX_PRESET_FILE as usize + 1];
+    for bytes in [gone, b"not json".to_vec(), oversized] {
+        cms::set_active(&cms::ColorSettings::default()).unwrap();
+        std::fs::write(&file, &bytes).unwrap();
+        let mut s = Session::new();
+        s.attach_color_settings(file.clone());
+        assert_eq!(cms::active_settings(), cms::ColorSettings::default());
+        assert_eq!(std::fs::read(&file).unwrap(), bytes, "left as it is");
+        s.execute("edit.colorSettings", &json!({"bpc": false})).unwrap();
+        let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        assert!(!saved.bpc && saved.cmyk == cms::GENERIC_CMYK, "written over by the next change: {saved:?}");
+    }
 }
