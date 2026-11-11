@@ -318,6 +318,29 @@ fn the_folder_is_read_at_the_first_frame_and_when_the_window_becomes_active() {
 }
 
 #[test]
+fn a_read_asked_for_during_another_runs_when_that_one_ends() {
+    let dir = folder("pending");
+    let app = app(&dir);
+    write(&dir, "first.js", "");
+    let ctx = egui::Context::default();
+    let frame = || {
+        let mut out = ctx.run_ui(egui::RawInput { focused: true, ..Default::default() }, |ui| scripts_menu::poll(&app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    frame();
+    scripts_menu::wait();
+    // A read that has passed the folder when a script is added, and the File menu opening then.
+    scripts_menu::refresh(&app, None);
+    scripts_menu::end_untaken();
+    write(&dir, "added.js", "");
+    scripts_menu::refresh(&app, None);
+    frame();
+    scripts_menu::wait();
+    assert!(shape(&scripts()).starts_with("added, first, -"), "{}", shape(&scripts()));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn an_app_without_a_scripts_folder_keeps_the_two_fixed_items() {
     let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
     read(&app);

@@ -38,6 +38,8 @@ struct State {
     revision: u64,
     /// The listing being read on another thread.
     reading: Option<Receiver<Listing>>,
+    /// Another read was asked for while one was under way; [`poll`] starts it when that one ends.
+    pending: bool,
     /// A first read was asked for.
     started: bool,
     /// The window was the active one at the last [`poll`].
@@ -94,12 +96,14 @@ pub fn revision() -> u64 {
     state().revision
 }
 
-/// Read the Scripts folder again on another thread, unless a read is under way or the session has
-/// no folder (the web, and a run without preferences). `ctx` is asked to draw when the read ends.
+/// Read the Scripts folder again on another thread, unless the session has no folder (the web, and
+/// a run without preferences). While a read is under way, another read starts when it ends
+/// ([`poll`]). `ctx` is asked to draw when the read ends.
 pub fn refresh(app: &VectorcraftApp, ctx: Option<&egui::Context>) {
     let Some(root) = app.session.scripts_dir().map(Path::to_path_buf) else { return };
     let mut state = state();
     if state.reading.is_some() {
+        state.pending = true;
         return;
     }
     let (tx, rx) = std::sync::mpsc::channel();
@@ -119,7 +123,7 @@ pub fn refresh(app: &VectorcraftApp, ctx: Option<&egui::Context>) {
 }
 
 /// Once per iteration: start a read on the first one and when the window becomes the active one,
-/// and take in a read that ended.
+/// take in a read that ended, and then start a read asked for while it was under way.
 pub fn poll(app: &VectorcraftApp, ctx: &egui::Context) {
     let focused = ctx.input(|i| i.focused);
     let start = {
@@ -132,6 +136,17 @@ pub fn poll(app: &VectorcraftApp, ctx: &egui::Context) {
         refresh(app, Some(ctx));
     }
     take(false);
+    let again = {
+        let mut state = state();
+        let again = state.pending && state.reading.is_none();
+        if again {
+            state.pending = false;
+        }
+        again
+    };
+    if again {
+        refresh(app, Some(ctx));
+    }
 }
 
 /// Take in the read under way: when it has ended, or with `wait` once it ends.
@@ -156,6 +171,19 @@ fn take(wait: bool) {
 #[cfg(test)]
 pub(crate) fn wait() {
     take(true);
+}
+
+/// Wait for the read under way to end and leave its listing to be taken in, so the read is under
+/// way until the next [`poll`].
+#[cfg(test)]
+pub(crate) fn end_untaken() {
+    let mut state = state();
+    let Some(reading) = &state.reading else { return };
+    let (tx, rx) = std::sync::mpsc::channel();
+    if let Ok(listing) = reading.recv() {
+        let _ = tx.send(listing);
+    }
+    state.reading = Some(rx);
 }
 
 /// File › Scripts' items: the listed scripts and subfolders, a note when some may be missing or
