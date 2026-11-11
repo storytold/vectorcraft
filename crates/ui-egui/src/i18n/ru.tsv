@@ -6895,8 +6895,14 @@ shape	Open	Открытый
 	Ended at a limit	Завершено на лимите
 	Stopped	Остановлено
 	Ended by an internal fault	Завершено из-за внутренней ошибки
-	{ms} ms, {calls} host calls	{ms} мс, вызовов хоста: {calls}
-	{dropped} earlier lines dropped, {cut} lines cut	Отброшено прежних строк: {dropped}, обрезано строк: {cut}
+	time unavailable	время недоступно
+	{ms} ms	{ms} мс
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	самые медленные: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} вызов хоста|{n} вызова хоста|{n} вызовов хоста
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} прежняя строка отброшена|{n} прежние строки отброшены|{n} прежних строк отброшено
+@plural	{n} line cut|{n} lines cut	{n} строка обрезана|{n} строки обрезаны|{n} строк обрезано
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`
 
 # Deferred plug-in effects

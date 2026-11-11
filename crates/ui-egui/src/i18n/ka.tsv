@@ -6867,8 +6867,14 @@ font-script	Japanese	იაპონური
 	Ended at a limit	დასრულდა ლიმიტზე
 	Stopped	შეჩერდა
 	Ended by an internal fault	დასრულდა შიდა შეცდომის გამო
-	{ms} ms, {calls} host calls	{ms} ms, ჰოსტის {calls} გამოძახება
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ძველი სტრიქონი წაიშალა, {cut} სტრიქონი შემოკლდა
+	time unavailable	დრო მიუწვდომელია
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	ყველაზე ნელი: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	ჰოსტის {n} გამოძახება
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ძველი სტრიქონი წაიშალა
+@plural	{n} line cut|{n} lines cut	{n} სტრიქონი შემოკლდა
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
 
 # Deferred plug-in effects

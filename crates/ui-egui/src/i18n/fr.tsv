@@ -6801,8 +6801,14 @@ breakText	Glyphs	Glyphes
 	Ended at a limit	Terminé à une limite
 	Stopped	Arrêté
 	Ended by an internal fault	Terminé par une erreur interne
-	{ms} ms, {calls} host calls	{ms} ms, {calls} appels à l’hôte
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} lignes antérieures supprimées, {cut} lignes coupées
+	time unavailable	temps indisponible
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	plus lentes : {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} appel à l’hôte|{n} appels à l’hôte
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ligne antérieure supprimée|{n} lignes antérieures supprimées
+@plural	{n} line cut|{n} lines cut	{n} ligne coupée|{n} lignes coupées
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` et `last` doivent être des numéros de lignes que la console contient, `first` avant `last`
 
 # Deferred plug-in effects

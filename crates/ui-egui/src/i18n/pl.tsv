@@ -6662,8 +6662,14 @@ breakText	Glyphs	Glify
 	Ended at a limit	Zakończono na limicie
 	Stopped	Zatrzymano
 	Ended by an internal fault	Zakończono z powodu błędu wewnętrznego
-	{ms} ms, {calls} host calls	{ms} ms, wywołania hosta: {calls}
-	{dropped} earlier lines dropped, {cut} lines cut	Odrzucone wcześniejsze wiersze: {dropped}, skrócone wiersze: {cut}
+	time unavailable	czas niedostępny
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	najwolniejsze: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} wywołanie hosta|{n} wywołania hosta|{n} wywołań hosta
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} odrzucony wcześniejszy wiersz|{n} odrzucone wcześniejsze wiersze|{n} odrzuconych wcześniejszych wierszy
+@plural	{n} line cut|{n} lines cut	{n} skrócony wiersz|{n} skrócone wiersze|{n} skróconych wierszy
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` muszą być numerami wierszy przechowywanych w konsoli, `first` przed `last`
 
 # Deferred plug-in effects

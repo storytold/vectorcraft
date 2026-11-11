@@ -6841,8 +6841,14 @@ breakText	Glyphs	Merkit
 	Ended at a limit	Päättyi rajaan
 	Stopped	Pysäytetty
 	Ended by an internal fault	Päättyi sisäiseen virheeseen
-	{ms} ms, {calls} host calls	{ms} ms, {calls} isäntäkutsua
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} aiempaa riviä poistettu, {cut} riviä katkaistu
+	time unavailable	aika ei käytettävissä
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	hitaimmat: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} isäntäkutsu|{n} isäntäkutsua
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} aiempi rivi poistettu|{n} aiempaa riviä poistettu
+@plural	{n} line cut|{n} lines cut	{n} rivi katkaistu|{n} riviä katkaistu
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ja `last` on oltava konsolin säilyttämien rivien numeroita, `first` ennen arvoa `last`
 
 # Deferred plug-in effects

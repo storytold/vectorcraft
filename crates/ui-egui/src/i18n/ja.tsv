@@ -6492,8 +6492,14 @@ breakText	Glyphs	字形
 	Ended at a limit	上限で終了
 	Stopped	停止
 	Ended by an internal fault	内部エラーで終了
-	{ms} ms, {calls} host calls	{ms} ms、ホスト呼び出し {calls} 回
-	{dropped} earlier lines dropped, {cut} lines cut	古い行 {dropped} 行を破棄、{cut} 行を切り詰め
+	time unavailable	時間を取得できません
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}、{calls}
+	slowest: {commands}	最も遅いコマンド：{commands}
+	{dropped}, {cut}	{dropped}、{cut}
+@plural	{n} host call|{n} host calls	ホスト呼び出し {n} 回
+@plural	{n} earlier line dropped|{n} earlier lines dropped	古い行 {n} 行を破棄
+@plural	{n} line cut|{n} lines cut	{n} 行を切り詰め
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` と `last` には、コンソールが保持している行の番号を、`first` が `last` より前になるよう指定してください
 
 # Deferred plug-in effects

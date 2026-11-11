@@ -6546,8 +6546,14 @@ breakText	Glyphs	Glif
 	Ended at a limit	Berakhir pada batas
 	Stopped	Dihentikan
 	Ended by an internal fault	Berakhir karena galat internal
-	{ms} ms, {calls} host calls	{ms} ms, {calls} panggilan host
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} baris lama dibuang, {cut} baris dipotong
+	time unavailable	waktu tidak tersedia
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	paling lambat: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} panggilan host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} baris lama dibuang
+@plural	{n} line cut|{n} lines cut	{n} baris dipotong
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Segarkan efek yang ditunda

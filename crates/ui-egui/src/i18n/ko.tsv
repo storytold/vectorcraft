@@ -6388,8 +6388,14 @@ breakText	Glyphs	글리프
 	Ended at a limit	한도에서 종료됨
 	Stopped	중지됨
 	Ended by an internal fault	내부 오류로 종료됨
-	{ms} ms, {calls} host calls	{ms} ms, 호스트 호출 {calls}회
-	{dropped} earlier lines dropped, {cut} lines cut	이전 줄 {dropped}개 삭제됨, 줄 {cut}개 잘림
+	time unavailable	시간 정보 없음
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	가장 느린 명령: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	호스트 호출 {n}회
+@plural	{n} earlier line dropped|{n} earlier lines dropped	이전 줄 {n}개 삭제됨
+@plural	{n} line cut|{n} lines cut	줄 {n}개 잘림
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다
 
 # Deferred plug-in effects
