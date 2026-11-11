@@ -751,6 +751,17 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                     let x = g.xf.translation().x - offset;
                     (advance, if (x - g.origin.x).abs() > PLACE_TOLERANCE { x } else { g.origin.x })
                 }
+                // The space before a line's first character (`kerningBefore`) is in its advance and
+                // moves it along the line: a reader sets it from where it is drawn, without it.
+                None if !lay.vertical
+                    && !g.rtl
+                    && g.len > 0
+                    && run.style.kerning_before != 0.0
+                    && vectorcraft_text::edit::starts_line(&plain, g.byte) =>
+                {
+                    let before = Some(g.xf.translation().x - g.origin.x).filter(|b| b.is_finite()).unwrap_or(0.0);
+                    (g.advance - before, g.origin.x + before)
+                }
                 None => (g.advance, g.origin.x),
             };
             let src: String = source(line.glyph_start + k, g).chars().filter(|c| *c != '\u{ad}').map(|c| run.style.digits.map(c)).collect();

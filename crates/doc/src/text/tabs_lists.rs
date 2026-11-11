@@ -356,6 +356,7 @@ impl ParaList {
             position: CharPosition::Normal,
             tracking: 0.0,
             kerning: None,
+            kerning_before: 0.0,
             optical_kerning: first.optical_kerning,
             tate_chu_yoko: false,
             underline: false,

@@ -1430,6 +1430,9 @@ impl Picked {
                 stroke_width: st.stroke_width,
                 overprint_fill: st.overprint_fill,
                 overprint_stroke: st.overprint_stroke,
+                // The space before a line's first character belongs to where the character is,
+                // not to how it looks: a sample from one doesn't move the target's (#5111).
+                kerning_before: st.kerning_before,
                 ..cs.clone()
             };
         }

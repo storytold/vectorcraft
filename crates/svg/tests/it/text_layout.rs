@@ -109,6 +109,30 @@ fn rich_text_writes_spacing_shift_and_scale() {
     assert_eq!(attr(tags[1], "y"), attr(tags[0], "y"));
 }
 
+/// The space before a line's first character (`kerningBefore`, #5111) moves the line's first
+/// `<tspan>` to where the character is drawn, left aligned or anchored at a centred line's centre.
+#[test]
+fn the_space_before_a_lines_first_character_moves_its_tspan() {
+    let before = CharStyle { kerning_before: 250.0, ..style(12.0) };
+    // 250/1000 em of 12 pt: 3 pt. The second paragraph's first character takes it too; the "O" after
+    // the first "H" is inside its line, so its value does nothing.
+    let runs = vec![run("HO", before.clone()), run("H\n", style(12.0)), run("H", before.clone()), run("O", style(12.0))];
+    let svg = export(&area_doc(runs, 200.0, Justify::Left), &ExportOptions::default());
+    // The first <tspan> on each baseline.
+    let mut starts: Vec<(f64, f64)> = vec![];
+    for t in tspans(&svg) {
+        let (x, y) = (attr(t, "x").unwrap(), attr(t, "y").unwrap());
+        if starts.last().is_none_or(|&(_, last)| last != y) {
+            starts.push((x, y));
+        }
+    }
+    assert_eq!(starts.iter().map(|s| s.0).collect::<Vec<_>>(), vec![3.0, 3.0], "{svg}");
+    // Centred, the line is 3 pt longer and the anchor sits at the middle of what a reader draws.
+    let svg = export(&area_doc(vec![run("H", before.clone()), run("OH", style(12.0))], 200.0, Justify::Center), &ExportOptions::default());
+    let x = tspans(&svg).iter().find_map(|t| attr(t, "x")).unwrap();
+    assert!((x - 101.5).abs() < 0.01, "{svg}");
+}
+
 /// Proportional Metrics (#966) is written as the `palt` feature, beside the character's own.
 #[test]
 fn proportional_metrics_write_palt() {

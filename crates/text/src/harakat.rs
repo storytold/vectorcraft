@@ -51,6 +51,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         leading,
         tracking,
         kerning,
+        kerning_before,
         optical_kerning,
         baseline_shift,
         h_scale,
@@ -100,6 +101,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         && leading == &b.leading
         && tracking == &b.tracking
         && kerning == &b.kerning
+        && kerning_before == &b.kerning_before
         && optical_kerning == &b.optical_kerning
         && baseline_shift == &b.baseline_shift
         && h_scale == &b.h_scale
