@@ -57,22 +57,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         divider(ui);
     }
     let is_image = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Image(_)));
-    if let Some((ids, pixelated)) = selected_image_pixelated(app) {
-        if ids.len() == 1 {
-            image_section(app, ui);
-        } else {
-            section_header(ui, tl!("Image"));
-        }
-
-        if widgets::check3(ui, tl!("Pixelated"), pixelated, true) {
-            let next = !pixelated.unwrap_or(false);
-            if let Err(e) = app.run("object.setProps", json!({"ids": ids, "pixelated": next})) {
-                app.status(e);
-            }
-        }
-
-        divider(ui);
-    }
+    image_properties_section(app, ui);
     if let Some((preset, view)) = crate::panels::image_trace::selected_trace(app) {
         trace_section(app, ui, &preset, view);
         divider(ui);
@@ -386,6 +371,28 @@ fn selected_image_pixelated(app: &VectorcraftApp) -> Option<(Vec<u64>, Option<bo
     }
 
     Some((ids, if mixed { None } else { value }))
+}
+
+/// Show image information and the per-image interpolation setting.
+fn image_properties_section(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some((ids, pixelated)) = selected_image_pixelated(app) else {
+        return;
+    };
+
+    if ids.len() == 1 {
+        image_section(app, ui);
+    } else {
+        section_header(ui, tl!("Image"));
+    }
+
+    if widgets::check3(ui, tl!("Pixelated"), pixelated, true) {
+        let next = !pixelated.unwrap_or(false);
+        if let Err(e) = app.run("object.setProps", json!({"ids": ids, "pixelated": next})) {
+            app.status(e);
+        }
+    }
+
+    divider(ui);
 }
 
 /// The one selected image: its file (or Embedded), colour mode and resolution, and the Links
