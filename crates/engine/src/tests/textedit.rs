@@ -570,6 +570,7 @@ fn character_ruby_and_path_handle_refuse_a_param_of_the_wrong_type() {
         ("text.setStyle", json!({"size": 30, "justify": {"value": "center"}}), string("justify")),
         ("text.setStyle", json!({"features": ["dlig", 5]}), tags.clone()),
         ("text.setStyle", json!({"leading": true}), "leading must be a number or \"auto\"".to_string()),
+        ("text.setStyle", json!({"leading": "12abc"}), "leading must be a number or \"auto\"".to_string()),
         ("text.setRangeStyle", json!({"id": id.0, "font": 5}), string("font")),
         ("text.setRangeStyle", json!({"id": id.0, "size": 30, "style": false}), string("style")),
         ("text.setRangeStyle", json!({"id": id.0, "features": [null]}), tags),
