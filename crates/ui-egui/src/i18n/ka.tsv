@@ -3385,7 +3385,7 @@ theme	Appearance	იერსახე
 	Use Japanese Crop Marks	იაპონური ჭრის ნიშნების გამოყენება
 	Use Low Resolution Proxy for Linked EPS	დაბალი გარჩევადობის პროქსის გამოყენება დაკავშირებული EPS-ისთვის
 	Use Precise Cursors	ზუსტი კურსორების გამოყენება
-	Caps Lock Cursor State	Caps Lock-ის მდგომარეობა კურსორისთვის
+	Caps Lock Cursor State	Caps Lock-ის მდგომარეობა (კურსორი)
 	Use Preview Bounds	გადახედვის საზღვრების გამოყენება
 	When pasting text	ტექსტის ჩასმისას
 	XML ID	XML ID
@@ -6353,7 +6353,7 @@ anchor	Points:	წერტილები:
 	Parametric Shape Tool	პარამეტრული ფიგურის ხელსაწყო
 	Parametric Shape	პარამეტრული ფიგურა
 	Edit Parametric Shape	პარამეტრული ფიგურის რედაქტირება
-	Configure Shape	ფიგურის პარამეტრების დაყენება
+	Configure Shape	ფიგურის პარამეტრების შეცვლა
 	Convert to Parametric Shape	პარამეტრულ ფიგურად გარდაქმნა
 	Ring	რგოლი
 	Heart	გული
@@ -6655,7 +6655,7 @@ breakText	Glyphs	გლიფები
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	ყველა ღია დოკუმენტის ექსპორტი PDF-ად
 	Export All Open Documents as SVG	ყველა ღია დოკუმენტის ექსპორტი SVG-ად
-	Export All Open Documents	ყველა ღია დოკუმენტის ექსპორტი
+	Export All Open Documents	ყველა ღია დოკუმენტის ექსპორტირება
 @msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
 # Document Tools add-on: Batch Trace Folder (#4921).
@@ -6912,9 +6912,3 @@ font-script	Japanese	იაპონური
 	{ms} ms, {calls} host calls	{ms} ms, ჰოსტის {calls} გამოძახება
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ძველი სტრიქონი წაიშალა, {cut} სტრიქონი შემოკლდა
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
-
-# Deferred plug-in effects
-	Refresh Deferred Effects	გადადებული ეფექტების განახლება
-	Deferred Effects	გადადებული ეფექტები
-@msg	no plug-in effect is deferred	პლაგინის ეფექტი არ არის გადადებული
-@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.
