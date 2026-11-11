@@ -550,8 +550,28 @@ impl<'a> Interp<'a> {
 
     /// An object as the scanner gives it: with `immediate`, its `//name`s replaced by their
     /// values (down through procedures), as they are when read.
-    pub fn scanned(&self, o: Obj, immediate: bool) -> Res<Obj> {
+    pub fn scanned(&mut self, o: Obj, immediate: bool) -> Res<Obj> {
+        // Every scan builds a fresh string or procedure, so a loop that rescans one text is charged
+        // for each copy it keeps, not only for the text.
+        self.charge_scanned(&o, 0)?;
         if immediate { self.resolve(o, 0) } else { Ok(o) }
+    }
+
+    /// Count the storage of the string or procedure the scanner just made against [`MAX_MEMORY`],
+    /// and the time to build it.
+    fn charge_scanned(&mut self, o: &Obj, depth: usize) -> Res {
+        match o {
+            Obj::Str(s) => {
+                self.alloc(s.len())?;
+                self.spend_bytes(s.len())
+            }
+            Obj::Array { items, .. } if depth < MAX_DEPTH as usize => {
+                self.alloc(items.len().saturating_mul(std::mem::size_of::<Obj>()))?;
+                self.spend_bytes(items.len())?;
+                items.borrow().iter().try_for_each(|i| self.charge_scanned(i, depth + 1))
+            }
+            _ => Ok(()),
+        }
     }
 
     fn resolve(&self, o: Obj, depth: usize) -> Res<Obj> {
