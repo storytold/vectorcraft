@@ -1660,7 +1660,7 @@ way. The listed scripts come first in the menu, above Check Script… and Other 
 The rest of this section is VectorCraft's own rules:
 
 - The folder is read when the app starts, each time its window becomes the active one, and, where the menus are in
-  the window (Windows and Linux), each time the File menu opens. A script added while VectorCraft runs is listed
+  the window (Windows, Linux and BSD), each time the File menu opens. A script added while VectorCraft runs is listed
   after the next of these. A read takes names only, never a script's text, and runs off the UI thread, one read at a
   time.
 - Each level is sorted by label without regard to case, with scripts and subfolders mixed. A script whose label
@@ -1684,8 +1684,9 @@ The rest of this section is VectorCraft's own rules:
 `script.listInstalled {}` returns the same listing: `{folder, scripts: [{path, label, folders}], truncated,
 unreadable}`, with the scripts in menu order and `folders` the labels of the subfolders a script is in. `folder` is
 `null` without a Scripts folder. `ui.runInstalledScript {path}` runs one of them by the `path` the listing gave, as
-its menu item does. Under `--automation-read-root`, both read the folder only when it lies inside a read root, and
-`ui.menu.list` leaves out the listed scripts outside the read roots.
+its menu item does. Under `--automation-read-root`, `script.listInstalled` lists the folder only when the folder lies
+inside a read root, `ui.runInstalledScript` runs a script only when the script lies inside one, and `ui.menu.list`
+leaves out the listed scripts outside the read roots.
 
 ```json
 {"name":"run_command","arguments":{"command":"script.listInstalled","params":{}}}
