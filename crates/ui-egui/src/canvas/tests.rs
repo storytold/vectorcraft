@@ -1208,6 +1208,73 @@ fn a_drag_from_a_ruler_onto_the_canvas_makes_a_guide() {
     assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the tool drew nothing");
 }
 
+/// An artboard's guide label colors its own guides only: a canvas guide, a guide of an artboard
+/// without a label and a guide of a deleted artboard keep the guide color preference, and a
+/// selected labeled guide takes the selection color. Hide Guides hides labeled guides too.
+#[test]
+fn artboard_guide_label_colors_only_its_own_guides() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("artboard.new", &json!({})).unwrap();
+    app.session.execute("artboard.new", &json!({})).unwrap();
+    app.session.execute("artboard.setProps", &json!({"index": 0, "guideLabel": "Red"})).unwrap();
+    app.session.execute("artboard.setProps", &json!({"index": 2, "guideLabel": "#00ff00"})).unwrap();
+    // Vertical guides at x 100 (artboard 1, Red), 520 (artboard 2, no label) and 940 (artboard
+    // 3, whose artboard is then deleted), and a horizontal canvas guide at y 150.
+    for (pos, artboard) in [(100, json!(0)), (520, json!(1)), (940, json!(2))] {
+        app.session.execute("guide.add", &json!({"vertical": true, "pos": pos, "artboard": artboard})).unwrap();
+    }
+    app.session.execute("guide.add", &json!({"vertical": false, "pos": 150})).unwrap();
+    // Deleting artboard 3 deletes its guide; a guide still naming its id (as a file might) is an
+    // orphan, drawn across the canvas.
+    let gone = app.session.active().unwrap().doc.artboards[2].id;
+    app.session.execute("artboard.setProps", &json!({"index": 2, "guideLabel": null})).unwrap();
+    app.session.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 300})).unwrap();
+    {
+        let st = app.session.active_mut().unwrap();
+        let doc = std::sync::Arc::make_mut(&mut st.doc);
+        let last = doc.guides.len() - 1;
+        doc.guides[last].artboard = Some(gone);
+    }
+    app.ui.view.guides = true;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let t = Tokens::get(&ctx);
+    let pref = LineLook::guides(&app.session.prefs, &t).color;
+    let colors = |app: &mut VectorcraftApp, at: f64, vertical: bool| -> Vec<Color32> {
+        shapes(app, &ctx)
+            .iter()
+            .filter_map(|s| match s {
+                Shape::LineSegment { points, stroke } => {
+                    let (a, b) = (xf.to_doc(points[0]), xf.to_doc(points[1]));
+                    let (u, v) = if vertical { (a.x, b.x) } else { (a.y, b.y) };
+                    ((u - at).abs() < 0.01 && (v - at).abs() < 0.01).then_some(stroke.color)
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let red = Color32::from_rgb(0xff, 0x4f, 0x4f);
+    assert_eq!(colors(&mut app, 100.0, true), [red], "the labeled artboard's guide");
+    assert_eq!(colors(&mut app, 520.0, true), [pref], "an artboard without a label");
+    assert_eq!(colors(&mut app, 150.0, false), [pref], "a canvas guide");
+    assert!(colors(&mut app, 940.0, true).is_empty(), "deleted with its artboard");
+    assert_eq!(colors(&mut app, 300.0, true), [pref], "a guide whose artboard is gone");
+    assert_ne!(red, pref);
+    // Selected, it is drawn in the selection color; deselected, in the label's again.
+    app.session.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    assert_eq!(colors(&mut app, 100.0, true), [t.selection], "selected");
+    app.session.execute("guide.select", &json!({"indexes": []})).unwrap();
+    assert_eq!(colors(&mut app, 100.0, true), [red], "deselected");
+    // A new label shows on the next frame.
+    app.session.execute("artboard.setProps", &json!({"index": 0, "guideLabel": "Black"})).unwrap();
+    assert_eq!(colors(&mut app, 100.0, true), [Color32::BLACK]);
+    app.ui.view.guides = false;
+    assert!(colors(&mut app, 100.0, true).is_empty(), "Hide Guides hides it");
+}
+
 /// #4646: a guide dragged out of a ruler shows as a line across the canvas while it is dragged,
 /// also with Preferences › Performance › Real-time Drawing and Editing off (only its position
 /// label showed then).

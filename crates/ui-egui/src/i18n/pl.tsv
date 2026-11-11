@@ -2567,6 +2567,7 @@ digits	Malayalam	Malajalam
 	File Dimensions	Wymiary pliku
 	Transforms	Przekształcenia
 	Background Color:	Kolor tła:
+	Guide Label:	Etykieta linii pomocniczych:
 	Show Center Mark	Pokaż znacznik środka
 	Show Cross Hairs	Pokaż krzyż nitkowy
 	Show Video Safe Areas	Pokaż bezpieczne obszary wideo
@@ -4417,6 +4418,7 @@ imageTrace	Outline	Kontur
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musi mieć wartość "vertical", "horizontal" lub kąt w stopniach, nie `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tło {other}: transparent, white, black lub kolor, np. "#ff8800"
 @msg	bad color {v}	nieprawidłowy kolor {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` to null, nazwa koloru warstwy lub #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musi być liczbą od 0,1 do 10
 @msg	the Color Picker is not open	Próbnik kolorów nie jest otwarty
 @msg	the Simplify slider is not open	Suwak Uprość nie jest otwarty

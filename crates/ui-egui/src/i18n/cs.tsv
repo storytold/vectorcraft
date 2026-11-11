@@ -2654,6 +2654,7 @@ digits	Malayalam	Malajálamské
 	File Dimensions	Rozměry souboru
 	Transforms	Transformace
 	Background Color:	Barva pozadí:
+	Guide Label:	Štítek vodítek:
 	Show Center Mark	Zobrazit středovou značku
 	Show Cross Hairs	Zobrazit nitkový kříž
 	Show Video Safe Areas	Zobrazit bezpečné oblasti videa
@@ -4594,6 +4595,7 @@ imageTrace	Outline	Obrys
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musí být "vertical", "horizontal" nebo úhel ve stupních, ne `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	pozadí {other}: transparent, white, black nebo barva jako "#ff8800"
 @msg	bad color {v}	chybná barva {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` je null, název barvy vrstvy nebo #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musí být číslo od 0,1 do 10
 @msg	the Color Picker is not open	Výběr barvy není otevřený
 @msg	the Simplify slider is not open	Posuvník Zjednodušit není otevřený

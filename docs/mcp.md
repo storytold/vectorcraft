@@ -4828,7 +4828,7 @@ value: true}`; the Control bar's and Properties' Scale Artwork with Artboard che
 Artboard) makes its handle drags proportional and passes `scaleArt`, as do Properties' and the Transform panel's
 artboard size fields while the tool is in use.
 
-`artboard.setProps {artboards: [{index, name?, color?, locked?, showCenterMark?, showCrossHairs?, showVideoSafeAreas?, videoRulerPixelAspectRatio?, x?, y?, width?, height?}…], scaleArt?, moveArt?, …}` sets several
+`artboard.setProps {artboards: [{index, name?, color?, guideLabel?, locked?, showCenterMark?, showCrossHairs?, showVideoSafeAreas?, videoRulerPixelAspectRatio?, x?, y?, width?, height?}…], scaleArt?, moveArt?, …}` sets several
 artboards in one undo step, each with its own fields; the other params apply to all of them. The art that moves or
 scales with each artboard is the art inside it before any of them changes, and an object inside several of them goes
 with the first one listed that moves or scales its art. An empty list and a list that names an artboard twice are
@@ -4961,6 +4961,20 @@ else, and a file's outside the range opens brought into it),
 is the width of one video pixel over its height, which `view.videoRulers` counts the artboard in. Duplicates, copies and
 the native format keep both (written only when on or not 1), and `inspect_document` adds `showVideoSafeAreas: true` and
 `videoRulerPixelAspectRatio` to an artboard that has them.
+
+Artboard Options' Guide Label: `artboard.setProps {index, guideLabel?: name | "#rrggbb" | null}` (or each entry of
+`artboards`) gives the artboard a guide label, and `artboard.new` takes one too. The canvas draws the artboard's own
+guides (`guide.add {artboard}`) in the label's color instead of the guide color preference, in the preference's style;
+canvas guides, guides of an artboard without a label and guides whose artboard is gone keep the preference's color, and
+selected guides are still drawn in the selection color. The value is a layer color's name, spelled exactly as Layer
+Options lists it (`"Light Blue"`, `"Red"`, …), or `#rrggbb`; null clears it, and new artboards and older files have none.
+The label is VectorCraft's own (no public documentation describes one): it is screen-only, so exports and print leave
+it out, the paper and the artboard's background color stay as they are, and a locked artboard's label can change.
+Anything else (a preset's index, another letter case, `#rrggbbaa`) is refused with "`guideLabel` is null, a layer
+color's name or #rrggbb", and a list with a bad value anywhere changes nothing. Duplicates and copies keep it, the
+native format writes it only when set (a preset index past the layer colors opens as none), and `inspect_document` adds
+`guideLabel` (the name or `#rrggbb`) to an artboard that has one. `artboard.setProps` adds no undo step when nothing it
+is given differs from the artboard.
 
 Artboard Options' Global checkboxes are application preferences, not artboard properties: `fadeRegionOutsideArtboard`
 (Fade Region Outside Artboard) and `artboardUpdateWhileDragging` (Update While Dragging), both on by default

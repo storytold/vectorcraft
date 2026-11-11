@@ -1087,11 +1087,14 @@ fn guide_lines(app: &VectorcraftApp, painter: &egui::Painter, xf: &Xf, rect: egu
     }
 }
 
-/// The ruler guides of document `st`, its selected guides in the selection colour.
+/// The ruler guides of document `st`, its selected guides in the selection colour. An artboard
+/// guide of an artboard with a guide label ([`vectorcraft_doc::Artboard::guide_label`]) is drawn in
+/// the label's color, in the guide preference's style; the others in the guide preference's color.
 fn guides_of(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, (painter, xf, t): (&egui::Painter, &Xf, &Tokens), rect: egui::Rect) {
     let doc = &st.doc;
     let look = LineLook::guides(&app.session.prefs, t);
     let picked = LineLook { color: t.selection, ..look };
+    let labels = guide_labels(doc);
     let selected: &[usize] = &st.selection.guides;
     let key = st.selection.key_guide;
     let view = view_bounds(xf);
@@ -1108,12 +1111,24 @@ fn guides_of(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, (painter, 
                 ends
             }
         };
-        if selected.contains(&i) { picked } else { look }.guide(painter, a, b);
+        let own = g.artboard.and_then(|id| labels.get(&id)).map_or(look, |&color| LineLook { color, ..look });
+        if selected.contains(&i) { picked } else { own }.guide(painter, a, b);
         // The key guide (Align to Key Object, #2143): thicker, as a key object's outline is.
         if key == Some(i) {
             painter.line_segment([a, b], Stroke::new(KEY_OUTLINE, picked.color));
         }
     }
+}
+
+/// The guide label colors of `doc`'s artboards that have one, by artboard id.
+pub(super) fn guide_labels(doc: &vectorcraft_doc::Document) -> std::collections::HashMap<u32, Color32> {
+    doc.artboards
+        .iter()
+        .filter_map(|a| {
+            let [r, g, b] = a.guide_label?.rgb();
+            Some((a.id, Color32::from_rgb(r, g, b)))
+        })
+        .collect()
 }
 
 /// The selection's visuals and the tools' overlays, to be drawn.

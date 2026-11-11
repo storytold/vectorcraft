@@ -1209,6 +1209,7 @@ impl<'a> Reader<'a> {
                 show_video_safe_areas: b.safe_areas,
                 video_ruler_pixel_aspect_ratio: b.par,
                 color: None,
+                guide_label: None,
             })
             .collect();
         if doc.artboards.is_empty() {
@@ -1223,6 +1224,7 @@ impl<'a> Reader<'a> {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             }];
         }
         doc.opened_artboard = active.and_then(|i| doc.artboards.get(i)).map(|a| a.id);

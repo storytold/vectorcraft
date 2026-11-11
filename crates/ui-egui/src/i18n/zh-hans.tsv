@@ -235,6 +235,7 @@ antiAlias	Sharp	锐利
 	Average…	平均…
 	Axis:	轴：
 	Background Color:	背景颜色：
+	Guide Label:	参考线标签：
 	Show Center Mark	显示中心标记
 	Show Cross Hairs	显示十字线
 	Show Video Safe Areas	显示视频安全区域
@@ -4396,6 +4397,7 @@ imageTrace	Outline	轮廓
 @msg	{label}…	{label}…
 @msg	no blend options	没有混合选项
 @msg	bad color {v}	颜色 {v} 无效
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` 应为 null、图层颜色名称或 #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必须是 0.1 到 10 之间的数字
 @msg	the Color Picker is not open	拾色器未打开
 @msg	the Simplify slider is not open	简化滑块未打开

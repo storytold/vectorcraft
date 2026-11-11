@@ -1077,6 +1077,7 @@ antiAlias	Sharp	シャープ
 	Average	平均
 	BLANK DOCUMENT PRESETS	空白のドキュメントプリセット
 	Background Color:	背景色:
+	Guide Label:	ガイドのラベル:
 	Show Center Mark	中心マークを表示
 	Show Cross Hairs	十字線を表示
 	Show Video Safe Areas	ビデオセーフエリアを表示
@@ -4684,6 +4685,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{label}…	{label}…
 @msg	no blend options	ブレンドオプションがありません
 @msg	bad color {v}	カラー {v} が正しくありません
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` は null、レイヤーカラーの名前、または #rrggbb です
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio には 0.1 〜 10 の数値を指定してください
 @msg	the Color Picker is not open	カラーピッカーが開いていません
 @msg	the Simplify slider is not open	単純化スライダーが開いていません
