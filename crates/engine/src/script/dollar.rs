@@ -268,7 +268,7 @@ pub(super) fn members(host: &Rc<Host>, info: RunInfo, localization: &Rc<Localiza
                 _ => return Err(HostError::Type("$.sleep: give a number of milliseconds".into())),
             };
             h.charge_call(8)?;
-            h.sleep(Duration::from_secs_f64(ms / 1000.0));
+            h.sleep(Duration::from_secs_f64(ms / 1000.0))?;
             Ok(Data::Undefined)
         })
     };

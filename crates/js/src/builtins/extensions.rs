@@ -199,7 +199,12 @@ impl Source {
     }
 
     fn check_length(&mut self, interp: &mut Interp) -> JsResult<()> {
-        if self.out.units.len() > interp.data_limits.bytes {
+        self.fit(interp, 0)
+    }
+
+    /// Checks that `more` code units can be added without passing the length limit.
+    fn fit(&mut self, interp: &mut Interp, more: usize) -> JsResult<()> {
+        if self.out.units.len().saturating_add(more) > interp.data_limits.bytes {
             return Err(interp.throw(ErrorType::Range, "toSource: the source is too long"));
         }
         Ok(())
@@ -229,8 +234,11 @@ impl Source {
         }
     }
 
-    /// `s` in double quotes, with the characters a string literal cannot hold escaped.
+    /// `s` in double quotes, with the characters a string literal cannot hold escaped. The length
+    /// limit is checked before each addition, so a string that grows as it is escaped throws a
+    /// `RangeError` before the text takes more heap than the limit allows.
     fn quoted(&mut self, interp: &mut Interp, s: &[u16]) -> JsResult<()> {
+        self.fit(interp, 1)?;
         self.out.push_str(interp, "\"")?;
         let mut start = 0;
         for (i, &c) in s.iter().enumerate() {
@@ -245,10 +253,12 @@ impl Source {
                 0..=0x1F | 0x7F | 0x2028 | 0x2029 | 0xD800..=0xDFFF => format!("\\u{c:04X}"),
                 _ => continue,
             };
+            self.fit(interp, (i - start).saturating_add(escape.len()))?;
             self.out.push_units(interp, s.get(start..i).unwrap_or_default())?;
             self.out.push_str(interp, &escape)?;
             start = i + 1;
         }
+        self.fit(interp, s.len().saturating_sub(start).saturating_add(1))?;
         self.out.push_units(interp, s.get(start..).unwrap_or_default())?;
         self.push(interp, "\"")
     }

@@ -507,6 +507,8 @@ struct Host {
     started: Option<std::time::Instant>,
     /// The time since [`Host::started`] at which a `$.sleep` ends.
     wake_at: Cell<Option<std::time::Duration>>,
+    /// Set while a host function runs where the run can stop at the call ([`Realm::wait_flag`]).
+    can_wait: Rc<Cell<bool>>,
 }
 
 /// An error `$.evalFile` raised, as thrown, and the file, line and column it is at.
@@ -595,14 +597,22 @@ impl Host {
     }
 
     /// `$.sleep`: ends the slice, and the run does not go on until `d` has passed. Without a clock
-    /// it does not wait.
-    fn sleep(&self, d: std::time::Duration) {
+    /// it does not wait. A getter, a conversion, a built-in's callback or a file `$.evalFile` runs
+    /// cannot stop at the call, so a wait there is an error.
+    fn sleep(&self, d: std::time::Duration) -> std::result::Result<(), HostError> {
         if let Some(now) = self.elapsed()
             && !d.is_zero()
         {
+            if !self.can_wait.get() {
+                return Err(HostError::Error(
+                    "$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code"
+                        .into(),
+                ));
+            }
             self.wake_at.set(Some(now.saturating_add(d)));
             self.pause.set(true);
         }
+        Ok(())
     }
 
     /// The time left of a `$.sleep`, or none when the run is not asleep.
@@ -1357,6 +1367,7 @@ impl Session {
             eval_failure: RefCell::default(),
             started: clock(),
             wake_at: Cell::new(None),
+            can_wait: realm.wait_flag(),
         });
         let args = to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0))
             .map_err(|place| EngineError::BadParams { cmd: "script.run".into(), msg: format!("`args{place}` is nested more than 64 levels deep") })?;

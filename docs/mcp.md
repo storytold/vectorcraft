@@ -1625,7 +1625,7 @@ VectorCraft's own, and `vc.api.has("dollar")` is true where they are available:
 | `localize` | `false`; while `true`, `String(object)` of a localization object gives its text for `$.locale` |
 | `os` | `Windows`, `macOS`, `Linux`, `FreeBSD`, `Unix` or `Web`, without a version |
 | `screens` | an empty array |
-| `sleep(ms)` | waits from 0 to 1,000 milliseconds between two frames of the app, without stopping it from drawing; `script.stop` ends the wait; it does not wait on the web |
+| `sleep(ms)` | waits from 0 to 1,000 milliseconds between two frames of the app, without stopping it from drawing; `script.stop` ends the wait; it does not wait on the web; called with more than 0 inside a getter, a conversion, a callback of a built-in function or a file `$.evalFile` runs, it throws an `Error` instead of waiting |
 | `strict` | `false` |
 
 Members that are values (`build`, `level`, `os` and the like) cannot be changed. A wrong value for a member that can

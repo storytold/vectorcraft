@@ -127,6 +127,18 @@ fn to_source_refuses_what_is_not_plain_data() {
 }
 
 #[test]
+fn to_source_of_a_string_with_many_escapes_throws_a_range_error_before_the_heap_limit() {
+    let mut r = realm();
+    // A run's heap in the web build. 2^23 control characters, each written as six, pass a quarter
+    // of it, which is all one string may take.
+    r.set_limits(Limits { heap_bytes: 128 << 20, ..Limits::default() });
+    let source = "var s = '\\x01'; for (var i = 0; i < 23; i++) s = s + s;
+        try { toSource(s); 'no error'; } catch (e) { e.name + ': ' + e.message; }";
+    assert_eq!(text(&mut r, source), "RangeError: toSource: the source is too long");
+    assert_eq!(text(&mut r, "toSource('a\\x01a\\x01a\\x01a\\x01').length + ''"), "30", "short strings are written whole");
+}
+
+#[test]
 fn to_source_stops_at_the_fuel_limit() {
     let mut r = realm();
     r.set_limits(Limits { fuel: 200_000, ..Limits::default() });

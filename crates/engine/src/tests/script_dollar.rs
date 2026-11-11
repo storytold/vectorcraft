@@ -213,3 +213,20 @@ fn sleep_takes_milliseconds_from_0_to_1000() {
         assert!(thrown(&mut s, bad).starts_with("TypeError"), "{bad}");
     }
 }
+
+#[test]
+fn sleep_throws_where_the_run_cannot_wait_instead_of_running_on() {
+    let mut s = Session::new();
+    s.script_frames = true;
+    TEST_ELAPSED.set(Some(Duration::ZERO));
+    let source = "var o = {}; Object.defineProperty(o, 'x', { get: function () { $.sleep(250); vc.log('after'); return 1; } });
+        try { o.x; } catch (e) { vc.log(e.name + ': ' + e.message); }
+        try { [1].map(function () { $.sleep(250); vc.log('after'); }); } catch (e) { vc.log(e.name + ': ' + e.message); }
+        [1].map(function () { $.sleep(0); });
+        vc.log('done');";
+    s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    let r = s.script_pump().expect("the run does not wait").unwrap();
+    TEST_ELAPSED.set(None);
+    let message = "Error: $.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code";
+    assert_eq!(r["log"], json!([message, message, "done"]));
+}
