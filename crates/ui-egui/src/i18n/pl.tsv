@@ -730,6 +730,13 @@
 	Quest Outline	Zadanie
 	Coin Shine	Moneta
 	Boss Alert	Boss
+	Status Effects	Efekty statusu
+	Poison Tint	Trucizna
+	Freeze Edge	Mróz
+	Burn Aura	Oparzenie
+	Stun Pulse	Ogłuszenie
+	Stealth Fade	Ukrycie
+	Shield Buff	Tarcza
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
 	Gradient Finishes	Wykończenia gradientowe
@@ -2201,6 +2208,8 @@ digits	Malayalam	Malajalam
 	Green	Zielony
 	Shifts the tints of global and spot colors; other colors stay.	Przesuwa tinty kolorów globalnych i dodatkowych; pozostałe kolory bez zmian.
 	Tint	Tinta
+	Fill Tint	Tinta wypełnienia
+	Stroke Tint	Tinta obrysu
 	Color Guide Options	Opcje przewodnika kolorów
 	Less	Mniej
 	Steps:	Kroki:
@@ -2567,6 +2576,7 @@ digits	Malayalam	Malajalam
 	File Dimensions	Wymiary pliku
 	Transforms	Przekształcenia
 	Background Color:	Kolor tła:
+	Guide Label:	Etykieta linii pomocniczych:
 	Show Center Mark	Pokaż znacznik środka
 	Show Cross Hairs	Pokaż krzyż nitkowy
 	Show Video Safe Areas	Pokaż bezpieczne obszary wideo
@@ -4221,6 +4231,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Zatrzymaj skrypt
 	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
 	A Script Is Running	Skrypt jest uruchomiony
+	Script Alert	Komunikat skryptu
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
 	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.
@@ -4234,6 +4245,9 @@ imageTrace	Outline	Kontur
 @msg	the script is too large to run	skrypt jest zbyt duży, aby go uruchomić
 @msg	a drag or an undo group is open; finish it before running a script	otwarte jest przeciąganie lub grupa cofania; zakończ je przed uruchomieniem skryptu
 @msg	the script left a document that cannot be kept	skrypt pozostawił dokument, którego nie można zachować
+@msg	the script is no longer in the Scripts folder	skryptu nie ma już w folderze Scripts
+	Some scripts were not listed	Niektóre skrypty nie zostały wyświetlone
+	The Scripts folder cannot be read	Nie można odczytać folderu Scripts
 @msg	the script's run is no longer available	uruchomienie skryptu nie jest już dostępne
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	nieudane polecenie zmieniło kroki cofania, których nie udało się przywrócić, więc skrypt został zatrzymany
 @msg	a recovery copy could not be written, so the script was not run	nie udało się zapisać kopii odzyskiwania, więc skrypt nie został uruchomiony
@@ -4417,6 +4431,7 @@ imageTrace	Outline	Kontur
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musi mieć wartość "vertical", "horizontal" lub kąt w stopniach, nie `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tło {other}: transparent, white, black lub kolor, np. "#ff8800"
 @msg	bad color {v}	nieprawidłowy kolor {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` to null, nazwa koloru warstwy lub #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musi być liczbą od 0,1 do 10
 @msg	the Color Picker is not open	Próbnik kolorów nie jest otwarty
 @msg	the Simplify slider is not open	Suwak Uprość nie jest otwarty
@@ -5587,6 +5602,7 @@ mark-style	Japanese	Japońskie
 @msg	Invalid drawing scale	Nieprawidłowa skala rysunku
 @msg	Invalid real scale	Nieprawidłowa skala rzeczywista
 @msg	Measured anchor no longer exists	Mierzony punkt kontrolny już nie istnieje
+@msg	Invalid measured point	Nieprawidłowy mierzony punkt
 @msg	Measured segment no longer exists	Mierzony odcinek już nie istnieje
 @msg	Non-finite dimension	Wymiar nie jest liczbą skończoną
 @msg	Only linear dimensions are horizontal or vertical	Tylko wymiary liniowe są poziome lub pionowe
@@ -5965,6 +5981,12 @@ axis	Y Axis	Oś Y
 	Flag	Flaga
 	Crosshair	Celownik
 	Checkpoint	Punkt kontrolny
+	Inventory Icons	Ikony ekwipunku
+	Sword	Miecz
+	Shield	Tarcza
+	Potion	Mikstura
+	Key	Klucz
+	Gem	Klejnot
 	Open Symbol Library	Otwórz bibliotekę symboli
 	Save Symbol Library	Zapisz bibliotekę symboli
 	Save Symbol Library…	Zapisz bibliotekę symboli…
@@ -6632,3 +6654,9 @@ breakText	Glyphs	Glify
 	{ms} ms, {calls} host calls	{ms} ms, wywołania hosta: {calls}
 	{dropped} earlier lines dropped, {cut} lines cut	Odrzucone wcześniejsze wiersze: {dropped}, skrócone wiersze: {cut}
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` muszą być numerami wierszy przechowywanych w konsoli, `first` przed `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Odśwież odroczone efekty
+	Deferred Effects	Odroczone efekty
+@msg	no plug-in effect is deferred	żaden efekt wtyczki nie jest odroczony
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otwarto z {n} odroczonym efektem wtyczki. Efekt › Odśwież odroczone efekty go uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.

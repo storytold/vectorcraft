@@ -472,7 +472,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
         Ok(p) => p,
         Err(e) => return Err(interp.throw(ErrorType::Syntax, &e.message)),
     };
-    let source = Rc::new(Source { lines: program.lines.clone(), text: units.into() });
+    let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: interp.source_tag, strict_writes: interp.writes_mode() });
     let code = match compile_constructed_function(&program, &source) {
         Ok(Some(code)) => code,
         Ok(None) => return Err(interp.throw(ErrorType::Syntax, "the parameters or body do not form one function")),
@@ -501,7 +501,7 @@ fn function_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
             return Ok(Value::String(Str::from_units(units.to_vec())));
         }
         Some(Func::Native { name, .. }) => format!("function {name}() {{ [native code] }}"),
-        Some(Func::Host { name, .. } | Func::Data { name, .. }) => format!("function {name}() {{ [native code] }}"),
+        Some(Func::Host { name, .. } | Func::Data { name, .. } | Func::Eval { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Bound { .. }) => "function () { [native code] }".to_string(),
         None => return Err(interp.type_error("Function.prototype.toString was called on a value that is not a function")),
     };

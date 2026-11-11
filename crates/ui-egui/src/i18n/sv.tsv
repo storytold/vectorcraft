@@ -278,6 +278,7 @@ font-technology	Variable	Variabla
 	Average…	Medelvärde…
 	Axis:	Axel:
 	Background Color:	Bakgrundsfärg:
+	Guide Label:	Stödlinjeetikett:
 	Show Center Mark	Visa mittmarkering
 	Show Cross Hairs	Visa hårkors
 	Show Video Safe Areas	Visa videosäkra områden
@@ -3079,6 +3080,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Uppdrag
 	Coin Shine	Mynt
 	Boss Alert	Boss
+	Status Effects	Statuseffekter
+	Poison Tint	Gift
+	Freeze Edge	Frost
+	Burn Aura	Bränna
+	Stun Pulse	Bedövning
+	Stealth Fade	Smyga
+	Shield Buff	Sköld
 	Shape	Form
 	Shape Builder	Formbyggare
 	Shape Builder Regions	Formbyggarområden
@@ -3495,6 +3503,8 @@ digits	Malayalam	Malayalam
 	Tiles are numbered across, then down; leave the range empty for every tile.	Rutorna numreras från vänster till höger och sedan nedåt. Lämna omfånget tomt för att få med alla rutor.
 	Copies per Sheet (as many as fit, in a grid)	Kopior per ark (så många som får plats, i ett rutnät)
 	Tint	Färgton
+	Fill Tint	Fyllnadsfärgton
+	Stroke Tint	Konturfärgton
 	Tip extends past the end point	Spetsen sträcker sig förbi slutpunkten
 	Tip on the end point	Spetsen på slutpunkten
 	Title Case	Inledande versaler
@@ -3998,6 +4008,7 @@ axis	Both	Båda
 	Stop Script	Stoppa skript
 	Show External Script Warning	Visa varning för externa skript
 	A Script Is Running	Ett skript körs
+	Script Alert	Skriptmeddelande
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
 	Do not show this warning again	Visa inte den här varningen igen
 	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
@@ -4011,6 +4022,9 @@ axis	Both	Båda
 @msg	the script is too large to run	skriptet är för stort för att köras
 @msg	a drag or an undo group is open; finish it before running a script	en dragning eller ångragrupp är öppen; avsluta den innan du kör ett skript
 @msg	the script left a document that cannot be kept	skriptet lämnade ett dokument som inte kan behållas
+@msg	the script is no longer in the Scripts folder	skriptet finns inte längre i mappen Scripts
+	Some scripts were not listed	Vissa skript visas inte i listan
+	The Scripts folder cannot be read	Mappen Scripts kan inte läsas
 @msg	the script's run is no longer available	skriptets körning är inte längre tillgänglig
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	ett misslyckat kommando ändrade ångrasteg som inte kunde återställas, så skriptet stoppades
 @msg	a recovery copy could not be written, so the script was not run	en återställningskopia kunde inte skrivas, så skriptet kördes inte
@@ -4194,6 +4208,7 @@ axis	Both	Båda
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis måste vara "vertical", "horizontal" eller en vinkel i grader, inte `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black eller en färg som "#ff8800"
 @msg	bad color {v}	ogiltig färg {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` är null, namnet på en lagerfärg eller #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio måste vara ett tal från 0,1 till 10
 @msg	bad colour `{hex}` (#rrggbb)	ogiltig färg `{hex}` (#rrggbb)
 @msg	bad page tree	ogiltigt sidträd
@@ -5694,6 +5709,7 @@ theme	Appearance	Utseende
 @msg	Invalid drawing scale	Ogiltig ritningsskala
 @msg	Invalid real scale	Ogiltig verklig skala
 @msg	Measured anchor no longer exists	Den mätta ankarpunkten finns inte längre
+@msg	Invalid measured point	Ogiltig mätt punkt
 @msg	Measured segment no longer exists	Det mätta segmentet finns inte längre
 @msg	Non-finite dimension	Måttet är inte ett ändligt tal
 @msg	Only linear dimensions are horizontal or vertical	Endast linjära mått är vågräta eller lodräta
@@ -6134,6 +6150,12 @@ axis	Y Axis	Y-axel
 	Flag	Flagga
 	Crosshair	Hårkors
 	Checkpoint	Kontrollpunkt
+	Inventory Icons	Inventarieikoner
+	Sword	Svärd
+	Shield	Sköld
+	Potion	Dryck
+	Key	Nyckel
+	Gem	Ädelsten
 	Open Symbol Library	Öppna symbolbibliotek
 	Save Symbol Library	Spara symbolbibliotek
 	Save Symbol Library…	Spara symbolbibliotek…
@@ -8261,3 +8283,9 @@ digits	Hindi	Hindi
 	{ms} ms, {calls} host calls	{ms} ms, {calls} värdanrop
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidigare rader borttagna, {cut} rader avkortade
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uppdatera uppskjutna effekter
+	Deferred Effects	Uppskjutna effekter
+@msg	no plug-in effect is deferred	ingen plugineffekt är uppskjuten
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Öppnades med {n} uppskjuten plugineffekt. Effekt › Uppdatera uppskjutna effekter kör den.|Öppnades med {n} uppskjutna plugineffekter. Effekt › Uppdatera uppskjutna effekter kör dem.

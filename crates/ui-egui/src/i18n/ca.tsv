@@ -428,6 +428,7 @@ antiAlias	Sharp	Nítid
 	B5	B5
 	Back	Enrere
 	Background Color:	Color de fons:
+	Guide Label:	Etiqueta de les guies:
 	Background Contents	Contingut del fons
 	Background Level	Nivell de fons
 	Background:	Fons:
@@ -454,6 +455,12 @@ antiAlias	Sharp	Nítid
 	Flag	Bandera
 	Crosshair	Punt de mira
 	Checkpoint	Punt de control
+	Inventory Icons	Icones d’inventari
+	Sword	Espasa
+	Shield	Escut
+	Potion	Poció
+	Key	Clau
+	Gem	Gemm
 	Batch	Lot
 	Batch…	Lot…
 	Bearing	Orientació
@@ -3948,6 +3955,13 @@ digits	Malayalam	Malaiàlam
 	Quest Outline	Missió
 	Coin Shine	Moneda
 	Boss Alert	Cap
+	Status Effects	Efectes d’estat
+	Poison Tint	Verí
+	Freeze Edge	Congelació
+	Burn Aura	Cremada
+	Stun Pulse	Atordiment
+	Stealth Fade	Sigil
+	Shield Buff	Escut
 	Shape	Forma
 	Shape Builder	Constructor de formes
 	Shape Builder Delete	Suprimeix del constructor de formes
@@ -4477,6 +4491,8 @@ digits	Malayalam	Malaiàlam
 	Tilt	Inclinació
 	Time (hhmmss)	Hora (hhmmss)
 	Tint	To
+	Fill Tint	To de farciment
+	Stroke Tint	To del traç
 	Tint Reduction	Reducció de to
 	Tints	Tons
 	Tints and Shades	Tons i ombres
@@ -5129,6 +5145,7 @@ digits	Malayalam	Malaiàlam
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis ha de ser "vertical", "horizontal" o un angle en graus, no `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	fons {other}: transparent, blanc, negre o un color com "#ff8800"
 @msg	bad color {v}	color incorrecte {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` és null, el nom d’un color de capa o #rrggbb
 @msg	bad colour `{hex}` (#rrggbb)	color incorrecte `{hex}` (#rrggbb)
 @msg	bad page tree	arbre de pàgines incorrecte
 @msg	bad shortcut	drecera incorrecta
@@ -5186,6 +5203,7 @@ digits	Malayalam	Malaiàlam
 	Stop Script	Atura l'script
 	Show External Script Warning	Mostra l'avís dels scripts externs
 	A Script Is Running	S'està executant un script
+	Script Alert	Avís de l'script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
 	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
@@ -5199,6 +5217,9 @@ digits	Malayalam	Malaiàlam
 @msg	the script is too large to run	l'script és massa gran per executar-lo
 @msg	a drag or an undo group is open; finish it before running a script	hi ha un arrossegament o un grup de desfer obert; acabeu-lo abans d'executar un script
 @msg	the script left a document that cannot be kept	l'script ha deixat un document que no es pot conservar
+@msg	the script is no longer in the Scripts folder	l'script ja no és a la carpeta Scripts
+	Some scripts were not listed	Alguns scripts no s'han llistat
+	The Scripts folder cannot be read	No es pot llegir la carpeta Scripts
 @msg	the script's run is no longer available	l'execució de l'script ja no està disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
 @msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat
@@ -5366,6 +5387,7 @@ digits	Malayalam	Malaiàlam
 @msg	Make Guides: select paths	Crea guies: seleccioneu traçats
 @msg	mask art ends outside a mask dictionary	l’art de la màscara acaba fora d’un diccionari de màscara
 @msg	Measured anchor no longer exists	El punt d’ancoratge mesurat ja no existeix
+@msg	Invalid measured point	El punt mesurat no és vàlid
 @msg	Measured segment no longer exists	El segment mesurat ja no existeix
 @msg	missing `folder`	falta `folder`
 @msg	missing `id` (see plugin.list)	falta `id` (vegeu plugin.list)
@@ -6757,3 +6779,9 @@ breakText	Glyphs	Glifs
 	{ms} ms, {calls} host calls	{ms} ms, {calls} crides a l’amfitrió
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} línies anteriors descartades, {cut} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Actualitza els efectes ajornats
+	Deferred Effects	Efectes ajornats
+@msg	no plug-in effect is deferred	no hi ha cap efecte de complement ajornat
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	S’ha obert amb {n} efecte de complement ajornat. Efecte › Actualitza els efectes ajornats l’executa.|S’ha obert amb {n} efectes de complement ajornats. Efecte › Actualitza els efectes ajornats els executa.

@@ -648,6 +648,10 @@ impl<'a> Reader<'a> {
         if self.author.is_none() {
             self.author = outer.author;
         }
+        // Ruler units the editing data doesn't give: the file still records them (#5820).
+        if self.ruler_units.is_none() {
+            self.ruler_units = outer.ruler_units;
+        }
         self.names.absorb(outer.names);
         for n in outer.custom_colors {
             if self.custom_colors.len() < super::directives::MAX_CUSTOM_COLORS && !self.custom_colors.iter().any(|c| c.name == n.name) {
@@ -1209,6 +1213,7 @@ impl<'a> Reader<'a> {
                 show_video_safe_areas: b.safe_areas,
                 video_ruler_pixel_aspect_ratio: b.par,
                 color: None,
+                guide_label: None,
             })
             .collect();
         if doc.artboards.is_empty() {
@@ -1223,6 +1228,7 @@ impl<'a> Reader<'a> {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             }];
         }
         doc.opened_artboard = active.and_then(|i| doc.artboards.get(i)).map(|a| a.id);
@@ -1253,6 +1259,7 @@ impl<'a> Reader<'a> {
         }
         if let Some(u) = self.ruler_units.and_then(ruler_unit) {
             doc.units = u;
+            doc.units_from_file = true;
         }
         // The file's own swatches in place of the defaults, in its order and colour groups.
         let own_palette = match self.palette_swatches(&doc.patterns) {

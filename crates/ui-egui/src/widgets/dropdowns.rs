@@ -379,29 +379,51 @@ fn popup_anchor(ui: &Ui) -> Option<(Rect, bool)> {
 /// The body of a menu or popup list: as tall as its items up to the bottom bars of the window it
 /// opens in, and scrolling only past that, so long menus (Window, Effect, a panel's menu) stay
 /// reachable on small windows and in a floating panel's short OS window. Its scroll bar has a column
-/// of its own, so it never covers the shortcuts or the submenu arrows (#2086, #5347).
+/// of its own, so it never covers the shortcuts or the submenu arrows (#2086, #5347). When the list
+/// scrolls, that column widens the popup instead of narrowing the items, so their labels stay on one
+/// line.
 ///
 /// The list's height comes from the room below and above the button, row or point the popup opens
 /// from. A popup with an id of its own measures from its own top instead.
 pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
-    let ctx = ui.ctx();
-    let tallest = (ctx.content_rect().height() - egui::Frame::popup(ui.style()).total_margin().sum().y).max(0.0);
+    let ctx = ui.ctx().clone();
+    let margins = egui::Frame::popup(ui.style()).total_margin().sum();
+    let tallest = (ctx.content_rect().height() - margins.y).max(0.0);
     let top = ui.next_widget_position().y;
     // The rows above the list (the popup's margin, a search field) move with the popup.
     let popup_top = ui.stack().iter().last().map_or(top, |root| root.max_rect.top());
     let ahead = top - popup_top;
-    let (floor, window_top) = (menu_floor(ctx), ctx.content_rect().top());
+    let (floor, window_top) = (menu_floor(&ctx), ctx.content_rect().top());
     let room = if let Some((anchor, submenu)) = popup_anchor(ui) {
         let (down_from, up_to) = if submenu { (anchor.top(), anchor.bottom()) } else { (anchor.bottom(), anchor.top()) };
         menu_room_either(floor - down_from - ahead, up_to - window_top - ahead, tallest)
     } else {
         menu_room(floor, top, tallest)
     };
+    // The items' width on the first frame of this showing, when the scroll area does not yet show
+    // its bar. Later frames lay the items out at least that wide, and the bar's column is added to
+    // the popup's width. The width is kept until the popup closes.
+    let key = ui.next_auto_id().with("menu-scroll-width");
+    let frame = ctx.cumulative_frame_nr();
+    let first = ctx.data(|d| d.get_temp::<(u64, f32)>(key)).filter(|(shown, _)| shown + 1 >= frame).map(|(_, width)| width);
+    let scroll = list_scroll_style();
+    // The widest the items can be with the popup's margins and the bar's column inside the window.
+    let widest = (ctx.content_rect().width() - margins.x - scroll.allocated_width()).max(0.0);
     ui.scope(|ui| {
-        ui.spacing_mut().scroll = list_scroll_style();
+        ui.spacing_mut().scroll = scroll;
         // The minimum lets the list grow past a popup's default 400 pt size; it still shrinks to
         // its items when they need less.
-        egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).show(ui, add_contents).inner
+        let area = egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room);
+        let out = area.show(ui, |ui| {
+            // Always the same child, so the items' ids stay the same on the frame the width changes.
+            let max = ui.max_rect();
+            let width = first.map_or(max.width(), |first| first.min(widest).max(max.width()));
+            let rect = egui::Rect::from_min_size(max.min, egui::vec2(width, max.height()));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(*ui.layout()), add_contents).inner
+        });
+        let width = first.unwrap_or(out.content_size.x);
+        ctx.data_mut(|d| d.insert_temp(key, (frame, width)));
+        out.inner
     })
     .inner
 }

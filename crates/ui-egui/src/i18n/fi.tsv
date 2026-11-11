@@ -774,6 +774,13 @@
 	Quest Outline	Tehtävä
 	Coin Shine	Kolikko
 	Boss Alert	Bossi
+	Status Effects	Tilatehosteet
+	Poison Tint	Myrkky
+	Freeze Edge	Jäädytys
+	Burn Aura	Poltto
+	Stun Pulse	Tainnutus
+	Stealth Fade	Hiipiminen
+	Shield Buff	Kilpi
 	Outlines and Rules	Ääriviivat ja viivat
 	Hand-Drawn	Käsin piirretyt
 	Gradient Finishes	Liukuväriviimeistelyt
@@ -2244,6 +2251,8 @@ digits	Malayalam	Malajalam
 	Green	Vihreä
 	Shifts the tints of global and spot colors; other colors stay.	Siirtää globaalien värien ja spottivärien sävyjä; muut värit säilyvät.
 	Tint	Sävy
+	Fill Tint	Täytön sävy
+	Stroke Tint	Viivan sävy
 	Color Guide Options	Väriopasteen asetukset
 	Less	Vähemmän
 	Steps:	Vaiheet:
@@ -2598,6 +2607,7 @@ digits	Malayalam	Malajalam
 	File Dimensions	Tiedoston mitat
 	Transforms	Muunnokset
 	Background Color:	Taustaväri:
+	Guide Label:	Apuviivojen tunniste:
 	Show Center Mark	Näytä keskimerkki
 	Show Cross Hairs	Näytä hiusristikko
 	Show Video Safe Areas	Näytä videon turva-alueet
@@ -4312,6 +4322,7 @@ imageTrace	Outline	Ääriviiva
 	Stop Script	Pysäytä komentosarja
 	Show External Script Warning	Näytä ulkoisten komentosarjojen varoitus
 	A Script Is Running	Komentosarja on käynnissä
+	Script Alert	Komentosarjan ilmoitus
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
 	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
 	Stop the script and undo what it did? Then quit again.	Pysäytetäänkö komentosarja ja kumotaan sen muutokset? Lopeta sitten uudelleen.
@@ -4325,6 +4336,9 @@ imageTrace	Outline	Ääriviiva
 @msg	the script is too large to run	komentosarja on liian suuri suoritettavaksi
 @msg	a drag or an undo group is open; finish it before running a script	vetäminen tai kumousryhmä on kesken; viimeistele se ennen komentosarjan suorittamista
 @msg	the script left a document that cannot be kept	komentosarja jätti asiakirjan, jota ei voi säilyttää
+@msg	the script is no longer in the Scripts folder	komentosarja ei ole enää Scripts-kansiossa
+	Some scripts were not listed	Kaikkia komentosarjoja ei ole lueteltu
+	The Scripts folder cannot be read	Scripts-kansiota ei voi lukea
 @msg	the script's run is no longer available	komentosarjan suoritus ei ole enää käytettävissä
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	epäonnistunut komento muutti kumoamisvaiheita, joita ei voitu palauttaa, joten komentosarja pysäytettiin
 @msg	a recovery copy could not be written, so the script was not run	palautuskopiota ei voitu kirjoittaa, joten komentosarjaa ei suoritettu
@@ -4507,6 +4521,7 @@ imageTrace	Outline	Ääriviiva
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis-arvon on oltava "vertical", "horizontal" tai kulma asteina, ei `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tausta {other}: transparent, white, black tai väri, kuten "#ff8800"
 @msg	bad color {v}	virheellinen väri {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` on null, tasovärin nimi tai #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio on oltava luku väliltä 0,1–10
 @msg	bad colour `{hex}` (#rrggbb)	virheellinen väri `{hex}` (#rrggbb)
 @msg	bad page tree	virheellinen sivupuu
@@ -5702,6 +5717,7 @@ mark-style	Japanese	Japanilainen
 @msg	Invalid drawing scale	Virheellinen piirustuksen mittakaava
 @msg	Invalid real scale	Virheellinen todellinen mittakaava
 @msg	Measured anchor no longer exists	Mitattua ankkuripistettä ei ole enää
+@msg	Invalid measured point	Virheellinen mitattu piste
 @msg	Measured segment no longer exists	Mitattua segmenttiä ei ole enää
 @msg	Non-finite dimension	Mitta ei ole äärellinen luku
 @msg	Only linear dimensions are horizontal or vertical	Vain lineaariset mitat ovat vaaka- tai pystysuuntaisia
@@ -6141,6 +6157,12 @@ axis	Y Axis	Y-akseli
 	Flag	Lippu
 	Crosshair	Tähtäin
 	Checkpoint	Tarkastuskohta
+	Inventory Icons	Inventaarioikonit
+	Sword	Miekka
+	Shield	Kilpi
+	Potion	Taikajuoma
+	Key	Avain
+	Gem	Jalokivi
 	Open Symbol Library	Avaa symbolikirjasto
 	Save Symbol Library	Tallenna symbolikirjasto
 	Save Symbol Library…	Tallenna symbolikirjasto…
@@ -6811,3 +6833,9 @@ breakText	Glyphs	Merkit
 	{ms} ms, {calls} host calls	{ms} ms, {calls} isäntäkutsua
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} aiempaa riviä poistettu, {cut} riviä katkaistu
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ja `last` on oltava konsolin säilyttämien rivien numeroita, `first` ennen arvoa `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Päivitä lykätyt tehosteet
+	Deferred Effects	Lykätyt tehosteet
+@msg	no plug-in effect is deferred	yhtään laajennustehostetta ei ole lykätty
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Avattiin, ja {n} laajennustehoste lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa sen.|Avattiin, ja {n} laajennustehostetta lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa ne.

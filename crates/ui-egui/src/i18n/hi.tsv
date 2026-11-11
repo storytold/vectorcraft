@@ -497,6 +497,7 @@ antiAlias	Sharp	शार्प
 	B5	B5
 	Back	वापस
 	Background Color:	बैकग्राउंड रंग:
+	Guide Label:	गाइड लेबल:
 	Background Contents	बैकग्राउंड सामग्री
 	Background Level	बैकग्राउंड स्तर
 	Background:	बैकग्राउंड:
@@ -525,6 +526,12 @@ antiAlias	Sharp	शार्प
 	Flag	झंडा
 	Crosshair	क्रॉसहेयर
 	Checkpoint	चेकपॉइंट
+	Inventory Icons	इन्वेंटरी आइकन
+	Sword	तलवार
+	Shield	ढाल
+	Potion	औषधि
+	Key	कुंजी
+	Gem	रत्न
 	Batch	बैच
 	Batch Trace Folder	फ़ोल्डर बैच ट्रेस करें
 	Batch…	बैच…
@@ -4260,6 +4267,13 @@ antiAlias	Sharp	शार्प
 	Quest Outline	क्वेस्ट
 	Coin Shine	सिक्का
 	Boss Alert	बॉस
+	Status Effects	स्थिति प्रभाव
+	Poison Tint	ज़हर
+	Freeze Edge	ठंड
+	Burn Aura	जलन
+	Stun Pulse	स्तब्ध
+	Stealth Fade	छिपना
+	Shield Buff	ढाल
 	Shaft:	दस्ता:
 	Shape	शेप
 	Shape Builder	शेप बिल्डर
@@ -4852,6 +4866,8 @@ antiAlias	Sharp	शार्प
 	Tilt	झुकाव
 	Time (hhmmss)	समय (hhmms)
 	Tint	टिंट
+	Fill Tint	फ़िल टिंट
+	Stroke Tint	स्ट्रोक टिंट
 	Tint Reduction	टिंट में कमी
 	Tints	टिंट्स
 	Tints and Shades	टिंट्स और शेड्स
@@ -6040,6 +6056,7 @@ antiAlias	Sharp	शार्प
 @msg	bad base64	बुरा आधार64
 @msg	bad color {c}	बुरा रंग {c}
 @msg	bad color {v}	बुरा रंग {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` null, किसी लेयर रंग का नाम या #rrggbb होता है
 @msg	bad colour	बुरा रंग
 @msg	bad colour {v}	बुरा रंग {v}
 @msg	bad colour {v} in groupColors	groupColors में अमान्य रंग {v}
@@ -6176,6 +6193,7 @@ antiAlias	Sharp	शार्प
 	Stop Script	स्क्रिप्ट रोकें
 	Show External Script Warning	बाहरी स्क्रिप्ट की चेतावनी दिखाएँ
 	A Script Is Running	एक स्क्रिप्ट चल रही है
+	Script Alert	स्क्रिप्ट सूचना
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	स्क्रिप्ट खुले दस्तावेज़ बदल सकती है और अपने चलाए कमांड से फ़ाइलें लिख सकती है। केवल भरोसेमंद स्क्रिप्ट चलाएँ।
 	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
 	Stop the script and undo what it did? Then quit again.	स्क्रिप्ट रोककर उसके बदलाव पूर्ववत करें? फिर दोबारा बाहर निकलें।
@@ -6189,6 +6207,9 @@ antiAlias	Sharp	शार्प
 @msg	the script is too large to run	स्क्रिप्ट चलाने के लिए बहुत बड़ी है
 @msg	a drag or an undo group is open; finish it before running a script	कोई ड्रैग या पूर्ववत समूह खुला है; स्क्रिप्ट चलाने से पहले उसे पूरा करें
 @msg	the script left a document that cannot be kept	स्क्रिप्ट ने ऐसा दस्तावेज़ छोड़ा है जिसे रखा नहीं जा सकता
+@msg	the script is no longer in the Scripts folder	स्क्रिप्ट अब Scripts फ़ोल्डर में नहीं है
+	Some scripts were not listed	कुछ स्क्रिप्ट सूचीबद्ध नहीं की गईं
+	The Scripts folder cannot be read	Scripts फ़ोल्डर पढ़ा नहीं जा सकता
 @msg	the script's run is no longer available	स्क्रिप्ट का रन अब उपलब्ध नहीं है
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	एक विफल कमांड ने पूर्ववत चरण बदल दिए जिन्हें वापस नहीं रखा जा सका, इसलिए स्क्रिप्ट रोक दी गई
 @msg	a recovery copy could not be written, so the script was not run	रिकवरी प्रति नहीं लिखी जा सकी, इसलिए स्क्रिप्ट नहीं चलाई गई
@@ -6618,6 +6639,7 @@ antiAlias	Sharp	शार्प
 @msg	matrix must be finite and invertible, depth finite	matrix: मैट्रिक्स को परिमित और उलटा, गहराई परिमित होना चाहिए
 @msg	matte: {e}	मैट: {e}
 @msg	Measured anchor no longer exists	मापने वाला एंकर अब मौजूद नहीं है
+@msg	Invalid measured point	मापा गया बिंदु अमान्य है
 @msg	Measured segment no longer exists	मापदंड अब मौजूद नहीं है
 @msg	member is for order front, forward, backward or back	member केवल order front, forward, backward या back के लिए है
 @msg	memory budget (the selection is too large to hand over)	स्मृति बजट (चुनाव बहुत बड़ा है)
@@ -8217,3 +8239,9 @@ theme	Appearance	अपीयरेंस
 	{ms} ms, {calls} host calls	{ms} ms, {calls} होस्ट कॉल
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} पुरानी पंक्तियाँ हटाई गईं, {cut} पंक्तियाँ काटी गईं
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	स्थगित इफ़ेक्ट्स रिफ्रेश करें
+	Deferred Effects	स्थगित इफ़ेक्ट्स
+@msg	no plug-in effect is deferred	कोई प्लग-इन इफ़ेक्ट स्थगित नहीं है
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} प्लग-इन इफ़ेक्ट स्थगित रखकर खोला गया। इफ़ेक्ट › स्थगित इफ़ेक्ट्स रिफ्रेश करें इसे चलाता है।|{n} प्लग-इन इफ़ेक्ट्स स्थगित रखकर खोला गया। इफ़ेक्ट › स्थगित इफ़ेक्ट्स रिफ्रेश करें इन्हें चलाता है।

@@ -289,6 +289,7 @@ font-technology	Variable	Variabili
 	Average…	Media…
 	Axis:	Asse:
 	Background Color:	Colore di sfondo:
+	Guide Label:	Etichetta delle guide:
 	Show Center Mark	Mostra segno centrale
 	Show Cross Hairs	Mostra mirino
 	Show Video Safe Areas	Mostra aree sicure video
@@ -3192,6 +3193,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Missione
 	Coin Shine	Moneta
 	Boss Alert	Boss
+	Status Effects	Effetti di stato
+	Poison Tint	Veleno
+	Freeze Edge	Gelo
+	Burn Aura	Bruciatura
+	Stun Pulse	Stordimento
+	Stealth Fade	Furtività
+	Shield Buff	Scudo
 	Shape	Forma
 	Shape Builder	Generatore forme
 	Shape Builder Regions	Aree del Generatore forme
@@ -3611,6 +3619,8 @@ digits	Malayalam	Malayalam
 	Copies per Sheet (as many as fit, in a grid)	Copie per foglio (quante ne entrano, in griglia)
 	Gutter:	Spazio intermedio:
 	Tint	Tinta
+	Fill Tint	Tinta riempimento
+	Stroke Tint	Tinta traccia
 	Tip extends past the end point	La punta si estende oltre il punto finale
 	Tip on the end point	Punta sul punto finale
 	Title Case	Iniziali maiuscole
@@ -4131,6 +4141,7 @@ axis	Both	Entrambi
 	Stop Script	Interrompi script
 	Show External Script Warning	Mostra avviso per gli script esterni
 	A Script Is Running	È in esecuzione uno script
+	Script Alert	Avviso dello script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Uno script può modificare i documenti aperti e scrivere file tramite i comandi che esegue. Esegui solo script di cui ti fidi.
 	Do not show this warning again	Non mostrare più questo avviso
 	Stop the script and undo what it did? Then quit again.	Interrompere lo script e annullare ciò che ha fatto? Poi esci di nuovo.
@@ -4144,6 +4155,9 @@ axis	Both	Entrambi
 @msg	the script is too large to run	lo script è troppo grande per essere eseguito
 @msg	a drag or an undo group is open; finish it before running a script	è aperto un trascinamento o un gruppo di annullamento; completalo prima di eseguire uno script
 @msg	the script left a document that cannot be kept	lo script ha lasciato un documento che non può essere conservato
+@msg	the script is no longer in the Scripts folder	lo script non è più nella cartella Scripts
+	Some scripts were not listed	Alcuni script non sono stati elencati
+	The Scripts folder cannot be read	Impossibile leggere la cartella Scripts
 @msg	the script's run is no longer available	l'esecuzione dello script non è più disponibile
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando non riuscito ha modificato passaggi di annullamento che non è stato possibile ripristinare, quindi lo script è stato interrotto
 @msg	a recovery copy could not be written, so the script was not run	non è stato possibile scrivere una copia di recupero, quindi lo script non è stato eseguito
@@ -4328,6 +4342,7 @@ axis	Both	Entrambi
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis deve essere "vertical", "horizontal" o un angolo in gradi, non `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	sfondo {other}: transparent, white, black o un colore come "#ff8800"
 @msg	bad color {v}	colore non valido {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` è null, il nome di un colore di livello o #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio deve essere un numero da 0,1 a 10
 @msg	the Color Picker is not open	il Selettore colore non è aperto
 @msg	the Simplify slider is not open	il cursore Semplifica non è aperto
@@ -5347,6 +5362,7 @@ lighting	Light	Luce
 @msg	Invalid drawing scale	Scala del disegno non valida
 @msg	Invalid real scale	Scala reale non valida
 @msg	Measured anchor no longer exists	Il punto di ancoraggio misurato non esiste più
+@msg	Invalid measured point	Punto misurato non valido
 @msg	Measured segment no longer exists	Il segmento misurato non esiste più
 @msg	Non-finite dimension	Quota non finita
 @msg	Only linear dimensions are horizontal or vertical	Solo le quote lineari sono orizzontali o verticali
@@ -5728,6 +5744,12 @@ axis	Y Axis	Asse Y
 	Flag	Bandiera
 	Crosshair	Mirino
 	Checkpoint	Punto di controllo
+	Inventory Icons	Icone inventario
+	Sword	Spada
+	Shield	Scudo
+	Potion	Pozione
+	Key	Chiave
+	Gem	Gemma
 	Open Symbol Library	Apri libreria simboli
 	Save Symbol Library	Salva libreria simboli
 	Save Symbol Library…	Salva libreria simboli…
@@ -6397,3 +6419,9 @@ breakText	Glyphs	Glifi
 	{ms} ms, {calls} host calls	{ms} ms, {calls} chiamate all'host
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} righe precedenti scartate, {cut} righe tagliate
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Aggiorna effetti rimandati
+	Deferred Effects	Effetti rimandati
+@msg	no plug-in effect is deferred	nessun effetto plug-in è rimandato
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aperto con {n} effetto plug-in rimandato. Effetto › Aggiorna effetti rimandati lo esegue.|Aperto con {n} effetti plug-in rimandati. Effetto › Aggiorna effetti rimandati li esegue.

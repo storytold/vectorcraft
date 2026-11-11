@@ -274,6 +274,7 @@ font-technology	Variable	Değişken
 	Average…	Ortalama…
 	Axis:	Eksen:
 	Background Color:	Arka Plan Rengi:
+	Guide Label:	Kılavuz Etiketi:
 	Show Center Mark	Merkez İşaretini Göster
 	Show Cross Hairs	Artı Çizgilerini Göster
 	Show Video Safe Areas	Video Güvenli Alanlarını Göster
@@ -2983,6 +2984,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Görev
 	Coin Shine	Jeton
 	Boss Alert	Boss
+	Status Effects	Durum Etkileri
+	Poison Tint	Zehir
+	Freeze Edge	Donma
+	Burn Aura	Yanma
+	Stun Pulse	Sersemletme
+	Stealth Fade	Gizlilik
+	Shield Buff	Kalkan
 	Shape	Şekil
 	Shape Builder	Şekil Oluşturucu
 	Shape Builder Regions	Şekil Oluşturucu Bölgeleri
@@ -3384,6 +3392,8 @@ digits	Malayalam	Malayalam
 	tile {number}	kiremit {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Fayanslar önce baştan sonra aşağı doğru numaralandırılır; aralığı her döşeme için boş bırakın.
 	Tint	Renk tonu
+	Fill Tint	Dolgu Renk Tonu
+	Stroke Tint	Kontur Renk Tonu
 	Tip extends past the end point	İpucu bitiş noktasının ötesine uzanıyor
 	Tip on the end point	Bitiş noktasına dair ipucu
 	Title Case	Başlık Durumu
@@ -3880,6 +3890,7 @@ axis	Both	Her İkisi
 	Stop Script	Betiği Durdur
 	Show External Script Warning	Harici Betik Uyarısını Göster
 	A Script Is Running	Bir Betik Çalışıyor
+	Script Alert	Betik Uyarısı
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
 	Do not show this warning again	Bu uyarıyı bir daha gösterme
 	Stop the script and undo what it did? Then quit again.	Betik durdurulsun ve yaptıkları geri alınsın mı? Ardından yeniden çıkın.
@@ -3893,6 +3904,9 @@ axis	Both	Her İkisi
 @msg	the script is too large to run	betik çalıştırılamayacak kadar büyük
 @msg	a drag or an undo group is open; finish it before running a script	bir sürükleme veya geri alma grubu açık; betiği çalıştırmadan önce tamamlayın
 @msg	the script left a document that cannot be kept	betik, saklanamayan bir belge bıraktı
+@msg	the script is no longer in the Scripts folder	betik artık Scripts klasöründe değil
+	Some scripts were not listed	Bazı komut dosyaları listelenmedi
+	The Scripts folder cannot be read	Scripts klasörü okunamıyor
 @msg	the script's run is no longer available	betiğin çalıştırması artık kullanılamıyor
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	başarısız bir komut geri yüklenemeyen geri alma adımlarını değiştirdi, bu yüzden betik durduruldu
 @msg	a recovery copy could not be written, so the script was not run	kurtarma kopyası yazılamadı, bu nedenle betik çalıştırılmadı
@@ -4050,6 +4064,7 @@ axis	Both	Her İkisi
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis "vertical", "horizontal" veya derece cinsinden bir açı olmalıdır, `{v}` değil
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	arka plan {other}: şeffaf, beyaz, siyah veya "#ff8800" gibi bir renk
 @msg	bad color {v}	kötü renk {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` null, bir katman renginin adı veya #rrggbb olur
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 0,1 ile 10 arasında bir sayı olmalıdır
 @msg	the Color Picker is not open	Renk Seçici açık değil
 @msg	the screen color sampler is already open	ekran rengi örnekleyici zaten açık
@@ -5415,6 +5430,7 @@ theme	Appearance	Görünüm
 @msg	Invalid drawing scale	Geçersiz çizim ölçeği
 @msg	Invalid real scale	Geçersiz gerçek ölçek
 @msg	Measured anchor no longer exists	Ölçülen çapa artık mevcut değil
+@msg	Invalid measured point	Geçersiz ölçülen nokta
 @msg	Measured segment no longer exists	Ölçülen segment artık mevcut değil
 @msg	Non-finite dimension	Sonlu olmayan boyut
 @msg	Only linear dimensions are horizontal or vertical	Yalnızca doğrusal boyutlar yatay veya dikey olabilir
@@ -6067,6 +6083,12 @@ axis	Y Axis	Y ekseni
 	Flag	Bayrak
 	Crosshair	Nişangah
 	Checkpoint	Kontrol noktası
+	Inventory Icons	Envanter Simgeleri
+	Sword	Kılıç
+	Shield	Kalkan
+	Potion	İksir
+	Key	Anahtar
+	Gem	Mücevher
 	Open Symbol Library	Sembol Kitaplığını Aç
 	Save Symbol Library	Sembol Kitaplığını Kaydet
 	Save Symbol Library…	Sembol Kitaplığını Kaydet…
@@ -6732,3 +6754,9 @@ breakText	Glyphs	Glifler
 	{ms} ms, {calls} host calls	{ms} ms, {calls} ana bilgisayar çağrısı
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eski satır atıldı, {cut} satır kesildi
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Ertelenen Efektleri Yenile
+	Deferred Effects	Ertelenen Efektler
+@msg	no plug-in effect is deferred	ertelenen eklenti efekti yok
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} eklenti efekti ertelenerek açıldı. Efekt › Ertelenen Efektleri Yenile bunları çalıştırır.

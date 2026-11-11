@@ -9,10 +9,11 @@ use vectorcraft_engine::{Session, command_specs};
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::Fixture;
 use vectorcraft_testkit::invariants::{check_all, check_session, doc_json};
-use vectorcraft_testkit::strategies::{junk_params, junk_values, param_keys};
+use vectorcraft_testkit::strategies::{junk_params, junk_values, param_keys, safe_value};
 
 /// Commands that replace/close the active document or touch the filesystem are fine to call, but a
-/// few need their paths redirected into a temp dir (handled by `junk_params`).
+/// few need their file and folder params redirected into a temp dir (`safe_value`, which
+/// `junk_params` applies).
 fn safe_path() -> String {
     vectorcraft_testkit::temp_dir("sweep").join("out.bin").to_string_lossy().to_string()
 }
@@ -230,6 +231,54 @@ fn tool_edit_state(s: &Session) -> ToolEditState {
     (docs, s.active_index(), s.paint.clone())
 }
 
+/// The params the tool-edit sweep sends `c`: junk params, then each documented key turned on and
+/// off, with a string under a file or folder key replaced by a location inside `path`'s folder.
+fn tool_edit_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value> {
+    let mut cases = junk_params(c.params, path);
+    if heavy(c.id) {
+        cases.truncate(12);
+    }
+    for k in param_keys(c.params) {
+        for v in [json!(true), json!(false), json!(1), json!("on")] {
+            cases.push(json!({ k.as_str(): safe_value(&k, &v, path) }));
+        }
+    }
+    // Find Objects selects only with a filter, which one key at a time does not give it.
+    if c.id == "document.find" {
+        cases.extend([json!({"kind": "Path", "select": true}), json!({"name": "no such name", "select": true})]);
+    }
+    cases
+}
+
+/// Every string the sweeps send under a key that names a file or folder to write is inside the
+/// sweep's temp folder, so no run writes into the working directory.
+#[test]
+fn sweep_cases_name_files_only_inside_the_temp_folder() {
+    let path = safe_path();
+    let dir = vectorcraft_testkit::temp_dir("sweep");
+    let keys = ["path", "diffPath", "folder", "destinationFolder"];
+    let mut seen = std::collections::BTreeSet::new();
+    let mut outside = std::collections::BTreeSet::new();
+    for c in command_specs() {
+        let mut cases = junk_params(c.params, &path);
+        cases.extend(tool_edit_cases(c, &path));
+        for p in &cases {
+            let Some(o) = p.as_object() else { continue };
+            for (k, v) in o.iter().filter(|(k, _)| keys.contains(&k.as_str())) {
+                seen.insert(k.clone());
+                if let Some(s) = v.as_str()
+                    && !std::path::Path::new(s).starts_with(&dir)
+                {
+                    outside.insert(format!("{} {{\"{k}\": {v}}}", c.id));
+                }
+            }
+        }
+    }
+    assert_eq!(seen.len(), keys.len(), "the sweeps send only {seen:?}");
+    let outside: Vec<String> = outside.into_iter().collect();
+    assert!(outside.is_empty(), "{} cases name a location outside {}:\n{}", outside.len(), dir.display(), outside.join("\n"));
+}
+
 /// Every command that runs at once while the active tool computes an edit on another thread (a
 /// Shape Builder merge), rather than applying the edit first (`waits_for_tool_edit`), leaves the
 /// documents' revisions and selections, the active document and the current paint as they were,
@@ -241,19 +290,7 @@ fn commands_that_do_not_wait_for_a_tool_edit_change_no_document() {
     let mut failures = vec![];
     for fx in [Fixture::Single, Fixture::Multi] {
         for c in command_specs().iter().filter(|c| !vectorcraft_engine::waits_for_tool_edit(c.id)) {
-            let mut cases = junk_params(c.params, &path);
-            if heavy(c.id) {
-                cases.truncate(12);
-            }
-            for k in param_keys(c.params) {
-                for v in [json!(true), json!(false), json!(1), json!("on")] {
-                    cases.push(json!({ k.as_str(): v }));
-                }
-            }
-            // Find Objects selects only with a filter, which one key at a time does not give it.
-            if c.id == "document.find" {
-                cases.extend([json!({"kind": "Path", "select": true}), json!({"name": "no such name", "select": true})]);
-            }
+            let cases = tool_edit_cases(c, &path);
             for p in &cases {
                 let mut s = fx.session();
                 let before = tool_edit_state(&s);

@@ -55,6 +55,8 @@
 	Scripts	Scripter
 	Check Script…	Kontrollér script…
 	Check Script	Kontrollér script
+	Some scripts were not listed	Nogle scripter blev ikke vist
+	The Scripts folder cannot be read	Mappen Scripts kan ikke læses
 	Other Script…	Andet script…
 	Document Setup…	Dokumentopsætning…
 	Switch Units	Skift enheder
@@ -720,6 +722,13 @@
 	Quest Outline	Quest
 	Coin Shine	Mønt
 	Boss Alert	Boss
+	Status Effects	Statuseffekter
+	Poison Tint	Gift
+	Freeze Edge	Frost
+	Burn Aura	Brænd
+	Stun Pulse	Bedøvelse
+	Stealth Fade	Snige
+	Shield Buff	Skjold
 	Outlines and Rules	Konturer og linjer
 	Hand-Drawn	Håndtegnet
 	Gradient Finishes	Gradientfinish
@@ -2089,6 +2098,8 @@ digits	Malayalam	Malayalam
 	Green	Grøn
 	Shifts the tints of global and spot colors; other colors stay.	Flytter nuancerne af globale farver og spotfarver; andre farver forbliver uændrede.
 	Tint	Nuance
+	Fill Tint	Fyldnuance
+	Stroke Tint	Stregnuance
 	Color Guide Options	Indstillinger for farveguide
 	Less	Mindre
 	Steps:	Trin:
@@ -2442,6 +2453,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Fildimensioner
 	Transforms	Transformationer
 	Background Color:	Baggrundsfarve:
+	Guide Label:	Hjælpelinjeetiket:
 	Show Center Mark	Vis midtermærke
 	Show Cross Hairs	Vis trådkors
 	Show Video Safe Areas	Vis sikre videoområder
@@ -4094,6 +4106,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Stop script
 	Show External Script Warning	Vis advarsel om eksterne scripts
 	A Script Is Running	Et script kører
+	Script Alert	Scriptadvarsel
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
 	Do not show this warning again	Vis ikke denne advarsel igen
 	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
@@ -5326,6 +5339,7 @@ mark-style	Japanese	Japansk
 @msg	Invalid drawing scale	Ugyldig tegningsmålestok
 @msg	Invalid real scale	Ugyldig virkelig målestok
 @msg	Measured anchor no longer exists	Det målte ankerpunkt findes ikke længere
+@msg	Invalid measured point	Ugyldigt målt punkt
 @msg	Measured segment no longer exists	Det målte segment findes ikke længere
 @msg	Non-finite dimension	Ikke-endeligt mål
 @msg	Only linear dimensions are horizontal or vertical	Kun lineære mål er vandrette eller lodrette
@@ -5900,6 +5914,12 @@ axis	Y Axis	Y-akse
 	Flag	Flag
 	Crosshair	Sigtekorn
 	Checkpoint	Kontrolpunkt
+	Inventory Icons	Inventarikoner
+	Sword	Sværd
+	Shield	Skjold
+	Potion	Eliksir
+	Key	Nøgle
+	Gem	Ædelsten
 	Open Symbol Library	Åbn symbolbibliotek
 	Save Symbol Library	Gem symbolbibliotek
 	Save Symbol Library…	Gem symbolbibliotek…
@@ -6517,3 +6537,7 @@ breakText	Glyphs	Glyffer
 	Ended by an internal fault	Afsluttet af en intern fejl
 	{ms} ms, {calls} host calls	{ms} ms, {calls} værtskald
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidligere linjer fjernet, {cut} linjer afkortet
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Opdatér udskudte effekter
+	Deferred Effects	Udskudte effekter

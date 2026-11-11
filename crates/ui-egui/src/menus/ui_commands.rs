@@ -137,7 +137,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{folder?} Type › Find Font's Find in Folder…: asks for a folder (or takes folder), then opens Missing Fonts looking there for the files of the fonts the active document misses (text.findFontFiles). Disabled where there is no folder picker (the web)",
     ),
-    ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
+    ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first; under an automation read root, only the files inside it"),
     (
         "file.export.svg",
         "Export As SVG…",
@@ -1531,6 +1531,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Other Script…",
         "Cmd+F12",
         "{path? | source?, name?} run a .js or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `name`, `script`, `dontShow`); without a file pick one (the web opens the browser's file picker)",
+    ),
+    (
+        crate::scripts_menu::COMMAND,
+        "Run Script",
+        "",
+        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (the script is checked again, then script.run runs it by its path, so its #include lines and $.evalFile read beside it), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
     ),
     (
         "ui.checkScript",

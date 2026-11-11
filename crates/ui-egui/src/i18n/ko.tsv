@@ -800,6 +800,13 @@ digits	Malayalam	말라얄람어
 	Quest Outline	퀘스트
 	Coin Shine	코인
 	Boss Alert	보스
+	Status Effects	상태 효과
+	Poison Tint	독
+	Freeze Edge	빙결
+	Burn Aura	화상
+	Stun Pulse	기절
+	Stealth Fade	은신
+	Shield Buff	방패
 	Outlines and Rules	윤곽선과 괘선
 	Hand-Drawn	손그림
 	Gradient Finishes	그레이디언트 마감
@@ -1067,6 +1074,7 @@ antiAlias	Sharp	날카롭게
 	Average	평균
 	BLANK DOCUMENT PRESETS	빈 문서 프리셋
 	Background Color:	배경색:
+	Guide Label:	안내선 레이블:
 	Show Center Mark	중심 표시 보기
 	Show Cross Hairs	십자선 보기
 	Show Video Safe Areas	비디오 안전 영역 보기
@@ -3877,6 +3885,8 @@ file-filter	Templates	템플릿
 	Text Wrap Options	텍스트 감싸기 옵션
 	Tile Full Pages	전체 페이지 타일링
 	Tint	색조
+	Fill Tint	칠 색조
+	Stroke Tint	선 색조
 	Tip extends past the end point	끝이 끝점을 지나 연장됨
 	Tip on the end point	끝이 끝점에 위치
 	Top	위쪽
@@ -4611,6 +4621,7 @@ theme	Appearance	외관
 @msg	{label}…	{label}…
 @msg	no blend options	혼합 옵션이 없습니다
 @msg	bad color {v}	잘못된 색상 {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel`은 null, 레이어 색상 이름 또는 #rrggbb입니다
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio은(는) 0.1에서 10 사이의 숫자여야 합니다
 @msg	the Color Picker is not open	색상 피커가 열려 있지 않습니다
 @msg	the Simplify slider is not open	단순화 슬라이더가 열려 있지 않습니다
@@ -4787,6 +4798,7 @@ theme	Appearance	외관
 	Stop Script	스크립트 중지
 	Show External Script Warning	외부 스크립트 경고 표시
 	A Script Is Running	스크립트 실행 중
+	Script Alert	스크립트 알림
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
 	Do not show this warning again	이 경고를 다시 표시하지 않음
 	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
@@ -4800,6 +4812,9 @@ theme	Appearance	외관
 @msg	the script is too large to run	스크립트가 너무 커서 실행할 수 없습니다
 @msg	a drag or an undo group is open; finish it before running a script	드래그 또는 실행 취소 그룹이 열려 있습니다. 스크립트를 실행하기 전에 완료하세요
 @msg	the script left a document that cannot be kept	스크립트가 유지할 수 없는 문서를 남겼습니다
+@msg	the script is no longer in the Scripts folder	스크립트가 더 이상 Scripts 폴더에 없습니다
+	Some scripts were not listed	일부 스크립트가 나열되지 않았습니다
+	The Scripts folder cannot be read	Scripts 폴더를 읽을 수 없습니다
 @msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
 @msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다
@@ -5308,6 +5323,7 @@ lighting	Light	광원
 @msg	Invalid drawing scale	잘못된 도면 축척
 @msg	Invalid real scale	잘못된 실제 축척
 @msg	Measured anchor no longer exists	측정한 고정점이 더 이상 없습니다
+@msg	Invalid measured point	측정한 점이 잘못되었습니다
 @msg	Measured segment no longer exists	측정한 세그먼트가 더 이상 없습니다
 @msg	Non-finite dimension	유한하지 않은 치수
 @msg	Only linear dimensions are horizontal or vertical	선형 치수만 가로 또는 세로로 지정할 수 있습니다
@@ -5689,6 +5705,12 @@ axis	Y Axis	Y축
 	Flag	깃발
 	Crosshair	십자선
 	Checkpoint	체크포인트
+	Inventory Icons	인벤토리 아이콘
+	Sword	검
+	Shield	방패
+	Potion	포션
+	Key	열쇠
+	Gem	보석
 	Open Symbol Library	심볼 라이브러리 열기
 	Save Symbol Library	심볼 라이브러리 저장
 	Save Symbol Library…	심볼 라이브러리 저장…
@@ -6358,3 +6380,9 @@ breakText	Glyphs	글리프
 	{ms} ms, {calls} host calls	{ms} ms, 호스트 호출 {calls}회
 	{dropped} earlier lines dropped, {cut} lines cut	이전 줄 {dropped}개 삭제됨, 줄 {cut}개 잘림
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	보류된 효과 새로 고침
+	Deferred Effects	보류된 효과
+@msg	no plug-in effect is deferred	보류된 플러그인 효과가 없습니다
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	플러그인 효과 {n}개를 보류하고 열었습니다. 효과 › 보류된 효과 새로 고침으로 실행합니다.

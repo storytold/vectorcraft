@@ -55,6 +55,8 @@
 	Scripts	Scripts
 	Check Script…	Script controleren…
 	Check Script	Script controleren
+	Some scripts were not listed	Sommige scripts zijn niet weergegeven
+	The Scripts folder cannot be read	De map Scripts kan niet worden gelezen
 	Other Script…	Ander script…
 	Document Setup…	Documentinstellingen…
 	Switch Units	Eenheden wisselen
@@ -734,6 +736,13 @@
 	Quest Outline	Quest
 	Coin Shine	Munt
 	Boss Alert	Baas
+	Status Effects	Statuseffecten
+	Poison Tint	Gif
+	Freeze Edge	Bevriezing
+	Burn Aura	Brand
+	Stun Pulse	Verdoving
+	Stealth Fade	Sluipen
+	Shield Buff	Schild
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
 	Gradient Finishes	Verloopafwerkingen
@@ -2103,6 +2112,8 @@ digits	Malayalam	Malayalam
 	Green	Groen
 	Shifts the tints of global and spot colors; other colors stay.	Verschuift de tinten van globale kleuren en spotkleuren; andere kleuren blijven ongewijzigd.
 	Tint	Tint
+	Fill Tint	Vultint
+	Stroke Tint	Contourtint
 	Color Guide Options	Opties voor kleurengids
 	Less	Minder
 	Steps:	Stappen:
@@ -2456,6 +2467,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Bestandsafmetingen
 	Transforms	Transformaties
 	Background Color:	Achtergrondkleur:
+	Guide Label:	Hulplijnlabel:
 	Show Center Mark	Middenmarkering tonen
 	Show Cross Hairs	Dradenkruis tonen
 	Show Video Safe Areas	Veilige videogebieden tonen
@@ -4108,6 +4120,7 @@ imageTrace	Outline	Contour
 	Stop Script	Script stoppen
 	Show External Script Warning	Waarschuwing voor externe scripts tonen
 	A Script Is Running	Er wordt een script uitgevoerd
+	Script Alert	Scriptmelding
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen
 	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
@@ -5338,6 +5351,7 @@ mark-style	Japanese	Japans
 @msg	Invalid drawing scale	Ongeldige tekeningsschaal
 @msg	Invalid real scale	Ongeldige werkelijke schaal
 @msg	Measured anchor no longer exists	Gemeten ankerpunt bestaat niet meer
+@msg	Invalid measured point	Ongeldig gemeten punt
 @msg	Measured segment no longer exists	Gemeten segment bestaat niet meer
 @msg	Non-finite dimension	Niet-eindige maatlijn
 @msg	Only linear dimensions are horizontal or vertical	Alleen lineaire maatlijnen zijn horizontaal of verticaal
@@ -5951,6 +5965,12 @@ axis	Y Axis	Y-as
 	Flag	Vlag
 	Crosshair	Vizier
 	Checkpoint	Controlepunt
+	Inventory Icons	Inventarisiconen
+	Sword	Zwaard
+	Shield	Schild
+	Potion	Drank
+	Key	Sleutel
+	Gem	Edelsteen
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…
@@ -6568,3 +6588,7 @@ breakText	Glyphs	Glyphs
 	Ended by an internal fault	Beëindigd door een interne fout
 	{ms} ms, {calls} host calls	{ms} ms, {calls} host-aanroepen
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eerdere regels verwijderd, {cut} regels ingekort
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
+	Deferred Effects	Uitgestelde effecten

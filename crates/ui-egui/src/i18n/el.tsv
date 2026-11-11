@@ -267,6 +267,7 @@ font-technology	Variable	Μεταβλητές
 	Average…	Μέσος όρος…
 	Axis:	Άξονας:
 	Background Color:	Χρώμα φόντου:
+	Guide Label:	Ετικέτα οδηγών:
 	Show Center Mark	Εμφάνιση σημαδιού κέντρου
 	Show Cross Hairs	Εμφάνιση σταυρονήματος
 	Show Video Safe Areas	Εμφάνιση ασφαλών περιοχών βίντεο
@@ -2084,6 +2085,8 @@ font-technology	Variable	Μεταβλητές
 	Threshold	Κατώφλι
 	Tile	Παράθεση
 	Tint	Χρωματική απόχρωση
+	Fill Tint	Χρωματική απόχρωση γεμίσματος
+	Stroke Tint	Χρωματική απόχρωση περιγράμματος
 	Tolerance	Ανοχή
 	Tolerance:	Ανοχή:
 	Tool Options…	Επιλογές εργαλείου…
@@ -2244,6 +2247,7 @@ axis	Both	Και τα δύο
 	Stop Script	Διακοπή σεναρίου
 	Show External Script Warning	Εμφάνιση προειδοποίησης για εξωτερικά σενάρια
 	A Script Is Running	Εκτελείται ένα σενάριο
+	Script Alert	Ειδοποίηση σεναρίου
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
 	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
 	Stop the script and undo what it did? Then quit again.	Διακοπή του σεναρίου και αναίρεση όσων έκανε; Έπειτα κάντε ξανά έξοδο.
@@ -2257,6 +2261,9 @@ axis	Both	Και τα δύο
 @msg	the script is too large to run	το σενάριο είναι πολύ μεγάλο για εκτέλεση
 @msg	a drag or an undo group is open; finish it before running a script	είναι ανοιχτή μια μεταφορά ή ομάδα αναίρεσης· ολοκληρώστε την πριν εκτελέσετε σενάριο
 @msg	the script left a document that cannot be kept	το σενάριο άφησε ένα έγγραφο που δεν μπορεί να διατηρηθεί
+@msg	the script is no longer in the Scripts folder	το σενάριο δεν βρίσκεται πλέον στον φάκελο Scripts
+	Some scripts were not listed	Ορισμένα σενάρια δεν εμφανίζονται στη λίστα
+	The Scripts folder cannot be read	Δεν είναι δυνατή η ανάγνωση του φακέλου Scripts
 @msg	the script's run is no longer available	η εκτέλεση του σεναρίου δεν είναι πλέον διαθέσιμη
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	μια εντολή που απέτυχε άλλαξε βήματα αναίρεσης που δεν ήταν δυνατό να επαναφερθούν, οπότε το σενάριο σταμάτησε
 @msg	a recovery copy could not be written, so the script was not run	δεν ήταν δυνατή η εγγραφή αντιγράφου ανάκτησης, οπότε το σενάριο δεν εκτελέστηκε
@@ -3618,6 +3625,13 @@ digits	Malayalam	Μαλαγιάλαμ
 	Quest Outline	Αποστολή
 	Coin Shine	Νόμισμα
 	Boss Alert	Αρχηγός
+	Status Effects	Εφέ κατάστασης
+	Poison Tint	Δηλητήριο
+	Freeze Edge	Πάγωμα
+	Burn Aura	Κάψιμο
+	Stun Pulse	Ζάλη
+	Stealth Fade	Αορασία
+	Shield Buff	Ασπίδα
 	Shape Builder Regions	Περιοχές δημιουργίας σχημάτων
 	Shape Effects	Εφέ σχημάτων
 	Shape Mode	Λειτουργία σχήματος
@@ -4245,6 +4259,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	το axis πρέπει να είναι "vertical", "horizontal" ή γωνία σε μοίρες, όχι `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	φόντο {other}: transparent, white, black ή χρώμα όπως "#ff8800"
 @msg	bad color {v}	μη έγκυρο χρώμα {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	το `guideLabel` είναι null, όνομα χρώματος επιπέδου ή #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	Το videoRulerPixelAspectRatio πρέπει να είναι αριθμός από 0,1 έως 10
 @msg	bad colour `{hex}` (#rrggbb)	μη έγκυρο χρώμα `{hex}` (#rrggbb)
 @msg	bad page tree	μη έγκυρο δέντρο σελίδων
@@ -5690,6 +5705,7 @@ effect	Points	Σημεία
 @msg	Invalid drawing scale	Μη έγκυρη κλίμακα σχεδίου
 @msg	Invalid real scale	Μη έγκυρη πραγματική κλίμακα
 @msg	Measured anchor no longer exists	Το μετρημένο σημείο αγκύρωσης δεν υπάρχει πλέον
+@msg	Invalid measured point	Μη έγκυρο μετρημένο σημείο
 @msg	Measured segment no longer exists	Το μετρημένο τμήμα δεν υπάρχει πλέον
 @msg	Non-finite dimension	Η διάσταση δεν είναι πεπερασμένος αριθμός
 @msg	Only linear dimensions are horizontal or vertical	Μόνο οι γραμμικές διαστάσεις είναι οριζόντιες ή κατακόρυφες
@@ -6062,6 +6078,12 @@ axis	Y Axis	Άξονας Y
 	Flag	Σημαία
 	Crosshair	Σταυρόνημα
 	Checkpoint	Σημείο ελέγχου
+	Inventory Icons	Εικονίδια αποθέματος
+	Sword	Ξίφος
+	Shield	Ασπίδα
+	Potion	Φίλτρο
+	Key	Κλειδί
+	Gem	Πετράδι
 	Open Symbol Library	Άνοιγμα βιβλιοθήκης συμβόλων
 	Save Symbol Library	Αποθήκευση βιβλιοθήκης συμβόλων
 	Save Symbol Library…	Αποθήκευση βιβλιοθήκης συμβόλων…
@@ -6728,3 +6750,9 @@ breakText	Glyphs	Γλύφοι
 	{ms} ms, {calls} host calls	{ms} ms, {calls} κλήσεις προς το κεντρικό σύστημα
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} παλαιότερες γραμμές απορρίφθηκαν, {cut} γραμμές περικόπηκαν
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	Τα `first` και `last` πρέπει να είναι αριθμοί γραμμών που κρατά η κονσόλα, το `first` πριν από το `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή
+	Deferred Effects	Εφέ σε αναμονή
+@msg	no plug-in effect is deferred	κανένα εφέ προσθέτου δεν είναι σε αναμονή
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Άνοιξε με {n} εφέ προσθέτου σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή το εκτελεί.|Άνοιξε με {n} εφέ προσθέτων σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή τα εκτελεί.

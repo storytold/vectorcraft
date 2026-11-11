@@ -283,6 +283,7 @@ font-technology	Variable	Варіативні
 	Average…	Усереднити…
 	Axis:	Вісь:
 	Background Color:	Колір тла:
+	Guide Label:	Мітка напрямних:
 	Show Center Mark	Показати центральну позначку
 	Show Cross Hairs	Показати перехрестя
 	Show Video Safe Areas	Показати безпечні зони відео
@@ -3184,6 +3185,13 @@ digits	Malayalam	Малаялам
 	Quest Outline	Квест
 	Coin Shine	Монета
 	Boss Alert	Бос
+	Status Effects	Ефекти статусу
+	Poison Tint	Отрута
+	Freeze Edge	Заморозка
+	Burn Aura	Опік
+	Stun Pulse	Оглушення
+	Stealth Fade	Невидимість
+	Shield Buff	Щит
 	Shape	Фігура
 	Shape Builder	Створення фігур
 	Shape Builder Regions	Області створення фігур
@@ -3604,6 +3612,8 @@ effect	Points	Точки
 	Copies per Sheet (as many as fit, in a grid)	Копій на аркуш (скільки поміститься, сіткою)
 	Gutter:	Проміжок:
 	Tint	Відтінок
+	Fill Tint	Відтінок заливки
+	Stroke Tint	Відтінок обведення
 	Tip extends past the end point	Кінчик виходить за кінцеву точку
 	Tip on the end point	Кінчик на кінцевій точці
 	Title Case	Як у заголовку
@@ -4115,6 +4125,7 @@ axis	Both	Обидві
 	Stop Script	Зупинити скрипт
 	Show External Script Warning	Показувати попередження про зовнішні скрипти
 	A Script Is Running	Виконується скрипт
+	Script Alert	Повідомлення скрипту
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
 	Do not show this warning again	Більше не показувати це попередження
 	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
@@ -4128,6 +4139,9 @@ axis	Both	Обидві
 @msg	the script is too large to run	скрипт завеликий для виконання
 @msg	a drag or an undo group is open; finish it before running a script	відкрито перетягування або групу скасування; завершіть їх перед запуском скрипта
 @msg	the script left a document that cannot be kept	скрипт залишив документ, який не можна зберегти
+@msg	the script is no longer in the Scripts folder	скрипт більше не міститься в папці Scripts
+	Some scripts were not listed	Деякі сценарії не показано
+	The Scripts folder cannot be read	Не вдалося прочитати папку Scripts
 @msg	the script's run is no longer available	виконання скрипта більше не доступне
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	невдала команда змінила кроки скасування, які не вдалося відновити, тому скрипт зупинено
 @msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
@@ -4312,6 +4326,7 @@ axis	Both	Обидві
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` має бути null, назвою кольору шару або #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio має бути числом від 0,1 до 10
 @msg	the Color Picker is not open	палітра кольорів не відкрита
 @msg	the Simplify slider is not open	повзунок «Спростити» не відкрито
@@ -5327,6 +5342,7 @@ lighting	Light	Світло
 @msg	Invalid drawing scale	Неприпустимий масштаб креслення
 @msg	Invalid real scale	Неприпустимий реальний масштаб
 @msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
+@msg	Invalid measured point	Недійсна виміряна точка
 @msg	Measured segment no longer exists	Виміряний сегмент більше не існує
 @msg	Non-finite dimension	Розмір не є скінченним числом
 @msg	Only linear dimensions are horizontal or vertical	Лише лінійні розміри бувають горизонтальними або вертикальними
@@ -5708,6 +5724,12 @@ axis	Y Axis	Вісь Y
 	Flag	Прапор
 	Crosshair	Приціл
 	Checkpoint	Контрольна точка
+	Inventory Icons	Піктограми інвентарю
+	Sword	Меч
+	Shield	Щит
+	Potion	Зілля
+	Key	Ключ
+	Gem	Самоцвіт
 	Open Symbol Library	Відкрити бібліотеку символів
 	Save Symbol Library	Зберегти бібліотеку символів
 	Save Symbol Library…	Зберегти бібліотеку символів…
@@ -6377,3 +6399,9 @@ breakText	Glyphs	Гліфи
 	{ms} ms, {calls} host calls	{ms} мс, викликів хоста: {calls}
 	{dropped} earlier lines dropped, {cut} lines cut	Відкинуто попередніх рядків: {dropped}, обрізано рядків: {cut}
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` і `last` мають бути номерами рядків, які зберігає консоль, причому `first` не пізніше `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Оновити відкладені ефекти
+	Deferred Effects	Відкладені ефекти
+@msg	no plug-in effect is deferred	немає відкладених ефектів модулів
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Відкрито з {n} відкладеним ефектом модуля. Ефект › Оновити відкладені ефекти виконає його.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.

@@ -1208,6 +1208,73 @@ fn a_drag_from_a_ruler_onto_the_canvas_makes_a_guide() {
     assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the tool drew nothing");
 }
 
+/// An artboard's guide label colors its own guides only: a canvas guide, a guide of an artboard
+/// without a label and a guide of a deleted artboard keep the guide color preference, and a
+/// selected labeled guide takes the selection color. Hide Guides hides labeled guides too.
+#[test]
+fn artboard_guide_label_colors_only_its_own_guides() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("artboard.new", &json!({})).unwrap();
+    app.session.execute("artboard.new", &json!({})).unwrap();
+    app.session.execute("artboard.setProps", &json!({"index": 0, "guideLabel": "Red"})).unwrap();
+    app.session.execute("artboard.setProps", &json!({"index": 2, "guideLabel": "#00ff00"})).unwrap();
+    // Vertical guides at x 100 (artboard 1, Red), 520 (artboard 2, no label) and 940 (artboard
+    // 3, whose artboard is then deleted), and a horizontal canvas guide at y 150.
+    for (pos, artboard) in [(100, json!(0)), (520, json!(1)), (940, json!(2))] {
+        app.session.execute("guide.add", &json!({"vertical": true, "pos": pos, "artboard": artboard})).unwrap();
+    }
+    app.session.execute("guide.add", &json!({"vertical": false, "pos": 150})).unwrap();
+    // Deleting artboard 3 deletes its guide; a guide still naming its id (as a file might) is an
+    // orphan, drawn across the canvas.
+    let gone = app.session.active().unwrap().doc.artboards[2].id;
+    app.session.execute("artboard.setProps", &json!({"index": 2, "guideLabel": null})).unwrap();
+    app.session.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 300})).unwrap();
+    {
+        let st = app.session.active_mut().unwrap();
+        let doc = std::sync::Arc::make_mut(&mut st.doc);
+        let last = doc.guides.len() - 1;
+        doc.guides[last].artboard = Some(gone);
+    }
+    app.ui.view.guides = true;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let t = Tokens::get(&ctx);
+    let pref = LineLook::guides(&app.session.prefs, &t).color;
+    let colors = |app: &mut VectorcraftApp, at: f64, vertical: bool| -> Vec<Color32> {
+        shapes(app, &ctx)
+            .iter()
+            .filter_map(|s| match s {
+                Shape::LineSegment { points, stroke } => {
+                    let (a, b) = (xf.to_doc(points[0]), xf.to_doc(points[1]));
+                    let (u, v) = if vertical { (a.x, b.x) } else { (a.y, b.y) };
+                    ((u - at).abs() < 0.01 && (v - at).abs() < 0.01).then_some(stroke.color)
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let red = Color32::from_rgb(0xff, 0x4f, 0x4f);
+    assert_eq!(colors(&mut app, 100.0, true), [red], "the labeled artboard's guide");
+    assert_eq!(colors(&mut app, 520.0, true), [pref], "an artboard without a label");
+    assert_eq!(colors(&mut app, 150.0, false), [pref], "a canvas guide");
+    assert!(colors(&mut app, 940.0, true).is_empty(), "deleted with its artboard");
+    assert_eq!(colors(&mut app, 300.0, true), [pref], "a guide whose artboard is gone");
+    assert_ne!(red, pref);
+    // Selected, it is drawn in the selection color; deselected, in the label's again.
+    app.session.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    assert_eq!(colors(&mut app, 100.0, true), [t.selection], "selected");
+    app.session.execute("guide.select", &json!({"indexes": []})).unwrap();
+    assert_eq!(colors(&mut app, 100.0, true), [red], "deselected");
+    // A new label shows on the next frame.
+    app.session.execute("artboard.setProps", &json!({"index": 0, "guideLabel": "Black"})).unwrap();
+    assert_eq!(colors(&mut app, 100.0, true), [Color32::BLACK]);
+    app.ui.view.guides = false;
+    assert!(colors(&mut app, 100.0, true).is_empty(), "Hide Guides hides it");
+}
+
 /// #4646: a guide dragged out of a ruler shows as a line across the canvas while it is dragged,
 /// also with Preferences › Performance › Real-time Drawing and Editing off (only its position
 /// label showed then).
@@ -2326,6 +2393,52 @@ fn undecodable_images_are_marked_and_reported_once() {
     frame(&mut app, &ctx, vec![]);
     frame(&mut app, &ctx, vec![]);
     assert_eq!(app.ui.status, "", "said once");
+}
+
+/// The plug-in effects a document's first view leaves out past its budget are reported in the
+/// status bar once, in the singular or the plural, and Effect › Refresh Deferred Effects is
+/// enabled until it has run them.
+#[test]
+fn the_first_view_reports_the_plug_in_effects_it_deferred() {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use vectorcraft_plugins::wat as tpl;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.canvas.worker_started = true; // render on this thread
+    let module = tpl::module(&tpl::manifest("test.ui.deferred", "effect", "{}"), tpl::ECHO, "", 1);
+    app.session.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(module).unwrap())})).unwrap();
+    // Each reading of the clock is 3 s later: the first run's result comes back after the budget,
+    // and no later run starts.
+    let step = std::sync::Arc::new(AtomicU64::new(3_000));
+    let ctx = egui::Context::default();
+    for (count, said) in [
+        (2, "Opened with 2 plug-in effects deferred. Effect › Refresh Deferred Effects runs them."),
+        (1, "Opened with 1 plug-in effect deferred. Effect › Refresh Deferred Effects runs it."),
+    ] {
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        // Art the plug-in has not been given before: a result it gave is kept and drawn at once.
+        for i in 0..count {
+            let x = 31.0 + 97.0 * f64::from(i) + 13.0 * f64::from(count);
+            let id = app.session.execute("shape.rectangle", &json!({"x": x, "y": 47, "width": 23, "height": 29})).unwrap()["id"].clone();
+            app.session.execute("effect.apply", &json!({"ids": [id], "effect": "plugin.test.ui.deferred"})).unwrap();
+        }
+        app.session.execute("select.none", &json!({})).unwrap();
+        let (now, by) = (std::sync::Arc::new(AtomicU64::new(0)), step.clone());
+        let clock: vectorcraft_plugins::deferred::Clock =
+            std::sync::Arc::new(move || Some(now.fetch_add(by.load(Ordering::Relaxed), Ordering::Relaxed)));
+        app.session.doc_mut().unwrap().plugin_effects = vectorcraft_plugins::deferred::Deferrals::with_clock(clock);
+        step.store(3_000, Ordering::Relaxed);
+        app.status("");
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(app.ui.status, said);
+        assert!(crate::menus::enabled(&app, "effect.refreshDeferred"));
+        app.status("");
+        app.session.doc_mut().unwrap().revision += 1;
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(app.ui.status, "", "said once");
+        step.store(0, Ordering::Relaxed);
+        app.session.execute("effect.refreshDeferred", &json!({})).unwrap();
+        assert!(!crate::menus::enabled(&app, "effect.refreshDeferred"), "nothing is left deferred");
+    }
 }
 
 /// A drag of an object with raster effects (#1257): the drag's frames render while
@@ -9131,6 +9244,20 @@ fn the_task_bar_offers_the_artboard_tools_actions() {
     assert_eq!(names(&mut app), ["Resize", "Duplicate", "Export"]);
 }
 
+/// Screen readers name the Contextual Task Bar's text buttons by their labels.
+#[test]
+fn screen_readers_name_the_task_bars_text_buttons() {
+    use crate::widgets::accessibility_tests::{named, tree};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 180, "y": 130, "width": 40, "height": 40})).unwrap();
+    app.select_tool("selection");
+    let tree = tree(|ui| show(&mut app, ui));
+    for label in ["Edit Path", "Offset Path", "Simplify", "Duplicate"] {
+        assert_eq!(named(&tree, label).role(), egui::accesskit::Role::Button, "{label}");
+    }
+}
+
 /// A selected group's Contextual Task Bar offers Ungroup and Isolate. While an opacity mask is
 /// edited, when Enter Isolation Mode is off, a group in the mask art gets Ungroup without Isolate.
 #[test]
@@ -10772,6 +10899,7 @@ fn pan_job(doc: &std::sync::Arc<vectorcraft_doc::Document>, key: &CacheKey, (dx,
         view: Affine::translate((dx, dy)),
         opts: vectorcraft_render::RenderOptions::default(),
         scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+        effects: Default::default(),
         may_copy: true,
         may_keep: true,
     }
@@ -11387,6 +11515,151 @@ fn direct_selection_shows_the_bounding_box_while_cmd_is_held() {
     assert!(handle_drawn(&mut app, egui::Modifiers::COMMAND), "Cmd held shows the Selection tool's box");
     assert!(!handle_drawn(&mut app, egui::Modifiers::NONE), "gone once Cmd is released");
     assert!(app.ui.view.bounding_box, "View › Show Bounding Box is unchanged");
+}
+
+/// #5239: a double-click on a ruler adds a guide at the pointer: a vertical one on the top ruler
+/// at its x, a horizontal one on the left ruler at its y, as one undo step, shown even when
+/// guides were hidden. The first click of the pair adds nothing.
+#[test]
+fn double_clicking_a_ruler_adds_a_guide_at_that_position() {
+    // The ruler to click, the guide's orientation and its position, the pointer at that position.
+    for (top, vertical, pos) in [(true, true, 120.0), (false, false, 80.0)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.ui.view.rulers = true;
+        app.ui.view.guides = false;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let view = app.view_mut().unwrap();
+        view.zoom = 2.0;
+        view.rotation = 0.0;
+        view.center = Point::new(200.0, 150.0);
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let at = if top {
+            pos2(xf.to_screen(Point::new(pos, 0.0)).x, rect.top() - RULER / 2.0)
+        } else {
+            pos2(rect.left() - RULER / 2.0, xf.to_screen(Point::new(0.0, pos)).y)
+        };
+        let guides = |app: &mut VectorcraftApp| {
+            let list = app.session.execute("guide.list", &json!({})).unwrap();
+            list.as_array().unwrap().iter().map(|g| (g["vertical"].as_bool().unwrap(), g["pos"].as_f64().unwrap())).collect::<Vec<_>>()
+        };
+        let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let before = steps(&app);
+        let click = |app: &mut VectorcraftApp| {
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(app, &ctx, vec![button(true)]);
+            frame(app, &ctx, vec![button(false)]);
+        };
+        click(&mut app);
+        assert_eq!(guides(&mut app), vec![], "a single click adds none");
+        click(&mut app);
+        let got = guides(&mut app);
+        assert_eq!(got.len(), 1, "top ruler: {top}, {got:?}");
+        assert!(got[0].0 == vertical && (got[0].1 - pos).abs() < 0.01, "top ruler: {top}, want vertical {vertical} at {pos}: {got:?}");
+        assert!(app.ui.view.guides, "the new guide is shown");
+        assert_eq!(steps(&app), before + 1, "one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(guides(&mut app), vec![]);
+    }
+}
+
+/// A fresh app with a 400 x 300 document, rulers on, the view at zoom 2 turned `rotation` degrees,
+/// and its first frame drawn.
+fn ruler_guide_app(rotation: f64) -> (VectorcraftApp, egui::Context) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.rulers = true;
+    app.ui.view.guides = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let view = app.view_mut().unwrap();
+    view.zoom = 2.0;
+    view.rotation = rotation;
+    view.center = Point::new(200.0, 150.0);
+    frame(&mut app, &ctx, vec![]);
+    (app, ctx)
+}
+
+/// One primary click at `at`, as three frames (move, press, release).
+fn click_at(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2) {
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(app, ctx, vec![button(true)]);
+    frame(app, ctx, vec![button(false)]);
+}
+
+/// The ruler guides as (vertical, position).
+fn guide_list(app: &mut VectorcraftApp) -> Vec<(bool, f64)> {
+    let list = app.session.execute("guide.list", &json!({})).unwrap();
+    list.as_array().unwrap().iter().map(|g| (g["vertical"].as_bool().unwrap(), g["pos"].as_f64().unwrap())).collect()
+}
+
+/// #5239 review: egui counts a double-click by position and time, not by widget, so a click on
+/// the canvas right at a ruler followed at once by a click on the ruler is not a double-click on
+/// the ruler. No guide; two clicks on the ruler still make one.
+#[test]
+fn a_canvas_click_then_a_ruler_click_adds_no_guide() {
+    for (top, canvas_first) in [(true, true), (false, true), (true, false), (false, false)] {
+        let (mut app, ctx) = ruler_guide_app(0.0);
+        let rect = app.canvas_rect.unwrap();
+        // Two points less than 6 pt apart, either side of the ruler's inner edge.
+        let (on_canvas, on_ruler) = if top {
+            (pos2(rect.center().x, rect.top() + 1.0), pos2(rect.center().x, rect.top() - 1.0))
+        } else {
+            (pos2(rect.left() + 1.0, rect.center().y), pos2(rect.left() - 1.0, rect.center().y))
+        };
+        click_at(&mut app, &ctx, if canvas_first { on_canvas } else { on_ruler });
+        click_at(&mut app, &ctx, on_ruler);
+        let want = usize::from(!canvas_first);
+        assert_eq!(guide_list(&mut app).len(), want, "top ruler: {top}, first click on the canvas: {canvas_first}");
+    }
+}
+
+/// #5239 review: the rulers read the canvas's coordinates turned with the view, so a guide made
+/// by a double-click runs across the ruler's axis in any view: it passes through the clicked
+/// point and crosses the ruler's edge at it, never along it. At 90° the top ruler reads the
+/// document's y, so its guide is horizontal; the left ruler reads x, so its guide is vertical.
+/// A view turned part of the way takes the document axis nearer to the ruler's.
+#[test]
+fn a_ruler_double_click_follows_a_rotated_view() {
+    // Rotation (degrees), top ruler's guide is vertical, left ruler's guide is vertical.
+    for (rotation, top_vertical, left_vertical) in [
+        (0.0, true, false),
+        (90.0, false, true),
+        (-90.0, false, true),
+        (180.0, true, false),
+        (270.0, false, true),
+        (30.0, true, false),
+        (60.0, false, true),
+    ] {
+        for top in [true, false] {
+            let (mut app, ctx) = ruler_guide_app(rotation);
+            let rect = app.canvas_rect.unwrap();
+            let xf = Xf::new(rect, app.view().unwrap());
+            let at =
+                if top { pos2(rect.center().x + 37.0, rect.top() - RULER / 2.0) } else { pos2(rect.left() - RULER / 2.0, rect.center().y + 23.0) };
+            click_at(&mut app, &ctx, at);
+            click_at(&mut app, &ctx, at);
+            let got = guide_list(&mut app);
+            let label = format!("rotation {rotation}, top ruler: {top}: {got:?}");
+            assert_eq!(got.len(), 1, "{label}");
+            let (vertical, pos) = got[0];
+            assert_eq!(vertical, if top { top_vertical } else { left_vertical }, "{label}");
+            // Through the clicked point.
+            let doc = xf.to_doc(at);
+            assert!((pos - if vertical { doc.x } else { doc.y }).abs() < 0.01, "{label}: through {doc:?}");
+            // Its direction on screen is not along the ruler: the line crosses the ruler's edge.
+            let along = if vertical { Point::new(doc.x, doc.y + 1.0) } else { Point::new(doc.x + 1.0, doc.y) };
+            let dir = (xf.to_screen(along) - xf.to_screen(doc)).normalized();
+            let across = if top { dir.y.abs() } else { dir.x.abs() };
+            assert!(across > 0.5, "{label}: the guide runs along the ruler ({dir:?})");
+        }
+    }
 }
 
 /// An edit to a 3D effect renders the part it changed on this thread, measured by the renderer

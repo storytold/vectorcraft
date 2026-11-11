@@ -280,6 +280,37 @@ fn metrics_pair_step_preserves_the_drawn_auto_position() {
     assert!((moved - s.prefs.tracking_increment * 0.1).abs() < 0.01, "V moves by one kerning increment: {moved}");
 }
 
+/// At 50% Horizontal Scale the font's pair reads as the same thousandths of an em as at 100%:
+/// kerning is measured in the em as the scale draws it (`vectorcraft_text::spacing_scale`), so the
+/// value read keeps V where the font's kerning draws it, and a step moves V half as far as at 100%.
+#[test]
+fn horizontally_scaled_pair_reads_as_the_kerning_that_keeps_it() {
+    use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(pair_kerning_font().unwrap());
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "AV", "size": 100, "font": PAIR_KERNING_FAMILY})).unwrap()["id"].as_u64().unwrap(),
+    );
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 2, "hScale": 50})).unwrap();
+    let before = obj(&s, id);
+    assert_eq!(before.runs[0].style.h_scale, 50.0);
+    let auto = vectorcraft_text::layout(db, &before);
+    let drawn_v = |layout: &vectorcraft_text::TextLayout| layout.glyphs.iter().find(|g| g.byte == 1).unwrap().xf.as_coeffs()[4];
+    let read = crate::cmd::effective_kerning(db, &before, &auto, 0, 1);
+    assert!((read + 160.0).abs() < 0.01, "the font's -160/1000 em: {read}");
+    let mut same = before.clone();
+    vectorcraft_text::edit::style_range(&mut same.runs, 0, 1, |st| st.kerning = Some(read));
+    assert!((drawn_v(&vectorcraft_text::layout(db, &same)) - drawn_v(&auto)).abs() < 0.01);
+
+    s.execute("type.step", &json!({"id": id.0, "start": 1, "end": 1, "attribute": "kerning", "by": 1})).unwrap();
+    let after = obj(&s, id);
+    assert!((after.runs[0].style.kerning.unwrap() + 160.0 - s.prefs.tracking_increment).abs() < 0.01);
+    let moved = drawn_v(&vectorcraft_text::layout(db, &after)) - drawn_v(&auto);
+    assert!((moved - s.prefs.tracking_increment * 0.05).abs() < 0.01, "V moves by half a kerning increment at 100%: {moved}");
+}
+
 #[test]
 fn effective_auto_kerning_at_area_line_end_survives_unkerned_wrap() {
     use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
@@ -3434,6 +3465,75 @@ fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
     assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
     let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
     assert_eq!(query["chosen"], json!(glyph.gid), "an overflowing character reports the fallback glyph it is drawn with");
+}
+
+/// `text.setGlyphAlternate` with `gid: null` reports the glyph the character is drawn with, as
+/// `text.glyphAlternates` does: the fallback face's glyph for a character the font lacks, laid out
+/// or overflowing, and the capital that All Caps draws for an a.
+#[test]
+fn a_glyph_choice_taken_away_reports_the_glyph_drawn() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let mut s = session();
+    let reset = |s: &mut Session, id: NodeId, start: usize| {
+        s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": start, "gid": null})).unwrap()["gid"].clone()
+    };
+    let chosen = |s: &mut Session, id: NodeId, start: usize| {
+        s.execute("text.glyphAlternates", &json!({"id": id.0, "start": start})).unwrap()["chosen"].clone()
+    };
+
+    let ch = 'Ƃ';
+    assert_eq!(face.glyph_for(ch), 0);
+    let point = json!({"x": 0, "y": 0, "text": ch.to_string(), "font": alternates_family(true)});
+    let id = NodeId(s.execute("text.create", &point).unwrap()["id"].as_u64().unwrap());
+    let drawn = vectorcraft_text::layout(db, &obj(&s, id)).glyphs[0].gid;
+    assert_ne!(drawn, 0);
+    assert_eq!(reset(&mut s, id, 0), json!(drawn), "the fallback glyph");
+    assert_eq!(chosen(&mut s, id, 0), json!(drawn));
+
+    let area = json!({"x": 0, "y": 300, "text": ch.to_string(), "font": alternates_family(true), "area": {"width": 200, "height": 2}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(reset(&mut s, boxed, 0), json!(drawn), "the overflowing character's fallback glyph");
+
+    let caps = NodeId(
+        s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("text.setRangeStyle", &json!({"id": caps.0, "start": 0, "end": 4, "allCaps": true})).unwrap();
+    let drawn = vectorcraft_text::layout(db, &obj(&s, caps)).glyphs.iter().find(|g| g.byte == 1).expect("the a is laid out").gid;
+    assert_ne!(drawn, face.glyph_for('a'), "All Caps draws the a as A");
+    assert_eq!(reset(&mut s, caps, 1), json!(drawn), "the capital drawn");
+    assert_eq!(chosen(&mut s, caps, 1), json!(drawn));
+}
+
+/// A run that holds a choice for its first character and goes on past it, as a file may have,
+/// draws Source Serif 4's fi ligature for the f and the i after that character. `gid: null` for the
+/// i leaves the text as it is and reports the ligature, as `text.glyphAlternates` does.
+#[test]
+fn a_glyph_choice_taken_away_inside_a_ligature_reports_the_ligature() {
+    let db = vectorcraft_text::FontDb::global();
+    let face = db.face("Source Serif 4", "Regular").expect("the bundled face");
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xfin", "size": 40, "font": "Source Serif 4"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let mut runs = obj(&s, id).runs;
+    runs[0].style.glyph_alternate = Some(face.choice('x', face.glyph_for('x')));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let Some(NodeKind::Text(text)) = doc.node_mut(id).map(|n| &mut n.kind) else { panic!("text") };
+    text.runs = runs.clone();
+    let ligature = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().find(|g| g.byte == 1 && g.len == 2).expect("f + i is one glyph").gid;
+    let chosen = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 2})).unwrap()["chosen"].clone();
+    assert_eq!(chosen, json!(ligature));
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": null})).unwrap();
+    assert_eq!(r["gid"], chosen, "the ligature drawn for the i");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no edit");
+    assert_eq!(obj(&s, id).runs, runs, "the runs are kept");
 }
 
 /// A fallback face draws Ka with the vowel sign I in one cluster, the vowel sign first. The glyph

@@ -21,8 +21,8 @@ use serde_json::{Map, Value, json};
 use vectorcraft_brush::Brush;
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Document, GraphicStyle, Node, NodeKind, PatternDef, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration,
-    TextStyleDef,
+    Appearance, AppearanceItem, Document, Effect, GraphicStyle, Node, NodeKind, PatternDef, Symbol, SymbolExportType, SymbolNineSlice,
+    SymbolRegistration, TextStyleDef,
 };
 
 use super::super::brushsym::{set_natural_size, stored_natural_size};
@@ -136,6 +136,31 @@ fn node_refs(n: &Node, f: Visit) {
             NodeKind::PlacedDocument(pl) => f(Ref::Name(Res::Image, &pl.key)),
             NodeKind::SymbolInstance { symbol, .. } => f(Ref::Name(Res::Symbol, symbol)),
             _ => {}
+        }
+    });
+}
+
+/// The `(name, xml)` of `e` when it is an SVG filter effect.
+fn filter_of(e: &Effect) -> Option<(String, String)> {
+    let text = |k: &str| e.params.get(k).and_then(Value::as_str).map(str::to_string);
+    if e.id != Appearance::SVG_FILTER {
+        return None;
+    }
+    Some((text("name")?, text("xml")?))
+}
+
+/// The SVG filter effects of appearance `a` (its own and its fills' and strokes').
+fn appearance_filters(a: &Appearance, out: &mut BTreeSet<(String, String)>) {
+    let items = a.items.iter().flat_map(|i| i.effects().iter());
+    out.extend(a.effects.iter().chain(items).filter_map(filter_of));
+}
+
+/// The SVG filter effects in the subtree of `n` (opacity-mask art included).
+fn node_filters(n: &Node, out: &mut BTreeSet<(String, String)>) {
+    n.walk(&mut |m| {
+        appearance_filters(&m.appearance, out);
+        if let Some(mask) = &m.extras().mask {
+            node_filters(&mask.art, out);
         }
     });
 }
@@ -527,6 +552,9 @@ impl SwatchChoices {
 #[derive(Clone, Debug, Default)]
 struct Relink {
     renames: BTreeMap<Res, BTreeMap<String, String>>,
+    /// An SVG filter effect's `(name, xml)` on the clipboard → its `(name, xml)` in the document
+    /// ([`Clipboard::filter_links`]).
+    filters: BTreeMap<(String, String), (String, String)>,
     /// Graphic style id on the clipboard → its id in the document. Links to other ids are dropped.
     styles: BTreeMap<u32, u32>,
     /// Swatch (its name in the document) → the colour linked colours show at 100 %.
@@ -566,6 +594,15 @@ impl Relink {
         });
     }
     fn appearance(&self, a: &mut Appearance) {
+        if !self.filters.is_empty() {
+            let items = a.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
+            for e in a.effects.iter_mut().chain(items) {
+                if let Some((name, xml)) = filter_of(e).and_then(|k| self.filters.get(&k)) {
+                    e.params["name"] = json!(name);
+                    e.params["xml"] = json!(xml);
+                }
+            }
+        }
         for it in &mut a.items {
             self.paint(it.paint_mut());
             if let AppearanceItem::Stroke(l) = it
@@ -1013,6 +1050,7 @@ impl Clipboard {
     /// of definitions that use each other is matched on its own ([`loop_groups`]).
     fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, in_use_order: bool) -> Imported {
         let mut out = Imported::default();
+        out.relink.filters = self.filter_links(d, same_doc);
         self.import_images(d, used, same_doc, &mut out);
         self.import_swatches(d, used, choices, same_doc, &mut out);
         // Brushes whose art shows no symbols or patterns, before the symbols and patterns whose art
@@ -1170,8 +1208,63 @@ impl Clipboard {
             }
             vectorcraft_brush::store(d, &lib);
         }
-        out.relinks = !(out.relink.renames.is_empty() && out.relink.styles.is_empty() && out.relink.colors.is_empty() && used.styles.is_empty());
+        out.relinks = !(out.relink.renames.is_empty()
+            && out.relink.filters.is_empty()
+            && out.relink.styles.is_empty()
+            && out.relink.colors.is_empty()
+            && used.styles.is_empty());
         out
+    }
+
+    /// How the pasted SVG filter effects relink ([`Relink::filters`]). Each names the document's
+    /// filter of its name; one that draws another definition than that filter takes the document's
+    /// filter when pasted back into the document it came from, and elsewhere keeps its own under a
+    /// free name, so editing or deleting the document's filter leaves it alone. When that name would
+    /// make the filter too long to draw, the free name is a shorter start of its name ("Shif"), else
+    /// a free letter or digit; the filter's id is always its name.
+    fn filter_links(&self, d: &Document, same_doc: bool) -> BTreeMap<(String, String), (String, String)> {
+        let mut found = BTreeSet::new();
+        for n in &self.nodes {
+            node_filters(n, &mut found);
+        }
+        for s in &self.symbols {
+            node_filters(&s.art, &mut found);
+        }
+        for a in self.patterns.iter().flat_map(|p| p.art.iter()) {
+            node_filters(a, &mut found);
+        }
+        for a in self.brushes.iter().flat_map(Brush::art) {
+            node_filters(a, &mut found);
+        }
+        for g in &self.graphic_styles {
+            appearance_filters(&g.appearance, &mut found);
+        }
+        let mut taken: BTreeSet<String> = d.svg_filters.iter().map(|f| f.name.clone()).chain(found.iter().map(|(n, _)| n.clone())).collect();
+        let mut links = BTreeMap::new();
+        for (name, xml) in found {
+            let Some(held) = d.svg_filters.iter().find(|f| f.name == name).filter(|f| f.xml != xml.trim()) else { continue };
+            let to = if same_doc {
+                (name.clone(), held.xml.clone())
+            } else {
+                // Free names made from the starts of the name, longest first, then free letters and
+                // digits: the first under which the filter still draws.
+                let mut ends: Vec<usize> = name.char_indices().map(|(i, _)| i).skip(1).collect();
+                ends.push(name.len());
+                let starts = ends.iter().rev().filter_map(|&end| name.get(..end).map(str::trim_end)).filter(|b| !b.is_empty());
+                let shorter = starts.map(|b| unique_name(b, |n| taken.contains(n)));
+                let single = ('a'..='z').chain('0'..='9').map(String::from).filter(|n| !taken.contains(n));
+                let renamed = shorter.chain(single).find_map(|new| {
+                    let drawn = vectorcraft_render::effects::svg_filter::with_id(&xml, &new)
+                        .filter(|x| vectorcraft_render::effects::svg_filter::check(x).is_ok())?;
+                    Some((new, drawn))
+                });
+                let Some((new, drawn)) = renamed else { continue };
+                taken.insert(new.clone());
+                (new, drawn)
+            };
+            links.insert((name, xml), to);
+        }
+        links
     }
 
     /// Image blobs: a different blob under a key the document uses gets a new key.

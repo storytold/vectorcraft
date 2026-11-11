@@ -112,7 +112,7 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     }
     // Colour adjustments: the object recoloured (inside it too), then baked as it is.
     if has_adjustment(n)
-        && let Some(m) = adjust_in_document(d, n)
+        && let Some(m) = adjust_in_document(d, n, None)
     {
         return Some(bake_node(d, &m).unwrap_or(m));
     }
@@ -395,7 +395,7 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
     if !kept {
         return None;
     }
-    reshape_leaves(&mut m, &fx, Some(d));
+    reshape_leaves(&mut m, &fx, &n.appearance.effects, Some(d));
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !is_geometry(&e.id));
     m.appearance.items.clear();
     m.appearance.contents_index = None;

@@ -120,7 +120,7 @@ fn suffix(kind: &str, key: &str) -> Option<&'static str> {
 /// The fields of the form dialogs ([`grid`]) that the dialog's own body draws, by dialog kind.
 fn own_rows(kind: &str) -> &'static [&'static str] {
     match kind {
-        "artboardOptions" => &["color", super::artboard_options::PIXEL_ASPECT],
+        "artboardOptions" => &["color", super::artboard_options::GUIDE_LABEL, super::artboard_options::PIXEL_ASPECT],
         // The grids' Reference Point is their 9-point locator.
         "rectangularGrid" | "polarGrid" => &["reference"],
         _ => &[],

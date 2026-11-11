@@ -287,6 +287,7 @@ font-technology	Variable	Вариативные
 	Average…	Усреднить…
 	Axis:	Ось:
 	Background Color:	Цвет фона:
+	Guide Label:	Метка направляющих:
 	Show Center Mark	Показать центральную метку
 	Show Cross Hairs	Показать перекрестие
 	Show Video Safe Areas	Показать безопасные зоны видео
@@ -3187,6 +3188,13 @@ digits	Malayalam	Малаялам
 	Quest Outline	Квест
 	Coin Shine	Монета
 	Boss Alert	Босс
+	Status Effects	Эффекты статуса
+	Poison Tint	Яд
+	Freeze Edge	Заморозка
+	Burn Aura	Ожог
+	Stun Pulse	Оглушение
+	Stealth Fade	Скрытность
+	Shield Buff	Щит
 	Shape	Фигура
 	Shape Builder	Создание фигур
 	Shape Builder Regions	Области создания фигур
@@ -3605,6 +3613,8 @@ digits	Malayalam	Малаялам
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруются слева направо, затем вниз; оставьте диапазон пустым для всех плиток.
 	Copies per Sheet (as many as fit, in a grid)	Копий на лист (сколько поместится, сеткой)
 	Tint	Оттенок
+	Fill Tint	Оттенок заливки
+	Stroke Tint	Оттенок обводки
 	Tip extends past the end point	Кончик выходит за конечную точку
 	Tip on the end point	Кончик на конечной точке
 	Title Case	Как в заголовке
@@ -4125,6 +4135,7 @@ axis	Both	Оба
 	Stop Script	Остановить скрипт
 	Show External Script Warning	Показывать предупреждение о внешних скриптах
 	A Script Is Running	Выполняется скрипт
+	Script Alert	Сообщение скрипта
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт может изменять открытые документы и записывать файлы с помощью выполняемых команд. Запускайте только те скрипты, которым доверяете.
 	Do not show this warning again	Больше не показывать это предупреждение
 	Stop the script and undo what it did? Then quit again.	Остановить скрипт и отменить его изменения? Затем выйдите ещё раз.
@@ -4138,6 +4149,9 @@ axis	Both	Оба
 @msg	the script is too large to run	скрипт слишком велик для выполнения
 @msg	a drag or an undo group is open; finish it before running a script	открыто перетаскивание или группа отмены; завершите их перед запуском скрипта
 @msg	the script left a document that cannot be kept	скрипт оставил документ, который нельзя сохранить
+@msg	the script is no longer in the Scripts folder	скрипт больше не находится в папке Scripts
+	Some scripts were not listed	Некоторые сценарии не показаны
+	The Scripts folder cannot be read	Не удалось прочитать папку Scripts
 @msg	the script's run is no longer available	выполнение скрипта больше недоступно
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	неудавшаяся команда изменила шаги отмены, которые не удалось восстановить, поэтому скрипт остановлен
 @msg	a recovery copy could not be written, so the script was not run	не удалось записать копию для восстановления, поэтому скрипт не выполнен
@@ -4322,6 +4336,7 @@ axis	Both	Оба
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis должно быть "vertical", "horizontal" или углом в градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black или цвет, например "#ff8800"
 @msg	bad color {v}	недопустимый цвет {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` должен быть null, именем цвета слоя или #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio должно быть числом от 0,1 до 10
 @msg	the Color Picker is not open	палитра цветов не открыта
 @msg	the Simplify slider is not open	ползунок «Упростить» не открыт
@@ -5341,6 +5356,7 @@ lighting	Light	Свет
 @msg	Invalid drawing scale	Недопустимый масштаб чертежа
 @msg	Invalid real scale	Недопустимый реальный масштаб
 @msg	Measured anchor no longer exists	Измеряемая опорная точка больше не существует
+@msg	Invalid measured point	Недопустимая измеряемая точка
 @msg	Measured segment no longer exists	Измеряемый сегмент больше не существует
 @msg	Non-finite dimension	Размер не является конечным числом
 @msg	Only linear dimensions are horizontal or vertical	Только линейные размеры бывают горизонтальными или вертикальными
@@ -5722,6 +5738,12 @@ axis	Y Axis	Ось Y
 	Flag	Флаг
 	Crosshair	Прицел
 	Checkpoint	Контрольная точка
+	Inventory Icons	Иконки инвентаря
+	Sword	Меч
+	Shield	Щит
+	Potion	Зелье
+	Key	Ключ
+	Gem	Самоцвет
 	Open Symbol Library	Открыть библиотеку символов
 	Save Symbol Library	Сохранить библиотеку символов
 	Save Symbol Library…	Сохранить библиотеку символов…
@@ -6865,3 +6887,9 @@ shape	Open	Открытый
 	{ms} ms, {calls} host calls	{ms} мс, вызовов хоста: {calls}
 	{dropped} earlier lines dropped, {cut} lines cut	Отброшено прежних строк: {dropped}, обрезано строк: {cut}
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Обновить отложенные эффекты
+	Deferred Effects	Отложенные эффекты
+@msg	no plug-in effect is deferred	нет отложенных эффектов модулей
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Открыто с {n} отложенным эффектом модуля. Эффект › Обновить отложенные эффекты выполнит его.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.

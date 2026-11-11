@@ -290,6 +290,7 @@ font-technology	Variable	Variables
 	Average…	Alignement…
 	Axis:	Axe :
 	Background Color:	Couleur d’arrière-plan :
+	Guide Label:	Étiquette des repères :
 	Show Center Mark	Afficher le repère central
 	Show Cross Hairs	Afficher le réticule
 	Show Video Safe Areas	Afficher les zones de sécurité vidéo
@@ -3147,6 +3148,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Quête
 	Coin Shine	Pièce
 	Boss Alert	Boss
+	Status Effects	Effets de statut
+	Poison Tint	Poison
+	Freeze Edge	Gel
+	Burn Aura	Brûlure
+	Stun Pulse	Étourdissement
+	Stealth Fade	Furtivité
+	Shield Buff	Bouclier
 	Shape	Forme
 	Shape Builder	Concepteur de forme
 	Shape Builder Regions	Zones du Concepteur de forme
@@ -3565,6 +3573,8 @@ digits	Malayalam	Malayalam
 	Copies per Sheet (as many as fit, in a grid)	Copies par feuille (autant qu’il en tient, en grille)
 	Tiles are numbered across, then down; leave the range empty for every tile.	Les carreaux sont numérotés de gauche à droite, puis de haut en bas ; laissez la plage vide pour tous les carreaux.
 	Tint	Teinte
+	Fill Tint	Teinte du fond
+	Stroke Tint	Teinte du contour
 	Tip extends past the end point	La pointe dépasse le point d’extrémité
 	Tip on the end point	Pointe sur le point d’extrémité
 	Title Case	Majuscule à chaque mot
@@ -4077,6 +4087,7 @@ axis	Both	Les deux
 	Stop Script	Arrêter le script
 	Show External Script Warning	Afficher l’avertissement des scripts externes
 	A Script Is Running	Un script est en cours d’exécution
+	Script Alert	Alerte de script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script peut modifier les documents ouverts et écrire des fichiers au moyen des commandes qu’il exécute. N’exécutez que des scripts de confiance.
 	Do not show this warning again	Ne plus afficher cet avertissement
 	Stop the script and undo what it did? Then quit again.	Arrêter le script et annuler ce qu’il a fait ? Quittez ensuite à nouveau.
@@ -4090,6 +4101,9 @@ axis	Both	Les deux
 @msg	the script is too large to run	le script est trop volumineux pour être exécuté
 @msg	a drag or an undo group is open; finish it before running a script	un glissement ou un groupe d’annulation est ouvert ; terminez-le avant d’exécuter un script
 @msg	the script left a document that cannot be kept	le script a laissé un document qui ne peut pas être conservé
+@msg	the script is no longer in the Scripts folder	le script ne se trouve plus dans le dossier Scripts
+	Some scripts were not listed	Certains scripts ne sont pas répertoriés
+	The Scripts folder cannot be read	Impossible de lire le dossier Scripts
 @msg	the script's run is no longer available	l’exécution du script n’est plus disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	une commande en échec a modifié des étapes d’annulation qui n’ont pas pu être rétablies, le script a donc été arrêté
 @msg	a recovery copy could not be written, so the script was not run	une copie de récupération n’a pas pu être écrite, le script n’a donc pas été exécuté
@@ -4274,6 +4288,7 @@ axis	Both	Les deux
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis doit être "vertical", "horizontal" ou un angle en degrés, pas `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	arrière-plan {other} : transparent, white, black ou une couleur comme "#ff8800"
 @msg	bad color {v}	couleur non valide {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` est null, le nom d’une couleur de calque ou #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio doit être un nombre de 0,1 à 10
 @msg	the Color Picker is not open	le Sélecteur de couleurs n’est pas ouvert
 @msg	the Simplify slider is not open	le curseur Simplifier n’est pas ouvert
@@ -5730,6 +5745,7 @@ theme	Appearance	Apparence
 @msg	Invalid drawing scale	Échelle du dessin non valide
 @msg	Invalid real scale	Échelle réelle non valide
 @msg	Measured anchor no longer exists	Le point d’ancrage mesuré n’existe plus
+@msg	Invalid measured point	Point mesuré non valide
 @msg	Measured segment no longer exists	Le segment mesuré n’existe plus
 @msg	Non-finite dimension	Cote non finie
 @msg	Only linear dimensions are horizontal or vertical	Seules les cotes linéaires sont horizontales ou verticales
@@ -6106,6 +6122,12 @@ axis	Y Axis	Axe Y
 	Flag	Drapeau
 	Crosshair	Réticule
 	Checkpoint	Point de contrôle
+	Inventory Icons	Icônes d’inventaire
+	Sword	Épée
+	Shield	Bouclier
+	Potion	Potion
+	Key	Clé
+	Gem	Gemme
 	Open Symbol Library	Ouvrir une bibliothèque de symboles
 	Save Symbol Library	Enregistrer la bibliothèque de symboles
 	Save Symbol Library…	Enregistrer la bibliothèque de symboles…
@@ -6771,3 +6793,9 @@ breakText	Glyphs	Glyphes
 	{ms} ms, {calls} host calls	{ms} ms, {calls} appels à l’hôte
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} lignes antérieures supprimées, {cut} lignes coupées
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` et `last` doivent être des numéros de lignes que la console contient, `first` avant `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Actualiser les effets différés
+	Deferred Effects	Effets différés
+@msg	no plug-in effect is deferred	aucun effet de plug-in n’est différé
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Ouvert avec {n} effet de plug-in différé. Effet › Actualiser les effets différés l’exécute.|Ouvert avec {n} effets de plug-in différés. Effet › Actualiser les effets différés les exécute.

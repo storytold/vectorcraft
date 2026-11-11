@@ -248,6 +248,7 @@ font-technology	Variable	可變
 	Average…	平均…
 	Axis:	軸：
 	Background Color:	背景顏色：
+	Guide Label:	參考線標籤：
 	Show Center Mark	顯示中心標記
 	Show Cross Hairs	顯示十字線
 	Show Video Safe Areas	顯示視訊安全區域
@@ -2224,6 +2225,7 @@ file-filter	Templates	範本
 @msg	{label}…	{label}…
 @msg	no blend options	沒有漸變選項
 @msg	bad color {v}	顏色 {v} 無效
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` 應為 null、圖層顏色名稱或 #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必須是 0.1 到 10 之間的數字
 @msg	the Color Picker is not open	「顏色選擇器」未開啟
 @msg	the Simplify slider is not open	「簡化」滑桿未開啟
@@ -2395,6 +2397,7 @@ file-filter	Templates	範本
 	Stop Script	停止指令碼
 	Show External Script Warning	顯示外部指令碼警告
 	A Script Is Running	指令碼正在執行
+	Script Alert	指令碼提示
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	指令碼可以變更開啟的文件，並可透過其執行的命令寫入檔案。請只執行您信任的指令碼。
 	Do not show this warning again	不再顯示此警告
 	Stop the script and undo what it did? Then quit again.	要停止指令碼並還原其變更嗎？然後請再次結束。
@@ -2408,6 +2411,9 @@ file-filter	Templates	範本
 @msg	the script is too large to run	指令碼過大，無法執行
 @msg	a drag or an undo group is open; finish it before running a script	拖曳或還原群組尚未結束；請在執行指令碼前完成
 @msg	the script left a document that cannot be kept	指令碼留下了無法保留的文件
+@msg	the script is no longer in the Scripts folder	指令碼已不在 Scripts 資料夾中
+	Some scripts were not listed	部分指令碼未列出
+	The Scripts folder cannot be read	無法讀取 Scripts 資料夾
 @msg	the script's run is no longer available	指令碼執行已無法使用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗的命令變更了無法還原的復原步驟，因此指令碼已停止
 @msg	a recovery copy could not be written, so the script was not run	無法寫入復原副本，因此未執行指令碼
@@ -2604,6 +2610,7 @@ file-filter	Templates	範本
 @msg	Invalid drawing scale	圖紙比例無效
 @msg	Invalid real scale	實際比例無效
 @msg	Measured anchor no longer exists	測量的錨點已不存在
+@msg	Invalid measured point	測量點無效
 @msg	Measured segment no longer exists	測量的線段已不存在
 @msg	Non-finite dimension	尺寸標註不是有限值
 @msg	Only linear dimensions are horizontal or vertical	只有線性尺寸可以是水平或垂直的
@@ -4128,6 +4135,13 @@ digits	Malayalam	馬來亞拉姆數字
 	Quest Outline	任務
 	Coin Shine	金幣
 	Boss Alert	首領
+	Status Effects	狀態效果
+	Poison Tint	中毒
+	Freeze Edge	冰凍
+	Burn Aura	灼燒
+	Stun Pulse	暈眩
+	Stealth Fade	隱身
+	Shield Buff	護盾
 	Shape	形狀
 	Shape Builder	形狀建立
 	Shape Builder Regions	形狀建立區域
@@ -4547,6 +4561,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Copies per Sheet (as many as fit, in a grid)	每張紙印多份 (盡量排滿，以格點排列)
 	Gutter:	間距：
 	Tint	色調
+	Fill Tint	填色色調
+	Stroke Tint	筆畫色調
 	Tip extends past the end point	尖端延伸超過終點
 	Tip on the end point	尖端位於終點
 	Title Case	標題式大小寫
@@ -5746,6 +5762,12 @@ axis	Y Axis	Y 軸
 	Flag	旗幟
 	Crosshair	準星
 	Checkpoint	檢查點
+	Inventory Icons	物品欄圖示
+	Sword	劍
+	Shield	盾
+	Potion	藥水
+	Key	鑰匙
+	Gem	寶石
 	Open Symbol Library	開啟符號資料庫
 	Save Symbol Library	儲存符號資料庫
 	Save Symbol Library…	儲存符號資料庫…
@@ -6412,3 +6434,9 @@ breakText	Glyphs	字符
 	{ms} ms, {calls} host calls	{ms} 毫秒，主機呼叫 {calls} 次
 	{dropped} earlier lines dropped, {cut} lines cut	已捨棄 {dropped} 行較早內容，已截斷 {cut} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	重新整理延後的效果
+	Deferred Effects	延後的效果
+@msg	no plug-in effect is deferred	沒有延後的增效模組效果
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	開啟時延後了 {n} 個增效模組效果。效果 › 重新整理延後的效果可執行它們。

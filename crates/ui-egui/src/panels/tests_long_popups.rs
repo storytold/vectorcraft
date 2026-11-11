@@ -21,6 +21,7 @@ type Draw<'a> = Box<dyn FnMut(&mut VectorcraftApp, &mut Ui) + 'a>;
 pub(super) struct PopupWindow<'a> {
     ctx: egui::Context,
     time: f64,
+    width: f32,
     height: f32,
     draw: Draw<'a>,
     texts: Vec<(String, Rect)>,
@@ -30,7 +31,7 @@ impl<'a> PopupWindow<'a> {
     pub(super) fn new(app: &mut VectorcraftApp, height: f32, draw: impl FnMut(&mut VectorcraftApp, &mut Ui) + 'a) -> Self {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
-        let mut window = Self { ctx, time: 0.0, height, draw: Box::new(draw), texts: vec![] };
+        let mut window = Self { ctx, time: 0.0, width: WIDTH, height, draw: Box::new(draw), texts: vec![] };
         window.frames(app, 2);
         window
     }
@@ -38,12 +39,18 @@ impl<'a> PopupWindow<'a> {
     /// One frame with `events`.
     fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<Event>) {
         self.time += 1.0 / 60.0;
-        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(WIDTH, self.height)));
+        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(self.width, self.height)));
         let input = egui::RawInput { time: Some(self.time), screen_rect, events, ..Default::default() };
         let draw = &mut self.draw;
         let mut out = self.ctx.run_ui(input, |ui| draw(app, ui));
         out.textures_delta.clear();
         self.texts = crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
+    }
+
+    /// Makes the window `width` pt wide and draws the frames that takes.
+    pub(super) fn resize(&mut self, app: &mut VectorcraftApp, width: f32) {
+        self.width = width;
+        self.frames(app, OPEN_FRAMES);
     }
 
     fn frames(&mut self, app: &mut VectorcraftApp, count: usize) {
@@ -56,6 +63,14 @@ impl<'a> PopupWindow<'a> {
     /// before a panel's text of the same name.
     pub(super) fn text(&self, wanted: &str) -> Option<Rect> {
         self.texts.iter().rfind(|(text, _)| text.trim() == wanted).map(|(_, rect)| *rect)
+    }
+
+    /// The rect of the popup drawn on top: the last shown area in the foreground.
+    pub(super) fn popup(&self) -> Option<Rect> {
+        self.ctx.memory(|m| {
+            let top = m.layer_ids().filter(|layer| layer.order == egui::Order::Foreground && m.areas().is_visible(layer)).last()?;
+            m.area_rect(top.id)
+        })
     }
 
     /// The rects of the last frame's clickable widgets `size` across, in the order they were drawn.
@@ -81,9 +96,14 @@ impl<'a> PopupWindow<'a> {
 
     /// Turns the wheel far down with the pointer at `over`, and lets the scrolling finish.
     pub(super) fn wheel_down(&mut self, app: &mut VectorcraftApp, over: Pos2) {
+        self.wheel(app, over, 5000.0);
+    }
+
+    /// Turns the wheel `down` pt down with the pointer at `over`, and lets the scrolling finish.
+    pub(super) fn wheel(&mut self, app: &mut VectorcraftApp, over: Pos2, down: f32) {
         let wheel = Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
-            delta: vec2(0.0, -5000.0),
+            delta: vec2(0.0, -down),
             phase: egui::TouchPhase::Move,
             modifiers: Default::default(),
             source: egui::MouseWheelSource::Unknown,
@@ -187,6 +207,80 @@ pub(super) fn assert_last_row_scrolls_into_view(
     window.wheel_down(app, over);
     let row = window.text(last).unwrap_or_else(|| panic!("the wheel brings {last} into the {height} pt window"));
     assert!(row.bottom() <= height, "{last} at {row:?} is inside the {height} pt window");
+}
+
+/// In windows 200, 400 and 900 pt tall, the popup of the button `pick` finds draws each of its rows
+/// `rows` that are in view on one line, as tall as the row with the shortest name, and left of the
+/// scroll bar's column, whether or not its list scrolls. The row `widest` is drawn the widest; the
+/// wheel brings it into view when the popup opens without it. The popup and that row keep their
+/// place and size while the popup stays open. After the 200 pt window becomes `narrow` pt wide,
+/// the popup and its rows in view stay inside the window.
+pub(super) fn assert_rows_stay_on_one_line(
+    app: &mut VectorcraftApp,
+    mut draw: impl FnMut(&mut VectorcraftApp, &mut Ui),
+    pick: impl Fn(&PopupWindow) -> Pos2,
+    rows: &[String],
+    widest: &str,
+    narrow: f32,
+) {
+    let bar = crate::widgets::list_scroll_style().allocated_width();
+    let in_view =
+        |window: &PopupWindow| -> Vec<(String, Rect)> { rows.iter().filter_map(|row| window.text(row).map(|rect| (row.clone(), rect))).collect() };
+    let assert_inside = |window: &PopupWindow, drawn: &[(String, Rect)], name: &str| {
+        let popup = window.popup().unwrap_or_else(|| panic!("the popup is open in the {name} window"));
+        for (row, rect) in drawn {
+            assert!(
+                rect.left() >= popup.left() && rect.right() <= popup.right() - bar,
+                "{row} at {rect:?} is drawn left of the scroll bar's column in the popup at {popup:?} in the {name} window"
+            );
+        }
+        popup
+    };
+    for height in [200.0, 400.0, TALL] {
+        let mut window = PopupWindow::new(app, height, |app, ui| draw(app, ui));
+        let button = pick(&window);
+        window.click(app, button);
+        for _ in 0..rows.len() {
+            if window.text(widest).is_some() {
+                break;
+            }
+            let drawn = in_view(&window);
+            let Some((_, middle)) = drawn.get(drawn.len() / 2) else { break };
+            window.wheel(app, middle.center(), 20.0);
+        }
+        let opened = window.text(widest).unwrap_or_else(|| panic!("the popup's row {widest} is in view in the {height} pt window"));
+        let drawn = in_view(&window);
+        assert!(drawn.len() >= 3, "the popup's rows are in view in the {height} pt window: {drawn:?}");
+        let Some((shortest, line)) = drawn.iter().min_by_key(|(row, _)| row.chars().count()) else { panic!("no rows in view") };
+        let line = line.height();
+        for (row, rect) in &drawn {
+            assert!(
+                rect.height() <= line + 0.5,
+                "{row} at {rect:?} is drawn on one line, as tall as {shortest} ({line} pt), in the {height} pt window"
+            );
+        }
+        for (row, rect) in &drawn {
+            assert!(rect.width() <= opened.width() + 0.5, "{widest} is drawn as wide as {row} at {rect:?} or wider in the {height} pt window");
+        }
+        let popup = assert_inside(&window, &drawn, &format!("{height} pt"));
+        // The popup's size settles within a frame of opening; after that it stays the same.
+        window.frames(app, 30);
+        let settled = window.popup();
+        assert!(
+            settled.is_some_and(|settled| (settled.width() - popup.width()).abs() <= 0.5 && settled.min == popup.min),
+            "the popup at {settled:?} stays where it opened, at {popup:?}, in the {height} pt window"
+        );
+        window.frames(app, 300);
+        assert_eq!(window.text(widest), Some(opened), "{widest} keeps its place and size while the popup stays open in the {height} pt window");
+        assert_eq!(window.popup(), settled, "the popup keeps its place and size while it stays open in the {height} pt window");
+        if height == 200.0 {
+            window.resize(app, narrow);
+            let drawn = in_view(&window);
+            assert!(!drawn.is_empty(), "the popup's rows are in view in the {narrow} pt wide window");
+            let popup = assert_inside(&window, &drawn, &format!("{narrow} pt wide"));
+            assert!(popup.left() >= 0.0, "the popup at {popup:?} starts inside the {narrow} pt wide window");
+        }
+    }
 }
 
 /// In a tall window the popup of the button `pick` finds shows its rows `first` to `last` without

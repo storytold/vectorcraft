@@ -670,6 +670,13 @@
 	Quest Outline	ქვესტი
 	Coin Shine	მონეტა
 	Boss Alert	ბოსი
+	Status Effects	სტატუსის ეფექტები
+	Poison Tint	შხამი
+	Freeze Edge	გაყინვა
+	Burn Aura	დაწვა
+	Stun Pulse	დაბნეულობა
+	Stealth Fade	შენიღბვა
+	Shield Buff	ფარი
 	Outlines and Rules	კონტურები და ხაზები
 	Hand-Drawn	ხელით დახატული
 	Gradient Finishes	გრადიენტული ზედაპირები
@@ -1995,6 +2002,8 @@ digits	Malayalam	მალაიალამური
 	Green	მწვანე
 	Shifts the tints of global and spot colors; other colors stay.	ცვლის გლობალური და სპოტ-ფერების ტონირებებს; სხვა ფერები უცვლელი რჩება.
 	Tint	ტონირება
+	Fill Tint	შევსების ტონირება
+	Stroke Tint	კონტურის ტონირება
 	Color Guide Options	ფერის გზამკვლევის პარამეტრები
 	Less	ნაკლები
 	Steps:	ბიჯები:
@@ -2343,6 +2352,7 @@ digits	Malayalam	მალაიალამური
 	File Dimensions	ფაილის ზომები
 	Transforms	გარდაქმნები
 	Background Color:	ფონის ფერი:
+	Guide Label:	დამხმარე ხაზების იარლიყი:
 	Show Center Mark	ცენტრის ნიშნის ჩვენება
 	Show Cross Hairs	ჯვარედინი ხაზების ჩვენება
 	Show Video Safe Areas	ვიდეოს უსაფრთხო არეების ჩვენება
@@ -4042,6 +4052,7 @@ font-technology	Variable	ცვლადი
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis უნდა იყოს "vertical", "horizontal" ან კუთხე გრადუსებში და არა `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	ფონი {other}: transparent, white, black ან ფერი, მაგალითად "#ff8800"
 @msg	bad color {v}	არასწორი ფერი {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` არის null, ფენის ფერის სახელი ან #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio უნდა იყოს რიცხვი 0,1-დან 10-მდე
 @msg	bad colour `{hex}` (#rrggbb)	არასწორი ფერი `{hex}` (#rrggbb)
 @msg	bad page tree	გვერდების არასწორი ხე
@@ -5175,6 +5186,7 @@ imageTrace	Outline	კონტური
 	Stop Script	სკრიპტის შეჩერება
 	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
 	A Script Is Running	სკრიპტი მუშაობს
+	Script Alert	სკრიპტის შეტყობინება
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
 	Stop the script and undo what it did? Then quit again.	შეჩერდეს სკრიპტი და გაუქმდეს მისი ცვლილებები? შემდეგ ხელახლა გამოდით.
@@ -5188,6 +5200,9 @@ imageTrace	Outline	კონტური
 @msg	the script is too large to run	სკრიპტი გასაშვებად ძალიან დიდია
 @msg	a drag or an undo group is open; finish it before running a script	ღიაა გადათრევა ან გაუქმების ჯგუფი; დაასრულეთ სკრიპტის გაშვებამდე
 @msg	the script left a document that cannot be kept	სკრიპტმა დატოვა დოკუმენტი, რომლის შენახვა შეუძლებელია
+@msg	the script is no longer in the Scripts folder	სკრიპტი აღარ არის Scripts საქაღალდეში
+	Some scripts were not listed	ზოგიერთი სკრიპტი არ არის ჩამოთვლილი
+	The Scripts folder cannot be read	Scripts საქაღალდის წაკითხვა შეუძლებელია
 @msg	the script's run is no longer available	სკრიპტის გაშვება აღარ არის ხელმისაწვდომი
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	წარუმატებელმა ბრძანებამ შეცვალა გაუქმების ნაბიჯები, რომელთა აღდგენა ვერ მოხერხდა, ამიტომ სკრიპტი შეჩერდა
 @msg	a recovery copy could not be written, so the script was not run	აღდგენის ასლის ჩაწერა ვერ მოხერხდა, ამიტომ სკრიპტი არ გაეშვა
@@ -5341,6 +5356,7 @@ imageTrace	Outline	კონტური
 @msg	Invalid drawing scale	ნახაზის არასწორი მასშტაბი
 @msg	Invalid real scale	რეალური ზომის არასწორი მასშტაბი
 @msg	Measured anchor no longer exists	გაზომილი საყრდენი წერტილი აღარ არსებობს
+@msg	Invalid measured point	გაზომილი წერტილი არასწორია
 @msg	Measured segment no longer exists	გაზომილი სეგმენტი აღარ არსებობს
 @msg	Non-finite dimension	ზომა სასრული რიცხვი არ არის
 @msg	Only linear dimensions are horizontal or vertical	მხოლოდ ხაზოვანი ზომებია ჰორიზონტალური ან ვერტიკალური
@@ -6034,6 +6050,12 @@ axis	Y Axis	Y ღერძი
 	Flag	დროშა
 	Crosshair	სამიზნე
 	Checkpoint	საკონტროლო წერტილი
+	Inventory Icons	ინვენტარის ხატულები
+	Sword	მახვილი
+	Shield	ფარი
+	Potion	წამალი
+	Key	გასაღები
+	Gem	ძვირფასი ქვა
 	Open Symbol Library	სიმბოლოების ბიბლიოთეკის გახსნა
 	Save Symbol Library	სიმბოლოების ბიბლიოთეკის შენახვა
 	Save Symbol Library…	სიმბოლოების ბიბლიოთეკის შენახვა…
@@ -6837,3 +6859,9 @@ font-script	Japanese	იაპონური
 	{ms} ms, {calls} host calls	{ms} ms, ჰოსტის {calls} გამოძახება
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ძველი სტრიქონი წაიშალა, {cut} სტრიქონი შემოკლდა
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	გადადებული ეფექტების განახლება
+	Deferred Effects	გადადებული ეფექტები
+@msg	no plug-in effect is deferred	პლაგინის ეფექტი არ არის გადადებული
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.

@@ -55,6 +55,8 @@
 	Scripts	Skrip
 	Check Script…	Periksa skrip…
 	Check Script	Periksa skrip
+	Some scripts were not listed	Beberapa skrip tidak dicantumkan
+	The Scripts folder cannot be read	Folder Scripts tidak dapat dibaca
 	Other Script…	Skrip lain…
 	Document Setup…	Pengaturan dokumen…
 	Switch Units	Ganti satuan
@@ -720,6 +722,13 @@
 	Quest Outline	Quest
 	Coin Shine	Koin
 	Boss Alert	Boss
+	Status Effects	Efek Status
+	Poison Tint	Racun
+	Freeze Edge	Beku
+	Burn Aura	Bakar
+	Stun Pulse	Pingsan
+	Stealth Fade	Menghilang
+	Shield Buff	Perisai
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
 	Gradient Finishes	Finishing gradien
@@ -2089,6 +2098,8 @@ digits	Malayalam	Malayalam
 	Green	Hijau
 	Shifts the tints of global and spot colors; other colors stay.	Menggeser tint warna global dan warna spot; warna lainnya tetap.
 	Tint	Tint
+	Fill Tint	Tint isian
+	Stroke Tint	Tint stroke
 	Color Guide Options	Opsi panduan warna
 	Less	Lebih sedikit
 	Steps:	Langkah:
@@ -2442,6 +2453,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Dimensi file
 	Transforms	Transformasi
 	Background Color:	Warna latar belakang:
+	Guide Label:	Label panduan:
 	Show Center Mark	Tampilkan tanda tengah
 	Show Cross Hairs	Tampilkan garis silang
 	Show Video Safe Areas	Tampilkan area aman video
@@ -4094,6 +4106,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Hentikan Skrip
 	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
 	A Script Is Running	Skrip Sedang Berjalan
+	Script Alert	Peringatan Skrip
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
@@ -5326,6 +5339,7 @@ mark-style	Japanese	Jepang
 @msg	Invalid drawing scale	Skala gambar tidak valid
 @msg	Invalid real scale	Skala sebenarnya tidak valid
 @msg	Measured anchor no longer exists	Titik jangkar yang diukur sudah tidak ada
+@msg	Invalid measured point	Titik yang diukur tidak valid
 @msg	Measured segment no longer exists	Segmen yang diukur sudah tidak ada
 @msg	Non-finite dimension	Dimensi bukan bilangan berhingga
 @msg	Only linear dimensions are horizontal or vertical	Hanya dimensi linear yang horizontal atau vertikal
@@ -5900,6 +5914,12 @@ axis	Y Axis	Sumbu Y
 	Flag	Bendera
 	Crosshair	Bidik silang
 	Checkpoint	Pos pemeriksaan
+	Inventory Icons	Ikon Inventaris
+	Sword	Pedang
+	Shield	Perisai
+	Potion	Ramuan
+	Key	Kunci
+	Gem	Permata
 	Open Symbol Library	Buka pustaka simbol
 	Save Symbol Library	Simpan pustaka simbol
 	Save Symbol Library…	Simpan pustaka simbol…
@@ -6517,3 +6537,7 @@ breakText	Glyphs	Glif
 	Ended by an internal fault	Berakhir karena galat internal
 	{ms} ms, {calls} host calls	{ms} ms, {calls} panggilan host
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} baris lama dibuang, {cut} baris dipotong
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Segarkan efek yang ditunda
+	Deferred Effects	Efek yang ditunda

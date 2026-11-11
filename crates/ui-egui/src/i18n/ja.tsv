@@ -807,6 +807,13 @@ digits	Malayalam	マラヤーラム数字
 	Quest Outline	クエスト
 	Coin Shine	コイン
 	Boss Alert	ボス
+	Status Effects	ステータス効果
+	Poison Tint	毒
+	Freeze Edge	凍結
+	Burn Aura	火傷
+	Stun Pulse	気絶
+	Stealth Fade	ステルス
+	Shield Buff	シールド
 	Outlines and Rules	アウトラインと罫線
 	Hand-Drawn	手描き風
 	Gradient Finishes	グラデーション仕上げ
@@ -1077,6 +1084,7 @@ antiAlias	Sharp	シャープ
 	Average	平均
 	BLANK DOCUMENT PRESETS	空白のドキュメントプリセット
 	Background Color:	背景色:
+	Guide Label:	ガイドのラベル:
 	Show Center Mark	中心マークを表示
 	Show Cross Hairs	十字線を表示
 	Show Video Safe Areas	ビデオセーフエリアを表示
@@ -3889,6 +3897,8 @@ file-filter	Templates	テンプレート
 	Text Wrap Options	テキストの回り込みオプション
 	Tile Full Pages	ページ全体を分割
 	Tint	濃度
+	Fill Tint	濃度 (塗り)
+	Stroke Tint	濃度 (線)
 	Tip extends past the end point	先端をパスの端点より先に伸ばす
 	Tip on the end point	先端をパスの端点に合わせる
 	Top	上
@@ -4684,6 +4694,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{label}…	{label}…
 @msg	no blend options	ブレンドオプションがありません
 @msg	bad color {v}	カラー {v} が正しくありません
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` は null、レイヤーカラーの名前、または #rrggbb です
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio には 0.1 〜 10 の数値を指定してください
 @msg	the Color Picker is not open	カラーピッカーが開いていません
 @msg	the Simplify slider is not open	単純化スライダーが開いていません
@@ -4860,6 +4871,7 @@ swatch	Bright Violet	ビビッドバイオレット
 	Stop Script	スクリプトを停止
 	Show External Script Warning	外部スクリプトの警告を表示
 	A Script Is Running	スクリプトの実行中
+	Script Alert	スクリプトの通知
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
 	Do not show this warning again	今後この警告を表示しない
 	Stop the script and undo what it did? Then quit again.	スクリプトを停止して変更を取り消しますか？その後、もう一度終了してください。
@@ -4873,6 +4885,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the script is too large to run	スクリプトが大きすぎて実行できません
 @msg	a drag or an undo group is open; finish it before running a script	ドラッグまたは取り消しグループが開いています。スクリプトを実行する前に完了してください
 @msg	the script left a document that cannot be kept	スクリプトが保持できないドキュメントを残しました
+@msg	the script is no longer in the Scripts folder	スクリプトは Scripts フォルダーにもうありません
+	Some scripts were not listed	一部のスクリプトは一覧に表示されていません
+	The Scripts folder cannot be read	Scripts フォルダーを読み込めません
 @msg	the script's run is no longer available	スクリプトの実行は利用できなくなりました
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗したコマンドが元に戻せない取り消し手順を変更したため、スクリプトを停止しました
 @msg	a recovery copy could not be written, so the script was not run	復元用のコピーを書き込めなかったため、スクリプトは実行されませんでした
@@ -5390,6 +5405,7 @@ lighting	Light	ライト
 @msg	Invalid drawing scale	図面の縮尺が無効です
 @msg	Invalid real scale	実寸の縮尺が無効です
 @msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
+@msg	Invalid measured point	測定した点が無効です
 @msg	Measured segment no longer exists	測定したセグメントはもう存在しません
 @msg	Non-finite dimension	寸法が有限ではありません
 @msg	Only linear dimensions are horizontal or vertical	水平または垂直にできるのは直線寸法のみです
@@ -5793,6 +5809,12 @@ axis	Y Axis	Y 軸
 	Flag	旗
 	Crosshair	クロスヘア
 	Checkpoint	チェックポイント
+	Inventory Icons	インベントリアイコン
+	Sword	剣
+	Shield	盾
+	Potion	ポーション
+	Key	鍵
+	Gem	宝石
 	Open Symbol Library	シンボルライブラリを開く
 	Save Symbol Library	シンボルライブラリを保存
 	Save Symbol Library…	シンボルライブラリを保存…
@@ -6462,3 +6484,9 @@ breakText	Glyphs	字形
 	{ms} ms, {calls} host calls	{ms} ms、ホスト呼び出し {calls} 回
 	{dropped} earlier lines dropped, {cut} lines cut	古い行 {dropped} 行を破棄、{cut} 行を切り詰め
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` と `last` には、コンソールが保持している行の番号を、`first` が `last` より前になるよう指定してください
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	保留中の効果を更新
+	Deferred Effects	保留中の効果
+@msg	no plug-in effect is deferred	保留中のプラグイン効果はありません
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	プラグイン効果を {n} 件保留して開きました。「効果 › 保留中の効果を更新」で実行します。

@@ -385,6 +385,7 @@ font-technology	Variable	Változó
 	B4	B4
 	B5	B5
 	Background Color:	Háttérszín:
+	Guide Label:	Segédvonalak címkéje:
 	Show Center Mark	Középjel megjelenítése
 	Show Cross Hairs	Szálkereszt megjelenítése
 	Show Video Safe Areas	Biztonságos videoterületek megjelenítése
@@ -3770,6 +3771,13 @@ mark-style	Japanese	Japán
 	Quest Outline	Küldetés
 	Coin Shine	Érme
 	Boss Alert	Főellenség
+	Status Effects	Állapot hatások
+	Poison Tint	Méreg
+	Freeze Edge	Fagy
+	Burn Aura	Égés
+	Stun Pulse	Kábítás
+	Stealth Fade	Lopakodás
+	Shield Buff	Pajzs
 	Shape	Alakzat
 	Shape Builder	Alakzatépítő
 	Shape Builder Regions	Alakzatépítő területei
@@ -4248,6 +4256,8 @@ mark-style	Japanese	Japán
 	Tilt	Dőlés
 	Copies per Sheet (as many as fit, in a grid)	Példány laponként (ahány elfér, rácsban)
 	Tint	Tónus
+	Fill Tint	Kitöltés tónusa
+	Stroke Tint	Körvonal tónusa
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok
 	Tips	Tippek
@@ -4833,6 +4843,7 @@ imageTrace	Outline	Körvonal
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	az axis értéke "vertical", "horizontal" vagy fokban megadott szög lehet, ez nem az: `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black vagy egy szín, például "#ff8800"
 @msg	bad color {v}	hibás szín: {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	a `guideLabel` értéke null, egy rétegszín neve vagy #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio: 0,1 és 10 közötti szám kell
 @msg	the Color Picker is not open	a Színválasztó nincs megnyitva
 @msg	the Simplify slider is not open	az Egyszerűsítés csúszka nincs megnyitva
@@ -4884,6 +4895,7 @@ imageTrace	Outline	Körvonal
 	Stop Script	Parancsfájl leállítása
 	Show External Script Warning	Figyelmeztetés külső parancsfájlok előtt
 	A Script Is Running	Egy parancsfájl fut
+	Script Alert	Parancsfájl-értesítés
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
 	Stop the script and undo what it did? Then quit again.	Leállítja a parancsfájlt, és visszavonja a módosításait? Ezután lépjen ki újra.
@@ -4897,6 +4909,9 @@ imageTrace	Outline	Körvonal
 @msg	the script is too large to run	a parancsfájl túl nagy a futtatáshoz
 @msg	a drag or an undo group is open; finish it before running a script	húzás vagy visszavonási csoport van folyamatban; fejezze be a parancsfájl futtatása előtt
 @msg	the script left a document that cannot be kept	a parancsfájl olyan dokumentumot hagyott hátra, amely nem tartható meg
+@msg	the script is no longer in the Scripts folder	a parancsfájl már nincs a Scripts mappában
+	Some scripts were not listed	Néhány szkript nem szerepel a listában
+	The Scripts folder cannot be read	A Scripts mappa nem olvasható
 @msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
 @msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
@@ -5717,6 +5732,7 @@ imageTrace	Outline	Körvonal
 @msg	Invalid drawing scale	Érvénytelen rajzlépték
 @msg	Invalid real scale	Érvénytelen valós lépték
 @msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
+@msg	Invalid measured point	Érvénytelen mért pont
 @msg	Measured segment no longer exists	A mért szakasz már nem létezik
 @msg	Non-finite dimension	Nem véges méret
 @msg	Only linear dimensions are horizontal or vertical	Csak a lineáris méretek lehetnek vízszintesek vagy függőlegesek
@@ -6094,6 +6110,12 @@ axis	Y Axis	Y tengely
 	Flag	Zászló
 	Crosshair	Célkereszt
 	Checkpoint	Ellenőrzőpont
+	Inventory Icons	Leltári ikonok
+	Sword	Kard
+	Shield	Pajzs
+	Potion	Bájital
+	Key	Kulcs
+	Gem	Drágakő
 	Open Symbol Library	Szimbólumkönyvtár megnyitása
 	Save Symbol Library	Szimbólumkönyvtár mentése
 	Save Symbol Library…	Szimbólumkönyvtár mentése…
@@ -6760,3 +6782,9 @@ breakText	Glyphs	Glifák
 	{ms} ms, {calls} host calls	{ms} ms, {calls} gazdahívás
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} korábbi sor elvetve, {cut} sor levágva
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Elhalasztott effektusok frissítése
+	Deferred Effects	Elhalasztott effektusok
+@msg	no plug-in effect is deferred	nincs elhalasztott bővítményeffektus
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.
