@@ -368,6 +368,14 @@ impl MoveSnap {
             if q != start + d {
                 d = q - start;
                 guides = ov;
+            } else if guides.is_empty()
+                && let Some(b) = self.bounds
+            {
+                // Nothing else lined up: the bounds slide along the line onto a ruler guide, as
+                // they do without Shift (#4312).
+                let (adj, ov) = t.snap_moved_along_to_rulers(start + d, b + d, u, cx.tol(cx.snap_tolerance));
+                d += adj;
+                guides = ov;
             }
         }
         if cx.snap_to_pixel

@@ -6397,8 +6397,14 @@ breakText	Glyphs	Glyph
 	Ended at a limit	Kết thúc ở giới hạn
 	Stopped	Đã dừng
 	Ended by an internal fault	Kết thúc do lỗi nội bộ
-	{ms} ms, {calls} host calls	{ms} ms, {calls} lệnh gọi máy chủ
-	{dropped} earlier lines dropped, {cut} lines cut	Đã bỏ {dropped} dòng cũ, đã cắt {cut} dòng
+	time unavailable	không có thời gian
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	chậm nhất: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} lệnh gọi máy chủ
+@plural	{n} earlier line dropped|{n} earlier lines dropped	đã bỏ {n} dòng cũ
+@plural	{n} line cut|{n} lines cut	đã cắt {n} dòng
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` và `last` phải là số thứ tự của các dòng mà bảng điều khiển đang giữ, `first` đứng trước `last`
 
 # Deferred plug-in effects
