@@ -29,17 +29,26 @@ pub(crate) fn paint_bytes(paint: &Paint) -> usize {
         Paint::Gradient(g) => g,
         _ => return own,
     };
-    let freeform = g
-        .freeform
-        .as_ref()
-        .map_or(0, |f| f.points.len() * size_of::<FreeformPoint>() + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>());
+    let freeform = g.freeform.as_ref().map_or(0, |f| {
+        // Each line is a Vec: its header too, not only its indices.
+        f.points.len() * size_of::<FreeformPoint>()
+            + f.lines.len() * size_of::<Vec<usize>>()
+            + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>()
+    });
     let stops: usize = g.gradient.stops.iter().map(|s| size_of::<GradientStop>() + name(&s.swatch)).sum();
     own + size_of::<vectorcraft_doc::color::GradientPaint>() + name(&g.swatch) + stops + freeform
 }
 
 /// Whether `copies` copies of `paint` stay within [`MAX_PAINT_COPIES`].
 pub(crate) fn paint_copies_fit(copies: usize, paint: &Paint) -> bool {
-    copies.saturating_mul(paint_bytes(paint)) <= MAX_PAINT_COPIES
+    paint_copies_add(&mut 0, copies, paint)
+}
+
+/// Add `copies` copies of `paint` to the running byte total `used`; whether it still fits within
+/// [`MAX_PAINT_COPIES`] (for several items whose copies count together).
+pub(crate) fn paint_copies_add(used: &mut usize, copies: usize, paint: &Paint) -> bool {
+    *used = used.saturating_add(copies.saturating_mul(paint_bytes(paint)));
+    *used <= MAX_PAINT_COPIES
 }
 
 fn visible(fx: &[Effect]) -> bool {

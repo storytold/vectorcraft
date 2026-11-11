@@ -89,8 +89,13 @@ pub fn dash(bp: &BezPath, d: &Dash) -> Option<Dashed> {
     }
     let phase = Phase { ix: ix0, rem: pat[ix0] - off, on: ix0 % 2 == 0 };
     let mut out = Dashed::default();
+    // The estimates above trust the fitted scales; this counts the pattern entries actually walked,
+    // so entries that fit down to nothing can't keep a subpath looping.
+    let mut budget = MAX_STEPS as usize;
     for plan in &plans {
-        dash_subpath(&mut out, plan, &pat, phase);
+        if !dash_subpath(&mut out, plan, &pat, phase, &mut budget) {
+            return None;
+        }
     }
     Some(out)
 }
@@ -183,7 +188,8 @@ impl Piece {
     }
 }
 
-fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
+/// Dash one subpath; `false` when `budget` (pattern entries left to walk, shared by all subpaths) runs out.
+fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase, budget: &mut usize) -> bool {
     let first_dot = out.dots.len();
     let total: f64 = plan.lens.iter().sum();
     // Fraction of the subpath's length at `x` along the plan.
@@ -235,6 +241,8 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
                     push_dot(out, first_dot, Dot { at: seg.eval(t), dir: tangent(seg, t), t: frac(acc + end) });
                 }
             }
+            let Some(rest) = budget.checked_sub(1) else { return false };
+            *budget = rest;
             cuts += 1;
             s = end;
             ph.ix = (ph.ix + 1) % pat.len();
@@ -263,7 +271,7 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
             write(&mut out.path, &d.segs);
             out.path.close_path();
             out.spans.push((frac(0.0), frac(0.0) + 1.0));
-            return;
+            return true;
         }
         if starts_on && ends_on && dashes.len() > 1 {
             // The dash running through the start point is one dash.
@@ -281,6 +289,7 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
         let t0 = frac(d.start);
         out.spans.push((t0, if total > 0.0 { t0 + (d.end - d.start) / total } else { t0 }));
     }
+    true
 }
 
 /// Add `dot` unless the subpath's last dot (from index `first`) is already there: a run ending on

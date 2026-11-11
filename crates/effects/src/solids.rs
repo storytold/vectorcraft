@@ -256,12 +256,14 @@ fn art_for(n: &Node, fx: &Effect, path: &PathData, rule: FillRule, items: &[&App
     if fx.id == ROTATE {
         // Every part turns about the centre of the object's own bounds, so they stay together.
         let mut out = vec![];
+        let mut paint_bytes = 0usize;
         for item in items {
             let (paint, opacity, blend) = paint_of(item);
             let (area, rule) = region(path, rule, item);
             let f = facets(ROTATE, &area, rule, b, &p).ok()?;
-            // Each facet and its seam stroke copy the paint; past the allowance the source path is drawn.
-            if !crate::revolve::paint_copies_fit(f.len().saturating_mul(2), &paint) {
+            // Each facet and its seam stroke copy the paint; past the allowance (all items together)
+            // the source path is drawn.
+            if !crate::revolve::paint_copies_add(&mut paint_bytes, f.len().saturating_mul(2), &paint) {
                 return None;
             }
             out.push(Arc::new(surface(n, f, &paint, opacity, blend, colored)));
@@ -289,10 +291,11 @@ fn art_for(n: &Node, fx: &Effect, path: &PathData, rule: FillRule, items: &[&App
         parts.iter().map(|(_, area, rule)| facets(&fx.id, area, *rule, bounds, &p)).collect()
     };
     let mut solids = vec![];
+    let mut paint_bytes = 0usize;
     for ((item, _, _), f) in parts.iter().zip(built) {
         let item: &AppearanceItem = item;
         match f {
-            Ok(f) if !crate::revolve::paint_copies_fit(f.len().saturating_mul(2), &paint_of(item).0) => return None,
+            Ok(f) if !crate::revolve::paint_copies_add(&mut paint_bytes, f.len().saturating_mul(2), &paint_of(item).0) => return None,
             Ok(f) => solids.push((item, f)),
             // A stroke's outline past the limits is left out; the fill's solid still draws.
             Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}

@@ -241,20 +241,27 @@ fn near_pairs(rects: &[Option<Rect>], reach_x: f64, reach_y: f64) -> Option<Vec<
 
 /// Most candidate pairs one trap evaluation keeps; past it no traps are made (the art draws as is).
 /// Each pair costs a boolean trap band, so real art stays far below this.
-const MAX_NEAR_PAIRS: usize = 1 << 20;
+pub const MAX_NEAR_PAIRS: usize = 1 << 20;
 
 /// The traps between `sources` (back to front) with options `o`: for each two sources of
 /// different solid colours whose visible parts meet, the strip of the darker one's visible part
 /// next to the lighter one's (the other way round with [`TrapOptions::reverse`]), painted per
-/// [`trap_paint`]. Empty when no visible edges of different colours meet.
+/// [`trap_paint`]. Empty when no visible edges of different colours meet, or when there are more
+/// than [`MAX_NEAR_PAIRS`] candidate pairs (see [`try_traps`] to tell those apart).
 pub fn traps(sources: &[TrapSource], o: &TrapOptions) -> Vec<TrapPiece> {
+    try_traps(sources, o).unwrap_or_default()
+}
+
+/// [`traps`], but `None` when there are more than [`MAX_NEAR_PAIRS`] candidate pairs, as opposed to
+/// `Some` of an empty list when no edges meet.
+pub fn try_traps(sources: &[TrapSource], o: &TrapOptions) -> Option<Vec<TrapPiece>> {
     let colors: Vec<Option<Color>> = sources.iter().map(|s| trap_color(&s.fill)).collect();
     if colors.iter().flatten().count() < 2 {
-        return vec![];
+        return Some(vec![]);
     }
     let (w, r) = (o.thickness, o.height_width);
     if !(w.is_finite() && w > 0.0 && r.is_finite() && r > 0.0) {
-        return vec![]; // `trap_band` cuts nothing with these.
+        return Some(vec![]); // `trap_band` cuts nothing with these.
     }
     let vis = visible(sources);
     // Only pairs whose visible parts come within the trap's reach can trap (`trap_band` rejects
@@ -266,7 +273,7 @@ pub fn traps(sources: &[TrapSource], o: &TrapOptions) -> Vec<TrapPiece> {
     let extent = rects.iter().flatten().flat_map(|b| [b.x0, b.y0, b.x1, b.y1]).fold(0.0_f64, |m, v| m.max(v.abs()));
     let hair = 1e-9 * (1.0 + extent + w * r.max(1.0));
     let mut out = vec![];
-    let Some(pairs) = near_pairs(&rects, w + hair, w * r + hair) else { return vec![] };
+    let pairs = near_pairs(&rects, w + hair, w * r + hair)?;
     for (i, j) in pairs {
         let (Some(ci), Some(cj)) = (colors[i], colors[j]) else { continue };
         if vis[i].is_empty() || vis[j].is_empty() || same_color(&sources[i].fill, &sources[j].fill, ci, cj) {
@@ -286,7 +293,7 @@ pub fn traps(sources: &[TrapSource], o: &TrapOptions) -> Vec<TrapPiece> {
         let Some(color) = colors[from] else { continue };
         out.push(TrapPiece { path: band, paint: trap_paint(&sources[from].fill, color, o), from, into });
     }
-    out
+    Some(out)
 }
 
 /// A trap's appearance: one overprinting fill of `paint`, no stroke.
@@ -393,6 +400,7 @@ mod tests {
     fn no_trap_without_adjoining_edges_of_different_colours() {
         let apart = vec![src(Rect::new(0.0, 0.0, 10.0, 10.0), yellow()), src(Rect::new(30.0, 0.0, 40.0, 10.0), blue())];
         assert!(traps(&apart, &TrapOptions::default()).is_empty());
+        assert_eq!(try_traps(&apart, &TrapOptions::default()).map(|t| t.len()), Some(0), "no edges meet: empty, not over the cap");
         let same = vec![src(Rect::new(0.0, 0.0, 10.0, 10.0), blue()), src(Rect::new(10.0, 0.0, 20.0, 10.0), blue())];
         assert!(traps(&same, &TrapOptions::default()).is_empty());
         let mut unfilled = abutting();
