@@ -468,12 +468,14 @@ pub fn adjust(n: &Node, outer: Option<&ColorMap>, swatches: &SwatchKinds, images
 }
 
 /// [`adjust`] for export and Expand Appearance: recoloured embedded images become new images in
-/// `d` (named by their content), and a symbol instance stands for its symbol's art.
-pub fn adjust_in_document(d: &mut Document, n: &Node) -> Option<Node> {
+/// `d` (named by their content), and a symbol instance stands for its symbol's art: `symbol_art`
+/// when given, otherwise the symbol's art with the instance's own appearance changes.
+pub fn adjust_in_document(d: &mut Document, n: &Node, symbol_art: Option<Node>) -> Option<Node> {
     let art;
     let src = match &n.kind {
         NodeKind::SymbolInstance { symbol, .. } if has_adjustment(n) => {
-            let symbol = d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n));
+            let symbol = symbol_art
+                .or_else(|| d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n)));
             art = crate::reshape::as_art(Some(d), n, symbol.as_ref())?;
             &art
         }
