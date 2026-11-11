@@ -207,7 +207,7 @@ impl Console {
 
 /// `c` as the console shows it: a control character as its Control Picture, a line or paragraph
 /// separator as U+2424, anything else as it is.
-fn shown(c: char) -> char {
+pub(crate) fn shown(c: char) -> char {
     match c {
         '\u{0}'..='\u{1f}' => char::from_u32(0x2400 + c as u32).unwrap_or('\u{fffd}'),
         '\u{7f}' => '\u{2421}',
