@@ -5730,6 +5730,12 @@ axis	Y Axis	Ось Y
 	Flag	Флаг
 	Crosshair	Прицел
 	Checkpoint	Контрольная точка
+	Inventory Icons	Иконки инвентаря
+	Sword	Меч
+	Shield	Щит
+	Potion	Зелье
+	Key	Ключ
+	Gem	Самоцвет
 	Open Symbol Library	Открыть библиотеку символов
 	Save Symbol Library	Сохранить библиотеку символов
 	Save Symbol Library…	Сохранить библиотеку символов…

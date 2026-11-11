@@ -6061,6 +6061,12 @@ axis	Y Axis	Eje Y
 	Flag	Bandera
 	Crosshair	Punto de mira
 	Checkpoint	Punto de control
+	Inventory Icons	Iconos de inventario
+	Sword	Espada
+	Shield	Escudo
+	Potion	Poción
+	Key	Llave
+	Gem	Gema
 	Open Symbol Library	Abrir biblioteca de símbolos
 	Save Symbol Library	Guardar biblioteca de símbolos
 	Save Symbol Library…	Guardar biblioteca de símbolos…

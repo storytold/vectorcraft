@@ -233,6 +233,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     for (label, icon, cmd, params) in &items {
                         let galley = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(13.0), t.text_strong);
                         let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 38.0, 30.0), Sense::click());
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, *label));
                         if resp.hovered() {
                             ui.painter().rect_filled(r, CornerRadius::same(3), t.hover);
                         }
