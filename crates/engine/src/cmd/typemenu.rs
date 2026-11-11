@@ -293,11 +293,20 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
                 continue;
             }
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-            let b = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+            let mut b = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+            // Across, the frame spans the lines as they are aligned: from their starts to their ends
+            // without the tracking after their last characters (`LineInfo::trailing`), not to the
+            // ink, which tracking can pull past an advance. Area type aligns them alike.
+            let (x0, x1) = lay.lines.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), l| (a.min(l.x0), z.max(l.x1 - l.trailing)));
+            if x0.is_finite() && x1.is_finite() && x0 <= x1 {
+                (b.x0, b.x1) = (x0, x1);
+            }
+            // Line breaking counts that tracking: the slack holds the most of it.
+            let trailing = lay.lines.iter().map(|l| l.trailing).filter(|t| t.is_finite()).fold(0.0, f64::max);
             let size = t.first_style().size;
             // A little slack on the right so the text doesn't rewrap.
             let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
-            let slack = size * 0.5;
+            let slack = size * 0.5 + trailing;
             // Slack goes where the alignment leaves room, so the text doesn't move or rewrap.
             let (sl, sr) = match t.para_at(0).justify {
                 Justify::Center | Justify::JustifyCenter => (slack * 0.5, slack * 0.5),

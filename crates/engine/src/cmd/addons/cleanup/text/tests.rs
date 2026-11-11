@@ -125,6 +125,30 @@ fn break_area_type_into_lines_paragraphs_and_glyphs() {
     }
 }
 
+/// Tracked area type broken into lines or paragraphs stays where it was, however it is aligned:
+/// a wrap after a hyphen or at a space becomes a line break or a paragraph's end, and the line
+/// leaves the tracking after its last character out of its width there as it did at the wrap.
+/// (Words chosen without a kerning pair across the wrap, which the pieces don't keep.)
+#[test]
+fn break_tracked_area_type_keeps_its_aligned_lines_in_place() {
+    for justify in ["center", "right"] {
+        for text_of in ["Mode-Mode-Mode", "Wave Wave Wave"] {
+            for by in ["paragraphs", "lines"] {
+                let mut s = session();
+                let id = text(&mut s, json!({"x": 40, "y": 40, "text": text_of, "size": 20, "area": {"width": 90, "height": 200}}));
+                s.execute("text.setRangeStyle", &json!({"id": id.0, "tracking": 200})).unwrap();
+                s.execute("text.setStyle", &json!({"ids": [id.0], "justify": justify})).unwrap();
+                let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &obj(&s, id));
+                assert!(lay.lines.len() > 1, "{text_of}: it wraps");
+                let was = glyphs(&s, &[id]);
+                select(&mut s, &[id]);
+                let pieces = ids(&s.execute("addon.cleanup.breakText", &json!({"by": by})).unwrap());
+                assert_same_places(&was, &glyphs(&s, &pieces));
+            }
+        }
+    }
+}
+
 #[test]
 fn break_text_refuses_what_it_cannot_break() {
     let mut s = session();
