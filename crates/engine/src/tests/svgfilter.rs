@@ -324,15 +324,37 @@ fn pasted_art_takes_no_name_the_documents_brushes_use() {
     assert_eq!(names, ["Shift 3"]);
 }
 
-/// A pasted filter at the size limit with a one-letter name, when every free name it could take is
-/// in use, is refused rather than pasted under the name of the document's filter.
+/// A pasted filter at the size limit with a one-letter name takes a free capital letter when every
+/// lowercase letter and digit is in use.
 #[test]
-fn a_paste_with_no_free_name_for_its_filter_is_refused() {
+fn a_renamed_paste_takes_a_free_capital_letter() {
     let mut s = session();
     for n in ('a'..='z').chain('0'..='9') {
         run(&mut s, "svgFilter.define", json!({"xml": format!(r#"<filter id="{n}"><feOffset dx="1" dy="1"/></filter>"#)}));
     }
     run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="S"><feOffset dx="3" dy="3"/></filter>"#}));
+    let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
+    let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#S)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].0, "A");
+    assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok("A".to_string()));
+    assert!(pasted[0].1.contains("dx=\"9\""), "its own filter");
+}
+
+/// A pasted filter at the size limit with a one-letter name, when every free name it could take is
+/// in use, is refused rather than pasted under the name of the document's filter.
+#[test]
+fn a_paste_with_no_free_name_for_its_filter_is_refused() {
+    let mut s = session();
+    for n in ('a'..='z').chain('0'..='9').chain('A'..='Z') {
+        run(&mut s, "svgFilter.define", json!({"xml": format!(r#"<filter id="{n}"><feOffset dx="1" dy="1"/></filter>"#)}));
+    }
     let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
     let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
     let svg = format!(

@@ -1286,7 +1286,7 @@ impl Clipboard {
                 ends.push(name.len());
                 let starts = ends.iter().rev().filter_map(|&end| name.get(..end).map(str::trim_end)).filter(|b| !b.is_empty());
                 let shorter = starts.map(|b| unique_name(b, |n| taken.contains(n)));
-                let single = ('a'..='z').chain('0'..='9').map(String::from).filter(|n| !taken.contains(n));
+                let single = ('a'..='z').chain('0'..='9').chain('A'..='Z').map(String::from).filter(|n| !taken.contains(n));
                 let renamed = shorter.chain(single).find_map(|new| {
                     let drawn = vectorcraft_render::effects::svg_filter::with_id(&xml, &new)
                         .filter(|x| vectorcraft_render::effects::svg_filter::check(x).is_ok_and(|id| id == new))?;
