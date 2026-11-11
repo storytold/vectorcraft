@@ -3242,6 +3242,40 @@ fn removing_an_id_that_is_not_installed_deletes_its_storage() {
     assert!(s.execute("plugin.remove", &json!({"id": id})).is_err(), "nothing left to remove");
 }
 
+/// The `plugin.*` commands that the tests running every command with `{}` run
+/// ([`crate::runs_with_empty_params`]) leave the cache of an installed plug-in as it is, so
+/// those tests can run beside the ones here that check a cache. Each command runs with `{}` in a
+/// document with two rectangles, one or both selected, as `every_command_survives_empty_params`
+/// runs it.
+#[test]
+fn plugin_commands_run_with_empty_params_keep_other_plugins_caches() {
+    let folder = crate::tests_links::Folder::new("plugin-storage-empty-params");
+    let id = "test.engine.storageemptyparams";
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(&mut s, id, WRITES);
+    run(&mut s, "plugin.run", json!({"id": id, "ids": []}));
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": id}))["cacheBytes"], json!(3));
+    let mut ran = vec![];
+    for all in [false, true] {
+        for c in crate::cmd::command_specs().iter().filter(|c| c.id.starts_with("plugin.") && crate::runs_with_empty_params(c.id)) {
+            let mut other = session();
+            let a = rect(&mut other, 10.0, "#ff0000");
+            rect(&mut other, 40.0, "#0000ff");
+            if all {
+                run(&mut other, "select.all", json!({}));
+            } else {
+                run(&mut other, "select.set", json!({"ids": [a.0]}));
+            }
+            let _ = other.execute(c.id, &json!({}));
+            ran.push(c.id);
+            assert_eq!(run(&mut s, "plugin.info", json!({"id": id}))["cacheBytes"], json!(3), "after {}", c.id);
+        }
+    }
+    assert!(ran.contains(&"plugin.list"), "{ran:?}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// The settings file and the cache are checked: a file that doesn't read is moved aside and the
 /// settings start empty; a write past a cap fails and changes nothing; cache entries whose names
 /// differ only in case are two files; a removed plug-in's storage takes no more writes.
