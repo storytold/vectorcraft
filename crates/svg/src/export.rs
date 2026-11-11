@@ -98,7 +98,9 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         brushes: None,
         knockout: doc.page_knockout,
         anonymous: false,
-        knockout_filter: None,
+        knockout_filters: HashMap::new(),
+        region_boxes: None,
+        art_reach: HashMap::new(),
         warnings: vec![],
         id_prefix,
         linked: Vec::new(),
@@ -255,8 +257,13 @@ struct Writer<'a> {
     knockout: bool,
     /// Writing a copy of an object (a knockout mask): no object ids, so they stay unique.
     anonymous: bool,
-    /// The filter that paints art black keeping its alpha (knockout masks), once defined.
-    knockout_filter: Option<String>,
+    /// The filters that paint art black keeping its alpha (knockout masks), by the region
+    /// attributes they were defined with.
+    knockout_filters: HashMap<String, String>,
+    /// The document's symbol boxes, measured once for every mask and filter region.
+    region_boxes: Option<vectorcraft_doc::SymbolBoxes<'a>>,
+    /// How far each symbol's art paints past its box, by name, once measured for a region.
+    art_reach: HashMap<String, f64>,
     /// The brush library, parsed when the first brushed stroke is written.
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Features written approximately (once each).

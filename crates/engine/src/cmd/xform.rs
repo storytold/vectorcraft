@@ -368,7 +368,7 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
         q["ids"] = ids.clone();
     }
     let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
-    let result = (spec.run)(s, &q)?;
+    let result = super::run_checked(s, spec, &q)?;
     if clear_stroke {
         s.paint.stroke = Paint::None;
     }

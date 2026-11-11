@@ -137,6 +137,35 @@ fn summary_warnings_are_translated() {
     assert_eq!(warning_line(fr, "no row: for this note"), "⚠ no row\u{a0}: for this note");
 }
 
+/// The warnings and the error for a page longer than 14,400 pt are translated: a PDF 1.5 file
+/// written as PDF 1.6, a page with a `UserUnit`, a PDF/X-4 page in points, a refused PDF/X-1a
+/// file and a page too narrow for the `UserUnit` its long side needs.
+#[test]
+fn long_page_notes_are_translated() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 56_692.91, "height": 2_834.65})).unwrap();
+    let mut notes: Vec<String> = vec![];
+    for p in [json!({"compatibility": "1.5"}), json!({"preset": "PDF/X-4:2010"})] {
+        let r = s.execute("document.exportPdf", &p).unwrap();
+        let warnings = r["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str());
+        notes.extend(warnings.filter(|w| w.contains("14,400 pt")).map(str::to_string));
+    }
+    notes.push(s.execute("document.exportPdf", &json!({"preset": "PDF/X-1a:2001"})).unwrap_err().to_string());
+    s.execute("file.new", &json!({"width": 85_040, "height": 17})).unwrap();
+    let r = s.execute("document.exportPdf", &json!({})).unwrap();
+    let warnings = r["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str());
+    notes.extend(warnings.filter(|w| w.contains("too long and narrow")).map(str::to_string));
+    assert_eq!(notes.len(), 5, "{notes:?}");
+    let english = ["has no UserUnit, which", "apps that ignore UserUnit", "apps that keep to the limit", "real numbers up to", "too long and narrow"];
+    for code in ["de", "fr", "ja", "zh-hans"] {
+        let lang = crate::i18n::Lang::from_code(code).unwrap();
+        for note in &notes {
+            let shown = warning_line(lang, note);
+            assert!(english.iter().all(|e| !shown.contains(e)), "{code}: {shown}");
+        }
+    }
+}
+
 /// A placed image whose pixel data can't be decoded is left out of the PDF, and the status bar
 /// shows the note raster exports give.
 #[test]

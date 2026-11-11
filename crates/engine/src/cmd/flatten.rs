@@ -5,7 +5,7 @@
 //! cut into atomic regions: the faces of the planar arrangement of every fill, outlined stroke and
 //! clipping path in them ([`po::regions`]). The same paints cover each whole region, so its colour
 //! is exact: those paints composited as the renderer composites them ([`Composer`], blend modes by
-//! [`composite`]), over white (or over nothing with Preserve Alpha); in CMYK documents their inks
+//! [`composite`]), with white under the finished art (or nothing with Preserve Alpha); in CMYK documents their inks
 //! composite, plane by plane ([`cmyk_planes`]), and the colour is CMYK. Each region becomes a path
 //! filled with that flat colour. Where gradients, patterns, images, opacity masks or raster
 //! effects reach there is no single colour: those regions are rendered into one image per group,

@@ -2,7 +2,7 @@
 
 use serde_json::json;
 use vectorcraft_color::{Color, GradientKind, Paint};
-use vectorcraft_doc::{AppearanceItem, NodeKind};
+use vectorcraft_doc::{AppearanceItem, LayerColor, NodeKind};
 
 use crate::*;
 
@@ -1387,6 +1387,128 @@ fn artboard_video_display_options_are_set_in_one_undo_step() {
     assert_eq!(video(&s, 1), (false, 10.0), "10 is in range");
 }
 
+/// Artboard Options' guide label: `artboard.setProps {guideLabel}` takes a layer color's name or
+/// `#rrggbb` and null clears it, each change one undo step, also on a locked artboard (whose
+/// rectangle stays locked) and for several artboards in one list; a value equal to the artboard's
+/// adds no undo step. `artboard.new` takes it, a duplicate and an undone delete keep it, and
+/// `inspect_document` reports it. A bad value anywhere in a list changes nothing.
+#[test]
+fn artboard_guide_labels_are_set_and_cleared_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let label = |s: &Session, i: usize| s.doc().unwrap().doc.artboards[i].guide_label;
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    assert_eq!((label(&s, 0), label(&s, 1)), (None, None), "no label by default");
+    let u0 = undo(&s);
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": "Red"})).unwrap();
+    assert_eq!((label(&s, 0), label(&s, 1)), (None, Some(LayerColor::Preset(1))), "only that artboard");
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": "#12aBcd"})).unwrap();
+    assert_eq!(label(&s, 1), Some(LayerColor::Custom([0x12, 0xab, 0xcd])));
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": null})).unwrap();
+    assert_eq!(label(&s, 1), None, "null clears it");
+    assert_eq!(undo(&s), u0 + 3, "one undo step each");
+    for was in [Some(LayerColor::Custom([0x12, 0xab, 0xcd])), Some(LayerColor::Preset(1)), None] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(label(&s, 1), was);
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    // The same label again, or a list that changes nothing: no undo step.
+    let u = undo(&s);
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": "Red"})).unwrap();
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": null}, {"index": 1, "guideLabel": "Red"}]})).unwrap();
+    assert_eq!(undo(&s), u, "nothing changed, no undo step");
+    // A locked artboard takes a label; its rectangle stays locked.
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let rect0 = s.doc().unwrap().doc.artboards[0].rect;
+    s.execute("artboard.setProps", &json!({"index": 0, "guideLabel": "Gold"})).unwrap();
+    assert_eq!(label(&s, 0), Some(LayerColor::Preset(15)));
+    assert!(s.execute("artboard.setProps", &json!({"index": 0, "x": 999, "guideLabel": "Teal"})).is_err());
+    assert_eq!((s.doc().unwrap().doc.artboards[0].rect, label(&s, 0)), (rect0, Some(LayerColor::Preset(15))));
+    let u = undo(&s);
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": "Teal"}, {"index": 1, "guideLabel": "#000000"}]})).unwrap();
+    assert_eq!((label(&s, 0), label(&s, 1)), (Some(LayerColor::Preset(11)), Some(LayerColor::Custom([0, 0, 0]))), "each its own");
+    assert_eq!(undo(&s), u + 1, "in one undo step");
+    let doc = crate::inspect::document(&s);
+    assert_eq!((doc["artboards"][0]["guideLabel"].clone(), doc["artboards"][1]["guideLabel"].clone()), (json!("Teal"), json!("#000000")));
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": null})).unwrap();
+    assert!(crate::inspect::document(&s)["artboards"][1].get("guideLabel").is_none(), "no label isn't reported");
+    let copy = s.execute("artboard.duplicate", &json!({"index": 0})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(label(&s, copy), Some(LayerColor::Preset(11)), "a duplicate keeps it");
+    let made = s.execute("artboard.new", &json!({"guideLabel": "Violet"})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(label(&s, made), Some(LayerColor::Preset(14)), "a new artboard takes it");
+    let plain = s.execute("artboard.new", &json!({})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(label(&s, plain), None);
+    s.execute("artboard.delete", &json!({"index": made})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(label(&s, made), Some(LayerColor::Preset(14)), "undoing a delete brings it back");
+    let before = s.doc().unwrap().doc.clone();
+    let bads = [
+        json!("red"),
+        json!(" Red"),
+        json!("#12345"),
+        json!("#1234567"),
+        json!("#12345678"),
+        json!("#fff"),
+        json!("#gg0000"),
+        json!(1),
+        json!([1, 2, 3]),
+        json!({"Preset": 1}),
+        json!(true),
+    ];
+    for bad in bads {
+        assert!(s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": bad})).is_err(), "{bad}");
+        assert!(s.execute("artboard.new", &json!({"guideLabel": bad})).is_err(), "{bad}");
+        assert!(
+            s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": "Red"}, {"index": 1, "guideLabel": bad}]})).is_err(),
+            "{bad}"
+        );
+    }
+    assert!(s.execute("artboard.setProps", &json!({"artboards": [{"index": 1, "guideLabel": "Red"}, {"index": 1, "guideLabel": "Red"}]})).is_err());
+    assert!(s.execute("artboard.setProps", &json!({"artboards": [{"index": 1, "guideLabel": "Red"}, {"index": 99, "guideLabel": "Red"}]})).is_err());
+    assert_eq!(*s.doc().unwrap().doc, *before, "a bad value changes nothing");
+}
+
+/// The native format keeps the guide label, as `{"Preset": n}` or `{"Custom": [r, g, b]}`. An
+/// artboard without one is written as before labels could be set, and a preset outside the layer
+/// colors in a file reads as no label. Exports leave the label out.
+#[test]
+fn artboard_guide_labels_round_trip_through_the_native_format() {
+    let mut s = session();
+    rect(&mut s);
+    s.execute("artboard.new", &json!({})).unwrap();
+    let save = |s: &Session| vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let before = save(&s);
+    let plain = (*s.doc().unwrap().doc).clone();
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": "Green"}, {"index": 1, "guideLabel": "#102030"}]})).unwrap();
+    let bytes = save(&s);
+    let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let ab = |i: usize| saved["document"]["artboards"][i]["guide_label"].clone();
+    assert_eq!((ab(0), ab(1)), (json!({"Preset": 2}), json!({"Custom": [16, 32, 48]})));
+    let back = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(back.artboards, s.doc().unwrap().doc.artboards);
+    // Screen-only: SVG and PDF exports are the same as without the labels.
+    let on = (*s.doc().unwrap().doc).clone();
+    assert_eq!(vectorcraft_svg::export(&on, &Default::default()), vectorcraft_svg::export(&plain, &Default::default()));
+    let options = vectorcraft_pdf::PdfOptions { created: Some(0), ..Default::default() };
+    assert_eq!(crate::export_pdf(&on, &options).unwrap(), crate::export_pdf(&plain, &options).unwrap());
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": null}, {"index": 1, "guideLabel": null}]})).unwrap();
+    assert_eq!(save(&s), before, "without labels, the file is as it was");
+    // A file's labels as another writer might put them: a preset past the layer colors reads as
+    // none, and a label that isn't a layer color at all is refused.
+    let mut edited = saved.clone();
+    edited["document"]["artboards"][0]["guide_label"] = json!({"Preset": 27});
+    edited["document"]["artboards"][1]["guide_label"] = json!({"Preset": 26});
+    let back = vectorcraft_format::load(&serde_json::to_vec(&edited).unwrap()).unwrap();
+    assert_eq!((back.artboards[0].guide_label, back.artboards[1].guide_label), (None, Some(LayerColor::Preset(26))));
+    for bad in [json!({"Preset": 256}), json!({"Custom": [1, 2]}), json!("Red"), json!({"Custom": [1, 2, 300]})] {
+        edited["document"]["artboards"][0]["guide_label"] = bad.clone();
+        assert!(vectorcraft_format::load(&serde_json::to_vec(&edited).unwrap()).is_err(), "{bad}");
+    }
+    edited["document"]["artboards"][0]["guide_label"] = json!(null);
+    let back = vectorcraft_format::load(&serde_json::to_vec(&edited).unwrap()).unwrap();
+    assert_eq!(back.artboards[0].guide_label, None);
+}
+
 /// The native format keeps Show Video Safe Areas and the Video Ruler Pixel Aspect Ratio. A
 /// document whose artboards hide the safe areas and have square pixels is written byte for byte as
 /// before they could be set, a file written without the two keys opens with the safe areas off
@@ -1784,6 +1906,54 @@ fn delete_empty_artboards_check_measures_a_document_once() {
     assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "after a change of the selection");
     s.execute("select.none", &json!({})).unwrap();
     assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "after another change of the selection");
+}
+
+/// Whether Fit to Artwork Bounds has art to fit on `indices`, as a menu asks for it, with the
+/// plug-ins' and fonts' generations `outside`, and how many times asking measured a document on
+/// this thread.
+fn art_to_fit_counted(s: &Session, indices: &[usize], outside: (u64, u64)) -> (bool, usize) {
+    let measures = || crate::doc_state::ART_TO_FIT_MEASURES.with(std::cell::Cell::get);
+    let before = measures();
+    let any = s.doc().unwrap().any_art_to_fit_with(indices, outside);
+    (any, measures() - before)
+}
+
+/// A menu asks whether Fit to Artwork Bounds has art on every frame while it is open: the answer is
+/// measured once for a version of the document and the artboards asked about, kept through a change
+/// of the selection or the view, and measured again after an edit, for other artboards, and when
+/// the plug-ins or the fonts change.
+#[test]
+fn art_to_fit_is_measured_once_for_a_version_of_the_document() {
+    let mut s = row_of_artboards(2);
+    let both = [0, 1];
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (false, 1), "the first frame");
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (false, 0), "a later frame");
+    let art = box_at(&mut s, 10.0, 20.0);
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 1), "an edit puts art on artboard 1");
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 0), "after a change of the selection");
+    s.execute("view.transparencyGrid", &json!({})).unwrap();
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 0), "after a change of the view");
+    assert_eq!(art_to_fit_counted(&s, &[1], (0, 0)), (false, 1), "other artboards");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 0)), (false, 1), "a plug-in installed or removed");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 1)), (false, 1), "fonts installed");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 1)), (false, 0));
+}
+
+/// A change made to the document in place (`Arc::make_mut`, with no other holder and no change
+/// of revision) is measured again: the kept answer holds the document it measured weakly, so a
+/// changed document is a new allocation, not the old address.
+#[test]
+fn art_to_fit_follows_a_change_in_place() {
+    let mut s = row_of_artboards(2);
+    box_at(&mut s, 10.0, 20.0);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (true, 1), "art on artboard 1");
+    let st = s.doc_mut().unwrap();
+    assert_eq!(Arc::strong_count(&st.doc), 1, "the undo history holds the document before the edit");
+    let (revision, empty_spot) = (st.revision, st.doc.artboards[1].rect);
+    Arc::make_mut(&mut st.doc).artboards[0].rect = empty_spot;
+    assert_eq!(st.revision, revision);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (false, 1), "artboard 1 moved off the art");
 }
 
 /// The enabled state follows an edit, an undo, a redo, an added and a removed artboard, a locked

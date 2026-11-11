@@ -952,6 +952,43 @@ fn node_renders_follow_the_anti_alias_option() {
     assert!(drawn(&thumb) && !partial(&thumb), "render_node_thumbnail_with: every alpha is 0 or 255");
 }
 
+/// Node renders follow `supersample` and `precise` as a page render does: two rectangles that meet
+/// at x = 50.37 leave no seam when supersampled, and a node render gives the pixels of a page
+/// render of the same art with the same options.
+#[test]
+fn node_renders_follow_the_supersample_and_precise_options() {
+    let mut d = Document::new(100.0, 100.0);
+    let left = rect_node(&mut d, Rect::new(10.0, 10.0, 50.37, 90.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let right = rect_node(&mut d, Rect::new(50.37, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(0.2, 0.6, 0.9)), Paint::None, 0.0);
+    // Blended at half opacity over both, so the group composites offscreen.
+    let mut over = rect_node(&mut d, Rect::new(30.0, 60.0, 70.0, 80.0), Paint::solid(Color::rgb(0.9, 0.7, 0.1)), Paint::None, 0.0);
+    over.opacity = 0.5;
+    over.blend = vectorcraft_color::BlendMode::Multiply;
+    let group = Node::group(d.alloc_id(), vec![Arc::new(left), Arc::new(right), Arc::new(over)]);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group.clone()).unwrap();
+    let node = Arc::new(group.clone());
+    let page = |opts: &RenderOptions| RenderOptions { background: None, artboards: false, ..opts.clone() };
+    let mut r = Renderer::new();
+    for (supersample, precise) in [(false, false), (true, false), (false, true), (true, true)] {
+        let opts = RenderOptions { supersample, precise, ..Default::default() };
+        let case = format!("supersample {supersample}, precise {precise}");
+        let img = r.render_node_with(&d, &node, 100, 100, Affine::IDENTITY, &opts).unwrap();
+        let whole = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &page(&opts));
+        assert!(img.pixels == whole.pixels, "{case}: render_node_with draws as a page render does");
+        // Pixel column 50 at row 50: the black rectangle covers 37% of it and the blue one the rest.
+        let seam = img.pixels[(50 * 100 + 50) * 4 + 3];
+        assert_eq!(seam == 255, supersample, "{case}: render_node_with seam alpha {seam}");
+        // A 37-pixel thumbnail draws 0.4375 pixels a point, the seam at x = 18.66.
+        let thumb = r.render_node_thumbnail_with(&d, &group, 37, None, &opts).unwrap();
+        let view = Affine::translate((18.5, 18.5)) * Affine::scale(0.4375) * Affine::translate((-50.0, -50.0));
+        let whole = Renderer::new().render(&d, 37, 37, view, &page(&opts));
+        assert!(thumb.pixels == whole.pixels, "{case}: the thumbnail draws as a page render does");
+        let seam = thumb.pixels[(18 * 37 + 18) * 4 + 3];
+        assert_eq!(seam == 255, supersample, "{case}: thumbnail seam alpha {seam}");
+    }
+}
+
 #[test]
 fn opacity_mask_with_undecodable_image_leaves_out_object() {
     use vectorcraft_doc::{Effect, ImageBlob, ImageObject, NodeKind, OpacityMask};

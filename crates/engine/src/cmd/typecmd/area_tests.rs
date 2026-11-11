@@ -2081,3 +2081,35 @@ fn fit_min_percent_for_several_frames_keeps_each_frames_fit() {
     assert_eq!(fit(&s, plain), vectorcraft_doc::AreaFit::None, "the plain frame doesn't start shrinking");
     assert_eq!(fit(&s, shrink), vectorcraft_doc::AreaFit::ShrinkText { min_percent: 30.0 });
 }
+
+/// #3565: `text.setPathHandle` moves a direction handle of type on a path's path, in document
+/// space, as `path.setHandle` moves a path's: a smooth anchor's other handle turns with it at
+/// its length, `independent` leaves it and makes the anchor a corner; one undo step.
+#[test]
+fn set_path_handle_reshapes_type_on_a_path() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    let path =
+        s.execute("path.create", &json!({"anchors": [{"x": 100, "y": 300, "in": [50, 300], "out": [150, 300]}, {"x": 400, "y": 300}]})).unwrap();
+    let text = s.execute("text.createInPath", &json!({"path": path["id"], "mode": "onPath", "text": "Along the curve"})).unwrap();
+    let id = NodeId(text["id"].as_u64().unwrap());
+    let first = |s: &Session| match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => *t.type_path().unwrap().subpaths[0].anchors.first().unwrap(),
+        _ => panic!("not text"),
+    };
+    let smooth = first(&s).kind == vectorcraft_geom::AnchorKind::Smooth;
+    s.execute("text.setPathHandle", &json!({"id": id.0, "anchor": 0, "which": "out", "x": 100, "y": 250})).unwrap();
+    let a = first(&s);
+    assert!((a.h_out.x - 100.0).abs() < 1e-6 && (a.h_out.y - 250.0).abs() < 1e-6, "{a:?}");
+    if smooth {
+        assert!((a.h_in.x - 100.0).abs() < 1e-6 && (a.h_in.y - 350.0).abs() < 1e-6, "smooth: the in handle turns with it at its length: {a:?}");
+    }
+    s.execute("text.setPathHandle", &json!({"id": id.0, "anchor": 0, "which": "in", "x": 60, "y": 300, "independent": true})).unwrap();
+    let b = first(&s);
+    assert_eq!(b.h_out, a.h_out, "independent: the other handle stays");
+    assert_eq!(b.kind, vectorcraft_geom::AnchorKind::Corner);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(first(&s), a, "one undo step each");
+    assert!(s.execute("text.setPathHandle", &json!({"id": id.0, "anchor": 9, "which": "out", "x": 0, "y": 0})).is_err(), "no such anchor");
+    assert!(s.execute("text.setPathHandle", &json!({"id": path["id"], "anchor": 0, "which": "out", "x": 0, "y": 0})).is_err(), "not type");
+}

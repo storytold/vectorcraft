@@ -501,7 +501,7 @@ fn function_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
             return Ok(Value::String(Str::from_units(units.to_vec())));
         }
         Some(Func::Native { name, .. }) => format!("function {name}() {{ [native code] }}"),
-        Some(Func::Host { name, .. }) => format!("function {name}() {{ [native code] }}"),
+        Some(Func::Host { name, .. } | Func::Data { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Bound { .. }) => "function () { [native code] }".to_string(),
         None => return Err(interp.type_error("Function.prototype.toString was called on a value that is not a function")),
     };

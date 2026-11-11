@@ -185,6 +185,8 @@ mod tests_batch;
 #[cfg(test)]
 mod tests_screens;
 #[cfg(test)]
+mod tests_selexport;
+#[cfg(test)]
 mod tests_text;
 
 #[cfg(test)]

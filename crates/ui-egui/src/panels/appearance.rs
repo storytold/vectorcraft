@@ -385,10 +385,22 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
     let area_id = egui::Id::unique("ap-row-popup");
     let shown = ctx.memory(|m| m.area_rect(area_id));
     // A press outside it (not one that closes a dropdown the popup opened) or Escape puts it away.
+    // With a field in it that has the keyboard, a press draws it once more first, so the field lets
+    // go of the keyboard to that press and commits what was typed, as in a panel (#6429). Escape
+    // drops what was typed.
     let pressed_outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| shown.is_some_and(|r| !r.contains(p))));
-    if pressed_outside && !egui::Popup::is_any_open(ctx) || ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+    let mut last = false;
+    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
         return close(app);
+    } else if pressed_outside && !egui::Popup::is_any_open(ctx) {
+        if !widgets::field_focused_in(ctx, egui::LayerId::new(egui::Order::Foreground, area_id)) {
+            return close(app);
+        }
+        last = true;
     }
+    // Fields let go of the keyboard on a click, which this press isn't yet. The app-wide option
+    // goes back however this function ends, a panic in the panel included.
+    let _surrender = last.then(|| SurrenderOnPress::set(ctx));
     let screen = ctx.content_rect();
     let left = panel.left() - POPUP_GAP - POPUP_W;
     let x = if left >= screen.left() + POPUP_GAP { left } else { (panel.right() + POPUP_GAP).min(screen.right() - POPUP_W - POPUP_GAP) };
@@ -415,6 +427,28 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
             }
         });
     });
+    if last {
+        close(app);
+    }
+}
+
+/// While it lives, a press anywhere makes a field let go of the keyboard, as a click does
+/// otherwise; dropped, egui's previous `surrender_focus_on` is back ([`row_popup`]'s last frame).
+struct SurrenderOnPress(egui::Context, egui::SurrenderFocusOn);
+
+impl SurrenderOnPress {
+    fn set(ctx: &egui::Context) -> Self {
+        let before = ctx.options(|o| o.input_options.surrender_focus_on);
+        ctx.options_mut(|o| o.input_options.surrender_focus_on = egui::SurrenderFocusOn::Presses);
+        Self(ctx.clone(), before)
+    }
+}
+
+impl Drop for SurrenderOnPress {
+    fn drop(&mut self) {
+        let before = self.1;
+        self.0.options_mut(|o| o.input_options.surrender_focus_on = before);
+    }
 }
 
 /// A row's name that edits the row when clicked ([`link`]), with the tooltip "Click to edit".

@@ -4205,3 +4205,17 @@ fn character_formats_are_kept_and_bigger_labels_space_out() {
         }
     }
 }
+
+#[test]
+fn csv_leading_byte_order_mark_is_ignored() {
+    assert_eq!(super::parse_csv("\u{feff}1,2\n3,4"), super::parse_csv("1,2\n3,4"));
+}
+
+#[test]
+fn csv_round_trip_keeps_blank_row_in_single_column_graph() {
+    let mut g = GraphSpec::default();
+    g.set_cells(vec![vec![Some(1.0)], vec![None], vec![Some(3.0)]]);
+    let (_, c, r) = super::parse_csv(&g.to_csv());
+    assert!(c.is_empty());
+    assert_eq!(r, g.cells());
+}

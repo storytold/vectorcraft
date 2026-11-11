@@ -603,7 +603,7 @@ fn a_baked_transform_copy_keeps_its_scaled_stroke() {
     let m = bake_appearance(None, &n).unwrap();
     let w = widths(&m);
     assert_eq!(w.len(), 2, "{w:?}");
-    assert!((w[0] - 102.0).abs() < 0.5 && (w[1] - 204.0).abs() < 0.5, "{w:?}");
+    assert!((w[1] - 102.0).abs() < 0.5 && (w[0] - 204.0).abs() < 0.5, "the original on top: {w:?}");
     assert!(baked_paths(&m).iter().all(|p| p.appearance.stroke().is_none()), "the strokes are outlined");
 }
 
@@ -619,7 +619,7 @@ fn a_baked_transform_copy_keeps_its_moved_pattern() {
             p => panic!("not a pattern: {p:?}"),
         })
         .collect();
-    assert_eq!(xs, vec![0.0, 30.0]);
+    assert_eq!(xs, vec![30.0, 0.0], "the original on top");
 }
 
 #[test]

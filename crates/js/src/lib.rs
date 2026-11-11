@@ -47,6 +47,7 @@ mod compiler;
 mod date_builtins;
 mod error;
 mod heap;
+mod host;
 mod interp;
 mod lexer;
 mod number;
@@ -65,9 +66,10 @@ pub use ast::{
     PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, UnaryOp, UpdateOp, VarDecl,
 };
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
+pub use host::{Data, DataLimits, HostError, HostFunction, HostItem};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
-pub use realm::{Interrupt, JsValue, LimitKind, Limits, Realm, RunError, RunErrorKind};
+pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.
@@ -184,6 +186,8 @@ impl LineTable {
 
 #[cfg(test)]
 mod builtins_tests;
+#[cfg(test)]
+mod host_tests;
 #[cfg(test)]
 mod interp_tests;
 #[cfg(test)]
