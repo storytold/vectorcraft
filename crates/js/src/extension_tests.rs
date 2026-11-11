@@ -163,6 +163,8 @@ fn script_items_read_the_global_object_the_last_error_the_line_and_the_stack() {
     assert_eq!(r.run("\n\n  h.line").unwrap(), JsValue::Number(3.0));
     let source = "function outer() {\n  return inner();\n}\nfunction inner() {\n  return h.stack;\n}\nvar f = function () { return outer(); };\nf()";
     assert_eq!(text(&mut r, source), "[global]:8\n[anonymous]:7\nouter:2\ninner:5\n");
+    let source = "function maker() {\n  function named() {\n    return h.stack;\n  }\n  return named;\n}\nvar later = maker();\nlater()";
+    assert_eq!(text(&mut r, source), "[global]:8\nnamed:3\n", "a declared function keeps its name after its declaring function returns");
     let deep = "function d(n) { return n ? d(n - 1) : h.stack; } var s = d(100).split('\\n'); s.length + ',' + s[0]";
     let lines = text(&mut r, deep);
     assert_eq!(lines, "66,…", "64 frames, the line that some are left out, and the last line's end");

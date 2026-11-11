@@ -30,7 +30,9 @@ fn thrown(s: &mut Session, statement: &str) -> String {
 fn each_member_has_its_value() {
     let mut s = Session::new();
     let version = env!("CARGO_PKG_VERSION");
-    let os = if cfg!(windows) {
+    let os = if cfg!(target_arch = "wasm32") {
+        "Web"
+    } else if cfg!(windows) {
         "Windows"
     } else if cfg!(target_os = "macos") {
         "macOS"

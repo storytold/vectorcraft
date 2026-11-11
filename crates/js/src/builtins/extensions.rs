@@ -381,7 +381,7 @@ fn stack(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value>
     }
     for (code, pc, function) in frames.iter().skip(skip) {
         interp.use_fuel()?;
-        let name = if *function { function_name(&frames, code) } else { "[global]".to_string() };
+        let name = if *function { function_name(code) } else { "[global]".to_string() };
         let line = code.line_column(pc.saturating_sub(1)).0;
         text.push_str(&format!("{name}:{line}\n"));
     }
@@ -390,14 +390,11 @@ fn stack(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value>
     Ok(out.finish(interp))
 }
 
-/// The name `code` has: its own as a function expression's, or the one a function declaration of
-/// a frame's code gives it, cut to [`STACK_NAME_UNITS`]; `[anonymous]` without one.
-fn function_name(frames: &[(Rc<Code>, usize, bool)], code: &Rc<Code>) -> String {
-    let declared = frames.iter().find_map(|(outer, ..)| {
-        outer.fun_decls.iter().find(|(_, i)| outer.functions.get(*i as usize).is_some_and(|f| Rc::ptr_eq(f, code))).map(|(name, _)| name.clone())
-    });
-    match code.self_name.clone().or(declared) {
-        Some(name) => String::from_utf16_lossy(name.get(..STACK_NAME_UNITS).unwrap_or(&*name)),
+/// The name `code` has: its own as a function expression's, or its declaration's, cut to
+/// [`STACK_NAME_UNITS`]; `[anonymous]` without one.
+fn function_name(code: &Code) -> String {
+    match code.self_name.as_ref().or(code.decl_name.as_ref()) {
+        Some(name) => String::from_utf16_lossy(name.get(..STACK_NAME_UNITS).unwrap_or(&**name)),
         None => "[anonymous]".to_string(),
     }
 }
