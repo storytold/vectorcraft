@@ -174,6 +174,23 @@ fn each_page_keeps_its_own_layer_order() {
     }
 }
 
+/// Pages that alternate between two orders of the same layers reuse the layers made for each
+/// order instead of adding layers page after page.
+#[test]
+fn pages_in_alternating_layer_orders_reuse_their_layers() {
+    let v = V(1100);
+    let rect = || synth::object(v, 1, &[(30, [v.coord(5.0), v.coord(5.0), v.coord(0.0), v.coord(0.0), v.coord(0.0), v.coord(0.0)].concat())], None);
+    let page = |names: &[&str]| synth::page(false, names.iter().map(|n| synth::layer(v, [0, 0, 0, 0x98], n, vec![rect()])).collect());
+    // Front to back on each page.
+    let mut kids = vec![chunk(b"vrsn", 1100u16.to_le_bytes().to_vec())];
+    kids.extend((0..6).map(|i| if i % 2 == 0 { page(&["B", "A"]) } else { page(&["A", "B"]) }));
+    let (doc, _) = super::cdr::import(&synth::riff(1100, &kids)).unwrap();
+    let names: Vec<String> = doc.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["A", "B", "A"], "bottom to top");
+    let got: Vec<usize> = doc.layers.iter().map(|l| l.children().unwrap().len()).collect();
+    assert_eq!(got, [3, 6, 3]);
+}
+
 #[test]
 fn pages_and_the_guides_copied_onto_them_are_bounded() {
     let v = V(1100);

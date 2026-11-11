@@ -160,8 +160,9 @@ impl shapes::Builder {
         // Bottom to top: the master page's layers, then the pages' in the order first seen.
         let mut layers: Vec<(String, Vec<Arc<Node>>)> = Vec::new();
         // A layer is known by its name and how many layers of that name the page has below it, so
-        // two layers of one name on a page stay two layers.
-        let mut by_name: HashMap<(String, usize), usize> = HashMap::new();
+        // two layers of one name on a page stay two layers. Each key keeps every layer made for
+        // it, bottom to top.
+        let mut by_name: HashMap<(String, usize), Vec<usize>> = HashMap::new();
         self.master_layers(d, &placed, &mut layers);
         // The pages' layers go above the master page's.
         let pages_from = layers.len();
@@ -182,8 +183,9 @@ impl shapes::Builder {
                 *n += 1;
                 // A layer an earlier page stacked below this page's last one would put this page's
                 // art in the wrong order, so the page gets a new layer of that name instead, just
-                // above its last one.
-                match by_name.get(&key).copied().filter(|&i| below.is_none_or(|b| i > b)) {
+                // above its last one. Of the layers of that name above the last one, the lowest
+                // takes the art.
+                match by_name.get(&key).and_then(|is| is.iter().copied().find(|&i| below.is_none_or(|b| i > b))) {
                     Some(i) => {
                         if let Some((_, kids)) = layers.get_mut(i) {
                             kids.extend(art);
@@ -194,11 +196,12 @@ impl shapes::Builder {
                     None => {
                         let at = below.map_or(pages_from, |b| b + 1);
                         if at < layers.len() {
-                            for i in by_name.values_mut().filter(|i| **i >= at) {
+                            for i in by_name.values_mut().flatten().filter(|i| **i >= at) {
                                 *i += 1;
                             }
                         }
-                        by_name.insert(key, at);
+                        let is = by_name.entry(key).or_default();
+                        is.insert(is.partition_point(|&i| i < at), at);
                         layers.insert(at, (l.name.clone(), art));
                         below = Some(at);
                     }
