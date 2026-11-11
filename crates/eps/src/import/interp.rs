@@ -570,6 +570,7 @@ impl<'a> Interp<'a> {
                 self.spend_bytes(items.len())?;
                 items.borrow().iter().try_for_each(|i| self.charge_scanned(i, depth + 1))
             }
+            Obj::Name(n) | Obj::Exec(n) => self.alloc(n.len()),
             _ => Ok(()),
         }
     }

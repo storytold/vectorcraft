@@ -1625,3 +1625,11 @@ fn a_failed_filter_decode_is_not_tried_again() {
     r.document.walk(|n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. })));
     assert_eq!(paths, 1, "{:?}", r.warnings);
 }
+
+/// A long name scanned again and again (`token`) is charged as strings are.
+#[test]
+fn rescanned_names_are_charged() {
+    let body = format!("/s ({}) def\n1100 {{ s token pop pop pop }} repeat\n", "a".repeat(1 << 20));
+    let e = import(&eps(&body)).unwrap_err();
+    assert!(e.contains("too much memory"), "{e}");
+}
