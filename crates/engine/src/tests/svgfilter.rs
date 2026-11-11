@@ -284,6 +284,151 @@ fn pasted_art_with_a_filter_at_the_size_limit_still_draws_when_renamed() {
     }
 }
 
+/// A pasted filter is not renamed to a name an effect in the document already gives, even one whose
+/// filter was deleted, so defining a filter of that name later changes only that effect.
+#[test]
+fn pasted_art_takes_no_name_the_documents_effects_use() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="Shift 2"><feOffset dx="1" dy="1"/></filter>"#}));
+    run(&mut s, "svgFilter.apply", json!({"name": "Shift 2", "ids": [a.0]}));
+    run(&mut s, "svgFilter.delete", json!({"name": "Shift 2"}));
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT_MORE}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let names: Vec<String> = filter_effects(&s).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["Shift 2", "Shift 3"]);
+}
+
+/// A pasted filter is not renamed to a name an effect in a brush's art gives either.
+#[test]
+fn pasted_art_takes_no_name_the_documents_brushes_use() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="Shift 2"><feOffset dx="1" dy="1"/></filter>"#}));
+    run(&mut s, "svgFilter.apply", json!({"name": "Shift 2", "ids": [a.0]}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "brush.new", json!({"type": "art", "name": "Fx"}));
+    run(&mut s, "edit.clear", json!({"ids": [a.0]}));
+    run(&mut s, "svgFilter.delete", json!({"name": "Shift 2"}));
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT_MORE}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let names: Vec<String> = filter_effects(&s).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["Shift 3"]);
+}
+
+/// A pasted filter at the size limit with a one-letter name takes a free capital letter when every
+/// lowercase letter and digit is in use.
+#[test]
+fn a_renamed_paste_takes_a_free_capital_letter() {
+    let mut s = session();
+    for n in ('a'..='z').chain('0'..='9') {
+        run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}));
+    }
+    run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="S"><feOffset dx="3" dy="3"/></filter>"#}));
+    let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
+    let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#S)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].0, "A");
+    assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok("A".to_string()));
+    assert!(pasted[0].1.contains("dx=\"9\""), "its own filter");
+}
+
+/// A filter named `n`, with the characters a quoted attribute value cannot hold escaped.
+fn one_char_filter(n: char) -> String {
+    let id = match n {
+        '"' => "&quot;".to_string(),
+        '&' => "&amp;".to_string(),
+        '<' => "&lt;".to_string(),
+        c => c.to_string(),
+    };
+    format!(r#"<filter id="{id}"><feOffset dx="1" dy="1"/></filter>"#)
+}
+
+/// A pasted filter at the size limit with a one-letter name takes a free punctuation character when
+/// every letter and digit is in use.
+#[test]
+fn a_renamed_paste_takes_a_free_punctuation_character() {
+    let mut s = session();
+    for n in ('a'..='z').chain('0'..='9').chain('A'..='Z') {
+        run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}));
+    }
+    let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
+    let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#S)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].0, "!");
+    assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok("!".to_string()));
+    assert!(pasted[0].1.contains("dx=\"9\""), "its own filter");
+}
+
+/// A pasted filter at the size limit with a one-letter name, when every free name it could take is
+/// in use, is refused rather than pasted under the name of the document's filter.
+#[test]
+fn a_paste_with_no_free_name_for_its_filter_is_refused() {
+    let mut s = session();
+    for n in ('a'..='z').chain('0'..='9').chain('A'..='Z') {
+        run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}));
+    }
+    // A document holds at most 64 filters: the other one-character names are taken by effects
+    // whose filters were deleted.
+    for n in ('!'..='~').filter(|c| !c.is_ascii_alphanumeric()) {
+        let a = rect(&mut s, 10.0);
+        let name = run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}))["name"].as_str().unwrap().to_string();
+        assert_eq!(name, n.to_string());
+        run(&mut s, "svgFilter.apply", json!({"name": name, "ids": [a.0]}));
+        run(&mut s, "svgFilter.delete", json!({"name": name}));
+    }
+    let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
+    let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#S)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    let (before, effects) = (steps(&s), filter_effects(&s).len());
+    assert_eq!(effects, 32);
+    assert!(err(&mut s, "edit.pasteInPlace", json!({})).contains("no free name"));
+    assert_eq!(filter_effects(&s).len(), effects, "nothing pasted");
+    assert_eq!(steps(&s), before);
+}
+
+/// A pasted filter whose name holds a tab, a line feed or a carriage return keeps those characters
+/// in its id under its new name.
+#[test]
+fn a_renamed_paste_keeps_whitespace_characters_in_its_id() {
+    for c in ["&#9;", "&#10;", "&#13;"] {
+        let mut s = session();
+        run(&mut s, "svgFilter.define", json!({"xml": format!(r#"<filter id="S{c}t"><feOffset dx="3" dy="3"/></filter>"#)}));
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><filter id="S{c}t"><feOffset dx="9" dy="9"/></filter></defs><rect width="30" height="30" filter="url(#S{c}t)"/></svg>"#
+        );
+        run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+        run(&mut s, "edit.pasteInPlace", json!({}));
+        let pasted = filter_effects(&s);
+        assert_eq!(pasted.len(), 1);
+        assert_ne!(pasted[0].0, names(&mut s)[0], "renamed");
+        assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok(pasted[0].0.clone()), "{c}: its id is its name");
+    }
+}
+
 /// Art in a symbol's definition that uses a filter follows its edits too.
 #[test]
 fn a_symbols_art_follows_a_filter_edit() {

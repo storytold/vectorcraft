@@ -1315,6 +1315,25 @@ fn plugin_management_commands() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
+/// Clearing the Additional Plug-ins Folder forgets the folder: setting the same folder again
+/// installs what is in it, as setting any other folder does.
+#[test]
+fn plugins_folder_set_again_after_clearing_installs_its_plugins() {
+    let dir = crate::tests_links::Folder::new("plugin-folder-cleared");
+    let id = "test.engine.foldercleared";
+    let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+    std::fs::write(dir.0.join("cleared.wasm"), wat::parse_str(src).unwrap()).unwrap();
+    let mut s = session();
+    let folder = json!({"key": "pluginsFolder", "value": dir.0.display().to_string()});
+    run(&mut s, "prefs.set", folder.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed from the folder");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    run(&mut s, "prefs.set", json!({"key": "pluginsFolder", "value": ""}));
+    run(&mut s, "prefs.set", folder);
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again when the folder is set again");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
 /// session that attaches the store, and Remove Plug-in takes it out of the store.
 #[test]

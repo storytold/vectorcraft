@@ -35,6 +35,7 @@ const FEATURE_CASES: &[(&str, &str, &str)] = &[
     ("directive.target", "  //@target acme", "x(); //@target acme"),
     ("directive.targetengine", "#targetengine session", "var targetengine = 'session';"),
     ("dollar", "$.writeln('hi');", "log.writeln('hi');"),
+    ("dollar", "$.localize = true;", "obj.localize = true;"),
     ("dollar.env", "var home = $.getenv('HOME');", "var home = env.getenv('HOME');"),
     ("dollar.evalFile", "$.evalFile(f);", "loader.evalFile(f);"),
     ("dynamicCode", "eval(code);", "safe.eval(code);"),
@@ -68,7 +69,6 @@ const FEATURE_CASES: &[(&str, &str, &str)] = &[
     ("file.write", "Folder.temp.remove();", "cache.temp.remove();"),
     ("hostCheck", "if (parseInt(app.version) < 20) {}", "if (parseInt(appVersion) < 20) {}"),
     ("localize", "var s = localize(text);", "var s = text.localize;"),
-    ("localize", "var s = $.localize(text);", "var s = obj.localize(text);"),
     ("menuCommand", "app.executeMenuCommand('acmecopyall');", "executeMenuCommand('acmecopyall');"),
     ("notify", "alert('done');", "panel.alert('done');"),
     ("notify", "if (confirm('Go?')) {}", "function confirm(m) {}"),
@@ -100,6 +100,15 @@ fn each_feature_is_found_where_it_is_and_nowhere_else() {
         assert!(r.needs.contains(&need), "{with}: {:?}", r.needs);
         let r = report(without);
         assert!(feature(&r, id).is_none(), "{id} found in {without:?}");
+    }
+}
+
+#[test]
+fn the_dollar_objects_localize_property_is_not_the_global_localize_function() {
+    for src in ["$.localize = true;", "if ($.localize) {}", "var s = $.localize(text);"] {
+        let r = report(src);
+        assert!(feature(&r, "dollar").is_some(), "{src}: {:?}", r.features);
+        assert!(feature(&r, "localize").is_none(), "{src}: {:?}", r.features);
     }
 }
 

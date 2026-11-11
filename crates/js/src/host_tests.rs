@@ -261,6 +261,59 @@ fn errors_from_the_host_can_be_caught_and_an_abort_cannot() {
 }
 
 #[test]
+fn a_marked_host_error_keeps_its_mark_only_while_no_catch_takes_it() {
+    let mut r = realm(1_000_000);
+    let f: HostFunction = Rc::new(|a| {
+        let error = match a.first() {
+            Some(Data::String(k)) if k == "abort" => HostError::Abort("stopped".into()),
+            _ => HostError::Syntax("bad file".into()),
+        };
+        Err(HostError::Marked { error: Box::new(error), mark: 7 })
+    });
+    r.define_host_object("host", vec![("f".into(), HostItem::Function(f))]).unwrap();
+    let cases = [
+        ("host.f();", Some(7)),
+        ("try { host.f(); } finally { var x = 1; }", Some(7)),
+        ("try { try { host.f(); } finally { 1; } } finally { 2; }", Some(7)),
+        ("function g() { host.f(); }\ng();", Some(7)),
+        ("try { host.f(); } finally { try { try { host.f(); } finally { 1; } } catch (e) {} }", Some(7)),
+        ("var saved; try { host.f(); } catch (e) { saved = e; }\nthrow saved;", None),
+        ("try { host.f(); } catch (e) { throw e; }", None),
+        ("try { try { host.f(); } finally { 1; } } catch (e) { throw e; }", None),
+        ("var m; try { host.f(); } catch (e) { m = e.message; }\nthrow new SyntaxError(m);", None),
+        ("do { try { host.f(); } finally { break; } } while (false);\nthrow new Error('other');", None),
+        ("try { host.f('abort'); } catch (e) { 'caught' }", Some(7)),
+    ];
+    for (source, mark) in cases {
+        assert!(r.run(source).is_err(), "{source}");
+        assert_eq!(r.error_mark(), mark, "{source}");
+    }
+    assert_eq!(r.run("1").unwrap(), JsValue::Number(1.0));
+    assert_eq!(r.error_mark(), None, "a later run that ends normally has no mark");
+}
+
+/// Marked errors that `finally` blocks discard with `return`, `break` or `continue` are collected
+/// with the rest of the garbage, so a run that discards many of them stays within its heap.
+#[test]
+fn marked_errors_a_finally_block_discards_are_collected() {
+    let mut r = Realm::new();
+    r.set_limits(Limits { fuel: 200_000_000, heap_bytes: 1 << 20, ..Limits::default() });
+    let f: HostFunction = Rc::new(|_| Err(HostError::Marked { error: Box::new(HostError::Syntax("bad file".into())), mark: 7 }));
+    r.define_host_object("host", vec![("f".into(), HostItem::Function(f))]).unwrap();
+    let cases = [
+        "function d() { try { host.f(); } finally { return; } }\nfor (var i = 0; i < 20000; i++) d();",
+        "for (var i = 0; i < 20000; i++) { try { host.f(); } finally { continue; } }",
+        "for (var i = 0; i < 20000; i++) { do { try { host.f(); } finally { break; } } while (false); }",
+    ];
+    for source in cases {
+        r.run(source).unwrap_or_else(|e| panic!("{source}: {e:?}"));
+        assert_eq!(r.error_mark(), None, "{source}");
+    }
+    assert!(r.run("try { host.f(); } finally { 1; }").is_err());
+    assert_eq!(r.error_mark(), Some(7));
+}
+
+#[test]
 fn an_error_says_where_in_the_source_it_was_raised() {
     let mut r = realm(1_000_000);
     r.start("var a = 1;\n  throw new TypeError('no');").unwrap();

@@ -697,6 +697,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Estimate:** 4–8 h.
 - **Done (2026-10-16):** the MCP server hears the client during a long call: `notifications/cancelled` stops a queued or running export (PDF pages, flattening, baking, drawing, artboards) without writing anything or changing the document, `ping` and the list methods answer at once, any other request that would wait behind a call running for two seconds or more is refused as busy (`-32003`, naming the call), and `_meta.progressToken` gets page progress (#2165, #2171, #2172). Reading the document during an export is not served (refused as busy); estimate unchanged.
 - **Exposed in MCP:** `add_text {vertical: true}` uses the existing vertical point, area and path type commands. Horizontal writing remains the default; the broader automation gap and estimate are unchanged.
+- **Done (#6460):** headless and remote `command_list` list desktop `UI_COMMANDS` (`ui: true`); UI-only runs still need `--connect`; effect ids are not command ids; 33 tools; eight prompts (spelling, variables, path-tools added); `vectorcraft://commands/reference` in the rebuilt CLI; prefer a checkout-built CLI when a release binary lags. Estimate unchanged.
 
 ## G15 Performance budgets and a GPU renderer
 
@@ -860,6 +861,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 | Date | Change | Summary |
 |---|---|---|
 | 2026-11-11 | minor | M5/G15: text thread overlay membership indexing, focused output controls and matched component timings (#6543); scores and estimates unchanged. |
+| 2026-11-10 | minor | G6: MCP catalogue (#6460): headless lists `UI_COMMANDS` (`ui: true`), eight prompts, effect vs command ids, 33 tools, commands/reference; estimate unchanged. |
 | 2026-11-11 | minor | G5: built-in Status Effects graphic style library (Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade, Shield Buff); Missing trimmed; estimate 7–17 → 6–16 h; MCP docs list UI Frames and Map Markers under Symbol libraries. |
 | 2026-11-11 | minor | G5: built-in Inventory Icons symbol library (Sword, Shield, Potion, Key, Gem; no default 9-slice); Missing trimmed; estimate 8–18 → 7–17 h. |
 | 2026-11-10 | minor | G4 type: Edit › Edit Custom Dictionary… adds, deletes and changes the custom dictionary's words, #4936; the Check Spelling dialog remains; scores and estimates unchanged. |

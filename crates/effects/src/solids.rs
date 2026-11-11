@@ -275,23 +275,30 @@ impl Scope {
     }
 }
 
+/// Does `scope` draw its members' faces other than plainly: does it have an opacity mask or a
+/// blending mode other than Normal?
+fn composites(scope: &Scope) -> bool {
+    scope.mask.is_some() || scope.blend != BlendMode::Normal
+}
+
 /// `surfaces`, each with the scopes of the member it was built from, in groups with the opacity
-/// masks of those scopes, so each mask applies to the faces of the members it holds. The members'
-/// opacity is already in their paint ([`Profile::opacity`]), so these groups are opaque.
+/// masks and blending modes of those scopes, so each applies to the faces of the members it holds.
+/// The members' opacity is already in their paint ([`Profile::opacity`]), so these groups are
+/// opaque.
 fn masked(id: NodeId, surfaces: Vec<(&[Scope], Arc<Node>)>) -> Vec<Arc<Node>> {
     let masks: Vec<(Vec<Scope>, Arc<Node>)> = surfaces
         .into_iter()
         .map(|(scopes, s)| {
-            let masks = scopes.iter().filter(|s| s.mask.is_some()).map(|s| Scope { opacity: 1.0, blend: BlendMode::Normal, ..s.clone() }).collect();
+            let masks = scopes.iter().filter(|s| composites(s)).map(|s| Scope { opacity: 1.0, ..s.clone() }).collect();
             (masks, s)
         })
         .collect();
     crate::revolve::scoped(id, masks.iter().map(|(scopes, s)| (scopes.as_slice(), s.clone())).collect(), 0)
 }
 
-/// Does any of `shapes` sit in a scope with an opacity mask?
+/// Does any of `shapes` sit in a scope with an opacity mask or a blending mode other than Normal?
 fn has_masks(shapes: &[Profile]) -> bool {
-    shapes.iter().any(|s| s.scopes.iter().any(|s| s.mask.is_some()))
+    shapes.iter().any(|s| s.scopes.iter().any(composites))
 }
 
 /// One shape a solid is built from: its outline and fill rule, the fills and strokes that paint
@@ -484,6 +491,21 @@ fn paint_of(item: &AppearanceItem, member: f32) -> (Paint, f32, BlendMode) {
     }
 }
 
+/// `item`'s paint, borrowed (for checks that must not copy it).
+fn paint_ref(item: &AppearanceItem) -> &Paint {
+    match item {
+        AppearanceItem::Fill(f) => &f.paint,
+        AppearanceItem::Stroke(s) => &s.paint,
+    }
+}
+
+/// Paint copies `surface` makes for `facets`: two per facet (fill and seam stroke), six when colored
+/// lights give each facet derived paints (`lighting::solid_surface`).
+fn facet_copies(facets: &[Facet], paint: &Paint, colored: bool) -> usize {
+    let derived = colored && paint.color().is_some() && facets.iter().any(|f| f.rgb_gradient.is_some());
+    facets.len().saturating_mul(if derived { 6 } else { 2 })
+}
+
 /// The area `item` paints on `path`, and the rule that fills it: the path itself for a fill, the
 /// stroke's outline (whose contours nest as its holes do) for a stroke.
 fn region(path: &PathData, rule: FillRule, item: &AppearanceItem) -> (PathData, FillRule) {
@@ -535,14 +557,17 @@ pub(crate) fn reshape_members(n: &Node, before: &[Effect], shapes: &mut [Profile
 /// each in its own paint. When every one is opaque with normal blending and no colored light makes
 /// a surface one composite or masks it, their faces are drawn in one back-to-front order (where
 /// depths tie, as for the caps turned toward the viewer, in the order of the appearance);
-/// otherwise each solid is a surface of its own, in that order. A member's opacity mask, or that of
-/// a group it is in, masks the surfaces of the members it holds ([`masked`]).
+/// otherwise each solid is a surface of its own, in that order. A member's opacity mask and
+/// blending mode, and those of a group it is in, apply to the surfaces of the members it holds
+/// ([`masked`]).
 fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> {
     let b = union_bounds(shapes)?;
     let p = crate::merged_params(&fx.id, &fx.params);
     let classic = fx.id == CLASSIC_EXTRUDE;
     let colored = !classic && view_options(&p).has_colored_lights();
     let masks = has_masks(shapes);
+    // The paint copies of every solid together: past the allowance the source path is drawn.
+    let mut paint_bytes = 0usize;
     if fx.id == ROTATE {
         // Every part turns about the centre of the object's own bounds (a group's members about
         // the centre of theirs), so they stay together.
@@ -552,6 +577,9 @@ fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> 
                 let (paint, opacity, blend) = paint_of(item, s.opacity);
                 let (area, rule) = region(&s.path, s.rule, item);
                 let f = facets(ROTATE, &area, rule, b, &p).ok()?;
+                if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, &paint, colored), &paint) {
+                    return None;
+                }
                 out.push((s.scopes.as_slice(), Arc::new(surface(n, f, &paint, opacity, blend, colored))));
             }
         }
@@ -569,6 +597,7 @@ fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> 
     for ((item, opacity, _, _, scopes), f) in parts.iter().zip(built) {
         let item: &AppearanceItem = item;
         match f {
+            Ok(f) if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, paint_ref(item), colored), paint_ref(item)) => return None,
             Ok(f) => solids.push((item, *opacity, *scopes, f)),
             // A stroke's outline past the limits is left out; the fill's solid still draws.
             Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}

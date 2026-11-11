@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use kurbo::{ParamCurve, Point, Rect, Shape as _};
-use vectorcraft_geom::{AnchorKind, FillRule, PathData, SubPath};
+use vectorcraft_geom::{Anchor, AnchorKind, FillRule, PathData, SubPath};
 use vectorcraft_pathops::*;
 
 const NZ: FillRule = FillRule::NonZero;
@@ -406,6 +406,35 @@ fn simplify_straight_lines_option() {
     assert!(!has_curves(&s));
     assert!(s.anchor_count() < 40);
     assert!(max_deviation(&c, &s) <= 1.0 + 1e-6);
+}
+
+/// A closed subpath whose refit is one curve stays a closed subpath that encloses an area, in a
+/// compound path and on its own, with curves and with Convert to Straight Lines.
+#[test]
+fn simplify_keeps_a_closed_subpath_that_refits_to_one_curve() {
+    let small = |cx: f64, cy: f64| circle(cx, cy, 2.0).subpaths.remove(0);
+    let square = rect(0.0, 0.0, 1000.0, 1000.0).subpaths.remove(0);
+    let compound = PathData::new(vec![square, small(500.0, 500.0)]);
+    let lone = PathData::single(small(0.0, 0.0));
+    // A straight edge and a curve that bows 2.25 pt from it.
+    let bow = PathData::single(SubPath::new(
+        vec![
+            Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 3.0), Point::new(0.0, 0.0)),
+            Anchor::with_handles(Point::new(100.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 3.0)),
+        ],
+        true,
+    ));
+    for straight_lines in [false, true] {
+        for tolerance in [4.0, 10.0, 32.0] {
+            let opts = SimplifyOptions { tolerance, straight_lines, ..Default::default() };
+            for path in [&compound, &lone, &bow] {
+                let s = simplify_with(path, &opts);
+                assert_eq!(s.subpaths.len(), path.subpaths.len(), "{tolerance} pt, straight lines {straight_lines}: {s:?}");
+                assert!(s.subpaths.iter().all(|sp| sp.closed && sp.anchors.len() >= 2 && sp.area().abs() > 1.0), "{s:?}");
+                assert!(max_deviation(path, &s) <= tolerance + 1e-6, "{tolerance} pt: {}", max_deviation(path, &s));
+            }
+        }
+    }
 }
 
 /// The Simplify slider's levels: 1 pt at 50, doubled for every 10 levels down and halved for every

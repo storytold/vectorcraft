@@ -84,11 +84,14 @@ pub fn simplify_with(path: &PathData, opts: &SimplifyOptions) -> PathData {
     PathData::new(out)
 }
 
-/// [`simplify_with`] for one subpath; `None` when the refit leaves nothing of it.
+/// [`simplify_with`] for one subpath; `None` when the refit leaves nothing of it. A closed subpath
+/// whose refit is one segment, or two lines that enclose no area, is refitted in two parts, cut at
+/// the point farthest from its start, or in three when two still give that; one of a single segment
+/// stays as it is.
 fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     let mut segs = subpath_segs(sp);
     let n = segs.len();
-    if n == 0 {
+    if n == 0 || sp.closed && n < 2 {
         return Some(sp.clone());
     }
     if sp.closed {
@@ -101,7 +104,34 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     // along its chord, and `no_worse` can return the original subpath, so the start can keep a kink.
     let across = if sp.closed && opts.smooth > 0.0 { unit(end_tangent(&segs[n - 1].c) + start_tangent(&segs[0].c)) } else { None };
     let across = across.filter(|_| (0..n).all(|i| turn_deg(&segs[(i + n - 1) % n], &segs[i]) <= opts.corner_angle_deg));
-    let result = simplify_run_within(&segs, opts, MAX_RUN_SAMPLES, across);
+    let mut result = simplify_run_within(&segs, opts, MAX_RUN_SAMPLES, across);
+    let flat = |r: &[Seg]| r.len() < 2 || r.len() == 2 && r.iter().all(|s| s.line);
+    if sp.closed && flat(&result) {
+        // Each segment in two, and the loop cut where they meet: first at the point farthest from its
+        // start, then also at the point farthest from the line between those two.
+        let halves: Vec<Seg> = segs
+            .iter()
+            .flat_map(|s| {
+                let (a, b) = s.c.subdivide();
+                [Seg { c: a, line: s.line }, Seg { c: b, line: s.line }]
+            })
+            .collect();
+        let m = halves.len();
+        let at = |i: usize| halves[i].c.p0;
+        let farthest = |from: &dyn Fn(Point) -> f64, skip: usize| (1..m).filter(|&i| i != skip).max_by(|&a, &b| from(at(a)).total_cmp(&from(at(b))));
+        let p0 = at(0);
+        let j = farthest(&|p| p.distance(p0), 0).unwrap_or(m / 2);
+        let chord = at(j) - p0;
+        let off_chord = |p: Point| if chord.hypot2() > 0.0 { chord.cross(p - p0).abs() } else { p.distance(p0) };
+        let k = farthest(&off_chord, j).unwrap_or(m / 2);
+        let refit = |cuts: &[usize]| -> Vec<Seg> {
+            cuts.windows(2).flat_map(|w| simplify_run_within(&halves[w[0]..w[1]], opts, MAX_RUN_SAMPLES / 3, None)).collect()
+        };
+        result = refit(&[0, j, m]);
+        if flat(&result) && k != j {
+            result = refit(&[0, j.min(k), j.max(k), m]);
+        }
+    }
     let s = segs_to_subpath(&result, sp.closed)?;
     Some(if opts.straight_lines { s } else { no_worse(sp, s) })
 }

@@ -523,6 +523,52 @@ fn an_opacity_mask_on_a_member_or_a_group_in_a_three_d_group_masks_its_solids() 
     }
 }
 
+/// The leaf faces of `art` that draw something, each with its visual bounds and whether it is drawn
+/// inside a group with blending mode `mode`.
+fn faces_in_mode(art: &Node, mode: BlendMode) -> Vec<(Rect, bool)> {
+    fn walk(n: &Node, inside: bool, mode: BlendMode, out: &mut Vec<(Rect, bool)>) {
+        let inside = inside || (n.children().is_some() && n.blend == mode);
+        match n.children() {
+            Some(children) => children.iter().for_each(|c| walk(c, inside, mode, out)),
+            None => out.extend(n.visual_bounds().map(|b| (b, inside))),
+        }
+    }
+    let mut out = Vec::new();
+    walk(art, false, mode, &mut out);
+    out
+}
+
+#[test]
+fn a_blending_mode_on_a_member_or_a_group_in_a_three_d_group_applies_to_its_solids() {
+    let d = document();
+    let mode = |mut n: Node, mode: BlendMode| {
+        n.blend = mode;
+        n
+    };
+    let other = || Arc::new(rect(91, 600.0, 600.0, 650.0, 650.0, 0.0));
+    let member = || rect(1, 100.0, 100.0, 150.0, 200.0, 2.0);
+    let cases = [
+        ("a multiplied member", Node::group(NodeId(90), vec![Arc::new(mode(member(), BlendMode::Multiply)), other()])),
+        (
+            "a member of a multiplied group",
+            Node::group(NodeId(90), vec![Arc::new(mode(Node::group(NodeId(80), vec![Arc::new(member())]), BlendMode::Multiply)), other()]),
+        ),
+    ];
+    for (what, g) in cases {
+        for id in TYPES {
+            let g = with(g.clone(), id, json!({}));
+            // The member spans y 100 to 200 and the other member y 600 to 650, and every type keeps
+            // its faces near those heights (Revolve turns them around a vertical axis): a face whose
+            // center is above y 400 belongs to the member.
+            let (mine, others): (Vec<_>, Vec<_>) =
+                faces_in_mode(&art(&d, &g, id).expect("drawn"), BlendMode::Multiply).into_iter().partition(|(b, _)| b.center().y < 400.0);
+            assert!(!mine.is_empty() && !others.is_empty(), "{id}: both members draw faces ({} and {})", mine.len(), others.len());
+            assert!(mine.iter().all(|(_, m)| *m), "{id}: every face of {what} is drawn in Multiply");
+            assert!(others.iter().all(|(_, m)| !m), "{id}: no face of the other member is drawn in Multiply");
+        }
+    }
+}
+
 #[test]
 fn resolved_objects_and_groups_in_a_three_d_group_keep_their_geometry_effects() {
     let mut d = document();
