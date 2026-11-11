@@ -385,6 +385,22 @@ fn reverse_closed(sp: &mut SubPath) {
     sp.anchors.rotate_right(1);
 }
 
+/// Whether anchor `i` of `sp` is an end of an open subpath: a Blend tool click there sets which way
+/// the subpath blends ([`start_at`]).
+fn is_end(sp: &SubPath, i: Option<usize>) -> bool {
+    !sp.closed && i.is_some_and(|i| i == 0 || i + 1 == sp.anchors.len())
+}
+
+/// Whether open subpath `b` runs the other way from `a`: its ends lie nearer `a`'s opposite ends.
+/// Pairing them as drawn would fold every step through the middle (two Pencil strokes drawn one
+/// left to right and the other back).
+fn runs_against(a: &SubPath, b: &SubPath) -> bool {
+    let (Some(a0), Some(a1), Some(b0), Some(b1)) = (a.anchors.first(), a.anchors.last(), b.anchors.first(), b.anchors.last()) else {
+        return false;
+    };
+    a0.p.distance(b1.p) + a1.p.distance(b0.p) < a0.p.distance(b0.p) + a1.p.distance(b1.p)
+}
+
 /// Anchor positions of a subpath relative to its box, scaled to unit size.
 fn normalised(sp: &SubPath) -> Vec<Vec2> {
     let pts = sp.anchors.iter().map(|a| a.p);
@@ -426,7 +442,8 @@ pub struct PathPair {
 
 impl PathPair {
     /// `starts`: the anchor of each path's first subpath its blend starts from (the Blend tool's
-    /// clicks); with neither, closed subpaths start where they twist least.
+    /// clicks); with neither, closed subpaths start where they twist least. Open subpaths blend
+    /// end to nearer end, unless a click on an end of each sets their directions.
     pub fn new(a: &PathData, b: &PathData, starts: (Option<usize>, Option<usize>)) -> Self {
         let n = a.subpaths.len().max(b.subpaths.len());
         let ca = a.bounds().map(|r| r.center()).unwrap_or_default();
@@ -441,6 +458,8 @@ impl PathPair {
                 (None, None) => continue,
             };
             let explicit = i == 0 && (starts.0.is_some() || starts.1.is_some());
+            // Which open subpaths a click on one of their ends turned (before `start_at` moves it).
+            let (set_a, set_b) = (i == 0 && is_end(&sa, starts.0), i == 0 && is_end(&sb, starts.1));
             if explicit {
                 if let Some(s) = starts.0 {
                     start_at(&mut sa, s);
@@ -452,6 +471,10 @@ impl PathPair {
             let closed = sa.closed && sb.closed && sa.anchors.len() > 2 && sb.anchors.len() > 2;
             if closed && (sa.area() * sb.area()) < 0.0 {
                 reverse_closed(&mut sb);
+            }
+            // Two open subpaths drawn opposite ways: turn the one no click set to match the other.
+            if !sa.closed && !sb.closed && !(set_a && set_b) && runs_against(&sa, &sb) {
+                if set_b { sa.reverse() } else { sb.reverse() }
             }
             let m = sa.anchors.len().max(sb.anchors.len());
             grow(&mut sa, m);
@@ -1435,6 +1458,47 @@ mod tests {
         let line = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 10.0, 0.0)], false));
         let m = PathPair::new(&line(0.0), &line(100.0), (None, Some(1))).at(0.5);
         assert_eq!(m.subpaths[0].anchors[0].p, Point::new(55.0, 0.0));
+    }
+
+    /// Two wavy open lines that cross, the second drawn the other way (right to left), with
+    /// different anchor counts, as two Pencil strokes are.
+    fn crossing_waves() -> (PathData, PathData) {
+        let wave = |n: usize, sign: f64| -> Vec<Point> {
+            (0..=n)
+                .map(|i| {
+                    let x = 200.0 * i as f64 / n as f64;
+                    Point::new(x, 50.0 + sign * 30.0 * (x / 200.0 * std::f64::consts::TAU).sin())
+                })
+                .collect()
+        };
+        let a = wave(17, 1.0);
+        let mut b = wave(9, -1.0);
+        b.reverse();
+        (PathData::single(SubPath::polyline(&a, false)), PathData::single(SubPath::polyline(&b, false)))
+    }
+
+    #[test]
+    fn open_paths_drawn_opposite_ways_blend_end_to_end() {
+        let (a, b) = crossing_waves();
+        // Without clicks, each end blends to the nearer end of the other line: the step halfway
+        // spans the lines' width instead of folding up in the middle.
+        let mid = PathPair::new(&a, &b, (None, None)).at(0.5);
+        let r = mid.bounds().unwrap();
+        assert!(r.width() > 199.0, "{r:?}");
+        let first = mid.subpaths[0].anchors[0].p;
+        assert!(first.distance(Point::new(0.0, 50.0)) < 1e-6, "{first:?}");
+        // A click on an anchor in the middle of an open line leaves its direction to the blend.
+        let mid = PathPair::new(&a, &b, (Some(8), Some(4))).at(0.5);
+        assert!(mid.bounds().unwrap().width() > 199.0);
+        // Clicks on an end of each line still pair those ends, even when that twists: A's left
+        // end with B's right end.
+        let twisted = PathPair::new(&a, &b, (Some(0), Some(0))).at(0.5);
+        assert!(twisted.bounds().unwrap().width() < 50.0, "the clicked ends pair up");
+        // Clicking an end of only one line turns the other to match it.
+        let mid = PathPair::new(&a, &b, (Some(a.subpaths[0].anchors.len() - 1), None)).at(0.5);
+        let first = mid.subpaths[0].anchors[0].p;
+        assert!(first.distance(Point::new(200.0, 50.0)) < 1e-6, "{first:?}");
+        assert!(mid.bounds().unwrap().width() > 199.0);
     }
 
     fn key(x: f64) -> Arc<Node> {
