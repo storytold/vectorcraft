@@ -153,6 +153,9 @@ fn script_file_link_escape_refused() {
          Folder.current.getFiles().map(function (f) { return f.name; }), new Folder('near').alias, new Folder('near').resolve().name]);",
     );
     assert_eq!(log, json!([[false, null, DENIED, null, false, false, DENIED, ["inner", "main.jsx", "near", "own.txt"], true, "inner"]]));
+    // A missing file behind the link is refused like an existing one, so nothing tells them apart.
+    let log = logged(&base, "var n = new File('away/nope.txt'); vc.log([n.exists, n.open('r'), n.error]);");
+    assert_eq!(log, json!([[false, false, DENIED]]));
     #[cfg(unix)]
     let made = |target: &Path, link: &Path| std::os::unix::fs::symlink(target, link).is_ok();
     #[cfg(windows)]
@@ -173,6 +176,31 @@ fn script_file_link_escape_refused() {
          Folder.current.getFiles().map(function (f) { return f.name; }), new File('alias.txt').alias, new File('alias.txt').resolve().name]);",
     );
     assert_eq!(log, json!([[false, false, DENIED, null, false, null, ["alias.txt", "inner", "main.jsx", "near", "own.txt"], true, "own.txt"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A path whose names differ from the script's folder only in case is that folder where case does
+/// not matter, and outside it where case matters, whether or not the file is there.
+#[test]
+fn script_file_case_variant_folder() {
+    let base = folder("case");
+    write(&base.join("main/own.txt"), b"own");
+    let upper = base.join("MAIN");
+    let source = |name: &str| {
+        let p = format!("{:?}", upper.join(name).to_string_lossy());
+        format!("var f = new File({p}); vc.log([f.exists, f.open('r'), f.error]);")
+    };
+    if upper.exists() {
+        // Case does not matter here: `MAIN` is the script's folder.
+        assert_eq!(logged(&base, &source("own.txt")), json!([[true, true, ""]]));
+        assert_eq!(logged(&base, &source("nope.txt")), json!([[false, false, "Script file does not exist"]]));
+    } else {
+        let denied = json!([[false, false, DENIED]]);
+        assert_eq!(logged(&base, &source("nope.txt")), denied, "MAIN does not exist");
+        write(&upper.join("secret.txt"), b"secret");
+        assert_eq!(logged(&base, &source("secret.txt")), denied);
+        assert_eq!(logged(&base, &source("nope.txt")), denied, "MAIN exists beside main");
+    }
     let _ = std::fs::remove_dir_all(base);
 }
 
