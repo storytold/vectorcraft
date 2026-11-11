@@ -60,6 +60,38 @@ impl ImageBlob {
         img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
         Some(Self::png(png))
     }
+
+    /// The image as a grayscale PNG: `f` gives each pixel's gray level from its (straight) RGB, and
+    /// the PNG has an alpha channel only when some pixel isn't opaque. `f` runs once per distinct
+    /// color. `None` when the image can't be decoded, or when its file stores grayscale already
+    /// and no visible pixel changed.
+    pub fn map_gray(&self, mut f: impl FnMut([u8; 3]) -> u8) -> Option<ImageBlob> {
+        let img = rgba_within(&self.bytes, MAX_RASTER_ALLOC)?;
+        let (width, height) = img.dimensions();
+        let mut memo: HashMap<[u8; 3], u8> = HashMap::new();
+        let mut changed = self.gray_source().is_none();
+        let mut opaque = true;
+        let mut gray_alpha = Vec::with_capacity(img.len() / 2);
+        for px in img.pixels() {
+            let rgb = [px.0[0], px.0[1], px.0[2]];
+            let level = *memo.entry(rgb).or_insert_with(|| f(rgb));
+            changed |= px.0[3] > 0 && [level; 3] != rgb;
+            opaque &= px.0[3] == 255;
+            gray_alpha.extend_from_slice(&[level, px.0[3]]);
+        }
+        if !changed {
+            return None;
+        }
+        let mut png = Vec::new();
+        let mut out = Cursor::new(&mut png);
+        if opaque {
+            let levels = gray_alpha.iter().step_by(2).copied().collect();
+            image::GrayImage::from_raw(width, height, levels)?.write_to(&mut out, image::ImageFormat::Png).ok()?;
+        } else {
+            image::GrayAlphaImage::from_raw(width, height, gray_alpha)?.write_to(&mut out, image::ImageFormat::Png).ok()?;
+        }
+        Some(Self::png(png))
+    }
 }
 
 /// How a grayscale image's file stores its pixels ([`ImageBlob::gray_source`]).

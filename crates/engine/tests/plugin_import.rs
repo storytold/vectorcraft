@@ -145,7 +145,7 @@ fn a_file_an_importer_reads_opens_as_editable_art() {
     let stroked = r#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":false,"anchors":[{"p":[0,-4000000]},{"p":[50,-4000000]}]}]},"strokes":[{"paint":{"type":"solid","color":{"model":"rgb","r":0,"g":0,"b":0}},"width":10}]}]}"#;
     open(&mut s, "Stroked.tso", stroked.as_bytes(), json!({})).unwrap();
     let (x0, y0, x1, y1) = artboard(&s);
-    assert!(x0 < 0.0 && x1 > 50.0 && y0 == -4_000_000.0 && y1 > y0 + 1.0, "{:?}", artboard(&s));
+    assert!(x0 == 0.0 && x1 == 50.0 && y0 == -4_000_000.0 && y1 > y0 + 1.0, "{:?}", artboard(&s));
     s.execute("select.all", &json!({})).unwrap();
     s.execute("object.move", &json!({"dx": 0, "dy": 5})).unwrap();
 

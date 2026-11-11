@@ -138,6 +138,50 @@ fn composite_font_parts_are_not_highlighted_as_substituted_glyphs() {
     assert!(g.substituted_glyphs.elements().is_empty() && g.substituted_fonts.elements().is_empty());
 }
 
+/// Type in one of a document's composite fonts draws in the document's definition when nothing has
+/// registered it: in a render, an ink render, a thumbnail and a placed document's art, as type set
+/// in the part's font draws.
+/// The font database is left without it afterwards.
+#[test]
+fn a_documents_own_composite_font_draws_without_being_registered() {
+    use vectorcraft_doc::{CompositeFont, CompositePart, CompositeParts};
+    let _adding = adding_fonts();
+    const NAME: &str = "CF Unregistered";
+    let db = vectorcraft_text::FontDb::global();
+    let typed = |family: &str| {
+        let mut d = Document::new(300.0, 150.0);
+        let style = CharStyle { size: 60.0, font_family: family.into(), ..Default::default() };
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 100.0), "Hamburg", style))));
+        let l = d.layers[0].id;
+        let id = d.insert(Some(l), 0, n).unwrap();
+        (d, id)
+    };
+    let (mut composite, id) = typed(NAME);
+    let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
+    parts.roman = CompositePart::new("JetBrains Mono", "Regular");
+    composite.composite_fonts.push(CompositeFont { name: NAME.into(), parts });
+    let (plain, plain_id) = typed("JetBrains Mono");
+    assert!(db.composite_font(NAME).is_none());
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let view = Affine::IDENTITY;
+    assert_eq!(
+        Renderer::new().render(&composite, 300, 150, view, &opts).pixels,
+        Renderer::new().render(&plain, 300, 150, view, &opts).pixels,
+        "rendered"
+    );
+    let region = Rect::new(0.0, 0.0, 300.0, 150.0);
+    assert_eq!(
+        Renderer::new().render_region_inks(&composite, region, 1.0, &opts),
+        Renderer::new().render_region_inks(&plain, region, 1.0, &opts),
+        "rendered as ink amounts"
+    );
+    let thumbnail = |d: &Document, id| Renderer::new().render_thumbnail(d, id, 64).map(|r| r.pixels);
+    assert_eq!(thumbnail(&composite, id), thumbnail(&plain, plain_id), "thumbnail");
+    let placed = |d: &Document| crate::placed_document::render_inside(&mut Renderer::new(), d, &d.layers[0], 300, 150, view).map(|r| r.pixels);
+    assert_eq!(placed(&composite), placed(&plain), "a placed document's art");
+    assert!(db.composite_font(NAME).is_none(), "given back after each render");
+}
+
 /// Type at 80% opacity, in Multiply and with a drop shadow redraws in a font that becomes
 /// available: the glyph geometry kept for it is laid out again.
 #[test]
@@ -370,4 +414,35 @@ fn a_renderer_maps_enveloped_type_from_its_glyphs_in_the_current_font() {
     let after = ink();
     assert!(off(before, after) > 0.5, "the type draws in the font that arrived: {before:?} vs {after:?}");
     assert!(off(src(), after) < 1e-6, "{:?} vs {after:?}", src());
+}
+
+/// 3D type measured for an edit ([`Renderer::changed`]) and drawn after its font became available
+/// is drawn in that font: the art made to measure it, in the font it had, isn't taken.
+#[test]
+fn three_d_type_measured_before_its_font_arrives_draws_in_it() {
+    let _adding = adding_fonts();
+    const FAMILY: &str = "Solid Serif 44";
+    let mut old = Document::new(300.0, 150.0);
+    let style = CharStyle { size: 60.0, font_family: FAMILY.into(), ..Default::default() };
+    let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 100.0), "Hamburg", style))));
+    n.id = old.alloc_id();
+    let extrude = |depth: f64| vectorcraft_doc::Effect {
+        id: "threeD.extrude".into(),
+        params: serde_json::json!({"depth": depth, "position": "isometricTop"}),
+        visible: true,
+    };
+    n.appearance.effects.push(extrude(40.0));
+    let l = old.layers[0].id;
+    let id = old.insert(Some(l), 0, n).unwrap();
+    let mut new = old.clone();
+    new.node_mut(id).unwrap().appearance.effects[0] = extrude(10.0);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    r.render(&old, 300, 150, Affine::IDENTITY, &opts);
+    let _ = r.changed(&old, &new, &opts);
+    assert!(vectorcraft_text::FontDb::global().add_font(serif_as(FAMILY)) > 0);
+    let drawn = r.render(&new, 300, 150, Affine::IDENTITY, &opts).pixels;
+    let fresh = Renderer::new().render(&new, 300, 150, Affine::IDENTITY, &opts).pixels;
+    let differ = drawn.iter().zip(&fresh).filter(|(a, b)| a != b).count();
+    assert_eq!(differ, 0, "as a new renderer draws it");
 }

@@ -158,6 +158,7 @@ pub const STYLE_LIBRARIES: &[BuiltinStyleLibrary] = &[
     BuiltinStyleLibrary { id: "gradient-finishes", name: "Gradient Finishes", make: gradient_finishes },
     BuiltinStyleLibrary { id: "shape-effects", name: "Shape Effects", make: shape_effects },
     BuiltinStyleLibrary { id: "blends-transparency", name: "Blends and Transparency", make: blends_transparency },
+    BuiltinStyleLibrary { id: "game-hud", name: "Game HUD", make: game_hud },
 ];
 
 /// Built-in library `id`, made once.
@@ -453,6 +454,34 @@ fn blends_transparency() -> Vec<GraphicStyle> {
     ]
 }
 
+/// Game HUD: fills and glows for health, mana, damage and quest chrome (original arcade/HUD look).
+fn game_hud() -> Vec<GraphicStyle> {
+    vec![
+        style("Health Fill", vec![F(fill("#e74c3c")), S(stroke("#5c1a1a", 1.25))], vec![]),
+        style(
+            "Mana Glow",
+            vec![F(fill("#3498db"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 85.0, "blur": 7.0, "color": "#5dade2"}))],
+        ),
+        style(
+            "Damage Flash",
+            vec![F(fill("#ff6b35"))],
+            vec![fx("stylize.innerGlow", json!({"mode": "screen", "opacity": 80.0, "blur": 8.0, "color": "#ffe66d", "source": "edge"}))],
+        ),
+        style("Quest Outline", vec![F(fill("#f7f3e8")), S(round("#2c3e50", 3.0))], vec![]),
+        style(
+            "Coin Shine",
+            vec![F(fill("#f1c40f")), S(stroke("#b7950b", 1.5))],
+            vec![fx("stylize.dropShadow", json!({"mode": "multiply", "opacity": 40.0, "x": 2.0, "y": 3.0, "blur": 4.0, "color": "#1d1b2a"}))],
+        ),
+        style(
+            "Boss Alert",
+            vec![F(fill("#1a1a2e")), S(round("#e94560", 2.5))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 75.0, "blur": 6.0, "color": "#e94560"}))],
+        ),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -475,6 +504,10 @@ mod tests {
         }
         assert!(Arc::ptr_eq(&builtin_style_library("hand-drawn").unwrap(), &builtin_style_library("hand-drawn").unwrap()), "made once");
         assert!(builtin_style_library("nope").is_none());
+        let game = builtin_style_library("game-hud").unwrap();
+        assert_eq!(game.name, "Game HUD");
+        let names: Vec<&str> = game.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Health Fill", "Mana Glow", "Damage Flash", "Quest Outline", "Coin Shine", "Boss Alert"]);
     }
 
     #[test]

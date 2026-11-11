@@ -1,9 +1,10 @@
 //! What a plug-in may import from the host ([`IMPORTS`]), from plug-in API level 2 on:
 //! `vc_progress` reports how far a run has got, `vc_cancelled` tells it the user or a host limit
 //! asked it to stop, and `vc_log` writes a log line (the `progress` permission); `vc_settings_*`
-//! read and write its settings (`settings`) and `vc_cache_*` its cache (`cache`, [`crate::storage`]).
-//! A module may import one only when its manifest gives `api` 2 and lists the import's permission,
-//! and the host checks each import when the module is loaded ([`check_imports`], [`check_granted`]):
+//! read and write its settings (`settings`) and `vc_cache_*` its cache (`cache`, [`crate::storage`]);
+//! `vc_call` runs a command its manifest's `commandAllowlist` names and `vc_call_result` reads that
+//! command's result (`commands`, through the [`Bridge`] the run is given). A module may import one
+//! only when its manifest gives `api` 2 and lists the import's permission, and the host checks each import when the module is loaded ([`check_imports`], [`check_granted`]):
 //! one it doesn't offer, one with another signature and one the manifest doesn't allow are refused
 //! by name.
 //!
@@ -13,8 +14,9 @@
 //! each line ([`MAX_LOG_LINE`]) and each run ([`MAX_LOG_LINES`], [`MAX_LOG_BYTES`],
 //! [`MAX_LOG_READ`]) are capped. Keys and values must lie inside the module's memory, keys must be
 //! [`crate::storage::valid_name`]s, values are capped, and so are each run's storage calls
-//! ([`MAX_STORAGE_CALLS`]) and the bytes they move ([`MAX_STORAGE_BYTES`]). Nothing a module passes
-//! can panic the host.
+//! ([`MAX_STORAGE_CALLS`]) and the bytes they move ([`MAX_STORAGE_BYTES`]). Command calls are capped
+//! per call ([`MAX_CALL_DATA`]) and per run ([`MAX_CALLS`], [`MAX_CALL_BYTES`]). Nothing a module
+//! passes can panic the host.
 
 use std::sync::Arc;
 
@@ -95,6 +97,72 @@ pub const MAX_STORAGE_CALLS: usize = 10_000;
 /// pass it returns [`STORAGE_BUDGET`].
 pub const MAX_STORAGE_BYTES: usize = 1 << 30;
 
+/// What `vc_call` returns: the command ran, and `vc_call_result` reads its result.
+pub const CALL_OK: i32 = 0;
+/// What `vc_call` or `vc_call_result` returns: the id, the arguments or the buffer doesn't lie
+/// inside the module's memory.
+pub const CALL_OUTSIDE_MEMORY: i32 = -1;
+/// What `vc_call` returns: the id or the arguments are not UTF-8.
+pub const CALL_BAD_UTF8: i32 = -2;
+/// What `vc_call` returns: the arguments are not a JSON object.
+pub const CALL_BAD_JSON: i32 = -3;
+/// What `vc_call` returns: the manifest's `commandAllowlist` doesn't list the command.
+pub const CALL_NOT_ALLOWED: i32 = -4;
+/// What `vc_call` returns: no command has the id.
+pub const CALL_UNKNOWN_COMMAND: i32 = -5;
+/// What `vc_call` returns: a plug-in may not call the command, whatever its manifest lists.
+pub const CALL_DENIED_COMMAND: i32 = -6;
+/// What `vc_call` returns: the command can't run now (no document, nothing selected).
+pub const CALL_DISABLED: i32 = -7;
+/// What `vc_call` returns: the command ran and failed.
+pub const CALL_COMMAND_FAILED: i32 = -8;
+/// What `vc_call` returns: the arguments or the result are larger than [`MAX_CALL_DATA`], or the
+/// run made [`MAX_CALLS`] calls or moved [`MAX_CALL_BYTES`] with them.
+pub const CALL_LIMIT: i32 = -9;
+/// What `vc_call_result` returns: no call has a result yet.
+pub const CALL_NO_RESULT: i32 = -10;
+/// What `vc_call` returns: nothing can be called now (while the module is being loaded, in a run
+/// that isn't a filter's run on a document, or after a call in the run failed). In a run, this
+/// fails it too.
+pub const CALL_NO_CONTEXT: i32 = -11;
+
+/// Most `vc_call` calls one run makes.
+pub const MAX_CALLS: usize = 1_000;
+
+/// Largest arguments or result of one `vc_call`, in bytes.
+pub const MAX_CALL_DATA: usize = 8 << 20;
+
+/// Most bytes of arguments and results one run's `vc_call` calls move, all together.
+pub const MAX_CALL_BYTES: usize = 64 << 20;
+
+/// Instructions each `vc_call` costs the run, besides one for every 64 bytes of its arguments and
+/// result: [`MAX_CALLS`] calls cost a fifth of a filter's usual budget.
+pub const CALL_FUEL: u64 = 10_000;
+
+/// Why a command a plug-in called with `vc_call` didn't run, or failed: the code `vc_call` returns
+/// and the reason, which the run's error gives.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CallFailure {
+    pub code: i32,
+    pub why: String,
+}
+
+/// What runs the commands a plug-in calls: a command id and its arguments (a JSON object) → the
+/// command's result, or why it didn't run.
+pub type Bridge<'a> = dyn FnMut(&str, &serde_json::Value) -> std::result::Result<serde_json::Value, CallFailure> + 'a;
+
+/// What `vc_call` pauses the run with, for the host to make the call ([`Run::pending`]).
+#[derive(Debug)]
+pub(crate) struct CallPending;
+
+impl std::fmt::Display for CallPending {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("vc_call")
+    }
+}
+
+impl wasmi::errors::HostError for CallPending {}
+
 /// One host import: its name, its type and the permission it needs.
 pub struct Import {
     pub name: &'static str,
@@ -134,7 +202,17 @@ const fn storage_import(name: &'static str, params: &'static [ValType], signatur
 /// A storage call that fails returns [`STORAGE_NOT_FOUND`], [`STORAGE_OUTSIDE_MEMORY`],
 /// [`STORAGE_BAD_NAME`], [`STORAGE_FULL`], [`STORAGE_UNAVAILABLE`], [`STORAGE_FAILED`] or
 /// [`STORAGE_BUDGET`].
-pub const IMPORTS: [Import; 9] = [
+///
+/// With `commands`, for a filter whose manifest's `commandAllowlist` names the command:
+///
+/// - `vc_call(id, id_len, args, args_len) -> i32`: runs the command with the UTF-8 id of `id_len`
+///   bytes at `id` and the arguments at `args` (a UTF-8 JSON object; no bytes: `{}`) on the document
+///   the run is for → [`CALL_OK`] or why it didn't run or failed. A failed call fails the run, and
+///   nothing the run did stays;
+/// - `vc_call_result(out, out_cap) -> i32`: the length of the last successful call's result (JSON),
+///   copied to `out` when it fits in `out_cap` (nothing is copied otherwise), or
+///   [`CALL_NO_RESULT`].
+pub const IMPORTS: [Import; 11] = [
     Import {
         name: "vc_progress",
         params: &[ValType::I64, ValType::I64],
@@ -156,6 +234,8 @@ pub const IMPORTS: [Import; 9] = [
     storage_import("vc_cache_read", &[I32, I32, I32, I32], "(param i32 i32 i32 i32) (result i32)", Permission::Cache),
     storage_import("vc_cache_write", &[I32, I32, I32, I32], "(param i32 i32 i32 i32) (result i32)", Permission::Cache),
     storage_import("vc_cache_clear", &[I32, I32], "(param i32 i32) (result i32)", Permission::Cache),
+    storage_import("vc_call", &[I32, I32, I32, I32], "(param i32 i32 i32 i32) (result i32)", Permission::Commands),
+    storage_import("vc_call_result", &[I32, I32], "(param i32 i32) (result i32)", Permission::Commands),
 ];
 
 /// Which of a plug-in's stores a storage import reads or writes.
@@ -291,6 +371,18 @@ pub(crate) struct Run {
     storage: Option<Arc<dyn Storage>>,
     storage_calls: usize,
     storage_bytes: usize,
+    /// The commands `vc_call` may run (the manifest's `commandAllowlist`), once the module has
+    /// loaded and when the run has something to run them ([`Run::allow_calls`]); `None` otherwise.
+    allowed: Option<Vec<String>>,
+    /// How many `vc_call` calls the run made, and the bytes of arguments and results they moved.
+    calls: usize,
+    call_bytes: usize,
+    /// The call `vc_call` paused the run for: its command id, its arguments and their size in bytes.
+    pub(crate) pending: Option<(String, serde_json::Value, usize)>,
+    /// The last successful call's result, as JSON text.
+    pub(crate) call_result: Option<Vec<u8>>,
+    /// The run's first failed call, which fails the run.
+    pub(crate) call_failure: Option<Error>,
     pub(crate) report: Report,
 }
 
@@ -309,6 +401,12 @@ impl Run {
             storage: None,
             storage_calls: 0,
             storage_bytes: 0,
+            allowed: None,
+            calls: 0,
+            call_bytes: 0,
+            pending: None,
+            call_result: None,
+            call_failure: None,
             report: Report::default(),
         }
     }
@@ -317,6 +415,119 @@ impl Run {
     pub(crate) fn with_storage(mut self, storage: Option<Arc<dyn Storage>>) -> Self {
         self.storage = storage;
         self
+    }
+
+    /// From now on, `vc_call` runs the commands in `allowed`.
+    pub(crate) fn allow_calls(&mut self, allowed: Vec<String>) {
+        self.allowed = Some(allowed);
+    }
+
+    /// Records the run's first failed call, `e`, and returns `code`.
+    fn fail(&mut self, code: i32, e: Error) -> i32 {
+        self.call_failure.get_or_insert(e);
+        code
+    }
+
+    /// `vc_call`: checks the call to the command at `id` with the arguments at `args` in `memory`
+    /// and leaves it in [`Run::pending`] for the host to make, or → the code for why it can't be
+    /// made, which fails the run. The size of the arguments is checked before they are read. After
+    /// the run's first failed call, every call returns [`CALL_NO_CONTEXT`] and none is made.
+    fn call_request(&mut self, memory: &[u8], id: (usize, usize), args: (usize, usize)) -> std::result::Result<(), i32> {
+        self.call_result = None;
+        // No call is made after the run's first failed call.
+        if self.call_failure.is_some() {
+            return Err(CALL_NO_CONTEXT);
+        }
+        if self.allowed.is_none() {
+            let why = "vc_call: no command can be called here (while the module loads, or in a run that can't make calls)";
+            return Err(self.fail(CALL_NO_CONTEXT, Error::Abi(why.into())));
+        }
+        let shown = || {
+            id.0.checked_add(id.1)
+                .filter(|_| id.1 <= crate::manifest::MAX_ALLOWED_ID)
+                .and_then(|end| memory.get(id.0..end))
+                .map_or_else(|| "?".to_string(), |b| permissions::display_text(&String::from_utf8_lossy(b), permissions::MAX_SHOWN_FIELD))
+        };
+        if args.1 > MAX_CALL_DATA {
+            let (shown, len) = (shown(), args.1);
+            return Err(self.fail(CALL_LIMIT, Error::Limit(format!("command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})"))));
+        }
+        if self.calls >= MAX_CALLS || self.call_bytes.saturating_add(args.1) > MAX_CALL_BYTES {
+            return Err(self.fail(CALL_LIMIT, Error::Limit(format!("command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)"))));
+        }
+        self.calls += 1;
+        self.call_bytes += args.1;
+        let slice = |(at, len): (usize, usize)| at.checked_add(len).and_then(|end| memory.get(at..end));
+        let (Some(id_bytes), Some(arg_bytes)) = (slice(id).filter(|_| id.1 <= crate::manifest::MAX_ALLOWED_ID), slice(args)) else {
+            if id.1 > crate::manifest::MAX_ALLOWED_ID {
+                let shown = shown();
+                return Err(self.fail(CALL_NOT_ALLOWED, Error::Abi(format!("vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it"))));
+            }
+            let shown = shown();
+            return Err(
+                self.fail(CALL_OUTSIDE_MEMORY, Error::Abi(format!("vc_call `{shown}`: the id or the arguments lie outside the module's memory")))
+            );
+        };
+        let (Ok(name), Ok(text)) = (std::str::from_utf8(id_bytes), std::str::from_utf8(arg_bytes)) else {
+            let shown = shown();
+            return Err(self.fail(CALL_BAD_UTF8, Error::Abi(format!("vc_call `{shown}`: the id or the arguments are not UTF-8"))));
+        };
+        if !self.allowed.as_ref().is_some_and(|allowed| allowed.iter().any(|a| a == name)) {
+            let shown = shown();
+            return Err(self.fail(CALL_NOT_ALLOWED, Error::Abi(format!("vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it"))));
+        }
+        let parsed = if text.is_empty() { Ok(serde_json::Value::Object(serde_json::Map::new())) } else { serde_json::from_str(text) };
+        match parsed {
+            Ok(v @ serde_json::Value::Object(_)) => {
+                self.pending = Some((name.to_string(), v, args.1));
+                Ok(())
+            }
+            _ => {
+                let shown = shown();
+                Err(self.fail(CALL_BAD_JSON, Error::Abi(format!("vc_call `{shown}`: the arguments are not a JSON object"))))
+            }
+        }
+    }
+
+    /// Takes the host's answer to the call in [`Run::pending`], to command `id`: keeps its result for
+    /// `vc_call_result`, or records the failure → what `vc_call` returns.
+    pub(crate) fn call_answered(&mut self, id: &str, answer: std::result::Result<serde_json::Value, CallFailure>) -> i32 {
+        let shown = permissions::display_text(id, permissions::MAX_SHOWN_FIELD);
+        let value = match answer {
+            Ok(value) => value,
+            Err(f) => {
+                let why = f.why;
+                return self.fail(f.code, Error::Failed(format!("vc_call `{shown}`: {why}")));
+            }
+        };
+        let text = serde_json::to_vec(&value).unwrap_or_default();
+        let len = text.len();
+        if len > MAX_CALL_DATA {
+            return self.fail(CALL_LIMIT, Error::Limit(format!("command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})")));
+        }
+        if self.call_bytes.saturating_add(len) > MAX_CALL_BYTES {
+            return self.fail(CALL_LIMIT, Error::Limit(format!("command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)")));
+        }
+        self.call_bytes += len;
+        self.call_result = Some(text);
+        CALL_OK
+    }
+
+    /// `vc_call_result`: copies the last successful call's result into the `out_cap` bytes at `out`
+    /// when it fits → its length, or [`CALL_NO_RESULT`] or [`CALL_OUTSIDE_MEMORY`]. Neither fails
+    /// the run: a plug-in asks again with a larger buffer.
+    fn call_result(&self, memory: &mut [u8], out: (usize, usize)) -> i32 {
+        let Some(result) = &self.call_result else { return CALL_NO_RESULT };
+        if out.1 > 0 && out.0.checked_add(out.1).is_none_or(|end| end > memory.len()) {
+            return CALL_OUTSIDE_MEMORY;
+        }
+        if result.len() <= out.1
+            && let Some(dest) = memory.get_mut(out.0..out.0 + result.len())
+        {
+            dest.copy_from_slice(result);
+        }
+        // At most MAX_CALL_DATA, which an i32 holds.
+        i32::try_from(result.len()).unwrap_or(CALL_LIMIT)
     }
 
     /// Makes one storage call with `call`, on the plug-in's storage and a [`Meter`] holding the
@@ -532,6 +743,25 @@ pub(crate) fn linker(engine: &Engine, granted: &[Permission]) -> Linker<Host> {
         let _ = linker.func_wrap(MODULE, remove, move |mut caller: Caller<'_, Host>, key: i32, key_len: i32| -> i32 {
             let Some((data, host)) = memory_and_host(&mut caller) else { return STORAGE_OUTSIDE_MEMORY };
             host.run.storage_remove(area, data, (offset(key), offset(key_len)))
+        });
+    }
+    if granted.contains(&Permission::Commands) {
+        // A call that can be made pauses the run: the host makes it with what the run was given to
+        // make calls with ([`crate::Plugin::run_calling`]), and resumes the run with the code.
+        let _ = linker.func_wrap(
+            MODULE,
+            "vc_call",
+            |mut caller: Caller<'_, Host>, id: i32, id_len: i32, args: i32, args_len: i32| -> std::result::Result<i32, wasmi::Error> {
+                let Some((data, host)) = memory_and_host(&mut caller) else { return Ok(CALL_OUTSIDE_MEMORY) };
+                match host.run.call_request(data, (offset(id), offset(id_len)), (offset(args), offset(args_len))) {
+                    Ok(()) => Err(wasmi::Error::host(CallPending)),
+                    Err(code) => Ok(code),
+                }
+            },
+        );
+        let _ = linker.func_wrap(MODULE, "vc_call_result", |mut caller: Caller<'_, Host>, out: i32, out_cap: i32| -> i32 {
+            let Some((data, host)) = memory_and_host(&mut caller) else { return CALL_OUTSIDE_MEMORY };
+            host.run.call_result(data, (offset(out), offset(out_cap)))
         });
     }
     linker

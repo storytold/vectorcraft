@@ -1,14 +1,30 @@
 //! Effect → Effect Gallery: browse Photoshop-style raster filters by category, build a stack, and
 //! apply it as separate appearance effects in one undo step.
+//!
+//! Each filter has a thumbnail, and the dialog has its own preview, as the
+//! [Filter Gallery](https://helpx.adobe.com/photoshop/desktop/effects-filters/get-started-with-filters/filter-gallery.html)
+//! describes. Both are an original drawing made for VectorCraft (a small landscape), passed through
+//! the filter. The thumbnails use each filter's defaults. The preview uses the visible stack, or
+//! the filter being browsed when the stack is empty. The canvas preview and the one-undo OK are
+//! unchanged.
+
+use std::collections::HashMap;
 
 use egui;
 use serde_json::{Map, Value, json};
-use vectorcraft_effects::{EffectInfo, PIXEL_EFFECTS};
+use vectorcraft_effects::{EffectInfo, PIXEL_EFFECTS, PixelSpace};
+use vectorcraft_geom::{Affine, Point};
 
 use super::{DialogSpec, effect, form};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
+
+/// Thumbnail of one filter, in pixels. The drawing is original; the filter is this app's.
+const THUMB: usize = 36;
+/// In-dialog preview, in pixels, drawn at twice this size.
+const PREVIEW_W: usize = 120;
+const PREVIEW_H: usize = 84;
 
 /// Dialog kind for the Effect Gallery.
 pub const KIND: &str = "effectGallery";
@@ -248,6 +264,196 @@ fn effect_label(id: &str) -> String {
     vectorcraft_effects::effect_info(id).map(|e| tl!(e.label).trim_end_matches('…').to_string()).unwrap_or_else(|| id.to_string())
 }
 
+/// Where the preview rasters sit: one document point per pixel, origin at the top-left.
+fn preview_space(w: usize, h: usize) -> PixelSpace {
+    let (wf, hf) = (w as f64, h as f64);
+    PixelSpace {
+        to_doc: Affine::IDENTITY,
+        px: 1.0,
+        center: Point::new(wf / 2.0, hf / 2.0),
+        channels: vectorcraft_effects::pixel::Channels::Rgb,
+        line: 1.0,
+        extent: 0.5 * wf.hypot(hf),
+    }
+}
+
+fn byte(v: f32) -> u8 {
+    if !v.is_finite() {
+        return 0;
+    }
+    v.round().clamp(0.0, 255.0) as u8
+}
+
+/// An original landscape for the gallery (sky, sun, hills, a house, a river). Not a copied picture.
+fn sample_drawing(w: usize, h: usize) -> Vec<u8> {
+    let mut out = vec![0u8; w.saturating_mul(h).saturating_mul(4)];
+    if w == 0 || h == 0 || out.len() != w * h * 4 {
+        return out;
+    }
+    for y in 0..h {
+        for x in 0..w {
+            let xf = x as f32 / w as f32;
+            let yf = y as f32 / h as f32;
+            let mut rgb = [90.0 + 90.0 * (1.0 - yf), 150.0 + 50.0 * (1.0 - yf), 200.0 + 40.0 * yf];
+            let (dx, dy) = (xf - 0.78, yf - 0.22);
+            if dx * dx + dy * dy < 0.012 {
+                rgb = [252.0, 206.0, 64.0];
+            }
+            let hill = 0.58 + 0.08 * (xf * std::f32::consts::TAU).sin();
+            if yf > hill {
+                rgb = [46.0, 110.0 + 40.0 * (1.0 - (yf - hill).clamp(0.0, 1.0)), 52.0];
+            }
+            if (0.16..0.40).contains(&xf) && (0.46..0.70).contains(&yf) {
+                rgb = [196.0, 64.0, 48.0];
+            }
+            let roof = 0.46 - (xf - 0.28).abs() * 1.15;
+            if (0.12..0.44).contains(&xf) && yf > roof && yf < 0.48 {
+                rgb = [92.0, 48.0, 36.0];
+            }
+            if (0.22..0.32).contains(&xf) && (0.52..0.62).contains(&yf) {
+                rgb = [255.0, 236.0, 150.0];
+            }
+            if yf > 0.80 && (yf * 18.0 + xf * 9.0).sin() > -0.15 {
+                rgb = [36.0, 78.0, 196.0];
+            }
+            let i = (y * w + x) * 4;
+            out[i] = byte(rgb[0]);
+            out[i + 1] = byte(rgb[1]);
+            out[i + 2] = byte(rgb[2]);
+            out[i + 3] = 255;
+        }
+    }
+    out
+}
+
+/// Run one Photoshop-style filter on a premultiplied RGBA buffer. Leaves it unchanged when `id`
+/// is not one of those filters or the buffer is the wrong size.
+fn apply_pixel(id: &str, params: &Map<String, Value>, data: &mut [u8], w: usize, h: usize) {
+    let Some(n) = w.checked_mul(h).and_then(|n| n.checked_mul(4)) else { return };
+    if n != data.len() || w == 0 || h == 0 {
+        return;
+    }
+    let effect = vectorcraft_doc::Effect { id: id.to_string(), params: Value::Object(params.clone()), visible: true };
+    let Some(vectorcraft_effects::RasterFx::Pixel(fx)) = vectorcraft_effects::raster_effects(std::slice::from_ref(&effect)).into_iter().next() else {
+        return;
+    };
+    fx.apply(data, w, h, &preview_space(w, h));
+}
+
+fn filtered(id: &str, params: &Map<String, Value>, w: usize, h: usize) -> Vec<u8> {
+    let mut data = sample_drawing(w, h);
+    apply_pixel(id, params, &mut data, w, h);
+    data
+}
+
+/// The drawing with `jobs` applied in order (the visible stack, or the filter being browsed).
+fn preview_rgba(jobs: &[(String, Map<String, Value>)], w: usize, h: usize) -> Vec<u8> {
+    let mut data = sample_drawing(w, h);
+    for (id, params) in jobs {
+        apply_pixel(id, params, &mut data, w, h);
+    }
+    data
+}
+
+fn thumb_pixels(id: &str) -> Vec<u8> {
+    static CACHE: std::sync::LazyLock<std::sync::Mutex<HashMap<String, Vec<u8>>>> =
+        std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+    if let Some(px) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(id).cloned() {
+        return px;
+    }
+    // The filter runs outside the lock: a thumbnail is a few thousand pixels, and two threads
+    // computing the same one just keep one copy.
+    let px = filtered(id, &default_params(id), THUMB, THUMB);
+    CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(id.to_string(), px.clone());
+    px
+}
+
+/// Straight RGBA for egui, from the filters' premultiplied bytes.
+fn color_image(data: &[u8], w: usize, h: usize) -> egui::ColorImage {
+    let mut pixels = Vec::with_capacity(w.saturating_mul(h));
+    let (rows, _) = data.as_chunks::<4>();
+    for p in rows {
+        let a = u32::from(p[3]);
+        let (r, g, b) = if a == 0 {
+            (0, 0, 0)
+        } else if a == 255 {
+            (p[0], p[1], p[2])
+        } else {
+            let s = |c: u8| ((u32::from(c) * 255 + a / 2) / a).min(255) as u8;
+            (s(p[0]), s(p[1]), s(p[2]))
+        };
+        pixels.push(egui::Color32::from_rgba_unmultiplied(r, g, b, p[3]));
+    }
+    if pixels.len() != w.saturating_mul(h) {
+        return egui::ColorImage::filled([w.max(1), h.max(1)], egui::Color32::TRANSPARENT);
+    }
+    egui::ColorImage::new([w, h], pixels)
+}
+
+fn thumb_tex(ctx: &egui::Context, id: &str) -> egui::TextureHandle {
+    let key = egui::Id::unique("effect-gallery-thumbs");
+    if let Some(tex) = ctx.data(|d| d.get_temp::<HashMap<String, egui::TextureHandle>>(key).and_then(|m| m.get(id).cloned())) {
+        return tex;
+    }
+    let tex = ctx.load_texture(format!("effect-gallery-thumb-{id}"), color_image(&thumb_pixels(id), THUMB, THUMB), egui::TextureOptions::NEAREST);
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_insert_with(key, HashMap::new).insert(id.to_string(), tex.clone());
+    });
+    tex
+}
+
+/// What the in-dialog preview shows: the visible stack, or the browsed filter when nothing is stacked.
+fn preview_jobs(d: &Dialog, stack: &[StackEntry], browse: &str) -> Vec<(String, Map<String, Value>)> {
+    if !stack.is_empty() {
+        return stack.iter().filter(|e| e.visible).map(|e| (e.effect.clone(), e.params.clone())).collect();
+    }
+    if browse.is_empty() {
+        return Vec::new();
+    }
+    let params = if d.fields.get("browseEffect").and_then(Value::as_str) == Some(browse) { browse_params(d) } else { default_params(browse) };
+    vec![(browse.to_string(), params)]
+}
+
+fn preview_key(jobs: &[(String, Map<String, Value>)]) -> String {
+    let rows: Vec<Value> = jobs.iter().map(|(id, params)| json!({ "effect": id, "params": params })).collect();
+    serde_json::to_string(&Value::Array(rows)).unwrap_or_default()
+}
+
+fn preview_tex(ctx: &egui::Context, key: &str, rgba: &[u8]) -> egui::TextureHandle {
+    let id = egui::Id::unique("effect-gallery-preview");
+    if let Some(tex) = ctx.data(|d| d.get_temp::<(String, egui::TextureHandle)>(id).filter(|(k, _)| k == key).map(|(_, tex)| tex)) {
+        return tex;
+    }
+    let tex = ctx.load_texture("effect-gallery-preview", color_image(rgba, PREVIEW_W, PREVIEW_H), egui::TextureOptions::LINEAR);
+    ctx.data_mut(|d| d.insert_temp(id, (key.to_string(), tex.clone())));
+    tex
+}
+
+fn preview_area(ui: &mut egui::Ui, d: &Dialog, stack: &[StackEntry], browse: &str) {
+    let t = Tokens::get(ui.ctx());
+    widgets::subheader(ui, tl!("Preview"));
+    let jobs = preview_jobs(d, stack, browse);
+    let key = preview_key(&jobs);
+    let rgba = preview_rgba(&jobs, PREVIEW_W, PREVIEW_H);
+    let tex = preview_tex(ui.ctx(), &key, &rgba);
+    #[cfg(test)]
+    PREVIEWS_PAINTED.with(|c| c.set(c.get() + 1));
+    let (img_w, img_h) = (PREVIEW_W as f32 * 2.0, PREVIEW_H as f32 * 2.0);
+    ui.horizontal(|ui| {
+        let spare = (ui.available_width() - img_w).max(0.0);
+        ui.add_space(spare / 2.0);
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(img_w, img_h), egui::Sense::hover());
+        ui.painter().rect_filled(rect, 2.0, t.panel_darker);
+        let inner = rect.shrink(4.0);
+        ui.painter().image(tex.id(), inner, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+    });
+    let caption = jobs.iter().map(|(id, _)| effect_label(id)).collect::<Vec<_>>().join(", ");
+    if !caption.is_empty() {
+        ui.label(egui::RichText::new(caption).color(t.text_dim));
+    }
+    ui.add_space(8.0);
+}
+
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let cat = category_ix(d);
@@ -263,6 +469,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if stack_sel >= stack.len() && !stack.is_empty() {
         stack_sel = stack.len() - 1;
     }
+    preview_area(ui, d, &stack, &sel);
+
     let (param_effect, mut param_values) = param_target(d, &stack, stack_sel, &sel);
     if !param_effect.is_empty() {
         widgets::subheader(ui, tl!("Settings"));
@@ -293,12 +501,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.add_space(8.0);
         ui.vertical(|ui| {
             widgets::subheader(ui, tl!("Filters"));
-            ui.set_width(220.0);
-            egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+            ui.set_width(248.0);
+            egui::ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
                 for e in &effects {
                     let picked = e.id == sel;
                     let name = tl!(e.label).trim_end_matches('…').to_string();
-                    let resp = ui.add(egui::Button::selectable(picked, name));
+                    let image = egui::Image::from_texture(&thumb_tex(ui.ctx(), e.id)).fit_to_exact_size(egui::vec2(THUMB as f32, THUMB as f32));
+                    #[cfg(test)]
+                    THUMBS_PAINTED.with(|c| c.set(c.get() + 1));
+                    let resp = ui.add(egui::Button::selectable(picked, (image, name)).min_size(egui::vec2(200.0, THUMB as f32 + 4.0)));
                     if resp.clicked() {
                         set_selected(d, e.id);
                         set_stack_focus(d, false);
@@ -419,6 +630,12 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 }
 
 #[cfg(test)]
+thread_local! {
+    static THUMBS_PAINTED: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    static PREVIEWS_PAINTED: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
 mod tests {
     use serde_json::json;
     use vectorcraft_engine::Session;
@@ -475,5 +692,50 @@ mod tests {
         assert_eq!(n.appearance.effects[1].id, "stylize.glowingEdges");
         assert!(!n.appearance.effects[1].visible);
         assert_eq!(st.history.undo.len(), steps + 1);
+    }
+
+    #[test]
+    fn gallery_shows_thumbnails_and_an_in_dialog_preview() {
+        let plain = super::sample_drawing(super::THUMB, super::THUMB);
+        let mut seen = Vec::new();
+        for cat in 0..super::CATEGORIES.len() {
+            for e in super::effects_in_category(cat) {
+                let thumb = super::thumb_pixels(e.id);
+                assert_eq!(thumb.len(), super::THUMB * super::THUMB * 4, "{}", e.id);
+                assert_ne!(thumb, plain, "{} thumbnail is the untouched drawing", e.id);
+                seen.push(thumb);
+            }
+        }
+        assert!(seen.len() > 2);
+        assert_ne!(seen[0], seen[1], "two filters share one thumbnail");
+
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        app.run("ui.effectGalleryDialog", json!({})).unwrap();
+        super::THUMBS_PAINTED.with(|c| c.set(0));
+        super::PREVIEWS_PAINTED.with(|c| c.set(0));
+        frame(&mut app);
+        let thumbs = super::THUMBS_PAINTED.with(|c| c.get());
+        let previews = super::PREVIEWS_PAINTED.with(|c| c.get());
+        let artistic = super::effects_in_category(0).len() as u32;
+        assert!(thumbs >= artistic, "painted {thumbs} thumbnails, Artistic has {artistic}");
+        assert!(previews >= 1, "the dialog has a preview area");
+
+        let d = app.ui.dialog.as_ref().unwrap();
+        let stack = super::stack_of(d);
+        let jobs = super::preview_jobs(d, &stack, &super::selected_id(d));
+        assert_eq!(jobs.len(), 1, "an empty stack previews the filter being browsed");
+        let shown = super::preview_rgba(&jobs, super::PREVIEW_W, super::PREVIEW_H);
+        assert_ne!(shown, super::sample_drawing(super::PREVIEW_W, super::PREVIEW_H));
+
+        let soft = super::filtered("artistic.cutout", &super::default_params("artistic.cutout"), super::PREVIEW_W, super::PREVIEW_H);
+        let hard = super::filtered(
+            "artistic.cutout",
+            &serde_json::from_value(json!({"levels": 8, "edgeSimplicity": 0, "edgeFidelity": 3})).unwrap(),
+            super::PREVIEW_W,
+            super::PREVIEW_H,
+        );
+        assert_ne!(soft, hard, "the preview follows the filter's settings");
     }
 }

@@ -110,8 +110,9 @@ fn visit_paint(p: &mut Paint, f: &mut ColorVisitor) {
 }
 
 /// Visit every colour of a node tree (fills, strokes, gradient stops, text runs, mesh points, an
-/// image's colorize color, not opacity masks) with its swatch link and tint. Mesh points have no
-/// link: changes to it are dropped.
+/// image's colorize color, the fills and strokes a dynamic symbol instance keeps for objects of its
+/// art, not opacity masks) with its swatch link and tint. Mesh points have no link: changes to it
+/// are dropped.
 pub fn visit_node_colors(n: &mut Node, f: &mut ColorVisitor) {
     for it in &mut n.appearance.items {
         match it {
@@ -119,8 +120,13 @@ pub fn visit_node_colors(n: &mut Node, f: &mut ColorVisitor) {
             AppearanceItem::Stroke(l) => visit_paint(&mut l.paint, f),
         }
     }
-    if let Some(p) = n.extras.0.as_deref_mut().and_then(|e| e.colorize.as_deref_mut()) {
-        visit_paint(p, f);
+    if let Some(e) = n.extras.0.as_deref_mut() {
+        if let Some(p) = e.colorize.as_deref_mut() {
+            visit_paint(p, f);
+        }
+        for p in e.symbol_overrides.iter_mut().flat_map(|o| [&mut o.fill, &mut o.stroke]).flatten() {
+            visit_paint(p, f);
+        }
     }
     match &mut n.kind {
         NodeKind::Text(t) => {
@@ -144,7 +150,8 @@ pub fn visit_node_colors(n: &mut Node, f: &mut ColorVisitor) {
 }
 
 /// Apply `f` to every colour of a node tree (fills, strokes, gradient stops, text runs, mesh
-/// points) given its swatch link and tint, keeping the links.
+/// points, a dynamic symbol instance's own fills and strokes) given its swatch link and tint,
+/// keeping the links.
 pub fn map_node_colors(n: &mut Node, f: &mut dyn FnMut(&Color, Link) -> Color) {
     visit_node_colors(n, &mut |c, swatch, tint| *c = f(c, swatch.as_deref().map(|s| (s, *tint))));
 }
@@ -156,5 +163,34 @@ pub fn map_document_colors(doc: &mut Document, f: &mut dyn FnMut(&Color, Link) -
     }
     for s in &mut doc.symbols {
         map_node_colors(Arc::make_mut(&mut s.art), f);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{NodeId, SymbolOverride};
+    use vectorcraft_geom::Affine;
+
+    #[test]
+    fn a_dynamic_instances_own_fills_and_strokes_are_visited() {
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        let blue = Color::rgb(0.0, 0.0, 1.0);
+        let spot = Paint::Solid { color: red, swatch: Some("Spot".into()), tint: 0.5 };
+        let mut inst = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::IDENTITY });
+        inst.extras_mut().symbol_overrides = vec![
+            SymbolOverride { path: vec![0], fill: Some(spot), stroke: Some(Paint::solid(red)), ..Default::default() },
+            SymbolOverride { path: vec![1], opacity: Some(0.5), ..Default::default() },
+        ];
+        let mut links = vec![];
+        map_node_colors(&mut inst, &mut |_, link| {
+            links.push(link.map(|(s, t)| (s.to_string(), t)));
+            blue
+        });
+        assert_eq!(links, vec![Some(("Spot".to_string(), 0.5)), None], "each override paint is visited once, with its link");
+        let o = &inst.extras().symbol_overrides;
+        assert_eq!(o[0].fill, Some(Paint::Solid { color: blue, swatch: Some("Spot".into()), tint: 0.5 }), "the link is kept");
+        assert_eq!(o[0].stroke, Some(Paint::solid(blue)));
+        assert_eq!((o[1].fill.as_ref(), o[1].stroke.as_ref()), (None, None), "an override without paint gets none");
     }
 }

@@ -225,6 +225,158 @@ fn prefs_persist_through_ui_state() {
     assert_eq!(b.session.prefs.gridline_every, 50.0);
 }
 
+/// Guides & Grid › Lock Guides by Default: shown in its category, applied by OK, saved with the
+/// UI state and read back as locked guides. A file without the key leaves guides unlocked.
+#[test]
+fn lock_guides_by_default_shows_applies_and_restores() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    open(&mut a, Some("Guides & Grid"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Lock Guides by Default"), "{text}");
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields["lockGuidesByDefault"], json!(false));
+    a.ui.dialog.as_mut().unwrap().fields.insert("lockGuidesByDefault".into(), json!(true));
+    confirm(&mut a).unwrap();
+    assert!(a.session.guides_locked());
+    assert_eq!(crate::menus::dynamic_label(&a, "view.guides.lock", ""), "Unlock Guides");
+    assert_eq!(a.ui.engine_prefs["lockGuidesByDefault"], json!(true));
+
+    let saved = serde_json::to_vec(&a.ui).unwrap();
+    let mut b = app();
+    assert!(!b.session.guides_locked());
+    b.ui = serde_json::from_slice::<crate::UiState>(&saved).unwrap().sanitized();
+    restore(&mut b);
+    assert!(b.session.guides_locked());
+
+    let mut older = app();
+    older.ui.engine_prefs = json!({"gridlineEvery": 50});
+    restore(&mut older);
+    assert!(!older.session.guides_locked());
+}
+
+/// OK with the option unchanged keeps the lock from the View menu. OK after turning the option
+/// off, as Reset Preferences does in the dialog, unlocks guides.
+#[test]
+fn preferences_ok_changes_the_guide_lock_only_with_the_option() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("view.guides.lock", json!({"locked": true})).unwrap();
+    open(&mut a, Some("Guides & Grid"));
+    confirm(&mut a).unwrap();
+    assert!(a.session.guides_locked(), "the option did not change");
+    a.run("view.guides.lock", json!({"locked": false})).unwrap();
+    a.run("prefs.set", json!({"key": "lockGuidesByDefault", "value": true})).unwrap();
+    assert!(a.session.guides_locked());
+    open(&mut a, Some("Guides & Grid"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("lockGuidesByDefault".into(), Prefs::default().to_json()["lockGuidesByDefault"].clone());
+    confirm(&mut a).unwrap();
+    assert!(!a.session.guides_locked(), "the option went off");
+}
+
+/// Click the Preferences dialog's button `label` with the pointer.
+fn click_button(app: &mut VectorcraftApp, label: &str) {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        // A window takes a sizing frame and fades in: each frame is a quarter second on.
+        let time = ctx.input(|i| i.time) + 0.25;
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+        let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => v.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
+                egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
+                _ => {}
+            }
+        }
+        let mut v = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+        v
+    };
+    frame(app, vec![]);
+    let texts = frame(app, vec![]);
+    let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"));
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, vec![egui::Event::PointerMoved(at)]);
+    frame(app, vec![press(true)]);
+    frame(app, vec![press(false)]);
+}
+
+/// Click Reset Preferences and answer its question with OK: Preferences again, its working copy
+/// at the defaults.
+fn reset_preferences(app: &mut VectorcraftApp) {
+    click_button(app, "Reset Preferences");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::confirm::RESET_PREFS));
+    crate::dialogs::confirm(app).unwrap();
+}
+
+/// Reset Preferences then OK resets the preferences, General included, and leaves the open
+/// document's units, with no undo step in the document.
+#[test]
+fn reset_preferences_then_ok_leaves_the_documents_units() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    let undo = a.session.active().unwrap().history.undo.len();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a);
+    let d = a.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!(d.fields["keyboardIncrement"], Prefs::default().to_json()["keyboardIncrement"], "the working copy holds the defaults");
+    assert_eq!(d.fields["unitsGeneral"], json!("points"));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, Prefs::default().keyboard_increment);
+    assert_eq!(a.session.prefs.units_general, Prefs::default().units_general);
+    let st = a.session.active().unwrap();
+    assert_eq!(st.doc.units, vectorcraft_doc::Unit::Millimeters);
+    assert_eq!(st.history.undo.len(), undo, "no undo step");
+}
+
+/// After Reset Preferences, choosing a General unit in the dialog still sets the document's units
+/// on OK, Points included once another unit was chosen in between. With no document open, Reset
+/// Preferences resets General to its default.
+#[test]
+fn reset_preferences_keeps_an_edit_of_general_units() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a);
+    a.ui.dialog.as_mut().unwrap().fields.insert("unitsGeneral".into(), json!("inches"));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Inches);
+    assert_eq!(a.session.prefs.units_general, "inches");
+
+    // Between frames, as `ui.dialog.set` sets fields.
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a);
+    for u in ["inches", "points"] {
+        crate::dialogs::set_field(a.ui.dialog.as_mut().unwrap(), "unitsGeneral".into(), json!(u));
+    }
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Points);
+
+    // Through a frame of the dialog.
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a);
+    a.ui.dialog.as_mut().unwrap().fields.insert("unitsGeneral".into(), json!("inches"));
+    click_button(&mut a, "General");
+    a.ui.dialog.as_mut().unwrap().fields.insert("unitsGeneral".into(), json!("points"));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Points);
+
+    let mut b = app();
+    b.run("prefs.set", json!({"key": "unitsGeneral", "value": "Millimeters"})).unwrap();
+    open(&mut b, Some("General"));
+    reset_preferences(&mut b);
+    confirm(&mut b).unwrap();
+    assert_eq!(b.session.prefs.units_general, Prefs::default().units_general);
+}
+
 #[test]
 fn old_pref_files_keep_their_brightness() {
     let mut a = app();
@@ -642,6 +794,111 @@ fn escape_clears_the_search_then_closes_the_dialog() {
     assert!(a.ui.dialog.is_none(), "Escape in the empty field closes the dialog");
 }
 
+/// One frame of the open dialog as the app draws it, keys first, a quarter second after the last
+/// (a window takes a sizing frame and fades in). → The texts it painted, with their rectangles.
+fn dialog_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    let time = ctx.input(|i| i.time) + 0.25;
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+    let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::shortcuts::handle(a, ui.ctx());
+        crate::dialogs::show(a, ui.ctx());
+    });
+    out.textures_delta.clear();
+    fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => v.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
+            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
+            _ => {}
+        }
+    }
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+    v
+}
+
+/// Click the text `label` in the open dialog with the pointer.
+fn click_text(a: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    dialog_frame(a, ctx, vec![]);
+    let texts = dialog_frame(a, ctx, vec![]);
+    let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"));
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    dialog_frame(a, ctx, vec![egui::Event::PointerMoved(at)]);
+    dialog_frame(a, ctx, vec![press(true)]);
+    dialog_frame(a, ctx, vec![press(false)]);
+}
+
+/// Preferences with an edited Keyboard Increment, the Units category and a search, over a stored
+/// Keyboard Increment of 5.
+fn edited_preferences() -> VectorcraftApp {
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    open(&mut a, Some("Units"));
+    let d = a.ui.dialog.as_mut().unwrap();
+    d.fields.insert("keyboardIncrement".into(), json!(7));
+    d.fields.insert("__search".into(), json!("grid"));
+    a
+}
+
+/// Reset Preferences asks first, over Preferences. Escape, or Cancel, shows Preferences again as it
+/// was: its edits, category and search kept, and nothing applied.
+#[test]
+fn reset_preferences_asks_first_and_cancel_returns_to_preferences() {
+    let mut a = edited_preferences();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    for way_back in ["Escape", "Cancel"] {
+        click_text(&mut a, &ctx, "Reset Preferences");
+        let d = a.ui.dialog.clone().expect("a question is open");
+        assert_eq!(d.kind, crate::dialogs::confirm::RESET_PREFS, "Reset Preferences asks first");
+        let under = crate::dialogs::parent(&d).expect("the question is over Preferences");
+        assert_eq!((under.kind.as_str(), under.fields["keyboardIncrement"].clone()), ("preferences", json!(7)), "Preferences is unchanged");
+        dialog_frame(&mut a, &ctx, vec![]);
+        let shown: Vec<String> = dialog_frame(&mut a, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        assert!(shown.iter().any(|t| t == "Reset all preferences to their defaults?"), "{shown:?}");
+        if way_back == "Escape" {
+            dialog_frame(&mut a, &ctx, key_press(egui::Key::Escape, egui::Modifiers::NONE));
+        } else {
+            click_text(&mut a, &ctx, "Cancel");
+        }
+        let d = a.ui.dialog.as_ref().unwrap_or_else(|| panic!("{way_back}: Preferences is open again"));
+        assert_eq!(d.kind, "preferences", "{way_back}");
+        assert_eq!(d.fields["keyboardIncrement"], json!(7), "{way_back}: the edit is kept");
+        assert_eq!((d.str("__category").as_str(), d.str("__search").as_str()), ("Units", "grid"), "{way_back}: category and search kept");
+        assert_eq!(a.session.prefs.keyboard_increment, 5.0, "{way_back}: nothing applied");
+    }
+}
+
+/// OK on the question shows Preferences again with every preference at its default, its category
+/// and search kept; nothing is applied until OK in Preferences, and Preferences' Cancel keeps the
+/// stored preferences.
+#[test]
+fn confirming_reset_fills_preferences_and_applies_nothing_until_ok() {
+    let mut a = edited_preferences();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let default = Prefs::default().to_json()["keyboardIncrement"].clone();
+    click_text(&mut a, &ctx, "Reset Preferences");
+    click_text(&mut a, &ctx, "OK");
+    let d = a.ui.dialog.as_ref().expect("Preferences is open again");
+    assert_eq!(d.kind, "preferences");
+    assert_eq!(d.fields["keyboardIncrement"], default, "the working copy holds the defaults");
+    assert_eq!((d.str("__category").as_str(), d.str("__search").as_str()), ("Units", "grid"));
+    assert_eq!(a.session.prefs.keyboard_increment, 5.0, "nothing applied yet");
+    click_text(&mut a, &ctx, "Cancel");
+    assert!(a.ui.dialog.is_none());
+    assert_eq!(a.session.prefs.keyboard_increment, 5.0, "Cancel in Preferences keeps the preferences");
+
+    // `ui.dialog.confirm` answers the question as OK does; OK in Preferences then applies the defaults.
+    let mut a = edited_preferences();
+    click_text(&mut a, &ctx, "Reset Preferences");
+    crate::dialogs::confirm(&mut a).unwrap();
+    assert_eq!(a.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("preferences"));
+    crate::dialogs::confirm(&mut a).unwrap();
+    assert!(a.ui.dialog.is_none());
+    assert_eq!(a.session.prefs.keyboard_increment, Prefs::default().keyboard_increment);
+}
+
 /// Units › Numbers Without Units Are Points (#394): the preference reaches the fields when it
 /// changes, and its checkbox is dimmed unless a unit is Picas.
 #[test]
@@ -784,6 +1041,105 @@ fn temp_folder(name: &str) -> std::path::PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+/// An app whose save and open dialogs answer `path`, and that writes and reads real files.
+fn app_with_file_dialogs(path: &str) -> VectorcraftApp {
+    let mut a = app();
+    let (save, open) = (path.to_string(), path.to_string());
+    a.services.pick_save = Some(Box::new(move |_: &crate::FilePick| Some(save.clone())));
+    a.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(open.clone())));
+    a.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
+    a.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    a
+}
+
+/// Export Preferences… saves the applied preferences to a file, and Import Preferences… applies
+/// them again: the dialog shows them, OK keeps them, and the open document's units stay as they
+/// are.
+#[test]
+fn export_and_import_preferences_buttons_round_trip() {
+    let dir = temp_folder("prefs-file");
+    let path = dir.join("VectorCraft Preferences.json").to_string_lossy().into_owned();
+    let mut a = app_with_file_dialogs(&path);
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    let values = json!({"keyboardIncrement": 5, "uiAccent": "green", "unitsGeneral": "inches"});
+    a.run("prefs.set", json!({"values": values, "documentUnits": false})).unwrap();
+    let saved = a.session.prefs.to_json();
+    open(&mut a, Some("General"));
+    click_button(&mut a, "Export Preferences…");
+    let file: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(file["format"], "vectorcraft-preferences");
+    assert_eq!(file["prefs"]["uiAccent"], "green");
+
+    a.ui.dialog = None;
+    a.run("prefs.reset", json!({})).unwrap();
+    let undo = a.session.active().unwrap().history.undo.len();
+    open(&mut a, Some("General"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("keyboardIncrement".into(), json!(9));
+    click_button(&mut a, "Import Preferences…");
+    assert_eq!(a.ui.status, "Preferences imported.");
+    assert_eq!(a.session.prefs.to_json(), saved, "the exported preferences are applied");
+    assert_eq!(a.ui.engine_prefs, saved, "and saved with the UI state");
+    let d = a.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!((d.fields["keyboardIncrement"].clone(), d.fields["unitsGeneral"].clone()), (json!(5.0), json!("inches")), "the dialog shows them");
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.to_json(), saved);
+    let st = a.session.active().unwrap();
+    assert_eq!(st.doc.units, vectorcraft_doc::Unit::Millimeters, "the document's units stay");
+    assert_eq!(st.history.undo.len(), undo, "no undo step");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A file Import Preferences… can't use changes nothing, the dialog's edits included, and the
+/// status bar says why.
+#[test]
+fn import_preferences_of_a_bad_file_changes_nothing() {
+    let dir = temp_folder("prefs-bad-file");
+    let path = dir.join("newer.json");
+    std::fs::write(&path, r#"{"format": "vectorcraft-preferences", "version": 2, "prefs": {"uiAccent": "pink"}}"#).unwrap();
+    let mut a = app_with_file_dialogs(&path.to_string_lossy());
+    let before = a.session.prefs.to_json();
+    open(&mut a, Some("General"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("keyboardIncrement".into(), json!(9));
+    click_button(&mut a, "Import Preferences…");
+    assert!(a.ui.status.contains("newer version of VectorCraft"), "{}", a.ui.status);
+    assert_eq!(a.session.prefs.to_json(), before);
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields["keyboardIncrement"], json!(9), "the dialog keeps its edits");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `prefs.import` from a script or MCP while Preferences is open: the dialog shows the imported
+/// values. Import Preferences… shows only where the host has an open dialog (not on the web).
+#[test]
+fn prefs_import_refreshes_an_open_preferences_dialog() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    let data = json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"keyboardIncrement": 7}}).to_string();
+    a.run("prefs.import", json!({ "data": data })).unwrap();
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields["keyboardIncrement"], json!(7.0));
+    assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(7.0));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Export Preferences…") && !text.contains("Import Preferences…"), "{text}");
+    a.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Import Preferences…"), "{text}");
+}
+
+/// An import that turns Enable Touch Workspace on or off switches the workspace on a touch screen,
+/// as OK in Preferences does.
+#[test]
+fn prefs_import_of_touch_workspace_switches_the_workspace() {
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
+    a.touch_screen = true;
+    a.ui.workspace = "Typography".into();
+    let file = |on: bool| json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"touchWorkspace": on}}).to_string();
+    a.run("prefs.import", json!({ "data": file(true) })).unwrap();
+    assert_eq!(a.ui.workspace, crate::workspaces::TOUCH);
+    a.run("prefs.import", json!({ "data": file(false) })).unwrap();
+    assert_eq!(a.ui.workspace, "Typography");
 }
 
 /// File Handling › Data Recovery › Folder has a Choose… button where the host has a folder

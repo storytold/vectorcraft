@@ -74,7 +74,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::Paint;
 use vectorcraft_color::swatch::{REGISTRATION, Swatch};
-use vectorcraft_doc::{ColorMode, Document, LayerColor, Node};
+use vectorcraft_doc::{ColorMode, Document, LayerColor, Node, NodeKind};
 use vectorcraft_geom::{Affine, Rect};
 
 use graphics::{GState, Out};
@@ -97,6 +97,12 @@ pub use text::family_style;
 const LETTER: [f64; 4] = [0.0, 0.0, 612.0, 792.0];
 /// Largest page side read (points).
 const MAX_SIDE: f64 = 1e5;
+
+/// The start of the warning that type was set in fonts that aren't available, before ": " and
+/// their families: PDF import's words, as type in those fonts comes in the same way.
+pub(crate) const MISSING_FONTS_NOTE: &str = "fonts that aren't available show in the fallback font until they are";
+/// Most families named in that warning.
+const MAX_MISSING_FONTS: usize = 64;
 
 /// A read file.
 #[derive(Debug)]
@@ -265,8 +271,46 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
 
 /// [`import_trusting`], with the names in the editing copy that aren't UTF-8 (layers, objects,
 /// artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables
-/// and data sets) read in `names`.
+/// and data sets) read in `names`. The type of the document it gives that is set in families that
+/// aren't available shows in the fallback font, and a warning names them.
 pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
+    let mut r = read_names(bytes, editing_data, trust, names)?;
+    let missing = missing_fonts(&r.document);
+    if !missing.is_empty() {
+        r.warnings.push(format!("{MISSING_FONTS_NOTE}: {}", missing.join(", ")));
+    }
+    Ok(r)
+}
+
+/// The families of the type in `d` (its layers and its symbols) that aren't available, each once
+/// in the order the type comes, at most [`MAX_MISSING_FONTS`]: the document's, whether its type
+/// came from the page or from an editing copy, and none for type only measured or outlined.
+fn missing_fonts(d: &Document) -> Vec<String> {
+    let db = vectorcraft_text::FontDb::global();
+    let mut checked: HashSet<String> = HashSet::new();
+    let mut missing: Vec<String> = Vec::new();
+    let mut add = |n: &Node| {
+        let NodeKind::Text(t) = &n.kind else { return };
+        for run in &t.runs {
+            let family = run.style.font_family.as_str();
+            if missing.len() >= MAX_MISSING_FONTS || family.is_empty() || checked.contains(family) {
+                continue;
+            }
+            checked.insert(family.to_string());
+            if db.find_family(family).is_none() {
+                missing.push(family.to_string());
+            }
+        }
+    };
+    d.walk(&mut add);
+    for s in &d.symbols {
+        s.art.walk(&mut add);
+    }
+    missing
+}
+
+/// [`import_names`] before the type's fonts are checked.
+fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
     let ps = program(bytes)?;
     let dsc = Dsc::read(ps);
     // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no

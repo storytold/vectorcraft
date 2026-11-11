@@ -337,14 +337,8 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             }
         }
         Drag::RotateView { start_angle, start_rot, snaps } => {
-            let c = rect.center();
-            let a = (p.y - c.y).atan2(p.x - c.x) as f64;
-            let mut deg = start_rot + (a - start_angle).to_degrees();
-            if snaps && m.shift {
-                deg = (deg / 15.0).round() * 15.0;
-            }
             if let Some(vm) = app.view_mut() {
-                vm.rotation = vectorcraft_geom::normalize_deg(deg);
+                vm.rotation = super::view::drag_rotation(rect.center(), p, start_angle, start_rot, snaps && m.shift);
             }
         }
         Drag::ZoomBox { start } => {
