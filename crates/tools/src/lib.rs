@@ -546,6 +546,7 @@ pub(crate) mod testutil {
             preview_memo: None,
             unit: Unit::Points,
             stroke_unit: Unit::Points,
+            measure_unit: Unit::Points,
             paste_plain_text: false,
             typed_from_keyboard: false,
             slices_hidden: false,

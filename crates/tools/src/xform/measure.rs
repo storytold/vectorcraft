@@ -92,12 +92,14 @@ impl Tool for MeasureTool {
         let guides = self.snap.guides().iter().filter(|_| self.dragging).cloned();
         let Some((a, b)) = self.line.filter(|(a, b)| a != b) else { return guides.collect() };
         let mut out = vec![Overlay::Line { a, b, color: CYAN, dashed: false }];
-        // Measurement Labels decides the readout; the line the tool draws stays.
+        // Measurement Labels decides the readout; the line the tool draws stays. It reads in
+        // Preferences › Units › General, also in a document saved or opened in other units (#5820).
         if cx.measurement_labels {
             let (dist, ang, dx, dy) = measure(a, b);
+            let len = |v: f64| cx.measure_unit.readout(v);
             out.push(Overlay::Measure {
                 p: b + Vec2::new(cx.tol(12.0), cx.tol(12.0)),
-                text: format!("D: {}\nAngle: {ang:.1}°\n{}", cx.len(dist), cx.offset_label(dx, dy)),
+                text: format!("D: {}\nAngle: {ang:.1}°\ndX: {}\ndY: {}", len(dist), len(dx), len(dy)),
             });
         }
         out.extend(guides);

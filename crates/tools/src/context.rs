@@ -189,6 +189,9 @@ pub struct ToolContext<'a> {
     pub unit: Unit,
     /// Units ▸ Stroke: the unit measurement labels show stroke widths in.
     pub stroke_unit: Unit,
+    /// Preferences ▸ Units ▸ General as the preference holds it: the unit the Measure tool reads
+    /// in, whatever units the document was saved or opened in (#5820).
+    pub measure_unit: Unit,
     /// Clipboard Handling → When pasting text: Keep Plain Text. Text pasted while typing takes
     /// the style at the caret, even the text the Type tool copied with its formatting.
     pub paste_plain_text: bool,
