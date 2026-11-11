@@ -58,6 +58,10 @@ pub enum LimitKind {
     Host,
 }
 
+/// The tag [`Realm::error_source`] gives for a source that is neither the realm's script nor an
+/// evaluator's: code that `eval` or `Function` compiled, or an error with no place.
+pub const UNKNOWN_SOURCE: u32 = u32::MAX;
+
 /// The fuel [`Realm::advance`] lets a slice spend, past the slice it was asked for, in a nested run
 /// it cannot pause.
 pub const MAX_UNBROKEN_FUEL: u64 = 200_000_000;
@@ -218,10 +222,17 @@ impl Realm {
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;
         interp.host_abort = None;
+        interp.error_tag = UNKNOWN_SOURCE;
         let strict = interp.options.strict;
-        match interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global)) {
+        interp.source_tag = 0;
+        let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
+        interp.source_tag = UNKNOWN_SOURCE;
+        match code {
             Ok(code) => Ok(code),
-            Err(CompileError::Syntax(e)) => Err(e.into()),
+            Err(CompileError::Syntax(e)) => {
+                interp.error_tag = 0;
+                Err(e.into())
+            }
             Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0 }),
         }
     }
@@ -229,7 +240,9 @@ impl Realm {
     /// The end of a run: its completion value or error, with the interpreter's stacks emptied.
     fn outcome(&mut self, result: Result<Value, Abrupt>) -> Result<JsValue, RunError> {
         let interp = &mut self.interp;
-        let (line, column) = interp.throw_site.take().map_or((0, 0), |(code, pc)| code.line_column(pc));
+        let site = interp.throw_site.take();
+        interp.error_tag = site.as_ref().map_or(UNKNOWN_SOURCE, |(code, _)| code.source.tag);
+        let (line, column) = site.map_or((0, 0), |(code, pc)| code.line_column(pc));
         interp.stack.clear();
         interp.frames.clear();
         interp.temp_roots.clear();
@@ -297,6 +310,13 @@ impl Realm {
     /// Has this realm stop when `interrupt` is set, in place of its own flag.
     pub fn share_interrupt(&mut self, interrupt: &Interrupt) {
         self.interp.interrupt = interrupt.0.clone();
+    }
+
+    /// Which source the last error's `line` and `column` are in: 0 for the script given to
+    /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
+    /// [`crate::HostItem::Evaluator`] gave in this realm, and [`UNKNOWN_SOURCE`] otherwise.
+    pub fn error_source(&self) -> u32 {
+        self.interp.error_tag
     }
 
     /// Fuel the run has left.

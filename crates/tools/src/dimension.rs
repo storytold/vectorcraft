@@ -5,8 +5,8 @@
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 use serde_json::{Value, json};
 use vectorcraft_doc::{
-    Node,
-    dimension::{self, Dimension, DimensionMode, DimensionOptions, DimensionSource, Orientation, PointRef, SegmentRef},
+    Node, NodeId,
+    dimension::{self, Dimension, DimensionMode, DimensionOptions, DimensionSource, FreePoint, Orientation, PointRef, SegmentRef},
 };
 use vectorcraft_geom::{BezPath, Point, Vec2};
 
@@ -213,6 +213,30 @@ fn nearest_on(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<Point> {
     (q.x.is_finite() && q.y.is_finite()).then_some(q)
 }
 
+/// What a dimension between two picked points links to. A point on an anchor links to the anchor.
+/// A point on a segment keeps its place along the segment. Any other point is held
+/// against the anchors of the path under it, or, with no path under it, the path of the other
+/// point, so that it moves with that path. None when neither point has a path to link to.
+fn points_source(cx: &ToolContext, (a, ra): (Point, &Option<PointRef>), (b, rb): (Point, &Option<PointRef>)) -> Option<DimensionSource> {
+    let (edge_a, edge_b) = (pick(cx, a), pick(cx, b));
+    let node = |r: &Option<PointRef>, e: &Option<SegmentRef>| r.as_ref().map(|r| r.node).or_else(|| e.as_ref().map(|e| e.node));
+    let (path_a, path_b) = (node(ra, &edge_a), node(rb, &edge_b));
+    let free = |p: Point, r: &Option<PointRef>, edge: &Option<SegmentRef>, own: Option<NodeId>, other: Option<NodeId>| {
+        if r.is_some() {
+            return None;
+        }
+        edge.as_ref().and_then(|e| FreePoint::on_segment(cx.doc, e, p)).or_else(|| own.or(other).and_then(|node| FreePoint::on(cx.doc, node, p)))
+    };
+    let (free_a, free_b) = (free(a, ra, &edge_a, path_a, path_b), free(b, rb, &edge_b, path_b, path_a));
+    (ra.is_some() || rb.is_some() || free_a.is_some() || free_b.is_some()).then(|| DimensionSource::Points {
+        a: ra.clone(),
+        b: rb.clone(),
+        vertex: None,
+        free_a,
+        free_b,
+    })
+}
+
 impl DimensionTool {
     /// Where a Linear pick at `p` lands: on the nearest anchor of any path, within reach (kept as
     /// a link to its path); else where Smart Guides put it (another object's anchor or centre, in
@@ -364,7 +388,7 @@ impl DimensionTool {
                 }
                 self.points.push((at, reference));
                 if let [(a, ra), (b, rb)] = self.points.as_slice() {
-                    let source = (ra.is_some() || rb.is_some()).then(|| DimensionSource::Points { a: ra.clone(), b: rb.clone(), vertex: None });
+                    let source = points_source(cx, (*a, ra), (*b, rb));
                     let mut d = self.recipe(DimensionMode::Linear, *a, *b, Point::ZERO, source);
                     if d.resolve(cx.doc).is_ok() {
                         self.second = Some((*b, p));
@@ -667,7 +691,7 @@ mod tests {
         let d = t.pending.as_ref().expect("both anchors were picked");
         assert_eq!((d.a, d.b), (Point::new(100.0, 100.0), Point::new(200.0, 200.0)));
         let anchor = |anchor| Some(PointRef { node: id, subpath: 0, anchor });
-        assert_eq!(d.source, Some(DimensionSource::Points { a: anchor(0), b: anchor(2), vertex: None }));
+        assert_eq!(d.source, Some(DimensionSource::Points { a: anchor(0), b: anchor(2), vertex: None, free_a: None, free_b: None }));
         // Dragged past the anchor's reach, the press drags out the dimension of a segment there.
         let mut t = DimensionTool::default();
         t.pointer(&c, &ev(PointerKind::Down, 100.0, 100.0));
@@ -675,6 +699,66 @@ mod tests {
         let acts = t.pointer(&c, &ev(PointerKind::Drag, 100.0, 60.0));
         assert!(matches!(acts.first(), Some(Action::Begin(_))), "{acts:?}");
         assert!(matches!(t.pointer(&c, &ev(PointerKind::Up, 100.0, 60.0)).last(), Some(Action::Commit)));
+    }
+
+    /// A point picked on a segment, not on an anchor, keeps its place along the segment. A point
+    /// off the art is held against the anchors of the other point's path. Both then follow the
+    /// path, as the anchor at the other end does.
+    #[test]
+    fn points_off_anchors_are_held_against_the_path() {
+        use vectorcraft_doc::dimension::FreePoint;
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let click = |t: &mut DimensionTool, x: f64, y: f64| {
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y));
+        };
+        let mut t = DimensionTool::default();
+        click(&mut t, 100.0, 100.0);
+        click(&mut t, 200.0, 150.0);
+        let pending = t.pending.as_ref().expect("both points were picked");
+        let anchor = Some(PointRef { node: id, subpath: 0, anchor: 0 });
+        let Some(DimensionSource::Points { a, b: None, vertex: None, free_a: None, free_b: Some(FreePoint::OnSegment { edge, t }) }) =
+            &pending.source
+        else {
+            panic!("{:?}", pending.source)
+        };
+        assert_eq!((a, edge), (&anchor, &SegmentRef { node: id, subpath: 0, segment: 1 }));
+        assert!((t - 0.5).abs() < 1e-9, "{t}");
+        let mut t = DimensionTool::default();
+        click(&mut t, 400.0, 400.0);
+        click(&mut t, 200.0, 200.0);
+        let pending = t.pending.as_ref().expect("both points were picked");
+        let Some(DimensionSource::Points { free_a: Some(free), b: Some(b), .. }) = &pending.source else { panic!("{:?}", pending.source) };
+        let FreePoint::Anchors { node, anchors, across } = free else { panic!("{free:?}") };
+        assert_eq!((*node, anchors.len(), *across, b.node, b.anchor), (id, 3, 0.0, id, 2));
+        let at = free.position(&d).expect("the anchors that hold it exist");
+        assert!(at.distance(pending.a) < 1e-9, "{at:?} {:?}", pending.a);
+    }
+
+    /// A point that Smart Guides put in line with the path's center is held, where the guide put
+    /// it, against the anchors of the path at the other end.
+    #[test]
+    fn a_point_smart_guides_place_is_held_against_the_path() {
+        use vectorcraft_doc::dimension::FreePoint;
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        assert!(c.smart_guides);
+        let mut t = DimensionTool::default();
+        for (x, y) in [(200.0, 200.0), (151.5, 330.0)] {
+            t.pointer(&c, &PointerEvent::new(PointerKind::Move, x, y));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y));
+        }
+        let pending = t.pending.as_ref().expect("both points were picked");
+        assert!((pending.b.x - 150.0).abs() < 1e-9, "in line with the center: {:?}", pending.b);
+        let Some(DimensionSource::Points { a: Some(a), free_b: Some(free), .. }) = &pending.source else { panic!("{:?}", pending.source) };
+        assert!(matches!(free, FreePoint::Anchors { node, .. } if *node == id), "{free:?}");
+        assert_eq!(a.node, id);
+        let at = free.position(&d).expect("the anchors that hold it exist");
+        assert!(at.distance(pending.b) < 1e-9, "{at:?} {:?}", pending.b);
     }
 
     /// The anchors of a live rectangle are picked the same way.

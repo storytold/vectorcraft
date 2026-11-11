@@ -75,6 +75,29 @@ fn symbol_instance_tint_survives_expanding_an_object_effect() {
     assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
 }
 
+/// The canvas tints a symbol's art with the instance fill before the instance's color adjustment,
+/// and expanding gives the same colors.
+#[test]
+fn symbol_instance_tint_comes_before_a_color_adjustment_when_expanded() {
+    let mut s = session();
+    square(&mut s);
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Tinted Square"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let fill = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": fill, "color": "#00ff00", "opacity": 50}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "item": null, "effect": "adjust.hueSaturation", "params": {"hue": 120}}));
+    let before = render(&s);
+    assert_ne!(before.pixel(100, 100), [255, 255, 255, 255], "the symbol is visible");
+    assert!(expandable(&s));
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    assert!(!matches!(node(&s, id).kind, NodeKind::SymbolInstance { .. }));
+    let after = render(&s);
+    let (b, a) = (before.pixel(100, 100), after.pixel(100, 100));
+    assert!(b.iter().zip(a.iter()).all(|(x, y)| x.abs_diff(*y) <= 8), "expanding changed the color from {b:?} to {a:?}");
+    assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
+}
+
 /// An instance fill with an opacity of 0 does not tint the symbol's art, so expanding keeps the
 /// art's global swatch link.
 #[test]
