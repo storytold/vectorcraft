@@ -3385,6 +3385,8 @@ digits	Malayalam	Malayalam
 	tile {number}	kiremit {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Fayanslar önce baştan sonra aşağı doğru numaralandırılır; aralığı her döşeme için boş bırakın.
 	Tint	Renk tonu
+	Fill Tint	Dolgu Renk Tonu
+	Stroke Tint	Kontur Renk Tonu
 	Tip extends past the end point	İpucu bitiş noktasının ötesine uzanıyor
 	Tip on the end point	Bitiş noktasına dair ipucu
 	Title Case	Başlık Durumu

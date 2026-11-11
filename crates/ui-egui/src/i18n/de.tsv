@@ -3520,6 +3520,8 @@ effect	Points	Punkte
 	Copies per Sheet (as many as fit, in a grid)	Kopien pro Blatt (so viele wie passen, im Raster)
 	Gutter:	Zwischenraum:
 	Tint	Tonwert
+	Fill Tint	Flächentonwert
+	Stroke Tint	Konturtonwert
 	Tip extends past the end point	Spitze ragt über den Endpunkt hinaus
 	Tip on the end point	Spitze auf dem Endpunkt
 	Title Case	Wortanfänge groß

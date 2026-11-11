@@ -4553,6 +4553,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Copies per Sheet (as many as fit, in a grid)	每張紙印多份 (盡量排滿，以格點排列)
 	Gutter:	間距：
 	Tint	色調
+	Fill Tint	填色色調
+	Stroke Tint	筆畫色調
 	Tip extends past the end point	尖端延伸超過終點
 	Tip on the end point	尖端位於終點
 	Title Case	標題式大小寫

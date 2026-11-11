@@ -2105,6 +2105,8 @@ digits	Malayalam	Malayalam
 	Green	Groen
 	Shifts the tints of global and spot colors; other colors stay.	Verschuift de tinten van globale kleuren en spotkleuren; andere kleuren blijven ongewijzigd.
 	Tint	Tint
+	Fill Tint	Vultint
+	Stroke Tint	Contourtint
 	Color Guide Options	Opties voor kleurengids
 	Less	Minder
 	Steps:	Stappen:

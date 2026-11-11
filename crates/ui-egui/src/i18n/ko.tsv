@@ -3878,6 +3878,8 @@ file-filter	Templates	템플릿
 	Text Wrap Options	텍스트 감싸기 옵션
 	Tile Full Pages	전체 페이지 타일링
 	Tint	색조
+	Fill Tint	칠 색조
+	Stroke Tint	선 색조
 	Tip extends past the end point	끝이 끝점을 지나 연장됨
 	Tip on the end point	끝이 끝점에 위치
 	Top	위쪽
