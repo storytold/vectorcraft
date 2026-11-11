@@ -1280,19 +1280,25 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     // out (overflowing text) is shaped alone in its writing direction, with the rest of its grapheme
     // in the grapheme's own styles.
     let plain = t.plain_text();
-    let unchosen = holder.as_ref().filter(|_| !styled).and_then(|_| {
-        let mut probe = t.clone();
-        edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
-        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
-        own_glyph(&plain, &lay, ch, &bytes, &face).unwrap_or_else(|| shaped_alone(&probe, ch, &bytes, &face).0)
-    });
+    let mut probe = t.clone();
+    edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
+    let probe_lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
+    let unchosen = holder
+        .as_ref()
+        .filter(|_| !styled)
+        .and_then(|_| own_glyph(&plain, &probe_lay, ch, &bytes, &face).unwrap_or_else(|| shaped_alone(&probe, ch, &bytes, &face).0));
     let substituted = unchosen.is_some_and(|g| g != default);
     let choice = match gid.filter(|g| *g != default || substituted) {
         None => None,
         Some(g) if g == default || face.alternates(ch).iter().any(|a| a.gid == g) => Some(face.choice(ch, g)),
         Some(g) => return Err(bad(C, format!("glyph {g} is not an alternate of {ch} in {} {}", face.family, face.style))),
     };
-    let drawn = choice.as_ref().map_or(unchosen.unwrap_or(default), |c| c.gid);
+    // Without a choice, the glyph drawn in whatever face draws the character, as
+    // `text.glyphAlternates` reports it (a fallback face's glyph, the capital of All Caps).
+    let drawn = match &choice {
+        Some(c) => c.gid,
+        None => drawn_glyph(&plain, &probe_lay, ch, &bytes, &face).or_else(|| shaped_alone(&probe, ch, &bytes, &face).1).unwrap_or(default),
+    };
     // The run holding the character. The request changes nothing when the choice is the one the
     // character's run holds and that run holds the character alone; otherwise the edit splits the
     // run, so that the following text does not take the character into a ligature.
