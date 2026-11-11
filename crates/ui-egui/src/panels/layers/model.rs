@@ -1,5 +1,5 @@
 use super::rows::key;
-use super::{Arc, Color32, Document, LiveShape, Node, NodeKind, OpenRows, PanelOptions, Ui, Value, VectorcraftApp};
+use super::{Arc, Color32, Document, LiveShape, Node, NodeId, NodeKind, OpenRows, PanelOptions, Ui, Value, VectorcraftApp};
 
 /// Where a dragged row goes relative to the row it is dropped on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,7 +42,8 @@ pub(crate) fn shown_name(app: &VectorcraftApp, n: &Node, lang: crate::i18n::Lang
 pub(super) fn opens(n: &Node, opts: &PanelOptions) -> bool {
     match n.kind {
         NodeKind::Compound { .. } => false,
-        _ => n.children().is_some_and(|c| c.iter().any(|c| !opts.layers_only || c.is_layer())),
+        // Ruler guide nodes are not object rows (a layer's guide rows are counted by its caller).
+        _ => n.children().is_some_and(|c| c.iter().any(|c| !c.is_ruler_guide() && (!opts.layers_only || c.is_layer()))),
     }
 }
 
@@ -226,25 +227,29 @@ struct RowsKey {
 /// contains `query` (lowercase) and that `filter` keeps, and every row holding one.
 pub(super) fn list_rows(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str, filter: &Filter) -> Vec<Row> {
     let mask_layer = doc.mask_edit.map(|m| m.layer);
+    // The ruler guides' ids by `guide.list` index, listed once for every layer.
+    let guides: Vec<NodeId> = doc.ruler_guides().into_iter().filter_map(|g| g.id).collect();
     let mut out = vec![];
     for l in doc.layers.iter().rev().filter(|l| mask_layer.is_none_or(|m| m == l.id)) {
-        push_rows(l, 0, false, (Color32::PLACEHOLDER, true), (open, opts, query, filter, doc), &mut out);
+        push_rows(l, 0, false, (Color32::PLACEHOLDER, true), (open, opts, query, filter, &guides), &mut out);
     }
     out
 }
 
 /// Add the rows of `n` and those open inside it to `out`; `(colour, shown)` are those of what holds
-/// it (the layer's colour, and whether it is visible).
+/// it (the layer's colour, and whether it is visible). The last item of `cx` is the document's
+/// ruler guide ids by `guide.list` index.
 pub(super) fn push_rows(
     n: &Arc<Node>,
     depth: usize,
     clip_path: bool,
     (colour, shown): (Color32, bool),
-    cx: (&OpenRows, &PanelOptions, &str, &Filter, &Document),
+    cx: (&OpenRows, &PanelOptions, &str, &Filter, &[NodeId]),
     out: &mut Vec<Row>,
 ) {
-    let (open_rows, opts, query, filter, doc) = cx;
-    if opts.layers_only && !n.is_layer() {
+    let (open_rows, opts, query, filter, all_guides) = cx;
+    // A ruler guide node gets no object row: its layer lists the guide rows.
+    if n.is_ruler_guide() || (opts.layers_only && !n.is_layer()) {
         return;
     }
     let colour = match &n.kind {
@@ -257,10 +262,16 @@ pub(super) fn push_rows(
     let shown = shown && n.visible;
     let searching = !query.is_empty();
     let narrowing = searching || filter.is_on();
-    // A layer's ruler guides are rows in it, above its art (not while searching, nor while the
-    // filter leaves them out).
-    let guides: Vec<usize> =
-        if n.is_layer() && !opts.layers_only && !searching && filter.keeps_guides() { doc.guides_on(n.id).map(|(i, _)| i).collect() } else { vec![] };
+    // A layer's ruler guides are rows in it, above its art, the highest `guide.list` index first
+    // (not while searching, nor while the filter leaves them out).
+    let guides: Vec<usize> = if n.is_layer() && !opts.layers_only && !searching && filter.keeps_guides() {
+        let mut found: Vec<usize> =
+            n.children().into_iter().flatten().filter(|c| c.is_ruler_guide()).filter_map(|c| all_guides.binary_search(&c.id).ok()).collect();
+        found.sort_unstable();
+        found
+    } else {
+        vec![]
+    };
     let opens = opens(n, opts) || !guides.is_empty();
     let open = opens && (narrowing || open_rows.contains(n.id));
     let at = out.len();

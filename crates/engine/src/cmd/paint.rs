@@ -242,6 +242,10 @@ fn same_in_proxy(a: &Paint, b: &Paint) -> bool {
 /// change ([`leaf_targets`]): groups and layers stand for their contents (and so do blends and
 /// other containers inside them), a compound path for its parts.
 pub(crate) fn painted<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
+    // A ruler guide has no paints.
+    if n.is_ruler_guide() {
+        return;
+    }
     let expand = match n.kind {
         NodeKind::Group { .. } | NodeKind::Layer { .. } => true,
         NodeKind::Compound { .. } => false,

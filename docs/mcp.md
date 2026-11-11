@@ -2212,7 +2212,11 @@ kept with the workspace, and built-in workspaces and workspaces saved without it
 
 ## Ruler guides
 
-Ruler guides are numbered in the order they were made. `guide.add {vertical, pos, artboard?}` makes one (the x of a
+Each ruler guide is an object of a layer or sublayer, directly in it and above its art, and takes an id from the
+document's object ids. Ruler guides are numbered by id, which is the order they were made (a guide read from an `.ai`
+file takes its place in the file). An object command given a ruler guide's id (in `ids` or `id`) fails with an error,
+and `node.move` cannot put a ruler guide into a group or out of its layers; the guide commands below take guides by
+number. `guide.add {vertical, pos, artboard?}` makes one (the x of a
 vertical guide, the y of a horizontal one, in points) → `{index}`. With `artboard` (an artboard's index) it is an
 artboard guide: it runs across that artboard only, moves with it (`artboard.move`, a pure move in
 `artboard.setProps`, `artboard.rearrange`), scales with it (`artboard.setProps {scaleArt}`), is copied with it (`artboard.duplicate`, `artboard.move {copy}`) and is
@@ -2236,8 +2240,8 @@ with guides unlocked, as the preference is off until `prefs.set` turns it on.
 `view.guides.release {index?, ids?}` (View › Guides › Release Guides) turns guides into paths → `{count}`. With
 `index` it releases that ruler guide, and with `ids` it releases those guide paths (and the guide paths inside them).
 Otherwise it releases the selected guide paths and ruler guides, and with no guide selected it releases every guide
-path. A released ruler guide becomes a straight path with no fill or stroke, at the top of the guide's layer (or where
-new art goes, for a guide on no layer). An artboard guide becomes a line across its artboard, and a canvas guide
+path. A released ruler guide becomes a straight path with no fill or stroke, at the top of the art of the guide's
+layer. An artboard guide becomes a line across its artboard, and a canvas guide
 becomes a line across the bounds of all the artboards. `index` and `ids` are refused while guides are locked. The
 release is one undo step, and the released paths are selected. With the Selection, Direct Selection or Group
 Selection tool, a double-click with Cmd/Ctrl and Shift held releases the ruler guide or guide path under the pointer

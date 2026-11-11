@@ -164,6 +164,21 @@ fn compound_guides_are_not_filter_targets() {
     assert!(targets.contains(&made[1]), "the plain compound path");
 }
 
+/// New objects put on top of a layer go below its ruler guides, which stay on top; a ruler guide
+/// is never a filter target.
+#[test]
+fn new_objects_go_below_a_layers_ruler_guides() {
+    let (mut d, _, layer) = doc();
+    let guide = Node::new(d.alloc_id(), NodeKind::RulerGuide { vertical: true, pos: 5.0, artboard: None });
+    let gid = d.insert(Some(layer), usize::MAX, guide).unwrap();
+    assert!(!filter_targets(&d, &[layer]).contains(&gid));
+    let out = json!({"objects": [{"name": "N", "type": "path", "path": square(0.0)}]});
+    let made = apply_output(&mut d, &[], decode_json(out).unwrap(), Some(layer), &keep).unwrap();
+    let ids: Vec<NodeId> = d.children(Some(layer)).unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(ids.last(), Some(&gid));
+    assert_eq!(ids.get(ids.len() - 2), made.first());
+}
+
 /// `guide` and `locked` make objects guides (a compound path's members too) and lock them, or undo
 /// both; locked objects and guides are not [`selectable`]. Other values are refused.
 #[test]

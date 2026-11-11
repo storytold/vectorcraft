@@ -455,6 +455,17 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         return None;
     }
     let source: &[Arc<Node>] = group.children()?;
+    // A layer's ruler guides take no part in the operation: they stay above its result.
+    let art = Node::guide_run_start(source);
+    if art < source.len() {
+        let mut without = group.clone();
+        if let Some(ch) = without.children_mut() {
+            ch.truncate(art);
+        }
+        let mut out = pathfinder_children(doc, &without, hook)?;
+        out.extend(source.iter().skip(art).cloned());
+        return Some(out);
+    }
     let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
         // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
         match compound_shape_area(doc, group, hook) {
@@ -727,9 +738,11 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         return None;
     }
     let mut m = n.clone();
+    // A layer's ruler guides take no part: they go back above the evaluated art at the end.
+    let guides = m.children_mut().map(|ch| ch.split_off(Node::guide_run_start(ch))).unwrap_or_default();
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
-        let result = pathfinder_children(doc, n, Some(&hook)).unwrap_or_default();
+        let result = pathfinder_children(doc, &m, Some(&hook)).unwrap_or_default();
         if let Some(ch) = m.children_mut() {
             *ch = result;
         }
@@ -762,6 +775,9 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     m.appearance.items.clear();
     m.appearance.contents_index = None;
+    if let Some(ch) = m.children_mut() {
+        ch.extend(guides);
+    }
     Some(m)
 }
 

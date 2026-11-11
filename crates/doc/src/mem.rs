@@ -88,7 +88,7 @@ impl Document {
         }
         let mut n = 0;
         n += vec_bytes(&self.artboards) + self.artboards.iter().map(|a| a.name.capacity()).sum::<usize>();
-        n += vec_bytes(&self.guides) + vec_bytes(&self.views) + vec_bytes(&self.slices) + vec_bytes(&self.assets);
+        n += vec_bytes(&self.saved_guides) + vec_bytes(&self.views) + vec_bytes(&self.slices) + vec_bytes(&self.assets);
         n += vec_bytes(&self.text_threads) + self.text_threads.iter().map(vec_bytes).sum::<usize>();
         n += self.images.iter().map(|(k, b)| 4 * size_of::<usize>() + k.capacity() + b.mime.capacity() + size_of_val(b)).sum::<usize>();
         n += map_bytes(&self.export_settings) + map_bytes(&self.extra) + self.print_setup.as_ref().map_or(0, json_bytes);

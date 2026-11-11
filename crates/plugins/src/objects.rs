@@ -1195,7 +1195,10 @@ impl Plan {
         if self.top.as_ref().is_some_and(|(p, _)| *p == parent)
             && let Some((_, nodes)) = self.top.take()
         {
-            out.get_or_insert_with(|| list.to_vec()).extend(nodes.into_iter().map(Arc::new));
+            // On a layer, new objects go below its ruler guides, which stay on top.
+            let o = out.get_or_insert_with(|| list.to_vec());
+            let at = Node::guide_run_start(o);
+            o.splice(at..at, nodes.into_iter().map(Arc::new));
         }
         out
     }

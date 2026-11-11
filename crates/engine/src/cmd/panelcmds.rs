@@ -352,7 +352,7 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
             for &i in indices.iter().rev() {
                 let gone = d.artboards.remove(i).id;
                 d.retire_artboard_id(gone);
-                d.retain_guides(sel, |_, g| g.artboard != Some(gone));
+                d.retain_guides(sel, |g| g.artboard != Some(gone));
             }
             d.remove_many(&art)?;
             sel.prune(d);

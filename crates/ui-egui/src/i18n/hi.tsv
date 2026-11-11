@@ -6944,6 +6944,8 @@ antiAlias	Sharp	शार्प
 @msg	no such layer or object	ऐसी कोई लेयर या ऑब्जेक्ट नहीं
 @msg	no such object {0}	ऐसी कोई ऑब्जेक्ट नहीं {0}
 @msg	no such object id {value}	ऐसी कोई ऑब्जेक्ट नहीं id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} एक गाइड है, ऑब्जेक्ट नहीं
+@msg	a ruler guide goes only directly in a layer or sublayer	गाइड केवल सीधे किसी लेयर या सबलेयर में हो सकता है
 @msg	no such objects	ऐसी कोई ऑब्जेक्ट नहीं
 @msg	no such path anchor, or the path would reach past the canvas	इस तरह के कोई पाथ एंकर नहीं, या पाथ कैनवास तक पहुंच जाएगा
 @msg	no such perspective grid preset	ऐसा कोई पर्सपेक्टिव ग्रिड पूर्व निर्धारित नहीं है

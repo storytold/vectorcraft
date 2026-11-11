@@ -99,6 +99,13 @@ impl Session {
         // the artboards the journal recorded need only a document too, whatever is selected and
         // whichever tool is chosen.
         let given = given_ids(spec.params, params);
+        // The guide commands take ruler guides by index; an object command given one's id is refused.
+        if let (Some(ids), Some(st)) = (&given, self.active())
+            && let Some(guide) = ids.iter().find(|i| st.doc.node(**i).is_some_and(|n| n.is_ruler_guide()))
+        {
+            let value = guide.0;
+            return Err(cmd::bad(id, format!("id {value} is a ruler guide, not an object")));
+        }
         let enabled = if (id == "edit.clear" && params.get("ids").is_some())
             || (matches!(id, "edit.copy" | "edit.cut") && params.get("selectedArtboards").is_some())
         {

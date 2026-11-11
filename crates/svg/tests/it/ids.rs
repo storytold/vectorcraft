@@ -159,3 +159,21 @@ fn unique_ids_differ_when_only_gradient_stops_differ() {
     assert!(!ids1.is_empty() && !ids2.is_empty());
     assert!(ids1.iter().all(|id| !ids2.contains(id)), "IDs must not collide: {ids1:?} vs {ids2:?}");
 }
+
+/// Ruler guides on each layer, named as a layer and an object above them are, with a URL, are not
+/// written: the SVG is the same as without them, with every kind of object id.
+#[test]
+fn ruler_guides_are_not_written_and_take_no_id() {
+    let plain = doc("a", 0.0);
+    let mut guided = plain.clone();
+    for (i, (l, name)) in [(guided.layers[0].id, "Top & Front"), (guided.layers[1].id, "Logo mark (v2)")].into_iter().enumerate() {
+        let mut g = Node::new(guided.alloc_id(), vectorcraft_doc::NodeKind::RulerGuide { vertical: i == 0, pos: 30.0, artboard: None });
+        g.name = Some(name.into());
+        g.edit_attrs(|a| a.url = "https://example.com/".into());
+        guided.insert(Some(l), usize::MAX, g).unwrap();
+    }
+    for object_ids in [ObjectIds::LayerNames, ObjectIds::Minimal, ObjectIds::Unique] {
+        let opts = ExportOptions { object_ids, ..Default::default() };
+        assert_eq!(export(&guided, &opts), export(&plain, &opts), "{object_ids:?}");
+    }
+}

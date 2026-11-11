@@ -348,7 +348,7 @@ pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
     fn walk(n: &Node, opacity: f32, scopes: &[Scope], w: &mut Walk) -> Result<(), String> {
         let label = w.label;
         for c in n.children().into_iter().flatten() {
-            if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+            if !c.visible || c.is_guide() {
                 continue;
             }
             let opacity = opacity * c.opacity;
