@@ -16,7 +16,7 @@ pub const REVOLVE: &str = "threeD.revolve";
 /// Most bytes the copies of the object's paint in the faces may take together. Each face and the
 /// seam stroke around it gets a copy of the paint, so a gradient of many stops times tens of
 /// thousands of faces took gigabytes; past this the source path is drawn.
-const MAX_PAINT_COPIES: usize = 256 << 20;
+pub(crate) const MAX_PAINT_COPIES: usize = 256 << 20;
 
 /// The most face and box tests a group's transparent members' faces take together to rejoin their
 /// members' last runs; past them each starts a run of its own.
