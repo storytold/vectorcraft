@@ -6111,6 +6111,12 @@ axis	Y Axis	Y tengely
 	Crosshair	Célkereszt
 	Checkpoint	Ellenőrzőpont
 	Inventory Icons	Leltári ikonok
+	Skill Icons	Képességikonok
+	Attack	Támadás
+	Defend	Védelem
+	Heal	Gyógyítás
+	Buff	Erősítés
+	Ult	Ult
 	Sword	Kard
 	Shield	Pajzs
 	Potion	Bájital

@@ -5763,6 +5763,12 @@ axis	Y Axis	Y 軸
 	Crosshair	準星
 	Checkpoint	檢查點
 	Inventory Icons	物品欄圖示
+	Skill Icons	技能圖示
+	Attack	攻擊
+	Defend	防禦
+	Heal	治療
+	Buff	增益
+	Ult	必殺
 	Sword	劍
 	Shield	盾
 	Potion	藥水

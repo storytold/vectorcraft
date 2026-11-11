@@ -3138,8 +3138,8 @@ with the same extension and bytes as one there, loads as that User Defined libra
 
 ## Symbol libraries
 
-Symbol libraries are read-only sets of symbols: four generated in code (Basic Shapes, UI Frames, Map Markers,
-Inventory Icons), the `.vectorcraft` files in
+Symbol libraries are read-only sets of symbols: five generated in code (Basic Shapes, UI Frames, Map Markers,
+Inventory Icons, Skill Icons), the `.vectorcraft` files in
 the user library folder of the desktop app (User Defined) and the symbols of any document loaded with
 `symbol.loadLibrary`. `symbol.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`)
 and `symbol.library {library}` returns one's symbols (`name`, `size`, `registration`, `exportType`; `library` is an

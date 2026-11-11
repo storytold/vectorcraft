@@ -5711,6 +5711,12 @@ axis	Y Axis	Y-Achse
 	Crosshair	Fadenkreuz
 	Checkpoint	Kontrollpunkt
 	Inventory Icons	Inventar-Symbole
+	Skill Icons	Fähigkeitssymbole
+	Attack	Angriff
+	Defend	Verteidigung
+	Heal	Heilung
+	Buff	Buff
+	Ult	Ult
 	Sword	Schwert
 	Shield	Schild
 	Potion	Trank
