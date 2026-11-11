@@ -493,10 +493,13 @@ pub(super) fn symbol_break_link(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(EngineError::Other("no symbol instances selected".into()));
     }
+    let iso = s.doc()?.isolation;
     let out = s.edit("Break Link to Symbol", |d, sel| {
         let out = break_links(d, &ids, true)?;
-        // Hidden or locked art is left out of the selection.
-        sel.set(out.iter().copied().filter(|id| d.node(*id).is_some_and(|n| n.visible && !n.locked)));
+        // Art that is hidden or locked, or in a hidden or locked group or layer, is left out of the
+        // selection.
+        let locks = d.locked_artboards();
+        sel.set(out.iter().copied().filter(|id| crate::cmd::select::is_selectable(d, iso, &locks, *id)));
         Ok(out)
     })?;
     Ok(json!({ "ids": ids_json(&out) }))
