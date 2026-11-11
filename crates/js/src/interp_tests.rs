@@ -774,7 +774,7 @@ fn deep_nesting_compiles_on_a_small_stack() {
 // ---- the verifier ----
 
 fn code(ops: Vec<Op>) -> Code {
-    let source = Rc::new(Source { lines: crate::LineTable::new(&[]), text: Rc::from(Vec::<u16>::new()) });
+    let source = Rc::new(Source { lines: crate::LineTable::new(&[]), text: Rc::from(Vec::<u16>::new()), tag: 0 });
     Code {
         positions: vec![0; ops.len()],
         ops,

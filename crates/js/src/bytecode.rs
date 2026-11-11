@@ -171,6 +171,8 @@ pub(crate) struct Handler {
 pub(crate) struct Source {
     pub(crate) lines: LineTable,
     pub(crate) text: Rc<[u16]>,
+    /// Which source this is, as [`crate::Realm::error_source`] gives it.
+    pub(crate) tag: u32,
 }
 
 #[derive(Debug)]
