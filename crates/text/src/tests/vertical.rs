@@ -641,6 +641,20 @@ fn tracking_spaces_upright_marks_without_moving_them_off_the_centre_line() {
     assert!((step - 24.0).abs() < 1e-6, "one em plus 200/1000 em of tracking: {step}");
 }
 
+/// Vertical type keeps its tracking in thousandths of the em itself at any Horizontal Scale
+/// (`spacing_scale`): its advances down the column don't all take the scale.
+#[test]
+fn vertical_tracking_keeps_the_em_at_any_horizontal_scale() {
+    let step = |h_scale: f64, tracking: f64| {
+        let l = layout(FontDb::global(), &vertical_styled("§§", CharStyle { size: 20.0, h_scale, tracking, ..CharStyle::default() }));
+        ink(&l, 1).center().y - ink(&l, 0).center().y
+    };
+    for h_scale in [100.0, 50.0] {
+        let more = step(h_scale, 200.0) - step(h_scale, 0.0);
+        assert!((more - 4.0).abs() < 1e-6, "{h_scale}%: 200/1000 of the 20 pt em: {more}");
+    }
+}
+
 /// Baseline shift moves an upright glyph across the column, as it moves a letter lying on its
 /// side, at any Character Rotation, and leaves its neighbors where they are. The glyph turns about
 /// its shifted pen position (`xf * pivot`), and `xf * unturned` places the shifted glyph without
