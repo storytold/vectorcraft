@@ -168,6 +168,9 @@ pub struct Session {
     /// Where the plug-ins `plugin.install` installs are kept; `None`: only for the process
     /// ([`Session::attach_plugin_store`]).
     plugin_dir: Option<std::path::PathBuf>,
+    /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
+    /// ([`Session::attach_scripts_dir`]).
+    scripts_dir: Option<std::path::PathBuf>,
     /// The plug-in ids whose grant in the plug-in store should be gone but could not be removed:
     /// [`Session::plugin_approver`] and a load of the store do not count those grants, and a successful
     /// [`Session::store_grant`] for the id takes it out.

@@ -6179,6 +6179,9 @@ antiAlias	Sharp	शार्प
 @msg	the script is too large to run	स्क्रिप्ट चलाने के लिए बहुत बड़ी है
 @msg	a drag or an undo group is open; finish it before running a script	कोई ड्रैग या पूर्ववत समूह खुला है; स्क्रिप्ट चलाने से पहले उसे पूरा करें
 @msg	the script left a document that cannot be kept	स्क्रिप्ट ने ऐसा दस्तावेज़ छोड़ा है जिसे रखा नहीं जा सकता
+@msg	the script is no longer in the Scripts folder	स्क्रिप्ट अब Scripts फ़ोल्डर में नहीं है
+	Some scripts were not listed	कुछ स्क्रिप्ट सूचीबद्ध नहीं की गईं
+	The Scripts folder cannot be read	Scripts फ़ोल्डर पढ़ा नहीं जा सकता
 @msg	the script's run is no longer available	स्क्रिप्ट का रन अब उपलब्ध नहीं है
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	एक विफल कमांड ने पूर्ववत चरण बदल दिए जिन्हें वापस नहीं रखा जा सका, इसलिए स्क्रिप्ट रोक दी गई
 @msg	a recovery copy could not be written, so the script was not run	रिकवरी प्रति नहीं लिखी जा सकी, इसलिए स्क्रिप्ट नहीं चलाई गई

@@ -4128,6 +4128,9 @@ axis	Both	Оба
 @msg	the script is too large to run	скрипт слишком велик для выполнения
 @msg	a drag or an undo group is open; finish it before running a script	открыто перетаскивание или группа отмены; завершите их перед запуском скрипта
 @msg	the script left a document that cannot be kept	скрипт оставил документ, который нельзя сохранить
+@msg	the script is no longer in the Scripts folder	скрипт больше не находится в папке Scripts
+	Some scripts were not listed	Некоторые сценарии не показаны
+	The Scripts folder cannot be read	Не удалось прочитать папку Scripts
 @msg	the script's run is no longer available	выполнение скрипта больше недоступно
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	неудавшаяся команда изменила шаги отмены, которые не удалось восстановить, поэтому скрипт остановлен
 @msg	a recovery copy could not be written, so the script was not run	не удалось записать копию для восстановления, поэтому скрипт не выполнен

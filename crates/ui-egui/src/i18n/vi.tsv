@@ -4536,6 +4536,9 @@ theme	Appearance	Giao diện
 @msg	the script is too large to run	tập lệnh quá lớn để chạy
 @msg	a drag or an undo group is open; finish it before running a script	đang có thao tác kéo hoặc nhóm hoàn tác; hãy hoàn thành trước khi chạy tập lệnh
 @msg	the script left a document that cannot be kept	tập lệnh để lại một tài liệu không thể giữ
+@msg	the script is no longer in the Scripts folder	tập lệnh không còn trong thư mục Scripts
+	Some scripts were not listed	Một số tập lệnh không được liệt kê
+	The Scripts folder cannot be read	Không thể đọc thư mục Scripts
 @msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	một lệnh thất bại đã thay đổi các bước hoàn tác không thể khôi phục, nên tập lệnh đã bị dừng
 @msg	a recovery copy could not be written, so the script was not run	không thể ghi bản sao khôi phục nên tập lệnh không được chạy

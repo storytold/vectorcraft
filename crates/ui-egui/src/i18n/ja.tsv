@@ -4849,6 +4849,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the script is too large to run	スクリプトが大きすぎて実行できません
 @msg	a drag or an undo group is open; finish it before running a script	ドラッグまたは取り消しグループが開いています。スクリプトを実行する前に完了してください
 @msg	the script left a document that cannot be kept	スクリプトが保持できないドキュメントを残しました
+@msg	the script is no longer in the Scripts folder	スクリプトは Scripts フォルダーにもうありません
+	Some scripts were not listed	一部のスクリプトは一覧に表示されていません
+	The Scripts folder cannot be read	Scripts フォルダーを読み込めません
 @msg	the script's run is no longer available	スクリプトの実行は利用できなくなりました
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗したコマンドが元に戻せない取り消し手順を変更したため、スクリプトを停止しました
 @msg	a recovery copy could not be written, so the script was not run	復元用のコピーを書き込めなかったため、スクリプトは実行されませんでした

@@ -62,7 +62,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Export Selection…", "file.exportSelection"),
                 Sep,
                 c("Package…", "ui.packageDialog"),
-                sub("Scripts", vec![c("Check Script…", "ui.checkScript"), c("Other Script…", "ui.runScript")]),
+                sub("Scripts", crate::scripts_menu::items()),
                 Sep,
                 c("Document Setup…", "file.documentSetup"),
                 sub(
