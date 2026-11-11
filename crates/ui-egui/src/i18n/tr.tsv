@@ -3895,6 +3895,9 @@ axis	Both	Her İkisi
 @msg	the script is too large to run	betik çalıştırılamayacak kadar büyük
 @msg	a drag or an undo group is open; finish it before running a script	bir sürükleme veya geri alma grubu açık; betiği çalıştırmadan önce tamamlayın
 @msg	the script left a document that cannot be kept	betik, saklanamayan bir belge bıraktı
+@msg	the script is no longer in the Scripts folder	betik artık Scripts klasöründe değil
+	Some scripts were not listed	Bazı komut dosyaları listelenmedi
+	The Scripts folder cannot be read	Scripts klasörü okunamıyor
 @msg	the script's run is no longer available	betiğin çalıştırması artık kullanılamıyor
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	başarısız bir komut geri yüklenemeyen geri alma adımlarını değiştirdi, bu yüzden betik durduruldu
 @msg	a recovery copy could not be written, so the script was not run	kurtarma kopyası yazılamadı, bu nedenle betik çalıştırılmadı

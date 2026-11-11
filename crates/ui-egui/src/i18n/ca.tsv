@@ -5202,6 +5202,9 @@ digits	Malayalam	Malaiàlam
 @msg	the script is too large to run	l'script és massa gran per executar-lo
 @msg	a drag or an undo group is open; finish it before running a script	hi ha un arrossegament o un grup de desfer obert; acabeu-lo abans d'executar un script
 @msg	the script left a document that cannot be kept	l'script ha deixat un document que no es pot conservar
+@msg	the script is no longer in the Scripts folder	l'script ja no és a la carpeta Scripts
+	Some scripts were not listed	Alguns scripts no s'han llistat
+	The Scripts folder cannot be read	No es pot llegir la carpeta Scripts
 @msg	the script's run is no longer available	l'execució de l'script ja no està disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
 @msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat

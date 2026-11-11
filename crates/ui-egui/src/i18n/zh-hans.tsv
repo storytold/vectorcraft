@@ -4583,6 +4583,9 @@ imageTrace	Outline	轮廓
 @msg	the script is too large to run	脚本过大，无法运行
 @msg	a drag or an undo group is open; finish it before running a script	拖动或撤销组尚未结束；请在运行脚本前完成
 @msg	the script left a document that cannot be kept	脚本留下了无法保留的文档
+@msg	the script is no longer in the Scripts folder	脚本已不在 Scripts 文件夹中
+	Some scripts were not listed	部分脚本未列出
+	The Scripts folder cannot be read	无法读取 Scripts 文件夹
 @msg	the script's run is no longer available	脚本运行已不可用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
 @msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本

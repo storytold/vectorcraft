@@ -5080,6 +5080,9 @@ axis	Both	Ambos
 @msg	the script is too large to run	o script é grande demais para ser executado
 @msg	a drag or an undo group is open; finish it before running a script	há um arraste ou um grupo de desfazer aberto; conclua-o antes de executar um script
 @msg	the script left a document that cannot be kept	o script deixou um documento que não pode ser mantido
+@msg	the script is no longer in the Scripts folder	o script não está mais na pasta Scripts
+	Some scripts were not listed	Alguns scripts não foram listados
+	The Scripts folder cannot be read	Não é possível ler a pasta Scripts
 @msg	the script's run is no longer available	a execução do script não está mais disponível
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	um comando que falhou alterou etapas de desfazer que não puderam ser restauradas, então o script foi interrompido
 @msg	a recovery copy could not be written, so the script was not run	não foi possível gravar uma cópia de recuperação, portanto o script não foi executado

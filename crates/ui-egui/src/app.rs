@@ -341,6 +341,7 @@ impl VectorcraftApp {
         screen_color::poll(self, ctx);
         self.poll_finished_work();
         crate::script_runs::poll(self);
+        crate::scripts_menu::poll(self, ctx);
         if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
             ctx.request_repaint();
         }

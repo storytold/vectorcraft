@@ -4803,6 +4803,9 @@ theme	Appearance	외관
 @msg	the script is too large to run	스크립트가 너무 커서 실행할 수 없습니다
 @msg	a drag or an undo group is open; finish it before running a script	드래그 또는 실행 취소 그룹이 열려 있습니다. 스크립트를 실행하기 전에 완료하세요
 @msg	the script left a document that cannot be kept	스크립트가 유지할 수 없는 문서를 남겼습니다
+@msg	the script is no longer in the Scripts folder	스크립트가 더 이상 Scripts 폴더에 없습니다
+	Some scripts were not listed	일부 스크립트가 나열되지 않았습니다
+	The Scripts folder cannot be read	Scripts 폴더를 읽을 수 없습니다
 @msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
 @msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다

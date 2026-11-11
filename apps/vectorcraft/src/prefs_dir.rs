@@ -57,6 +57,14 @@ pub fn attach_plugin_store(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Have File › Scripts and `script.listInstalled` list the scripts of the `Scripts` folder. The
+/// folder is only read: the user makes it.
+pub fn attach_scripts_dir(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Scripts") {
+        session.attach_scripts_dir(dir);
+    }
+}
+
 /// Take the saved PDF presets from the `PDF Presets` folder (#2168), and keep the ones saved from
 /// now on there. After the preferences were restored: the folder is the one place the presets live.
 pub fn attach_pdf_preset_store(session: &mut vectorcraft_engine::Session) {

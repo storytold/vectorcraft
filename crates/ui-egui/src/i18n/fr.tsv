@@ -4092,6 +4092,9 @@ axis	Both	Les deux
 @msg	the script is too large to run	le script est trop volumineux pour être exécuté
 @msg	a drag or an undo group is open; finish it before running a script	un glissement ou un groupe d’annulation est ouvert ; terminez-le avant d’exécuter un script
 @msg	the script left a document that cannot be kept	le script a laissé un document qui ne peut pas être conservé
+@msg	the script is no longer in the Scripts folder	le script ne se trouve plus dans le dossier Scripts
+	Some scripts were not listed	Certains scripts ne sont pas répertoriés
+	The Scripts folder cannot be read	Impossible de lire le dossier Scripts
 @msg	the script's run is no longer available	l’exécution du script n’est plus disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	une commande en échec a modifié des étapes d’annulation qui n’ont pas pu être rétablies, le script a donc été arrêté
 @msg	a recovery copy could not be written, so the script was not run	une copie de récupération n’a pas pu être écrite, le script n’a donc pas été exécuté

@@ -50,6 +50,8 @@ use crate::{
     Clipboard, DocState, DrawMode, EngineError, Journal, NodeId, PaintDefaults, Result, Session, cmd, command_specs, guard, waits_for_tool_edit,
 };
 
+pub mod folder;
+
 /// The most bytes of source a run takes, as a file or as `source`.
 pub const MAX_SOURCE_BYTES: usize = 8 << 20;
 /// The instructions a run may execute when `maxFuel` is left out.
