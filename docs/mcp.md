@@ -143,8 +143,11 @@ the suite) keep the agent to the folders you give it:
   `file.openRecentN` for a file outside the roots ends with `no such recent file`, as an empty slot does.
 - `ui_inspect` (the control channel's `ui.inspect`) leaves out the paths outside the read roots: in `opening`, the
   documents still being read; in `ui.recent_files`, the recent files; a library panel's `path` in `ui.library_panels`;
-  in a recorded action's steps in `ui.action_sets`, also in a batch step's commands, the `path` and `folder` params,
-  a param whose name ends in `Folder` (`destinationFolder`) and the entries of a `paths` param; and the folder
+  in a recorded action's steps in `ui.action_sets`, also in a batch step's commands, the `path`, `paths`, `file`,
+  `files` and `folder` params, a param whose name ends in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
+  `destinationFolder`), the entries of a list under such a param, and under any other param or in any list an
+  absolute path or a `file:` URL outside the roots (any case of `file:`, `%XX` escapes decoded; a URL that names
+  another host is always left out); and the folder
   preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
   (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
   empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
@@ -159,9 +162,12 @@ the suite) keep the agent to the folders you give it:
   changed. A request may name such a library or its panel by the id
   shown in a `panel`, `library` or `panels` param, in a docking destination (`anchor`, `before`, `onto`, `above`,
   `below`) and in `window.panel.layout`'s `action` (`ui.set {panel: "library:swatches:loaded/<file name>"}`
-  reopens its panel), and the reply to such a request, an error included, shows that id too. `ui_inspect` rewrites only whole ids, and only in the fields that hold library and panel ids:
-  a longer id that begins with a hidden one, the status text (`ui.status`), the command palette query
-  (`ui.palette_query`) and a script's report (`scriptReport`) keep their text.
+  reopens its panel), and the reply to such a request shows that id and file name wherever the library's id or path
+  appears, an error included. Every reply under the read roots shows a hidden library's id as the id shown and its
+  path as the file name in every string and key, the status text (`ui.status`), dialogs, the command palette query
+  (`ui.palette_query`) and a script's report (`scriptReport`) included. A longer path that begins with a hidden one
+  keeps its text only when it lies inside the read roots, so a readable library's id that begins with a hidden one
+  stays. Encoded file data (`dataBase64`, `pngBase64`) is sent as it is.
 - `swatch.library.list`, `brush.libraries`, `symbol.libraries` and `graphicStyle.libraries` list every library
   but leave out the paths outside the read roots: a library's `path` and the user library folder in `userFolder`
   are `null` there. A library loaded from a file outside the roots is listed as `loaded/<file name>`, numbered

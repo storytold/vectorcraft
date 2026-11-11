@@ -487,22 +487,106 @@ fn ui_inspect_checks_a_folder_preference_as_written() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// `ui.inspect` rewrites a hidden library's id only in the fields that hold library and panel ids:
-/// status text that is that id stays as written.
+/// `ui.inspect` hides a hidden library's id and path in every string it holds: status text, the
+/// command palette query and a script's report show the id and file name shown, and the path appears
+/// nowhere in the reply.
 #[test]
-fn ui_inspect_keeps_status_text_that_is_a_hidden_library_id() {
+fn ui_inspect_hides_a_hidden_library_path_in_every_string() {
     let (mut app, tx, base) = confined("inspect-status-id");
-    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let path = s(base.join("outside/b.svg"));
+    let theirs = format!("loaded/{path}");
     app.ui.color_guide_limit = theirs.clone();
-    app.ui.status = theirs.clone();
+    app.ui.status = format!("Loaded {path} (3 swatches), kept {path}.bak");
+    app.ui.palette_query = format!("\"{theirs}\"");
+    let source = format!("vc.log({})", json!(format!("read {path}.")));
+    app.session.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_pump().is_some() {
+            break;
+        }
+    }
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
-    assert_eq!(r["result"]["ui"]["status"], json!(theirs), "{r}");
+    assert_eq!(r["result"]["ui"]["status"], "Loaded b.svg (3 swatches), kept b.svg.bak", "{r}");
+    assert_eq!(r["result"]["ui"]["palette_query"], "\"loaded/b.svg\"", "{r}");
+    assert_eq!(r["result"]["scriptReport"]["log"], json!(["read b.svg."]), "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The reply to a request that names a hidden library by the id `ui.inspect` shows hides that
+/// library's id wherever the reply holds it, also between spaces and brackets and where a character
+/// that continues a path follows it.
+#[test]
+fn a_reply_hides_a_library_the_request_named_by_its_shown_id_everywhere() {
+    let (mut app, tx, base) = confined("named-hidden-reply");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.status = format!("Not added ( {theirs} ); kept {theirs}_old");
+    let r = request(&mut app, &tx, "ui.inspect", json!({"library": "loaded/b.svg"}));
+    assert_eq!(r["result"]["ui"]["status"], "Not added ( loaded/b.svg ); kept loaded/b.svg_old", "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error to a request that names a hidden library by the id `ui.inspect` shows names it by that id,
+/// and its path appears nowhere in the reply.
+#[test]
+fn an_error_for_a_hidden_library_named_by_its_shown_id_shows_that_id() {
+    let (mut app, tx, base) = confined("named-hidden-error");
+    app.ui.color_guide_limit = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.colorGuideLimit", "params": {"library": "loaded/b.svg"}}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("loaded/b.svg")), "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded action's steps a path outside the read root under any path
+/// param (`diffPath`, `file`, a name ending in `Files`), and an absolute path or a `file:` URL outside
+/// it (the scheme in any case) under any other param or in any list. A `file:` URL inside it stays.
+#[test]
+fn ui_inspect_leaves_out_recorded_paths_under_any_key() {
+    let (mut app, tx, base) = confined("inspect-action-keys");
+    let (a, b) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")));
+    let to_url = |p: &str| if p.starts_with('/') { format!("file://{p}") } else { format!("file:///{}", p.replace('\\', "/")) };
+    let (url, url_in) = (to_url(&b), to_url(&a));
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": "files", "steps": [
+            ["document.compare", {"diffPath": b, "target": a}],
+            ["file.open", {"file": b}],
+            ["type.fonts", {"fontFiles": [a, b, url_in]}],
+            ["x.y", {"target": b, "url": url, "upper": url.replacen("file:", "FILE:", 1), "other": "keep"}],
+            ["x.z", {"list": [b, "keep"]}],
+            ["x.w", {"share": "file://other-host/share/b.svg", "other": "keep"}],
+            ["x.v", {"file": url_in}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let want = json!([
+        ["document.compare", {"target": a}],
+        ["file.open", {}],
+        ["type.fonts", {"fontFiles": [a, url_in]}],
+        ["x.y", {"other": "keep"}],
+        ["x.z", {"list": ["keep"]}],
+        ["x.w", {"other": "keep"}],
+        ["x.v", {"file": url_in}],
+    ]);
+    assert_eq!(steps, &want, "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
     let _ = std::fs::remove_dir_all(base);
 }
 
 /// `ui.inspect` hides a library loaded from outside the read root in the steps of a recorded action
-/// (its `library` and `panel` params), also when nothing else names it, and keeps the action's name.
+/// (its `library` and `panel` params) and in the action's name, also when nothing else names it.
 #[test]
 fn ui_inspect_hides_a_hidden_library_in_recorded_steps() {
     let (mut app, tx, base) = confined("inspect-action-steps");
@@ -518,7 +602,7 @@ fn ui_inspect_hides_a_hidden_library_in_recorded_steps() {
     app.ui.action_sets = vec![set];
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     let action = &r["result"]["ui"]["action_sets"][0]["actions"][0];
-    assert_eq!(action["name"], json!(theirs), "{r}");
+    assert_eq!(action["name"], "loaded/b.svg", "{r}");
     assert_eq!(
         action["steps"],
         json!([["swatch.library.add", {"library": "loaded/b.svg"}], ["window.panel", {"panel": "library:swatches:loaded/b.svg"}]]),
@@ -731,7 +815,7 @@ fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
 
 /// `ui.inspect` rewrites a hidden library's id only where a string is that whole id: a readable
 /// library's id that begins with it stays, and a script's report line and a command palette query
-/// that hold it stay as written.
+/// that end with it show the id shown.
 #[test]
 fn ui_inspect_rewrites_only_whole_hidden_library_ids() {
     let (mut app, tx, base) = confined("inspect-whole-id");
@@ -740,8 +824,7 @@ fn ui_inspect_rewrites_only_whole_hidden_library_ids() {
     assert!(readable.starts_with(&hidden));
     let panel = |id: &str| -> crate::panels::library_panel::LibraryPanel { serde_json::from_value(json!({"kind": "swatches", "id": id})).unwrap() };
     app.ui.library_panels = vec![panel(&hidden), panel(&readable)];
-    let query = format!("library:swatches:{hidden}");
-    app.ui.palette_query = query.clone();
+    app.ui.palette_query = format!("library:swatches:{hidden}");
     let text = format!("found {hidden}");
     let source = format!("vc.log({})", json!(text));
     app.session.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
@@ -753,8 +836,12 @@ fn ui_inspect_rewrites_only_whole_hidden_library_ids() {
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     let ids: Vec<_> = r["result"]["ui"]["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
     assert_eq!(ids, [json!("loaded/i"), json!(readable)], "{r}");
-    assert_eq!(r["result"]["scriptReport"]["log"], json!([text]), "{r}");
-    assert_eq!(r["result"]["ui"]["palette_query"], json!(query), "{r}");
+    assert_eq!(r["result"]["scriptReport"]["log"], json!(["found loaded/i"]), "{r}");
+    assert_eq!(r["result"]["ui"]["palette_query"], "library:swatches:loaded/i", "{r}");
+    // A request that names the hidden library by the id shown keeps the readable id too.
+    let r = request(&mut app, &tx, "ui.inspect", json!({"library": "loaded/i"}));
+    let ids: Vec<_> = r["result"]["ui"]["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
+    assert_eq!(ids, [json!("loaded/i"), json!(readable)], "{r}");
     let _ = std::fs::remove_dir_all(base);
 }
 

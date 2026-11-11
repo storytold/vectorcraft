@@ -12,6 +12,63 @@ fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value
     r
 }
 
+/// A reply hides a hidden library's id and path at every occurrence, in an error that wraps them in
+/// spaces, brackets or quotes, follows them with more path text, or quotes the path with `{:?}`.
+#[test]
+fn a_reply_hides_a_hidden_library_whatever_surrounds_it() {
+    let path = std::env::temp_dir().join("vc-named-reply").join("b.svg").to_string_lossy().into_owned();
+    let id = format!("loaded/{path}");
+    let hidden = [(id.clone(), "loaded/b.svg".to_string())];
+    let mut reply = json!({"ok": false, "error": format!("can't add ( {id} ) or '{id}', from {path}; also {id}.bak and {path:?}")});
+    let root = std::env::temp_dir().join(format!("vc-named-reply-root-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || super::hide_library_ids(&mut reply, &hidden));
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(reply["error"], "can't add ( loaded/b.svg ) or 'loaded/b.svg', from b.svg; also loaded/b.svg.bak and \"b.svg\"", "{reply}");
+}
+
+/// Encoded file data in a reply (`dataBase64`) stays as it is when it holds a hidden library's path.
+#[test]
+fn a_reply_keeps_encoded_data_that_holds_a_hidden_path() {
+    let hidden = [("loaded/assets/icon".to_string(), "loaded/icon".to_string())];
+    let data = "QUJDassets/iconREVG";
+    let mut reply = json!({"ok": true, "result": {"files": [{"name": "a.png", "dataBase64": data}], "status": "from assets/icon"}});
+    let root = std::env::temp_dir().join(format!("vc-base64-root-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || super::hide_library_ids(&mut reply, &hidden));
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(reply["result"]["files"][0]["dataBase64"], data, "{reply}");
+    assert_eq!(reply["result"]["status"], "from icon", "{reply}");
+}
+
+/// Under a read root, an absolute path or a `file:` URL outside it is unreadable; an empty string, a
+/// relative name and a path inside the root are not.
+#[test]
+fn an_absolute_path_outside_the_read_root_is_unreadable() {
+    let base = std::env::temp_dir().join(format!("vc-unreadable-absolute-{}", std::process::id()));
+    std::fs::create_dir_all(base.join("in")).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+    let inside = base.join("in").join("a.svg").to_string_lossy().into_owned();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        assert!(super::unreadable_absolute("/outside/root/x"));
+        assert!(super::unreadable_absolute("file:///outside/root/x"));
+        assert!(super::unreadable_absolute("FILE:///outside/root/x"));
+        assert!(super::unreadable_absolute("file://other-host/share/x"));
+        let url = if inside.starts_with('/') { format!("File://{inside}") } else { format!("File:///{}", inside.replace('\\', "/")) };
+        assert!(!super::unreadable_absolute(&url), "{url}");
+        assert!(super::readable_value(&url), "{url}");
+        let escaped = url.replacen("/in/a.svg", "/%69n/a.svg", 1);
+        assert!(!super::unreadable_absolute(&escaped) && super::readable_value(&escaped), "{escaped}");
+        assert!(super::unreadable_absolute("file:///outside%2Froot/x"));
+        assert!(!super::unreadable_absolute(""));
+        assert!(!super::unreadable_absolute("keep"));
+        assert!(!super::unreadable_absolute(&inside));
+    });
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn deferred_pointer_reply_uses_the_gesture_document_after_file_new() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
