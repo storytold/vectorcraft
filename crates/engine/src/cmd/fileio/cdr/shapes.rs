@@ -186,8 +186,24 @@ impl Builder {
             cd::Color::Spot { name, tint, .. } => {
                 let base = self.learn_spot(c).unwrap_or(Color::BLACK);
                 let tint = tint.clamp(0.0, 1.0);
-                Paint::Solid { color: base.tinted(tint), swatch: Some(name.clone()), tint }
+                let swatch = self.spot_index.get(name).and_then(|&i| self.spots.get(i)).map_or_else(|| name.clone(), |s| s.0.clone());
+                Paint::Solid { color: base.tinted(tint), swatch: Some(swatch), tint }
             }
+        }
+    }
+
+    /// Gives each spot color a swatch name of its own in the new document: a name its swatches,
+    /// color groups or Registration already use becomes the first free "name 2", "name 3"…, so
+    /// the ink stays a spot color. The drawing's other spot names are kept as they are. Call it
+    /// once the document is made and before any paint.
+    pub(super) fn name_spots(&mut self) {
+        let mut free = self.doc.free_swatch_names();
+        let clashes: Vec<bool> = self.spots.iter().map(|s| s.0 == REGISTRATION || self.doc.swatch_name_taken(&s.0)).collect();
+        for (s, _) in self.spots.iter().zip(&clashes).filter(|(_, c)| !**c) {
+            free.take(&s.0);
+        }
+        for (s, _) in self.spots.iter_mut().zip(&clashes).filter(|(_, c)| **c) {
+            s.0 = free.take(&s.0);
         }
     }
 
@@ -345,6 +361,48 @@ mod tests {
                 _ => None,
             });
             assert_eq!(full, Some(Color::rgb(1.0, 0.0, 0.0)));
+        }
+    }
+
+    /// A spot color named like one of a new document's process swatches gets a numbered name that
+    /// no other spot color of the drawing uses, and its paint names that spot swatch.
+    #[test]
+    fn a_spot_color_named_like_a_default_swatch_stays_a_spot_color() {
+        let shape = |name: &str| {
+            cd::Object::Shape(Box::new(cd::Shape {
+                geometry: Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
+                matrix: cd::Matrix::IDENTITY,
+                fill: Some(cd::Color::Spot { name: name.into(), tint: 1.0, look: Some([0.0; 3]) }),
+                outline: None,
+            }))
+        };
+        let layer = cd::Layer { name: "L".into(), kind: cd::LayerKind::Drawing, objects: vec![shape("Black"), shape("Black 2")], guides: vec![] };
+        let d = cd::Drawing {
+            version: 1300,
+            page_size: None,
+            pages: vec![cd::Page { size: None, layers: vec![layer] }],
+            master: vec![],
+            guides: vec![],
+            warnings: vec![],
+        };
+        assert!(Document::new(612.0, 792.0).swatches.iter().any(|s| s.name == "Black" && !s.spot));
+        let doc = Builder::new().document(&d);
+        let layer = doc.layers.first().unwrap().children().unwrap();
+        let mut names: Vec<String> = layer
+            .iter()
+            .filter_map(|n| match n.appearance.items.first() {
+                Some(AppearanceItem::Fill(f)) => match &f.paint {
+                    Paint::Solid { swatch: Some(name), .. } => Some(name.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        names.sort();
+        assert_eq!(names, ["Black 2", "Black 3"]);
+        for name in &names {
+            let swatch = doc.swatches.iter().find(|s| &s.name == name).unwrap();
+            assert!(swatch.spot && swatch.global, "{name}: {swatch:?}");
         }
     }
 

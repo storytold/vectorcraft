@@ -157,6 +157,7 @@ impl shapes::Builder {
             })
             .collect();
         self.doc = doc;
+        self.name_spots();
         // Bottom to top: the master page's layers, then the pages' in the order first seen.
         let mut layers: Vec<(String, Vec<Arc<Node>>)> = Vec::new();
         // A layer is known by its name and how many layers of that name the page has below it, so
