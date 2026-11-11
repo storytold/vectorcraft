@@ -770,6 +770,30 @@ fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
     assert_eq!(dx(&ToolContext { snap_to_point: false, ..cx(&d, &s, &p) }, 172.0), 22.0);
 }
 
+/// #4312: a Shift move keeps to its line while its edges and centre land on a ruler guide, as a
+/// move without Shift does (#5746).
+#[test]
+fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
+    let (mut d, id) = doc_with_rect();
+    d.guides = vec![vectorcraft_doc::Guide::new(true, 333.0)];
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    // Level; the left edge (100) would end 2 short of the guide, the pointer far from it.
+    let (m, _) = shift_moved(&c, (150.0 + 231.0, 150.0));
+    assert!(moved_by(m, (233.0, 0.0)), "{m:?}");
+    // The right edge, 1 past the guide.
+    let (m, _) = shift_moved(&c, (150.0 + 134.0, 150.0));
+    assert!(moved_by(m, (133.0, 0.0)), "{m:?}");
+    // Out of reach, or with Snap to Point off, the move stays as dragged.
+    let (m, _) = shift_moved(&c, (150.0 + 221.0, 150.0));
+    assert!(moved_by(m, (221.0, 0.0)), "{m:?}");
+    let off = ToolContext { snap_to_point: false, ..cx(&d, &s, &p) };
+    let (m, _) = shift_moved(&off, (150.0 + 231.0, 150.0));
+    assert!(moved_by(m, (231.0, 0.0)), "{m:?}");
+}
+
 /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as
 /// gathered before the previews moved it); released, the move doesn't.
 #[test]
