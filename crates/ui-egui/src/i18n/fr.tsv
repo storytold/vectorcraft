@@ -2812,6 +2812,12 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Réinitialiser les fonctions OpenType
 	Reset Panel	Réinitialiser le panneau
 	Reset Preferences	Réinitialiser les préférences
+	Export Preferences…	Exporter les préférences…
+	Import Preferences…	Importer des préférences…
+	Save the applied preferences to a JSON file	Enregistrer les préférences appliquées dans un fichier JSON
+	Apply the preferences in a file Export Preferences saved	Appliquer les préférences d’un fichier enregistré par Exporter les préférences
+	Export Preferences	Exporter les préférences
+	Import Preferences	Importer des préférences
 	Search Preferences	Rechercher dans les préférences
 	No settings found	Aucun réglage trouvé
 	Reset Profiles	Réinitialiser les profils
@@ -4673,6 +4679,20 @@ axis	Both	Les deux
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	surimpressions inconnues `{o}` (preserve, simulate ou discard)
 @msg	unknown panel `{raw}`	panneau inconnu `{raw}`
 @msg	unknown preference `{key}`	préférence inconnue `{key}`
+@msg	Preferences imported.	Préférences importées.
+@msg	not a preferences file: {e}	ce n’est pas un fichier de préférences : {e}
+@msg	not a preferences file: no JSON object	ce n’est pas un fichier de préférences : aucun objet JSON
+@msg	not a preferences file (format `{format}`)	ce n’est pas un fichier de préférences (format `{format}`)
+@msg	not a preferences file: no `format`	ce n’est pas un fichier de préférences : `format` manquant
+@msg	not a preferences file: no `version`	ce n’est pas un fichier de préférences : `version` manquant
+@msg	not a preferences file: no `prefs`	ce n’est pas un fichier de préférences : `prefs` manquant
+@msg	the file was saved by a newer version of VectorCraft (version {v})	le fichier a été enregistré par une version plus récente de VectorCraft (version {v})
+@msg	the file holds no preferences	le fichier ne contient aucune préférence
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` désigne un dossier, et les fichiers de préférences n’incluent pas les dossiers
+@msg	the file is larger than 1 MB	le fichier dépasse 1 Mo
+@msg	give `path` or `data`	indiquez `path` ou `data`
+@msg	`{key}` must be an object	`{key}` doit être un objet
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` s’exécute seul, pas comme étape d’un lot
 @msg	unknown preset (one of {_1})	paramètre prédéfini inconnu (valeurs possibles : {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	paramètre prédéfini inconnu `{name}` (high, medium, low ou un paramètre enregistré : voir flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	paramètre prédéfini inconnu `{name}` (voir flattener.presets.list)
@@ -5626,6 +5646,7 @@ file-filter	Flattener presets	Paramètres prédéfinis d’aplatissement
 file-filter	PDF presets	Paramètres prédéfinis PDF
 file-filter	PDF-compatible .ai	.ai compatible PDF
 file-filter	Print presets	Paramètres prédéfinis d’impression
+file-filter	Preferences	Préférences
 file-filter	Export presets	Paramètres prédéfinis d’export
 file-filter	SVG Compressed	SVG compressé
 file-filter	Swatch libraries	Bibliothèques de nuances

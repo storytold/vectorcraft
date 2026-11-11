@@ -1248,6 +1248,7 @@ file-filter	Swatch libraries	Farbfeldbibliotheken
 file-filter	Flattener presets	Reduzierungsvorgaben
 file-filter	PDF presets	PDF-Vorgaben
 file-filter	Print presets	Druckvorgaben
+file-filter	Preferences	Voreinstellungen
 file-filter	Export presets	Exportvorgaben
 file-filter	SVG Compressed	SVG komprimiert
 file-filter	PDF-compatible .ai	PDF-kompatible .ai
@@ -2777,6 +2778,12 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	OpenType-Funktionen zurücksetzen
 	Reset Panel	Bedienfeld zurücksetzen
 	Reset Preferences	Voreinstellungen zurücksetzen
+	Export Preferences…	Voreinstellungen exportieren…
+	Import Preferences…	Voreinstellungen importieren…
+	Save the applied preferences to a JSON file	Die angewendeten Voreinstellungen in einer JSON-Datei speichern
+	Apply the preferences in a file Export Preferences saved	Die Voreinstellungen aus einer mit „Voreinstellungen exportieren“ gespeicherten Datei anwenden
+	Export Preferences	Voreinstellungen exportieren
+	Import Preferences	Voreinstellungen importieren
 	Search Preferences	Voreinstellungen durchsuchen
 	No settings found	Keine Einstellungen gefunden
 	Reset Profiles	Profile zurücksetzen
@@ -4600,6 +4607,20 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
 @msg	unknown panel `{raw}`	unbekanntes Bedienfeld `{raw}`
 @msg	unknown preference `{key}`	unbekannte Voreinstellung `{key}`
+@msg	Preferences imported.	Voreinstellungen importiert.
+@msg	not a preferences file: {e}	keine Voreinstellungsdatei: {e}
+@msg	not a preferences file: no JSON object	keine Voreinstellungsdatei: kein JSON-Objekt
+@msg	not a preferences file (format `{format}`)	keine Voreinstellungsdatei (Format `{format}`)
+@msg	not a preferences file: no `format`	keine Voreinstellungsdatei: kein `format`
+@msg	not a preferences file: no `version`	keine Voreinstellungsdatei: keine `version`
+@msg	not a preferences file: no `prefs`	keine Voreinstellungsdatei: keine `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	die Datei wurde mit einer neueren Version von VectorCraft gespeichert (Version {v})
+@msg	the file holds no preferences	die Datei enthält keine Voreinstellungen
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` nennt einen Ordner, und Voreinstellungsdateien enthalten keine Ordner
+@msg	the file is larger than 1 MB	die Datei ist größer als 1 MB
+@msg	give `path` or `data`	geben Sie `path` oder `data` an
+@msg	`{key}` must be an object	`{key}` muss ein Objekt sein
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` läuft für sich allein, nicht als Stapelschritt
 @msg	unknown preset (one of {_1})	unbekannte Vorgabe (eine von {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	unbekannte Vorgabe `{name}` (high, medium, low oder eine gespeicherte: siehe flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	unbekannte Vorgabe `{name}` (siehe flattener.presets.list)

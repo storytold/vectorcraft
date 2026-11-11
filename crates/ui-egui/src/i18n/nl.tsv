@@ -3502,6 +3502,12 @@ theme	Appearance	Vormgeving
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
 	Render Threads (-1 = Automatic)	Renderthreads (-1 = automatisch)
 	Reset Preferences	Voorkeuren herstellen
+	Export Preferences…	Voorkeuren exporteren…
+	Import Preferences…	Voorkeuren importeren…
+	Save the applied preferences to a JSON file	De toegepaste voorkeuren in een JSON-bestand opslaan
+	Apply the preferences in a file Export Preferences saved	De voorkeuren toepassen uit een bestand dat Voorkeuren exporteren heeft opgeslagen
+	Export Preferences	Voorkeuren exporteren
+	Import Preferences	Voorkeuren importeren
 	Search Preferences	Voorkeuren doorzoeken
 	No settings found	Geen instellingen gevonden
 	Scale Corners	Hoeken schalen
@@ -4617,6 +4623,20 @@ imageTrace	Outline	Contour
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (behouden, simuleren of verwerpen)
 @msg	unknown panel `{raw}`	onbekend paneel `{raw}`
 @msg	unknown preference `{key}`	onbekende voorkeur `{key}`
+@msg	Preferences imported.	Voorkeuren geïmporteerd.
+@msg	not a preferences file: {e}	geen voorkeurenbestand: {e}
+@msg	not a preferences file: no JSON object	geen voorkeurenbestand: geen JSON-object
+@msg	not a preferences file (format `{format}`)	geen voorkeurenbestand (indeling `{format}`)
+@msg	not a preferences file: no `format`	geen voorkeurenbestand: geen `format`
+@msg	not a preferences file: no `version`	geen voorkeurenbestand: geen `version`
+@msg	not a preferences file: no `prefs`	geen voorkeurenbestand: geen `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	het bestand is opgeslagen met een nieuwere versie van VectorCraft (versie {v})
+@msg	the file holds no preferences	het bestand bevat geen voorkeuren
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` geeft een map aan, en voorkeurenbestanden bevatten geen mappen
+@msg	the file is larger than 1 MB	het bestand is groter dan 1 MB
+@msg	give `path` or `data`	geef `path` of `data` op
+@msg	`{key}` must be an object	`{key}` moet een object zijn
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` wordt los uitgevoerd, niet als stap van een batch
 @msg	unknown preset (one of {_1})	onbekende voorinstelling (één van {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	onbekende voorinstelling `{name}` (hoog, middel, laag of een opgeslagen voorinstelling: zie flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	onbekende voorinstelling `{name}` (zie flattener.presets.list)
@@ -5113,6 +5133,7 @@ file-filter	Swatch libraries	Stalenbibliotheken
 file-filter	Flattener presets	Afvlakvoorinstellingen
 file-filter	PDF presets	PDF-voorinstellingen
 file-filter	Print presets	Afdrukvoorinstellingen
+file-filter	Preferences	Voorkeuren
 file-filter	Export presets	Exportvoorinstellingen
 file-filter	SVG Compressed	Gecomprimeerde SVG
 file-filter	PDF-compatible .ai	PDF-compatibel .ai

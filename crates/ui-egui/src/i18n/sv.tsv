@@ -2756,6 +2756,12 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Återställ OpenType-funktioner
 	Reset Panel	Återställ panel
 	Reset Preferences	Återställ inställningar
+	Export Preferences…	Exportera inställningar…
+	Import Preferences…	Importera inställningar…
+	Save the applied preferences to a JSON file	Spara de tillämpade inställningarna i en JSON-fil
+	Apply the preferences in a file Export Preferences saved	Tillämpa inställningarna i en fil som Exportera inställningar har sparat
+	Export Preferences	Exportera inställningar
+	Import Preferences	Importera inställningar
 	Search Preferences	Sök i inställningar
 	No settings found	Inga inställningar hittades
 	Reset Profiles	Återställ profiler
@@ -4582,6 +4588,20 @@ axis	Both	Båda
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	okänd panel `{raw}`
 @msg	unknown preference `{key}`	okänd inställning `{key}`
+@msg	Preferences imported.	Inställningarna har importerats.
+@msg	not a preferences file: {e}	inte en inställningsfil: {e}
+@msg	not a preferences file: no JSON object	inte en inställningsfil: inget JSON-objekt
+@msg	not a preferences file (format `{format}`)	inte en inställningsfil (format `{format}`)
+@msg	not a preferences file: no `format`	inte en inställningsfil: inget `format`
+@msg	not a preferences file: no `version`	inte en inställningsfil: ingen `version`
+@msg	not a preferences file: no `prefs`	inte en inställningsfil: ingen `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	filen sparades av en nyare version av VectorCraft (version {v})
+@msg	the file holds no preferences	filen innehåller inga inställningar
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` anger en mapp, och inställningsfiler innehåller inga mappar
+@msg	the file is larger than 1 MB	filen är större än 1 MB
+@msg	give `path` or `data`	ange `path` eller `data`
+@msg	`{key}` must be an object	`{key}` måste vara ett objekt
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` körs för sig, inte som ett steg i en batch
 @msg	unknown preset (one of {_1})	okänd förinställning (en av {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	okänd förinställning `{name}` (high, medium, low eller en sparad: se flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	okänd förinställning `{name}` (se flattener.presets.list)
@@ -5530,6 +5550,7 @@ file-filter	Flattener presets	Förinställningar för plattning
 file-filter	PDF presets	PDF-förinställningar
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	Print presets	Utskriftsförinställningar
+file-filter	Preferences	Inställningar
 file-filter	Export presets	Exportförinställningar
 file-filter	SVG Compressed	SVG komprimerad
 file-filter	Swatch libraries	Färgrutebibliotek

@@ -3308,6 +3308,12 @@ theme	Appearance	იერსახე
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
 	Render Threads (-1 = Automatic)	ნაკადები (-1 = ავტომატური)
 	Reset Preferences	პარამეტრების ჩამოყრა
+	Export Preferences…	პარამეტრების ექსპორტირება…
+	Import Preferences…	პარამეტრების იმპორტირება…
+	Save the applied preferences to a JSON file	გამოყენებული პარამეტრების შენახვა JSON ფაილში
+	Apply the preferences in a file Export Preferences saved	პარამეტრების გამოყენება ფაილიდან, რომელიც „პარამეტრების ექსპორტირებამ“ შეინახა
+	Export Preferences	პარამეტრების ექსპორტირება
+	Import Preferences	პარამეტრების იმპორტირება
 	Search Preferences	პარამეტრებში ძიება
 	No settings found	პარამეტრები ვერ მოიძებნა
 	Scale Corners	კუთხეების მასშტაბირება
@@ -4408,6 +4414,20 @@ font-technology	Variable	ცვლადი
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
 @msg	unknown panel `{raw}`	უცნობი პანელი `{raw}`
 @msg	unknown preference `{key}`	უცნობი პარამეტრი `{key}`
+@msg	Preferences imported.	პარამეტრები იმპორტირებულია.
+@msg	not a preferences file: {e}	ეს არ არის პარამეტრების ფაილი: {e}
+@msg	not a preferences file: no JSON object	ეს არ არის პარამეტრების ფაილი: JSON ობიექტი არ არის
+@msg	not a preferences file (format `{format}`)	ეს არ არის პარამეტრების ფაილი (ფორმატი `{format}`)
+@msg	not a preferences file: no `format`	ეს არ არის პარამეტრების ფაილი: `format` არ არის
+@msg	not a preferences file: no `version`	ეს არ არის პარამეტრების ფაილი: `version` არ არის
+@msg	not a preferences file: no `prefs`	ეს არ არის პარამეტრების ფაილი: `prefs` არ არის
+@msg	the file was saved by a newer version of VectorCraft (version {v})	ფაილი შენახულია VectorCraft-ის უფრო ახალი ვერსიით (ვერსია {v})
+@msg	the file holds no preferences	ფაილში პარამეტრები არ არის
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` საქაღალდეს მიუთითებს, პარამეტრების ფაილები კი საქაღალდეებს არ შეიცავს
+@msg	the file is larger than 1 MB	ფაილი 1 MB-ზე დიდია
+@msg	give `path` or `data`	მიუთითეთ `path` ან `data`
+@msg	`{key}` must be an object	`{key}` უნდა იყოს ობიექტი
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` ცალკე სრულდება და არა პაკეტის ნაბიჯად
 @msg	unknown preset (one of {_1})	უცნობი პრესეტი (ერთ-ერთი: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	უცნობი პრესეტი `{name}` (high, medium, low ან შენახული: იხ. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	უცნობი პრესეტი `{name}` (იხ. flattener.presets.list)
@@ -4994,6 +5014,7 @@ file-filter	Swatch libraries	ფერის ნიმუშების ბი�
 file-filter	Flattener presets	გაბრტყელების პრესეტები
 file-filter	PDF presets	PDF-ის პრესეტები
 file-filter	Print presets	ბეჭდვის პრესეტები
+file-filter	Preferences	პარამეტრები
 file-filter	Export presets	ექსპორტის პრესეტები
 file-filter	SVG Compressed	შეკუმშული SVG
 file-filter	PDF-compatible .ai	PDF-თან თავსებადი .ai

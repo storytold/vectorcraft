@@ -2745,6 +2745,12 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Нулиране на OpenType характеристиките
 	Reset Panel	Нулиране на панела
 	Reset Preferences	Нулиране на настройките
+	Export Preferences…	Експортиране на настройките…
+	Import Preferences…	Импортиране на настройките…
+	Save the applied preferences to a JSON file	Запазване на приложените настройки във файл JSON
+	Apply the preferences in a file Export Preferences saved	Прилагане на настройките от файл, запазен с „Експортиране на настройките“
+	Export Preferences	Експортиране на настройките
+	Import Preferences	Импортиране на настройките
 	Search Preferences	Търсене в настройките
 	No settings found	Няма намерени настройки
 	Reset Profiles	Нулиране на профилите
@@ -4509,6 +4515,20 @@ axis	Both	И двете
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
 @msg	unknown panel `{raw}`	непознат панел `{raw}`
 @msg	unknown preference `{key}`	непозната настройка `{key}`
+@msg	Preferences imported.	Настройките са импортирани.
+@msg	not a preferences file: {e}	не е файл с настройки: {e}
+@msg	not a preferences file: no JSON object	не е файл с настройки: няма обект JSON
+@msg	not a preferences file (format `{format}`)	не е файл с настройки (формат `{format}`)
+@msg	not a preferences file: no `format`	не е файл с настройки: няма `format`
+@msg	not a preferences file: no `version`	не е файл с настройки: няма `version`
+@msg	not a preferences file: no `prefs`	не е файл с настройки: няма `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	файлът е запазен от по-нова версия на VectorCraft (версия {v})
+@msg	the file holds no preferences	файлът не съдържа настройки
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` указва папка, а файловете с настройки не съдържат папки
+@msg	the file is larger than 1 MB	файлът е по-голям от 1 MB
+@msg	give `path` or `data`	посочете `path` или `data`
+@msg	`{key}` must be an object	`{key}` трябва да бъде обект
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` се изпълнява самостоятелно, а не като стъпка от пакет
 @msg	unknown preset (one of {_1})	непозната предварителна настройка (една от {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (висока, средна, ниска или запазена: вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	непозната предварителна настройка `{name}` (вижте flattener.presets.list)
@@ -5424,6 +5444,7 @@ file-filter	Flattener presets	Предварителни настройки за
 file-filter	PDF presets	Предварителни настройки за PDF
 file-filter	PDF-compatible .ai	Съвместими с PDF .ai файлове
 file-filter	Print presets	Предварителни настройки за печат
+file-filter	Preferences	Настройки
 file-filter	Export presets	Набори за експортиране
 file-filter	SVG Compressed	Компресиран SVG
 file-filter	Swatch libraries	Библиотеки с образци

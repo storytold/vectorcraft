@@ -3476,6 +3476,12 @@ digits	Malayalam	Malaiàlam
 	Reset Painting	Restableix Pintura
 	Reset Panel	Restableix el panell
 	Reset Preferences	Restableix les preferències
+	Export Preferences…	Exporta les preferències…
+	Import Preferences…	Importa les preferències…
+	Save the applied preferences to a JSON file	Desa les preferències aplicades en un fitxer JSON
+	Apply the preferences in a file Export Preferences saved	Aplica les preferències d’un fitxer desat amb Exporta les preferències
+	Export Preferences	Exporta les preferències
+	Import Preferences	Importa les preferències
 	Search Preferences	Cerca a les preferències
 	No settings found	No s'ha trobat cap paràmetre
 	Reset Printing and Proofing	Restableix impressió i prova
@@ -5910,6 +5916,20 @@ digits	Malayalam	Malaiàlam
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` ha de ser {expected}, no {got}
 @msg	unknown preference `{key}`	preferència desconeguda `{key}`
+@msg	Preferences imported.	S’han importat les preferències.
+@msg	not a preferences file: {e}	no és un fitxer de preferències: {e}
+@msg	not a preferences file: no JSON object	no és un fitxer de preferències: no hi ha cap objecte JSON
+@msg	not a preferences file (format `{format}`)	no és un fitxer de preferències (format `{format}`)
+@msg	not a preferences file: no `format`	no és un fitxer de preferències: no hi ha `format`
+@msg	not a preferences file: no `version`	no és un fitxer de preferències: no hi ha `version`
+@msg	not a preferences file: no `prefs`	no és un fitxer de preferències: no hi ha `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	el fitxer s’ha desat amb una versió més nova del VectorCraft (versió {v})
+@msg	the file holds no preferences	el fitxer no conté cap preferència
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` indica una carpeta, i els fitxers de preferències no inclouen carpetes
+@msg	the file is larger than 1 MB	el fitxer ocupa més d’1 MB
+@msg	give `path` or `data`	indiqueu `path` o `data`
+@msg	`{key}` must be an object	`{key}` ha de ser un objecte
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` s’executa sol, no com a pas d’un lot
 @msg	unknown preset (one of {_1})	preajust desconegut (un de {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preajust desconegut `{name}` (high, medium, low o un de desat: consulta flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preajust desconegut `{name}` (consulta flattener.presets.list)
@@ -6072,6 +6092,7 @@ file-filter	Flattener presets	Preajustos de l’aplanador
 file-filter	PDF presets	Preajustos de PDF
 file-filter	PDF-compatible .ai	.ai compatible amb PDF
 file-filter	Print presets	Preajustos d’impressió
+file-filter	Preferences	Preferències
 file-filter	Export presets	Preajustos d’exportació
 file-filter	SVG Compressed	SVG comprimit
 file-filter	Swatch libraries	Biblioteques de mostres

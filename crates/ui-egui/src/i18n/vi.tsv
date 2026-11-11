@@ -1475,6 +1475,7 @@ file-filter	Swatch libraries	Thư viện mẫu màu
 file-filter	Flattener presets	Thiết lập sẵn làm phẳng
 file-filter	PDF presets	Thiết lập sẵn PDF
 file-filter	Print presets	Thiết lập sẵn in
+file-filter	Preferences	Tùy chọn
 file-filter	Export presets	Cài đặt sẵn xuất
 file-filter	SVG Compressed	SVG nén
 file-filter	PDF-compatible .ai	.ai tương thích PDF
@@ -3126,6 +3127,12 @@ mark-style	Japanese	Kiểu Nhật
 	Reset OpenType Features	Đặt lại tính năng OpenType
 	Reset Panel	Đặt lại bảng
 	Reset Preferences	Đặt lại tùy chọn
+	Export Preferences…	Xuất tùy chọn…
+	Import Preferences…	Nhập tùy chọn…
+	Save the applied preferences to a JSON file	Lưu các tùy chọn đang áp dụng vào tệp JSON
+	Apply the preferences in a file Export Preferences saved	Áp dụng các tùy chọn trong tệp do Xuất tùy chọn lưu
+	Export Preferences	Xuất tùy chọn
+	Import Preferences	Nhập tùy chọn
 	Search Preferences	Tìm trong tùy chọn
 	No settings found	Không tìm thấy cài đặt
 	Reset Profiles	Đặt lại hồ sơ màu
@@ -5162,6 +5169,20 @@ theme	Appearance	Giao diện
 @msg	missing `{path}`	thiếu `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` phải là {expected}, không phải {got}
 @msg	unknown preference `{key}`	tùy chọn không xác định `{key}`
+@msg	Preferences imported.	Đã nhập tùy chọn.
+@msg	not a preferences file: {e}	không phải tệp tùy chọn: {e}
+@msg	not a preferences file: no JSON object	không phải tệp tùy chọn: không có đối tượng JSON
+@msg	not a preferences file (format `{format}`)	không phải tệp tùy chọn (định dạng `{format}`)
+@msg	not a preferences file: no `format`	không phải tệp tùy chọn: thiếu `format`
+@msg	not a preferences file: no `version`	không phải tệp tùy chọn: thiếu `version`
+@msg	not a preferences file: no `prefs`	không phải tệp tùy chọn: thiếu `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	tệp được lưu bằng phiên bản VectorCraft mới hơn (phiên bản {v})
+@msg	the file holds no preferences	tệp không chứa tùy chọn nào
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` chỉ định một thư mục, và tệp tùy chọn không chứa thư mục
+@msg	the file is larger than 1 MB	tệp lớn hơn 1 MB
+@msg	give `path` or `data`	hãy cung cấp `path` hoặc `data`
+@msg	`{key}` must be an object	`{key}` phải là một đối tượng
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` chạy riêng, không phải là một bước trong lô
 @msg	unknown preset (one of {_1})	thiết lập sẵn không xác định (một trong {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (high, medium, low hoặc thiết lập đã lưu: xem flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (xem flattener.presets.list)

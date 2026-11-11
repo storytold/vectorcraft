@@ -1043,6 +1043,105 @@ fn temp_folder(name: &str) -> std::path::PathBuf {
     dir
 }
 
+/// An app whose save and open dialogs answer `path`, and that writes and reads real files.
+fn app_with_file_dialogs(path: &str) -> VectorcraftApp {
+    let mut a = app();
+    let (save, open) = (path.to_string(), path.to_string());
+    a.services.pick_save = Some(Box::new(move |_: &crate::FilePick| Some(save.clone())));
+    a.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(open.clone())));
+    a.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
+    a.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    a
+}
+
+/// Export Preferences… saves the applied preferences to a file, and Import Preferences… applies
+/// them again: the dialog shows them, OK keeps them, and the open document's units stay as they
+/// are.
+#[test]
+fn export_and_import_preferences_buttons_round_trip() {
+    let dir = temp_folder("prefs-file");
+    let path = dir.join("VectorCraft Preferences.json").to_string_lossy().into_owned();
+    let mut a = app_with_file_dialogs(&path);
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    let values = json!({"keyboardIncrement": 5, "uiAccent": "green", "unitsGeneral": "inches"});
+    a.run("prefs.set", json!({"values": values, "documentUnits": false})).unwrap();
+    let saved = a.session.prefs.to_json();
+    open(&mut a, Some("General"));
+    click_button(&mut a, "Export Preferences…");
+    let file: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(file["format"], "vectorcraft-preferences");
+    assert_eq!(file["prefs"]["uiAccent"], "green");
+
+    a.ui.dialog = None;
+    a.run("prefs.reset", json!({})).unwrap();
+    let undo = a.session.active().unwrap().history.undo.len();
+    open(&mut a, Some("General"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("keyboardIncrement".into(), json!(9));
+    click_button(&mut a, "Import Preferences…");
+    assert_eq!(a.ui.status, "Preferences imported.");
+    assert_eq!(a.session.prefs.to_json(), saved, "the exported preferences are applied");
+    assert_eq!(a.ui.engine_prefs, saved, "and saved with the UI state");
+    let d = a.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!((d.fields["keyboardIncrement"].clone(), d.fields["unitsGeneral"].clone()), (json!(5.0), json!("inches")), "the dialog shows them");
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.to_json(), saved);
+    let st = a.session.active().unwrap();
+    assert_eq!(st.doc.units, vectorcraft_doc::Unit::Millimeters, "the document's units stay");
+    assert_eq!(st.history.undo.len(), undo, "no undo step");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A file Import Preferences… can't use changes nothing, the dialog's edits included, and the
+/// status bar says why.
+#[test]
+fn import_preferences_of_a_bad_file_changes_nothing() {
+    let dir = temp_folder("prefs-bad-file");
+    let path = dir.join("newer.json");
+    std::fs::write(&path, r#"{"format": "vectorcraft-preferences", "version": 2, "prefs": {"uiAccent": "pink"}}"#).unwrap();
+    let mut a = app_with_file_dialogs(&path.to_string_lossy());
+    let before = a.session.prefs.to_json();
+    open(&mut a, Some("General"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("keyboardIncrement".into(), json!(9));
+    click_button(&mut a, "Import Preferences…");
+    assert!(a.ui.status.contains("newer version of VectorCraft"), "{}", a.ui.status);
+    assert_eq!(a.session.prefs.to_json(), before);
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields["keyboardIncrement"], json!(9), "the dialog keeps its edits");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `prefs.import` from a script or MCP while Preferences is open: the dialog shows the imported
+/// values. Import Preferences… shows only where the host has an open dialog (not on the web).
+#[test]
+fn prefs_import_refreshes_an_open_preferences_dialog() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    let data = json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"keyboardIncrement": 7}}).to_string();
+    a.run("prefs.import", json!({ "data": data })).unwrap();
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields["keyboardIncrement"], json!(7.0));
+    assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(7.0));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Export Preferences…") && !text.contains("Import Preferences…"), "{text}");
+    a.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Import Preferences…"), "{text}");
+}
+
+/// An import that turns Enable Touch Workspace on or off switches the workspace on a touch screen,
+/// as OK in Preferences does.
+#[test]
+fn prefs_import_of_touch_workspace_switches_the_workspace() {
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
+    a.touch_screen = true;
+    a.ui.workspace = "Typography".into();
+    let file = |on: bool| json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"touchWorkspace": on}}).to_string();
+    a.run("prefs.import", json!({ "data": file(true) })).unwrap();
+    assert_eq!(a.ui.workspace, crate::workspaces::TOUCH);
+    a.run("prefs.import", json!({ "data": file(false) })).unwrap();
+    assert_eq!(a.ui.workspace, "Typography");
+}
+
 /// File Handling › Data Recovery › Folder has a Choose… button where the host has a folder
 /// picker, and none where it has not (the web).
 #[test]

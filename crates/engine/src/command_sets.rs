@@ -94,6 +94,7 @@ const WAIT_FOR_TOOL_EDIT: &[&str] = &[
     "view.separationsPreview",
     "prefs.set",
     "prefs.reset",
+    "prefs.import",
     "text.addFontFiles",
 ];
 
