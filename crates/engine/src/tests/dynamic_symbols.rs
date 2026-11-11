@@ -903,6 +903,29 @@ fn gradients_and_patterns_on_a_picked_object_are_taken() {
     assert_eq!((undo_steps(&s), &s.paint.fill), (undo, &fill), "nothing changes");
 }
 
+/// A stop selected on the whole instance's gradient is not selected once a part of its art is
+/// picked, so the Gradient tool does not take Delete for it, and is selected again when the whole
+/// instance is.
+#[test]
+fn picking_a_part_leaves_no_gradient_stop_selected() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    let g = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]});
+    s.execute("select.set", &json!({"ids": [inst.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": g})).unwrap();
+    s.fill_active = true;
+    let view = ViewInfo::default();
+    s.select_tool("gradient", view).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    assert_eq!(s.selected_stop(), Some(1));
+    assert!(s.tool_claims_key(vectorcraft_tools::ToolKey::Delete, view));
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    assert_eq!(s.selected_stop(), None);
+    assert!(!s.tool_claims_key(vectorcraft_tools::ToolKey::Delete, view));
+    s.execute("select.set", &json!({"ids": [inst.0]})).unwrap();
+    assert_eq!(s.selected_stop(), Some(1));
+}
+
 #[test]
 fn opacity_and_blend_on_a_picked_object_go_through_transparency_set() {
     let mut s = session();
