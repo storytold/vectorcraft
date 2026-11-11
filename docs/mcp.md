@@ -1630,7 +1630,7 @@ Window › Script Console shows the session's script lines, oldest first: each r
 its time, host calls and slowest commands. Each line shows the run's number and the script's name. Line feeds,
 carriage returns and the two together break lines, and other control characters show as their Unicode Control
 Pictures. The console keeps at most 2,048 lines and 1 MiB of text and drops the oldest lines past that. A line longer
-than 4,096 bytes, and a script's name longer than 256 bytes, is cut with `…`. A note at the top counts the dropped and cut lines. The panel lays out only the
+than 4,096 bytes, and a script's name longer than 256 bytes, is cut with `…`. When the console has dropped or cut any lines, a note at the top counts them. The panel lays out only the
 rows in view. Click a line to select it and Shift-click to extend the selection. Clear, Copy Selected and Copy All are
 at the bottom of the panel and in its menu. Output goes on while the panel is closed.
 

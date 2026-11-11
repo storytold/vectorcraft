@@ -61,8 +61,9 @@ fn notice(c: &Console) -> Option<String> {
 }
 
 /// `ui.copyScriptConsole {first?, last?}`: copy the console's lines numbered `first` to `last`
-/// (both kept lines; default every line, with the notice of dropped and cut lines first) to the
-/// clipboard, as the panel shows them → `{lines: n}`.
+/// (both kept lines; default every line, with the notice of dropped and cut lines first when the
+/// console dropped or cut any) to the clipboard, as the panel shows them → `{lines: n}`, where `n`
+/// does not count the notice.
 pub(crate) fn copy(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let c = app.session.script_console();
     let start = c.first_number();
