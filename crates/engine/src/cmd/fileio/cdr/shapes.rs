@@ -203,15 +203,22 @@ impl Builder {
     }
 
     /// A guideline through `at` (document space) at `angle` degrees counterclockwise, as a guide
-    /// path across the page `rect`, reaching past it by the page's diagonal.
+    /// path from edge to edge of the page `rect`, so it moves with the page's artboard. A
+    /// guideline that misses the page runs through `at` for the page's diagonal each way.
     pub(super) fn angled_guide(&mut self, at: Point, angle: f64, rect: Rect) {
-        let reach = rect.width().hypot(rect.height()).max(1.0);
         let (s, c) = angle.to_radians().sin_cos();
         // The document's y axis points down.
-        let d = kurbo::Vec2::new(c, -s) * reach;
+        let dir = kurbo::Vec2::new(c, -s);
+        let (a, b) = match chord(at, dir, rect) {
+            Some((t0, t1)) => (at + dir * t0, at + dir * t1),
+            None => {
+                let d = dir * rect.width().hypot(rect.height()).max(1.0);
+                (at - d, at + d)
+            }
+        };
         let mut bp = BezPath::new();
-        bp.move_to(at - d);
-        bp.line_to(at + d);
+        bp.move_to(a);
+        bp.line_to(b);
         let path = PathData::from_bezpath(&bp);
         if !in_range(&path) {
             self.note(Warning::TooDeep);
@@ -220,6 +227,25 @@ impl Builder {
         let n = Node::new(self.doc.alloc_id(), NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: true });
         self.guide_paths.push(Arc::new(n));
     }
+}
+
+/// Where the line through `at` along the unit vector `dir` crosses `rect`: the distances along
+/// it to the two edges it meets, the nearer first. None when it misses `rect` or only touches it
+/// at a point.
+fn chord(at: Point, dir: kurbo::Vec2, rect: Rect) -> Option<(f64, f64)> {
+    let (mut lo, mut hi) = (f64::NEG_INFINITY, f64::INFINITY);
+    for (p, d, min, max) in [(at.x, dir.x, rect.x0, rect.x1), (at.y, dir.y, rect.y0, rect.y1)] {
+        if d.abs() < 1e-12 {
+            if p < min || p > max {
+                return None;
+            }
+        } else {
+            let (t0, t1) = ((min - p) / d, (max - p) / d);
+            lo = lo.max(t0.min(t1));
+            hi = hi.min(t0.max(t1));
+        }
+    }
+    (lo.is_finite() && hi.is_finite() && hi - lo > 1e-9).then_some((lo, hi))
 }
 
 fn affine(m: &cd::Matrix) -> Affine {

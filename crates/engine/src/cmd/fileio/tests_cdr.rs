@@ -233,6 +233,28 @@ fn layers_are_bounded() {
     }
 }
 
+/// A guide path of an angled guideline runs from edge to edge of its page, so it moves with that
+/// page's artboard and not with the page beside it.
+#[test]
+fn angled_guides_move_with_their_page() {
+    let v = V(1100);
+    let angled = |deg: i32, x: f64, y: f64| {
+        let mut g = vec![0; 12];
+        g.extend((deg * 1_000_000).to_le_bytes());
+        g.extend([v.coord(x), v.coord(y)].concat());
+        synth::object(v, 0x16, &[(16000, g)], None)
+    };
+    let page = |g| synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "G", vec![g])]);
+    let file = synth::riff(1100, &[chunk(b"vrsn", 1100u16.to_le_bytes().to_vec()), page(angled(45, 0.0, 0.0)), page(angled(30, 50.0, -40.0))]);
+    let (doc, _) = super::cdr::import(&file).unwrap();
+    assert_eq!(doc.artboards.len(), 2);
+    let guide = |id: &vectorcraft_doc::NodeId| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: true, .. }));
+    let moving: Vec<Vec<_>> = (0..2).map(|i| doc.art_moving_with(i, false).into_iter().filter(guide).collect()).collect();
+    assert_eq!(moving[0].len(), 1, "{moving:?}");
+    assert_eq!(moving[1].len(), 1, "{moving:?}");
+    assert_ne!(moving[0], moving[1]);
+}
+
 /// A page longer than the longest artboard opens at that length, and the warnings say so.
 #[test]
 fn pages_past_the_longest_artboard_are_cut_with_a_warning() {
