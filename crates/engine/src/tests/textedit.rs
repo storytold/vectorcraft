@@ -505,6 +505,8 @@ fn character_ruby_and_path_handle_refuse_a_param_of_the_wrong_type() {
         [
             ("text.setStyle", json!({"size": true}), "size"),
             ("text.setStyle", json!({"size": "big"}), "size"),
+            ("text.setStyle", json!({"size": "20abc"}), "size"),
+            ("text.setStyle", json!({"tracking": "20abc"}), "tracking"),
             ("text.setStyle", json!({"font": "Inter", "size": [12]}), "size"),
             ("text.setStyle", json!({"tracking": "wide"}), "tracking"),
             ("text.setStyle", json!({"size": 30, "tracking": false}), "tracking"),

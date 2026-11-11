@@ -8,7 +8,7 @@ use vectorcraft_doc::{AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAl
 use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
-use super::pathops::{len_param, num_param, shape_node};
+use super::pathops::{len_param, length_given, number_given, shape_node};
 use super::{
     CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, id_param, index, number_or, ok,
     str_param, switch_or, targets, text_param,
@@ -808,25 +808,6 @@ pub(crate) fn justify_param(v: &str) -> Option<Justify> {
         "justifyall" | "justify" => Justify::JustifyAll,
         _ => return None,
     })
-}
-
-/// The number `p` gives `cmd` for `key`, as [`num_param`] reads it (`"20"` included), or `None` when
-/// `p` leaves it out or gives null. Any other value, such as `true` or `"wide"`, is an error:
-/// "`{key}` must be a number, not {v}".
-fn number_given(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
-    match p.get(key) {
-        None | Some(Value::Null) => Ok(None),
-        Some(v) => num_param(p, key).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
-    }
-}
-
-/// The distance `p` gives `cmd` for `key`, as [`len_param`] reads it (`"5 mm"` included), or `None`
-/// when `p` leaves it out or gives null. Any other value is an error, as [`number_given`] gives it.
-fn length_given(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
-    match p.get(key) {
-        None | Some(Value::Null) => Ok(None),
-        Some(v) => len_param(p, key).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
-    }
 }
 
 fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
