@@ -316,7 +316,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview: off, images show
     // their pixels as they rasterize, hard-edged.
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
-    let key = cache_key(app, ui, st, &t, &v, (w, h, ppp), (pixel, smooth_images));
+    let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
+    let key = cache_key(app, ui, st, &t, &v, (w, h, ppp), (pixel, smooth_images, plugins));
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
@@ -565,7 +566,7 @@ fn cache_key(
     t: &Tokens,
     v: &View,
     (w, h, ppp): (u32, u32, f32),
-    (pixel, smooth_images): (Option<[i64; 4]>, bool),
+    (pixel, smooth_images, plugins): (Option<[i64; 4]>, bool, u64),
 ) -> CacheKey {
     // Paths made into guides are drawn as the ruler guides are (Preferences › Guides & Grid).
     let guide_look = LineLook::guides(&app.session.prefs, t);
@@ -590,6 +591,7 @@ fn cache_key(
         highlight_alternate_glyphs: app.session.prefs.highlight_alternate_glyphs,
         highlight_substituted_fonts: app.session.prefs.highlight_substituted_fonts,
         placed: vectorcraft_render::placed_document::generation(),
+        plugins,
         pixel,
         smooth_images,
         isolated: st.isolation.map(|id| id.0),
@@ -599,6 +601,26 @@ fn cache_key(
         dragging: app.session.in_interaction() && ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool),
         // The Image Trace panel's eye button, while it is held.
         trace_source: app.ui.trace_hold_source.clone(),
+    }
+}
+
+/// [`CacheKey::plugins`] of document `st`, one of the documents open in `session`. `keys` holds each
+/// document's value and the plug-in revision it was checked at, so a document is looked through only
+/// once after each plug-in install or removal.
+fn plugin_key(
+    keys: &mut std::collections::HashMap<u64, (u64, u64)>,
+    session: &vectorcraft_engine::Session,
+    st: &vectorcraft_engine::DocState,
+) -> u64 {
+    let revision = vectorcraft_render::effects::plugin_revision();
+    match keys.get(&st.uid) {
+        Some(&(checked, key)) if checked == revision => key,
+        seen => {
+            let key = if vectorcraft_render::draws_plugin_effects(&st.doc) { revision } else { seen.map_or(0, |&(_, key)| key) };
+            keys.retain(|uid, _| session.documents().iter().any(|d| d.uid == *uid));
+            keys.insert(st.uid, (revision, key));
+            key
+        }
     }
 }
 

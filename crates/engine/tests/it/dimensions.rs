@@ -210,6 +210,313 @@ fn clicking_two_points_then_placing_measures_between_them() {
     assert_eq!(text(&s, id), "72.00 pt");
 }
 
+/// After two clicked points, a pointer beside them (between the perpendiculars at the points)
+/// gives the distance between them (aligned), as does clicking again on the second point. Past
+/// either point, the quarter that holds the direction straight up or down from it gives their
+/// horizontal distance, and the quarter that holds the direction straight left or right gives
+/// their vertical distance. The dimension stays linked to the anchors it measures.
+#[test]
+fn two_points_measure_horizontally_vertically_or_aligned() {
+    use vectorcraft_doc::dimension::Orientation;
+    for ((x, y), want, orientation) in [
+        ((210.0, 120.0), "100.00 pt", Orientation::Horizontal),
+        ((90.0, 380.0), "100.00 pt", Orientation::Horizontal),
+        ((280.0, 220.0), "100.00 pt", Orientation::Vertical),
+        ((40.0, 310.0), "100.00 pt", Orientation::Vertical),
+        ((120.0, 160.0), "141.42 pt", Orientation::Aligned),
+        ((200.0, 300.0), "141.42 pt", Orientation::Aligned),
+        ((200.0, 200.0), "141.42 pt", Orientation::Aligned),
+    ] {
+        let mut s = session();
+        let line = run(&mut s, "shape.line", json!({"x1":100,"y1":300,"x2":200,"y2":200}))["id"].as_u64().unwrap();
+        s.select_tool("dimension", ViewInfo::default()).unwrap();
+        for (px, py) in [(100.0, 300.0), (200.0, 200.0), (x, y)] {
+            ev(&mut s, PointerKind::Move, px, py);
+            ev(&mut s, PointerKind::Down, px, py);
+            ev(&mut s, PointerKind::Up, px, py);
+        }
+        let id = s.doc().unwrap().selection.objects[0].0;
+        assert_eq!((text(&s, id), recipe(&s, id).orientation), (want.to_string(), orientation), "pointer at ({x}, {y})");
+        assert!(recipe(&s, id).source.is_some_and(|src| src.nodes() == vec![NodeId(line), NodeId(line)]));
+        if orientation != Orientation::Aligned {
+            run(&mut s, "select.set", json!({"ids":[line]}));
+            run(&mut s, "object.scale", json!({"sx":200,"sy":200}));
+            assert_eq!(text(&s, id), "200.00 pt", "follows the art");
+        }
+    }
+}
+
+/// A third click a little past the second point, still within reach of it, places an aligned
+/// dimension, also when Shift moved the second point away from where the pointer was: the click
+/// counts as clicking again on the second point.
+#[test]
+fn clicking_again_by_the_second_point_places_an_aligned_dimension() {
+    use vectorcraft_doc::dimension::Orientation;
+    let click = |s: &mut Session, x: f64, y: f64, shift: bool| {
+        for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+            let e = PointerEvent::new(kind, x, y).with_mods(Mods { shift, ..Mods::default() });
+            s.pointer(&e, ViewInfo::default()).unwrap();
+        }
+    };
+    // Free points, the third click 2.2 pt past the second.
+    let mut s = session();
+    s.select_tool("dimension", ViewInfo::default()).unwrap();
+    click(&mut s, 100.0, 300.0, false);
+    click(&mut s, 200.0, 200.0, false);
+    click(&mut s, 202.0, 201.0, false);
+    let id = s.doc().unwrap().selection.objects[0].0;
+    assert_eq!((text(&s, id), recipe(&s, id).orientation), ("141.42 pt".to_string(), Orientation::Aligned));
+    // Shift puts the second point on the 45 degree line, about 21 pt from the pointer.
+    let mut s = session();
+    s.select_tool("dimension", ViewInfo::default()).unwrap();
+    click(&mut s, 100.0, 300.0, false);
+    click(&mut s, 260.0, 170.0, true);
+    click(&mut s, 262.0, 168.0, false);
+    let id = s.doc().unwrap().selection.objects[0].0;
+    assert_eq!((text(&s, id), recipe(&s, id).orientation), ("206.16 pt".to_string(), Orientation::Aligned));
+}
+
+/// Dragged out from a slanted segment, the dimension follows the drag the same way, wherever on
+/// the segment the press was: beside the segment it measures its length, and past either end
+/// its horizontal or vertical length.
+#[test]
+fn a_segment_drag_measures_horizontally_vertically_or_aligned() {
+    use vectorcraft_doc::dimension::Orientation;
+    for (press, (x, y), want, orientation) in [
+        ((150.0, 250.0), (210.0, 120.0), "100.00 pt", Orientation::Horizontal),
+        ((110.0, 290.0), (210.0, 120.0), "100.00 pt", Orientation::Horizontal),
+        ((150.0, 250.0), (280.0, 220.0), "100.00 pt", Orientation::Vertical),
+        ((190.0, 210.0), (40.0, 310.0), "100.00 pt", Orientation::Vertical),
+        ((150.0, 250.0), (120.0, 160.0), "141.42 pt", Orientation::Aligned),
+        ((110.0, 290.0), (200.0, 300.0), "141.42 pt", Orientation::Aligned),
+    ] {
+        let mut s = session();
+        run(&mut s, "shape.line", json!({"x1":100,"y1":300,"x2":200,"y2":200}));
+        s.select_tool("dimension", ViewInfo::default()).unwrap();
+        ev(&mut s, PointerKind::Move, press.0, press.1);
+        ev(&mut s, PointerKind::Down, press.0, press.1);
+        ev(&mut s, PointerKind::Drag, (press.0 + x) / 2.0, (press.1 + y) / 2.0);
+        ev(&mut s, PointerKind::Drag, x, y);
+        ev(&mut s, PointerKind::Up, x, y);
+        let id = s.doc().unwrap().selection.objects[0].0;
+        assert_eq!((text(&s, id), recipe(&s, id).orientation), (want.to_string(), orientation), "pressed at {press:?}, dragged to ({x}, {y})");
+    }
+}
+
+/// Two points on one vertical line give an aligned dimension wherever the pointer goes: their
+/// vertical distance is the distance between them, and they have no horizontal distance.
+#[test]
+fn points_on_a_vertical_line_measure_aligned() {
+    use vectorcraft_doc::dimension::Orientation;
+    for (x, y) in [(60.0, 200.0), (160.0, 80.0), (100.0, 40.0), (40.0, 340.0), (100.0, 300.0)] {
+        let mut s = session();
+        s.select_tool("dimension", ViewInfo::default()).unwrap();
+        for (px, py) in [(100.0, 100.0), (100.0, 300.0), (x, y)] {
+            ev(&mut s, PointerKind::Move, px, py);
+            ev(&mut s, PointerKind::Down, px, py);
+            ev(&mut s, PointerKind::Up, px, py);
+        }
+        let id = s.doc().unwrap().selection.objects[0].0;
+        assert_eq!((text(&s, id), recipe(&s, id).orientation), ("200.00 pt".to_string(), Orientation::Aligned), "pointer at ({x}, {y})");
+    }
+}
+
+/// The ends of a dimension's generated paths (extension lines first, then the dimension line),
+/// rounded.
+fn path_ends(s: &Session, id: u64) -> Vec<Vec<(f64, f64)>> {
+    let round = |v: f64| (v * 1e6).round() / 1e6;
+    let doc = &s.doc().unwrap().doc;
+    let art = doc.node(NodeId(id)).unwrap().children().unwrap();
+    art.iter().filter_map(|n| n.path_data()).map(|p| p.subpaths[0].anchors.iter().map(|a| (round(a.p.x), round(a.p.y))).collect()).collect()
+}
+
+/// A horizontal dimension's line is horizontal and a vertical one's vertical, through the point
+/// it was placed at, and each extension line runs from its point to the dimension line. Points
+/// given right to left or bottom to top draw the same lines.
+#[test]
+fn horizontal_and_vertical_dimensions_draw_lines_along_their_axis() {
+    let mut s = session();
+    let r = run(&mut s, "dimension.create", json!({"a":[100,300],"b":[200,200],"orientation":"horizontal","offset":-150}));
+    assert_eq!(r["label"], "100.00 pt");
+    // Extension lines: 4 pt off each point, 6 pt past the line at y = 150.
+    let horizontal = vec![vec![(100.0, 296.0), (100.0, 144.0)], vec![(200.0, 196.0), (200.0, 144.0)], vec![(100.0, 150.0), (200.0, 150.0)]];
+    assert_eq!(path_ends(&s, r["id"].as_u64().unwrap()), horizontal);
+    let r = run(&mut s, "dimension.create", json!({"a":[200,200],"b":[100,300],"orientation":"horizontal","offset":-50}));
+    let swapped = vec![vec![(200.0, 196.0), (200.0, 144.0)], vec![(100.0, 296.0), (100.0, 144.0)], vec![(200.0, 150.0), (100.0, 150.0)]];
+    assert_eq!(path_ends(&s, r["id"].as_u64().unwrap()), swapped, "the line stays on the side the offset puts it");
+    // A vertical dimension 50 pt left of the first point: the line at x = 50.
+    let r = run(&mut s, "dimension.create", json!({"a":[100,300],"b":[200,200],"orientation":"vertical","offset":50}));
+    assert_eq!(r["label"], "100.00 pt");
+    let vertical = vec![vec![(96.0, 300.0), (44.0, 300.0)], vec![(196.0, 200.0), (44.0, 200.0)], vec![(50.0, 300.0), (50.0, 200.0)]];
+    assert_eq!(path_ends(&s, r["id"].as_u64().unwrap()), vertical);
+}
+
+/// A horizontal dimension stays horizontal when it or the art it measures turns: it shows the
+/// new horizontal distance, and 0 when the points come one above the other. It is not removed.
+#[test]
+fn turned_horizontal_dimensions_stay_horizontal() {
+    use vectorcraft_doc::dimension::Orientation;
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,260],"orientation":"horizontal","offset":-50}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.rotate", json!({"angle":90,"origin":[150,230]}));
+    assert_eq!((text(&s, id), recipe(&s, id).orientation), ("60.00 pt".to_string(), Orientation::Horizontal));
+    // The points are now at y = 180 and 280: the line stays 50 pt above the upper one instead of
+    // crossing between them.
+    let d = recipe(&s, id);
+    let mut ys = [d.a.y.round(), d.b.y.round()];
+    ys.sort_by(f64::total_cmp);
+    assert_eq!(ys, [180.0, 280.0]);
+    assert!(path_ends(&s, id)[2].iter().all(|(_, y)| (y - 130.0).abs() < 1e-6), "{:?}", path_ends(&s, id));
+    let line = run(&mut s, "shape.line", json!({"x1":100,"y1":400,"x2":200,"y2":400}))["id"].as_u64().unwrap();
+    let anchor = |anchor: u64| json!({"node":line,"subpath":0,"anchor":anchor});
+    let src = json!({"kind":"points","a":anchor(0),"b":anchor(1)});
+    let id = run(&mut s, "dimension.create", json!({"source":src,"orientation":"horizontal"}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[line]}));
+    run(&mut s, "object.rotate", json!({"angle":90}));
+    assert_eq!((text(&s, id), recipe(&s, id).orientation), ("0.00 pt".to_string(), Orientation::Horizontal));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(text(&s, id), "100.00 pt");
+}
+
+/// The line of a linked horizontal dimension keeps its gap from the outermost point on its side
+/// when the art turns, so it stays clear of the art: after a half turn the line is still 50 pt
+/// above the upper point, which is now the other anchor.
+#[test]
+fn a_linked_horizontal_dimension_keeps_its_gap_from_turned_art() {
+    let mut s = session();
+    let line = run(&mut s, "shape.line", json!({"x1":100,"y1":300,"x2":200,"y2":200}))["id"].as_u64().unwrap();
+    let anchor = |anchor: u64| json!({"node":line,"subpath":0,"anchor":anchor});
+    let src = json!({"kind":"points","a":anchor(0),"b":anchor(1)});
+    let id = run(&mut s, "dimension.create", json!({"source":src,"orientation":"horizontal","offset":-150}))["id"].as_u64().unwrap();
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 150.0), (200.0, 150.0)]);
+    run(&mut s, "select.set", json!({"ids":[line]}));
+    run(&mut s, "object.rotate", json!({"angle":180,"origin":[150,250]}));
+    assert_eq!(text(&s, id), "100.00 pt");
+    assert_eq!(path_ends(&s, id)[2], vec![(200.0, 150.0), (100.0, 150.0)]);
+    // Scaled to twice the size about the lower left point, the upper point is at y = 100.
+    run(&mut s, "object.scale", json!({"sx":200,"sy":200,"origin":[100,300]}));
+    assert_eq!(text(&s, id), "200.00 pt");
+    assert_eq!(path_ends(&s, id)[2], vec![(300.0, 50.0), (100.0, 50.0)]);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 150.0), (200.0, 150.0)]);
+}
+
+/// An unlinked horizontal dimension reflected on its own has its line where the reflection puts
+/// it: a line above the points is below them after a flip top to bottom.
+#[test]
+fn a_reflected_horizontal_dimension_keeps_its_line_on_the_reflected_side() {
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[100,300],"b":[200,200],"orientation":"horizontal","offset":-150}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.reflect", json!({"axis":"horizontal","origin":[0,250]}));
+    let d = recipe(&s, id);
+    assert_eq!((d.a.y.round(), d.b.y.round()), (200.0, 300.0));
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 350.0), (200.0, 350.0)]);
+    assert_eq!(text(&s, id), "100.00 pt");
+}
+
+/// The line of a linked horizontal dimension below both points stays below them when the art
+/// turns a half turn; a line between the points keeps its distance from the first point.
+#[test]
+fn a_linked_horizontal_dimension_below_or_between_its_points_follows_turned_art() {
+    for (offset, want) in [(50.0, vec![(200.0, 350.0), (100.0, 350.0)]), (-50.0, vec![(200.0, 150.0), (100.0, 150.0)])] {
+        let mut s = session();
+        let line = run(&mut s, "shape.line", json!({"x1":100,"y1":300,"x2":200,"y2":200}))["id"].as_u64().unwrap();
+        let anchor = |anchor: u64| json!({"node":line,"subpath":0,"anchor":anchor});
+        let src = json!({"kind":"points","a":anchor(0),"b":anchor(1)});
+        let id = run(&mut s, "dimension.create", json!({"source":src,"orientation":"horizontal","offset":offset}))["id"].as_u64().unwrap();
+        run(&mut s, "select.set", json!({"ids":[line]}));
+        run(&mut s, "object.rotate", json!({"angle":180,"origin":[150,250]}));
+        assert_eq!(text(&s, id), "100.00 pt");
+        assert_eq!(path_ends(&s, id)[2], want, "offset {offset}");
+    }
+}
+
+/// A dimension recipe without an orientation reads as aligned.
+#[test]
+fn a_dimension_without_an_orientation_reads_as_aligned() {
+    use vectorcraft_doc::dimension::{Dimension, Orientation};
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[30,40]}))["id"].as_u64().unwrap();
+    let v = serde_json::to_value(recipe(&s, id)).unwrap();
+    assert!(v.get("orientation").is_none());
+    let d: Dimension = serde_json::from_value(v).unwrap();
+    assert_eq!(d.orientation, Orientation::Aligned);
+}
+
+/// `orientation` is checked on create and update, and only linear dimensions take one.
+#[test]
+fn dimension_orientation_is_checked() {
+    let mut s = session();
+    for (p, want) in [
+        (json!({"a":[0,0],"b":[30,40],"orientation":"horizontal"}), Some("30.00 pt")),
+        (json!({"a":[0,0],"b":[30,40],"orientation":"vertical"}), Some("40.00 pt")),
+        (json!({"a":[0,0],"b":[30,40],"orientation":"aligned"}), Some("50.00 pt")),
+        (json!({"a":[0,0],"b":[0,40],"orientation":"horizontal"}), Some("0.00 pt")),
+        (json!({"a":[0,0],"b":[30,40],"orientation":"diagonal"}), None),
+        (json!({"a":[0,0],"b":[30,40],"orientation":7}), None),
+        (json!({"a":[0,0],"b":[30,40],"orientation":null}), None),
+        (json!({"mode":"angular","a":[0,0],"b":[30,40],"vertex":[10,0],"orientation":"horizontal"}), None),
+    ] {
+        let before = serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+        match (s.execute("dimension.create", &p), want) {
+            (Ok(r), Some(want)) => assert_eq!(r["label"], want, "{p}"),
+            (Err(_), None) => assert_eq!(serde_json::to_value(&*s.doc().unwrap().doc).unwrap(), before, "{p}"),
+            (r, _) => panic!("{p}: {r:?}"),
+        }
+    }
+    // An aligned dimension is written as before, without the field.
+    let doc = serde_json::to_string(&*s.doc().unwrap().doc).unwrap();
+    assert_eq!(doc.matches("\"orientation\"").count(), 3, "only the horizontal and vertical ones");
+    // dimension.update turns an existing linear dimension, and refuses the same bad values.
+    let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[30,40]}))["id"].as_u64().unwrap();
+    let angle = run(&mut s, "dimension.create", json!({"mode":"angular","a":[0,0],"b":[30,40],"vertex":[10,0]}))["id"].as_u64().unwrap();
+    for (orientation, want) in [("horizontal", "30.00 pt"), ("vertical", "40.00 pt"), ("aligned", "50.00 pt")] {
+        run(&mut s, "dimension.update", json!({"ids":[id],"orientation":orientation}));
+        assert_eq!(text(&s, id), want);
+    }
+    run(&mut s, "dimension.update", json!({"ids":[id],"orientation":"vertical"}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(text(&s, id), "50.00 pt", "one undo step");
+    let before = serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    for p in [
+        json!({"ids":[id],"orientation":"diagonal"}),
+        json!({"ids":[id],"orientation":7}),
+        json!({"ids":[angle],"orientation":"vertical"}),
+        // A linear and an angular dimension together: neither changes.
+        json!({"ids":[id, angle],"orientation":"vertical"}),
+    ] {
+        assert!(s.execute("dimension.update", &p).is_err(), "{p}");
+        assert_eq!(serde_json::to_value(&*s.doc().unwrap().doc).unwrap(), before, "{p}");
+    }
+    // The orientation it already has, or aligned for an angular one, changes nothing and records
+    // no undo step: the undo after it goes back to the vertical dimension of the earlier update.
+    for p in [json!({"ids":[id],"orientation":"aligned"}), json!({"ids":[angle],"orientation":"aligned"})] {
+        run(&mut s, "dimension.update", p);
+        assert_eq!(serde_json::to_value(&*s.doc().unwrap().doc).unwrap(), before);
+    }
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(text(&s, id), "40.00 pt");
+}
+
+/// A dimension turned with `dimension.update` keeps its line on the side of the points it was
+/// on: an aligned line 30 pt above a pair made right to left stays 30 pt above as horizontal,
+/// and an aligned line below and right of slanted points goes 30 pt below the lower point.
+#[test]
+fn a_turned_dimension_keeps_its_line_on_its_side() {
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[200,200],"b":[100,200],"offset":30}))["id"].as_u64().unwrap();
+    assert_eq!(path_ends(&s, id)[2], vec![(200.0, 170.0), (100.0, 170.0)]);
+    run(&mut s, "dimension.update", json!({"ids":[id],"orientation":"horizontal"}));
+    assert_eq!(path_ends(&s, id)[2], vec![(200.0, 170.0), (100.0, 170.0)]);
+    // The middle of the aligned line (about 171, 271) lies between the points' heights.
+    let id = run(&mut s, "dimension.create", json!({"a":[100,300],"b":[200,200],"offset":30}))["id"].as_u64().unwrap();
+    run(&mut s, "dimension.update", json!({"ids":[id],"orientation":"horizontal"}));
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 330.0), (200.0, 330.0)]);
+}
+
 /// Dragging out from a corner of two straight segments measures the angle between them.
 #[test]
 fn dragging_out_from_a_corner_measures_its_angle() {

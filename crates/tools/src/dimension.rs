@@ -6,7 +6,7 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 use serde_json::{Value, json};
 use vectorcraft_doc::{
     Node,
-    dimension::{self, Dimension, DimensionMode, DimensionOptions, DimensionSource, PointRef, SegmentRef},
+    dimension::{self, Dimension, DimensionMode, DimensionOptions, DimensionSource, Orientation, PointRef, SegmentRef},
 };
 use vectorcraft_geom::{BezPath, Point, Vec2};
 
@@ -69,6 +69,42 @@ pub struct DimensionTool {
     snapped: Option<(Point, Option<PointRef>)>,
     /// Whether the press under way began on an anchor a Linear click picks.
     press_on_anchor: bool,
+    /// The second point clicked for the Linear dimension being placed, and where the pointer was
+    /// for that click (a snap or Shift can move the point away from it): placed with the pointer
+    /// still at either, it is aligned.
+    second: Option<(Point, Point)>,
+}
+
+/// What a linear dimension between `a` and `b` measures with the pointer at `p` while it is
+/// placed (VectorCraft's own rule). Beside the points, where the nearest point of the line
+/// through them lies between them, the dimension is aligned: it measures the distance between
+/// them. Past either point it measures along an axis. The line through the points and the
+/// perpendicular at that point bound a quarter on each side; the pointer's quarter holds either
+/// the straight up or down direction, which gives the horizontal distance, or the straight left
+/// or right direction, which gives the vertical distance. Points on one horizontal or vertical
+/// line only give an aligned dimension.
+fn orientation_at(a: Point, b: Point, p: Point) -> Orientation {
+    let u = b - a;
+    let len = u.hypot();
+    if len < 1e-9 {
+        return Orientation::Aligned;
+    }
+    let along = (p - a).dot(u) / (len * len);
+    if (0.0..=1.0).contains(&along) {
+        return Orientation::Aligned;
+    }
+    // Out past the nearer point, and the side of the line the pointer is on.
+    let (out, side) = (if along > 1.0 { u } else { -u }, u.cross(p - a));
+    let axes = [
+        (Vec2::new(0.0, 1.0), Orientation::Horizontal),
+        (Vec2::new(0.0, -1.0), Orientation::Horizontal),
+        (Vec2::new(1.0, 0.0), Orientation::Vertical),
+        (Vec2::new(-1.0, 0.0), Orientation::Vertical),
+    ];
+    let within = len * 1e-9;
+    axes.into_iter()
+        .find(|(axis, _)| axis.dot(out) > within && u.cross(*axis).abs() > within && u.cross(*axis) * side > 0.0)
+        .map_or(Orientation::Aligned, |(_, orientation)| orientation)
 }
 
 /// How near an anchor (screen pixels) a pick snaps to it.
@@ -214,7 +250,18 @@ impl DimensionTool {
         }
     }
     fn recipe(&self, mode: DimensionMode, a: Point, b: Point, vertex: Point, source: Option<DimensionSource>) -> Dimension {
-        Dimension { mode, a, b, vertex, offset: 0.0, length: a.distance(b), options: self.style.clone(), source, moved: None }
+        Dimension {
+            mode,
+            a,
+            b,
+            vertex,
+            offset: 0.0,
+            length: a.distance(b),
+            options: self.style.clone(),
+            source,
+            orientation: Orientation::Aligned,
+            moved: None,
+        }
     }
     /// The dimension a target gives when dragged from.
     fn dimension_for(&self, target: &Target, p: Point) -> Option<Dimension> {
@@ -247,6 +294,9 @@ impl DimensionTool {
         if let Some(source) = &d.source {
             p["source"] = json!(source);
         }
+        if d.orientation != Orientation::Aligned {
+            p["orientation"] = json!(d.orientation);
+        }
         p
     }
     fn preview(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
@@ -255,6 +305,18 @@ impl DimensionTool {
             && let Some(Target::Radial { center, radius, .. }) = self.press.as_ref().and_then(|(_, t)| t.as_ref())
         {
             d.mode = if p.distance(*center) >= *radius { DimensionMode::Radius } else { DimensionMode::Diameter };
+        }
+        if d.mode == DimensionMode::Linear {
+            // The points the dimension measures: a dragged segment's ends, read from the art.
+            let ends = match &d.source {
+                Some(DimensionSource::Segment { edge }) => edge.endpoints(cx.doc),
+                _ => Some((d.a, d.b)),
+            };
+            let again = self.second.is_some_and(|(at, pointer)| at.distance(p).min(pointer.distance(p)) <= cx.tol(ANCHOR_REACH));
+            d.orientation = match ends {
+                Some((a, b)) if !again => orientation_at(a, b, p),
+                _ => Orientation::Aligned,
+            };
         }
         d.place(p);
         if d.resolve(cx.doc).is_err() {
@@ -287,6 +349,7 @@ impl DimensionTool {
         self.began = false;
         self.snap.clear();
         self.snapped = None;
+        self.second = None;
     }
     /// A plain click: picks a point or a line, or measures a circle's radius.
     fn click(&mut self, cx: &ToolContext, p: Point, target: Option<Target>, mods: Mods) -> Vec<Action> {
@@ -304,6 +367,7 @@ impl DimensionTool {
                     let source = (ra.is_some() || rb.is_some()).then(|| DimensionSource::Points { a: ra.clone(), b: rb.clone(), vertex: None });
                     let mut d = self.recipe(DimensionMode::Linear, *a, *b, Point::ZERO, source);
                     if d.resolve(cx.doc).is_ok() {
+                        self.second = Some((*b, p));
                         self.pending = Some(d);
                     }
                     self.points.clear();
@@ -653,6 +717,47 @@ mod tests {
         assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 155.0, 100.0)).is_empty(), "no segment dimension is dragged out");
         t.pointer(&c, &PointerEvent::new(PointerKind::Up, 155.0, 100.0));
         assert_eq!(t.points, vec![corner]);
+    }
+
+    /// Beside the two points the dimension is aligned; past either point it is horizontal when
+    /// the pointer's quarter holds the straight up or down direction and vertical when it holds
+    /// the straight left or right direction. Points on one horizontal or vertical line, a pointer
+    /// on the line through the points, and two equal points give aligned.
+    #[test]
+    fn the_pointer_chooses_aligned_horizontal_or_vertical() {
+        use Orientation::{Aligned, Horizontal, Vertical};
+        let at = |a: (f64, f64), b: (f64, f64), p: (f64, f64)| orientation_at(Point::new(a.0, a.1), Point::new(b.0, b.1), Point::new(p.0, p.1));
+        // A line rising to the right (y grows downwards), and the same points in the other order.
+        for (a, b) in [((100.0, 300.0), (200.0, 200.0)), ((200.0, 200.0), (100.0, 300.0))] {
+            for (p, want) in [
+                ((120.0, 160.0), Aligned),
+                ((200.0, 300.0), Aligned),
+                ((150.0, 250.0), Aligned),
+                ((200.0, 200.0), Aligned),
+                ((100.0, 300.0), Aligned),
+                ((210.0, 120.0), Horizontal),
+                ((240.0, 150.0), Horizontal),
+                ((280.0, 220.0), Vertical),
+                ((240.0, 170.0), Vertical),
+                ((40.0, 310.0), Vertical),
+                ((90.0, 380.0), Horizontal),
+                ((250.0, 150.0), Aligned),
+            ] {
+                assert_eq!(at(a, b, p), want, "{a:?} to {b:?}, pointer at {p:?}");
+            }
+        }
+        // A line falling to the right.
+        let (a, b) = ((100.0, 100.0), (300.0, 200.0));
+        for (p, want) in
+            [((200.0, 50.0), Aligned), ((320.0, 300.0), Horizontal), ((400.0, 210.0), Vertical), ((60.0, 20.0), Horizontal), ((20.0, 90.0), Vertical)]
+        {
+            assert_eq!(at(a, b, p), want, "pointer at {p:?}");
+        }
+        for (a, b) in [((100.0, 100.0), (300.0, 100.0)), ((100.0, 100.0), (100.0, 300.0)), ((100.0, 100.0), (100.0, 100.0))] {
+            for p in [(50.0, 50.0), (350.0, 50.0), (350.0, 350.0), (50.0, 350.0), (200.0, 60.0), (60.0, 200.0), (400.0, 100.0), (100.0, 400.0)] {
+                assert_eq!(at(a, b, p), Aligned, "{a:?} to {b:?}, pointer at {p:?}");
+            }
+        }
     }
 
     #[test]

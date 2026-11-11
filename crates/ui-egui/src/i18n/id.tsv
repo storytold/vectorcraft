@@ -5276,6 +5276,7 @@ mark-style	Japanese	Jepang
 	Preview (1 inch on the page)	Pratinjau (1 inci di halaman)
 	Set as Default	Atur sebagai default
 	 out from a highlighted edge to place its dimension  |  	 keluar dari tepi yang disorot untuk menempatkan dimensinya  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 dua titik, lalu gerakkan dan klik untuk menempatkan dimensi sejajar, horizontal, atau vertikal  |  
 	 cancels  |  Double-click the tool for options	 membatalkan  |  Klik dua kali alat untuk opsi
 	Angular	Sudut
 	Away from the Line	Menjauhi garis
@@ -5307,12 +5308,14 @@ mark-style	Japanese	Jepang
 @msg	Measured anchor no longer exists	Titik jangkar yang diukur sudah tidak ada
 @msg	Measured segment no longer exists	Segmen yang diukur sudah tidak ada
 @msg	Non-finite dimension	Dimensi bukan bilangan berhingga
+@msg	Only linear dimensions are horizontal or vertical	Hanya dimensi linear yang horizontal atau vertikal
 @msg	Scale Text Attributes: selected type has no scale to bake	Skalakan atribut teks: teks yang dipilih tidak memiliki skala untuk diterapkan
 @msg	Scale must be drawing:real, for example 1:10	Skala harus dalam format gambar:sebenarnya, misalnya 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Rasio skala harus antara 1:1000000 dan 1000000:1
 @msg	Second measured segment no longer exists	Segmen yang diukur kedua sudah tidak ada
 @msg	Unknown dimension mode	Mode dimensi tidak dikenal
 @msg	Unknown dimension option {k}	Opsi dimensi {k} tidak dikenal
+@msg	Unknown dimension orientation	Orientasi dimensi tidak dikenal
 @msg	Unknown dimension style	Gaya dimensi tidak dikenal
 @msg	Unknown unit	Satuan tidak dikenal
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Menutup ujung melingkar profil terbuka. Sapuan parsial mempertahankan sisi potongannya tetap terbuka.

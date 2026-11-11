@@ -5278,6 +5278,7 @@ theme	Appearance	Giao diện
 	Preview (1 inch on the page)	Xem trước (1 inch trên trang)
 	Set as Default	Đặt làm mặc định
 	 out from a highlighted edge to place its dimension  |  	 ra ngoài từ một cạnh được tô sáng để đặt kích thước của nó  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 hai điểm, rồi di chuyển và bấm để đặt kích thước căn theo hai điểm, nằm ngang hoặc thẳng đứng  |  
 	 cancels  |  Double-click the tool for options	 để hủy  |  Nhấp đúp vào công cụ để mở tùy chọn
 	Linear	Tuyến tính
 	Angular	Góc
@@ -5310,12 +5311,14 @@ theme	Appearance	Giao diện
 @msg	Measured anchor no longer exists	Điểm neo được đo không còn tồn tại
 @msg	Measured segment no longer exists	Đoạn được đo không còn tồn tại
 @msg	Non-finite dimension	Kích thước không phải là số hữu hạn
+@msg	Only linear dimensions are horizontal or vertical	Chỉ kích thước tuyến tính mới nằm ngang hoặc thẳng đứng
 @msg	Scale Text Attributes: selected type has no scale to bake	Tỷ lệ thuộc tính văn bản: văn bản được chọn không có tỷ lệ để áp dụng
 @msg	Scale must be drawing:real, for example 1:10	Tỷ lệ phải có dạng bản vẽ:thực tế, ví dụ 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Tỷ lệ phải nằm trong khoảng 1:1000000 đến 1000000:1
 @msg	Second measured segment no longer exists	Đoạn được đo thứ hai không còn tồn tại
 @msg	Unknown dimension mode	Chế độ kích thước không xác định
 @msg	Unknown dimension option {k}	Tùy chọn kích thước không xác định {k}
+@msg	Unknown dimension orientation	Hướng kích thước không xác định
 @msg	Unknown dimension style	Kiểu kích thước không xác định
 @msg	Unknown unit	Đơn vị không xác định
 # Revolve cap description

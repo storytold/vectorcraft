@@ -5506,6 +5506,7 @@ theme	Appearance	Външен вид
 	Preview (1 inch on the page)	Преглед (1 инч на страницата)
 	Set as Default	Задаване по подразбиране
 	 out from a highlighted edge to place its dimension  |  	 навън от осветен ръб, за да поставите размера му  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 върху две точки, после преместете и щракнете, за да поставите подравнен, хоризонтален или вертикален размер  |  
 	 cancels  |  Double-click the tool for options	 отказва  |  Двойно щракване върху инструмента за опции
 	Angular	Ъглов
 	Away from the Line	Встрани от линията
@@ -5537,12 +5538,14 @@ theme	Appearance	Външен вид
 @msg	Measured anchor no longer exists	Измерената опорна точка вече не съществува
 @msg	Measured segment no longer exists	Измереният сегмент вече не съществува
 @msg	Non-finite dimension	Размерът не е крайно число
+@msg	Only linear dimensions are horizontal or vertical	Само линейните размери са хоризонтални или вертикални
 @msg	Scale Text Attributes: selected type has no scale to bake	Мащабиране на текстови атрибути: избраният текст няма мащаб за прилагане
 @msg	Scale must be drawing:real, for example 1:10	Мащабът трябва да е чертеж:реалност, например 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Съотношението на мащаба трябва да е между 1:1000000 и 1000000:1
 @msg	Second measured segment no longer exists	Вторият измерен сегмент вече не съществува
 @msg	Unknown dimension mode	Непознат режим на размера
 @msg	Unknown dimension option {k}	Непозната опция за размер {k}
+@msg	Unknown dimension orientation	Непозната ориентация на размера
 @msg	Unknown dimension style	Непознат стил на размера
 @msg	Unknown unit	Непозната единица
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Затваря кръговите краища на отворени профили. При частично завъртане срязаните страни остават отворени.

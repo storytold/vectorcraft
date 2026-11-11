@@ -10590,6 +10590,48 @@ fn a_whole_pixel_pan_copies_the_pixels_that_stay_on_screen() {
     }
 }
 
+/// Installing, replacing or removing a plug-in draws a document with a plug-in effect again, and a
+/// pan from the frame drawn before the change renders whole instead of copying its pixels. The key
+/// of a document without a plug-in effect does not follow the plug-ins. The other tests share the
+/// plug-in registry, and the plug-in is removed after.
+#[test]
+fn a_plug_in_change_draws_the_document_s_plug_in_effects_again() {
+    use vectorcraft_plugins::wat as tpl;
+    let id = "test.canvas.redraw";
+    let module = vectorcraft_format::base64_encode(&wat::parse_str(tpl::module(&tpl::manifest(id, "effect", "{}"), tpl::ECHO, "", 1)).unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("plugin.install", json!({"dataBase64": module})).unwrap();
+    app.session.execute("file.new", &json!({"width": 256, "height": 128})).unwrap();
+    let rect = app.run("shape.rectangle", json!({"x": 16, "y": 16, "width": 64, "height": 96})).unwrap()["id"].clone();
+    app.canvas.worker_started = true; // render on this thread
+    let ctx = egui::Context::default();
+    shapes(&mut app, &ctx);
+    // Other keys' fields (placed documents' bitmaps) follow what other tests do; this one's don't.
+    let plugins = |app: &VectorcraftApp| app.canvas.key.as_ref().expect("a frame was rendered").plugins;
+    let plain = plugins(&app);
+    app.run("plugin.install", json!({"dataBase64": module})).unwrap();
+    shapes(&mut app, &ctx);
+    assert_eq!(plugins(&app), plain, "no plug-in effect, so nothing to draw again");
+    app.run("effect.apply", json!({"effect": vectorcraft_plugins::effect::effect_id(id), "ids": [rect]})).unwrap();
+    shapes(&mut app, &ctx);
+    let before = app.canvas.key.clone().expect("a frame was rendered");
+    app.run("plugin.install", json!({"dataBase64": module})).unwrap();
+    shapes(&mut app, &ctx);
+    let after = plugins(&app);
+    assert_ne!(after, before.plugins, "drawn again once the plug-in was replaced");
+    // The worker's frame from before the change gives no pixels to the next pan.
+    let doc = app.session.active().unwrap().doc.clone();
+    let at_100 = CacheKey { zoom: 1.0, rot: 0.0, ppp: 1.0, pixel: None, ..before };
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut kept = None;
+    render_job(&mut r, &mut kept, &pan_job(&doc, &at_100, (0.0, 0.0)));
+    let pan = pan_job(&doc, &CacheKey { plugins: after, ..at_100.clone() }, (10.0, 0.0));
+    assert!(!render_job(&mut r, &mut kept, &pan).reused, "copied from the frame before the change");
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    shapes(&mut app, &ctx);
+    assert_ne!(plugins(&app), after, "drawn again once the plug-in was removed");
+}
+
 /// A frame does not copy from the last one when the view moves by part of a pixel or over half the
 /// frame, when copying is not allowed, or when a listed key field, render option, zoom, rotation,
 /// canvas size or device scale differs. Each such frame has the job's size. The session test
@@ -10643,6 +10685,7 @@ fn a_frame_renders_whole_when_anything_but_a_whole_pixel_pan_changed() {
         ("outline key", other_key(&|k| k.outline = true)),
         ("Pixel Preview", other_key(&|k| k.pixel = Some([0, 0, 256, 128]))),
         ("placed bitmaps", other_key(&|k| k.placed += 1)),
+        ("plug-ins", other_key(&|k| k.plugins += 1)),
         ("outline", other_opts(&|o| o.outline = true)),
         ("proof", other_opts(&|o| o.proof = Some(Default::default()))),
         ("overprint preview", other_opts(&|o| o.overprint_preview = true)),

@@ -5289,6 +5289,7 @@ lighting	Light	Свет
 	Preview (1 inch on the page)	Просмотр (1 дюйм на странице)
 	Set as Default	Установить по умолчанию
 	 out from a highlighted edge to place its dimension  |  	 наружу от подсвеченного края, чтобы разместить его размер  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 по двум точкам, затем переместите и щёлкните, чтобы разместить выровненный, горизонтальный или вертикальный размер  |  
 	 cancels  |  Double-click the tool for options	 отменяет  |  Двойной щелчок по инструменту открывает параметры
 	Linear	Линейный
 	Angular	Угловой
@@ -5323,12 +5324,14 @@ lighting	Light	Свет
 @msg	Measured anchor no longer exists	Измеряемая опорная точка больше не существует
 @msg	Measured segment no longer exists	Измеряемый сегмент больше не существует
 @msg	Non-finite dimension	Размер не является конечным числом
+@msg	Only linear dimensions are horizontal or vertical	Только линейные размеры бывают горизонтальными или вертикальными
 @msg	Scale Text Attributes: selected type has no scale to bake	Масштабировать атрибуты текста: у выбранного текста нет масштаба для применения
 @msg	Scale must be drawing:real, for example 1:10	Масштаб должен быть в виде чертёж:реальность, например 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Соотношение масштаба должно быть от 1:1000000 до 1000000:1
 @msg	Second measured segment no longer exists	Второй измеряемый сегмент больше не существует
 @msg	Unknown dimension mode	Неизвестный режим размера
 @msg	Unknown dimension option {k}	Неизвестный параметр размера {k}
+@msg	Unknown dimension orientation	Неизвестная ориентация размера
 @msg	Unknown dimension style	Неизвестный стиль размера
 @msg	Unknown unit	Неизвестная единица
 # Revolve cap description

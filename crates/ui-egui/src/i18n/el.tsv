@@ -5574,6 +5574,7 @@ effect	Points	Σημεία
 # Strings added upstream after this catalog was written (machine-drafted; review welcome).
 	 cancels  |  Double-click the tool for options	 για ακύρωση  |  Διπλό κλικ στο εργαλείο για επιλογές
 	 out from a highlighted edge to place its dimension  |  	 προς τα έξω από μια επισημασμένη ακμή για τοποθέτηση της διάστασής της  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 σε δύο σημεία, μετά μετακινήστε και κάντε κλικ για τοποθέτηση ευθυγραμμισμένης, οριζόντιας ή κατακόρυφης διάστασης  |  
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Ένα αρχείο .ai παλαιού τύπου περιέχει έναν πίνακα σχεδίασης: κάθε πίνακας σχεδίασης που επιλέγετε αποθηκεύεται ως ξεχωριστό αρχείο.
 	Arrange Intertwine Area	Διάταξη περιοχής διαπλοκής
 	Batch…	Μαζική επεξεργασία…
@@ -5672,12 +5673,14 @@ effect	Points	Σημεία
 @msg	Measured anchor no longer exists	Το μετρημένο σημείο αγκύρωσης δεν υπάρχει πλέον
 @msg	Measured segment no longer exists	Το μετρημένο τμήμα δεν υπάρχει πλέον
 @msg	Non-finite dimension	Η διάσταση δεν είναι πεπερασμένος αριθμός
+@msg	Only linear dimensions are horizontal or vertical	Μόνο οι γραμμικές διαστάσεις είναι οριζόντιες ή κατακόρυφες
 @msg	Scale Text Attributes: selected type has no scale to bake	Κλιμάκωση ιδιοτήτων κειμένου: το επιλεγμένο κείμενο δεν έχει κλίμακα προς εφαρμογή
 @msg	Scale must be drawing:real, for example 1:10	Η κλίμακα πρέπει να είναι σχέδιο:πραγματικό, για παράδειγμα 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Ο λόγος κλίμακας πρέπει να είναι μεταξύ 1:1000000 και 1000000:1
 @msg	Second measured segment no longer exists	Το δεύτερο μετρημένο τμήμα δεν υπάρχει πλέον
 @msg	Unknown dimension mode	Άγνωστη λειτουργία διάστασης
 @msg	Unknown dimension option {k}	Άγνωστη επιλογή διάστασης {k}
+@msg	Unknown dimension orientation	Άγνωστος προσανατολισμός διάστασης
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	το `mode` πρέπει να είναι grayscale, rgb, hsb, cmyk ή websafe
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού

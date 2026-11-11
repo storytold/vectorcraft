@@ -2594,12 +2594,14 @@ file-filter	Templates	範本
 @msg	Measured anchor no longer exists	測量的錨點已不存在
 @msg	Measured segment no longer exists	測量的線段已不存在
 @msg	Non-finite dimension	尺寸標註不是有限值
+@msg	Only linear dimensions are horizontal or vertical	只有線性尺寸可以是水平或垂直的
 @msg	Scale Text Attributes: selected type has no scale to bake	縮放文字屬性：所選文字沒有可套用的縮放
 @msg	Scale must be drawing:real, for example 1:10	比例必須為 圖紙:實際，例如 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	比例必須介於 1:1000000 和 1000000:1 之間
 @msg	Second measured segment no longer exists	第二條測量線段已不存在
 @msg	Unknown dimension mode	未知的尺寸標註模式
 @msg	Unknown dimension option {k}	未知的尺寸標註選項 {k}
+@msg	Unknown dimension orientation	未知的尺寸標註方向
 @msg	span must be "object" or "selection", got {v}	span 必須是 "object" 或 "selection"，收到 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而非色票
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 會放置漸層：請提供 `gradient`
@@ -5386,6 +5388,7 @@ lighting	Light	光源
 	Preview (1 inch on the page)	預覽（頁面上 1 英寸）
 	Set as Default	設為預設
 	 out from a highlighted edge to place its dimension  |  	 從醒目提示的邊緣向外拖曳以放置其尺寸  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 兩個點，然後移動並按一下以放置對齊、水平或垂直尺寸  |  
 	 cancels  |  Double-click the tool for options	 取消  |  按兩下工具開啟選項
 	Linear	線性
 	Angular	角度

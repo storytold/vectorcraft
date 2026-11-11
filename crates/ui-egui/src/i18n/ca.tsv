@@ -35,6 +35,7 @@
 	 on the canvas to create one	 al llenç per crear-ne un
 	 on the canvas to create one (	 al llenç per crear-ne un (
 	 out from a highlighted edge to place its dimension  |  	 des d’una vora ressaltada cap enfora per col·locar-ne la dimensió  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 dos punts, després moveu i feu clic per col·locar una dimensió alineada, horitzontal o vertical  |  
 	 over paths to roughen their outlines  |  	 sobre traçats per fer aspres els contorns  |  
 	 over paths, and hold still to keep going  |  	 sobre traçats i mantén el punter quiet per continuar  |  
 	 right or left to zoom in or out  |  	 a la dreta o a l’esquerra per ampliar o reduir  |  
@@ -5520,6 +5521,7 @@ digits	Malayalam	Malaiàlam
 @msg	node {_1} is not text	el node {_1} no és text
 @msg	node {_1} is on a locked artboard	el node {_1} és en un tauler bloquejat
 @msg	Non-finite dimension	Cota no finita
+@msg	Only linear dimensions are horizontal or vertical	Només les dimensions lineals són horitzontals o verticals
 @msg	not a blend	no és una fusió
 @msg	not a DXF drawing	no és un dibuix DXF
 @msg	not a file	no és un fitxer
@@ -5890,6 +5892,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	control desconegut `{name}`: fillStroke, coloring, drawMode o screenMode
 @msg	Unknown dimension mode	Mode de dimensió desconegut
 @msg	Unknown dimension option {k}	Opció de dimensió desconeguda {k}
+@msg	Unknown dimension orientation	Orientació de dimensió desconeguda
 @msg	Unknown dimension style	Estil de dimensió desconegut
 @msg	unknown effect `{id}`	efecte desconegut `{id}`
 @msg	unknown format	format desconegut
