@@ -151,3 +151,38 @@
 	Editable	ניתן לעריכה
 	Outlines	קווי מתאר
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ומעלה (גרסה {n})
+	Save PDF	שמירת PDF
+	New PDF Preset	הגדרה קבועה חדשה ל־PDF
+	Edit PDF Preset	עריכת הגדרה קבועה ל־PDF
+	Preset name:	שם ההגדרה הקבועה:
+	Standard:	תקן:
+	Compatibility:	תאימות:
+	Preset:	הגדרה קבועה:
+	Save Preset…	שמירת הגדרה קבועה…
+	Save these settings as a preset	שמירת הגדרות אלה כהגדרה קבועה
+	Save as preset:	שמירה כהגדרה קבועה:
+	Options	אפשרויות
+	Preserve editing capabilities	שמירת יכולות העריכה
+	Embed page thumbnails	הטמעת תמונות ממוזערות של עמודים
+	Optimize for fast web view	מיטוב לצפייה מהירה באינטרנט
+	View PDF after saving	פתיחת PDF לאחר השמירה
+	Create PDF layers from layers and sublayers	יצירת שכבות PDF משכבות ומשכבות משנה
+	Include non-printing layers	הכללת שכבות שאינן מודפסות
+	Description	תיאור
+	Compression:	דחיסה:
+	Quality:	איכות:
+	Color images	תמונות צבע
+	Grayscale images	תמונות בגווני אפור
+	Monochrome images	תמונות חד־צבעיות
+	Compress text and line art	דחיסת טקסט וקווים
+	Document open password	סיסמה לפתיחת המסמך
+	Require a password to open the document	דרישת סיסמה לפתיחת המסמך
+	Open password:	סיסמת פתיחה:
+	Permissions	הרשאות
+	Restrict printing, editing and other tasks	הגבלת הדפסה, עריכה ופעולות אחרות
+	Permissions password:	סיסמת הרשאות:
+	Printing allowed:	הדפסה מותרת:
+	Changes allowed:	שינויים מותרים:
+	Enable copying of text, images and other content	אפשור העתקת טקסט, תמונות ותוכן אחר
+	Enable text access for screen readers	אפשור גישה לטקסט עבור קוראי מסך
+	Files of a PDF standard can't be password-protected.	לא ניתן להגן בסיסמה על קבצים העומדים בתקן PDF.

@@ -146,6 +146,69 @@ fn hebrew_save_options_dialog_controls_are_translated() {
     assert!(errors.is_empty(), "{errors:?}");
 }
 
+
+/// Native Save PDF and PDF-security controls must be readable in Hebrew, while
+/// preserving their original English source identifiers and the fallback path.
+#[test]
+fn hebrew_save_pdf_options_and_security_controls_are_localized() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let source = include_str!("../dialogs/save_pdf.rs");
+    for english in [
+        "Save PDF",
+        "New PDF Preset",
+        "Edit PDF Preset",
+        "Preset name:",
+        "Standard:",
+        "Compatibility:",
+        "Preset:",
+        "Save Preset…",
+        "Save these settings as a preset",
+        "Save as preset:",
+        "Options",
+        "Preserve editing capabilities",
+        "Embed page thumbnails",
+        "Optimize for fast web view",
+        "View PDF after saving",
+        "Create PDF layers from layers and sublayers",
+        "Include non-printing layers",
+        "Description",
+        "Compression:",
+        "Quality:",
+        "Color images",
+        "Grayscale images",
+        "Monochrome images",
+        "Compress text and line art",
+        "Document open password",
+        "Require a password to open the document",
+        "Open password:",
+        "Permissions",
+        "Restrict printing, editing and other tasks",
+        "Permissions password:",
+        "Printing allowed:",
+        "Changes allowed:",
+        "Enable copying of text, images and other content",
+        "Enable text access for screen readers",
+        "Files of a PDF standard can't be password-protected.",
+    ] {
+        assert!(
+            source.contains(&format!(r#"tl!("{english}")"#)),
+            "source key missing: {english}"
+        );
+        assert_ne!(
+            tr(he, english),
+            english,
+            "Save PDF control untranslated: {english}"
+        );
+    }
+    assert_eq!(tr(he, "Save PDF"), "שמירת PDF");
+    assert_eq!(tr(he, "Permissions"), "הרשאות");
+    assert_eq!(tr(he, "Document open password"), "סיסמה לפתיחת המסמך");
+    assert_eq!(tr(Lang::EN, "Save PDF"), "Save PDF");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rows.len() >= 175, "new PDF rows absent");
+}
+
 #[test]
 fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     let hi = Lang::from_code("hi").expect("hi registered");
