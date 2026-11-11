@@ -273,6 +273,110 @@ fn preferences_ok_changes_the_guide_lock_only_with_the_option() {
     assert!(!a.session.guides_locked(), "the option went off");
 }
 
+/// Click the Preferences dialog's button `label` with the pointer.
+fn click_button(app: &mut VectorcraftApp, label: &str) {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        // A window takes a sizing frame and fades in: each frame is a quarter second on.
+        let time = ctx.input(|i| i.time) + 0.25;
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+        let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => v.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
+                egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
+                _ => {}
+            }
+        }
+        let mut v = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+        v
+    };
+    frame(app, vec![]);
+    let texts = frame(app, vec![]);
+    let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"));
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, vec![egui::Event::PointerMoved(at)]);
+    frame(app, vec![press(true)]);
+    frame(app, vec![press(false)]);
+}
+
+/// Click Reset Preferences and answer its question with OK: Preferences again, its working copy
+/// at the defaults.
+fn reset_preferences(app: &mut VectorcraftApp) {
+    click_button(app, "Reset Preferences");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::confirm::RESET_PREFS));
+    crate::dialogs::confirm(app).unwrap();
+}
+
+/// Reset Preferences then OK resets the preferences, General included, and leaves the open
+/// document's units, with no undo step in the document.
+#[test]
+fn reset_preferences_then_ok_leaves_the_documents_units() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    let undo = a.session.active().unwrap().history.undo.len();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a);
+    let d = a.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!(d.fields["keyboardIncrement"], Prefs::default().to_json()["keyboardIncrement"], "the working copy holds the defaults");
+    assert_eq!(d.fields["unitsGeneral"], json!("points"));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, Prefs::default().keyboard_increment);
+    assert_eq!(a.session.prefs.units_general, Prefs::default().units_general);
+    let st = a.session.active().unwrap();
+    assert_eq!(st.doc.units, vectorcraft_doc::Unit::Millimeters);
+    assert_eq!(st.history.undo.len(), undo, "no undo step");
+}
+
+/// After Reset Preferences, choosing a General unit in the dialog still sets the document's units
+/// on OK, Points included once another unit was chosen in between. With no document open, Reset
+/// Preferences resets General to its default.
+#[test]
+fn reset_preferences_keeps_an_edit_of_general_units() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a);
+    a.ui.dialog.as_mut().unwrap().fields.insert("unitsGeneral".into(), json!("inches"));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Inches);
+    assert_eq!(a.session.prefs.units_general, "inches");
+
+    // Between frames, as `ui.dialog.set` sets fields.
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a);
+    for u in ["inches", "points"] {
+        crate::dialogs::set_field(a.ui.dialog.as_mut().unwrap(), "unitsGeneral".into(), json!(u));
+    }
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Points);
+
+    // Through a frame of the dialog.
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a);
+    a.ui.dialog.as_mut().unwrap().fields.insert("unitsGeneral".into(), json!("inches"));
+    click_button(&mut a, "General");
+    a.ui.dialog.as_mut().unwrap().fields.insert("unitsGeneral".into(), json!("points"));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Points);
+
+    let mut b = app();
+    b.run("prefs.set", json!({"key": "unitsGeneral", "value": "Millimeters"})).unwrap();
+    open(&mut b, Some("General"));
+    reset_preferences(&mut b);
+    confirm(&mut b).unwrap();
+    assert_eq!(b.session.prefs.units_general, Prefs::default().units_general);
+}
+
 #[test]
 fn old_pref_files_keep_their_brightness() {
     let mut a = app();
