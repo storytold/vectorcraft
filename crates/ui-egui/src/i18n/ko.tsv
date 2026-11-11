@@ -6380,3 +6380,9 @@ breakText	Glyphs	글리프
 	{ms} ms, {calls} host calls	{ms} ms, 호스트 호출 {calls}회
 	{dropped} earlier lines dropped, {cut} lines cut	이전 줄 {dropped}개 삭제됨, 줄 {cut}개 잘림
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	보류된 효과 새로 고침
+	Deferred Effects	보류된 효과
+@msg	no plug-in effect is deferred	보류된 플러그인 효과가 없습니다
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	플러그인 효과 {n}개를 보류하고 열었습니다. 효과 › 보류된 효과 새로 고침으로 실행합니다.
