@@ -115,7 +115,16 @@ fn script_file_unc_rejected_before_lookup() {
          vc.log(out);",
     );
     assert_eq!(log, json!([[false, false, null, false, false, null, false, false, null, false, false, null]]));
-    assert_eq!(script_probes(), before, "no network or device path was looked up");
+    if cfg!(windows) {
+        assert_eq!(script_probes(), before, "no network or device path was looked up");
+    } else {
+        // Outside Windows the backslash forms are relative file names in the script's folder, and
+        // `//host/s/x.txt` is an absolute path outside it.
+        let before = script_probes();
+        let log = logged(&base, "var f = new File('//host/s/x.txt'); vc.log([f.exists, f.open('r'), new Folder('//host/s/x.txt').getFiles()]);");
+        assert_eq!(log, json!([[false, false, null]]));
+        assert_eq!(script_probes(), before, "a path outside the script's folder was not looked up");
+    }
     let _ = std::fs::remove_dir_all(base);
 }
 
