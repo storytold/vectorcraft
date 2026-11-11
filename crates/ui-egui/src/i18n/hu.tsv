@@ -1572,6 +1572,7 @@ file-filter	Swatch libraries	Színminta-könyvtárak
 file-filter	Flattener presets	Lapítási előbeállítások
 file-filter	PDF presets	PDF-előbeállítások
 file-filter	Print presets	Nyomtatási előbeállítások
+file-filter	Preferences	Beállítások
 file-filter	Export presets	Exportálási előbeállítások
 file-filter	SVG Compressed	Tömörített SVG
 file-filter	PDF-compatible .ai	PDF-kompatibilis .ai
@@ -3361,6 +3362,12 @@ mark-style	Japanese	Japán
 	Reset Painting	Painting visszaállítása
 	Reset Panel	Panel visszaállítása
 	Reset Preferences	Beállítások visszaállítása
+	Export Preferences…	Beállítások exportálása…
+	Import Preferences…	Beállítások importálása…
+	Save the applied preferences to a JSON file	Az alkalmazott beállítások mentése JSON-fájlba
+	Apply the preferences in a file Export Preferences saved	A Beállítások exportálása paranccsal mentett fájl beállításainak alkalmazása
+	Export Preferences	Beállítások exportálása
+	Import Preferences	Beállítások importálása
 	Search Preferences	Keresés a beállításokban
 	No settings found	Nincs ilyen beállítás
 	Reset Printing and Proofing	Printing and Proofing visszaállítása
@@ -5491,6 +5498,20 @@ imageTrace	Outline	Körvonal
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
 @msg	unknown panel `{raw}`	ismeretlen panel: `{raw}`
 @msg	unknown preference `{key}`	ismeretlen beállítás: `{key}`
+@msg	Preferences imported.	A beállítások importálva.
+@msg	not a preferences file: {e}	nem beállításfájl: {e}
+@msg	not a preferences file: no JSON object	nem beállításfájl: nincs JSON-objektum
+@msg	not a preferences file (format `{format}`)	nem beállításfájl (formátum: `{format}`)
+@msg	not a preferences file: no `format`	nem beállításfájl: nincs `format`
+@msg	not a preferences file: no `version`	nem beállításfájl: nincs `version`
+@msg	not a preferences file: no `prefs`	nem beállításfájl: nincs `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	a fájlt a VectorCraft újabb verziója mentette (verzió: {v})
+@msg	the file holds no preferences	a fájl nem tartalmaz beállításokat
+@msg	`{key}` names a folder, which preferences files leave out	a(z) `{key}` mappát ad meg, a beállításfájlok pedig nem tartalmaznak mappákat
+@msg	the file is larger than 1 MB	a fájl nagyobb 1 MB-nál
+@msg	give `path` or `data`	adja meg a `path` vagy a `data` értékét
+@msg	`{key}` must be an object	a(z) `{key}` értékének objektumnak kell lennie
+@msg	`prefs.import` runs on its own, not as a batch step	a `prefs.import` önállóan fut, nem kötegelt lépésként
 @msg	unknown preset (one of {_1})	ismeretlen előbeállítás (ezek egyike lehet: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (high, medium, low vagy egy mentett; lásd: flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (lásd: flattener.presets.list)

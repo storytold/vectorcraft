@@ -3764,6 +3764,12 @@ theme	Appearance	Motiv
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
+	Export Preferences…	Exportovat předvolby…
+	Import Preferences…	Importovat předvolby…
+	Save the applied preferences to a JSON file	Uložit použité předvolby do souboru JSON
+	Apply the preferences in a file Export Preferences saved	Použít předvolby ze souboru uloženého příkazem Exportovat předvolby
+	Export Preferences	Exportovat předvolby
+	Import Preferences	Importovat předvolby
 	Search Preferences	Hledat v předvolbách
 	No settings found	Nenalezena žádná nastavení
 	Scale Corners	Měnit velikost rohů
@@ -4989,6 +4995,20 @@ imageTrace	Outline	Obrys
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
 @msg	unknown panel `{raw}`	neznámý panel `{raw}`
 @msg	unknown preference `{key}`	neznámá předvolba `{key}`
+@msg	Preferences imported.	Předvolby byly importovány.
+@msg	not a preferences file: {e}	nejde o soubor předvoleb: {e}
+@msg	not a preferences file: no JSON object	nejde o soubor předvoleb: chybí objekt JSON
+@msg	not a preferences file (format `{format}`)	nejde o soubor předvoleb (formát `{format}`)
+@msg	not a preferences file: no `format`	nejde o soubor předvoleb: chybí `format`
+@msg	not a preferences file: no `version`	nejde o soubor předvoleb: chybí `version`
+@msg	not a preferences file: no `prefs`	nejde o soubor předvoleb: chybí `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	soubor byl uložen novější verzí aplikace VectorCraft (verze {v})
+@msg	the file holds no preferences	soubor neobsahuje žádné předvolby
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` určuje složku a soubory předvoleb složky neobsahují
+@msg	the file is larger than 1 MB	soubor je větší než 1 MB
+@msg	give `path` or `data`	zadejte `path` nebo `data`
+@msg	`{key}` must be an object	`{key}` musí být objekt
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` se spouští samostatně, ne jako krok dávky
 @msg	unknown preset (one of {_1})	neznámé přednastavení (jedno z {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	neznámé přednastavení `{name}` (high, medium, low nebo uložené: viz flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	neznámé přednastavení `{name}` (viz flattener.presets.list)
@@ -5560,6 +5580,7 @@ file-filter	Swatch libraries	Knihovny vzorníků
 file-filter	Flattener presets	Přednastavení sloučení průhlednosti
 file-filter	PDF presets	Přednastavení PDF
 file-filter	Print presets	Přednastavení tisku
+file-filter	Preferences	Předvolby
 file-filter	Export presets	Přednastavení exportu
 file-filter	SVG Compressed	Komprimované SVG
 file-filter	PDF-compatible .ai	.ai kompatibilní s PDF

@@ -3778,6 +3778,12 @@ antiAlias	Sharp	शार्प
 	Reset Painting	पेंटिंग रीसेट करें
 	Reset Panel	पैनल रीसेट करें
 	Reset Preferences	प्रेफ़रेंसेज़ रीसेट करें
+	Export Preferences…	प्रेफ़रेंसेज़ निर्यात करें…
+	Import Preferences…	प्रेफ़रेंसेज़ आयात करें…
+	Save the applied preferences to a JSON file	लागू प्रेफ़रेंसेज़ को JSON फ़ाइल में सहेजें
+	Apply the preferences in a file Export Preferences saved	प्रेफ़रेंसेज़ निर्यात करें से सहेजी गई फ़ाइल की प्रेफ़रेंसेज़ लागू करें
+	Export Preferences	प्रेफ़रेंसेज़ निर्यात करें
+	Import Preferences	प्रेफ़रेंसेज़ आयात करें
 	Search Preferences	प्रेफ़रेंसेज़ में खोजें
 	No settings found	कोई सेटिंग नहीं मिली
 	Reset Printing and Proofing	मुद्रण और प्रूफिंग रीसेट करें
@@ -7866,6 +7872,20 @@ antiAlias	Sharp	शार्प
 @msg	unknown plate `{n}`	अज्ञात प्लेट `{n}`
 @msg	unknown preference `{k}`	अज्ञात वरीयता `{k}`
 @msg	unknown preference `{key}`	अज्ञात वरीयता `{key}`
+@msg	Preferences imported.	प्रेफ़रेंसेज़ आयात की गईं।
+@msg	not a preferences file: {e}	प्रेफ़रेंसेज़ फ़ाइल नहीं: {e}
+@msg	not a preferences file: no JSON object	प्रेफ़रेंसेज़ फ़ाइल नहीं: कोई JSON ऑब्जेक्ट नहीं
+@msg	not a preferences file (format `{format}`)	प्रेफ़रेंसेज़ फ़ाइल नहीं (फ़ॉर्मैट `{format}`)
+@msg	not a preferences file: no `format`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `format` नहीं है
+@msg	not a preferences file: no `version`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `version` नहीं है
+@msg	not a preferences file: no `prefs`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `prefs` नहीं है
+@msg	the file was saved by a newer version of VectorCraft (version {v})	फ़ाइल VectorCraft के नए संस्करण से सहेजी गई थी (संस्करण {v})
+@msg	the file holds no preferences	फ़ाइल में कोई प्रेफ़रेंस नहीं है
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` एक फ़ोल्डर बताता है, और प्रेफ़रेंसेज़ फ़ाइलों में फ़ोल्डर नहीं होते
+@msg	the file is larger than 1 MB	फ़ाइल 1 MB से बड़ी है
+@msg	give `path` or `data`	`path` या `data` दें
+@msg	`{key}` must be an object	`{key}` एक ऑब्जेक्ट होना चाहिए
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` अकेले चलता है, बैच के चरण के रूप में नहीं
 @msg	unknown preset (one of {_1})	अज्ञात प्रीसेट ({_1} में से एक)
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	अज्ञात प्रीसेट `{name}` (उच्च, मध्यम, निम्न या एक बचाया: flattener.presets.list देखें)
 @msg	unknown preset `{name}` (see flattener.presets.list)	अज्ञात प्रीसेट `{name}` (देखें flattener.presets.list)
@@ -8065,6 +8085,7 @@ file-filter	Flattener presets	फ़्लैटनर प्रीसेट्�
 file-filter	PDF presets	PDF प्रीसेट्स
 file-filter	PDF-compatible .ai	PDF-संगत .ai
 file-filter	Print presets	प्रिंट प्रीसेट्स
+file-filter	Preferences	प्रेफ़रेंसेज़
 file-filter	SVG Compressed	SVG संपीड़ित
 file-filter	Swatch libraries	स्वॉच लाइब्रेरीज़
 file-filter	Templates	टेम्पलेट्स

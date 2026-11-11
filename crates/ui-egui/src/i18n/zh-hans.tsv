@@ -1216,6 +1216,7 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Preferences	首选项
 file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG
 file-filter	PDF-compatible .ai	PDF 兼容 .ai
@@ -2718,6 +2719,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset OpenType Features	重置 OpenType 特性
 	Reset Panel	重置面板
 	Reset Preferences	重置首选项
+	Export Preferences…	导出首选项…
+	Import Preferences…	导入首选项…
+	Save the applied preferences to a JSON file	将已应用的首选项保存到 JSON 文件
+	Apply the preferences in a file Export Preferences saved	应用“导出首选项”所保存文件中的首选项
+	Export Preferences	导出首选项
+	Import Preferences	导入首选项
 	Search Preferences	搜索首选项
 	No settings found	未找到设置
 	Reset Profiles	重置配置文件
@@ -4148,6 +4155,20 @@ imageTrace	Outline	轮廓
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必须介于 {min} 和 {max} 之间 (实际为 {x})
 @msg	`{key}` must be one of {_1}	`{key}` 必须是 {_1} 之一
 @msg	unknown preference `{key}`	未知首选项 `{key}`
+@msg	Preferences imported.	已导入首选项。
+@msg	not a preferences file: {e}	不是首选项文件：{e}
+@msg	not a preferences file: no JSON object	不是首选项文件：没有 JSON 对象
+@msg	not a preferences file (format `{format}`)	不是首选项文件（格式 `{format}`）
+@msg	not a preferences file: no `format`	不是首选项文件：没有 `format`
+@msg	not a preferences file: no `version`	不是首选项文件：没有 `version`
+@msg	not a preferences file: no `prefs`	不是首选项文件：没有 `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	该文件由更新版本的 VectorCraft 保存（版本 {v}）
+@msg	the file holds no preferences	该文件不包含首选项
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` 指定的是文件夹，首选项文件不包含文件夹
+@msg	the file is larger than 1 MB	文件大于 1 MB
+@msg	give `path` or `data`	请提供 `path` 或 `data`
+@msg	`{key}` must be an object	`{key}` 必须是对象
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` 需单独运行，不能作为批处理步骤
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	数据恢复没有可保存副本的位置：请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	数据恢复无法将副本保存到 {path}：{e}
 @msg	Plug-ins can't be loaded from {path}: {e}	无法从 {path} 载入增效工具：{e}

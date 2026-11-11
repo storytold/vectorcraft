@@ -1,11 +1,12 @@
-//! Preferences (Edit → Preferences): `prefs.get`, `prefs.set`, `prefs.reset`, `prefs.list`.
+//! Preferences (Edit → Preferences): `prefs.get`, `prefs.set`, `prefs.reset`, `prefs.list`,
+//! `prefs.export`, `prefs.import`.
 //!
 //! [`PREF_SPECS`] is the single source of truth for every preference: its category, section,
 //! label and value kind. The Preferences dialog renders from it and `prefs.set` validates with it.
 
 use serde_json::{Map, Value, json};
 
-use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, str_param, switch_or};
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, str_param, switch_or, text_param};
 use crate::Prefs;
 use crate::units::Measure;
 use vectorcraft_doc::{GridPrefs, Unit};
@@ -457,6 +458,9 @@ pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinde
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
+    if !v.is_object() {
+        return Err(format!("`{key}` must be an object"));
+    }
     match key {
         "eyedropper" => {
             let cur: super::EyedropperOptions = serde_json::from_value(current.clone()).unwrap_or_default();
@@ -763,13 +767,115 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Preference",
             [],
             None,
-            "{key, value} or {values: {key: value, …}, documentUnits?: bool=true} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step, unless documentUnits is false; the eyedropper group takes a partial object, as eyedropper.setOptions; a new recoveryFolder must be a folder that can be listed and written in, and a new pluginsFolder a folder that can be listed: otherwise an error, and nothing changes; an empty value is not checked)",
+            "{key, value} or {values: {key: value, …}, documentUnits?: bool=true} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step, unless documentUnits is false; the eyedropper group takes a partial object, as eyedropper.setOptions, and a group given anything but an object is an error; a new recoveryFolder must be a folder that can be listed and written in, and a new pluginsFolder a folder that can be listed: otherwise an error, and nothing changes; an empty value is not checked)",
             always,
             set
         ),
         cmd!(query "prefs.reset", "Reset Preferences", [], None, "{category?} reset one category (or everything) to defaults", always, reset),
         cmd!(query "prefs.list", "List Preferences", [], None, "{} → [{key, category, section, label, kind, value, …}] every preference", always, list),
+        cmd!(
+            query "prefs.export",
+            "Export Preferences",
+            [],
+            None,
+            "{path?} write the preferences as a JSON file {format: \"vectorcraft-preferences\", version: 1, prefs: {key: value, …}}: every preference prefs.list lists and the eyedropper, perspectiveWidget, pathfinder and glyphSnap groups, without the folder preferences fontsFolder, pluginsFolder, recoveryFolder and templatesFolder and without saved presets; a file over 1 MB, which prefs.import would refuse, is an error and is not written → {path, count}; without path → {data: the file's text, count}",
+            always,
+            export
+        ),
+        cmd!(
+            query "prefs.import",
+            "Import Preferences",
+            [],
+            None,
+            "{path? | data?: the file's text} apply the preferences of a file prefs.export wrote (at most 1 MB). Every value is checked first, as prefs.set checks it: another format, a newer version, an unknown preference, a value of the wrong type or out of range, or a folder preference is an error, and nothing changes. Preferences the file leaves out keep their values; the open document's units stay as they are; no undo step; not a command.batch step → {imported: count}",
+            always,
+            import
+        ),
     ]
+}
+
+/// The `format` of a preferences file (`prefs.export`, `prefs.import`).
+pub const PREFS_FORMAT: &str = "vectorcraft-preferences";
+
+/// The `version` `prefs.export` writes; `prefs.import` refuses a newer one.
+pub const PREFS_VERSION: u64 = 1;
+
+/// The largest preferences file `prefs.import` reads.
+const MAX_PREFS_FILE_BYTES: usize = 1 << 20;
+
+/// Folder preferences, which name folders on one computer: a preferences file leaves them out.
+const FOLDER_PREFS: &[&str] = &["fontsFolder", "pluginsFolder", "recoveryFolder", "templatesFolder"];
+
+/// The preferences `prefs.export` writes: every [`PREF_SPECS`] key but the [`FOLDER_PREFS`], and
+/// the [`PREF_GROUPS`].
+fn exported(prefs: &crate::Prefs) -> Map<String, Value> {
+    let all = prefs.to_json();
+    let keys = PREF_SPECS.iter().map(|s| s.key).filter(|k| !FOLDER_PREFS.contains(k)).chain(PREF_GROUPS.iter().copied());
+    keys.map(|k| (k.to_string(), all[k].clone())).collect()
+}
+
+fn export(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "prefs.export";
+    let path = text_param(p, "path", C)?;
+    let prefs = exported(&s.prefs);
+    let count = prefs.len();
+    let file = json!({ "format": PREFS_FORMAT, "version": PREFS_VERSION, "prefs": prefs });
+    let text = serde_json::to_string_pretty(&file).map_err(|e| bad(C, e.to_string()))?;
+    // A file `prefs.import` would refuse is not written.
+    if text.len() > MAX_PREFS_FILE_BYTES {
+        return Err(bad(C, "the file is larger than 1 MB"));
+    }
+    match path {
+        Some(path) => {
+            super::fileio::write_file(path, text.as_bytes())?;
+            Ok(json!({"path": path, "count": count}))
+        }
+        None => Ok(json!({"data": text, "count": count})),
+    }
+}
+
+/// The preferences in the bytes of a preferences file, unchecked: `Err` says why the file is not
+/// one this version reads.
+fn read_prefs_file(bytes: &[u8]) -> std::result::Result<Map<String, Value>, String> {
+    let v: Value = serde_json::from_slice(bytes).map_err(|e| format!("not a preferences file: {e}"))?;
+    let Some(file) = v.as_object() else { return Err("not a preferences file: no JSON object".into()) };
+    match file.get("format").and_then(Value::as_str) {
+        Some(PREFS_FORMAT) => {}
+        Some(format) => return Err(format!("not a preferences file (format `{format}`)")),
+        None => return Err("not a preferences file: no `format`".into()),
+    }
+    match file.get("version").and_then(Value::as_u64) {
+        Some(v) if v > PREFS_VERSION => return Err(format!("the file was saved by a newer version of VectorCraft (version {v})")),
+        Some(1..) => {}
+        _ => return Err("not a preferences file: no `version`".into()),
+    }
+    let Some(prefs) = file.get("prefs").and_then(Value::as_object) else { return Err("not a preferences file: no `prefs`".into()) };
+    if prefs.is_empty() {
+        return Err("the file holds no preferences".into());
+    }
+    if let Some(key) = prefs.keys().find(|k| FOLDER_PREFS.contains(&k.as_str())) {
+        return Err(format!("`{key}` names a folder, which preferences files leave out"));
+    }
+    Ok(prefs.clone())
+}
+
+fn import(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "prefs.import";
+    let too_large = || bad(C, "the file is larger than 1 MB");
+    let bytes = match (text_param(p, "path", C)?, text_param(p, "data", C)?) {
+        (Some(path), None) => super::fileio::read_file_head(path, MAX_PREFS_FILE_BYTES + 1)?,
+        (None, Some(text)) if text.len() > MAX_PREFS_FILE_BYTES => return Err(too_large()),
+        (None, Some(text)) => text.as_bytes().to_vec(),
+        _ => return Err(bad(C, "give `path` or `data`")),
+    };
+    if bytes.len() > MAX_PREFS_FILE_BYTES {
+        return Err(too_large());
+    }
+    let values = read_prefs_file(&bytes).map_err(|e| bad(C, e))?;
+    let mut next = s.prefs.clone();
+    next.set_values(&values).map_err(|e| bad(C, e))?;
+    s.apply_prefs(next);
+    Ok(json!({ "imported": values.len() }))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {

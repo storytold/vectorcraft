@@ -1278,6 +1278,7 @@ file-filter	Swatch libraries	Librerie campioni
 file-filter	Flattener presets	Preset di appiattimento
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset di stampa
+file-filter	Preferences	Preferenze
 file-filter	Export presets	Predefiniti di esportazione
 file-filter	SVG Compressed	SVG compresso
 file-filter	PDF-compatible .ai	.ai compatibile con PDF
@@ -2852,6 +2853,12 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Reimposta funzioni OpenType
 	Reset Panel	Reimposta pannello
 	Reset Preferences	Reimposta preferenze
+	Export Preferences…	Esporta preferenze…
+	Import Preferences…	Importa preferenze…
+	Save the applied preferences to a JSON file	Salva le preferenze applicate in un file JSON
+	Apply the preferences in a file Export Preferences saved	Applica le preferenze di un file salvato con Esporta preferenze
+	Export Preferences	Esporta preferenze
+	Import Preferences	Importa preferenze
 	Search Preferences	Cerca nelle preferenze
 	No settings found	Nessuna impostazione trovata
 	Reset Profiles	Reimposta profili
@@ -4723,6 +4730,20 @@ axis	Both	Entrambi
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	valore di sovrastampa sconosciuto `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	pannello sconosciuto `{raw}`
 @msg	unknown preference `{key}`	preferenza sconosciuta `{key}`
+@msg	Preferences imported.	Preferenze importate.
+@msg	not a preferences file: {e}	non è un file di preferenze: {e}
+@msg	not a preferences file: no JSON object	non è un file di preferenze: nessun oggetto JSON
+@msg	not a preferences file (format `{format}`)	non è un file di preferenze (formato `{format}`)
+@msg	not a preferences file: no `format`	non è un file di preferenze: manca `format`
+@msg	not a preferences file: no `version`	non è un file di preferenze: manca `version`
+@msg	not a preferences file: no `prefs`	non è un file di preferenze: manca `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	il file è stato salvato da una versione più recente di VectorCraft (versione {v})
+@msg	the file holds no preferences	il file non contiene preferenze
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` indica una cartella, e i file di preferenze non includono cartelle
+@msg	the file is larger than 1 MB	il file supera 1 MB
+@msg	give `path` or `data`	specifica `path` o `data`
+@msg	`{key}` must be an object	`{key}` deve essere un oggetto
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` viene eseguito da solo, non come passo di un batch
 @msg	unknown preset (one of {_1})	preset sconosciuto (uno dei seguenti: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preset sconosciuto `{name}` (high, medium, low o uno salvato: vedi flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preset sconosciuto `{name}` (vedi flattener.presets.list)

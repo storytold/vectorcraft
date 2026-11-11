@@ -3712,6 +3712,12 @@ theme	Appearance	Izgled
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
+	Export Preferences…	Izvezi postavke…
+	Import Preferences…	Uvezi postavke…
+	Save the applied preferences to a JSON file	Sačuvaj primijenjene postavke u JSON datoteku
+	Apply the preferences in a file Export Preferences saved	Primijeni postavke iz datoteke sačuvane naredbom Izvezi postavke
+	Export Preferences	Izvezi postavke
+	Import Preferences	Uvezi postavke
 	Search Preferences	Pretraga postavki
 	No settings found	Nema pronađenih postavki
 	Scale Corners	Skaliraj uglove
@@ -4905,6 +4911,20 @@ imageTrace	Outline	Obris
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nepoznati pretisci `{o}` (preserve, simulate ili discard)
 @msg	unknown panel `{raw}`	nepoznat panel `{raw}`
 @msg	unknown preference `{key}`	nepoznata postavka `{key}`
+@msg	Preferences imported.	Postavke su uvezene.
+@msg	not a preferences file: {e}	nije datoteka postavki: {e}
+@msg	not a preferences file: no JSON object	nije datoteka postavki: nema JSON objekta
+@msg	not a preferences file (format `{format}`)	nije datoteka postavki (format `{format}`)
+@msg	not a preferences file: no `format`	nije datoteka postavki: nema `format`
+@msg	not a preferences file: no `version`	nije datoteka postavki: nema `version`
+@msg	not a preferences file: no `prefs`	nije datoteka postavki: nema `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	datoteku je sačuvala novija verzija programa VectorCraft (verzija {v})
+@msg	the file holds no preferences	datoteka ne sadrži postavke
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` navodi folder, a datoteke postavki ne sadrže foldere
+@msg	the file is larger than 1 MB	datoteka je veća od 1 MB
+@msg	give `path` or `data`	navedite `path` ili `data`
+@msg	`{key}` must be an object	`{key}` mora biti objekat
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` se pokreće samostalno, ne kao korak paketa
 @msg	unknown preset (one of {_1})	nepoznat predložak (jedan od {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	nepoznat predložak `{name}` (high, medium, low ili sačuvani: vidi flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	nepoznat predložak `{name}` (vidi flattener.presets.list)
@@ -5445,6 +5465,7 @@ file-filter	Swatch libraries	Biblioteke uzoraka boja
 file-filter	Flattener presets	Predlošci spljoštavanja
 file-filter	PDF presets	PDF predlošci
 file-filter	Print presets	Predlošci štampanja
+file-filter	Preferences	Postavke
 file-filter	Export presets	Predlošci izvoza
 file-filter	SVG Compressed	Komprimirani SVG
 file-filter	PDF-compatible .ai	.ai kompatibilan s PDF-om

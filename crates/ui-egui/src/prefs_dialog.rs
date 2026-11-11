@@ -401,6 +401,21 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
         ui.add_space(14.0);
         ui.horizontal(|ui| {
+            if widgets::secondary_button(ui, tl!("Export Preferences…")).on_hover_text(tl!("Save the applied preferences to a JSON file")).clicked()
+            {
+                export_preferences(app, &mut d);
+            }
+            // Not on the web, which has no open dialog that returns a file here.
+            if crate::picks::can(app, &crate::picks::PickRequest::Open(crate::FilePick::default()))
+                && widgets::secondary_button(ui, tl!("Import Preferences…"))
+                    .on_hover_text(tl!("Apply the preferences in a file Export Preferences saved"))
+                    .clicked()
+            {
+                import_preferences(app, &mut d);
+            }
+        });
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
             if widgets::secondary_button(ui, tl!("Reset Preferences"))
                 .on_hover_text(tl!("Restore every preference to its default (applied on OK)"))
                 .clicked()
@@ -661,6 +676,67 @@ fn choose_folder(app: &mut VectorcraftApp, d: &mut Dialog, key: &'static str) {
     });
     if let Err(e) = r {
         app.status(e);
+    }
+}
+
+/// The file name Export Preferences… suggests.
+const PREFS_FILE_NAME: &str = "VectorCraft Preferences.json";
+
+/// Export Preferences…: the applied preferences (`prefs.export`) go to a file picked in a save
+/// dialog (the web downloads it). Changes in the dialog not yet applied with OK are not in it.
+fn export_preferences(app: &mut VectorcraftApp, d: &mut Dialog) {
+    let r =
+        crate::picks::in_app_dialog(app, d, |app, _| crate::io::save_command_output_named(app, "prefs.export", PREFS_FILE_NAME, json!({})).map(drop));
+    if let Err(e) = r
+        && e != "cancelled"
+    {
+        app.status(e);
+    }
+}
+
+/// Import Preferences…: the preferences in a file picked in an open dialog are applied
+/// (`prefs.import`), and the dialog shows them. On an error nothing changes and the status bar
+/// says why.
+fn import_preferences(app: &mut VectorcraftApp, d: &mut Dialog) {
+    let r = crate::picks::in_app_dialog(app, d, |app, d| {
+        let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Preferences", &["json"])], ..Default::default() };
+        let Some(path) = crate::picks::open(app, &pick) else { return Ok(()) };
+        app.run("prefs.import", json!({ "path": path }))?;
+        show_prefs(d, &app.session.prefs.to_json());
+        app.status("Preferences imported.");
+        Ok(())
+    });
+    if let Err(e) = r {
+        app.status(e);
+    }
+}
+
+/// After `prefs.import`: the preferences are saved with the UI state, Enable Touch Workspace takes
+/// effect when the import changed it from `touch_workspace`, and an open Preferences dialog shows
+/// the imported values.
+pub(crate) fn imported(app: &mut VectorcraftApp, touch_workspace: bool) {
+    snapshot(app);
+    app.prefs_changed = true;
+    if app.session.prefs.touch_workspace != touch_workspace {
+        crate::workspaces::sync_touch_workspace(app, app.touch_screen);
+    }
+    let prefs = app.session.prefs.to_json();
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "preferences") {
+        show_prefs(d, &prefs);
+    }
+}
+
+/// The Preferences dialog `d` shows the preferences `prefs` in place of its working copy. Units ›
+/// General shows the preference, and OK then leaves the open document's units alone unless the
+/// field is changed.
+fn show_prefs(d: &mut Dialog, prefs: &Value) {
+    for (k, v) in prefs.as_object().into_iter().flatten() {
+        if d.fields.contains_key(k) {
+            d.fields.insert(k.clone(), v.clone());
+        }
+    }
+    if let Some(v) = d.fields.get("unitsGeneral").cloned() {
+        d.fields.insert(RESET_UNITS.into(), v);
     }
 }
 

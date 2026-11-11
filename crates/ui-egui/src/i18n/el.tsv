@@ -1919,6 +1919,12 @@ font-technology	Variable	Μεταβλητές
 	Reselect	Επαναφορά προηγούμενης επιλογής
 	Reset	Επαναφορά
 	Reset Preferences	Επαναφορά προτιμήσεων
+	Export Preferences…	Εξαγωγή προτιμήσεων…
+	Import Preferences…	Εισαγωγή προτιμήσεων…
+	Save the applied preferences to a JSON file	Αποθήκευση των εφαρμοσμένων προτιμήσεων σε αρχείο JSON
+	Apply the preferences in a file Export Preferences saved	Εφαρμογή των προτιμήσεων από αρχείο που αποθήκευσε η Εξαγωγή προτιμήσεων
+	Export Preferences	Εξαγωγή προτιμήσεων
+	Import Preferences	Εισαγωγή προτιμήσεων
 	Search Preferences	Αναζήτηση στις προτιμήσεις
 	No settings found	Δεν βρέθηκαν ρυθμίσεις
 	Reset to Default	Επαναφορά προεπιλογής
@@ -2616,6 +2622,7 @@ file-filter	Flattener presets	Προεπιλογές ισοπέδωσης
 file-filter	PDF presets	Προεπιλογές PDF
 file-filter	PDF-compatible .ai	.ai συμβατό με PDF
 file-filter	Print presets	Προεπιλογές εκτύπωσης
+file-filter	Preferences	Προτιμήσεις
 file-filter	Export presets	Προκαθορισμένα εξαγωγής
 file-filter	SVG Compressed	Συμπιεσμένο SVG
 file-filter	Swatch libraries	Βιβλιοθήκες δειγμάτων χρωμάτων
@@ -4629,6 +4636,20 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	άγνωστη επιλογή υπερεκτύπωσης `{o}` (preserve, simulate ή discard)
 @msg	unknown panel `{raw}`	άγνωστος πίνακας `{raw}`
 @msg	unknown preference `{key}`	άγνωστη προτίμηση `{key}`
+@msg	Preferences imported.	Οι προτιμήσεις εισήχθησαν.
+@msg	not a preferences file: {e}	δεν είναι αρχείο προτιμήσεων: {e}
+@msg	not a preferences file: no JSON object	δεν είναι αρχείο προτιμήσεων: δεν υπάρχει αντικείμενο JSON
+@msg	not a preferences file (format `{format}`)	δεν είναι αρχείο προτιμήσεων (μορφή `{format}`)
+@msg	not a preferences file: no `format`	δεν είναι αρχείο προτιμήσεων: δεν υπάρχει `format`
+@msg	not a preferences file: no `version`	δεν είναι αρχείο προτιμήσεων: δεν υπάρχει `version`
+@msg	not a preferences file: no `prefs`	δεν είναι αρχείο προτιμήσεων: δεν υπάρχει `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	το αρχείο αποθηκεύτηκε από νεότερη έκδοση του VectorCraft (έκδοση {v})
+@msg	the file holds no preferences	το αρχείο δεν περιέχει προτιμήσεις
+@msg	`{key}` names a folder, which preferences files leave out	το `{key}` ορίζει φάκελο, και τα αρχεία προτιμήσεων δεν περιέχουν φακέλους
+@msg	the file is larger than 1 MB	το αρχείο είναι μεγαλύτερο από 1 MB
+@msg	give `path` or `data`	δώστε `path` ή `data`
+@msg	`{key}` must be an object	το `{key}` πρέπει να είναι αντικείμενο
+@msg	`prefs.import` runs on its own, not as a batch step	το `prefs.import` εκτελείται μόνο του, όχι ως βήμα δέσμης
 @msg	unknown preset (one of {_1})	άγνωστη προεπιλογή (μία από τις {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	άγνωστη προεπιλογή `{name}` (high, medium, low ή αποθηκευμένη: δείτε flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	άγνωστη προεπιλογή `{name}` (δείτε flattener.presets.list)

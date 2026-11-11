@@ -1242,6 +1242,7 @@ file-filter	Swatch libraries	色票資料庫
 file-filter	Flattener presets	平面化預設集
 file-filter	PDF presets	PDF 預設集
 file-filter	Print presets	列印預設集
+file-filter	Preferences	偏好設定
 file-filter	Export presets	轉存預設集
 file-filter	SVG Compressed	壓縮 SVG
 file-filter	PDF-compatible .ai	PDF 相容 .ai
@@ -1982,6 +1983,20 @@ file-filter	Templates	範本
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必須介於 {min} 和 {max} 之間 (收到 {x})
 @msg	`{key}` must be one of {_1}	`{key}` 必須是 {_1} 其中之一
 @msg	unknown preference `{key}`	未知的偏好設定 `{key}`
+@msg	Preferences imported.	已匯入偏好設定。
+@msg	not a preferences file: {e}	不是偏好設定檔案：{e}
+@msg	not a preferences file: no JSON object	不是偏好設定檔案：沒有 JSON 物件
+@msg	not a preferences file (format `{format}`)	不是偏好設定檔案（格式 `{format}`）
+@msg	not a preferences file: no `format`	不是偏好設定檔案：沒有 `format`
+@msg	not a preferences file: no `version`	不是偏好設定檔案：沒有 `version`
+@msg	not a preferences file: no `prefs`	不是偏好設定檔案：沒有 `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	此檔案由較新版本的 VectorCraft 儲存（版本 {v}）
+@msg	the file holds no preferences	此檔案不含偏好設定
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` 指定的是資料夾，偏好設定檔案不含資料夾
+@msg	the file is larger than 1 MB	檔案大於 1 MB
+@msg	give `path` or `data`	請提供 `path` 或 `data`
+@msg	`{key}` must be an object	`{key}` 必須是物件
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` 須單獨執行，不能作為批次步驟
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	「資料復原」沒有可存放拷貝的位置：請設定「偏好設定 → 檔案處理 → 資料復原 → 資料夾」 (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	「資料復原」無法將拷貝存放到 {path}：{e}
 @msg	Plug-ins can't be loaded from {path}: {e}	無法從 {path} 載入增效模組：{e}
@@ -3774,6 +3789,12 @@ digits	Malayalam	馬來亞拉姆數字
 	Reset OpenType Features	重設 OpenType 功能
 	Reset Panel	重設面板
 	Reset Preferences	重設偏好設定
+	Export Preferences…	匯出偏好設定…
+	Import Preferences…	匯入偏好設定…
+	Save the applied preferences to a JSON file	將已套用的偏好設定儲存為 JSON 檔案
+	Apply the preferences in a file Export Preferences saved	套用「匯出偏好設定」所儲存檔案中的偏好設定
+	Export Preferences	匯出偏好設定
+	Import Preferences	匯入偏好設定
 	Search Preferences	搜尋偏好設定
 	No settings found	找不到設定
 	Reset Profiles	重設描述檔
