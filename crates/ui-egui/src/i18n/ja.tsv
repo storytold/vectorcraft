@@ -6446,3 +6446,19 @@ breakText	Glyphs	字形
 	No Suggestions	候補なし
 	Edit Custom Dictionary	カスタム辞書を編集
 	Entry:	エントリ:
+# Script Console
+	Script Console	スクリプトコンソール
+	Clear Script Console	スクリプトコンソールを消去
+	Copy Script Console	スクリプトコンソールをコピー
+	Copy All	すべてコピー
+	Copy Selected	選択範囲をコピー
+	Finished	完了
+	Ended with an error	エラーで終了
+	Out of fuel	命令数の上限に到達
+	Ended at a host limit	ホストの上限で終了
+	Ended at a limit	上限で終了
+	Stopped	停止
+	Ended by an internal fault	内部エラーで終了
+	{ms} ms, {calls} host calls	{ms} ms、ホスト呼び出し {calls} 回
+	{dropped} earlier lines dropped, {cut} lines cut	古い行 {dropped} 行を破棄、{cut} 行を切り詰め
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` と `last` には、コンソールが保持している行の番号を、`first` が `last` より前になるよう指定してください

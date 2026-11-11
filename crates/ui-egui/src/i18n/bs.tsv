@@ -6539,3 +6539,18 @@ shape	Open	Otvoren
 @msg	side is left or right, not `{s}`	side je left ili right, a ne `{s}`
 	Edit Custom Dictionary	Uredi prilagođeni rječnik
 	Entry:	Unos:
+# Script Console
+	Script Console	Konzola skripti
+	Clear Script Console	Očisti konzolu skripti
+	Copy Script Console	Kopiraj konzolu skripti
+	Copy All	Kopiraj sve
+	Copy Selected	Kopiraj odabrano
+	Finished	Završeno
+	Ended with an error	Završeno s greškom
+	Out of fuel	Dostignuto ograničenje instrukcija
+	Ended at a host limit	Završeno na ograničenju hosta
+	Ended at a limit	Završeno na ograničenju
+	Stopped	Zaustavljeno
+	Ended by an internal fault	Završeno zbog interne greške
+	{ms} ms, {calls} host calls	{ms} ms, {calls} poziva hosta
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ranijih redova uklonjeno, {cut} redova skraćeno

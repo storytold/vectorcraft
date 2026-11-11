@@ -6598,3 +6598,19 @@ breakText	Glyphs	字形
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`
 	Edit Custom Dictionary	编辑自定义词典
 	Entry:	条目：
+# Script Console
+	Script Console	脚本控制台
+	Clear Script Console	清除脚本控制台
+	Copy Script Console	复制脚本控制台
+	Copy All	全部复制
+	Copy Selected	复制所选内容
+	Finished	已完成
+	Ended with an error	因错误结束
+	Out of fuel	已用尽指令上限
+	Ended at a host limit	在宿主限制处结束
+	Ended at a limit	在限制处结束
+	Stopped	已停止
+	Ended by an internal fault	因内部错误结束
+	{ms} ms, {calls} host calls	{ms} 毫秒，宿主调用 {calls} 次
+	{dropped} earlier lines dropped, {cut} lines cut	已丢弃 {dropped} 行较早内容，已截断 {cut} 行
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必须是控制台保留的行号，且 `first` 不能在 `last` 之后

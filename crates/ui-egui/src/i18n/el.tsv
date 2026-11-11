@@ -6712,3 +6712,19 @@ breakText	Glyphs	Γλύφοι
 	No Suggestions	Καμία πρόταση
 	Edit Custom Dictionary	Επεξεργασία προσαρμοσμένου λεξικού
 	Entry:	Λήμμα:
+# Script Console
+	Script Console	Κονσόλα σεναρίων
+	Clear Script Console	Εκκαθάριση κονσόλας σεναρίων
+	Copy Script Console	Αντιγραφή κονσόλας σεναρίων
+	Copy All	Αντιγραφή όλων
+	Copy Selected	Αντιγραφή επιλεγμένων
+	Finished	Ολοκληρώθηκε
+	Ended with an error	Τερματίστηκε με σφάλμα
+	Out of fuel	Εξαντλήθηκε το όριο εντολών
+	Ended at a host limit	Τερματίστηκε σε όριο του κεντρικού συστήματος
+	Ended at a limit	Τερματίστηκε σε όριο
+	Stopped	Διακόπηκε
+	Ended by an internal fault	Τερματίστηκε λόγω εσωτερικού σφάλματος
+	{ms} ms, {calls} host calls	{ms} ms, {calls} κλήσεις προς το κεντρικό σύστημα
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} παλαιότερες γραμμές απορρίφθηκαν, {cut} γραμμές περικόπηκαν
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	Τα `first` και `last` πρέπει να είναι αριθμοί γραμμών που κρατά η κονσόλα, το `first` πριν από το `last`

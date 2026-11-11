@@ -6760,3 +6760,19 @@ breakText	Glyphs	Glyfy
 	No Suggestions	Žádné návrhy
 	Edit Custom Dictionary	Upravit vlastní slovník
 	Entry:	Položka:
+# Script Console
+	Script Console	Konzole skriptů
+	Clear Script Console	Vymazat konzoli skriptů
+	Copy Script Console	Kopírovat konzoli skriptů
+	Copy All	Kopírovat vše
+	Copy Selected	Kopírovat vybrané
+	Finished	Dokončeno
+	Ended with an error	Ukončeno s chybou
+	Out of fuel	Vyčerpán limit instrukcí
+	Ended at a host limit	Ukončeno na limitu hostitele
+	Ended at a limit	Ukončeno na limitu
+	Stopped	Zastaveno
+	Ended by an internal fault	Ukončeno vnitřní chybou
+	{ms} ms, {calls} host calls	{ms} ms, {calls} volání hostitele
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} starších řádků zahozeno, {cut} řádků zkráceno
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` a `last` musí být čísla řádků, které konzole uchovává, `first` před `last`

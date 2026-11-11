@@ -224,6 +224,25 @@ fn a_getter_is_read_each_time() {
 }
 
 #[test]
+fn a_text_function_takes_each_argument_as_string_gives_it() {
+    let mut r = realm(1_000_000);
+    let seen: Rc<RefCell<Vec<Data>>> = Rc::default();
+    let log = seen.clone();
+    let f: HostFunction = Rc::new(move |args| {
+        log.borrow_mut().extend(args);
+        Ok(Data::Undefined)
+    });
+    r.define_host_object("host", vec![("text".into(), HostItem::TextFunction(f))]).unwrap();
+    r.run("host.text(1 / 0, NaN, undefined, null, 0.1, [1, [2]], {toString: function () { return 'own'; }}, function f() {}, '\\ud800x')").unwrap();
+    let texts: Vec<String> = seen.borrow().iter().map(|d| if let Data::String(s) = d { s.clone() } else { format!("{d:?}") }).collect();
+    assert_eq!(texts[..7], ["Infinity", "NaN", "undefined", "null", "0.1", "1,2", "own"]);
+    assert!(texts[7].starts_with("function f()"), "{}", texts[7]);
+    assert_eq!(texts[8], "\u{fffd}x", "a lone surrogate becomes U+FFFD");
+    let e = r.run("host.text({toString: function () { throw new Error('no text'); }})").unwrap_err();
+    assert!(e.message.contains("no text"), "{}", e.message);
+}
+
+#[test]
 fn errors_from_the_host_can_be_caught_and_an_abort_cannot() {
     let mut r = realm(1_000_000);
     let f: HostFunction = Rc::new(|a| match a.first() {

@@ -1549,7 +1549,7 @@ describes that menu item. Pass exactly one of `path` and `source`. A `path` must
 case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
 not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and
 `ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. The script reaches the
-app through one global object:
+app through the global object `vc`, and writes to the Script Console through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
   catch. The documents and the session state the command changed, preferences included, go back, and any file it
@@ -1558,7 +1558,9 @@ app through one global object:
 - `vc.document` is a snapshot of the active document, or `null` when none is open. A snapshot too large to cross
   throws a `RangeError`.
 - `vc.commands` lists the commands a script may run.
-- `vc.log(value)` adds a value to the report.
+- `vc.log(value)` adds a value to the report and a line to the Script Console.
+- `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
+  `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `vc.args` is the `args` object.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
@@ -1597,13 +1599,23 @@ VectorCraft sets these limits itself:
 | A value crossing to or from a command | 16 MiB and 1,048,576 entries |
 | `args` as JSON | 1 MiB |
 | Log | 10,000 entries and 4 MiB |
+| Script Console | 2,048 lines and 1 MiB of text; 4,096 bytes a line; 256 bytes of a script's name |
 | Growth before a person is asked | 100,000 objects and 512 MiB of new document data |
 
 In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
 `ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
-with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls}`.
-In the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`.
-`answers` takes only an empty object, since scripts have no prompts yet.
+with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
+runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console}`. In the app the reply is `{running: true,
+name}`, and the report appears later as `scriptReport` in `ui.inspect`. The report of a failed run has the same
+fields after `kind`, `message`, `line`, `column` and `fuelLeft`. `answers` takes only an empty object, since scripts
+have no prompts yet.
+
+- `runTimeMs` is the time the script ran, its commands included. Waits between frames and for a person's answer are
+  left out. `timingAvailable` is false on the web, where `runTimeMs` is 0.
+- `hostCallCounts` is `{vcRun, documentReads, commandListReads, vcLog, consoleWrites}`.
+- `slowestCommands` lists at most 5 commands as `{id, calls, totalMs, maxMs}`, the longest in all first, then by id.
+- `console` is `{lines, droppedLines, truncatedLines}`: the run's own output, `vc.log` lines and uncaught error, as
+  text.
 
 ```json
 {"name":"run_command","arguments":{"command":"script.run","params":{"source":"vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10});"}}}
@@ -1611,6 +1623,28 @@ In the app the reply is `{running: true, name}`, and the report appears later as
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"path": "Tidy Layers.js", "args": {"margin": 12}}'
+```
+
+Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
+`$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message`, its end, and a report of
+its time, host calls and slowest commands. Each line shows the run's number and the script's name. Line feeds,
+carriage returns and the two together break lines, and other control characters show as their Unicode Control
+Pictures. The console keeps at most 2,048 lines and 1 MiB of text and drops the oldest lines past that. A line longer
+than 4,096 bytes, and a script's name longer than 256 bytes, is cut with `…`. When the console has dropped or cut any lines, a note at the top counts them. The panel lays out only the
+rows in view. Click a line to select it and Shift-click to extend the selection. Clear, Copy Selected and Copy All are
+at the bottom of the panel and in its menu. Output goes on while the panel is closed.
+
+- `script.console {}` returns `{lines: [{run, name, kind, text}], droppedLines, truncatedLines}`. `run` is the
+  run's number in the session, and `kind` is `start`, `output`, `log`, `error`, `end` or `report`. An end line's text
+  is `ended:`, a space, and then `finished`, `error`, `fuel`, `hostLimit`, `limit`, `stopped` or `internal`.
+- `script.console.clear {}` empties the console, sets its counts to zero and returns `{cleared}`. A running script
+  goes on writing, and `scriptReport` keeps the last run's console.
+- `ui.copyScriptConsole {first?, last?}` copies lines `first` to `last` to the clipboard as the panel shows them, or
+  every line when both are left out. When the console has dropped or cut any lines, a copy of every line starts with a
+  line that counts them. Pass both or neither. It returns `{lines}`, which does not count that line.
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"source": "$.writeln(\"layers: \", 3);"}'
 ```
 
 ## Transparency and opacity masks

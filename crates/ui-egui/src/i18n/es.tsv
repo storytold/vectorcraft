@@ -6703,3 +6703,19 @@ breakText	Glyphs	Glifos
 	No Suggestions	No hay sugerencias
 	Edit Custom Dictionary	Editar diccionario personalizado
 	Entry:	Entrada:
+# Script Console
+	Script Console	Consola de scripts
+	Clear Script Console	Borrar consola de scripts
+	Copy Script Console	Copiar consola de scripts
+	Copy All	Copiar todo
+	Copy Selected	Copiar selección
+	Finished	Terminado
+	Ended with an error	Terminado con un error
+	Out of fuel	Límite de instrucciones agotado
+	Ended at a host limit	Terminado en un límite del host
+	Ended at a limit	Terminado en un límite
+	Stopped	Detenido
+	Ended by an internal fault	Terminado por un error interno
+	{ms} ms, {calls} host calls	{ms} ms, {calls} llamadas al host
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} líneas anteriores descartadas, {cut} líneas recortadas
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` y `last` deben ser números de líneas que la consola conserva, `first` antes que `last`

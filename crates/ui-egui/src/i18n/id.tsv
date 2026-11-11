@@ -6502,3 +6502,18 @@ breakText	Glyphs	Glif
 @msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
 	Edit Custom Dictionary	Edit kamus kustom
 	Entry:	Entri:
+# Script Console
+	Script Console	Konsol Skrip
+	Clear Script Console	Bersihkan Konsol Skrip
+	Copy Script Console	Salin Konsol Skrip
+	Copy All	Salin Semua
+	Copy Selected	Salin yang Dipilih
+	Finished	Selesai
+	Ended with an error	Berakhir dengan galat
+	Out of fuel	Batas instruksi tercapai
+	Ended at a host limit	Berakhir pada batas host
+	Ended at a limit	Berakhir pada batas
+	Stopped	Dihentikan
+	Ended by an internal fault	Berakhir karena galat internal
+	{ms} ms, {calls} host calls	{ms} ms, {calls} panggilan host
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} baris lama dibuang, {cut} baris dipotong

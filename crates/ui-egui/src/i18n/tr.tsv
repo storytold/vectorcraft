@@ -6716,3 +6716,19 @@ breakText	Glyphs	Glifler
 	No Suggestions	Öneri Yok
 	Edit Custom Dictionary	Özel Sözlüğü Düzenle
 	Entry:	Giriş:
+# Script Console
+	Script Console	Betik Konsolu
+	Clear Script Console	Betik Konsolunu Temizle
+	Copy Script Console	Betik Konsolunu Kopyala
+	Copy All	Tümünü Kopyala
+	Copy Selected	Seçileni Kopyala
+	Finished	Bitti
+	Ended with an error	Bir hatayla sona erdi
+	Out of fuel	Komut sınırına ulaşıldı
+	Ended at a host limit	Bir ana bilgisayar sınırında sona erdi
+	Ended at a limit	Bir sınırda sona erdi
+	Stopped	Durduruldu
+	Ended by an internal fault	Bir iç hata nedeniyle sona erdi
+	{ms} ms, {calls} host calls	{ms} ms, {calls} ana bilgisayar çağrısı
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eski satır atıldı, {cut} satır kesildi
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli

@@ -6821,3 +6821,19 @@ font-script	Japanese	იაპონური
 	No Suggestions	შემოთავაზებები არ არის
 	Edit Custom Dictionary	მომხმარებლის ლექსიკონის რედაქტირება
 	Entry:	ჩანაწერი:
+# Script Console
+	Script Console	სკრიპტების კონსოლი
+	Clear Script Console	სკრიპტების კონსოლის გასუფთავება
+	Copy Script Console	სკრიპტების კონსოლის კოპირება
+	Copy All	ყველაფრის კოპირება
+	Copy Selected	მონიშნულის კოპირება
+	Finished	დასრულდა
+	Ended with an error	დასრულდა შეცდომით
+	Out of fuel	ინსტრუქციების ლიმიტი ამოიწურა
+	Ended at a host limit	დასრულდა ჰოსტის ლიმიტზე
+	Ended at a limit	დასრულდა ლიმიტზე
+	Stopped	შეჩერდა
+	Ended by an internal fault	დასრულდა შიდა შეცდომის გამო
+	{ms} ms, {calls} host calls	{ms} ms, ჰოსტის {calls} გამოძახება
+	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ძველი სტრიქონი წაიშალა, {cut} სტრიქონი შემოკლდა
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
