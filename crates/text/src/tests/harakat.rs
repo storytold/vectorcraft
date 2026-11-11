@@ -316,22 +316,32 @@ fn harakat_ranges_normalise_their_range() {
 /// everything else stays at the cluster start (conservative).
 /// A space before the line's first letter (#5111), set on the letter alone as the Type tool's caret
 /// sets it, keeps the letter's harakat coloured apart attached and in their own colour. Right to
-/// left the space is past the letter's right side, so every glyph stays where it was.
+/// left the space is past the letter's right side, so every glyph stays where it was and the line
+/// is the space longer. Checked with the in-memory Arabic test font (its fatha a `GDEF` mark) in
+/// every environment, and with an installed Arabic face when there is one.
 #[test]
 fn a_space_before_the_first_letter_keeps_its_coloured_harakat() {
-    let Some(face) = arabic_face("a_space_before_the_first_letter_keeps_its_coloured_harakat") else {
-        return;
-    };
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(crate::test_fonts::lam_alef_font(b"rlig").unwrap()), 1);
+    check_spaced_harakat(&db, crate::test_fonts::lam_alef_family(b"rlig"));
+    if let Some(face) = arabic_face("a_space_before_the_first_letter_keeps_its_coloured_harakat") {
+        check_spaced_harakat(FontDb::global(), &face.family);
+    }
+}
+
+fn check_spaced_harakat(db: &FontDb, family: &str) {
     const WORD: &str = "بَبَب"; // ب 0, fatha 2, ب 4, fatha 6, ب 8
-    let db = FontDb::global();
-    let coloured = text_with_harakat(WORD, &face.family, Some(red()));
+    let coloured = text_with_harakat(WORD, family, Some(red()));
     let mut spaced = coloured.clone();
     crate::edit::style_range(&mut spaced.runs, 0, 2, |st| st.kerning_before = 250.0);
     let (a, b) = (layout(db, &coloured), layout(db, &spaced));
     let placed = |l: &TextLayout| l.glyphs.iter().map(|g| (g.font_id, g.gid, g.byte, g.xf.as_coeffs().map(f64::to_bits))).collect::<Vec<_>>();
-    assert_eq!(placed(&a), placed(&b), "the same glyphs where they were");
-    assert_eq!(painted(&spaced, &b, &red()), painted(&coloured, &a, &red()), "the harakat keep their colour");
-    assert!(painted(&spaced, &b, &red()) > 0, "harakat painted apart");
+    assert_eq!(placed(&a), placed(&b), "{family}: the same glyphs where they were");
+    assert!(painted(&spaced, &b, &red()) > 0, "{family}: harakat painted apart");
+    assert_eq!(painted(&spaced, &b, &red()), painted(&coloured, &a, &red()), "{family}: the harakat keep their colour");
+    // 250/1000 of the 48 pt em.
+    let length = |l: &TextLayout| l.glyphs.iter().map(|g| g.advance).sum::<f64>();
+    assert!((length(&b) - length(&a) - 12.0).abs() < 1e-6, "{family}: {} → {}", length(&a), length(&b));
 }
 
 #[test]
