@@ -172,10 +172,13 @@ pub fn install_plugin(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     install_module(app, json!({ "path": path }))
 }
 
-/// What permission `name` lets a plug-in do, in plain words in the UI language; a name the app
-/// doesn't know is shown as it is.
-fn permission_words(name: &str) -> String {
+/// What permission `name` lets a plug-in do, in plain words in the UI language, with the ids of
+/// the `commands` it may call for `commands`; a name the app doesn't know is shown as it is.
+fn permission_words(name: &str, commands: &[String]) -> String {
     let words = match permissions::Permission::parse(name) {
+        Some(permissions::Permission::Commands) => {
+            return crate::i18n::fmt(tl!("Run these commands on the document: {ids}"), &[("ids", &commands.join(", "))]);
+        }
         Some(permissions::Permission::DocRead) => tl!("Read the objects it is given"),
         Some(permissions::Permission::DocWrite) => tl!("Change, add and delete objects in the document"),
         Some(permissions::Permission::State) => tl!("Keep data of its own with the document"),
@@ -244,7 +247,11 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
         }
         lines.push(crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]));
         lines.push(String::new());
-        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p))));
+        let commands: Vec<String> = info["commandAllowlist"]
+            .as_array()
+            .map(|ids| ids.iter().filter_map(Value::as_str).map(|id| permissions::display_text(id, permissions::MAX_SHOWN_FIELD)).collect())
+            .unwrap_or_default();
+        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p, &commands))));
         paragraphs.push(lines.join("\n"));
         install["grant"] = Value::Array(asked.clone());
     }

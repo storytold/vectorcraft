@@ -54,6 +54,7 @@ mod compiler;
 mod date_builtins;
 mod error;
 mod heap;
+mod host;
 mod interp;
 mod lexer;
 mod number;
@@ -73,10 +74,12 @@ pub use ast::{
     AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LogicalOp, Name, Program, Property,
     PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
+pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
+pub use host::{Arg, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
-pub use realm::{Interrupt, JsValue, LimitKind, Limits, Realm, RunError, RunErrorKind};
+pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, UNKNOWN_SOURCE};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.
@@ -195,6 +198,10 @@ impl LineTable {
 
 #[cfg(test)]
 mod builtins_tests;
+#[cfg(test)]
+mod extension_tests;
+#[cfg(test)]
+mod host_tests;
 #[cfg(test)]
 mod interp_tests;
 #[cfg(test)]

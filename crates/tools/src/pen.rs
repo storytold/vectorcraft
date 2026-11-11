@@ -242,6 +242,10 @@ impl Tool for PenTool {
     fn busy(&self) -> bool {
         self.drag.is_some() || self.handle.is_some() || self.convert.is_some()
     }
+    /// A path being drawn: Escape ends it.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.active(cx).is_some()
+    }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let tol = cx.tol(5.0).max(cx.point_tol());
         // The path a press began is the selected one by the next event.

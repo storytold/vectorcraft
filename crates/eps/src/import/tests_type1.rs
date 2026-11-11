@@ -5,7 +5,7 @@
 
 use vectorcraft_doc::{NodeKind, TextObject};
 
-use super::tests::{all, bounds, check, read};
+use super::tests::{all, bounds, check, program_warnings, read};
 use crate::import::import;
 
 /// A Type 1 charstring number (§6.2).
@@ -115,7 +115,7 @@ fn program(encoding: &str, hex: bool, body: &str) -> crate::Imported {
 fn embedded_type1_type_keeps_the_fonts_widths() {
     for hex in [true, false] {
         let r = program(OWN, hex, "/TestOne findfont 50 scalefont setfont 10 20 moveto (AB) show");
-        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+        assert!(program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
         let t = texts(&r);
         assert_eq!(t.len(), 1, "{:?}", all(&r.document));
         assert_eq!(t[0].plain_text(), "AB");
@@ -124,6 +124,22 @@ fn embedded_type1_type_keeps_the_fonts_widths() {
         let o: Vec<f64> = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t[0]).glyphs.iter().map(|g| g.origin.x).collect();
         assert!((o[1] - o[0] - 30.0).abs() < 0.05, "{o:?}");
     }
+}
+
+/// Type in an embedded font whose family isn't available keeps the font's name and shows in the
+/// fallback font, and the import says so as PDF import does: each such family once, in the order
+/// its type comes. A family that is available isn't named.
+#[test]
+fn type_in_fonts_that_arent_available_is_named_in_a_warning() {
+    let r = program(
+        OWN,
+        false,
+        "/TestOne findfont 50 scalefont setfont 10 20 moveto (AB) show 10 60 moveto (BA) show \
+         /Nowhere-Bold 12 selectfont 10 80 moveto (x) show /Inter-Regular 12 selectfont 10 90 moveto (y) show",
+    );
+    assert_eq!(texts(&r).iter().map(|t| t.runs[0].style.font_family.as_str()).collect::<Vec<_>>(), ["Test One", "Test One", "Nowhere", "Inter"]);
+    // PDF import's words.
+    assert_eq!(r.warnings, ["fonts that aren't available show in the fallback font until they are: Test One, Nowhere"]);
 }
 
 #[test]

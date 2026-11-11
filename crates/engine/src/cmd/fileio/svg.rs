@@ -180,9 +180,11 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
     let flat = crate::cmd::rasterfx::flatten_pixel_effects_for(doc, opts.profile != vectorcraft_svg::Profile::Tiny12);
     let doc = flat.as_ref().unwrap_or(doc);
     let mut enc = Encoded { warnings, ..Encoded::default() };
+    // One renderer measures the art over every artboard: each 3D solid is built once.
+    let mut renderer = vectorcraft_render::Renderer::new();
     for artboard in boards {
         // A chosen artboard's file holds the art over it (#550) and is named after it (#3544).
-        let over = artboard.filter(|_| chosen).and_then(|b| doc.artboards.get(b)).map(|a| super::export::art_over(doc, a.rect));
+        let over = artboard.filter(|_| chosen).and_then(|b| doc.artboards.get(b)).map(|a| super::export::art_over(doc, a.rect, &mut renderer));
         let file = ExportOptions { artboard, artboard_title: chosen, ..opts.clone() };
         let mut out = vectorcraft_svg::export_full(over.as_ref().unwrap_or(doc), &file, native.as_deref());
         let bytes = out.take_bytes();

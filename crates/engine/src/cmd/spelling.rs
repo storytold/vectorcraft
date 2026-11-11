@@ -7,11 +7,13 @@
 //! `removeWord`, `changeWord`), which every document's check takes as right; Ignore All
 //! (`text.spelling.ignoreAll`) skips a word in the active document only.
 
+use std::collections::BTreeSet;
 use std::ops::Range;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use craft_proof::{IssueKind, Options, ProofLang};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, NodeId, NodeKind};
+use vectorcraft_doc::{Document, NodeId, NodeKind, TextObject};
 
 use super::menucmds::whole_or;
 use super::typemenu::{all_texts, text_ids};
@@ -84,6 +86,15 @@ pub fn specs() -> Vec<CommandSpec> {
             change_word
         ),
         cmd!(
+            query "text.spelling.editDictionary",
+            "Edit Custom Dictionary",
+            [],
+            None,
+            "{remove?: [word…], add?: [word…] (each one word, at most 64 characters; at most 10000 of each)} deletes the words of remove that are there and adds those of add, then saves once: all of it, or none of it when the save fails (Edit Custom Dictionary's Done) → {removed: [word…], added: [word…]}",
+            always,
+            edit_dictionary
+        ),
+        cmd!(
             query "text.spelling.ignoreAll",
             "Ignore All",
             [],
@@ -106,54 +117,94 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
         None => all_texts(&s.doc()?.doc),
     };
     let st = s.doc()?;
-    let ignored = &st.spelling_ignored;
-    let opts = Options::default();
     let mut words = vec![];
     let mut more = false;
-    'texts: for id in ids {
+    for id in ids {
         let Some(NodeKind::Text(t)) = st.doc.node(id).map(|n| &n.kind) else { continue };
         let text = t.plain_text();
-        // Each run in its own language, at its bytes of the plain text.
-        let mut spans: Vec<(Range<usize>, ProofLang)> = Vec::with_capacity(t.runs.len());
-        let mut at = 0;
-        for r in &t.runs {
-            let end = at + r.text.len();
-            spans.push((at..end, ProofLang::from_tag(r.style.language.as_deref())));
-            at = end;
+        let (found, cut) = misspellings(t, &st.spelling_ignored, MAX_WORDS - words.len());
+        for m in found {
+            let Some(word) = text.get(m.range.clone()) else { continue };
+            words.push(json!({ "id": id.0, "start": m.range.start, "end": m.range.end, "word": word, "lang": m.lang.tag() }));
         }
-        // craft-proof checks one paragraph at a time (its language detection reads the
-        // paragraph), and the check stops at the paragraph where the list fills up rather than
-        // proofing the rest of the text.
-        let mut para_start = 0;
-        for para in text.split('\n') {
-            let para_end = para_start + para.len();
-            let para_spans: Vec<(Range<usize>, ProofLang)> = spans
-                .iter()
-                .filter_map(|(r, lang)| {
-                    let (a, b) = (r.start.max(para_start), r.end.min(para_end));
-                    (a < b).then(|| (a - para_start..b - para_start, *lang))
-                })
-                .collect();
-            for issue in craft_proof::check_text_with(para, &para_spans, &opts, false, false) {
-                if issue.kind != IssueKind::Spelling {
-                    continue;
-                }
-                let (start, end) = (para_start + issue.start, para_start + issue.end);
-                let Some(word) = text.get(start..end) else { continue };
-                if craft_proof::custom_word(word).is_some_and(|w| ignored.contains(&w)) {
-                    continue;
-                }
-                if words.len() == MAX_WORDS {
-                    more = true;
-                    break 'texts;
-                }
-                words.push(json!({ "id": id.0, "start": start, "end": end, "word": word, "lang": issue.lang.tag() }));
-            }
-            // Past the paragraph and its `\n`.
-            para_start = para_end + 1;
+        if cut {
+            more = true;
+            break;
         }
     }
     Ok(json!({ "words": words, "more": more }))
+}
+
+/// One word of a type object its dictionaries don't know ([`misspellings`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Misspelling {
+    /// The word's bytes in the object's [`TextObject::plain_text`].
+    pub range: Range<usize>,
+    /// The language it was checked in.
+    pub lang: ProofLang,
+}
+
+/// The words of `t` its dictionaries don't know, in text order: each run checked in its
+/// language, each paragraph on its own, leaving out the words in `ignored` (a document's Ignore
+/// All words). At most `max` of them; the flag says the list was cut short there. What
+/// `text.spelling.check` lists for one object, and what Auto Spell Check underlines.
+pub fn misspellings(t: &TextObject, ignored: &BTreeSet<String>, max: usize) -> (Vec<Misspelling>, bool) {
+    let text = t.plain_text();
+    // Each run in its own language, at its bytes of the plain text.
+    let mut spans: Vec<(Range<usize>, ProofLang)> = Vec::with_capacity(t.runs.len());
+    let mut at = 0;
+    for r in &t.runs {
+        let end = at + r.text.len();
+        spans.push((at..end, ProofLang::from_tag(r.style.language.as_deref())));
+        at = end;
+    }
+    let opts = Options::default();
+    let mut found = vec![];
+    // craft-proof checks one paragraph at a time (its language detection reads the paragraph),
+    // and the check stops at the paragraph where the list fills up rather than proofing the rest
+    // of the text.
+    let mut para_start = 0;
+    for para in text.split('\n') {
+        let para_end = para_start + para.len();
+        let para_spans: Vec<(Range<usize>, ProofLang)> = spans
+            .iter()
+            .filter_map(|(r, lang)| {
+                let (a, b) = (r.start.max(para_start), r.end.min(para_end));
+                (a < b).then(|| (a - para_start..b - para_start, *lang))
+            })
+            .collect();
+        for issue in craft_proof::check_text_with(para, &para_spans, &opts, false, false) {
+            if issue.kind != IssueKind::Spelling {
+                continue;
+            }
+            let (start, end) = (para_start + issue.start, para_start + issue.end);
+            let Some(word) = text.get(start..end) else { continue };
+            if craft_proof::custom_word(word).is_some_and(|w| ignored.contains(&w)) {
+                continue;
+            }
+            if found.len() == max {
+                return (found, true);
+            }
+            found.push(Misspelling { range: start..end, lang: issue.lang });
+        }
+        // Past the paragraph and its `\n`.
+        para_start = para_end + 1;
+    }
+    (found, false)
+}
+
+/// Goes up each time the custom dictionary may have changed: an add, delete or change (saved or
+/// not, since a save takes in the words another window saved), and a dictionary file attached.
+static DICTIONARY_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// The custom dictionary's generation: what [`misspellings`] found before it last changed may be
+/// out of date (Auto Spell Check checks the type again).
+pub fn dictionary_generation() -> u64 {
+    DICTIONARY_GENERATION.load(Ordering::Relaxed)
+}
+
+fn dictionary_changed() {
+    DICTIONARY_GENERATION.fetch_add(1, Ordering::Relaxed);
 }
 
 /// `ids` sorted back to front, as the document paints them: by their index paths, which are in
@@ -179,6 +230,12 @@ fn suggest(_s: &mut Session, p: &Value) -> Result<Value> {
     // `max` is at most MAX_SUGGESTIONS, so it fits.
     let suggestions = craft_proof::suggest_in(word, usize::try_from(max).unwrap_or(5), lang);
     Ok(json!({ "suggestions": suggestions }))
+}
+
+/// `w` as the custom dictionary keeps it (trimmed, lower case), or None when it isn't one word of at
+/// most `craft_proof::MAX_CUSTOM_WORD_CHARS` characters: what `text.spelling.addWord` takes.
+pub fn custom_word(w: &str) -> Option<String> {
+    craft_proof::custom_word(w)
 }
 
 /// `p`'s `key` as a custom-dictionary word (trimmed, lower case), or an error naming what it must be.
@@ -246,7 +303,9 @@ fn add_word(s: &mut Session, p: &Value) -> Result<Value> {
     let word = word_param(p, "word", C)?;
     let added = !craft_proof::user_dictionary().contains(&word);
     craft_proof::add_word(&word);
-    save_dictionary(s, &[], C).inspect_err(|_| {
+    let saved = save_dictionary(s, &[], C);
+    dictionary_changed();
+    saved.inspect_err(|_| {
         // Only this command's word: words the save took in from the file stay.
         if added {
             craft_proof::remove_word(&word);
@@ -263,7 +322,9 @@ fn remove_word(s: &mut Session, p: &Value) -> Result<Value> {
     if !craft_proof::remove_word(&word) {
         return Err(bad(C, format!("`{word}` isn't in the custom dictionary")));
     }
-    save_dictionary(s, std::slice::from_ref(&word), C).inspect_err(|_| craft_proof::add_word(&word))?;
+    let saved = save_dictionary(s, std::slice::from_ref(&word), C);
+    dictionary_changed();
+    saved.inspect_err(|_| craft_proof::add_word(&word))?;
     Ok(json!({ "word": word }))
 }
 
@@ -276,13 +337,17 @@ fn change_word(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("`{word}` isn't in the custom dictionary")));
     }
     if word == to {
-        save_dictionary(s, &[], C)?;
+        let saved = save_dictionary(s, &[], C);
+        dictionary_changed();
+        saved?;
         return Ok(json!({ "word": to }));
     }
     let to_is_new = !craft_proof::user_dictionary().contains(&to);
     craft_proof::remove_word(&word);
     craft_proof::add_word(&to);
-    save_dictionary(s, std::slice::from_ref(&word), C).inspect_err(|_| {
+    let saved = save_dictionary(s, std::slice::from_ref(&word), C);
+    dictionary_changed();
+    saved.inspect_err(|_| {
         if to_is_new {
             craft_proof::remove_word(&to);
             retake_file_words(s);
@@ -290,6 +355,62 @@ fn change_word(s: &mut Session, p: &Value) -> Result<Value> {
         craft_proof::add_word(&word);
     })?;
     Ok(json!({ "word": to }))
+}
+
+/// Most words `text.spelling.editDictionary` takes in each of its lists.
+const MAX_EDIT_WORDS: usize = 10_000;
+
+/// `p`'s `key`, a list of custom-dictionary words (none when it is missing), deduplicated.
+fn word_list(p: &Value, key: &str, command: &str) -> Result<BTreeSet<String>> {
+    let Some(v) = p.get(key) else { return Ok(BTreeSet::new()) };
+    let words = v.as_array().ok_or_else(|| bad(command, format!("`{key}` must be a list of words")))?;
+    if words.len() > MAX_EDIT_WORDS {
+        return Err(bad(command, format!("`{key}` holds more than {MAX_EDIT_WORDS} words")));
+    }
+    words
+        .iter()
+        .map(|w| {
+            w.as_str()
+                .and_then(craft_proof::custom_word)
+                .ok_or_else(|| bad(command, format!("`{key}` must hold single words of at most {} characters", craft_proof::MAX_CUSTOM_WORD_CHARS)))
+        })
+        .collect()
+}
+
+/// `text.spelling.editDictionary`: Edit Custom Dictionary's Done. Every delete and add is made,
+/// then saved once; when the save fails, all of them are taken back, so a failed Done leaves the
+/// dictionary as it was rather than half changed.
+fn edit_dictionary(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.spelling.editDictionary";
+    let (remove, add) = (word_list(p, "remove", C)?, word_list(p, "add", C)?);
+    let before: BTreeSet<String> = craft_proof::user_dictionary().into_iter().collect();
+    // A word in both lists stays; a word to delete that another window deleted already is skipped.
+    let removed: Vec<String> = remove.iter().filter(|w| !add.contains(*w) && before.contains(*w)).cloned().collect();
+    let added: Vec<String> = add.iter().filter(|w| !before.contains(*w)).cloned().collect();
+    if removed.is_empty() && added.is_empty() {
+        return Ok(json!({ "removed": removed, "added": added }));
+    }
+    for w in &removed {
+        craft_proof::remove_word(w);
+    }
+    for w in &added {
+        craft_proof::add_word(w);
+    }
+    let saved = save_dictionary(s, &removed, C);
+    dictionary_changed();
+    saved.inspect_err(|_| {
+        for w in &added {
+            craft_proof::remove_word(w);
+        }
+        for w in &removed {
+            craft_proof::add_word(w);
+        }
+        // Words the save took in from the file stay, as for one word.
+        if !added.is_empty() {
+            retake_file_words(s);
+        }
+    })?;
+    Ok(json!({ "removed": removed, "added": added }))
 }
 
 /// `text.spelling.ignoreAll`: Ignore All, for the active document.
@@ -315,5 +436,6 @@ impl Session {
             Err(why) => log::warn!("not reading the custom dictionary {}: {why}; it is left as it is", path.display()),
         }
         self.dictionary_file = Some(path);
+        dictionary_changed();
     }
 }

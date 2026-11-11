@@ -262,6 +262,45 @@ fn snap_moves_objects_at_different_depths_by_one_plane_offset() {
     assert!(on_line(moved.y0) || on_line(moved.y1), "{moved:?}");
 }
 
+/// The anchors of `flat` and `far` after a snapped move of both on the left plane, where `flat`
+/// starts flat (attached by the move, or first with `attach_first`) and `far` sits 50 pt deeper.
+fn move_with_a_flat_first_object(attach_first: bool, constrain: bool) -> Vec<Point> {
+    let (mut s, _) = persp_session();
+    let rect = |s: &mut Session, x: f64| {
+        NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 380, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap())
+    };
+    s.execute("perspective.plane.move", &json!({"plane": "left", "offset": 50})).unwrap();
+    let far = rect(&mut s, 150.0);
+    s.execute("perspective.attach", &json!({"ids": [far.0], "plane": "left"})).unwrap();
+    s.execute("perspective.plane.move", &json!({"plane": "left", "offset": 0})).unwrap();
+    let flat = rect(&mut s, 240.0);
+    if attach_first {
+        s.execute("perspective.attach", &json!({"ids": [flat.0], "plane": "left"})).unwrap();
+    }
+    s.execute("perspective.grid.snap", &json!({"on": true})).unwrap();
+    let h = grid(&s).homography_at(Plane::Left, 0.0).unwrap();
+    let (from, to) = (h.apply(Point::new(100.0, 100.0)).unwrap(), h.apply(Point::new(137.3, 121.7)).unwrap());
+    s.execute(
+        "perspective.move",
+        &json!({"ids": [flat.0, far.0], "plane": "left", "from": [from.x, from.y], "to": [to.x, to.y], "constrain": constrain}),
+    )
+    .unwrap();
+    assert_eq!(attached(&s, flat).map(|a| a.0), Some(Plane::Left));
+    let doc = &s.doc().unwrap().doc;
+    [flat, far].iter().flat_map(|id| doc.node(*id).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect::<Vec<_>>()).collect()
+}
+
+#[test]
+fn snap_reads_a_flat_first_object_as_attached_by_the_move() {
+    for constrain in [false, true] {
+        let (moved, attached_first) = (move_with_a_flat_first_object(false, constrain), move_with_a_flat_first_object(true, constrain));
+        assert_eq!(moved.len(), attached_first.len());
+        for (a, b) in moved.iter().zip(&attached_first) {
+            assert!(a.distance(*b) < 1e-6, "constrain {constrain}: {moved:?} vs {attached_first:?}");
+        }
+    }
+}
+
 #[test]
 fn constrained_move_uses_each_objects_plane() {
     let (mut s, right) = persp_session();

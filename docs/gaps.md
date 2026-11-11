@@ -1,18 +1,16 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-09 · **Change:** minor (G5: dynamic symbol part on-canvas takes opacity, blend, gradient and pattern; docs Overlap/auto-corners sync; estimate 12–22 h; previously minor: interim macOS cursor delivery, #2292; native validation pending; scores and estimates unchanged; previously minor: Control bar › Snapping includes the existing Snap to Glyph and Alignment Guides toggles (#6164); scores and estimates unchanged; previously minor: G5 docs: Art brush Overlap, Pattern brush auto corners and Global Edit Shift-click leave-out moved from Missing to Done (code already shipped); previously minor: custom dictionary and Ignore All: `text.spelling.addWord`, `removeWord`, `changeWord`, `dictionary` and `ignoreAll`, #4936; previously minor: EPS import: embedded fonts (composite, Type 42, CID-keyed, Type 1, CFF FontSet) draw their glyphs; spell check engine: `text.spelling.check` and `text.spelling.suggest` on craft-proof, #4936; previously minor: floating tab groups collapse into the side icon rail and opened rail panels fold back into it, #5925 in part; G9: EPS gradients drawn as abutting strips import as one gradient, without seams; Tools stays beside the canvas with left-side panels; new gradients follow document color mode; Selection QoL: marquee modes and visible feedback, #5313; #3380 deletion-only review follow-up: independent survivors keep gradient placement, owned subpaths avoid discarded copies, and contracts/status/evidence are clarified; endpoint highlighting remains open; scores and estimates unchanged; Indian-language hyphenation review and license allowlist, #4947; opening a slow file shows a progress window, part of #5930; Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-10 · **Change:** minor (ruler double-click adds a guide at the pointer, #5239; G5: built-in Status Effects graphic style library; estimate 7–17 → 6–16 h; MCP docs catch-up for UI Frames and Map Markers; previously minor: G5: built-in Inventory Icons symbol library; estimate 8–18 → 7–17 h; previously minor: G9: `.ai` save names a variable font instance's design-space setting, #6388; previously minor: G5: built-in Game Trails brush library; estimate 9–19 → 8–18 h; previously minor: Edit › Edit Custom Dictionary…: its dialog adds, deletes and changes the custom dictionary's words, #4936; previously minor: docs tidy-up, no content change: stray notes at the top moved into the revision table; scores and estimates unchanged; previously minor: G5: built-in Game HUD graphic style library; estimate 10–20 → 9–19 h; previously minor: G5: built-in Map Markers symbol library; estimate 11–21 → 10–20 h; previously minor: right-click on type: Spelling › Auto Spell Check, with its check mark, #4936; previously minor: right-click on a word Auto Spell Check underlined: its suggestions, Ignore All and Add to Dictionary, #4936; previously minor: G2: Effect Gallery thumbnails and in-dialog preview; estimate 1–2 h → 0; Auto Spell Check: `edit.autoSpellCheck` underlines the unknown words, #4936; previously minor: PDF editable import preserves authored ActualText once, including empty/nested spans and authored ordering (#6165); cross-line/style layout remains approximate; scores and estimates unchanged; PDF marked-text export (#6309): compatible glyphs stay on one layout line with per-glyph offsets; scores and estimates unchanged; G5: built-in UI Frames symbol library with default 9-slice; estimate 11–21 h; previously minor: G5: dynamic symbol part on-canvas takes opacity, blend, gradient and pattern; docs Overlap/auto-corners sync; estimate 12–22 h; previously minor: interim macOS cursor delivery, #2292; native validation pending; scores and estimates unchanged; previously minor: Control bar › Snapping includes the existing Snap to Glyph and Alignment Guides toggles (#6164); scores and estimates unchanged; previously minor: G5 docs: Art brush Overlap, Pattern brush auto corners and Global Edit Shift-click leave-out moved from Missing to Done (code already shipped); previously minor: custom dictionary and Ignore All: `text.spelling.addWord`, `removeWord`, `changeWord`, `dictionary` and `ignoreAll`, #4936; previously minor: EPS import: embedded fonts (composite, Type 42, CID-keyed, Type 1, CFF FontSet) draw their glyphs; spell check engine: `text.spelling.check` and `text.spelling.suggest` on craft-proof, #4936; previously minor: floating tab groups collapse into the side icon rail and opened rail panels fold back into it, #5925 in part; G9: EPS gradients drawn as abutting strips import as one gradient, without seams; Tools stays beside the canvas with left-side panels; new gradients follow document color mode; Selection QoL: marquee modes and visible feedback, #5313; #3380 deletion-only review follow-up: independent survivors keep gradient placement, owned subpaths avoid discarded copies, and contracts/status/evidence are clarified; endpoint highlighting remains open; scores and estimates unchanged; Indian-language hyphenation review and license allowlist, #4947; opening a slow file shows a progress window, part of #5930; Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
-**Feature evidence last updated:** 2026-11-02.
-| 2026-11-06 | minor | Opening a file that takes longer than 0.4 s shows a progress window: the file name, a moving bar (reading reports no steps), how many more files wait, Cancel (Esc; the file doesn't open) and Continue in Background (`file.cancelOpen`, `file.openInBackground`); it never opens over another dialog or progress window (part of #5930); scores and estimates unchanged |
+**Feature evidence last updated:** 2026-11-03.
+
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
 
-**PR #3273 revision — 2026-11-04:** Thin curved stroke coverage ported to the current raster-only cache, cropped-long-stroke and effect paths with guarded flattening; vector export geometry unchanged. Scores and estimates unchanged.
+Icon-strip flyouts resize from the canvas-side edge and bottom, keeping the icon-column edge anchored (#5713). Independent group heights and flyout widths persist in workspaces; saved heights override content fitting while untouched heights still fit content. Shared panel button bars and the Glyphs font row stay at the bottom after enlargement; the Artboards list grows into the extra space. Regressions: `panel_docking::tests::glyphs_and_artboards_flyouts_keep_user_sizes` and `expanded_panel_footers_stay_at_the_bottom_with_short_and_long_lists`. Scores and estimates unchanged.
 
 Group Selection keeps an already selected component selected during a drag; a completed click still adds its next enclosing group. The current Direct Selection click/release machinery is shared, preserving compound-member picks, Shift deselection, isolation and masked-art dragging. Outline Stroke continues to preserve all original fills, including open contours; the change does not remove fills. Regressions: `group_selection_distinguishes_selected_leaf_drags_from_clicks` and `outline_fill_and_stroke_move_independently_with_group_selection` cover tool events, independent component movement and Undo/Redo. Scores and estimates unchanged.
-
-**PR #3272 revision — 2026-11-04:** Group Selection component drags defer ancestor selection until a completed click, using current Direct Selection release handling; original Outline Stroke fills and newer selection behavior retained. Scores and estimates unchanged.
 
 Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
 
@@ -24,12 +22,8 @@ adds one undo step; the list follows saved font filters, ignores search text, an
 stops at its ends. These interaction details
 are VectorCraft's choices. Scores and estimates are unchanged.
 
-**Feature evidence last updated:** 2026-11-02.
-**Feature evidence last updated:** 2026-11-03.
-
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
-- Current-main conflict reconciliation retains upstream and feature behavior; scores and estimates unchanged
 - Superseded 2026-10-20 behavior, retained as history: Artboard Options shares existing presets and orientation controls and can fit artwork without moving it; artwork fitting uses the original target artboard and revision-scoped bounds caches
 
 - Artboard Options puts Fit to Artwork Bounds and Fit to Selected Art in the Preset menu. Artwork bounds cover all drawn document art, including other artboards and off-board art; selection bounds may span artboards. Fit changes only the active artboard and keeps artwork stationary, including position-only fitting with Move Artwork enabled. Existing Background Color and presets remain available; scores and estimates unchanged.
@@ -40,9 +34,13 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | A double-click on a ruler adds a guide at the pointer (#5239): a vertical one on the top ruler, a horizontal one on the left ruler; scores and estimates unchanged. |
 | 2026-11-08 | minor | #3380, deletion only: preserve gradient placement and exact surviving geometry; consume owned subpaths with a shared original-node snapshot; consolidate status/evidence and document command/helper contracts. Compound behavior and the existing M2 status entry are retained. Endpoint highlighting remains open; scores and estimates unchanged. |
 | 2026-11-07 | minor | #3380 (deletion only): independent surviving path objects; transformed appearance, stacking, selection, cubic handles and Undo/Redo covered by `delete_path_pieces`; compound semantics retained. Endpoint highlighting remains open; scores and estimates unchanged. |
 | 2026-11-06 | minor | G9: EPS import reads gradients a page paints as abutting strips as one linear gradient each (no seams); an Illustrator EPS whose page drew them that way keeps its layers. Estimate unchanged. |
+| 2026-11-06 | minor | Opening a file that takes longer than 0.4 s shows a progress window: the file name, a moving bar (reading reports no steps), how many more files wait, Cancel (Esc; the file doesn't open) and Continue in Background (`file.cancelOpen`, `file.openInBackground`); it never opens over another dialog or progress window (part of #5930); scores and estimates unchanged |
+| 2026-11-04 | minor | PR #3273: Thin curved stroke coverage ported to the current raster-only cache, cropped-long-stroke and effect paths with guarded flattening; vector export geometry unchanged. Scores and estimates unchanged. |
+| 2026-11-04 | minor | PR #3272: Group Selection component drags defer ancestor selection until a completed click, using current Direct Selection release handling; original Outline Stroke fills and newer selection behavior retained. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-07 | minor | Indian-language hyphenation (#4947): eleven MIT-licensed pattern sets, with grapheme and shaping-cluster protection in both composers and existing paragraph limits. Assamese and Sanskrit are selectable; Sanskrit automatic patterns remain pending an allowlisted source. Scores and estimates unchanged. |
@@ -51,6 +49,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 | 2026-11-05 | minor | G15: Selection skips building corner and pie widgets when the pointer is well outside a large selection; empty-canvas hover with 20,000 selected paths took 28.72 ms before and 16.41 ms after in local median runs. Other cursor targets remain active; estimate unchanged. |
 | 2026-11-05 | minor | G15: Direct Selection reuses one document hit result when choosing the cursor over a path; after the path hit-test improvement, a 200,000-anchor path's segment cursor took 3.72 ms before and 2.66 ms after in local median runs. Cursor behavior is unchanged; estimate unchanged. |
 | 2026-11-05 | minor | G15: large-selection transforms reuse object locations found during command validation; a 20,000-object nudge took 58.07 ms before and 51.26 ms after in paired median runs. Estimate unchanged. |
+| 2026-11-06 | minor | Icon-strip flyouts resize on their free edges and retain sizes with workspaces (#5713); saved heights beat auto-fit; panel footers stay at the bottom after enlargement. Scores and estimates unchanged. |
 | 2026-11-05 | minor | G9, G14: `.ai` paths with a Calligraphic brush open brushed (the brush on the stroke, at its weight) where the object's settings are the brush's own, and the brush's Tilt, Bearing and Rotation codes come in as those channels; Windows reads the pen's tilt and barrel rotation from Windows Ink (#372). Checked against a user's file of 6D Art Pen strokes, used locally; not tried with a pen. Scores and estimates unchanged. |
 | 2026-11-04 | minor | Contour add-on (beyond Illustrator): drag away from a selected shape's edge to grow a live copy of it, or toward the inside to shrink it; the copy carries a live Offset Path effect, so it stays editable until Bake (Expand Appearance), a second drag changes the same Contour instead of nesting one, and a floating bar sets the distance and the Sharp, Round or Square corners. `addon.contour.set` is the command behind it. It is a built-in add-on: Object › Plug-ins › Contour, and its own heading in All Tools, with no default shortcut or toolbar slot. A VectorCraft design built on Offset Path; no other application was inspected. Scores and estimates unchanged. |
 | 2026-11-04 | minor | Contour tool (beyond Illustrator): drag away from a selected shape's edge to grow a live copy of it, or toward the inside to shrink it; the copy carries a live Offset Path effect, so it stays editable until Bake (Expand Appearance), a second drag changes the same Contour instead of nesting one, and a floating bar sets the distance and the Sharp, Round or Square corners. `object.contour` is the command behind it. A VectorCraft design built on Offset Path; no other application was inspected. Scores and estimates unchanged. |
@@ -60,17 +59,11 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 | 2026-11-03 | minor | Help Bar has its own Window menu toggle and workspace visibility setting. Scores and estimates unchanged. |
 | 2026-11-02 | minor | Font-family fields step selected text with the mouse wheel (#5253); no scored gap or estimate reassessed. |
 | 2026-10-24 | minor | G12: General › Corner Radius is the Rounded Rectangle tool's radius, a change while the tool is active reaches it, and the radius ↑/↓ set while drawing (or a Tool Options value) becomes the preference, within 0–1296 pt (#394, `crates/engine/src/tests/constrain_tools.rs`); no entry closed, estimate unchanged. |
-| 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
-| 2026-10-22 | minor | Reconcile upstream documentation after review F-2; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
-| 2026-10-22 | minor | Reconcile subsequent upstream progress updates without changing the runtime or repeating completed evidence; retain every dated upstream and feature revision. |
-| 2026-10-22 | minor | Resynchronize newer upstream progress documentation using the same owned source/build cache; preserve every feature revision and the original scaleArt runtime evidence. |
-| 2026-10-22 | minor | Retain the latest upstream shared assessment and complete revision history after newer documentation landed; scaleArt runtime and its original evidence remain unchanged. |
-| 2026-10-22 | minor | Correct the scaleArt follow-up evidence description to match current upstream shared status and revision history; runtime, evidence, scores and estimates unchanged. |
+| 2026-10-22 | minor | Documentation reconciled with newer upstream progress docs in six passes (after reviews F-2 and F-3), including a corrected description of the scaleArt follow-up evidence; every dated revision and the original scaleArt runtime evidence kept; runtime, scores and estimates unchanged. |
 | 2026-10-22 | minor | Artboard Options honors Scale Artwork with Artboard for preset, orientation and typed-size changes; both Fits keep artwork stationary; scores and estimates unchanged. |
 | 2026-10-21 | minor | Correct current global-all-art and document/revision cache descriptions; mark target-scoped fitting as superseded 2026-10-20 history. Runtime, tests, scores and estimates unchanged. |
 | 2026-10-21 | minor | Artboard Options puts Fit to Artwork Bounds and Fit to Selected Art in the Preset menu. Artwork bounds cover all drawn document art, including other artboards and off-board art; selection bounds may span artboards. Fit changes only the active artboard and keeps artwork stationary, including position-only fitting with Move Artwork enabled. Existing Background Color and presets remain available; scores and estimates unchanged. |
-| 2026-10-21 | minor | Reconcile feature status and revision evidence in a dated section; retain shared baseline metadata for independent upstream updates. Scores and estimates are not reassessed. |
-| 2026-10-21 | minor | Reconcile this feature with current main, preserving both sets of behavior and progress evidence; scores and estimates unchanged. |
+| 2026-10-21 | minor | Feature status and revision evidence reconciled with current main in a dated section, keeping both sets of behaviour and progress evidence and the shared baseline metadata for independent upstream updates; scores and estimates unchanged. |
 | 2026-10-20 | minor | Review follow-up: artwork fitting uses the original target artboard and revision-scoped bounds caches; focused regression evidence and behavior documentation updated; scores and hours unchanged. |
 | 2026-10-20 | minor | Artboard Options shares existing presets and orientation controls and can fit artwork without moving it; scores and hours unchanged. |
 
@@ -94,10 +87,10 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 5 | [G11 Correctness bugs in core tools](#g11-correctness-bugs-in-core-tools) | 8–15 | yes | [target-app-parity.md](target-app-parity.md) |
 | 6 | [G4 Advanced type](#g4-advanced-type) | 34–47 | core part | [type-parity.md](type-parity.md) |
 | 7 | [G12 Preferences and panels that don't act yet](#g12-preferences-and-panels-that-dont-act-yet) | 13–20 | yes | [ui-parity.md](ui-parity.md) |
-| 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 1–2 | no | [effects-parity.md](effects-parity.md) |
+| 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 0 | no | [effects-parity.md](effects-parity.md) |
 | 9 | [G13 Illustrator 2026 (30.x) additions](#g13-illustrator-2026-30x-additions) | 13–23 | no | [target-app-parity.md](target-app-parity.md) |
 | 10 | [G14 Pen hardware beyond Windows pressure](#g14-pen-hardware-beyond-windows-pressure) | 4–10 | Wayland pressure | [hardware-parity.md](hardware-parity.md) |
-| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 12–22 | no | [target-app-parity.md](target-app-parity.md) |
+| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 7–17 | no | [target-app-parity.md](target-app-parity.md) |
 | 12 | [G3 3D and Materials](#g3-3d-and-materials) | 25–45 | no | [effects-parity.md](effects-parity.md) |
 | 13 | [G7 Views and windows](#g7-views-and-windows) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 | 14 | [G6 Automation and scripting](#g6-automation-and-scripting) | 4–8 | no | [target-app-parity.md](target-app-parity.md) |
@@ -197,6 +190,10 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G9 Illustrator `.ai` and EPS files from real users
 
+- **Done (#6388, 2026-11-10):** a saved `.ai`'s text document names, for type in a variable font, where in the font's design space it is set (each axis, the named instance's or the run's own setting) and the font's version, so Montserrat Bold no longer opens as the font's default instance (Thin); two settings of one font are two fonts of the set. Test `ai_editing::tests::variable_font_instances_name_their_design_space`. The PDF part's font naming (#4548) remains with craft-libs. Estimate unchanged.
+
+- **Narrowed (#6165, 2026-11-09):** editable PDF import preserves explicit ActualText once, with empty/nested spans, authored order and glyph advances covered by `crates/pdf/src/tests/actual_text.rs`. One replacement uses the first placed glyph's line/style; exact redistribution across lines/styles and general mixed-direction layout remain. Input is bounded to depth 128 and 64 KiB encoded per accepted replacement. This does not close G9's broader `.ai`/EPS gaps or change its estimate.
+
 - **Done (2026-11-09):** the fonts an EPS carries draw their glyphs instead of being set as type in an installed font: composite (Type 0) fonts with the 8/8 mapping, plain Type 42 fonts (characters from their glyph names or character map, widths from the font), CID-keyed fonts over CMaps (Type 0 and Type 2 CIDFonts, CIDFonts in a FontSet's Compact Font Format data, base-font CMaps, named CIDFonts over predefined Unicode CMaps set as type) and embedded Type 1 fonts; the show operators' spacing along the baseline is kept as tracking, `kshow` included. Each step is charged to the interpreter's budgets. Hand-written test files only (no corpus file uses these fonts); scores and estimates unchanged. This narrows G9.
 - **Done (2026-11-06):** an EPS page that paints its gradients as rows of abutting one-colour strips imports them as linear gradients, so the seams between strips no longer show and an Illustrator EPS drawn that way keeps its layers instead of opening as its page. This narrows G9; scores and estimates unchanged.
 - **Done (2026-10-30):** from an audit of a user's `.ai`/EPS files: All Caps and Small Caps; placed files at their box's corner; pages cropped to the art; gradient mesh corners with handle weights of 0 and the transparency written after a mesh, a masked mesh and a blend; a layer's state block with the stroke style; type on a path spaced as the file lays it out (the distance from the path under Align to Path is measured from the top of each character's em box, half the height of the top of its H or the bottom of its font's bounding box, and the fit under Gravity does not reproduce the file's layout); EPS10 legacy-format type; a PDF of some artboards compared on the artboard its page shows. Comparison limits remain unchanged. This narrows G9; scores and estimates unchanged.
@@ -215,19 +212,14 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   art with strokes, gradients or patterns) and type with an Art brush keep the drawn look.
 
 - **Missing:** faithful layer and group structure from the editing data in real files (#951: 109 layers instead
-  of 14), open speed on large files (#758), live effects, Scatter, Art, Pattern and Bristle brushes on paths, a
-  path's own Calligraphic brush settings, and symbols as live objects (#637; plain art styles read Drop Shadow, Outer Glow and Feather as live effects; pattern fills and global colours are read since #1025, placed (linked) files since #1264). A PDF-compatible `.ai` carries an editing copy of the art in the form
+  of 14), open speed on large files (#758), live effects, Scatter, Pattern and Bristle brushes on paths, the Art
+  brushes listed above as keeping the drawn look, a path's own Calligraphic or Art brush settings, and symbols as live objects (#637; plain art styles read Drop Shadow, Outer Glow and Feather as live effects; pattern fills and global colours are read since #1025, placed (linked) files since #1264). A PDF-compatible `.ai` carries an editing copy of the art in the form
   VectorCraft's reader reads (layers, groups, paths, colors, gradients, patterns, images, transparency, opacity masks,
   clipping, type as text and symbols), with live effects kept only on paths, compound paths and groups that
   qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports, other objects' effects other than geometry effects left out, and live objects written as their art
   ([file-format-parity.md](file-format-parity.md)). Save As
   `.ai` › Version: Legacy (version 7) writes the PostScript form from the published version 7 specification,
   keeping layers (names, order, visibility, lock), groups, compound paths, clipping groups, gradients and
-  of 14), open speed on large files (#758), live effects, Scatter, Pattern and Bristle brushes on paths, the Art
-  brushes listed above as keeping the drawn look, a path's own Calligraphic or Art brush settings, and symbols as live objects (#637; plain art styles read Drop Shadow, Outer Glow and Feather as live effects; pattern fills and global colours are read since #1025, placed (linked) files since #1264). Writing Illustrator's own editing data is out of scope
-  (undocumented): a PDF-compatible `.ai` opens in Illustrator 2018 without its layers and groups (#868). Save As
-  `.ai` › Version: Legacy (version 7) writes the PostScript form from the published version 7 specification
-  instead, keeping layers (names, order, visibility, lock), groups, compound paths, clipping groups, gradients and
   images, and type as editable text objects (or outlines), one artboard per file (an artboard picker chooses
   which); transparency, live effects and object names don't survive it (transparent images are flattened or
   omitted, hidden objects go to a hidden layer, are omitted or made visible), and type is set again in the
@@ -312,6 +304,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Estimate:** 30–50 h (the corpus and QA part blocks beta).
 
 ## G11 Correctness bugs in core tools
+
+- **Export-only improvement (#6309):** PDF export keeps harakat and zero-advance Noto Arabic dot glyphs in one compatible batch per layout line, with per-glyph vertical offsets (#6309). `crates/pdf/src/tests/realtext.rs` (`mark_text_*`) checks decoded cluster mappings, mixed Arabic/Latin/digits, contour placement against outline export, vertical columns, differing path rotations and PDF/X-1a/3/4. Editable-text import preserves authored ActualText separately (#6165), with cross-line/style layout limits; separately styled or differently rotated clusters and external viewer search/copy remain outside this export-only evidence. Broader G11 scope, scores and estimates unchanged.
 
 - **Done, deletion only (#3380):** deleting anchors or segments that disconnect an ordinary contour creates independent selected path objects, preserving appearance, baked transforms, sibling order and one-step Undo/Redo. Existing multi-subpath paths and compound members stay intact. A second Delete removes all selected survivors. Bounds-fitted gradients keep their original placement on the new objects; already placed gradients stay unchanged. Segment endpoint highlighting remains open; broader G11 scope, scores and estimates are unchanged. Evidence: `crates/engine/tests/it/delete_path_pieces.rs` and the Delete/Backspace frame regression in `crates/ui-egui/src/tests/removeanchors.rs`.
 
@@ -445,7 +439,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Missing:** CJK vertical
   composition (mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
   features beyond bidi, digit types, Character Direction and Kashidas (Middle Eastern composers, a split caret), spell check (its engine is done, #4936: `text.spelling.check` and
-  `text.spelling.suggest` on craft-proof; the custom dictionary and Ignore All commands; the Check Spelling and Edit Custom Dictionary dialogs and Auto Spell Check remain),
+  `text.spelling.suggest` on craft-proof; the custom dictionary and Ignore All commands; Auto Spell Check, `edit.autoSpellCheck`, with a right-click on an underlined word offering its suggestions, Ignore All and Add to Dictionary, and Spelling › Auto Spell Check in the context menu of type; the Edit Custom Dictionary dialog; the Check Spelling dialog remains),
   Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
   Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.
@@ -508,7 +502,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 ## G2 Photoshop-style raster effects and the Effect Gallery
 
 - **Done:** Effect › Texture › Texturizer › Load Texture… (stored grayscale `textureImage`, Loaded Texture in the Texture menu), matching Glass.
-- **Missing:** the Effect Gallery's filter thumbnails and a preview area inside the dialog ([Filter Gallery overview](https://helpx.adobe.com/photoshop/desktop/effects-filters/get-started-with-filters/filter-gallery.html)); all 57 Photoshop-style filters are in the catalogue. Measured in
+- **Done:** the Effect Gallery's filter thumbnails and in-dialog preview ([Filter Gallery overview](https://helpx.adobe.com/photoshop/desktop/effects-filters/get-started-with-filters/filter-gallery.html)). Each thumbnail is an original landscape drawing passed through that filter at its defaults; the preview area shows the same drawing through the visible stack, or through the filter being browsed when the stack is empty. The canvas preview and the one-undo OK are unchanged (`dialogs::effect_gallery::tests::gallery_shows_thumbnails_and_an_in_dialog_preview`). All 57 Photoshop-style filters are in the catalogue. Measured in
   [effects-parity.md](effects-parity.md).
 - **Done:** the Effect Gallery (#2883): Effect › Effect Gallery… browses the Artistic, Brush Strokes, Distort, Sketch, Stylize and Texture filters, edits each filter's settings, builds an ordered stack (add, reorder, hide, remove) with a live canvas preview, and OK applies it as separate appearance effects in one undo step (`dialogs::effect_gallery::tests::stack_ok_is_one_undo_step`, `stack_preview_is_one_interaction`).
 - **Done:** Effect › Sketch › Conté Crayon (`sketch.conteCrayon`: Foreground Level, Background Level, Texture, Scaling, Relief, Light Direction, Invert; original visual approximation, defaults unverified), the last missing filter.
@@ -516,7 +510,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done:** the pixel-filter pipeline and all 57 Photoshop-style filters (Artistic, Blur, Brush Strokes, Distort, Pixelate,
   Sharpen, Sketch, Stylize, Texture, Video), with live preview and editable native settings. Smart Blur supports Edge Only and Overlay Edge
   modes. Per-filter detail: [effects-parity.md](effects-parity.md).
-- **Estimate:** 1–2 h (Effect Gallery thumbnails and in-dialog preview).
+- **Estimate:** 0 h.
 
 ## G13 Illustrator 2026 (30.x) additions
 
@@ -624,8 +618,10 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   symbol static drops them; stored in the native format.
   Color eyedropper for scatter, art and pattern brushes (Hue Shift colorization; samples canvas art);
   symbol libraries ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-or-import-symbol-libraries.html)): Window › Symbol Libraries and the Symbols panel's Symbol
-  Libraries Menu open each library in a library panel of its own (one original library generated in code,
-  Basic Shapes; User Defined; Other Library… reads the symbols of any document VectorCraft opens); a click
+  Libraries Menu open each library in a library panel of its own (four original libraries generated in code,
+  Basic Shapes, UI Frames with default 9-slice guides on Panel, Button and Bar, Map Markers with Pin,
+  Flag, Crosshair and Checkpoint, and Inventory Icons with Sword, Shield, Potion, Key and Gem; User Defined; Other
+  Library… reads the symbols of any document VectorCraft opens); a click
   adds a symbol to the document's Symbols with its Symbol Options and the resources it uses, as one undo
   step, and dragging one onto the canvas also places it; Save Symbols / Save Symbol Library writes the
   document's symbols as a `.vectorcraft` library into the user library folder (listed under User Defined) or
@@ -633,8 +629,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   libraries ([public source](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/create-new-brush-libraries.html),
   [import](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/import-brushes-from-brush-libraries-or-other-files.html)):
   Window › Brush Libraries and the Brushes panel's Brush Libraries Menu open each library in a library panel of
-  its own (four original libraries generated in code: Art Ribbons, Calligraphic Nibs, Pattern Borders, Scatter
-  Shapes; User Defined; Other Library… reads the brushes of any document VectorCraft opens); a click adds a
+  its own (five original libraries generated in code: Art Ribbons, Calligraphic Nibs, Pattern Borders, Scatter
+  Shapes and Game Trails; User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
+  click adds a
   brush to the document's Brushes with the patterns, symbols and other resources its art uses, as one undo
   step (applied to the selected paths in the same step), dragging one onto a path adds and applies it and
   dragging one onto the Brushes panel adds it; Save Brushes / Save Brush Library writes the document's brushes
@@ -646,12 +643,16 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   is on, a Shift-click on a highlighted match leaves it out (`select.globalEditExclude`, #3521 evidence);
   Direct Selection of a path, compound path or type inside a dynamic instance also takes opacity and blend
   (`transparency.set`) and a gradient or pattern fill or stroke (`paint.setFill` / `paint.setStroke`,
-  Eyedropper), for that instance only.
-- **Missing:** more built-in brush, symbol and graphic-style libraries (original, generated in code, never
-  Adobe's); dynamic symbols' `.ai` read and write; Global Edit of groups holding type or images, rotated copies
-  as matches and highlighting matches before the start; 9-slice guides outside the symbol's art (a dragged guide
-  stops at the art's edge).
-- **Estimate:** 12–22 h.
+  Eyedropper), for that instance only;
+  graphic style libraries (Window › Graphic Style Libraries; eight original libraries generated in code, including
+  Game HUD with Health Fill, Mana Glow, Damage Flash, Quest Outline, Coin Shine and Boss Alert, and Status Effects
+  with Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade and Shield Buff; User Defined; Other
+  Library…; `graphicStyle.libraries`, `graphicStyle.addFromLibrary`).
+- **Missing:** more built-in brush libraries beyond the five shipped (and further graphic-style libraries beyond the eight shipped, and further symbol libraries beyond Basic
+  Shapes, UI Frames, Map Markers and Inventory Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
+  Global Edit of groups holding type or images, rotated copies as matches and highlighting matches before the
+  start; 9-slice guides outside the symbol's art (a dragged guide stops at the art's edge).
+- **Estimate:** 6–16 h.
 
 ## G3 3D and Materials
 
@@ -667,6 +668,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 - **Done:** Selection artwork drag across visible document tabs (400 ms hover); lossless target copy, source/clipboard preservation and cancellation regressions. Cross-window dragging remains separate.
 
+- **Done (#5239):** a double-click on a ruler adds a guide at the pointer (vertical on the top ruler, horizontal on the left one, swapped in a view turned 90°; both clicks on that ruler) through `guide.add`, unsnapped and in one undo step; no scored gap or estimate reassessed.
 - **Done:** custom document ruler origin (#1212): corner drag with preview, double-click reset to the active artboard, relative X/Y inputs and native save/reopen.
 - **Done:** View › Rulers › Change to Global / Artboard Rulers (`view.globalRulers`, Cmd+Alt+R): artboard rulers, a new document's, count from the active artboard, each artboard with its own zero point; rulers, X/Y fields and guide readouts follow the mode, which is saved with the document. Estimate unchanged.
 - **Done (#2849):** View › Rulers › Show Video Rulers (`view.videoRulers`): the rulers show and count the active artboard in video pixels from its top-left corner, a pixel as many points wide as the artboard's Video Ruler Pixel Aspect Ratio and one point tall ([public source](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/set-video-display-options-for-artboards.html)); Hide Video Rulers returns them to the General unit and the ruler origin. Shift-snapping a new guide to ruler ticks still uses the General unit's ticks. Estimate unchanged.
@@ -685,8 +687,10 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G6 Automation and scripting
 
-- **Missing:** a scripting surface over the command registry (Illustrator: JavaScript, File › Scripts;
-  #1183 is open). Actions, Batch, Variables (text, visibility, image and graph), data set CSV import and
+- **Missing:** the document object model for scripts and the `#targetengine` and `#engine` script directives (#1183 is
+  open). File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry,
+  File › Scripts lists the scripts of the Scripts folder, and
+  Window › Script Console shows their output, errors and run reports. Actions, Batch, Variables (text, visibility, image and graph), data set CSV import and
   export, and full agent control over MCP are done.
 - **Estimate:** 4–8 h.
 - **Done (2026-10-16):** the MCP server hears the client during a long call: `notifications/cancelled` stops a queued or running export (PDF pages, flattening, baking, drawing, artboards) without writing anything or changing the document, `ping` and the list methods answer at once, any other request that would wait behind a call running for two seconds or more is refused as busy (`-32003`, naming the call), and `_meta.progressToken` gets page progress (#2165, #2171, #2172). Reading the document during an export is not served (refused as busy); estimate unchanged.
@@ -848,8 +852,22 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-11 | minor | G5: built-in Status Effects graphic style library (Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade, Shield Buff); Missing trimmed; estimate 7–17 → 6–16 h; MCP docs list UI Frames and Map Markers under Symbol libraries. |
+| 2026-11-11 | minor | G5: built-in Inventory Icons symbol library (Sword, Shield, Potion, Key, Gem; no default 9-slice); Missing trimmed; estimate 8–18 → 7–17 h. |
+| 2026-11-10 | minor | G4 type: Edit › Edit Custom Dictionary… adds, deletes and changes the custom dictionary's words, #4936; the Check Spelling dialog remains; scores and estimates unchanged. |
+| 2026-11-10 | minor | Tidy-up, no content change: in Feature submission evidence, a stray table row and two "PR #NNNN revision" notes move into Feature revisions, the three "Feature evidence last updated" lines become one, the duplicate Flyout update note goes (its row stays), and eight reconciliation rows become two. Scores and estimates unchanged. |
+| 2026-11-10 | minor | G5: built-in Game HUD graphic style library (Health Fill, Mana Glow, Damage Flash, Quest Outline, Coin Shine, Boss Alert); Missing trimmed; estimate 10–20 → 9–19 h. |
+| 2026-11-10 | minor | G5: built-in Map Markers symbol library (Pin, Flag, Crosshair, Checkpoint; no default 9-slice); Missing trimmed; estimate 11–21 → 10–20 h. |
+| 2026-11-10 | minor | G4 type: a right-click on type has Spelling › Auto Spell Check, checked while it is on, #4936; the Check Spelling and Edit Custom Dictionary dialogs remain; scores and estimates unchanged. |
+| 2026-11-10 | minor | G4 type: a right-click on a word Auto Spell Check underlined lists its suggestions, Ignore All and Add to Dictionary, #4936; the Check Spelling and Edit Custom Dictionary dialogs remain; scores and estimates unchanged. |
+| 2026-11-10 | minor | G2: the Effect Gallery shows a thumbnail of each filter and a preview area inside the dialog (an original landscape drawing passed through the filter). Estimate 1–2 h → 0. The canvas preview and one-undo OK are unchanged. |
+| 2026-11-09 | minor | G5: built-in Game Trails brush library (Speed Line, Dash Trail, Burst Ray, Zigzag); Missing trimmed; estimate 11–21 → 10–20 h. |
+| 2026-11-09 | minor | G4 type: Auto Spell Check (`edit.autoSpellCheck`) underlines the unknown words of the visible type, #4936; the Check Spelling and Edit Custom Dictionary dialogs and the right-click Spelling menu remain; scores and estimates unchanged. |
+| 2026-11-09 | minor | G5: built-in UI Frames symbol library (Panel, Button, Bar with default 9-slice); Missing trimmed; estimate 12–22 → 11–21 h. |
 | 2026-11-09 | minor | G5: Direct Selection of a dynamic instance part takes opacity, blend, gradient and pattern fill/stroke; Art brush Overlap and Pattern auto corners documented Done; estimate 15–25 → 12–22 h. |
 | 2026-11-09 | minor | G5: Art brush Overlap, Pattern brush auto corners and Global Edit Shift-click leave-out documented as Done (already in code); Missing trimmed; estimate unchanged. |
+| 2026-11-09 | minor | PDF editable import preserves authored ActualText once, including empty/nested spans and authored ordering (#6165); cross-line/style layout remains approximate; scores and estimates unchanged. Synthetic evidence: `crates/pdf/src/tests/actual_text.rs`. |
+| 2026-11-09 | minor | PDF marked-text export (#6309): compatible glyphs stay on one layout line with per-glyph offsets; scores and estimates unchanged. Decoded stream and placement regressions; reader ActualText (#6165), styled clusters and external viewer validation remain separate. |
 | 2026-11-09 | minor | Interim macOS canvas cursor delivery (#2292): existing artwork in aligned 1×/2× AppKit representations, visible system fallback and host-owned restoration. Headless routing, bitmap and ownership coverage; native timing, menus, focus/handback, mixed displays, Spotlight and full-screen Spaces remain unverified. Scores and estimates unchanged. |
 | 2026-11-09 | minor | G4 type: the custom dictionary (`text.spelling.addWord`, `removeWord`, `changeWord`, `dictionary`, kept in a file beside the preferences) and Ignore All for the active document (`text.spelling.ignoreAll`), #4936; the Check Spelling and Edit Custom Dictionary dialogs and Auto Spell Check remain; scores and estimates unchanged. |
 | 2026-11-09 | minor | G9: EPS import: the fonts an EPS carries draw their glyphs instead of being set as type in an installed font: composite (Type 0) fonts with the 8/8 mapping, plain Type 42 fonts (characters from their glyph names or character map, widths from the font), CID-keyed fonts over CMaps (Type 0 and Type 2 CIDFonts, CIDFonts in a FontSet's Compact Font Format data, base-font CMaps, named CIDFonts over predefined Unicode CMaps set as type) and embedded Type 1 fonts; the show operators' spacing along the baseline is kept as tracking, `kshow` included. Each step is charged to the interpreter's budgets. Hand-written test files only (no corpus file uses these fonts); scores and estimates unchanged. |

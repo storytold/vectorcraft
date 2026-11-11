@@ -770,6 +770,30 @@ fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
     assert_eq!(dx(&ToolContext { snap_to_point: false, ..cx(&d, &s, &p) }, 172.0), 22.0);
 }
 
+/// #4312: a Shift move keeps to its line while its edges and centre land on a ruler guide, as a
+/// move without Shift does (#5746).
+#[test]
+fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
+    let (mut d, id) = doc_with_rect();
+    d.guides = vec![vectorcraft_doc::Guide::new(true, 333.0)];
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    // Level; the left edge (100) would end 2 short of the guide, the pointer far from it.
+    let (m, _) = shift_moved(&c, (150.0 + 231.0, 150.0));
+    assert!(moved_by(m, (233.0, 0.0)), "{m:?}");
+    // The right edge, 1 past the guide.
+    let (m, _) = shift_moved(&c, (150.0 + 134.0, 150.0));
+    assert!(moved_by(m, (133.0, 0.0)), "{m:?}");
+    // Out of reach, or with Snap to Point off, the move stays as dragged.
+    let (m, _) = shift_moved(&c, (150.0 + 221.0, 150.0));
+    assert!(moved_by(m, (221.0, 0.0)), "{m:?}");
+    let off = ToolContext { snap_to_point: false, ..cx(&d, &s, &p) };
+    let (m, _) = shift_moved(&off, (150.0 + 231.0, 150.0));
+    assert!(moved_by(m, (231.0, 0.0)), "{m:?}");
+}
+
 /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as
 /// gathered before the previews moved it); released, the move doesn't.
 #[test]
@@ -2255,6 +2279,30 @@ fn the_preview_memo_measures_once_per_revision_selection_and_preview_bounds() {
     assert_eq!(selection_bounds(&c).map(|r| r.x1), Some(250.0));
 }
 
+/// With Measure Type by Glyph Bounds, the bounding box of selected point type is the ink of its
+/// glyphs; the memo measures again when only that setting changes.
+#[test]
+fn the_bounding_box_of_point_type_follows_measure_type_by_glyph_bounds() {
+    use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, TextObject};
+    let mut d = Document::new(500.0, 500.0);
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let text = TextObject::point(Point::new(100.0, 300.0), "Hg", CharStyle { size: 60.0, ..Default::default() });
+    let ink = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text).ink_bounds().unwrap();
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(text.clone())))).unwrap();
+    let (mut s, p, memo) = (Selection::default(), paint(), PreviewMemo::default());
+    s.set([id]);
+    let at = |glyph_bounds| {
+        let c = ToolContext { revision: (1, 1), glyph_bounds, preview_memo: Some(&memo), ..cx(&d, &s, &p) };
+        (selection_box(&c).map(|b| b.rect), object_bounds(&c, id))
+    };
+    let em = d.node(id).and_then(|n| n.geometric_bounds());
+    assert_eq!(at(false), (em, em));
+    let glyphs = Some(text.xf.transform_rect_bbox(ink));
+    assert_eq!(at(true), (glyphs, glyphs));
+    assert_ne!(glyphs, em);
+    assert_eq!(memo.measurements(), 4, "the same revision measured again for the setting");
+}
+
 /// A double-click on a symbol instance edits its symbol in symbol editing mode (`symbol.edit`), and
 /// one outside the symbol's art in that mode leaves it, as it leaves isolation mode. An instance
 /// inside the art of the symbol being edited is not entered.
@@ -2401,4 +2449,31 @@ fn a_ruler_guide_under_the_centre_point_keeps_the_pointer() {
     let down = t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y));
     let drag = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 150.0));
     assert!(drag.iter().any(|a| matches!(a, Action::Preview(cmd, _) if cmd == "guide.move")), "the guide drags: {down:?} {drag:?}");
+}
+
+/// #6437: in Outline view, where an image is drawn as its frame, a click inside it on the edge of
+/// a path behind selects that path, with the image selected or not. In Preview the image takes
+/// the click.
+#[test]
+fn outline_view_click_through_an_image_selects_the_path_behind() {
+    use vectorcraft_doc::{Appearance, Document, ImageObject, Node, NodeKind};
+    let mut d = Document::new(500.0, 500.0);
+    let layer = d.layers[0].id;
+    let (back, image) = (d.alloc_id(), d.alloc_id());
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0));
+    d.insert(Some(layer), 0, Node::path(back, square, Appearance::default_art())).unwrap();
+    let xf = vectorcraft_geom::Affine::translate((150.0, 150.0));
+    let im = ImageObject { key: "k".into(), width: 100, height: 100, xf, link: None, placement: Default::default(), pixels: None };
+    d.insert(Some(layer), 1, Node::new(image, NodeKind::Image(Box::new(im)))).unwrap();
+    let selects = |a: &[Action], id: NodeId| a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([id.0])));
+    let p = paint();
+    for picked in [vec![], vec![image]] {
+        let mut s = Selection::default();
+        s.set(picked.clone());
+        let outline = ToolContext { outline: true, ..cx(&d, &s, &p) };
+        let a = SelectionTool::default().pointer(&outline, &ev(PointerKind::Down, 200.0, 180.0));
+        assert!(selects(&a, back), "outline, {picked:?} selected: {a:?}");
+        let a = SelectionTool::default().pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 200.0, 180.0));
+        assert!(!selects(&a, back), "preview, {picked:?} selected: {a:?}");
+    }
 }

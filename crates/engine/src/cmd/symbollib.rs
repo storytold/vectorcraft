@@ -2,7 +2,7 @@
 //! of symbols the library panel shows. A library is a document holding the symbols with the
 //! resources they use (nested symbols, patterns, swatches, brushes, graphic styles, images) and
 //! their Symbol Options; saved, it is a native `.vectorcraft` file, which File › Open also opens.
-//! The built-in library is generated here ([`BUILTIN`]); User Defined ones are the `.vectorcraft`
+//! The built-in libraries are generated here ([`BUILTIN`]); User Defined ones are the `.vectorcraft`
 //! files in the user library folder ([`Libraries`]), and Other Library… loads the symbols of any
 //! document VectorCraft opens. `symbol.addFromLibrary` copies symbols into the document;
 //! `symbol.saveLibrary` writes the document's.
@@ -12,7 +12,7 @@ use std::sync::{Arc, LazyLock};
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Symbol};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Symbol, SymbolNineSlice};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
 
 use super::brushsym::{CURRENT_SYMBOL, natural_size, normalize, place_xf, set_natural_size};
@@ -154,7 +154,12 @@ pub struct BuiltinSymbolLibrary {
 }
 
 /// The built-in symbol libraries, in menu order: original art generated in code.
-pub const BUILTIN: &[BuiltinSymbolLibrary] = &[BuiltinSymbolLibrary { id: "basic-shapes", name: "Basic Shapes", make: basic_shapes }];
+pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
+    BuiltinSymbolLibrary { id: "basic-shapes", name: "Basic Shapes", make: basic_shapes },
+    BuiltinSymbolLibrary { id: "ui-frames", name: "UI Frames", make: ui_frames },
+    BuiltinSymbolLibrary { id: "map-markers", name: "Map Markers", make: map_markers },
+    BuiltinSymbolLibrary { id: "inventory-icons", name: "Inventory Icons", make: inventory_icons },
+];
 
 /// Built-in library `id`, made once.
 fn builtin_library(id: &str) -> Option<Arc<SymbolLibrary>> {
@@ -192,6 +197,119 @@ fn basic_shapes() -> SymbolLibrary {
     }
     doc.title = "Basic Shapes".into();
     SymbolLibrary { name: "Basic Shapes".into(), doc }
+}
+
+/// UI Frames: panel, button and bar HUD chrome with default 9-slice guides (original art).
+fn ui_frames() -> SymbolLibrary {
+    // Heights keep default 9-slice (0.25) past each corner radius so a vertical resize
+    // stretches only the flat middle, not the curves.
+    let frames = [
+        ("Panel", Rect::new(-48.0, -36.0, 48.0, 36.0), 10.0, "#2b3340", "#8aa0b8"),
+        ("Button", Rect::new(-36.0, -18.0, 36.0, 18.0), 8.0, "#3a6ea5", "#d7e6f5"),
+        ("Bar", Rect::new(-56.0, -24.0, 56.0, 24.0), 10.0, "#1f6b4a", "#b7e0c9"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, rect, radius, fill_hex, edge_hex) in frames {
+        let fill = Color::from_hex(fill_hex).unwrap_or(Color::BLACK);
+        let edge = Color::from_hex(edge_hex).unwrap_or(Color::BLACK);
+        let id = doc.alloc_id();
+        let art = Node::path(id, shapes::rounded_rectangle(rect, radius), Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.5));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+        doc.set_symbol_nine_slice(name, Some(SymbolNineSlice::default()));
+    }
+    doc.title = "UI Frames".into();
+    SymbolLibrary { name: "UI Frames".into(), doc }
+}
+
+/// Map Markers: pin, flag, crosshair and checkpoint for map/HUD art (original, no 9-slice).
+fn map_markers() -> SymbolLibrary {
+    let c = Point::ZERO;
+    let pin = [(0.0, 22.0), (-9.0, 4.0), (-12.0, -6.0), (-8.0, -16.0), (0.0, -20.0), (8.0, -16.0), (12.0, -6.0), (9.0, 4.0)];
+    let flag = [(-16.0, 22.0), (-12.0, 22.0), (-12.0, -8.0), (18.0, -14.0), (-12.0, -20.0), (-12.0, -22.0), (-16.0, -22.0)];
+    let pin: Vec<Point> = pin.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let flag: Vec<Point> = flag.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let markers = [
+        ("Pin", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pin, true)), "#e74c3c"),
+        ("Flag", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&flag, true)), "#3498db"),
+        ("Crosshair", shapes::star(c, 20.0, 5.0, 4, 0.0), "#2c3e50"),
+        ("Checkpoint", shapes::polygon(c, 18.0, 4, 0.0), "#27ae60"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in markers {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Map Markers".into();
+    SymbolLibrary { name: "Map Markers".into(), doc }
+}
+
+/// Inventory Icons: sword, shield, potion, key and gem for loot/RPG art (original, no 9-slice).
+fn inventory_icons() -> SymbolLibrary {
+    let c = Point::ZERO;
+    let sword = [
+        (0.0, -22.0),
+        (3.0, -10.0),
+        (3.0, 6.0),
+        (8.0, 8.0),
+        (8.0, 12.0),
+        (3.0, 12.0),
+        (3.0, 20.0),
+        (-3.0, 20.0),
+        (-3.0, 12.0),
+        (-8.0, 12.0),
+        (-8.0, 8.0),
+        (-3.0, 6.0),
+        (-3.0, -10.0),
+    ];
+    let shield = [(0.0, -20.0), (16.0, -12.0), (14.0, 8.0), (0.0, 20.0), (-14.0, 8.0), (-16.0, -12.0)];
+    let potion =
+        [(-4.0, -20.0), (4.0, -20.0), (4.0, -12.0), (10.0, -6.0), (12.0, 6.0), (8.0, 18.0), (-8.0, 18.0), (-12.0, 6.0), (-10.0, -6.0), (-4.0, -12.0)];
+    let key = [
+        (-4.0, -18.0),
+        (4.0, -18.0),
+        (6.0, -14.0),
+        (6.0, -8.0),
+        (4.0, -6.0),
+        (4.0, 16.0),
+        (8.0, 16.0),
+        (8.0, 20.0),
+        (-2.0, 20.0),
+        (-2.0, 12.0),
+        (0.0, 12.0),
+        (0.0, -6.0),
+        (-4.0, -8.0),
+        (-6.0, -14.0),
+    ];
+    let sword: Vec<Point> = sword.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let shield: Vec<Point> = shield.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let potion: Vec<Point> = potion.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let key: Vec<Point> = key.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let icons = [
+        ("Sword", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&sword, true)), "#95a5a6"),
+        ("Shield", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&shield, true)), "#3498db"),
+        ("Potion", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&potion, true)), "#9b59b6"),
+        ("Key", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&key, true)), "#f1c40f"),
+        ("Gem", shapes::polygon(c, 16.0, 6, 0.0), "#1abc9c"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in icons {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Inventory Icons".into();
+    SymbolLibrary { name: "Inventory Icons".into(), doc }
 }
 
 /// An instance of symbol `name` (what the resource gathering follows).
@@ -287,7 +405,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Where the symbols land, worked out on a copy: nothing to add and nothing to place is no edit.
     let mut probe = (*st.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let doc_names: Vec<String> = picked.iter().map(|n| target(&imported.renamed, n)).collect();
     let centre = st.doc.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
     let at = if place { Some(Point::new(number_or(p, "x", centre.x, C)?, number_or(p, "y", centre.y, C)?)) } else { None };
@@ -295,7 +413,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({ "library": info.id });
     if imported.added > 0 || place {
         let placed = s.edit("Add to Symbols", |d, sel| {
-            let imported = clip.import_into(d, &choices, false);
+            let imported = clip.import_into(d, &choices, false)?;
             // Every symbol brought in (nested ones too) takes its Symbol Options along.
             for sym in &clip.symbols {
                 let to = target(&imported.renamed, &sym.name);

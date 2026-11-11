@@ -24,6 +24,9 @@ pub struct Job {
     /// The automation roots in force where the job was made: the render reads linked files under
     /// them, as it would on that thread.
     pub scope: ScopeHandle,
+    /// The document's deferred live-effect plug-in stages and first-view budget: the render runs
+    /// inside their view ([`vectorcraft_plugins::deferred::Deferrals::view`]).
+    pub effects: vectorcraft_plugins::deferred::Deferrals,
     /// The render may copy pixels from the worker's last frame ([`crate::canvas::render_job`]).
     /// Off: it renders the whole frame.
     pub may_copy: bool,
@@ -71,7 +74,7 @@ impl Worker {
                         job = newer;
                     }
                     let t0 = crate::now_ms();
-                    let frame = job.scope.clone().run(|| crate::canvas::render_job(&mut r, &mut kept, &job));
+                    let frame = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(&mut r, &mut kept, &job)));
                     let ms = crate::now_ms() - t0;
                     let done = Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused };
                     if done_tx.send(done).is_err() {

@@ -737,7 +737,7 @@ fn embedded_font_programs_are_skipped() {
         let r = read(&program);
         let NodeKind::Text(t) = &objects(&r.document)[0].kind else { panic!("{program}: {:?}", r.warnings) };
         assert_eq!(t.runs[0].style.font_family, "My Font");
-        assert!(r.warnings.is_empty(), "{program}: {:?}", r.warnings);
+        assert!(program_warnings(&r.warnings).is_empty(), "{program}: {:?}", r.warnings);
     }
 }
 
@@ -833,12 +833,18 @@ fn device_settings_are_accepted_and_change_nothing() {
 }
 
 /// Check that `body` draws one square, blue: it sets blue when what it checks holds, else red.
+/// `warnings` without the note naming fonts that aren't available: which those are depends on the
+/// fonts installed where the tests run, not on the program.
+pub(super) fn program_warnings(warnings: &[String]) -> Vec<&String> {
+    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE)).collect()
+}
+
 fn blue(body: &str) {
     let r = read(&format!("{body} 10 10 80 80 rectfill"));
     let o = objects(&r.document);
     assert_eq!(o.len(), 1, "{body}: {:?}", r.warnings);
     assert_eq!(fill(&o[0]), Some(&Paint::solid(Color::rgb(0.0, 0.0, 1.0))), "{body}");
-    assert!(r.warnings.is_empty(), "{body}: {:?}", r.warnings);
+    assert!(program_warnings(&r.warnings).is_empty(), "{body}: {:?}", r.warnings);
 }
 
 /// Check that PostScript `cond` leaves `true`.
@@ -1262,6 +1268,15 @@ fn shading_functions_in_shared_arrays_stop_at_the_limits() {
     // more than the operation budget.
     let r = read(&format!("{} /sh {} def 2000 {{ sh shfill }} repeat", array(256), axial("a")));
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{:?}", r.warnings);
+}
+
+/// Type only measured (`stringwidth`) or drawn as outlines (`charpath`) adds no type to the
+/// document, so its font isn't named as one that shows in the fallback font.
+#[test]
+fn fonts_only_measured_or_outlined_are_not_named_as_missing() {
+    let r = read("/Nowhere-Bold 12 selectfont (Hi) stringwidth pop pop newpath 10 10 moveto (Hi) true charpath fill 10 10 80 80 rectfill");
+    assert!(!objects(&r.document).iter().any(|n| matches!(n.kind, NodeKind::Text(_))));
+    assert!(!r.warnings.iter().any(|w| w.starts_with(super::MISSING_FONTS_NOTE)), "{:?}", r.warnings);
 }
 
 #[test]

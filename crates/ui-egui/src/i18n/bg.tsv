@@ -276,6 +276,7 @@ font-technology	Variable	Променливи
 	Average…	Усредняване…
 	Axis:	Ос:
 	Background Color:	Цвят на фона:
+	Guide Label:	Етикет на водачите:
 	Show Center Mark	Показване на централен знак
 	Show Cross Hairs	Показване на кръстосани линии
 	Show Video Safe Areas	Показване на безопасните видеозони
@@ -284,7 +285,6 @@ font-technology	Variable	Променливи
 	Update While Dragging	Обновяване при плъзгане
 	Hide Video Rulers	Скриване на видеолинийките
 	Background Contents	Съдържание на фона
-	Background Contents:	Съдържание на фона:
 	Background:	Фон:
 	Backspace	Backspace
 	Bar Graph Tool	Инструмент „Стълбчеста диаграма“
@@ -568,6 +568,7 @@ font-technology	Variable	Променливи
 	Coming soon — tracked in the parity plan	Очаквайте скоро — следи се в плана за съвместимост
 	Command Click to Select Objects Behind	Щракване с Command за избор на обекти отзад
 	Command Dialog	Диалогов прозорец за команда
+	Command API Reference	Справочник за API на командите
 	Community	Общност
 	Compatibility:	Съвместимост:
 	Compatible Gradient and Gradient Mesh Printing	Съвместим печат на градиент и градиентна мрежа
@@ -654,7 +655,6 @@ font-technology	Variable	Променливи
 	Couldn't {} {name}: {e}	Неуспешно {name} на {}: {e}
 	Create	Създаване
 	Create Clipping Mask	Създаване на маска за изрязване
-	Create Document	Създаване на документ
 	Create from Guides	Създаване от водачи
 	Create from Selection	Създаване от селекцията
 	Create From:	Създаване от:
@@ -1826,6 +1826,8 @@ font-technology	Variable	Променливи
 	Lock (⌘2)	Заключване (⌘2)
 	Lock Grid	Заключване на мрежата
 	Lock Guides	Заключване на водачите
+	Lock Guides by Default	Заключване на водачите по подразбиране
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Водачи за работната област с Cmd/Ctrl + плъзгане от линийка
 	Lock Others	Заключване на другите
 	Lock Slices	Заключване на фрагментите
 	Lock Station Point	Заключване на базовата точка
@@ -2074,7 +2076,6 @@ font-technology	Variable	Променливи
 	New Color Group…	Нова цветова група…
 	New Document Presets	Предварителни настройки за нов документ
 	New file	Нов файл
-	New from Template	Нов от шаблон
 	New from Template…	Нов от шаблон…
 	New Graphic Style	Нов графичен стил
 	New Graphic Style (Alt-click to name it)	Нов графичен стил (кликнете с Alt, за да го наименувате)
@@ -2278,6 +2279,8 @@ font-technology	Variable	Променливи
 	Other Layers	Други слоеве
 	Other Libraries	Други библиотеки
 	Other Library…	Друга библиотека…
+	Some scripts were not listed	Някои скриптове не са изброени
+	The Scripts folder cannot be read	Папката Scripts не може да бъде прочетена
 	Other Script…	Друг скрипт…
 	Out of Gamut Warning	Предупреждение за излизане извън цветовата гама
 	Out of Web Color Warning	Предупреждение за цвят извън уеб палитрата
@@ -2745,6 +2748,12 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Нулиране на OpenType характеристиките
 	Reset Panel	Нулиране на панела
 	Reset Preferences	Нулиране на настройките
+	Export Preferences…	Експортиране на настройките…
+	Import Preferences…	Импортиране на настройките…
+	Save the applied preferences to a JSON file	Запазване на приложените настройки във файл JSON
+	Apply the preferences in a file Export Preferences saved	Прилагане на настройките от файл, запазен с „Експортиране на настройките“
+	Export Preferences	Експортиране на настройките
+	Import Preferences	Импортиране на настройките
 	Search Preferences	Търсене в настройките
 	No settings found	Няма намерени настройки
 	Reset Profiles	Нулиране на профилите
@@ -2767,6 +2776,8 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивен
 	Restore	Възстановяване
 	Restore every preference to its default (applied on OK)	Възстановяване на всички настройки по подразбиране (прилага се при ОПК)
+	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Стойностите по подразбиране се прилагат, когато щракнете върху ОК в Настройки. Отказ там запазва текущите ви настройки.
 	Restore Recovered Documents	Възстановяване на възстановените документи
 	Restored documents open unsaved: save them to keep them.	Възстановените документи се отварят незаписани: запазете ги, за да ги съхраните.
 	Restrict printing, editing and other tasks	Ограничаване на печата, редактирането и други задачи
@@ -2858,6 +2869,7 @@ digits	Malayalam	Малаялам
 	Save PDF Preset	Запази PDF предварителна настройка
 	Save Perspective Grid Preset	Запази предварителна настройка на перспективната мрежа
 	Save Preset	Запази предварителна настройка
+	Save Document Preset	Запази предварителна настройка на документа
 	Save Preset…	Запази предварителна настройка…
 	Save Print Preset	Запази предварителна настройка за печат
 	Save Recovery Data	Запази данни за възстановяване
@@ -3052,6 +3064,20 @@ digits	Malayalam	Малаялам
 	Settings…	Настройки…
 	Setup…	Настройка…
 	Shadows and Glows	Сенки и блясъци
+	Game HUD	Игрови HUD
+	Health Fill	Здраве
+	Mana Glow	Мана
+	Damage Flash	Щета
+	Quest Outline	Квест
+	Coin Shine	Монета
+	Boss Alert	Бос
+	Status Effects	Статус ефекти
+	Poison Tint	Отрова
+	Freeze Edge	Замразяване
+	Burn Aura	Изгаряне
+	Stun Pulse	Зашеметяване
+	Stealth Fade	Скритост
+	Shield Buff	Щит
 	Shape	Фигура
 	Shape Builder	Създател на фигури
 	Shape Builder Regions	Области на създателя на фигури
@@ -3422,7 +3448,6 @@ digits	Malayalam	Малаялам
 	Template	Шаблон
 	Templates	Шаблони
 	Templates Folder	Папка с шаблони
-	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, показван в клетката:
 	Text Export Options	Опции за експортиране на текст
 	Text Fill & Stroke Color	Цвят на запълване и щрих на текста
@@ -3470,6 +3495,8 @@ digits	Malayalam	Малаялам
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плочките се номерират напречно, след това надолу; оставете диапазона празен за всяка плочка.
 	Copies per Sheet (as many as fit, in a grid)	Копия на лист (колкото се побират, в мрежа)
 	Tint	Оттенък
+	Fill Tint	Оттенък на запълване
+	Stroke Tint	Оттенък на щриха
 	Tip extends past the end point	Връхът продължава след крайната точка
 	Tip on the end point	Връх върху крайната точка
 	Title Case	Заглавни букви
@@ -3955,6 +3982,16 @@ axis	Both	И двете
 @msg	Combine Slices: the slices have no bounds	Обединяване на парчета: парчетата нямат граници
 @msg	Convert to Artboards: selection has no area	Преобразуване в работни области: селекцията няма площ
 @msg	Convert to Shape: no rectangles or ellipses selected	Преобразуване в фигура: няма избрани правоъгълници или елипси
+	Run	Изпълни
+	Run Script	Изпълни скрипт
+	Stop Script	Спри скрипта
+	Show External Script Warning	Показвай предупреждение за външни скриптове
+	A Script Is Running	Изпълнява се скрипт
+	Script Alert	Известие от скрипт
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скриптът може да променя отворените документи и да записва файлове чрез командите, които изпълнява. Изпълнявайте само скриптове, на които имате доверие.
+	Do not show this warning again	Не показвай повече това предупреждение
+	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Този скрипт добави изключително много обекти. Да продължи ли, или да се спре и да се отменят промените му?
 @msg	Copied the script report	Копиран е отчетът за скрипта
 @msg	Corners edits the corners of a path	Ъглите редактират ъглите на пътя
 @msg	Couldn't copy to the system clipboard: {e}	Неуспешно копиране в системния клипборд: {e}
@@ -4491,6 +4528,20 @@ axis	Both	И двете
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
 @msg	unknown panel `{raw}`	непознат панел `{raw}`
 @msg	unknown preference `{key}`	непозната настройка `{key}`
+@msg	Preferences imported.	Настройките са импортирани.
+@msg	not a preferences file: {e}	не е файл с настройки: {e}
+@msg	not a preferences file: no JSON object	не е файл с настройки: няма обект JSON
+@msg	not a preferences file (format `{format}`)	не е файл с настройки (формат `{format}`)
+@msg	not a preferences file: no `format`	не е файл с настройки: няма `format`
+@msg	not a preferences file: no `version`	не е файл с настройки: няма `version`
+@msg	not a preferences file: no `prefs`	не е файл с настройки: няма `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	файлът е запазен от по-нова версия на VectorCraft (версия {v})
+@msg	the file holds no preferences	файлът не съдържа настройки
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` указва папка, а файловете с настройки не съдържат папки
+@msg	the file is larger than 1 MB	файлът е по-голям от 1 MB
+@msg	give `path` or `data`	посочете `path` или `data`
+@msg	`{key}` must be an object	`{key}` трябва да бъде обект
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` се изпълнява самостоятелно, а не като стъпка от пакет
 @msg	unknown preset (one of {_1})	непозната предварителна настройка (една от {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (висока, средна, ниска или запазена: вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	непозната предварителна настройка `{name}` (вижте flattener.presets.list)
@@ -4980,7 +5031,8 @@ lighting	Light	Светлина
 	Bevel both sides	Фасет от двете страни
 	Presets	Предварителни настройки
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Един обект може да има само един 3D ефект. Редактирайте параметрите на съществуващия ефект или го премахнете предварително.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} в момента изисква път или съставен път. Първо преобразувайте текста, изображенията и групите в пътища.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} в момента изисква път, съставен път, текст, група, преливане или екземпляр на символ. Първо разширете другите обекти.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} не може да създаде тяло от изображение: първо го трасирайте с Обект › Трасиране на изображение › Създаване.
 @msg	{label} requires a shape with at least two anchors	{label} изисква форма с поне две опорни точки
 @msg	The shape is too complex for a 3D effect	Формата е твърде сложна за 3D ефект
 @msg	The 3D surface is too complex; simplify the shape	3D повърхността е твърде сложна; опростете формата
@@ -5405,6 +5457,7 @@ file-filter	Flattener presets	Предварителни настройки за
 file-filter	PDF presets	Предварителни настройки за PDF
 file-filter	PDF-compatible .ai	Съвместими с PDF .ai файлове
 file-filter	Print presets	Предварителни настройки за печат
+file-filter	Preferences	Настройки
 file-filter	Export presets	Набори за експортиране
 file-filter	SVG Compressed	Компресиран SVG
 file-filter	Swatch libraries	Библиотеки с образци
@@ -5486,6 +5539,7 @@ theme	Appearance	Външен вид
 	Preview (1 inch on the page)	Преглед (1 инч на страницата)
 	Set as Default	Задаване по подразбиране
 	 out from a highlighted edge to place its dimension  |  	 навън от осветен ръб, за да поставите размера му  |  
+	 two points, then move and click to place an aligned, horizontal or vertical dimension  |  	 върху две точки, после преместете и щракнете, за да поставите подравнен, хоризонтален или вертикален размер  |  
 	 cancels  |  Double-click the tool for options	 отказва  |  Двойно щракване върху инструмента за опции
 	Angular	Ъглов
 	Away from the Line	Встрани от линията
@@ -5515,14 +5569,17 @@ theme	Appearance	Външен вид
 @msg	Invalid drawing scale	Невалиден мащаб на чертежа
 @msg	Invalid real scale	Невалиден реален мащаб
 @msg	Measured anchor no longer exists	Измерената опорна точка вече не съществува
+@msg	Invalid measured point	Невалидна измерена точка
 @msg	Measured segment no longer exists	Измереният сегмент вече не съществува
 @msg	Non-finite dimension	Размерът не е крайно число
+@msg	Only linear dimensions are horizontal or vertical	Само линейните размери са хоризонтални или вертикални
 @msg	Scale Text Attributes: selected type has no scale to bake	Мащабиране на текстови атрибути: избраният текст няма мащаб за прилагане
 @msg	Scale must be drawing:real, for example 1:10	Мащабът трябва да е чертеж:реалност, например 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Съотношението на мащаба трябва да е между 1:1000000 и 1000000:1
 @msg	Second measured segment no longer exists	Вторият измерен сегмент вече не съществува
 @msg	Unknown dimension mode	Непознат режим на размера
 @msg	Unknown dimension option {k}	Непозната опция за размер {k}
+@msg	Unknown dimension orientation	Непозната ориентация на размера
 @msg	Unknown dimension style	Непознат стил на размера
 @msg	Unknown unit	Непозната единица
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Затваря кръговите краища на отворени профили. При частично завъртане срязаните страни остават отворени.
@@ -5787,6 +5844,7 @@ axis	Y Axis	Y ос
 	Show its progress, see Cancel and write log lines	Показване на напредъка, разпознаване на отказ и записване на редове в дневника
 	Keep settings of its own	Съхраняване на собствени настройки
 	Keep a cache of its own, which you can clear	Съхраняване на собствен кеш, който можете да изчистите
+	Run these commands on the document: {ids}	Изпълняване на тези команди върху документа: {ids}
 	Clear Plug-in Cache	Изчистване на кеша на добавката
 # Actions panel: action sets (#3712).
 	New Set…	Нов набор…
@@ -5833,6 +5891,20 @@ axis	Y Axis	Y ос
 @plural	Result: {n}|Results: {n}	Резултат: {n}|Резултати: {n}
 	Add to Symbols	Добавяне към символи
 	Basic Shapes	Основни фигури
+	Button	Бутон
+	Panel	Панел
+	UI Frames	UI рамки
+	Map Markers	Маркери на карта
+	Pin	Карфица
+	Flag	Флаг
+	Crosshair	Мерник
+	Checkpoint	Контролна точка
+	Inventory Icons	Икони на инвентара
+	Sword	Меч
+	Shield	Щит
+	Potion	Отвара
+	Key	Ключ
+	Gem	Скъпоценен камък
 	Open Symbol Library	Отваряне на библиотека със символи
 	Save Symbol Library	Запазване на библиотека със символи
 	Save Symbol Library…	Запази библиотека със символи…
@@ -5881,6 +5953,11 @@ axis	Y Axis	Y ос
 	User Brush Library 9	Потребителска библиотека с четки 9
 	User Brush Library 10	Потребителска библиотека с четки 10
 	Art Ribbons	Арт ленти
+	Zigzag	Зигзаг
+	Burst Ray	Лъч на удар
+	Dash Trail	Пунктирна следа
+	Speed Line	Линия на скорост
+	Game Trails	Игрови следи
 	Calligraphic Nibs	Калиграфски писци
 	Pattern Borders	Бордюри с мостри
 	Scatter Shapes	Разсеяни фигури
@@ -5893,6 +5970,8 @@ axis	Y Axis	Y ос
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Точков текст
 	Area Text	Текст в зона
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Измерване на текста по границите на глифа
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показване на опциите за прилепване към глиф
 	Hide Snap to Glyph Options	Скриване на опциите за прилепване към глиф
@@ -6427,3 +6506,30 @@ breakText	Glyphs	Глифи
 # Align to Pixel Grid
 	Align to Pixel Grid	Подравняване към пикселната мрежа
 @msg	side is left or right, not `{s}`	side е left или right, а не `{s}`
+	Edit Custom Dictionary	Редактиране на потребителски речник
+	Entry:	Запис:
+# Script Console
+	Script Console	Конзола за скриптове
+	Clear Script Console	Изчистване на конзолата за скриптове
+	Copy Script Console	Копиране на конзолата за скриптове
+	Copy All	Копиране на всичко
+	Copy Selected	Копиране на избраното
+	Finished	Завършен
+	Ended with an error	Прекратен с грешка
+	Out of fuel	Достигнат лимит на инструкциите
+	Ended at a host limit	Прекратен при лимит на хоста
+	Ended at a limit	Прекратен при лимит
+	Stopped	Спрян
+	Ended by an internal fault	Прекратен поради вътрешна грешка
+	time unavailable	времето не е налично
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	най-бавни: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} извикване към хоста|{n} извиквания към хоста
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} по-ранен ред премахнат|{n} по-ранни реда премахнати
+@plural	{n} line cut|{n} lines cut	{n} ред съкратен|{n} реда съкратени
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Обновяване на отложените ефекти
+	Deferred Effects	Отложени ефекти

@@ -823,6 +823,13 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
             // No files: the command fails after the merge.
             assert!(s.execute("text.addFontFiles", &json!({"files": []})).is_err());
         }),
+        ("a call its schema refuses", |s, _, _| {
+            // The refused call adds no undo step of its own: the merge's is the last one.
+            let e = s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": 0})).unwrap_err().to_string();
+            assert!(e.contains("`zoom`"), "{e}");
+            assert!(s.doc().unwrap().doc.views.is_empty());
+            assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Shape Builder"));
+        }),
     ];
     let _proof = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = vectorcraft_testkit::temp_dir("shape-builder-merge-first");
@@ -3575,6 +3582,37 @@ fn a_trace_run_hands_its_trace_to_the_command() {
     assert!(s.trace_hand_off.is_none(), "dropped");
     let bb = outline(&traced_paths(&node(&s, NodeId(moved["id"].as_u64().unwrap())))[0]).0.bounds().unwrap();
     assert!((bb.center().x - 160.0).abs() < 1.5, "traced where the image is now: {bb:?}");
+}
+
+/// A plug-in run that calls Image Trace and then fails leaves a trace handed in for the command in
+/// place, as it leaves the document.
+#[test]
+fn a_failed_plugin_run_keeps_a_handed_in_trace() {
+    use vectorcraft_plugins::wat as tpl;
+    let (id, cmd, args) = ("test.engine.calltrace", "imageTrace.make", r#"{"params":{"ignoreWhite":true}}"#);
+    let mut s = session();
+    s.allow_plugin_grants_from_requests();
+    image_doc(&mut s);
+    let p: Value = serde_json::from_str(args).unwrap();
+    let run = cmd::TraceRun::prepare(&s, cmd, &p).unwrap();
+    run.run(&|_, _| true).unwrap().hand_in(&mut s);
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["{cmd}"]}}"#);
+    let imports = format!(
+        r#"(import "env" "vc_call" (func $vc_call (param i32 i32 i32 i32) (result i32)))
+  (data (i32.const 0x2000) "{}") (data (i32.const 0x2100) "{}")"#,
+        tpl::string(cmd),
+        tpl::string(args)
+    );
+    let first =
+        format!("(drop (call $vc_call (i32.const 0x2000) (i32.const {}) (i32.const 0x2100) (i32.const {}))) unreachable", cmd.len(), args.len());
+    let wasm = wat::parse_str(tpl::with_imports(&manifest, &imports, &first, "{}")).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true})).unwrap();
+    assert!(s.execute("plugin.run", &json!({"id": id, "ids": []})).is_err());
+    assert!(s.trace_hand_off.is_some(), "the trace is still handed in");
+    assert!(s.execute(cmd, &p).is_ok());
+    assert!(s.trace_hand_off.is_none(), "taken");
+    s.execute("plugin.remove", &json!({"id": id})).unwrap();
 }
 
 #[test]

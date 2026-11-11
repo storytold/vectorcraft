@@ -180,6 +180,13 @@ pub(crate) struct Interp {
     pub(crate) throw_site: Option<ThrowSite>,
     /// The last exception a run did not catch.
     pub(crate) last_thrown: Value,
+    /// The last `Error` object thrown in this run, caught or not, or `null` (`$.error`).
+    pub(crate) last_error: Value,
+    /// An exception passed on rather than thrown again: one a `finally` block restores, or one
+    /// leaving a nested run. [`Interp::unwind`] does not make it [`Interp::last_error`] again.
+    pub(crate) passing: Value,
+    /// The locale `localize` and `Object.prototype.toString` read.
+    pub(crate) localization: Rc<crate::builtins::extensions::Localization>,
     /// The state of `Math.random`'s generator.
     pub(crate) random: u64,
     /// The objects `Array.prototype.join` and `toLocaleString` are joining, innermost last: a
@@ -197,6 +204,36 @@ pub(crate) struct Interp {
     pub(crate) held: Rc<HeldCount>,
     /// The global code's default XML namespace URI (ECMA-357 section 12.1).
     pub(crate) xml_default_uri: Key,
+    /// Set by the host to end the current slice of a resumable run at the next safe point.
+    pub(crate) pause: Rc<std::cell::Cell<bool>>,
+    /// The outermost loop of a resumable run is running ([`crate::Realm::advance`]).
+    pub(crate) in_slice: bool,
+    /// True while a host function runs where it may wait ([`crate::HostError::Wait`]).
+    pub(crate) can_wait: Rc<std::cell::Cell<bool>>,
+    /// A host function's call waits for its result: the value on top of the stack stands in for it.
+    pub(crate) waiting: bool,
+    /// The message of the uncatchable error a host function ended the run with.
+    pub(crate) host_abort: Option<String>,
+    /// How much a value passed to or from a host function may carry.
+    pub(crate) data_limits: crate::DataLimits,
+    /// The tag the source compiled next gets ([`crate::Realm::error_source`]).
+    pub(crate) source_tag: u32,
+    /// The sources [`crate::HostItem::Evaluator`] functions have given in this realm.
+    pub(crate) evaluated: u32,
+    /// The tag of the source the last run's error was raised in.
+    pub(crate) error_tag: u32,
+    /// The mark of the host error ([`crate::HostError::Marked`]) whose exception or limit is
+    /// propagating.
+    pub(crate) thrown_mark: Option<u32>,
+    /// The marked exceptions `finally` blocks are running for, innermost last, each with its mark,
+    /// which the block's end throws it on with, and the stack slot that holds it while the block
+    /// runs. An entry whose slot no longer holds its exception belongs to a block that `break`,
+    /// `continue` or `return` left, and [`Self::drop_left_finally_marks`] removes it.
+    pub(crate) finally_marks: Vec<(ObjId, u32, usize)>,
+    /// The mark of the host error the last run ended with.
+    pub(crate) error_mark: Option<u32>,
+    /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
+    pub(crate) strict_writes: bool,
 }
 
 /// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
@@ -379,6 +416,9 @@ impl Interp {
             source_units: 0,
             throw_site: None,
             last_thrown: Value::Undefined,
+            last_error: Value::Null,
+            passing: Value::Undefined,
+            localization: Rc::default(),
             random: random_seed(),
             join_stack: Vec::new(),
             held_bytes: 0,
@@ -386,6 +426,19 @@ impl Interp {
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
             xml_default_uri: Rc::from(Vec::new()),
+            pause: Rc::default(),
+            in_slice: false,
+            can_wait: Rc::default(),
+            waiting: false,
+            host_abort: None,
+            data_limits: crate::DataLimits::default(),
+            source_tag: crate::realm::UNKNOWN_SOURCE,
+            evaluated: 0,
+            error_tag: crate::realm::UNKNOWN_SOURCE,
+            thrown_mark: None,
+            finally_marks: Vec::new(),
+            error_mark: None,
+            strict_writes: false,
         };
         crate::builtins::install(&mut interp);
         interp.fuel = limits.fuel;
@@ -539,11 +592,22 @@ impl Interp {
         Ok(())
     }
 
+    /// Removes the [`Self::finally_marks`] entries of `finally` blocks that `break`, `continue` or
+    /// `return` left: those whose stack slot no longer holds their exception.
+    fn drop_left_finally_marks(&mut self) {
+        let stack = &self.stack;
+        self.finally_marks.retain(|&(id, _, slot)| matches!(stack.get(slot), Some(Value::Object(o)) if *o == id));
+    }
+
     pub(crate) fn collect_garbage(&mut self) {
+        self.drop_left_finally_marks();
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
         roots.values.push(&self.last_thrown);
+        roots.values.push(&self.last_error);
+        roots.values.push(&self.passing);
+        roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -573,6 +637,28 @@ impl Interp {
                     self.abort_to_boundary();
                     return Err(other);
                 }
+            }
+        }
+    }
+
+    /// Runs the boundary frame on top until it returns (`Some` with its value) or the remaining
+    /// fuel falls to `pause_at`, or the host asks for a pause (`None`, with the frames left in
+    /// place for the next call). Only this outermost loop pauses: a nested run has native frames
+    /// under it and goes on until it returns.
+    pub(crate) fn execute_slice(&mut self, pause_at: u64) -> JsResult<Option<Value>> {
+        loop {
+            match self.step() {
+                Ok(Some(v)) => return Ok(Some(v)),
+                Ok(None) => {}
+                Err(Abrupt::Throw(v)) => self.unwind(v)?,
+                Err(other) => {
+                    self.note_site();
+                    self.abort_to_boundary();
+                    return Err(other);
+                }
+            }
+            if self.fuel <= pause_at || self.pause.replace(false) {
+                return Ok(None);
             }
         }
     }
@@ -607,9 +693,18 @@ impl Interp {
     /// boundary frame. Returns the exception when no handler takes it before the boundary frame.
     fn unwind(&mut self, v: Value) -> JsResult<()> {
         self.note_site();
+        let passed = matches!((&v, std::mem::replace(&mut self.passing, Value::Undefined)), (Value::Object(a), Value::Object(b)) if *a == b);
+        if !passed
+            && let Value::Object(o) = v
+            && self.heap.object(o).is_some_and(|o| matches!(o.class, Class::Error))
+        {
+            self.last_error = v.clone();
+        }
         loop {
             let Some(frame) = self.frames.last_mut() else { return Err(Abrupt::Throw(v)) };
             if let Some(h) = frame.code.handler(frame.pc.saturating_sub(1)) {
+                // A catch clause starts with `PushCatch`; every other handler is a `finally` block's.
+                let caught = matches!(frame.code.ops.get(h.target as usize), Some(Op::PushCatch(_)));
                 let target_len = frame.base + h.depth as usize;
                 while frame.env_depth > h.env_depth {
                     let outer = self.heap.env(frame.env).and_then(Env::outer);
@@ -622,6 +717,10 @@ impl Interp {
                     return internal("handler stack deeper than the stack");
                 }
                 self.stack.truncate(target_len);
+                self.drop_left_finally_marks();
+                if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
+                    self.finally_marks.push((*id, mark, target_len));
+                }
                 self.stack.push(v);
                 self.throw_site = None;
                 return Ok(());
@@ -629,9 +728,16 @@ impl Interp {
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
             if frame.boundary {
+                self.passing = v.clone();
                 return Err(Abrupt::Throw(v));
             }
         }
+    }
+
+    /// Each running frame of script code, outermost first: its code, the index of its next
+    /// instruction, and whether it runs a function (not global or eval code).
+    pub(crate) fn script_frames(&self) -> impl Iterator<Item = (&Rc<Code>, usize, bool)> {
+        self.frames.iter().map(|f| (&f.code, f.pc, f.callee.is_some()))
     }
 
     fn abort_to_boundary(&mut self) {
@@ -668,6 +774,18 @@ impl Interp {
 
     fn strict(&self) -> bool {
         self.frames.last().is_some_and(|f| f.code.strict)
+    }
+
+    /// Does a property write the running code makes throw when it cannot be made? It does in
+    /// strict mode code and in code from a source with [`crate::bytecode::Source::strict_writes`].
+    fn strict_writes(&self) -> bool {
+        self.frames.last().is_some_and(|f| f.code.strict || f.code.source.strict_writes)
+    }
+
+    /// [`crate::bytecode::Source::strict_writes`] for source compiled now: the running code's,
+    /// or the realm's between runs.
+    pub(crate) fn writes_mode(&self) -> bool {
+        self.frames.last().map_or(self.strict_writes, |f| f.code.source.strict_writes)
     }
 
     fn exec(&mut self, op: Op) -> JsResult<()> {
@@ -723,7 +841,10 @@ impl Interp {
             Op::Jump(t) => self.jump_to(t),
             Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => self.op_branch(t, matches!(op, Op::JumpIfTrue(_)), false),
             Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => self.op_branch(t, matches!(op, Op::JumpIfTrueKeep(_)), true),
-            Op::Throw => Err(Abrupt::Throw(self.pop()?)),
+            Op::Throw => {
+                self.thrown_mark = None;
+                Err(Abrupt::Throw(self.pop()?))
+            }
             Op::ThrowReferenceError(i) => self.op_throw_reference_error(i),
             Op::EndFinally(t) => self.op_end_finally(t),
             Op::NewObject => self.op_new_object(),
@@ -816,7 +937,15 @@ impl Interp {
             return self.pop().map(drop);
         }
         if kind == 1.0 {
-            return Err(Abrupt::Throw(self.pop()?));
+            let v = self.pop()?;
+            self.passing = v.clone();
+            if let Value::Object(o) = v
+                && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, _)| id == o)
+            {
+                self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
+                self.finally_marks.truncate(i);
+            }
+            return Err(Abrupt::Throw(v));
         }
         let k = (kind - 2.0) as usize;
         let target = self.frame()?.code.finally_tables.get(table as usize).and_then(|t| t.get(k)).copied();
@@ -902,11 +1031,14 @@ impl Interp {
             Resolved::Obj { object, .. } if self.options.e4x && self.is_xml(&Value::Object(object)) => {
                 self.put_value(&Value::Object(object), name.clone(), v)
             }
-            Resolved::Obj { object, .. } => self.put(object, name.clone(), v, strict),
+            Resolved::Obj { object, .. } => {
+                let throw = self.strict_writes();
+                self.put(object, name.clone(), v, throw)
+            }
             Resolved::Unresolved if strict => Err(self.not_defined(name)),
             Resolved::Unresolved => {
-                let global = self.global;
-                self.put(global, name.clone(), v, false)
+                let (global, throw) = (self.global, self.strict_writes());
+                self.put(global, name.clone(), v, throw)
             }
         }
     }
@@ -1006,11 +1138,11 @@ impl Interp {
 
     // ---- properties ----
 
-    fn object(&self, id: ObjId) -> JsResult<&Object> {
+    pub(crate) fn object(&self, id: ObjId) -> JsResult<&Object> {
         self.heap.object(id).ok_or_else(|| Abrupt::Internal("object out of range".into()))
     }
 
-    fn object_mut(&mut self, id: ObjId) -> JsResult<&mut Object> {
+    pub(crate) fn object_mut(&mut self, id: ObjId) -> JsResult<&mut Object> {
         self.heap.object_mut(id).ok_or_else(|| Abrupt::Internal("object out of range".into()))
     }
 
@@ -1450,7 +1582,10 @@ impl Interp {
         }
         let strict = self.strict();
         match base {
-            Value::Object(o) => self.put(*o, k, v, strict),
+            Value::Object(o) => {
+                let throw = self.strict_writes();
+                self.put(*o, k, v, throw)
+            }
             Value::Undefined | Value::Null => {
                 let message = format!(
                     "cannot set property '{}' of {}",
@@ -1901,6 +2036,14 @@ impl Interp {
                     self.temp_roots.truncate(mark);
                     return Ok(Prepared::Done(r?));
                 }
+                Func::Data { f, name, read } => {
+                    // The arguments are read before the function runs, and a result being built
+                    // keeps itself reachable.
+                    return Ok(Prepared::Done(self.call_data(&f, &name, &args, &read)?));
+                }
+                Func::Eval { f, end, strict_writes, name } => {
+                    return Ok(Prepared::Done(self.call_evaluator(&f, &end, &strict_writes, &name, &args)?));
+                }
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
                     return match host(&js_args) {
@@ -2169,11 +2312,17 @@ impl Interp {
     /// Parses and compiles source for eval code or a script, counting it against the source
     /// limit.
     pub(crate) fn compile_source(&mut self, units: &[u16], strict: bool, kind: CodeKind) -> Result<Rc<Code>, CompileError> {
+        let writes = self.writes_mode();
+        self.compile_source_writes(units, strict, writes, kind)
+    }
+
+    /// [`Interp::compile_source`], with [`crate::bytecode::Source::strict_writes`] set to `writes`.
+    pub(crate) fn compile_source_writes(&mut self, units: &[u16], strict: bool, writes: bool, kind: CodeKind) -> Result<Rc<Code>, CompileError> {
         self.source_units = self.source_units.saturating_add(units.len());
         let remaining = self.options.max_source_units.saturating_sub(self.source_units.saturating_sub(units.len()));
         let options = Options { strict, max_source_units: remaining, ..self.options.clone() };
         let program = crate::parse_utf16(units, &options).map_err(CompileError::Syntax)?;
-        let source = Rc::new(Source { lines: program.lines.clone(), text: units.into() });
+        let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: self.source_tag, strict_writes: writes });
         compile_program(&program, &source, kind).map_err(|e| match e {
             CompileFail::Syntax(s) => CompileError::Syntax(s),
             CompileFail::Internal(m) => CompileError::Internal(m),
@@ -2221,6 +2370,15 @@ impl Interp {
         if is_eval && self.reentry >= self.limits.reentry {
             return Err(Abrupt::Limit(LimitKind::Reentry));
         }
+        self.enter_global(code, is_eval)?;
+        self.reentry += nested;
+        let r = self.execute();
+        self.reentry -= nested;
+        r
+    }
+
+    /// Declares `code`'s variables and functions and pushes its boundary frame, ready to run.
+    pub(crate) fn enter_global(&mut self, code: Rc<Code>, is_eval: bool) -> JsResult<()> {
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let (env, global) = (self.global_env, self.global);
         let (env, var_env) = if code.strict && is_eval {
@@ -2230,11 +2388,7 @@ impl Interp {
             (env, env)
         };
         self.instantiate_global(&code, var_env, is_eval)?;
-        self.push_code_frame(code, env, var_env, Value::Object(global), true)?;
-        self.reentry += nested;
-        let r = self.execute();
-        self.reentry -= nested;
-        r
+        self.push_code_frame(code, env, var_env, Value::Object(global), true)
     }
 
     fn push_code_frame(&mut self, code: Rc<Code>, env: EnvId, var_env: EnvId, this: Value, boundary: bool) -> JsResult<()> {

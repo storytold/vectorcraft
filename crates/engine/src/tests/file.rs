@@ -447,6 +447,27 @@ fn export_selection_keeps_the_effects_in_the_crop() {
     }
 }
 
+/// An Outer Glow at its default Screen mode on the bare page is in a PNG on white and in a JPEG,
+/// and in a transparent PNG (#6125).
+#[test]
+fn a_screen_outer_glow_is_in_raster_exports() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.outerGlow"})).unwrap();
+    let mut pixel = |p: serde_json::Value| {
+        let v = s.execute("document.export", &p).unwrap();
+        let img = image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+        // 2 pt past the square's stroke, on the right.
+        *img.get_pixel(122, 110)
+    };
+    for p in [json!({"format": "png", "background": "white"}), json!({"format": "jpg"})] {
+        let px = pixel(p.clone());
+        assert!(px[0] > 235 && px[1] > 235 && px[2] < 235, "{p}: yellow on white: {px:?}");
+    }
+    let px = pixel(json!({"format": "png", "background": "transparent"}));
+    assert!(px[3] > 0 && px[0] > 235 && px[1] > 235 && px[2] < 40, "the glow is yellow in the transparent image: {px:?}");
+}
+
 /// A group's own drop shadow is inside the crop of the group's selection export too.
 #[test]
 fn export_selection_keeps_a_groups_shadow_in_the_crop() {

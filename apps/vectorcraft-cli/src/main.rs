@@ -236,11 +236,13 @@ fn main() -> ExitCode {
 }
 
 /// A headless session that remembers what the user keeps between runs: the PDF presets saved, the
-/// ICC profiles loaded, the plug-ins installed (#2168, #2174, #2541) and the custom dictionary's words (#4936), in the folders
-/// and files next to the preferences that the desktop app uses too. `VECTORCRAFT_NO_PREFS` and `VECTORCRAFT_CONFIG_DIR` apply
-/// as they do there.
+/// ICC profiles loaded, the plug-ins installed (#2168, #2174, #2541), the custom dictionary's words (#4936) and the Color Settings (#6335), in the folders
+/// and files next to the preferences that the desktop app uses too, and lists the scripts of the Scripts folder there
+/// (`script.listInstalled`). `VECTORCRAFT_NO_PREFS` and `VECTORCRAFT_CONFIG_DIR` apply as they do there.
 fn with_stores(mut h: Headless) -> Headless {
+    prefs_dir::attach_scripts_dir(&mut h.session);
     prefs_dir::attach_profile_store(&mut h.session);
+    prefs_dir::attach_color_settings(&mut h.session);
     prefs_dir::attach_plugin_store(&mut h.session);
     prefs_dir::attach_pdf_preset_store(&mut h.session);
     prefs_dir::attach_custom_dictionary(&mut h.session);

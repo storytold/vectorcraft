@@ -48,7 +48,7 @@ impl Kind {
 
 /// One command spec (the `cmd!` macro wants literals; these ids are built with `concat!`).
 const fn spec(id: &'static str, label: &'static str, menu: &'static [&'static str], params: &'static str, run: Run, journal: bool) -> CommandSpec {
-    CommandSpec { id, label, menu, shortcut: None, params, enabled: has_doc, run, journal }
+    CommandSpec { id, label, menu, shortcut: None, params, enabled: has_doc, run, journal, schema: None }
 }
 
 macro_rules! style_cmds {
@@ -976,12 +976,12 @@ fn load(s: &mut Session, p: &Value, kinds: &[Kind]) -> Result<Value> {
     }
     let (chars, paras) = (kinds.contains(&Kind::Char), kinds.contains(&Kind::Para));
     let mut trial = (*s.doc()?.doc).clone();
-    let mut placed = import_text_styles(&src, &mut trial, chars, paras);
+    let mut placed = import_text_styles(&src, &mut trial, chars, paras)?;
     // An undo step only when the document changes. The step takes the document the import made,
     // unless the edit first ends a typing session, which can change the document it starts from.
     if trial != *s.doc()?.doc {
         if super::typing_in_progress(s) {
-            placed = s.edit(label, |d, _| Ok(import_text_styles(&src, d, chars, paras)))?;
+            placed = s.edit(label, |d, _| import_text_styles(&src, d, chars, paras))?;
         } else {
             s.edit(label, |d, _| {
                 *d = trial;
