@@ -7880,6 +7880,63 @@ fn an_envelope_whose_contents_are_edited_opens_live_in_edit_contents() {
     assert_eq!(fill(&content[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
 }
 
+/// While an envelope's contents are edited, its mesh is kept in its dictionary, and in some files it
+/// lies away from the drawn art by a move, the contents with the drawn art. Where the mesh draws the
+/// contents as large as the drawn art but elsewhere, the envelope opens live with its mesh moved
+/// onto that art; where it draws them at another size, it keeps its drawn art.
+#[test]
+fn an_envelope_in_edit_contents_whose_mesh_stayed_behind_opens_live_on_its_drawn_art() {
+    use kurbo::Shape as _;
+    use vectorcraft_doc::live::EnvelopeKind;
+    // The top object of `an_envelope_whose_contents_are_edited_opens_live_in_edit_contents`.
+    let at = |(i, j): (usize, usize)| (40.0 + i as f64 * 120.0, 20.0 + j as f64 * 60.0);
+    let handle = |p: (usize, usize), q: (usize, usize)| match (p, q) {
+        ((0, 1), (1, 1)) => (70.0, 95.0),
+        ((1, 1), (0, 1)) => (130.0, 95.0),
+        _ => {
+            let ((x, y), (u, v)) = (at(p), at(q));
+            (x + (u - x) / 3.0, y + (v - y) / 3.0)
+        }
+    };
+    let mesh = mesh_text(1, 1, &at, &handle, None);
+    let mut bp = kurbo::BezPath::new();
+    bp.move_to((40.0, 20.0));
+    bp.curve_to((70.0, 5.0), (130.0, 5.0), (160.0, 20.0));
+    bp.curve_to((160.0, 40.0), (160.0, 60.0), (160.0, 80.0));
+    bp.curve_to((120.0, 80.0), (80.0, 80.0), (40.0, 80.0));
+    bp.curve_to((40.0, 60.0), (40.0, 40.0), (40.0, 20.0));
+    bp.close_path();
+    let shaped = |a: Affine| EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&(a * bp.clone())), corners: None };
+    let keys = ENVELOPE_KEYS.replace("0 /Bool (AIDeformEditModeKey)", "1 /Bool (AIDeformEditModeKey)");
+    // The contents and the drawn art lie 30 points right and 15 down of where the mesh in the
+    // dictionary draws them.
+    let moved = Affine::translate((30.0, 15.0));
+    let contents = Rect::new(70.0, 35.0, 190.0, 95.0);
+    let read_with = |drawn: &EnvelopeKind| {
+        let block = format!("0 g\n{mesh}");
+        let red = format!("{RED}{}f\n", rect_path(contents.x0, 100.0 - contents.y1, contents.x1, 100.0 - contents.y0));
+        read_ok(&layer(&envelope_parts(&red, &keys, &block, 3, &drawn_box(drawn, contents, contents))))
+    };
+    let r = read_with(&shaped(moved));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let (content, kind, _, editing, _) = live_envelope(&a[0]);
+    assert!(editing);
+    let EnvelopeKind::TopObject { path, .. } = kind else { panic!("{kind:?}") };
+    // Moved as far as the drawn art's box lies from the box of what the mesh draws.
+    let (got, want) = (path.to_bezpath().bounding_box(), (moved * bp.clone()).bounding_box());
+    assert!((got.origin() - want.origin()).hypot() < 0.01 && (got.size() - want.size()).to_vec2().hypot() < 1e-6, "{got:?} {want:?}");
+    assert_eq!(content.len(), 1, "{content:#?}");
+    assert_eq!(content[0].geometric_bounds(), Some(contents));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    // Drawn art moved and a tenth larger isn't the mesh's art moved: it stays.
+    let r = read_with(&shaped(moved * Affine::scale_about(1.1, (100.0, 50.0))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert_eq!(r.warnings, [super::envelope::DRAWN]);
+}
+
 /// An envelope that doesn't read (a warp style number past the list, a mesh envelope whose shape
 /// isn't a mesh, one whose plugin never closes it) keeps its drawn art, with one note; the art
 /// round it is read as ever.
