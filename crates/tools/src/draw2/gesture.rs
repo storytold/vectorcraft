@@ -782,8 +782,10 @@ impl Tool for GestureTool {
         };
         let color = if self.id == "eraser" { [0x80, 0x80, 0x80] } else { FEEDBACK };
         // A tip that is not round shows the outline of the area it covers, each step of the drag
-        // as wide as the pen pressed there with Size set to Pressure.
-        if matches!(self.id, "eraser" | "blobBrush") && self.roundness < 100.0 && !self.smoothing {
+        // as wide as the pen pressed there with Size set to Pressure. So does a round Blob Brush
+        // tip: a line as wide as the brush would end square, where the stroke it adds is round at
+        // both ends (#4343).
+        if matches!(self.id, "eraser" | "blobBrush") && (self.roundness < 100.0 || self.id == "blobBrush") && !self.smoothing {
             let area = |pts: &[Point], size| {
                 if self.id == "blobBrush" {
                     blob_area(pts, size, self.angle, self.roundness)
