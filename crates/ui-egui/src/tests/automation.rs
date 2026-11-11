@@ -304,6 +304,57 @@ fn frames_with_injected_input_are_confined() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// The enabled File › Open Recent Files rows `ui.menu.list` returns: (id, label).
+fn recent_rows(entries: &Value) -> Vec<(String, String)> {
+    let rows = entries.as_array().map(Vec::as_slice).unwrap_or_default();
+    rows.iter()
+        .filter(|e| e["command"].as_str().is_some_and(|c| c.starts_with("file.openRecent")) && e["enabled"] == true)
+        .map(|e| (e["command"].as_str().unwrap_or_default().to_string(), e["label"].as_str().unwrap_or_default().to_string()))
+        .collect()
+}
+
+#[test]
+fn recent_files_outside_the_read_root_are_not_listed_or_opened() {
+    let (mut app, tx, base) = confined("recent");
+    std::fs::copy(base.join("in/a.svg"), base.join("in/c.svg")).unwrap();
+    let (a, b, c) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")), s(base.join("in/c.svg")));
+    app.ui.recent_files = vec![a.clone(), b.clone(), c.clone()];
+    let rows = |pairs: &[(&str, &str)]| pairs.iter().map(|(id, l)| (id.to_string(), l.to_string())).collect::<Vec<_>>();
+
+    // The person's menu lists all three.
+    let person = serde_json::to_value(crate::menus::menu_entries(&app)).unwrap();
+    assert_eq!(recent_rows(&person), rows(&[("file.openRecent1", "a.svg"), ("file.openRecent2", "b.svg"), ("file.openRecent3", "c.svg")]));
+    assert_eq!(app.run("file.recentFiles", json!({})).unwrap(), json!([a, b, c]));
+
+    // The client's listing leaves out the second, and the third keeps its id.
+    let r = request(&mut app, &tx, "ui.menu.list", json!({}));
+    assert_eq!(recent_rows(&r["result"]), rows(&[("file.openRecent1", "a.svg"), ("file.openRecent3", "c.svg")]), "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.recentFiles"}));
+    assert_eq!(r["result"], json!([a, c]), "{r}");
+    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "file.openRecent2"}));
+    assert_eq!(r["error"], "no such recent file", "the reply names no path: {r}");
+    assert!(app.session.documents().is_empty());
+    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "file.openRecent3"}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(app.session.documents().len(), 1);
+    assert_eq!(app.ui.recent_files, [c.clone(), a.clone(), b.clone()]);
+
+    // A file outside the root that the person has open is still not brought forward.
+    app.run("file.openRecent3", json!({})).unwrap();
+    assert_eq!((app.session.documents().len(), &app.ui.recent_files[0]), (2, &b));
+    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "file.openRecent1"}));
+    assert_eq!(r["error"], "no such recent file", "{r}");
+
+    // Rows past Number of Recent Files to Display stay out, and a write root alone lists none.
+    app.session.prefs.recent_files_count = 2;
+    let r = request(&mut app, &tx, "ui.menu.list", json!({}));
+    assert_eq!(recent_rows(&r["result"]), rows(&[("file.openRecent2", "c.svg")]), "{r}");
+    let write_only = AutomationRoots::new(&[], &[&base.join("out")]).unwrap();
+    let listed = vectorcraft_engine::file_access::confine(write_only.as_ref(), || serde_json::to_value(crate::menus::menu_entries(&app)).unwrap());
+    assert!(recent_rows(&listed).is_empty(), "{listed}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Hidden logic-only ticks between the injection and its UI pass must not drain another step:
 /// one step per settled pass, not per hidden tick.
 #[test]

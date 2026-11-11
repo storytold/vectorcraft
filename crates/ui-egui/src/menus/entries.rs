@@ -1,6 +1,7 @@
 use super::context::context_items;
 use super::invoke::click_target;
 use super::labels::{display_label, dynamic_label, effect_item_label, item_shortcut, spelling_item_label, unlock_item_label};
+use super::slots::{recent_readable, recent_slot};
 use super::state::{shortcut_of, shown_state};
 use super::tree::menu_tree_named;
 use super::{Entry, Item, Serialize, Value, VectorcraftApp};
@@ -131,6 +132,10 @@ fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Ve
         match it {
             Item::Cmd(l, id, p) => {
                 if *id == crate::scripts_menu::COMMAND && !crate::scripts_menu::readable(p) {
+                    continue;
+                }
+                // The other rows keep their ids: `file.openRecent3` still opens the third file.
+                if id.starts_with("file.openRecent") && recent_slot(app, id).is_some_and(|path| !recent_readable(path)) {
                     continue;
                 }
                 let Some((enabled, _)) = shown_state(app, id, p) else { continue };

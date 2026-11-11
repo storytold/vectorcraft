@@ -6687,6 +6687,7 @@ dependencies = [
  "vectorcraft-geom",
  "wasmi",
  "wat",
+ "web-time",
 ]
 
 [[package]]
