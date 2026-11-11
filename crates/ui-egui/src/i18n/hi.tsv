@@ -3820,6 +3820,8 @@ antiAlias	Sharp	शार्प
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें
 	Restore every preference to its default (applied on OK)	प्रत्येक वरीयता को उसके डिफ़ॉल्ट में पुनर्स्थापित करें ( OK पर लागू)
+	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट
 	Restored documents open unsaved: save them to keep them.	रिकवर किए डॉक्यूमेंट बिना सेव किए ओपन होते हैं। रखने के लिए उन्हें सेव करें।
 	Restrict printing, editing and other tasks	प्रिंटिंग, एडिटिंग और बाकी कामों पर पाबंदी लगाएँ

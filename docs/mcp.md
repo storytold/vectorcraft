@@ -4536,7 +4536,10 @@ a string with a unit. Unit names: `Points`, `Picas`, `Inches`, `Millimeters`, `C
 settings whose label, section or category contains it, ignoring case, in the interface language or in English, or by
 "No settings found". Choosing a setting sets `__category` to its category, sets `__found` to its key (the row is
 highlighted until another category is shown) and clears `__search`. Cmd/Ctrl+F focuses the field again; Escape in the
-field with text clears it, and Escape in the empty field closes the dialog.
+field with text clears it, and Escape in the empty field closes the dialog. Its Reset Preferences button opens a
+`resetPreferences` question (fields `message`, `detail`) over Preferences: `ui.dialog.cancel` shows Preferences again
+as it was, and `ui.dialog.confirm` shows it again with every preference at its default value, applied by OK in
+Preferences. `prefs.reset` resets the preferences at once, without the question.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}

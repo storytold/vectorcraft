@@ -2377,6 +2377,8 @@ digits	Malayalam	Malaiala
 	Restore	Restaurar
 	Restore Recovered Documents	Restaurar Documentos Recuperados
 	Restore every preference to its default (applied on OK)	Restaurar toda preferência ao padrão (aplicado em OK)
+	Reset all preferences to their defaults?	Redefinir todas as preferências para o padrão?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Os padrões são aplicados quando você clica em OK em Preferências. Cancelar ali mantém suas preferências atuais.
 	Restored documents open unsaved: save them to keep them.	Os documentos restaurados abrem sem salvar: salve-os para mantê-los.
 	Restrict printing, editing and other tasks	Restringir impressão, edição e outras tarefas
 	Reverse Front to Back	Inverter da Frente para Trás

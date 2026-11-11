@@ -3397,6 +3397,8 @@ mark-style	Japanese	Japán
 	Responsive	Reszponzív
 	Restore	Visszaállít
 	Restore every preference to its default (applied on OK)	Minden beállítás visszaállítása az alapértékre (az OK gombbal lép életbe)
+	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
+	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
 	Restored documents open unsaved: save them to keep them.	A visszaállított dokumentumok mentetlenül nyílnak meg: mentsd őket, ha meg akarod tartani.
 	Restrict printing, editing and other tasks	Nyomtatás, szerkesztés és más műveletek korlátozása
