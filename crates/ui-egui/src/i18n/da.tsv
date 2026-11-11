@@ -6527,5 +6527,11 @@ breakText	Glyphs	Glyffer
 	Ended at a limit	Afsluttet ved en grænse
 	Stopped	Stoppet
 	Ended by an internal fault	Afsluttet af en intern fejl
-	{ms} ms, {calls} host calls	{ms} ms, {calls} værtskald
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidligere linjer fjernet, {cut} linjer afkortet
+	time unavailable	tid ikke tilgængelig
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	langsomste: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} værtskald|{n} værtskald
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} tidligere linje fjernet|{n} tidligere linjer fjernet
+@plural	{n} line cut|{n} lines cut	{n} linje afkortet|{n} linjer afkortet

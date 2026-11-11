@@ -6771,6 +6771,12 @@ breakText	Glyphs	Glifák
 	Ended at a limit	Korlátnál ért véget
 	Stopped	Leállítva
 	Ended by an internal fault	Belső hiba miatt ért véget
-	{ms} ms, {calls} host calls	{ms} ms, {calls} gazdahívás
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} korábbi sor elvetve, {cut} sor levágva
+	time unavailable	az idő nem érhető el
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	leglassabbak: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} gazdahívás
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} korábbi sor elvetve
+@plural	{n} line cut|{n} lines cut	{n} sor levágva
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt

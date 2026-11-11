@@ -6730,6 +6730,12 @@ breakText	Glyphs	Glifos
 	Ended at a limit	Terminado en un límite
 	Stopped	Detenido
 	Ended by an internal fault	Terminado por un error interno
-	{ms} ms, {calls} host calls	{ms} ms, {calls} llamadas al host
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} líneas anteriores descartadas, {cut} líneas recortadas
+	time unavailable	tiempo no disponible
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	más lentos: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} llamada al host|{n} llamadas al host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} línea anterior descartada|{n} líneas anteriores descartadas
+@plural	{n} line cut|{n} lines cut	{n} línea recortada|{n} líneas recortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` y `last` deben ser números de líneas que la consola conserva, `first` antes que `last`

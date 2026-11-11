@@ -6388,6 +6388,12 @@ breakText	Glyphs	Гліфи
 	Ended at a limit	Завершено на ліміті
 	Stopped	Зупинено
 	Ended by an internal fault	Завершено через внутрішню помилку
-	{ms} ms, {calls} host calls	{ms} мс, викликів хоста: {calls}
-	{dropped} earlier lines dropped, {cut} lines cut	Відкинуто попередніх рядків: {dropped}, обрізано рядків: {cut}
+	time unavailable	час недоступний
+	{ms} ms	{ms} мс
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	найповільніші: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} виклик хоста|{n} виклики хоста|{n} викликів хоста
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} попередній рядок відкинуто|{n} попередні рядки відкинуто|{n} попередніх рядків відкинуто
+@plural	{n} line cut|{n} lines cut	{n} рядок обрізано|{n} рядки обрізано|{n} рядків обрізано
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` і `last` мають бути номерами рядків, які зберігає консоль, причому `first` не пізніше `last`

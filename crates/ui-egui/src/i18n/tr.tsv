@@ -6743,6 +6743,12 @@ breakText	Glyphs	Glifler
 	Ended at a limit	Bir sınırda sona erdi
 	Stopped	Durduruldu
 	Ended by an internal fault	Bir iç hata nedeniyle sona erdi
-	{ms} ms, {calls} host calls	{ms} ms, {calls} ana bilgisayar çağrısı
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eski satır atıldı, {cut} satır kesildi
+	time unavailable	süre kullanılamıyor
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	en yavaşlar: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} ana bilgisayar çağrısı
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eski satır atıldı
+@plural	{n} line cut|{n} lines cut	{n} satır kesildi
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli

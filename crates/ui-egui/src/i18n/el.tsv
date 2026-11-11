@@ -6739,6 +6739,12 @@ breakText	Glyphs	Γλύφοι
 	Ended at a limit	Τερματίστηκε σε όριο
 	Stopped	Διακόπηκε
 	Ended by an internal fault	Τερματίστηκε λόγω εσωτερικού σφάλματος
-	{ms} ms, {calls} host calls	{ms} ms, {calls} κλήσεις προς το κεντρικό σύστημα
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} παλαιότερες γραμμές απορρίφθηκαν, {cut} γραμμές περικόπηκαν
+	time unavailable	ο χρόνος δεν είναι διαθέσιμος
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	πιο αργές: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} κλήση προς το κεντρικό σύστημα|{n} κλήσεις προς το κεντρικό σύστημα
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} παλαιότερη γραμμή απορρίφθηκε|{n} παλαιότερες γραμμές απορρίφθηκαν
+@plural	{n} line cut|{n} lines cut	{n} γραμμή περικόπηκε|{n} γραμμές περικόπηκαν
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	Τα `first` και `last` πρέπει να είναι αριθμοί γραμμών που κρατά η κονσόλα, το `first` πριν από το `last`

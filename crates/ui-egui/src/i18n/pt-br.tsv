@@ -6860,6 +6860,12 @@ swatch	Yellow Green	Verde-amarelado
 	Ended at a limit	Encerrado em um limite
 	Stopped	Interrompido
 	Ended by an internal fault	Encerrado por um erro interno
-	{ms} ms, {calls} host calls	{ms} ms, {calls} chamadas ao host
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} linhas anteriores descartadas, {cut} linhas cortadas
+	time unavailable	tempo indisponível
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	mais lentos: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} chamada ao host|{n} chamadas ao host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} linha anterior descartada|{n} linhas anteriores descartadas
+@plural	{n} line cut|{n} lines cut	{n} linha cortada|{n} linhas cortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`

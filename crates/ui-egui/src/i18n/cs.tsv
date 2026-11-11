@@ -6787,6 +6787,12 @@ breakText	Glyphs	Glyfy
 	Ended at a limit	Ukončeno na limitu
 	Stopped	Zastaveno
 	Ended by an internal fault	Ukončeno vnitřní chybou
-	{ms} ms, {calls} host calls	{ms} ms, {calls} volání hostitele
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} starších řádků zahozeno, {cut} řádků zkráceno
+	time unavailable	čas není k dispozici
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	nejpomalejší: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} volání hostitele|{n} volání hostitele|{n} volání hostitele
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} starší řádek zahozen|{n} starší řádky zahozeny|{n} starších řádků zahozeno
+@plural	{n} line cut|{n} lines cut	{n} řádek zkrácen|{n} řádky zkráceny|{n} řádků zkráceno
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` a `last` musí být čísla řádků, které konzole uchovává, `first` před `last`

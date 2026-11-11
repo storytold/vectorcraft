@@ -106,7 +106,8 @@ impl Entry {
             Entry::End(e) => format!("ended: {}", e.id()),
             Entry::Report { ms, host_calls, slowest } => {
                 let time = ms.map_or_else(|| "time unavailable".to_string(), |ms| format!("{ms} ms"));
-                let mut s = format!("{time}, {host_calls} host calls");
+                let calls = if *host_calls == 1 { "host call" } else { "host calls" };
+                let mut s = format!("{time}, {host_calls} {calls}");
                 if !slowest.is_empty() {
                     let list: Vec<String> = slowest.iter().map(|c| format!("{} ×{} {} ms", c.id, c.calls, c.total_ms)).collect();
                     s.push_str("; slowest: ");
