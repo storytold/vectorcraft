@@ -373,6 +373,7 @@ impl Session {
             preview_memo: Some(&self.preview_memo),
             unit,
             stroke_unit,
+            measure_unit: crate::units::pref_unit(&self.prefs.units_general),
             paste_plain_text: self.prefs.paste_text_formatting == "plain",
             typed_from_keyboard: self.keyboard_text,
             slices_hidden: self.menu.slices_hidden,

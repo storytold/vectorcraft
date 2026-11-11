@@ -199,3 +199,30 @@ fn east_asian_type_unit_leaves_the_document_in_points() {
     assert!((lead.unwrap() - Unit::Ha.to_pt(20.0)).abs() < 1e-9, "{lead:?}");
     assert!((sz - 17.0 * 72.0 / 101.6).abs() < 1e-9);
 }
+
+/// The Measure tool's readout after a drag from (0, 0) to (`x`, `y`) points.
+fn measured(s: &mut Session, x: f64, y: f64) -> Vec<String> {
+    let v = ViewInfo::default();
+    s.select_tool("measure", v).unwrap();
+    for (kind, px, py) in [(PointerKind::Down, 0.0, 0.0), (PointerKind::Drag, x, y), (PointerKind::Up, x, y)] {
+        s.pointer(&PointerEvent::new(kind, px, py).with_mods(Mods::default()), v).unwrap();
+    }
+    s.overlays(v).into_iter().filter_map(|o| if let Overlay::Measure { text, .. } = o { Some(text) } else { None }).collect()
+}
+
+#[test]
+fn the_measure_tool_reads_in_the_general_unit_in_a_document_saved_in_other_units() {
+    // A document saved in points, before General was set to millimeters.
+    let saved = session().execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "unitsGeneral", "value": "millimeters"})).unwrap();
+    s.execute("document.open", &json!({"name": "old.vectorcraft", "dataBase64": saved})).unwrap();
+    assert_eq!(units(&s), Unit::Points, "the document keeps the units it was saved in");
+    assert_eq!(measured(&mut s, 72.0, 0.0), ["D: 25.40 mm\nAngle: 0.0°\ndX: 25.40 mm\ndY: 0.00 mm"], "#5820");
+    // A document in other units than the preference (Document Setup) measures in the preference too.
+    s.execute("document.setUnits", &json!({"units": "Inches"})).unwrap();
+    assert_eq!(measured(&mut s, 72.0, 0.0), ["D: 25.40 mm\nAngle: 0.0°\ndX: 25.40 mm\ndY: 0.00 mm"]);
+    // Changing the preference changes the readout.
+    s.execute("prefs.set", &json!({"key": "unitsGeneral", "value": "inches"})).unwrap();
+    assert_eq!(measured(&mut s, 72.0, 0.0), ["D: 1.00 in\nAngle: 0.0°\ndX: 1.00 in\ndY: 0.00 in"]);
+}
