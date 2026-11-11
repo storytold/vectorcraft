@@ -290,6 +290,8 @@ fn the_constructors_keep_identity_or_copy_as_specified() {
     truth("XML().nodeKind() === 'text' && XML(null) == '' && XML(undefined) == ''");
     truth("var x = <a/>; XML(x) === x && new XML(x) !== x && new XML(x) == x");
     truth("var l = <><a/></>; XML(l) === l[0]");
+    truth("var l = <><a/></>; var y = new XML(l); y !== l[0] && y == l[0] && y.parent() === null");
+    truth("var l = <><a/></>; var y = new XML(l); y.@p = '1'; y.appendChild(<b/>); l[0].@p.length() === 0 && l[0].*.length() === 0");
     assert_eq!(thrown_name("XML(<><a/><b/></>)"), "TypeError");
     assert_eq!(thrown_name("XML('<a><b></a>')"), "SyntaxError");
     assert_eq!(thrown_name("XML('<a/><b/>')"), "SyntaxError");
@@ -368,7 +370,7 @@ fn the_xml_methods_behave_as_specified() {
     assert_eq!(string("(<a>1</a>).toString()"), "1");
     assert_eq!(string("(<a><b/></a>).toString()"), "<a>\n  <b/>\n</a>");
     truth("var x = <a/>; x.valueOf() === x");
-    truth("(<a/>).xpath === undefined || (<a/>).xpath.length() === 0");
+    truth("!Object.prototype.hasOwnProperty.call(XML.prototype, 'xpath') && !Object.prototype.hasOwnProperty.call(XMLList.prototype, 'xpath')");
     truth("var x = <a><b/></a>; x.b.attributes !== undefined");
 }
 
@@ -714,6 +716,26 @@ fn catastrophic_queries_end_with_the_fuel_limit() {
     assert_eq!(kind_of(limits.clone(), &descendants), RunErrorKind::Limit(LimitKind::Fuel));
     let serialize = format!("{build} for (;;) x.toXMLString();");
     assert_eq!(kind_of(limits, &serialize), RunErrorKind::Limit(LimitKind::Fuel));
+}
+
+/// The fuel that `action` takes when it runs after `setup`.
+fn fuel_of(setup: &str, action: &str) -> u64 {
+    let mut r = realm();
+    r.run(setup).unwrap();
+    r.run(action).unwrap();
+    Limits::default().fuel - r.fuel_left()
+}
+
+#[test]
+fn insert_child_before_and_after_take_fuel_for_each_child_they_scan() {
+    let narrow = "var x = <a><b/></a>; var last = x.b[0];";
+    let wide = "var x = <a/>; for (var i = 0; i < 2000; i++) x.appendChild(<b/>); var last = x.b[1999];";
+    for action in
+        ["x.insertChildAfter(<z/>, <c/>)", "x.insertChildBefore(<z/>, <c/>)", "x.insertChildAfter(last, <c/>)", "x.insertChildBefore(last, <c/>)"]
+    {
+        let (n, w) = (fuel_of(narrow, action), fuel_of(wide, action));
+        assert!(w >= n + 1999, "{action}: {n} with one child, {w} with 2000");
+    }
 }
 
 #[test]
