@@ -116,7 +116,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Mirror",
             ["Object", "Repeat"],
             None,
-            "{ids?, angle?: deg (90 = vertical axis), offset?: pt (10)} mirror repeat of the selection → {id}",
+            "{ids?, angle?: deg clockwise from level (the mirror axis; 90 = vertical), offset?: pt (10)} mirror repeat of the selection → {id}",
             has_selection,
             repeat_mirror
         ),
@@ -134,7 +134,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Options…",
             ["Object", "Repeat"],
             None,
-            "{instances?, radius?, reverseOverlap?, startAngle?, endAngle?, center?: [x,y] | hSpacing?, vSpacing?, rows?, cols?, gridType?, brickOffset?, flipRows?, flipCols? | angle?} set the options of the selected repeats",
+            "{instances?, radius?, reverseOverlap?, startAngle?, endAngle?: deg clockwise (0: where the source art sits), center?: [x,y] | hSpacing?, vSpacing?, rows?, cols?, gridType?, brickOffset?, flipRows?, flipCols? | angle?: deg clockwise from level (the mirror axis; 90 = vertical)} set the options of the selected repeats",
             has_repeat,
             repeat_options
         ),

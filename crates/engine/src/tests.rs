@@ -192,6 +192,7 @@ mod toolsettings;
 mod transformfx;
 mod transparencygrid;
 mod trap;
+mod turn_direction;
 mod typearea;
 mod typeglyphbounds;
 mod typescale;
