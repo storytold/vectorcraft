@@ -5736,6 +5736,12 @@ axis	Y Axis	Asse Y
 	Flag	Bandiera
 	Crosshair	Mirino
 	Checkpoint	Punto di controllo
+	Inventory Icons	Icone inventario
+	Sword	Spada
+	Shield	Scudo
+	Potion	Pozione
+	Key	Chiave
+	Gem	Gemma
 	Open Symbol Library	Apri libreria simboli
 	Save Symbol Library	Salva libreria simboli
 	Save Symbol Library…	Salva libreria simboli…
