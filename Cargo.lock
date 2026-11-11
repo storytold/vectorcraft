@@ -6726,6 +6726,7 @@ name = "vectorcraft-scriptcheck"
 version = "0.24.0"
 dependencies = [
  "proptest",
+ "unicode-general-category",
 ]
 
 [[package]]

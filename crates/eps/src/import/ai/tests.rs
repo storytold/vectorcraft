@@ -62,9 +62,14 @@ fn arrays_nested_past_the_depth_limit_are_refused() {
     assert!(nested(100_000));
 }
 
-/// The children of the first layer.
+/// The children of the first layer, its ruler guides left out.
 fn art(doc: &Document) -> Vec<Arc<Node>> {
-    doc.layers.first().and_then(|l| l.children()).cloned().unwrap_or_default()
+    doc.layers.first().and_then(|l| l.children()).into_iter().flatten().filter(|c| !c.is_ruler_guide()).cloned().collect()
+}
+
+/// The ruler guides of `doc` by their line, artboard and layer.
+fn guide_lines(doc: &Document) -> Vec<Guide> {
+    doc.ruler_guides().into_iter().map(|g| Guide { artboard: g.artboard, layer: g.layer, ..Guide::new(g.vertical, g.pos) }).collect()
 }
 
 fn fill(n: &Node) -> Paint {
@@ -8459,17 +8464,16 @@ fn canvas_wide_guide_paths_are_ruler_guides_of_their_layer() {
     );
     let doc = read(canvas_stream(&layer(&body)).as_bytes()).unwrap().doc;
     let top = &doc.layers[0];
-    let kids = top.children().unwrap();
+    let kids = art(&doc);
     assert_eq!(kids.len(), 2, "the square and the sublayer");
     assert!(matches!(kids[0].kind, NodeKind::Path { guide: false, .. }));
     let sub = &kids[1];
-    assert!(sub.children().unwrap().is_empty());
-    let want = [
-        Guide { vertical: false, pos: 60.0, artboard: None, layer: Some(top.id) },
-        Guide { vertical: true, pos: 25.0, artboard: None, layer: Some(top.id) },
-        Guide { vertical: false, pos: 10.0, artboard: None, layer: Some(sub.id) },
-    ];
-    assert_eq!(doc.guides, want);
+    assert!(sub.children().unwrap().iter().all(|c| c.is_ruler_guide()));
+    let at = |vertical, pos, layer| Guide { layer: Some(layer), ..Guide::new(vertical, pos) };
+    let want = [at(false, 60.0, top.id), at(true, 25.0, top.id), at(false, 10.0, sub.id)];
+    assert_eq!(guide_lines(&doc), want);
+    // The guides sit above the layers' art.
+    assert!(top.children().unwrap()[2..].iter().all(|c| c.is_ruler_guide()));
 }
 
 /// #779: a straight `(N) *` guide path from edge to edge of one artboard is a ruler guide of that
@@ -8478,7 +8482,7 @@ fn canvas_wide_guide_paths_are_ruler_guides_of_their_layer() {
 fn artboard_wide_guide_paths_are_ruler_guides_of_their_artboard() {
     // The crop marks' artboard, 0 0 200 100.
     let doc = read(canvas_stream(&layer(&guide_line(0.0, 30.0, 200.0, 30.0, "N"))).as_bytes()).unwrap().doc;
-    assert_eq!(doc.guides, [Guide { vertical: false, pos: 70.0, artboard: Some(1), layer: Some(doc.layers[0].id) }]);
+    assert_eq!(guide_lines(&doc), [Guide { artboard: Some(1), layer: Some(doc.layers[0].id), ..Guide::new(false, 70.0) }]);
     assert!(art(&doc).is_empty());
     // The second of two artboards: art space x 400 to 600, y -150 to 0.
     let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
@@ -8487,7 +8491,7 @@ fn artboard_wide_guide_paths_are_ruler_guides_of_their_artboard() {
                   %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
     let doc = read_ok(&format!("{boards}{}", layer(&guide_line(500.0, 0.0, 500.0, -150.0, "N")))).doc;
     assert_eq!(doc.artboards[1].id, 2);
-    assert_eq!(doc.guides, [Guide { vertical: true, pos: 500.0, artboard: Some(2), layer: Some(doc.layers[0].id) }]);
+    assert_eq!(guide_lines(&doc), [Guide { artboard: Some(2), layer: Some(doc.layers[0].id), ..Guide::new(true, 500.0) }]);
 }
 
 /// Guide paths that aren't ruler guides stay guide paths: `(S) *` ones (guides made from objects),
@@ -8506,7 +8510,7 @@ fn other_guide_paths_stay_guide_paths() {
     ];
     for body in cases {
         let doc = read(canvas_stream(&layer(&body)).as_bytes()).unwrap().doc;
-        assert!(doc.guides.is_empty(), "{body}");
+        assert!(doc.ruler_guides().is_empty(), "{body}");
         assert_eq!(art(&doc).len(), 1, "{body}");
     }
 }

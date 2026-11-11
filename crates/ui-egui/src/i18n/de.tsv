@@ -4863,6 +4863,8 @@ theme	Appearance	Erscheinungsbild
 @msg	invalid object id {value}: expected a non-negative integer	ungültige Objekt-ID {value}: erwartet wird eine nicht negative ganze Zahl
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	Eintrag {index} von `{key}` ist {value}, keine Objekt-ID (nicht negative ganze Zahl)
 @msg	no such object id {value}	kein Objekt mit der ID {value}
+@msg	id {value} is a ruler guide, not an object	die ID {value} gehört zu einer Hilfslinie, nicht zu einem Objekt
+@msg	a ruler guide goes only directly in a layer or sublayer	eine Hilfslinie kann nur direkt in einer Ebene oder Unterebene liegen
 @msg	id {value} is a layer, not an object	die ID {value} ist eine Ebene, kein Objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	die ID {value} ist eine Ebene, kein Objekt; verschieben Sie Ebenen mit layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	Dateisystemzugriff für die Automatisierung ist nicht gewährt: Die Leseberechtigung fehlt: {path}
@@ -5781,6 +5783,11 @@ axis	Y Axis	Y-Achse
 	Dash Trail	Strichelspur
 	Speed Line	Geschwindigkeitslinie
 	Game Trails	Spielspuren
+	Energy Beams	Energiestrahlen
+	Laser Bolt	Laserbolzen
+	Plasma Arc	Plasmabogen
+	Charge Wave	Ladewelle
+	Spark Trail	Funkenspur
 	Calligraphic Nibs	Kalligrafie-Federn
 	Pattern Borders	Musterbordüren
 	Scatter Shapes	Streuformen

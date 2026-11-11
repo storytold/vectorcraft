@@ -462,7 +462,7 @@ fn run_pass(s: &mut Session, p: &Value, cmd: &str, label: &str, pass: Recolor) -
 pub(crate) fn left_out(d: &Document, iso: Option<NodeId>, roots: &[NodeId]) -> Vec<(NodeId, bool)> {
     fn visit(n: &Node, hidden: bool, locked: bool, all: &HashSet<NodeId>, board_locked: &dyn Fn(&Node) -> bool, out: &mut Vec<(NodeId, bool)>) {
         for c in n.children().into_iter().flatten() {
-            if c.is_template() {
+            if c.is_template() || c.is_ruler_guide() {
                 continue;
             }
             let (hidden, locked) = (hidden || !c.visible, locked || c.locked);

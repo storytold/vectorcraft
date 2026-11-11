@@ -300,8 +300,8 @@ impl Session {
         cmd::compositefonts::filter_loaded(&mut doc);
         // Inline graphics in text take their size from their symbols' art (not saved).
         doc.resolve_inline_art();
-        // Guides from files saved before guides had layers go on a layer.
-        doc.adopt_guides();
+        // Ruler guides a reader left in the saved list become nodes on their layers.
+        doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
@@ -328,7 +328,7 @@ impl Session {
         doc.limit_depth();
         cmd::compositefonts::filter_loaded(&mut doc);
         doc.resolve_inline_art();
-        doc.adopt_guides();
+        doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
         // In the back, type set in a font named like a composite font is measured when the document
         // comes to the front and its own composite fonts are registered, not in the front

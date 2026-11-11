@@ -4925,6 +4925,8 @@ axis	Both	Ambos
 @msg	invalid object id {value}: expected a non-negative integer	identificador de objeto no válido {value}: se esperaba un entero no negativo
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	la entrada {index} de `{key}` es {value}, no un identificador de objeto (un entero no negativo)
 @msg	no such object id {value}	no existe el objeto con el identificador {value}
+@msg	id {value} is a ruler guide, not an object	el identificador {value} es de una guía, no de un objeto
+@msg	a ruler guide goes only directly in a layer or sublayer	una guía solo puede estar directamente en una capa o subcapa
 @msg	id {value} is a layer, not an object	el identificador {value} es una capa, no un objeto
 @msg	id {value} is a layer, not an object; move layers with layer.move	el identificador {value} es una capa, no un objeto; mueva las capas con layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	la automatización no tiene acceso al sistema de archivos: falta el permiso de lectura: {path}
@@ -6140,6 +6142,11 @@ axis	Y Axis	Eje Y
 	Dash Trail	Estela discontinua
 	Speed Line	Línea de velocidad
 	Game Trails	Estelas de juego
+	Energy Beams	Haces de energía
+	Laser Bolt	Proyectil láser
+	Plasma Arc	Arco de plasma
+	Charge Wave	Onda de carga
+	Spark Trail	Estela de chispas
 	Calligraphic Nibs	Plumillas caligráficas
 	Pattern Borders	Bordes de motivo
 	Scatter Shapes	Formas de dispersión

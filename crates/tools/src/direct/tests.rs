@@ -40,7 +40,7 @@ fn a_press_where_a_mask_hides_a_selected_object_drags_it() {
 #[test]
 fn direct_and_group_selection_pick_ruler_guides() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(true, 100.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 100.0));
     let (s, p) = (Selection::default(), paint());
     let c = cx(&d, &s, &p);
     let down = |t: &mut DirectSelectionTool, y: f64| t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, y));
@@ -62,7 +62,7 @@ fn direct_and_group_selection_pick_ruler_guides() {
 #[test]
 fn a_cmd_shift_double_click_releases_the_guide_under_the_pointer() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 300.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 300.0));
     let Some(NodeKind::Path { guide, .. }) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("the rectangle is a path") };
     *guide = true;
     let (s, p) = (Selection::default(), paint());
@@ -848,7 +848,7 @@ fn crossed_segments_match_testing_a_path_for_each_segment() {
 #[test]
 fn marquee_selects_ruler_guides() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 80.0));
     let s = Selection::default();
     let p = paint();
     let cx = cx(&d, &s, &p);

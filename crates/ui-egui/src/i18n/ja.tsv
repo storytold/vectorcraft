@@ -5009,6 +5009,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	invalid object id {value}: expected a non-negative integer	オブジェクト ID {value} は正しくありません: 0 以上の整数を指定してください
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` の要素 {index} は {value} で、オブジェクト ID (0 以上の整数) ではありません
 @msg	no such object id {value}	ID が {value} のオブジェクトは見つかりません
+@msg	id {value} is a ruler guide, not an object	ID {value} はオブジェクトではなくガイドです
+@msg	a ruler guide goes only directly in a layer or sublayer	ガイドはレイヤーまたはサブレイヤーの直下にのみ置けます
 @msg	id {value} is a layer, not an object	ID {value} はオブジェクトではなくレイヤーです
 @msg	id {value} is a layer, not an object; move layers with layer.move	ID {value} はオブジェクトではなくレイヤーです。レイヤーは layer.move で移動してください
 @msg	automation filesystem access is not granted: read authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 読み込み権限がありません: {path}
@@ -5880,6 +5882,11 @@ axis	Y Axis	Y 軸
 	Dash Trail	ダッシュトレイル
 	Speed Line	スピードライン
 	Game Trails	ゲームトレイル
+	Energy Beams	エネルギービーム
+	Laser Bolt	レーザーボルト
+	Plasma Arc	プラズマアーク
+	Charge Wave	チャージウェーブ
+	Spark Trail	スパークトレイル
 	Calligraphic Nibs	カリグラフィペン先
 	Pattern Borders	パターンボーダー
 	Scatter Shapes	散布シェイプ

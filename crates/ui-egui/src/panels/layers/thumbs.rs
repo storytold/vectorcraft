@@ -230,7 +230,8 @@ fn weigh(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&Docum
             return false;
         }
         let mask = n.extras().mask.as_deref().filter(|m| left.masks && !m.disabled).map(|m| &m.art);
-        n.children().into_iter().flatten().chain(mask).all(|c| left.object() && count(c, doc, left, depth))
+        // A layer's ruler guides draw nothing in its thumbnail and use no budget.
+        n.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).chain(mask).all(|c| left.object() && count(c, doc, left, depth))
     }
     let mut left = Left { nodes, anchors, steps: THUMB_COUNT_STEPS, masks };
     let small = count(n, doc, &mut left, 0);

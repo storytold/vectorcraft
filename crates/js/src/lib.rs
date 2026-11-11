@@ -53,6 +53,7 @@ mod chars;
 mod compiler;
 mod date_builtins;
 mod error;
+mod file_classes;
 mod heap;
 mod host;
 mod interp;

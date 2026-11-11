@@ -116,8 +116,9 @@ pub(crate) fn scan<'s>(src: &'s str, declared: &Declared<'s>, file: Option<&str>
 }
 
 /// `src` with the `\uXXXX` escapes in its names written as the characters they stand for (ECMA-262
-/// 3rd edition, section 7.6), and `src` itself when no name has one. An escape for a character no
-/// name may hold stays as written. Line breaks don't change, so every line keeps its number.
+/// 3rd edition, section 7.6), and `src` itself when no name has one. An escape for a character a
+/// name may not hold where the escape stands stays as written. Line breaks don't change, so every
+/// line keeps its number.
 pub(crate) fn unescaped<'a>(src: Cow<'a, str>, acc: &mut Acc) -> Cow<'a, str> {
     match unescape_names(&src, acc) {
         Some(out) => Cow::Owned(out),
@@ -145,20 +146,17 @@ fn unescape_names(src: &str, acc: &mut Acc) -> Option<String> {
     changed.then_some(out)
 }
 
-/// The name `text` with each `\uXXXX` escape for a character a name may hold written as that
-/// character.
+/// The name `text` with each `\uXXXX` escape for a character a name may hold where it stands written
+/// as that character: a character a name may start with first, and one a name may hold after that.
 fn unescape_name(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(i) = rest.find("\\u") {
         out.push_str(rest.get(..i).unwrap_or_default());
         let after = rest.get(i + 2..).unwrap_or_default();
-        let c = after
-            .get(..4)
-            .filter(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()))
-            .and_then(|hex| u32::from_str_radix(hex, 16).ok())
-            .and_then(char::from_u32)
-            .filter(|&c| crate::lex::ident_part(c));
+        let first = out.is_empty();
+        let c = crate::lex::escaped(rest.get(i..).unwrap_or_default())
+            .filter(|&c| if first { crate::lex::ident_start(c) } else { crate::lex::ident_part(c) });
         match c {
             Some(c) => {
                 out.push(c);

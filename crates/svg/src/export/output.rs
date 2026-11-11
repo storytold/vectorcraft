@@ -170,6 +170,10 @@ impl Writer<'_> {
         }
         let mut named: Vec<(NodeId, String)> = Vec::new();
         self.doc.walk(|n| {
+            // Ruler guides are not written, so their names reserve no id.
+            if n.is_ruler_guide() {
+                return;
+            }
             if let Some(name) = &n.name {
                 named.push((n.id, sanitize_id(name)));
             }
