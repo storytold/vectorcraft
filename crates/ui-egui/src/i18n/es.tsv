@@ -6070,6 +6070,12 @@ axis	Y Axis	Eje Y
 	Crosshair	Punto de mira
 	Checkpoint	Punto de control
 	Inventory Icons	Iconos de inventario
+	Skill Icons	Iconos de habilidad
+	Attack	Ataque
+	Defend	Defensa
+	Heal	Curación
+	Buff	Mejora
+	Ult	Ult
 	Sword	Espada
 	Shield	Escudo
 	Potion	Poción

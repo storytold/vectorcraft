@@ -5982,6 +5982,12 @@ axis	Y Axis	Oś Y
 	Crosshair	Celownik
 	Checkpoint	Punkt kontrolny
 	Inventory Icons	Ikony ekwipunku
+	Skill Icons	Ikony umiejętności
+	Attack	Atak
+	Defend	Obrona
+	Heal	Leczenie
+	Buff	Wzmocnienie
+	Ult	Ult
 	Sword	Miecz
 	Shield	Tarcza
 	Potion	Mikstura

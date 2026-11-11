@@ -2467,6 +2467,62 @@ fn convert_area_point_keeps_text_in_place_for_every_alignment() {
     }
 }
 
+/// Each line's first glyph in the document, and the line count.
+fn line_starts_doc(t: &TextObject) -> Vec<Point> {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    lay.lines.iter().map(|l| t.xf * lay.glyphs[l.glyph_start].origin).collect()
+}
+
+/// Tracked type converted between point and area type stays where it is, however it is aligned,
+/// as often as it goes round: an aligned line leaves the tracking after its last character out
+/// of its width, and the frame Convert To Area Type makes ends where the lines are aligned, with
+/// room for that tracking (line breaking counts it). Lines area type wraps at a space or after a
+/// hyphen keep their place as the paragraphs Convert To Point Type makes of them (words without a
+/// kerning pair across the wrap, which a new paragraph doesn't keep).
+#[test]
+fn converting_tracked_type_between_point_and_area_keeps_it_in_place() {
+    for j in ["left", "center", "right"] {
+        for tracking in [200.0, 1000.0, -100.0] {
+            let mut s = session();
+            let id =
+                NodeId(s.execute("text.create", &json!({"x": 50, "y": 100, "text": "Wave\nWaves", "size": 20})).unwrap()["id"].as_u64().unwrap());
+            s.execute("text.setRangeStyle", &json!({"id": id.0, "tracking": tracking})).unwrap();
+            s.execute("text.setStyle", &json!({"ids": [id.0], "justify": j})).unwrap();
+            let before = line_starts_doc(&obj(&s, id));
+            assert_eq!(before.len(), 2);
+            for round in 0..2 {
+                s.execute("type.convertToAreaType", &json!({"ids": [id.0]})).unwrap();
+                let area = line_starts_doc(&obj(&s, id));
+                assert_eq!(area.len(), 2, "{j} {tracking}: no rewrap");
+                for (a, b) in area.iter().zip(&before) {
+                    assert!((*a - *b).hypot() < 0.01, "{j} {tracking}, round {round}, area: {before:?} → {area:?}");
+                }
+                s.execute("type.convertToPointType", &json!({"ids": [id.0]})).unwrap();
+                let point = line_starts_doc(&obj(&s, id));
+                for (a, b) in point.iter().zip(&before) {
+                    assert!((*a - *b).hypot() < 0.01, "{j} {tracking}, round {round}, point: {before:?} → {point:?}");
+                }
+            }
+        }
+        // Area type wrapped at a space and after a hyphen, to point type.
+        for text in ["Wave Wave Wave", "Mode-Mode-Mode"] {
+            let mut s = session();
+            let r = s.execute("text.create", &json!({"x": 50, "y": 100, "text": text, "size": 20, "area": {"width": 90, "height": 200}})).unwrap();
+            let id = NodeId(r["id"].as_u64().unwrap());
+            s.execute("text.setRangeStyle", &json!({"id": id.0, "tracking": 200})).unwrap();
+            s.execute("text.setStyle", &json!({"ids": [id.0], "justify": j})).unwrap();
+            let before = line_starts_doc(&obj(&s, id));
+            assert!(before.len() > 1, "{text}: it wraps");
+            s.execute("type.convertToPointType", &json!({"ids": [id.0]})).unwrap();
+            let after = line_starts_doc(&obj(&s, id));
+            assert_eq!(after.len(), before.len(), "{text}");
+            for (a, b) in after.iter().zip(&before) {
+                assert!((*a - *b).hypot() < 0.01, "{j} {text}: {before:?} → {after:?}");
+            }
+        }
+    }
+}
+
 #[test]
 fn convert_area_to_point_keeps_a_deeper_list_item_in_place() {
     let mut s = session();

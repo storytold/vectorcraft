@@ -5745,6 +5745,12 @@ axis	Y Axis	Asse Y
 	Crosshair	Mirino
 	Checkpoint	Punto di controllo
 	Inventory Icons	Icone inventario
+	Skill Icons	Icone abilità
+	Attack	Attacco
+	Defend	Difesa
+	Heal	Cura
+	Buff	Potenziamento
+	Ult	Ult
 	Sword	Spada
 	Shield	Scudo
 	Potion	Pozione

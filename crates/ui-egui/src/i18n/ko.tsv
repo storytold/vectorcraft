@@ -5706,6 +5706,12 @@ axis	Y Axis	Y축
 	Crosshair	십자선
 	Checkpoint	체크포인트
 	Inventory Icons	인벤토리 아이콘
+	Skill Icons	스킬 아이콘
+	Attack	공격
+	Defend	방어
+	Heal	치유
+	Buff	버프
+	Ult	궁극기
 	Sword	검
 	Shield	방패
 	Potion	포션
