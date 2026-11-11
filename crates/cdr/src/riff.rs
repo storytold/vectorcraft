@@ -68,7 +68,7 @@ pub(crate) fn form_version(form: [u8; 4]) -> Option<u16> {
     }
 }
 
-/// Does `bytes` start like a RIFF CorelDRAW drawing (not the `CDRX` exchange variant)?
+/// Does `bytes` start like a RIFF `.cdr` drawing (not the `CDRX` exchange variant)?
 pub fn is_cdr_riff(bytes: &[u8]) -> bool {
     bytes.get(..4) == Some(b"RIFF") && bytes.get(8..12).and_then(|f| f.try_into().ok()).and_then(form_version).is_some()
 }
@@ -228,7 +228,7 @@ impl<'a> Index<'a> {
         let left = budget.inflate_left();
         let reader = flate2::read::ZlibDecoder::new(data);
         // One byte past what is left tells a stream that is too long from one that just fits.
-        let got = match reader.take(left as u64 + 1).read_to_end(&mut self.inflated) {
+        let got = match reader.take((left as u64).saturating_add(1)).read_to_end(&mut self.inflated) {
             Ok(n) => n,
             Err(_) => {
                 self.inflated.truncate(at);

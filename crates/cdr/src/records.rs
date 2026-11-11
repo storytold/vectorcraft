@@ -13,6 +13,8 @@ const TAG_1300: u32 = 1300;
 const MAX_SKIPPED: usize = 4;
 /// The most records skipped before an outline's own (R12).
 const MAX_OUTLINE_RECORDS: usize = 16;
+/// The most UTF-16 units of a library color's name kept.
+const MAX_NAME: usize = 256;
 
 /// A header field: u16 in short files, u32 otherwise.
 fn word(r: &mut Rd, p: &Profile) -> Option<usize> {
@@ -94,7 +96,7 @@ pub(crate) fn trfd(b: &[u8], p: &Profile) -> Option<Matrix> {
 /// A 12-byte color record (R14). Unknown models read as black with a warning.
 pub(crate) fn color(r: &mut Rd, warn: &mut Vec<Warning>) -> Option<Color> {
     let model = r.u16()?;
-    let _palette = r.u16()?;
+    let palette = r.u16()?;
     r.skip(4)?;
     let v = r.bytes(4)?;
     let (v0, v1, v2, v3) = (f32::from(v[0]), f32::from(v[1]), f32::from(v[2]), f32::from(v[3]));
@@ -111,7 +113,8 @@ pub(crate) fn color(r: &mut Rd, warn: &mut Vec<Warning>) -> Option<Color> {
             let number = u16::from_le_bytes([v[0], v[1]]);
             let tint = pct(f32::from(u16::from_le_bytes([v[2], v[3]])));
             push(warn, Warning::SpotLooks);
-            Color::Spot { name: format!("Spot {number}"), tint, look: None }
+            // Each library numbers its own colors: the name holds the palette and the number.
+            Color::Spot { name: format!("Spot {palette}:{number}"), tint, look: None }
         }
         _ => {
             push(warn, Warning::UnknownColors);
@@ -120,12 +123,25 @@ pub(crate) fn color(r: &mut Rd, warn: &mut Vec<Warning>) -> Option<Color> {
     })
 }
 
-/// A UTF-16 name stored as a character count and its code units.
-fn counted_utf16(r: &mut Rd) -> Option<String> {
+/// A UTF-16 name stored as a character count and its code units. Every shape that uses the color
+/// gets its own copy of the name: a name longer than [`MAX_NAME`] units keeps its first ones and a
+/// hash of the whole name, with a warning, so two long names that start alike stay apart.
+fn counted_utf16(r: &mut Rd, warn: &mut Vec<Warning>) -> Option<String> {
     let n = r.u32()? as usize;
     let b = r.bytes(n.checked_mul(2)?)?;
-    let units: Vec<u16> = b.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect();
-    Some(String::from_utf16_lossy(&units).trim_end_matches('\0').to_string())
+    // Trailing NULs are padding.
+    let all = b.as_chunks::<2>().0;
+    let all = all.get(..all.iter().rposition(|c| *c != [0, 0]).map_or(0, |i| i + 1)).unwrap_or_default();
+    let units = all.iter().map(|c| u16::from_le_bytes(*c));
+    if all.len() <= MAX_NAME {
+        let units: Vec<u16> = units.collect();
+        return Some(String::from_utf16_lossy(&units));
+    }
+    push(warn, Warning::TooDeep);
+    // FNV-1a over the code units.
+    let hash = units.clone().fold(0xcbf2_9ce4_8422_2325_u64, |h, u| (h ^ u64::from(u)).wrapping_mul(0x0100_0000_01b3));
+    let kept: Vec<u16> = units.take(MAX_NAME).collect();
+    Some(format!("{} {hash:016x}", String::from_utf16_lossy(&kept)))
 }
 
 /// The color of a tagged uniform fill's property list (R11): its color record, named by the
@@ -143,8 +159,8 @@ fn property_color(b: &[u8], warn: &mut Vec<Warning>) -> Option<Color> {
         let mut br = Rd::new(body);
         match kind {
             1 => found = color(&mut br, warn),
-            8 => name = br.skip(16).and_then(|_| counted_utf16(&mut br)),
-            3 => name = name.or_else(|| counted_utf16(&mut br)),
+            8 => name = br.skip(16).and_then(|_| counted_utf16(&mut br, warn)),
+            3 => name = name.or_else(|| counted_utf16(&mut br, warn)),
             _ => {}
         }
     }
@@ -196,12 +212,13 @@ pub(crate) fn fill(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<(u3
                 push(warn, Warning::Damaged);
                 return Some((id, None));
             }
+            // A uniform fill whose color can't be read is damage, not a fill of none.
             let len = r.u32()? as usize;
-            property_color(r.bytes(len.min(r.left()))?, warn)
+            Some(property_color(r.bytes(len.min(r.left()))?, warn)?)
         }
         1 => {
             r.skip(2)?;
-            color(&mut r, warn)
+            Some(color(&mut r, warn)?)
         }
         _ => {
             push(warn, Warning::UnsupportedFills);
@@ -224,7 +241,7 @@ fn tagged_body<'a>(r: &mut Rd<'a>) -> Option<&'a [u8]> {
 }
 
 /// An outline record: its id and the outline (`None`: no outline) (R12, R13).
-pub(crate) fn outline(b: &[u8], p: &Profile, limits: &Limits, warn: &mut Vec<Warning>) -> Option<(u32, Option<Outline>)> {
+pub(crate) fn outline(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<(u32, Option<Outline>)> {
     let mut r = Rd::new(b);
     let id = r.u32()?;
     if p.tagged {
@@ -253,10 +270,11 @@ pub(crate) fn outline(b: &[u8], p: &Profile, limits: &Limits, warn: &mut Vec<War
     let count = usize::from(r.u16()?);
     let first_dash = r.pos();
     let fits = r.left() / 2;
-    if count > fits || count > limits.dashes {
+    if count > fits {
         push(warn, Warning::Damaged);
     }
-    let dashes: Vec<f64> = (0..count.min(fits).min(limits.dashes)).filter_map(|_| r.u16().map(f64::from)).collect();
+    // At most 65,535; the read's dash limit is applied where shapes use them.
+    let dashes: Vec<f64> = (0..count.min(fits)).filter_map(|_| r.u16().map(f64::from)).collect();
     if let Some(after) = p.marker_after_dash {
         let mut m = Rd::at(b, first_dash + after);
         if matches!((m.u32(), m.u32()), (Some(s), Some(e)) if s != 0 || e != 0) {
@@ -329,9 +347,34 @@ mod tests {
         assert_eq!(rec(2, [100, 50, 0, 10]).0, Some(Color::Cmyk([1.0, 0.5, 0.0, 0.1])));
         assert_eq!(rec(5, [255, 0, 0, 0]).0, Some(Color::Rgb([0.0, 0.0, 1.0])));
         assert_eq!(rec(9, [255, 0, 0, 0]).0, Some(Color::Gray(0.0)));
-        assert_eq!(rec(25, [7, 0, 40, 0]).0, Some(Color::Spot { name: "Spot 7".into(), tint: 0.4, look: None }));
+        assert_eq!(rec(25, [7, 0, 40, 0]).0, Some(Color::Spot { name: "Spot 0:7".into(), tint: 0.4, look: None }));
+        // The same number in another library is another color.
+        let mut other = 25u16.to_le_bytes().to_vec();
+        other.extend(3u16.to_le_bytes());
+        other.extend([0; 4]);
+        other.extend([7, 0, 40, 0]);
+        assert_eq!(color(&mut Rd::new(&other), &mut vec![]), Some(Color::Spot { name: "Spot 3:7".into(), tint: 0.4, look: None }));
         let (c, w) = rec(6, [1, 2, 3, 4]);
         assert_eq!((c, w), (Some(Color::Rgb([0.0; 3])), vec![Warning::UnknownColors]));
+    }
+
+    #[test]
+    fn long_names_that_start_alike_stay_apart() {
+        let read = |name: &str| {
+            let mut b = (name.encode_utf16().count() as u32).to_le_bytes().to_vec();
+            b.extend(name.encode_utf16().flat_map(u16::to_le_bytes));
+            let mut w = vec![];
+            (counted_utf16(&mut Rd::new(&b), &mut w).unwrap(), w)
+        };
+        let (a, w) = read(&"N".repeat(300));
+        let (b, _) = read(&format!("{}M", "N".repeat(299)));
+        assert_ne!(a, b);
+        assert!(a.starts_with(&"N".repeat(MAX_NAME)) && a.chars().count() == MAX_NAME + 17, "{a}");
+        assert_eq!(w, vec![Warning::TooDeep]);
+        assert_eq!(read("Sky Blue"), ("Sky Blue".to_string(), vec![]));
+        // Padding doesn't count toward the length or the name.
+        let (padded, w) = read(&format!("{}\0\0", "N".repeat(MAX_NAME - 1)));
+        assert_eq!((padded, w), ("N".repeat(MAX_NAME - 1), vec![]));
     }
 
     #[test]

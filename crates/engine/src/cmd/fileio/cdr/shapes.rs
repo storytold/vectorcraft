@@ -142,8 +142,8 @@ impl Builder {
         if let Some(o) = &s.outline {
             items.push(AppearanceItem::Stroke(self.stroke(o)));
         }
-        // CorelDRAW fills a curve of several subpaths with holes where they overlap: VectorCraft's
-        // own choice of rule for it.
+        // A curve of several subpaths is filled with holes where they overlap: VectorCraft's own
+        // choice of rule for it.
         let rule = FillRule::EvenOdd;
         let mut n = Node::new(self.doc.alloc_id(), NodeKind::Path { path, rule, live: live.map(Box::new), clipping: false, guide: false });
         n.appearance = Appearance { items, ..Appearance::default() }.into();
@@ -347,6 +347,34 @@ mod tests {
         let doc = b.document(&d);
         let copies = doc.layers.first().and_then(|l| l.children()).map_or(0, |c| c.len());
         assert_eq!(copies, 3, "1,000 holds three copies of 302");
+        assert!(b.notes.contains(&Warning::TooDeep));
+    }
+
+    /// Copies of master art take from the budget by the dashes of their outlines too: a rectangle
+    /// whose outline has 299 dashes costs 300 each time it is copied.
+    #[test]
+    fn master_copies_count_their_dashes() {
+        let outline = cd::Outline { width: 1.0, color: cd::Color::Gray(1.0), cap: cd::Cap::Butt, join: cd::Join::Miter, dashes: vec![1.0; 299] };
+        let rect = cd::Object::Shape(Box::new(cd::Shape {
+            geometry: Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
+            matrix: cd::Matrix::IDENTITY,
+            fill: None,
+            outline: Some(outline),
+        }));
+        let master = cd::Layer { name: "M".into(), kind: cd::LayerKind::Drawing, objects: vec![rect], guides: vec![] };
+        let d = cd::Drawing {
+            version: 1300,
+            page_size: None,
+            pages: (0..10).map(|_| cd::Page { size: None, layers: vec![] }).collect(),
+            master: vec![master],
+            guides: vec![],
+            warnings: vec![],
+        };
+        let mut b = Builder::new();
+        b.copies_left = 1000;
+        let doc = b.document(&d);
+        let copies = doc.layers.first().and_then(|l| l.children()).map_or(0, |c| c.len());
+        assert_eq!(copies, 3, "1,000 holds three copies of 300");
         assert!(b.notes.contains(&Warning::TooDeep));
     }
 

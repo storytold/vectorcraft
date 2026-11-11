@@ -1,4 +1,4 @@
-//! CorelDRAW drawings of versions 5 to 13 (`.cdr`, and `.cdt` templates): the pages, layers,
+//! `.cdr` drawings of versions 5 to 13 (`.cdr`, and `.cdt` templates): the pages, layers,
 //! guidelines, groups, curves, rectangles, ellipses, arcs and polygons with uniform fills and
 //! outlines that `vectorcraft-cdr` reads, mapped to editable VectorCraft art. Pages become
 //! artboards side by side; layers of the same name on different pages become one layer where the
@@ -18,15 +18,14 @@ use crate::Result;
 
 mod shapes;
 
-const UNSUPPORTED_OBJECTS: &str =
-    "CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out";
-const UNSUPPORTED_FILLS: &str = "CorelDRAW fountain, pattern, texture and PostScript fills were left out";
-const UNKNOWN_COLORS: &str = "colors in CorelDRAW color models VectorCraft doesn't read were opened as black";
-const SPOT_LOOKS: &str = "CorelDRAW library colors that the drawing stores only by number were opened as black spot colors";
-const ARROWHEADS: &str = "CorelDRAW outline arrowheads were left out";
+const UNSUPPORTED_OBJECTS: &str = "CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out";
+const UNSUPPORTED_FILLS: &str = "CDR fountain, pattern, texture and PostScript fills were left out";
+const UNKNOWN_COLORS: &str = "colors in CDR color models VectorCraft doesn't read were opened as black";
+const SPOT_LOOKS: &str = "CDR library colors that the drawing stores only by number were opened as black spot colors";
+const ARROWHEADS: &str = "CDR outline arrowheads were left out";
 const TOO_DEEP: &str = "parts of the drawing nested too deeply, or past the import limits, were left out";
 const DAMAGED: &str = "damaged parts of the drawing were left out";
-const PAGES_CUT: &str = "CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard";
+const PAGES_CUT: &str = "CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard";
 
 /// What reading a drawing left out or changed, for each kind the reader reports.
 fn note(w: Warning) -> &'static str {
@@ -53,14 +52,14 @@ const MAX_PAGE_SIDE: f64 = 16383.0 * 10.0;
 /// The gap between pages laid side by side, in points.
 const PAGE_GAP: f64 = 36.0;
 /// The most objects, subpaths and path segments copied from master layers onto pages, all pages
-/// together: the Affinity importer's budget for its master pages (`affinity/master_copies.rs`).
+/// together: the `.af` importer's budget for its master pages (`affinity/master_copies.rs`).
 const MAX_MASTER_COPIES: usize = 1 << 23;
 /// The most guides and guide paths made, the master page's copied onto every page included.
 const MAX_GUIDES: usize = 100_000;
 /// The most layers made from the master page's and the pages' layers: VectorCraft's own limit.
 const MAX_LAYERS: usize = 10_000;
 
-/// Is `bytes` a CorelDRAW drawing this importer reads?
+/// Is `bytes` a `.cdr` drawing this importer reads?
 pub(super) fn is_cdr(bytes: &[u8]) -> bool {
     vectorcraft_cdr::is_cdr(bytes)
 }
@@ -68,14 +67,14 @@ pub(super) fn is_cdr(bytes: &[u8]) -> bool {
 pub(super) fn import(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
     // Versions 14 on save a ZIP archive, not a RIFF file.
     if bytes.starts_with(b"PK\x03\x04") {
-        return Err(err("CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13"));
+        return Err(err("CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13"));
     }
     let d = vectorcraft_cdr::read(bytes, Limits::default()).map_err(|e| match e {
         vectorcraft_cdr::Error::Version(v) => {
             let version = v / 100;
-            err(format!("CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13"))
+            err(format!("CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13"))
         }
-        why => err(format!("this CorelDRAW drawing can't be read ({why})")),
+        why => err(format!("this CDR drawing can't be read ({why})")),
     })?;
     let mut b = shapes::Builder::new();
     let mut doc = b.document(&d);
@@ -282,8 +281,8 @@ impl shapes::Builder {
     }
 }
 
-/// What one copy of `objects` takes: each object, and each subpath and segment of its path, since
-/// every copy builds its own path.
+/// What one copy of `objects` takes: each object, each subpath and segment of its path, and each
+/// dash of its outline, since every copy builds its own path and dash pattern.
 fn copy_cost(objects: &[cd::Object]) -> usize {
     let mut n: usize = 0;
     let mut stack: Vec<&cd::Object> = objects.iter().collect();
@@ -295,6 +294,7 @@ fn copy_cost(objects: &[cd::Object]) -> usize {
                 if let cd::Geometry::Path(p) = &s.geometry {
                     n = p.subpaths.iter().fold(n, |n, sp| n.saturating_add(1 + sp.segments.len()));
                 }
+                n = n.saturating_add(s.outline.as_ref().map_or(0, |o| o.dashes.len()));
             }
         }
     }

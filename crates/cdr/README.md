@@ -1,12 +1,12 @@
 # vectorcraft-cdr
 
-A bounded Rust reader for CorelDRAW drawings of versions 5 to 13 (`.cdr`, and `.cdt` templates).
+A bounded Rust reader for `.cdr` drawings of versions 5 to 13 (and `.cdt` templates).
 It reads the RIFF chunk tree with its compressed lists and the records listed below, and hands the
-engine a drawing in points, with each object's transform. It does not write CorelDRAW files.
+engine a drawing in points, with each object's transform. It does not write `.cdr` files.
 
 ## What is read
 
-| CorelDRAW | Read as |
+| In the `.cdr` file | Read as |
 |---|---|
 | Pages, the page size in `mcfg` or a page's own size | pages, laid out by the engine as artboards side by side |
 | Layers (drawing, desktop, guides and grid layers), the master page's among them | layers by name and kind |
@@ -33,5 +33,5 @@ third-party file is committed.
 ## Limits
 
 `Limits` bounds the input size, the bytes inflated from compressed lists, the nesting depth, the
-chunk count, the objects and the coordinates of one read. Past a limit the reader stops with an
+chunk count, the objects, the coordinates and the outline dashes of one read. Past a limit the reader stops with an
 error or leaves the rest out with a warning; it does not recurse and does not panic.

@@ -17,7 +17,7 @@
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
 //! - `metafile`: EMF and WMF export, open and place.
-//! - `cdr`: CorelDRAW 5 to 13 drawings and templates (`.cdr`, `.cdt`), open and place.
+//! - `cdr`: `.cdr` drawings of versions 5 to 13 and `.cdt` templates, open and place.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
 //! - `mesh3d`: 3D assets as OBJ, glTF, USDA and USDZ mesh files (`assets.export3D`).

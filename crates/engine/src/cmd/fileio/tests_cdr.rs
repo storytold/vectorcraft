@@ -1,4 +1,4 @@
-//! CorelDRAW drawings: Open, Place and New from Template, by extension and by content, mapped to
+//! `.cdr` drawings: Open, Place and New from Template, by extension and by content, mapped to
 //! artboards, layers, guides, live shapes, solid paint and strokes.
 
 use super::*;
@@ -105,11 +105,11 @@ fn spot_colors_become_spot_swatches_and_cmyk_drawings_open_in_cmyk() {
     let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![obj(1), obj(2), obj(2)])]);
     let file = synth::riff(1100, &[chunk(b"vrsn", 1100u16.to_le_bytes().to_vec()), doc, page]);
     let (doc, warnings) = super::cdr::import(&file).unwrap();
-    let s = doc.swatches.iter().find(|s| s.name == "Spot 7").unwrap();
+    let s = doc.swatches.iter().find(|s| s.name == "Spot 0:7").unwrap();
     assert!(s.spot && s.global);
     assert!(warnings.iter().any(|w| w.contains("library colors")), "{warnings:?}");
     let filled_with_spot = paths(&doc).iter().any(|n| {
-        n.appearance.items.iter().any(|i| matches!(i, vectorcraft_doc::appearance::AppearanceItem::Fill(f) if matches!(&f.paint, vectorcraft_color::Paint::Solid { swatch: Some(name), tint, .. } if name == "Spot 7" && (*tint - 0.4).abs() < 1e-6)))
+        n.appearance.items.iter().any(|i| matches!(i, vectorcraft_doc::appearance::AppearanceItem::Fill(f) if matches!(&f.paint, vectorcraft_color::Paint::Solid { swatch: Some(name), tint, .. } if name == "Spot 0:7" && (*tint - 0.4).abs() < 1e-6)))
     });
     assert!(filled_with_spot);
     assert_eq!(doc.color_mode, vectorcraft_doc::ColorMode::Cmyk);
@@ -261,7 +261,7 @@ fn fills_and_outlines_keep_their_colors_widths_caps_joins_and_dashes() {
 fn other_versions_and_damaged_drawings_say_why() {
     let mut s = Session::new();
     let e = open_bytes(&mut s, "old.cdr", &synth::riff(400, &[]), None).unwrap_err().to_string();
-    assert!(e.contains("CorelDRAW 4 drawings can't be opened"), "{e}");
+    assert!(e.contains("CDR 4 drawings can't be opened"), "{e}");
     // Version 14 on: a ZIP archive.
     let e = open_bytes(&mut s, "new.cdr", b"PK\x03\x04\x14\0\0\0\0\0content/riffData.cdr", None).unwrap_err().to_string();
     assert!(e.contains("version 14 or later can't be opened"), "{e}");

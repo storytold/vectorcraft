@@ -4953,17 +4953,17 @@ axis	Both	Ambos
 @msg	the HEIC or HEIF file can't be read	no se puede leer el archivo HEIC o HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	el archivo HEIC o HEIF contiene un tipo de imagen que no se puede leer
 @msg	HEIC and HEIF images can't be opened in this build	las imágenes HEIC y HEIF no se pueden abrir en esta compilación
-@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	no se pueden abrir dibujos de CorelDRAW {version}: VectorCraft lee las versiones 5 a 13
-@msg	this CorelDRAW drawing can't be read ({why})	no se puede leer este dibujo de CorelDRAW ({why})
-@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	no se pueden abrir dibujos guardados con CorelDRAW 14 o posterior: VectorCraft lee las versiones 5 a 13
-@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	se omitieron textos, mapas de bits, mezclas, siluetas, trazos de pincel y otros objetos de CorelDRAW que VectorCraft aún no lee
-@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	se omitieron los rellenos degradados, de patrón, de textura y PostScript de CorelDRAW
-@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	los colores en modelos de color de CorelDRAW que VectorCraft no lee se abrieron en negro
-@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	los colores de biblioteca de CorelDRAW que el dibujo guarda solo por número se abrieron como tintas planas negras
-@msg	CorelDRAW outline arrowheads were left out	se omitieron las puntas de flecha de los contornos de CorelDRAW
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	no se pueden abrir dibujos de CDR {version}: VectorCraft lee las versiones 5 a 13
+@msg	this CDR drawing can't be read ({why})	no se puede leer este dibujo de CDR ({why})
+@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	no se pueden abrir dibujos guardados con CDR 14 o posterior: VectorCraft lee las versiones 5 a 13
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	se omitieron textos, mapas de bits, mezclas, siluetas, trazos de pincel y otros objetos de CDR que VectorCraft aún no lee
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	se omitieron los rellenos degradados, de patrón, de textura y PostScript de CDR
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	los colores en modelos de color de CDR que VectorCraft no lee se abrieron en negro
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	los colores de biblioteca de CDR que el dibujo guarda solo por número se abrieron como tintas planas negras
+@msg	CDR outline arrowheads were left out	se omitieron las puntas de flecha de los contornos de CDR
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	se omitieron partes del dibujo anidadas a demasiada profundidad o fuera de los límites de importación
 @msg	damaged parts of the drawing were left out	se omitieron partes dañadas del dibujo
-@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	las páginas de CorelDRAW de más de 163.830 pt se abrieron con esa longitud, y el arte cerca de sus bordes queda fuera de la mesa de trabajo
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	las páginas de CDR de más de 163.830 pt se abrieron con esa longitud, y el arte cerca de sus bordes queda fuera de la mesa de trabajo
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imagen PSD es demasiado grande para leerla ({_1} × {_2} píxeles)
 @msg	zipped 32-bit PSD image data with prediction can't be read	no se pueden leer datos de imagen PSD de 32 bits comprimidos en ZIP con predicción
 @msg	{depth}-bit PSD files in this colour mode can't be read	los archivos PSD de {depth} bits en este modo de color no se pueden leer

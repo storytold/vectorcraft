@@ -1,5 +1,5 @@
 //! Synthetic drawings for tests and fuzz seeds, built from the layouts in `PROVENANCE.md`. Not a
-//! CorelDRAW writer: nothing checks that CorelDRAW opens these files.
+//! `.cdr` writer: nothing checks that other programs open these files.
 
 use std::io::Write as _;
 

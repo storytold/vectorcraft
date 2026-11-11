@@ -325,7 +325,14 @@ impl<'a, 'b> Ctx<'a, 'b> {
             return None;
         }
         let geometry = self.geometry(&loda)?;
-        let matrix = own_chunk(ix, list, &[b"trfd"]).and_then(|c| records::trfd(ix.data(c), &self.p)).unwrap_or(Matrix::IDENTITY);
+        // A transform that is there but can't be read is damage; the shape stays where it is.
+        let matrix = match own_chunk(ix, list, &[b"trfd"]) {
+            None => Matrix::IDENTITY,
+            Some(c) => records::trfd(ix.data(c), &self.p).unwrap_or_else(|| {
+                push(self.warn, Warning::Damaged);
+                Matrix::IDENTITY
+            }),
+        };
         let fill = loda.arg(ARG_FILL).and_then(id_of).and_then(|id| self.fill(id));
         let outline = loda.arg(ARG_OUTLINE).and_then(id_of).and_then(|id| self.outline(id));
         Some(Object::Shape(Box::new(Shape { geometry, matrix, fill, outline })))
@@ -371,19 +378,33 @@ impl<'a, 'b> Ctx<'a, 'b> {
         read
     }
 
+    /// The outline of record `id`. Its dashes count toward the read's dashes for every shape that
+    /// uses it; past them the shape's outline is solid.
     fn outline(&mut self, id: u32) -> Option<Outline> {
-        if let Some(o) = self.outlines.get(&id) {
-            return o.clone();
+        if !self.outlines.contains_key(&id) {
+            let read = self.outline_chunks.get(&id).and_then(|b| {
+                let read = records::outline(b, &self.p, self.warn);
+                if read.is_none() {
+                    push(self.warn, Warning::Damaged);
+                }
+                read.and_then(|(_, o)| o)
+            });
+            // An outline with more dashes than the read may still take is kept solid.
+            let read = read.map(|mut o| {
+                if o.dashes.len() > self.budget.dashes_left() {
+                    o.dashes = Vec::new();
+                    push(self.warn, Warning::TooDeep);
+                }
+                o
+            });
+            self.outlines.insert(id, read);
         }
-        let read = self.outline_chunks.get(&id).and_then(|b| {
-            let read = records::outline(b, &self.p, &self.budget.limits, self.warn);
-            if read.is_none() {
-                push(self.warn, Warning::Damaged);
-            }
-            read.and_then(|(_, o)| o)
-        });
-        self.outlines.insert(id, read.clone());
-        read
+        let o = self.outlines.get(&id)?.as_ref()?;
+        if o.dashes.is_empty() || self.budget.take_dashes(o.dashes.len()) {
+            return Some(o.clone());
+        }
+        push(self.warn, Warning::TooDeep);
+        Some(Outline { width: o.width, color: o.color.clone(), cap: o.cap, join: o.join, dashes: Vec::new() })
     }
 }
 

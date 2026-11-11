@@ -1682,19 +1682,19 @@ fn warped_type_note_is_translated() {
     }
 }
 
-/// The notes a CorelDRAW import adds to its warnings are translated in every complete catalog.
+/// The notes a CDR import adds to its warnings are translated in every complete catalog.
 /// They are constants, which the scan of message literals doesn't see.
 #[test]
-fn coreldraw_import_notes_are_translated() {
+fn cdr_import_notes_are_translated() {
     let notes = [
-        "CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out",
-        "CorelDRAW fountain, pattern, texture and PostScript fills were left out",
-        "colors in CorelDRAW color models VectorCraft doesn't read were opened as black",
-        "CorelDRAW library colors that the drawing stores only by number were opened as black spot colors",
-        "CorelDRAW outline arrowheads were left out",
+        "CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out",
+        "CDR fountain, pattern, texture and PostScript fills were left out",
+        "colors in CDR color models VectorCraft doesn't read were opened as black",
+        "CDR library colors that the drawing stores only by number were opened as black spot colors",
+        "CDR outline arrowheads were left out",
         "parts of the drawing nested too deeply, or past the import limits, were left out",
         "damaged parts of the drawing were left out",
-        "CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard",
+        "CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard",
     ];
     for code in COMPLETE_MESSAGES {
         let lang = Lang::from_code(code).expect("registered");

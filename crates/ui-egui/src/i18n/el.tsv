@@ -4914,17 +4914,17 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the HEIC or HEIF file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου HEIC ή HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	το αρχείο HEIC ή HEIF περιέχει είδος εικόνας που δεν είναι δυνατό να διαβαστεί
 @msg	HEIC and HEIF images can't be opened in this build	οι εικόνες HEIC και HEIF δεν μπορούν να ανοίξουν σε αυτή την έκδοση
-@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	δεν είναι δυνατό το άνοιγμα σχεδίων του CorelDRAW {version}: το VectorCraft διαβάζει τις εκδόσεις 5 έως 13
-@msg	this CorelDRAW drawing can't be read ({why})	δεν είναι δυνατή η ανάγνωση αυτού του σχεδίου CorelDRAW ({why})
-@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	δεν είναι δυνατό το άνοιγμα σχεδίων που αποθηκεύτηκαν με το CorelDRAW 14 ή νεότερο: το VectorCraft διαβάζει τις εκδόσεις 5 έως 13
-@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	παραλείφθηκαν κείμενα, bitmap, αναμείξεις, ομόκεντρα περιγράμματα, πινελιές και άλλα αντικείμενα του CorelDRAW που το VectorCraft δεν διαβάζει ακόμη
-@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	παραλείφθηκαν τα διαβαθμισμένα γεμίσματα και τα γεμίσματα μοτίβου, υφής και PostScript του CorelDRAW
-@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	τα χρώματα σε χρωματικά μοντέλα του CorelDRAW που δεν διαβάζει το VectorCraft ανοίχτηκαν ως μαύρα
-@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	τα χρώματα βιβλιοθήκης του CorelDRAW που το σχέδιο αποθηκεύει μόνο με αριθμό ανοίχτηκαν ως μαύρα πλακάτα χρώματα
-@msg	CorelDRAW outline arrowheads were left out	παραλείφθηκαν οι αιχμές βελών των γραμμών περιγράμματος του CorelDRAW
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	δεν είναι δυνατό το άνοιγμα σχεδίων του CDR {version}: το VectorCraft διαβάζει τις εκδόσεις 5 έως 13
+@msg	this CDR drawing can't be read ({why})	δεν είναι δυνατή η ανάγνωση αυτού του σχεδίου CDR ({why})
+@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	δεν είναι δυνατό το άνοιγμα σχεδίων που αποθηκεύτηκαν με το CDR 14 ή νεότερο: το VectorCraft διαβάζει τις εκδόσεις 5 έως 13
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	παραλείφθηκαν κείμενα, bitmap, αναμείξεις, ομόκεντρα περιγράμματα, πινελιές και άλλα αντικείμενα του CDR που το VectorCraft δεν διαβάζει ακόμη
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	παραλείφθηκαν τα διαβαθμισμένα γεμίσματα και τα γεμίσματα μοτίβου, υφής και PostScript του CDR
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	τα χρώματα σε χρωματικά μοντέλα του CDR που δεν διαβάζει το VectorCraft ανοίχτηκαν ως μαύρα
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	τα χρώματα βιβλιοθήκης του CDR που το σχέδιο αποθηκεύει μόνο με αριθμό ανοίχτηκαν ως μαύρα πλακάτα χρώματα
+@msg	CDR outline arrowheads were left out	παραλείφθηκαν οι αιχμές βελών των γραμμών περιγράμματος του CDR
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	παραλείφθηκαν τμήματα του σχεδίου με υπερβολικά βαθιά ένθεση ή πέρα από τα όρια εισαγωγής
 @msg	damaged parts of the drawing were left out	παραλείφθηκαν κατεστραμμένα τμήματα του σχεδίου
-@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	οι σελίδες του CorelDRAW με μήκος πάνω από 163.830 pt ανοίχτηκαν σε αυτό το μήκος και το γραφικό κοντά στα άκρα τους βρίσκεται έξω από τον πίνακα σχεδίασης
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	οι σελίδες του CDR με μήκος πάνω από 163.830 pt ανοίχτηκαν σε αυτό το μήκος και το γραφικό κοντά στα άκρα τους βρίσκεται έξω από τον πίνακα σχεδίασης
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	η εικόνα PSD είναι πολύ μεγάλη για ανάγνωση ({_1} × {_2} εικονοστοιχεία)
 @msg	zipped 32-bit PSD image data with prediction can't be read	τα συμπιεσμένα δεδομένα εικόνας PSD 32 bit με πρόβλεψη δεν διαβάζονται
 @msg	{depth}-bit PSD files in this colour mode can't be read	τα αρχεία PSD {depth} bit δεν διαβάζονται σε αυτήν τη λειτουργία χρώματος

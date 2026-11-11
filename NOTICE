@@ -35,7 +35,7 @@ based in part on the work of the Independent JPEG Group.
 WebAssembly plug-ins run in the wasmi interpreter (MIT OR Apache-2.0); its wasmparser dependency is
 under the Apache License 2.0 with the LLVM exception.
 
-The CorelDRAW reader (crates/cdr) reads the record layouts that the Kaitai Struct specification
+The .cdr reader (crates/cdr) reads the record layouts that the Kaitai Struct specification
 coreldraw_cdr.ksy (https://github.com/kaitai-io/coreldraw_cdr.ksy, MIT License) describes. No part
 of the specification is copied into the crate; its license text is in crates/cdr/LICENSE-kaitai.txt.
 

@@ -19,7 +19,8 @@ pub struct Limits {
     pub coordinates: usize,
     /// Arguments of one `loda` record.
     pub arguments: usize,
-    /// Dashes of one outline.
+    /// Dashes of all outlines together, an outline's counted again for every shape that uses it.
+    /// Past them a shape's outline is solid, with a warning.
     pub dashes: usize,
 }
 
@@ -37,7 +38,7 @@ impl Default for Limits {
             objects: 1_000_000,
             coordinates: 16_000_000,
             arguments: 64,
-            dashes: 250_000,
+            dashes: 16_000_000,
         }
     }
 
@@ -51,7 +52,7 @@ impl Default for Limits {
             objects: 1_000_000,
             coordinates: 16_000_000,
             arguments: 64,
-            dashes: 250_000,
+            dashes: 8_000_000,
         }
     }
 }
@@ -64,11 +65,12 @@ pub(crate) struct Budget {
     chunks: usize,
     objects: usize,
     coordinates: usize,
+    dashes: usize,
 }
 
 impl Budget {
     pub(crate) fn new(limits: Limits) -> Self {
-        Budget { limits, inflated: 0, chunks: 0, objects: 0, coordinates: 0 }
+        Budget { limits, inflated: 0, chunks: 0, objects: 0, coordinates: 0, dashes: 0 }
     }
 
     /// Bytes an inflate may still produce.
@@ -100,6 +102,22 @@ impl Budget {
         match self.coordinates.checked_add(n).filter(|&t| t <= self.limits.coordinates) {
             Some(t) => {
                 self.coordinates = t;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Dashes the read may still take.
+    pub(crate) fn dashes_left(&self) -> usize {
+        self.limits.dashes.saturating_sub(self.dashes)
+    }
+
+    /// `n` more dashes, or `false` past the limit (nothing is taken then).
+    pub(crate) fn take_dashes(&mut self, n: usize) -> bool {
+        match self.dashes.checked_add(n).filter(|&t| t <= self.limits.dashes) {
+            Some(t) => {
+                self.dashes = t;
                 true
             }
             None => false,

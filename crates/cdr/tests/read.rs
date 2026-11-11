@@ -435,6 +435,115 @@ fn library_colors_of_version_13_keep_their_names_and_tints() {
     assert!(look[0] < 0.01 && (look[2] - 1.0).abs() < 1e-6, "{look:?}");
 }
 
+/// One rectangle of version `v` that uses fill `fill` and outline `outline` (0: none).
+fn styled_rect(v: V, fill: u32, outline: u32) -> synth::Node {
+    let mut args = vec![(30, [v.coord(1.0), v.coord(1.0), v.coord(0.0), v.coord(0.0), v.coord(0.0), v.coord(0.0)].concat())];
+    if fill != 0 {
+        args.push((20, fill.to_le_bytes().to_vec()));
+    }
+    if outline != 0 {
+        args.push((10, outline.to_le_bytes().to_vec()));
+    }
+    synth::object(v, 1, &args, None)
+}
+
+/// A drawing of version `v` with `styles` in its `doc` list and `objects` on one page.
+fn styled_drawing(v: V, styles: Vec<synth::Node>, objects: Vec<synth::Node>) -> Vec<u8> {
+    let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", objects)]);
+    synth::riff(v.0, &[chunk(b"vrsn", v.0.to_le_bytes().to_vec()), list(b"doc ", styles), page])
+}
+
+/// An outline's dashes count toward the read's dashes for every shape that uses it: one outline
+/// of 65,535 dashes on 260 shapes would copy 17 million dashes, past the default limit.
+#[test]
+fn a_shared_dashed_outline_counts_its_dashes_for_every_shape() {
+    let v = V(1300);
+    let pen = synth::Pen { line_type: 4, width: 1.0, cap: 0, join: 0 };
+    let outl = |dashes: &[u16]| list(b"otlt", vec![chunk(b"outl", v.outline(9, pen, &synth::color(2, [0, 0, 0, 100]), dashes))]);
+    let file = styled_drawing(v, vec![outl(&[2, 1].repeat(10))], (0..20).map(|_| styled_rect(v, 0, 9)).collect());
+    let d = read(&file, Limits { dashes: 100, ..Limits::default() }).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    assert_eq!(s.len(), 20);
+    let dashed = s.iter().filter(|s| s.outline.as_ref().is_some_and(|o| o.dashes.len() == 20)).count();
+    assert_eq!(dashed, 5, "100 dashes hold five outlines of 20");
+    assert!(s.iter().all(|s| s.outline.as_ref().is_some_and(|o| o.dashes.is_empty() || o.dashes.len() == 20)));
+    assert!(d.warnings.contains(&Warning::TooDeep), "{:?}", d.warnings);
+    // An outline with more dashes than the limit is solid, not cut short.
+    let file = styled_drawing(v, vec![outl(&[2, 1])], vec![styled_rect(v, 0, 9)]);
+    let d = read(&file, Limits { dashes: 1, ..Limits::default() }).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    assert!(s[0].outline.as_ref().is_some_and(|o| o.dashes.is_empty()), "{:?}", s[0].outline);
+    assert_eq!(d.warnings, vec![Warning::TooDeep]);
+    // At the default limit.
+    let file = styled_drawing(v, vec![outl(&[1; 65_535])], (0..260).map(|_| styled_rect(v, 0, 9)).collect());
+    assert!(file.len() < 256 << 10);
+    let d = read(&file, Limits::default()).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    let total: usize = s.iter().filter_map(|s| s.outline.as_ref()).map(|o| o.dashes.len()).sum();
+    assert!(total <= Limits::default().dashes, "{total}");
+    assert!(d.warnings.contains(&Warning::TooDeep), "{:?}", d.warnings);
+}
+
+/// A library color's name is copied for every shape that uses it: a long one keeps its first 256
+/// units and a hash of the whole name.
+#[test]
+fn a_library_color_keeps_the_first_256_units_of_its_name() {
+    let v = V(1300);
+    let mut props = vec![1];
+    props.extend(12u32.to_le_bytes());
+    props.extend(synth::color(21, [255, 191, 128, 100]));
+    props.push(8);
+    let name: Vec<u8> = "N".repeat(10_000).encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+    props.extend((16 + 4 + name.len() as u32).to_le_bytes());
+    props.extend([0; 16]);
+    props.extend(10_000u32.to_le_bytes());
+    props.extend(name);
+    props.extend([0, 0, 0, 0, 0]);
+    let mut body = 1u16.to_le_bytes().to_vec();
+    body.extend(1300u32.to_le_bytes());
+    body.extend((props.len() as u32).to_le_bytes());
+    body.extend(props);
+    let mut fill = 4u32.to_le_bytes().to_vec();
+    fill.extend(1300u32.to_le_bytes());
+    fill.extend((body.len() as u32).to_le_bytes());
+    fill.extend(body);
+    let d = read(&styled_drawing(v, vec![list(b"filt", vec![chunk(b"fild", fill)])], vec![styled_rect(v, 4, 0)]), Limits::default()).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    let Some(Color::Spot { name, .. }) = &s[0].fill else { panic!("{:?}", s[0].fill) };
+    assert_eq!(name.chars().count(), 256 + 17, "{name}");
+    assert!(name.starts_with(&"N".repeat(256)), "{name}");
+    assert!(d.warnings.contains(&Warning::TooDeep), "{:?}", d.warnings);
+}
+
+/// A transform or a uniform fill's color that is there but can't be read is damage: the shape
+/// stays, without its transform or its fill, and the warnings say so.
+#[test]
+fn unreadable_transforms_and_fill_colors_are_damage() {
+    let v = V(1100);
+    let rect = [v.coord(1.0), v.coord(1.0), v.coord(0.0), v.coord(0.0), v.coord(0.0), v.coord(0.0)].concat();
+    let obj = list(b"obj ", vec![chunk(b"loda", v.loda(1, &[(30, rect)])), list(b"trfl", vec![chunk(b"trfd", vec![1, 2])])]);
+    let d = read(&styled_drawing(v, vec![], vec![obj]), Limits::default()).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    assert_eq!((s.len(), s[0].matrix), (1, vectorcraft_cdr::model::Matrix::IDENTITY));
+    assert!(d.warnings.contains(&Warning::Damaged), "trfd: {:?}", d.warnings);
+    // A uniform fill cut off in its color record, before version 13 and from it.
+    for v in [V(1100), V(1300)] {
+        let mut fill = v.fill(4, &synth::color(2, [0, 100, 0, 0]));
+        fill.truncate(fill.len() - 10);
+        let d = read(&styled_drawing(v, vec![list(b"filt", vec![chunk(b"fild", fill)])], vec![styled_rect(v, 4, 0)]), Limits::default()).unwrap();
+        let s = shapes(&d.pages[0].layers[0].objects);
+        assert_eq!(s[0].fill, None, "{}", v.0);
+        assert!(d.warnings.contains(&Warning::Damaged), "fill {}: {:?}", v.0, d.warnings);
+    }
+}
+
+/// The inflate limit may be as large as `usize` holds.
+#[test]
+fn the_largest_inflate_limit_reads_compressed_lists() {
+    let d = read(&synth::sample(1100, true), Limits { inflated: usize::MAX, ..Limits::default() }).unwrap();
+    check_shapes(&d, 1100);
+}
+
 proptest! {
     #![proptest_config(ProptestConfig { cases: 256, ..ProptestConfig::default() })]
 

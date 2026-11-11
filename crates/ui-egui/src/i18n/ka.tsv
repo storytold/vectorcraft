@@ -4627,17 +4627,17 @@ font-technology	Variable	ცვლადი
 @msg	the HEIC or HEIF file can't be read	HEIC ან HEIF ფაილის წაკითხვა შეუძლებელია
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC ან HEIF ფაილი შეიცავს გამოსახულების ტიპს, რომლის წაკითხვაც შეუძლებელია
 @msg	HEIC and HEIF images can't be opened in this build	ამ ვერსიაში HEIC და HEIF გამოსახულებების გახსნა შეუძლებელია
-@msg	CorelDRAW {version} drawings can't be opened: VectorCraft reads versions 5 to 13	CorelDRAW {version}-ის ნახაზების გახსნა შეუძლებელია: VectorCraft კითხულობს ვერსიებს 5-დან 13-მდე
-@msg	this CorelDRAW drawing can't be read ({why})	ამ CorelDRAW ნახაზის წაკითხვა შეუძლებელია ({why})
-@msg	CorelDRAW drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	CorelDRAW 14-ით ან უფრო ახალი ვერსიით შენახული ნახაზების გახსნა შეუძლებელია: VectorCraft კითხულობს ვერსიებს 5-დან 13-მდე
-@msg	CorelDRAW text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CorelDRAW-ის ტექსტები, ბიტმაპები, გადასვლები, კონტურები, ფუნჯის შტრიხები და სხვა ობიექტები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, გამოტოვებულია
-@msg	CorelDRAW fountain, pattern, texture and PostScript fills were left out	CorelDRAW-ის გრადიენტული, ნიმუშის, ტექსტურის და PostScript შევსებები გამოტოვებულია
-@msg	colors in CorelDRAW color models VectorCraft doesn't read were opened as black	CorelDRAW-ის იმ ფერის მოდელების ფერები, რომლებსაც VectorCraft ვერ კითხულობს, შავად გაიხსნა
-@msg	CorelDRAW library colors that the drawing stores only by number were opened as black spot colors	CorelDRAW-ის ბიბლიოთეკის ფერები, რომლებსაც ნახაზი მხოლოდ ნომრით ინახავს, შავ სპოტ-ფერებად გაიხსნა
-@msg	CorelDRAW outline arrowheads were left out	CorelDRAW-ის მოხაზულობების ისრისპირები გამოტოვებულია
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	CDR {version}-ის ნახაზების გახსნა შეუძლებელია: VectorCraft კითხულობს ვერსიებს 5-დან 13-მდე
+@msg	this CDR drawing can't be read ({why})	ამ CDR ნახაზის წაკითხვა შეუძლებელია ({why})
+@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	CDR 14-ით ან უფრო ახალი ვერსიით შენახული ნახაზების გახსნა შეუძლებელია: VectorCraft კითხულობს ვერსიებს 5-დან 13-მდე
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR-ის ტექსტები, ბიტმაპები, გადასვლები, კონტურები, ფუნჯის შტრიხები და სხვა ობიექტები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, გამოტოვებულია
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-ის გრადიენტული, ნიმუშის, ტექსტურის და PostScript შევსებები გამოტოვებულია
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	CDR-ის იმ ფერის მოდელების ფერები, რომლებსაც VectorCraft ვერ კითხულობს, შავად გაიხსნა
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-ის ბიბლიოთეკის ფერები, რომლებსაც ნახაზი მხოლოდ ნომრით ინახავს, შავ სპოტ-ფერებად გაიხსნა
+@msg	CDR outline arrowheads were left out	CDR-ის მოხაზულობების ისრისპირები გამოტოვებულია
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	ნახაზის ზედმეტად ღრმად ჩადგმული ან იმპორტის ლიმიტებს მიღმა არსებული ნაწილები გამოტოვებულია
 @msg	damaged parts of the drawing were left out	ნახაზის დაზიანებული ნაწილები გამოტოვებულია
-@msg	CorelDRAW pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163 830 pt-ზე გრძელი CorelDRAW-ის გვერდები ამ სიგრძით გაიხსნა და მათ კიდეებთან ახლოს მყოფი გრაფიკა სამუშაო დაფის გარეთაა
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163 830 pt-ზე გრძელი CDR-ის გვერდები ამ სიგრძით გაიხსნა და მათ კიდეებთან ახლოს მყოფი გრაფიკა სამუშაო დაფის გარეთაა
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 32-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
 @msg	{depth}-bit PSD files in this colour mode can't be read	ამ ფერის რეჟიმში {depth}-ბიტიანი PSD ფაილების წაკითხვა ვერ ხერხდება

@@ -20,6 +20,8 @@ use std::path::Path;
 const DENY: &[&str] = &[
     "adobe",
     "illustrator",
+    "coreldraw",
+    "corel",
     "photoshop",
     "acrobat",
     "indesign",
@@ -341,6 +343,9 @@ line Pantone"; }
         assert_eq!(terms_in("Adobe's app", DENY), ["adobe"]);
         assert_eq!(terms_in("an ILLUSTRATOR-style UI", DENY), ["illustrator"]);
         assert!(terms_in("illustrators illustration copyAicb aicbMode", DENY).is_empty());
+        assert_eq!(terms_in("a CorelDRAW drawing", DENY), ["coreldraw"]);
+        assert_eq!(terms_in("application/vnd.corel-draw", DENY), ["corel"]);
+        assert!(terms_in("wCorel3Dict corels", DENY).is_empty());
     }
 
     #[test]

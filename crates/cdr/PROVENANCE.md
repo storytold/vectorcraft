@@ -7,10 +7,12 @@ Sources:
 
 - **K**: the Kaitai Struct specification `coreldraw_cdr.ksy` (MIT, notice in `LICENSE-kaitai.txt`),
   https://github.com/kaitai-io/coreldraw_cdr.ksy/blob/9d8e2704b946961f5114115f1a488750a3c86ed0/coreldraw_cdr.ksy
-- **T**: TraceDraw's CDR format notes (MIT OR Apache-2.0), rows its authors mark confirmed,
+- **T**: an open-source converter's CDR format notes (MIT OR Apache-2.0), rows its authors mark
+  confirmed,
   https://github.com/tracedraw/tracedraw/blob/2ac6d02e97773e040a51be6cfb27cc424e3deeaa/docs/cdr-format.md
-- **C**: the CorelDRAW object model reference, https://community.coreldraw.com/sdk/api/draw/17
-- **P**: Photopea's CDR notes,
+- **C**: the published object model reference for the format's drawing program,
+  https://community.coreldraw.com/sdk/api/draw/17
+- **P**: a web editor's published CDR notes,
   https://github.com/photopea/CDR-specification/blob/f91b3c7e8c812b28473f6399e95a624a72a3d6b8/README.md
 
 Status: `public-spec` (K or C), `public-notes` (a confirmed row of T, a row of T's table of the
@@ -18,9 +20,9 @@ layouts its writer takes from sample files, or P), `unconfirmed` (a row T marks 
 so it can be checked against a file).
 
 T and P are themselves notes taken from files, not specifications. Drawings of versions 7 to 13
-that TraceDraw 0.44.0 (`tracedraw-cli convert`, the writer of T's authors) wrote read back with the
-pages, layers, groups, shapes, colors, outline widths, caps, joins and dashes it wrote; those files
-are not committed.
+that the converter T's authors publish (release 0.44.0) wrote read back with the pages, layers,
+groups, shapes, colors, outline widths, caps, joins and dashes it wrote; those files are not
+committed.
 
 | Id | What the code relies on | Source | Status |
 |---|---|---|---|
