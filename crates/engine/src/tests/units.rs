@@ -37,6 +37,19 @@ fn preferences_general_sets_the_open_documents_units_as_one_undo_step() {
 }
 
 #[test]
+fn preferences_general_with_document_units_false_sets_only_the_preference() {
+    let mut s = session();
+    s.execute("document.setUnits", &json!({"units": "Millimeters"})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("prefs.set", &json!({"values": {"unitsGeneral": "inches"}, "documentUnits": false})).unwrap();
+    assert_eq!((units(&s), s.prefs.units_general.as_str()), (Unit::Millimeters, "inches"));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    let e = s.execute("prefs.set", &json!({"key": "unitsGeneral", "value": "points", "documentUnits": "no"})).unwrap_err();
+    assert!(e.to_string().contains("`documentUnits` must be true or false"), "{e}");
+    assert_eq!((units(&s), s.prefs.units_general.as_str()), (Unit::Millimeters, "inches"), "nothing changes on error");
+}
+
+#[test]
 fn new_documents_start_in_the_preference_and_document_setup_only_changes_the_document() {
     let mut s = Session::new();
     assert_eq!(s.general_unit(), Unit::Points, "no document: the preference");
