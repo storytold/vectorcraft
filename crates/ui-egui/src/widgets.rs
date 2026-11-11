@@ -45,13 +45,13 @@ pub use drag::{
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
-#[cfg(test)]
-pub(crate) use dropdowns::menu_floor;
 pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, field_focused_in, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
     panel_scroll, popover, set_menu_floor, strip_scroll,
 };
+#[cfg(test)]
+pub(crate) use dropdowns::{menu_floor, menu_room_either};
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
 pub(crate) use labels::{label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
@@ -656,6 +656,27 @@ mod menu_room_tests {
     #[test]
     fn a_window_shorter_than_the_minimum_limits_the_menu() {
         assert_eq!(menu_room(100.0, 24.0, 92.0), 92.0);
+    }
+
+    /// A popup opens below its button while that leaves the minimum height, even when the list
+    /// then scrolls.
+    #[test]
+    fn a_menu_opens_below_while_that_side_has_the_minimum() {
+        assert_eq!(menu_room_either(300.0, 800.0, 980.0), 288.0);
+        assert_eq!(menu_room_either(132.0, 800.0, 980.0), 120.0);
+    }
+
+    /// With less than the minimum below, the list takes the room above, up to the window's height.
+    #[test]
+    fn a_menu_opens_above_when_below_is_too_short() {
+        assert_eq!(menu_room_either(40.0, 500.0, 980.0), 488.0);
+        assert_eq!(menu_room_either(40.0, 500.0, 300.0), 300.0);
+    }
+
+    /// With little room on either side, the list keeps the minimum height.
+    #[test]
+    fn a_menu_keeps_the_minimum_with_little_room_either_side() {
+        assert_eq!(menu_room_either(40.0, 60.0, 980.0), 120.0);
     }
 
     /// The floor one window records does not reach a menu in another window of the same context.
