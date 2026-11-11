@@ -397,6 +397,19 @@ fn a_function_that_returns_from_a_finally_block_does_not_keep_its_code() {
 }
 
 #[test]
+fn a_return_looks_only_at_the_finally_sites_of_its_own_frame() {
+    // 200 finally blocks run at once, each for its own exception, and the innermost calls a
+    // function 1,000 times. Each return looks at the last saved site only, not at all 200.
+    let src = "function g() { return 1; }\n\
+               function f(n) { try { throw n; } finally { if (n) { f(n - 1); } else { for (var i = 0; i < 1000; i++) g(); } } }\n\
+               try { f(199); } catch (e) { e; }";
+    crate::interp::SITE_CHECKS.with(|c| c.set(0));
+    assert_eq!(small(Limits::default()).run(src), Ok(JsValue::Number(0.0)));
+    let checks = crate::interp::SITE_CHECKS.with(std::cell::Cell::get);
+    assert!(checks < 10_000, "{checks} saved sites looked at");
+}
+
+#[test]
 fn for_in_names_take_fuel_and_heap_under_later_limits() {
     // The first run, under the default limits, builds an object with many properties. Later runs
     // with smaller limits list its names only within their own fuel and heap.
