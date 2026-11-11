@@ -280,6 +280,37 @@ fn metrics_pair_step_preserves_the_drawn_auto_position() {
     assert!((moved - s.prefs.tracking_increment * 0.1).abs() < 0.01, "V moves by one kerning increment: {moved}");
 }
 
+/// At 50% Horizontal Scale the font's pair reads as the same thousandths of an em as at 100%:
+/// kerning is measured in the em as the scale draws it (`vectorcraft_text::spacing_scale`), so the
+/// value read keeps V where the font's kerning draws it, and a step moves V half as far as at 100%.
+#[test]
+fn horizontally_scaled_pair_reads_as_the_kerning_that_keeps_it() {
+    use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(pair_kerning_font().unwrap());
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "AV", "size": 100, "font": PAIR_KERNING_FAMILY})).unwrap()["id"].as_u64().unwrap(),
+    );
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 2, "hScale": 50})).unwrap();
+    let before = obj(&s, id);
+    assert_eq!(before.runs[0].style.h_scale, 50.0);
+    let auto = vectorcraft_text::layout(db, &before);
+    let drawn_v = |layout: &vectorcraft_text::TextLayout| layout.glyphs.iter().find(|g| g.byte == 1).unwrap().xf.as_coeffs()[4];
+    let read = crate::cmd::effective_kerning(db, &before, &auto, 0, 1);
+    assert!((read + 160.0).abs() < 0.01, "the font's -160/1000 em: {read}");
+    let mut same = before.clone();
+    vectorcraft_text::edit::style_range(&mut same.runs, 0, 1, |st| st.kerning = Some(read));
+    assert!((drawn_v(&vectorcraft_text::layout(db, &same)) - drawn_v(&auto)).abs() < 0.01);
+
+    s.execute("type.step", &json!({"id": id.0, "start": 1, "end": 1, "attribute": "kerning", "by": 1})).unwrap();
+    let after = obj(&s, id);
+    assert!((after.runs[0].style.kerning.unwrap() + 160.0 - s.prefs.tracking_increment).abs() < 0.01);
+    let moved = drawn_v(&vectorcraft_text::layout(db, &after)) - drawn_v(&auto);
+    assert!((moved - s.prefs.tracking_increment * 0.05).abs() < 0.01, "V moves by half a kerning increment at 100%: {moved}");
+}
+
 #[test]
 fn effective_auto_kerning_at_area_line_end_survives_unkerned_wrap() {
     use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};

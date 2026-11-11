@@ -176,6 +176,24 @@ fn combine_joins_only_pieces_on_one_line_turned_alike() {
     assert!(other(s.execute("addon.cleanup.combineText", &json!({}))).contains("combine"));
 }
 
+/// Pieces in horizontally scaled type: the tracking that puts each back where it was is measured in
+/// the em as the Horizontal Scale draws it (`vectorcraft_text::spacing_scale`), as layout spaces it.
+#[test]
+fn combine_puts_horizontally_scaled_pieces_back_where_they_were() {
+    let mut s = session();
+    let a = text(&mut s, json!({"x": 50, "y": 100, "text": "Left", "size": 20}));
+    let b = text(&mut s, json!({"x": 160, "y": 100, "text": "Right", "size": 20}));
+    for id in [a, b] {
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "hScale": 200})).unwrap();
+    }
+    let was = glyphs(&s, &[a, b]);
+    select(&mut s, &[a, b]);
+    let r = s.execute("addon.cleanup.combineText", &json!({})).unwrap();
+    assert_eq!(ids(&r), [a]);
+    assert_eq!(obj(&s, a).plain_text(), "Left Right");
+    assert_same_places(&was, &glyphs(&s, &[a]));
+}
+
 /// Join Point Text makes one object of stacked one-line pieces: lines top to bottom as paragraphs,
 /// pieces on a line left to right, each line's baseline where it was (its leading is the distance
 /// from the line above), in one undo step. A piece turned unlike the top-left one stays.
