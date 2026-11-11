@@ -99,7 +99,12 @@ reply on the reference app's bug forum says that strokes "will be treated as out
 The rest is our reading:
 
 - When the fill and every stroke are opaque with Normal blending, the faces of all the solids are drawn in one
-  back-to-front order, and the caps turned toward the viewer are drawn last, the lower item's first. Otherwise
+  back-to-front order, and the caps turned toward the viewer are drawn last, the lower item's first. With caps on,
+  each side face of the fill's solid that is turned toward the viewer is drawn before every face of the same
+  shape's strokes, turned toward the viewer, whose bounds overlap it, so the stroke's walls cover the fill's walls
+  at concave corners. This applies to strokes on closed paths without dashes, a width profile or a brush, painted
+  with a solid color or a gradient without transparent stops; with other strokes, and without caps, the faces keep
+  their depth order. Otherwise
   each solid is drawn on its own with its opacity and blending, the lower item's first. With a light that is not
   white, each solid is also drawn on its own when one of them is a puffed, shaded Inflate surface in a solid color
   (drawn as one composite) or is painted with a gradient that has transparent stops (drawn with an opacity mask).
