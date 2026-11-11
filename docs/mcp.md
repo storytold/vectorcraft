@@ -7366,8 +7366,8 @@ and the stages with a part of their input too small for the drawing the refresh 
 timed out, failed or have no plug-in. `id` names one object in place of
 `ids`, and an entry that is not an object id of the document is an error. Each document has its own budget and its own deferred stages. Exports, Expand
 Appearance and commands run every stage under the per-call limit, so an export never leaves out a stage that was only
-deferred for time, and the canvas then draws the result. The web build has no clock for the budget: there the first
-view runs no plug-in effect, and Refresh Deferred Effects runs them. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
+deferred for time, and the canvas then draws the result. The web build measures the budget and the per-call
+limit with the page's `performance.now()`. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
 `document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
 that no built-in format has. An importer adds a read-only file format `plugin.<id>` (listed by `document.formats`
 with `read: true`, and `openExtensions` holds the extensions File › Open opens with it, without those a built-in format reads or that File › Open installs, imports or loads as something else, such as `.wasm` or `.ase`): `document.open {path | name, dataBase64, importer?:
