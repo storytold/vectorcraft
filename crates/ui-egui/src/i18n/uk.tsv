@@ -256,6 +256,7 @@ font-technology	Variable	Варіативні
 	Asset Export Settings	Параметри експорту ресурсів
 	Assets	Ресурси
 	Assign	Призначити
+	Assign Profile	Призначити профіль
 	Assign Profile…	Призначити профіль…
 	Assign:	Призначити:
 	Attach to Active Plane	Прикріпити до активної площини
@@ -694,6 +695,15 @@ font-technology	Variable	Варіативні
 	Created:	Створено:
 	Crop	Обрізати
 	Crop Image	Обрізати зображення
+	Image Tools	Інструменти зображення
+	Remove Background…	Видалити фон…
+	Remove Background	Видалити фон
+	Background	Фон
+	Edge Color	Колір краю
+	Picked Colors	Вибрані кольори
+	Corner Color	Колір кутів
+	Contiguous	Суміжні
+	Each Channel	Кожен канал
 	Edit Path	Редагувати контур
 	Mask	Маска
 	Crop Marks	Мітки обрізання
@@ -813,6 +823,14 @@ font-technology	Variable	Варіативні
 	Disable Auto Add/Delete	Вимкнути авто-додавання/видалення
 	Disable Opacity Mask	Вимкнути маску непрозорості
 	Discard	Відкинути
+	Preserve	Зберігати
+	TIFF (Black & White)	TIFF (чорно-білий)
+	TIFF (8-bit Color)	TIFF (8-бітний колір)
+	High Resolution	Висока роздільна здатність
+	Medium Resolution	Середня роздільна здатність
+	Low Resolution	Низька роздільна здатність
+	Language Level 2	Рівень мови 2
+	Language Level 3	Рівень мови 3
 	Discard Empty Type	Видалити порожній текст
 	Discard Recovered Documents	Відкинути відновлені документи
 	Discard White Overprint in Output	Скасувати накладення білого під час виведення
@@ -2358,6 +2376,9 @@ file-filter	Templates	Шаблони
 	Optical	Оптичний
 	Optical Margin Alignment	Оптичне вирівнювання полів
 	Dynamic Text	Динамічний текст
+	Dynamic Text Presets	Набори параметрів динамічного тексту
+	Arch	Арка
+@msg	select point type or type on a path	виберіть точковий текст або текст за контуром
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст за контуром у пов’язаному тексті не може використовувати динамічний текст: {frames}
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано
@@ -2365,6 +2386,7 @@ file-filter	Templates	Шаблони
 	Options for Selection…	Параметри виділення…
 	Options:	Параметри:
 	Options…	Параметри…
+	Organic Fades	Органічні згасання
 	or more spaces with a tab	або більше прогалин на табуляцію
 	Order:	Порядок:
 	Ordinals	Порядкові числівники
@@ -2558,6 +2580,7 @@ diagnostics	ui	інтерфейс
 	Presets:	Набори:
 	Press 	Натисніть 
 	Preview	Перегляд
+	Preview:	Перегляд:
 	Preview All Layers	Переглянути всі шари
 	Preview in Browser	Переглянути у браузері
 	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
@@ -2639,6 +2662,7 @@ digits	Malayalam	Малаялам
 	Radial Glows	Радіальні світіння
 	Radial Gradient	Радіальний градієнт
 	Conic Gradient	Конічний градієнт
+	Diamond Gradient	Ромбоподібний градієнт
 	Radius 1	Радіус 1
 	Radius 2	Радіус 2
 	Radius1	Радіус1
@@ -3196,6 +3220,15 @@ digits	Malayalam	Малаялам
 	Stun Pulse	Оглушення
 	Stealth Fade	Невидимість
 	Shield Buff	Щит
+	Textures	Текстури
+	Fine Grain	Дрібне зерно
+	Canvas Weave	Полотняне плетіння
+	Burlap Sack	Мішковина
+	Cracked Glaze	Потріскана глазур
+	Mosaic Floor	Мозаїчна підлога
+	Quilted Squares	Стьобані квадрати
+	Leaded Glass	Вітражне скло
+	Damp Paper	Вологий папір
 	Shape	Фігура
 	Shape Builder	Створення фігур
 	Shape Builder Regions	Області створення фігур
@@ -3564,6 +3597,8 @@ effect	Points	Точки
 	Scale at Center	Масштабувати від центру
 	Up/Down:	Вгору/вниз:
 	Left/Right:	Ліворуч/праворуч:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko вгору/вниз
+	Tate-chu-yoko Left/Right	Tate-chu-yoko ліворуч/праворуч
 	Temperature	Температура
 	Temperature/Tint…	Температура/відтінок…
 	Template	Шаблон
@@ -3900,6 +3935,7 @@ effect	Points	Точки
 	Windows	Windows
 	Working CMYK	Робочий CMYK
 	Working CMYK (don't tag)	Робочий CMYK (без позначки)
+	Working RGB (don't tag)	Робочий RGB (без позначки)
 	Workspace	Робоче середовище
 	Workspace {i}	Робоче середовище {i}
 	Wrinkle Tool	Інструмент «Зморшки»
@@ -4257,6 +4293,7 @@ axis	Both	Обидві
 @msg	`{key}` must be a number, not {v}	`{key}` має бути числом, а не {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} має бути часом Unix у секундах (цілим числом) або null
 @msg	`{key}` must be a string	`{key}` має бути рядком
+@msg	`{key}` must be a profile name or null	`{key}` має бути назвою профілю або null
 @msg	`{key}` must be a whole number	`{key}` має бути цілим числом
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` має бути цілим числом від {min} до {max} (отримано {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` має бути від {min} до {max} (отримано {x})
@@ -4409,6 +4446,7 @@ axis	Both	Обидві
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): її записано з UserUnit {unit}, тому застосунки, які ігнорують UserUnit, показують її в стільки ж разів меншою
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): сторінки {label} записуються без UserUnit, у пунктах, і застосунки, що дотримуються обмеження, обрізають сторінку до 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	у PDF 1.5 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб зберегти розмір: файл записується як PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	у PDF 1.4 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб вкластися в межу сторінки PDF/A-2 у 14 400 одиниць: файл записується як PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	сторінка монтажної області {n} має розмір {size} і задовга та завузька для сторін сторінки PDF від 3 до 14 400 одиниць: її записано з UserUnit {unit}, що тримає коротку сторону не менше 3 одиниць, а застосунки, які дотримуються межі, обрізають довгу сторону до 14 400 одиниць
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	файли {label} вміщують дійсні числа до {max}, а сторінці монтажної області {n} завдовжки {side} pt потрібні більші: виберіть PDF 1.6 або новіший без стандарту PDF/X чи меншу монтажну область
 @msg	invalid image data for `{0}`	неприпустимі дані зображення для `{0}`
@@ -4557,6 +4595,7 @@ axis	Both	Обидві
 @msg	not a stored central record	не є збереженим центральним записом
 @msg	not a valid plug-in module: {0}	не є допустимим модулем: {0}
 @msg	not an EMF or WMF file	не є файлом EMF або WMF
+@msg	not an HP-GL file	не є файлом HP-GL
 @msg	not found	не знайдено
 @msg	not in pattern editing mode	не в режимі редагування візерунка
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка
@@ -4636,6 +4675,14 @@ axis	Both	Обидві
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	це трасування створило б більше {max} опорних точок, що більше, ніж документ може плавно відобразити: збільште «Шум», зменште «Контури» або «Кольори» або виберіть набір з меншою точністю
 @msg	select an envelope	виділіть оболонку
 @msg	select an image	виділіть зображення
+@msg	`background` must be edges, corners or colors	`background` має бути edges, corners або colors
+@msg	`match` must be distance or channels	`match` має бути distance або channels
+@msg	`{key}` must be from 0 to 100	`{key}` має бути від 0 до 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` має містити від 1 до 16 кольорів, кожен у шістнадцятковому вигляді (#rrggbb або #rgb) або як black, white, red, green чи blue
+@msg	the linked image shows its preview: embed or relink it first	пов’язане зображення показує попередній перегляд: спочатку вбудуйте його або відновіть зв’язок
+@msg	a CMYK image has no transparency to set	зображення CMYK не має прозорості, яку можна задати
+@msg	every pixel matches the background: no image would be left	кожен піксель збігається з фоном: від зображення нічого не залишилося б
+@msg	an image of {w} × {h} pixels is too large to change	зображення розміром {w} × {h} пікселів завелике для зміни
 @msg	select an object in perspective	виділіть об’єкт у перспективі
 @msg	select artwork (or a colour group) to recolor	виділіть малюнок (або колірну групу) для перефарбовування
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перефарбовування завершено; без змін: {locked} і {hidden}
@@ -4742,7 +4789,7 @@ axis	Both	Обидві
 @msg	unknown format	невідомий формат
 @msg	unknown format `{f}` (Save writes {_1})	невідомий формат `{f}` (збереження записує {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	невідомий режим довільної форми `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	невідоме виділення `{h}`
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
@@ -5390,7 +5437,7 @@ lighting	Light	Світло
 @msg	span must be "object" or "selection", got {v}	span має бути "object" або "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" розміщує `gradient`, а не зразок
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" розміщує градієнт: вкажіть `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний або конічний градієнт, а не довільний
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний, конічний або ромбоподібний градієнт, а не довільний
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам розміщує градієнт: приберіть `start` і `end` (вони вже задають його в координатах документа)
 	Make Image Dynamic	Зробити зображення динамічним
 	Import Data Sets…	Імпортувати набори даних…
@@ -6415,6 +6462,11 @@ breakText	Glyphs	Гліфи
 @msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
 @msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копіювати відомості для усунення несправностей
+@msg	Copied the troubleshooting info	Відомості для усунення несправностей скопійовано
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Останній сеанс VectorCraft перестав відповідати перед закриттям. Довідка › Копіювати відомості для усунення несправностей копіює подробиці для звіту про помилку
+
 # Safe Mode
 	Safe Mode…	Безпечний режим…
 	Safe Mode	Безпечний режим
@@ -6435,6 +6487,7 @@ breakText	Glyphs	Гліфи
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
+	Align New Objects to Pixel Grid	Вирівнювати нові об’єкти за піксельною сіткою
 	Not Aligned to Pixel Grid	Не вирівняні за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
 @msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`

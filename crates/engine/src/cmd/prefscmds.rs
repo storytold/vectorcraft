@@ -687,6 +687,10 @@ impl Session {
         for e in self.prefs.keep_folders(&mut p) {
             log::warn!("{e}");
         }
+        // Saved gradient presets get names no built-in preset or other saved one has.
+        for (old, new) in super::gradpresets::rename_clashing_presets(&mut p.gradient_presets) {
+            log::warn!("saved gradient preset {old} is listed as {new}: another preset has its name");
+        }
         // The edit the active tool computes on another thread is applied first (the Preferences
         // dialog applies its settings here, outside a command). A failure to apply it was the
         // edit's own, and the preferences apply all the same.

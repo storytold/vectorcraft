@@ -106,6 +106,7 @@
 	PDF Presets…	PDF-forudindstillinger…
 	Perspective Grid Presets…	Forudindstillinger for perspektivgitter…
 	Color Settings…	Farveindstillinger…
+	Assign Profile	Tildel profil
 	Assign Profile…	Tildel profil…
 	Keyboard Shortcuts…	Tastaturgenveje…
 	Import Shortcut Set	Importér genvejssæt
@@ -189,6 +190,15 @@
 	Expand…	Udvid…
 	Expand Appearance	Udvid udseende
 	Crop Image	Beskær billede
+	Image Tools	Billedværktøjer
+	Remove Background…	Fjern baggrund…
+	Remove Background	Fjern baggrund
+	Background	Baggrund
+	Edge Color	Kantfarve
+	Picked Colors	Valgte farver
+	Corner Color	Hjørnefarve
+	Contiguous	Sammenhængende
+	Each Channel	Hver kanal
 	Edit Path	Redigér kurve
 	Mask	Maskér
 	Rasterize…	Rasterisér…
@@ -368,6 +378,8 @@
 	Create Outlines	Opret konturer
 	Optical Margin Alignment	Optisk marginjustering
 	Dynamic Text	Dynamisk tekst
+	Dynamic Text Presets	Forudindstillinger for dynamisk tekst
+	Arch	Hvælving
 	Fill with Placeholder Text	Udfyld med pladsholdertekst
 	Insert Inline Symbol	Indsæt indlejret symbol
 	Show Hidden Characters	Vis skjulte tegn
@@ -508,6 +520,7 @@
 	Gaussian Blur…	Gaussisk sløring…
 	View	Vis
 	Preview	Forhåndsvisning
+	Preview:	Forhåndsvisning:
 	Overprint Preview	Overprint-forhåndsvisning
 	Pixel Preview	Pixel-forhåndsvisning
 	Trim View	Beskåret visning
@@ -730,6 +743,15 @@
 	Stun Pulse	Bedøvelse
 	Stealth Fade	Snige
 	Shield Buff	Skjold
+	Textures	Teksturer
+	Fine Grain	Fin kornethed
+	Canvas Weave	Lærredsvævning
+	Burlap Sack	Jutesæk
+	Cracked Glaze	Krakeleret glasur
+	Mosaic Floor	Mosaikgulv
+	Quilted Squares	Quiltede firkanter
+	Leaded Glass	Blyindfattet glas
+	Damp Paper	Fugtigt papir
 	Outlines and Rules	Konturer og linjer
 	Hand-Drawn	Håndtegnet
 	Gradient Finishes	Gradientfinish
@@ -751,6 +773,7 @@
 	Spectrum Gradients	Spektrumgradienter
 	Sky Gradients	Himmelgradienter
 	Neutral Gradients	Neutrale gradienter
+	Organic Fades	Organiske toninger
 	Duotone Gradients	Duotonegradienter
 	Radial Glows	Radiale gløder
 	Save Swatch Library…	Gem bibliotek med farveprøver…
@@ -1499,6 +1522,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Skalér fra midten
 	Up/Down:	Op/ned:
 	Left/Right:	Venstre/højre:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko op/ned
+	Tate-chu-yoko Left/Right	Tate-chu-yoko venstre/højre
 	Underline	Understreget
 	Vertical Scale %	Lodret skalering %
 	Axis	Akse
@@ -1602,6 +1627,7 @@ digits	Malayalam	Malayalam
 	Points: clicks add free points	Punkter: klik tilføjer frie punkter
 	Radial Gradient	Radial gradient
 	Conic Gradient	Konisk gradient
+	Diamond Gradient	Diamantgradient
 	Reset to White, Black	Nulstil til hvid, sort
 	Reverse Gradient	Omvend gradient
 	Save to Swatches	Gem i farveprøver
@@ -1868,6 +1894,7 @@ digits	Malayalam	Malayalam
 	Simulate Paper	Simulér papir
 	Use Black Point Compensation	Brug sortpunktskompensation
 	Working CMYK (don't tag)	Arbejds-CMYK (mærk ikke)
+	Working RGB (don't tag)	Arbejds-RGB (mærk ikke)
 	{name} (spot)	{name} (spotfarve)
 	Add to Profiles…	Tilføj til profiler…
 	Align Stroke to Center	Justér kontur til midten
@@ -4466,6 +4493,7 @@ imageTrace	Outline	Kontur
 @msg	not a stored central record	ikke en gemt central post
 @msg	not a valid plug-in module: {0}	ikke et gyldigt plug-in-modul: {0}
 @msg	not an EMF or WMF file	ikke en EMF- eller WMF-fil
+@msg	not an HP-GL file	ikke en HP-GL-fil
 @msg	not found	ikke fundet
 @msg	not in pattern editing mode	ikke i mønsterredigeringstilstand
 @msg	finish editing the pattern first	afslut først redigeringen af mønsteret
@@ -4633,7 +4661,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	ukendt format
 @msg	unknown format `{f}` (Save writes {_1})	ukendt format `{f}` (Gem skriver {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	ukendt freeform-tilstand `{m}` (punkter, linjer)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	ukendt gradienttype `{k}` (lineær, radial, konisk, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ukendt gradienttype `{k}` (lineær, radial, konisk, diamant, freeform)
 @msg	unknown highlight `{h}`	ukendt fremhævning `{h}`
 @msg	unknown option `{path}.{k}`	ukendt indstilling `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (bevar, simulér eller forkast)
@@ -5397,7 +5425,7 @@ mark-style	Japanese	Japansk
 @msg	span must be "object" or "selection", got {v}	span skal være "object" eller "selection", fik {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerer en `gradient`, ikke en farveprøve
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerer en overgang: angiv `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" placerer en lineær, radial eller konisk overgang, ikke en fri
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" placerer en lineær, radial, konisk eller diamantformet overgang, ikke en fri
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerer overgangen selv: udelad `start` og `end` (de placerer den allerede i dokumentkoordinater)
 	Make Image Dynamic	Gør billede dynamisk
 	Import Data Sets…	Importér datasæt…
@@ -6549,6 +6577,11 @@ breakText	Glyphs	Glyffer
 	No importer plug-ins installed	Ingen import-plug-ins installeret
 	Read files you open in its format and make documents from them	Læse filer, du åbner i dens format, og lave dokumenter ud fra dem
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiér fejlfindingsoplysninger
+@msg	Copied the troubleshooting info	Kopierede fejlfindingsoplysningerne
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Den seneste VectorCraft-session holdt op med at svare, før den blev lukket. Hjælp › Kopiér fejlfindingsoplysninger kopierer detaljerne til en fejlrapport
+
 # Safe Mode
 	Safe Mode…	Sikker tilstand…
 	Safe Mode	Sikker tilstand
@@ -6569,6 +6602,7 @@ breakText	Glyphs	Glyffer
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Juster efter pixelgitter
+	Align New Objects to Pixel Grid	Juster nye objekter efter pixelgitter
 	Not Aligned to Pixel Grid	Ikke justeret efter pixelgitter
 @msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`
 	Edit Custom Dictionary	Redigér egen ordliste

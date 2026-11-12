@@ -247,6 +247,7 @@ font-technology	Variable	Değişken
 	Asset Export Settings	Varlık Dışa Aktarma Ayarları
 	Assets	Varlıklar
 	Assign	Ata
+	Assign Profile	Profil Ata
 	Assign Profile…	Profil Ata…
 	Assign:	Ata:
 	Attach to Active Plane	Etkin Düzlem'e Ekle
@@ -680,6 +681,15 @@ font-technology	Variable	Değişken
 	Created:	Oluşturuldu:
 	Crop	Kırpma
 	Crop Image	Resmi Kırp
+	Image Tools	Resim Araçları
+	Remove Background…	Arka Planı Kaldır…
+	Remove Background	Arka Planı Kaldır
+	Background	Arka Plan
+	Edge Color	Kenar Rengi
+	Picked Colors	Seçilen Renkler
+	Corner Color	Köşe Rengi
+	Contiguous	Bitişik
+	Each Channel	Her Kanal
 	Mask	Maske
 	Crop Marks	Kırpma İşaretleri
 	Crop To	Kırpma Hedefi
@@ -2147,6 +2157,9 @@ shape	Open	Açık
 	Optical	Optik
 	Optical Margin Alignment	Optik Kenar Boşluğu Hizalaması
 	Dynamic Text	Dinamik Metin
+	Dynamic Text Presets	Dinamik Metin Hazır Ayarları
+	Arch	Kemer
+@msg	select point type or type on a path	nokta metni veya yol üzerindeki yazıyı seçin
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	zincirli metindeki yol üzerindeki yazı dinamik metin kullanamaz: {frames}
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
@@ -2154,6 +2167,7 @@ shape	Open	Açık
 	Options for Selection…	Seçim Seçenekleri…
 	Options:	Seçenekler:
 	Options…	Seçenekler…
+	Organic Fades	Organik Solmalar
 	or more spaces with a tab	veya sekmeli daha fazla alan
 	Order:	Sipariş:
 	Ordinals	Sıra Sayıları
@@ -2344,6 +2358,7 @@ shape	Open	Açık
 	Presets:	Ön ayarlar:
 	Press 	Basın 
 	Preview	Önizleme
+	Preview:	Önizleme:
 	Preview All Layers	Tüm Katmanları Önizle
 	Preview in Browser	Tarayıcıda Önizleme
 	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
@@ -2422,6 +2437,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Radyal Parıltılar
 	Radial Gradient	Radyal Gradyan
 	Conic Gradient	Konik Gradyan
+	Diamond Gradient	Elmas Gradyan
 	Radius 1	Yarıçap 1
 	Radius 2	Yarıçap 2
 	Radius1	Yarıçap1
@@ -2995,6 +3011,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Sersemletme
 	Stealth Fade	Gizlilik
 	Shield Buff	Kalkan
+	Textures	Dokular
+	Fine Grain	İnce Gren
+	Canvas Weave	Kanvas Dokuma
+	Burlap Sack	Çuval Bezi
+	Cracked Glaze	Çatlak Sır
+	Mosaic Floor	Mozaik Zemin
+	Quilted Squares	Kapitone Kareler
+	Leaded Glass	Kurşunlu Cam
+	Damp Paper	Nemli Kâğıt
 	Shape	Şekil
 	Shape Builder	Şekil Oluşturucu
 	Shape Builder Regions	Şekil Oluşturucu Bölgeleri
@@ -3347,6 +3372,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Merkezden Ölçekle
 	Up/Down:	Yukarı/Aşağı:
 	Left/Right:	Sol/Sağ:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko Yukarı/Aşağı
+	Tate-chu-yoko Left/Right	Tate-chu-yoko Sol/Sağ
 	Temperature	Sıcaklık
 	Temperature/Tint…	Sıcaklık/Renk Tonu…
 	Template	Şablon
@@ -3676,6 +3703,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMYK'de çalışıyor
 	Working CMYK (don't tag)	CMYK çalışıyor (etiketlemeyin)
+	Working RGB (don't tag)	Çalışan RGB (etiketlemeyin)
 	Workspace	Çalışma Alanı
 	Workspace {i}	Çalışma Alanı {i}
 	Wrinkle Tool	Kırışıklık Aracı
@@ -4017,6 +4045,7 @@ axis	Both	Her İkisi
 @msg	`{key}` must be a #rrggbb colour	`{key}` bir #rrggbb rengi olmalıdır
 @msg	`{key}` must be a number	`{key}` bir sayı olmalıdır
 @msg	`{key}` must be a string	`{key}` bir dize olmalıdır
+@msg	`{key}` must be a profile name or null	`{key}` bir profil adı ya da null olmalıdır
 @msg	`{key}` must be a whole number	`{key}` bir tam sayı olmalıdır
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında bir tam sayı olmalıdır ({x}'yi aldı)
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında olmalıdır ({x}'yi aldı)
@@ -4145,6 +4174,7 @@ axis	Both	Her İkisi
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 14.400 pt (200 in) sayfa sınırından uzun: {unit} UserUnit değeriyle yazılır, bu yüzden UserUnit'i yok sayan uygulamalar onu o kadar kat küçük gösterir
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 14.400 pt (200 in) sayfa sınırından uzun: {label} sayfaları UserUnit olmadan, punto cinsinden yazılır ve sınıra uyan uygulamalar sayfayı 200 in'de keser
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5'te, 14.400 pt (200 in) uzunluğunu aşan bir sayfanın boyutunu koruması için gereken UserUnit yoktur: dosya PDF 1.6 olarak yazılır
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4'te, 14.400 pt (200 in) uzunluğunu aşan bir sayfanın PDF/A-2'nin 14.400 birimlik sayfa sınırı içinde kalması için gereken UserUnit yoktur: dosya PDF 1.6 olarak yazılır
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 3 ile 14.400 birim arasındaki sayfa kenarları için fazla uzun ve dar: kısa kenarı en az 3 birimde tutan {unit} UserUnit değeriyle yazılır ve sınıra uyan uygulamalar uzun kenarı 14.400 birimde keser
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} dosyaları en fazla {max} değerinde gerçek sayı tutar ve {n} çalışma yüzeyinin {side} pt uzunluğundaki sayfası daha büyüklerini gerektiriyor: PDF/X standardı olmadan PDF 1.6 veya sonrasını ya da daha küçük bir çalışma yüzeyi seçin
 @msg	invalid image data for `{0}`	`{0}` için geçersiz resim verileri
@@ -4288,6 +4318,7 @@ axis	Both	Her İkisi
 @msg	not a stored central record	saklanan merkezi bir kayıt değil
 @msg	not a valid plug-in module: {0}	geçerli bir eklenti modülü değil: {0}
 @msg	not an EMF or WMF file	EMF veya WMF dosyası değil
+@msg	not an HP-GL file	HP-GL dosyası değil
 @msg	not an RTF file: it doesn't start with {\\rtf	bir RTF dosyası değil: {\\rtf ile başlamıyor
 @msg	not found	bulunamadı
 @msg	not in pattern editing mode	desen düzenleme modunda değil
@@ -4359,6 +4390,14 @@ axis	Both	Her İkisi
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	bu iz, {max} bağlantı noktalarından daha fazlasını, yani belgenin düzgün bir şekilde gösterebileceğinden daha fazlasını oluşturur: Gürültüyü artırın, Yolları veya Renkleri düşürün veya aslına uygunluğu daha düşük bir ön ayar seçin
 @msg	select an envelope	bir zarf seç
 @msg	select an image	bir resim seç
+@msg	`background` must be edges, corners or colors	`background` edges, corners veya colors olmalıdır
+@msg	`match` must be distance or channels	`match` distance veya channels olmalıdır
+@msg	`{key}` must be from 0 to 100	`{key}` 0 ile 100 arasında olmalıdır
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors`, her biri onaltılık (#rrggbb veya #rgb) ya da black, white, red, green veya blue olarak yazılmış 1 ile 16 arasında renk içermelidir
+@msg	the linked image shows its preview: embed or relink it first	bağlantılı resim önizlemesini gösteriyor: önce gömün veya yeniden bağlayın
+@msg	a CMYK image has no transparency to set	CMYK görüntüsünde ayarlanacak saydamlık yok
+@msg	every pixel matches the background: no image would be left	her piksel arka planla eşleşiyor: hiç görüntü kalmaz
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} piksellik bir görüntü değiştirilemeyecek kadar büyük
 @msg	select an object in perspective	perspektifte bir nesne seç
 @msg	select artwork (or a colour group) to recolor	yeniden renklendirilecek resmi (veya bir renk grubunu) seçin
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {locked} ve {hidden}
@@ -4462,7 +4501,7 @@ axis	Both	Her İkisi
 @msg	unknown format	bilinmeyen format
 @msg	unknown format `{f}` (Save writes {_1})	bilinmeyen format `{f}` (Kaydet, {_1} yazar)
 @msg	unknown freeform mode `{m}` (points, lines)	bilinmeyen serbest biçimli mod `{m}` (noktalar, çizgiler)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, serbest biçimli)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, elmas, serbest biçimli)
 @msg	unknown highlight `{h}`	bilinmeyen vurgu `{h}`
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (koru, benzet veya at)
@@ -5473,7 +5512,7 @@ theme	Appearance	Görünüm
 @msg	span must be "object" or "selection", got {v}	span "object" veya "selection" olmalıdır, {v} değil
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" bir renk örneği değil, bir `gradient` yerleştirir
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" bir degrade yerleştirir: `gradient` verin
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal, radyal veya konik bir degrade yerleştirir
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal, radyal, konik veya elmas bir degrade yerleştirir
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" degradenin kendisini yerleştirir: `start` ve `end` değerlerini vermeyin (bunlar degradeyi zaten belge koordinatlarına yerleştirir)
 	Make Image Dynamic	Görüntüyü Dinamik Hale Getirin
 	Import Data Sets…	Veri Kümelerini İçe Aktar…
@@ -6770,6 +6809,11 @@ breakText	Glyphs	Glifler
 @msg	only an exporter or an importer declares `extensions`	`extensions` yalnızca dışa veya içe aktarma eklentisi bildirir
 @msg	an importer always gets an import's budget: leave `budget` out	içe aktarma eklentisi her zaman bir içe aktarmanın bütçesini alır: `budget` değerini çıkarın
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Sorun Giderme Bilgilerini Kopyala
+@msg	Copied the troubleshooting info	Sorun giderme bilgileri kopyalandı
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft'ın son oturumu kapanmadan önce yanıt vermeyi durdurdu. Yardım › Sorun Giderme Bilgilerini Kopyala, hata raporu için ayrıntıları kopyalar
+
 # Safe Mode
 	Safe Mode…	Güvenli Mod…
 	Safe Mode	Güvenli Mod
@@ -6790,6 +6834,7 @@ breakText	Glyphs	Glifler
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Piksel Izgarasına Hizala
+	Align New Objects to Pixel Grid	Yeni Nesneleri Piksel Izgarasına Hizala
 	Not Aligned to Pixel Grid	Piksel Izgarasına Hizalanmamış
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
 @msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil

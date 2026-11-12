@@ -574,8 +574,12 @@ Document Setup: File → Document Setup… (`file.documentSetup`, Cmd+Alt+P) ope
 are what `document.setup` reports (`units`, `bleed` [top, bottom, left, right] in pt, `outlineImages`,
 `highlightSubstitutedGlyphs`, `gridSize`, `gridColors`, `simulatePaper`, `flattenerPreset`,
 `discardWhiteOverprint`, `language`, `quotes`, `typographersQuotes`, `superscript`, `subscript`, `smallCapsSize`,
-`exportText`, `backgroundContents`) plus `tab` (`General`, `Transparency` or `Type`) and `bleedLinked`.
-`ui.dialog.confirm` runs `document.setup` with them as one undo step; a bad value answers with an error and the dialog
+`exportText`, `backgroundContents`) plus `tab` (`General`, `Transparency`, `Type` or `Color`) and `bleedLinked`, and
+the Color tab's `colorMode` (`rgb` or `cmyk`), `convertColors` (a mode change converts the colors; `false` keeps their
+numbers), `rgbProfile` and `cmykProfile` (a profile name, or null for the working space).
+`ui.dialog.confirm` runs `document.setup` with them as one undo step. When the Color tab's fields differ from the
+document, it runs `document.setup`, then `edit.assignProfile` with the changed profiles, then `file.documentColorMode`
+in one `command.batch`, and the document's changes are one undo step. A bad value answers with an error and the dialog
 stays open.
 
 New Document: File → New… (`file.newDialog`, Cmd+N) opens the `newDocument` dialog. Its fields are `file.new`'s params
@@ -790,7 +794,11 @@ artboards' files. A `.ai` file's `aiVersion` comes first: `"pdf"` (the default) 
 Options"), which takes only `transparentImages` (`"flatten"` or `"omit"`), `hiddenObjects` (`"layer"`, `"omit"` or
 `"visible"`, the Hidden Objects menu), `outlineText` (the Text menu: false Editable, true Outlines) and, with several artboards, the artboard
 picker: `boards`, one bool per artboard (default: those last saved, else all), saved as `range`, one file per checked
-artboard. OK is disabled with none checked.
+artboard. OK is disabled with none checked. Save As to an EPS file opens the same dialog after the save panel (heading
+"EPS Options") with `useArtboards`, `all` and `range`, then the options Export's EPS Options shows. Preview
+(`previewFormat`), Overprints (`overprints`), Flattener preset (`flattenerPreset`) and PostScript (`level`) are menus:
+a pick writes the option's value (`"tiffColor"`, `"preserve"`, a built-in preset's id such as `"medium"` or a saved
+preset's name, the level as a number), and a value none of them names shows as it is.
 
 EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or `"wmf"`); they have no options
 dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and

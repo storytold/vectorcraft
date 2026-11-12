@@ -260,6 +260,7 @@ font-technology	Variable	Вариативные
 	Asset Export Settings	Параметры экспорта ресурсов
 	Assets	Ресурсы
 	Assign	Назначить
+	Assign Profile	Назначить профиль
 	Assign Profile…	Назначить профиль…
 	Assign:	Назначить:
 	Attach to Active Plane	Прикрепить к активной плоскости
@@ -698,6 +699,15 @@ font-technology	Variable	Вариативные
 	Created:	Создано:
 	Crop	Обрезать
 	Crop Image	Обрезать изображение
+	Image Tools	Инструменты изображения
+	Remove Background…	Удалить фон…
+	Remove Background	Удалить фон
+	Background	Фон
+	Edge Color	Цвет края
+	Picked Colors	Выбранные цвета
+	Corner Color	Цвет углов
+	Contiguous	Смежные
+	Each Channel	Каждый канал
 	Edit Path	Редактировать контур
 	Mask	Маска
 	Crop Marks	Метки обрезки
@@ -2361,6 +2371,9 @@ file-filter	Templates	Шаблоны
 	Optical	Оптический
 	Optical Margin Alignment	Оптическое выравнивание полей
 	Dynamic Text	Динамический текст
+	Dynamic Text Presets	Наборы параметров динамического текста
+	Arch	Арка
+@msg	select point type or type on a path	выберите точечный текст или текст по контуру
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст по контуру в связанном тексте не может использовать динамический текст: {frames}
 	Optimize for fast web view	Оптимизировать для быстрого просмотра в web
 	Optimized	Оптимизировано
@@ -2368,6 +2381,7 @@ file-filter	Templates	Шаблоны
 	Options for Selection…	Параметры выделения…
 	Options:	Параметры:
 	Options…	Параметры…
+	Organic Fades	Органические затухания
 	or more spaces with a tab	или больше пробелов на табуляцию
 	Order:	Порядок:
 	Ordinals	Порядковые числительные
@@ -2561,6 +2575,7 @@ diagnostics	ui	интерфейс
 	Presets:	Наборы:
 	Press 	Нажмите 
 	Preview	Просмотр
+	Preview:	Просмотр:
 	Preview All Layers	Просмотреть все слои
 	Preview in Browser	Просмотреть в браузере
 	Preview in Browser needs the desktop app (the web downloads files instead)	Просмотр в браузере требует настольного приложения (web-версия скачивает файлы)
@@ -2642,6 +2657,7 @@ digits	Malayalam	Малаялам
 	Radial Glows	Радиальные свечения
 	Radial Gradient	Радиальный градиент
 	Conic Gradient	Конический градиент
+	Diamond Gradient	Ромбовидный градиент
 	Radius 1	Радиус 1
 	Radius 2	Радиус 2
 	Radius1	Радиус1
@@ -3199,6 +3215,15 @@ digits	Malayalam	Малаялам
 	Stun Pulse	Оглушение
 	Stealth Fade	Скрытность
 	Shield Buff	Щит
+	Textures	Текстуры
+	Fine Grain	Мелкое зерно
+	Canvas Weave	Холстяное плетение
+	Burlap Sack	Мешковина
+	Cracked Glaze	Потрескавшаяся глазурь
+	Mosaic Floor	Мозаичный пол
+	Quilted Squares	Стёганые квадраты
+	Leaded Glass	Витражное стекло
+	Damp Paper	Влажная бумага
 	Shape	Фигура
 	Shape Builder	Создание фигур
 	Shape Builder Regions	Области создания фигур
@@ -3566,6 +3591,8 @@ digits	Malayalam	Малаялам
 	Scale at Center	Масштабировать от центра
 	Up/Down:	Вверх/вниз:
 	Left/Right:	Влево/вправо:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko вверх/вниз
+	Tate-chu-yoko Left/Right	Tate-chu-yoko влево/вправо
 	Temperature	Температура
 	Temperature/Tint…	Температура/оттенок…
 	Template	Шаблон
@@ -3901,6 +3928,7 @@ digits	Malayalam	Малаялам
 	Windows	Windows
 	Working CMYK	Рабочий CMYK
 	Working CMYK (don't tag)	Рабочий CMYK (без пометки)
+	Working RGB (don't tag)	Рабочий RGB (без пометки)
 	Workspace	Рабочая среда
 	Workspace {i}	Рабочая среда {i}
 	Wrinkle Tool	Инструмент «Морщины»
@@ -4267,6 +4295,7 @@ axis	Both	Оба
 @msg	`{key}` must be a number, not {v}	`{key}` должно быть числом, а не {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} должно быть временем Unix в секундах (целым числом) или null
 @msg	`{key}` must be a string	`{key}` должно быть строкой
+@msg	`{key}` must be a profile name or null	`{key}` должно быть именем профиля или null
 @msg	`{key}` must be a whole number	`{key}` должно быть целым числом
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` должно быть целым числом от {min} до {max} (получено {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` должно быть от {min} до {max} (получено {x})
@@ -4419,6 +4448,7 @@ axis	Both	Оба
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): страницы {label} записываются без UserUnit, в пунктах, и приложения, соблюдающие ограничение, обрезают страницу до 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	в PDF 1.5 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы сохранить размер: файл записывается как PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	в PDF 1.4 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы уложиться в предел страницы PDF/A-2 в 14 400 единиц: файл записывается как PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	страница монтажной области {n} имеет размер {size} и слишком длинная и узкая для сторон страницы PDF от 3 до 14 400 единиц: она записывается с UserUnit {unit}, которая держит короткую сторону не меньше 3 единиц, а приложения, соблюдающие предел, обрезают длинную сторону до 14 400 единиц
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	файлы {label} вмещают вещественные числа до {max}, а странице монтажной области {n} длиной {side} pt нужны большие: выберите PDF 1.6 или новее без стандарта PDF/X или монтажную область меньшего размера
 @msg	invalid image data for `{0}`	недопустимые данные изображения для `{0}`
@@ -4567,6 +4597,7 @@ axis	Both	Оба
 @msg	not a stored central record	не является сохранённой центральной записью
 @msg	not a valid plug-in module: {0}	не является допустимым модулем: {0}
 @msg	not an EMF or WMF file	не является файлом EMF или WMF
+@msg	not an HP-GL file	не является файлом HP-GL
 @msg	not found	не найдено
 @msg	not in pattern editing mode	не в режиме редактирования узора
 @msg	finish editing the pattern first	сначала завершите редактирование узора
@@ -4646,6 +4677,14 @@ axis	Both	Оба
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	эта трассировка создала бы более {max} опорных точек, что больше, чем документ может плавно отобразить: увеличьте «Шум», уменьшите «Контуры» или «Цвета» либо выберите набор с меньшей точностью
 @msg	select an envelope	выделите оболочку
 @msg	select an image	выделите изображение
+@msg	`background` must be edges, corners or colors	`background` должен быть edges, corners или colors
+@msg	`match` must be distance or channels	`match` должен быть distance или channels
+@msg	`{key}` must be from 0 to 100	`{key}` должен быть от 0 до 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` должен содержать от 1 до 16 цветов, каждый в шестнадцатеричном виде (#rrggbb или #rgb) или как black, white, red, green или blue
+@msg	the linked image shows its preview: embed or relink it first	связанное изображение показывает предпросмотр: сначала внедрите его или восстановите связь
+@msg	a CMYK image has no transparency to set	у изображения CMYK нет прозрачности, которую можно задать
+@msg	every pixel matches the background: no image would be left	каждый пиксель совпадает с фоном: от изображения ничего не осталось бы
+@msg	an image of {w} × {h} pixels is too large to change	изображение размером {w} × {h} пикселей слишком велико для изменения
 @msg	select an object in perspective	выделите объект в перспективе
 @msg	select artwork (or a colour group) to recolor	выделите рисунок (или цветовую группу) для перекрашивания
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перекрашивание завершено; без изменений: {locked} и {hidden}
@@ -4752,7 +4791,7 @@ axis	Both	Оба
 @msg	unknown format	неизвестный формат
 @msg	unknown format `{f}` (Save writes {_1})	неизвестный формат `{f}` (сохранение записывает {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	неизвестный режим произвольной формы `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	неизвестный тип градиента `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	неизвестный тип градиента `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	неизвестное выделение `{h}`
 @msg	unknown option `{path}.{k}`	неизвестный параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)
@@ -5404,7 +5443,7 @@ lighting	Light	Свет
 @msg	span must be "object" or "selection", got {v}	span должен быть "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" размещает `gradient`, а не образец
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" размещает градиент: укажите `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" размещает линейный, радиальный или конический градиент, а не произвольный
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" размещает линейный, радиальный, конический или ромбовидный градиент, а не произвольный
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам размещает градиент: уберите `start` и `end` (они уже задают его в координатах документа)
 	Make Image Dynamic	Сделать изображение динамическим
 	Import Data Sets…	Импортировать наборы данных…
@@ -6903,6 +6942,11 @@ shape	Open	Открытый
 @msg	only an exporter or an importer declares `extensions`	`extensions` объявляет только модуль экспорта или импорта
 @msg	an importer always gets an import's budget: leave `budget` out	модуль импорта всегда получает бюджет импорта: не указывайте `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копировать сведения для устранения неполадок
+@msg	Copied the troubleshooting info	Сведения для устранения неполадок скопированы
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Последний сеанс VectorCraft перестал отвечать перед закрытием. Справка › Копировать сведения для устранения неполадок копирует подробности для отчёта об ошибке
+
 # Safe Mode
 	Safe Mode…	Безопасный режим…
 	Safe Mode	Безопасный режим
@@ -6923,6 +6967,7 @@ shape	Open	Открытый
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Выровнять по пиксельной сетке
+	Align New Objects to Pixel Grid	Выравнивать новые объекты по пиксельной сетке
 	Not Aligned to Pixel Grid	Не выровненные по пиксельной сетке
 @msg	only paths and compound paths can be aligned to the pixel grid	по пиксельной сетке можно выровнять только контуры и составные контуры
 @msg	side is left or right, not `{s}`	side — это left или right, а не `{s}`

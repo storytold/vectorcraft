@@ -231,6 +231,13 @@ capability model proposed for PhotoCraft plug-ins
   `VECTORCRAFT_NO_PREFS` set there is no store, and a `grant` accepted under the flag lasts for that session only.
   With `--allow-plugin-grants`, pass `hash` set to the `plugin.inspect` entry's `hash` so that the module installed is
   the one the user saw.
+- The approval protects against plug-ins and automation clients (MCP, scripts and CLI requests): none of them can
+  approve a module's permissions. VectorCraft's own code records a grant only after that approval and when it loads
+  `grants.json`, and installs a module that lists permissions only under a grant recorded for this very module,
+  also when it loads the Additional Plug-ins Folder. The approval does not protect against native code linked into
+  VectorCraft or against another program running as the same user, which can change the files in the `Plug-ins`
+  folder. `grants.json` is not signed, so such a program can add a grant to it. `--allow-plugin-grants` is a choice
+  the person starting a headless session makes.
 - **Replacing asks first.** When the file is another module than the plug-in installed with its id, or, with none
   installed, its id has settings and a cache in the `Plug-ins` folder, Install Plug-in… and File › Open show its id
   and SHA-256 and ask whether to install it in place of that plug-in, which gives it the settings and cache kept for
@@ -245,7 +252,9 @@ capability model proposed for PhotoCraft plug-ins
   records the new hash. When the new module or its grant can't be written to the `Plug-ins` folder, the folder keeps
   the old module and its grant, and the old module loads at the next start. If the write that puts the old module back
   fails as well, the folder holds the new module with the old grant, the grant does not cover that module, and the
-  plug-in is skipped at the next start until it is approved again. A grant whose hash is not 64 lower-case
+  plug-in is skipped at the next start until it is approved again. When the folder held no module for that id, that
+  write removes the new module; when the removal fails, the folder holds the new module and no grant covers it. In
+  both cases a disabled plug-in is turned on, as for any install the folder holds. A grant whose hash is not 64 lower-case
   hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
   module that lists no permissions under that id, so the earlier bytes need a new approval. When `plugin.remove` can't
   remove the grant from `grants.json`, it returns an error, the plug-in stays installed, and a second `plugin.remove`

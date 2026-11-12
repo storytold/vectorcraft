@@ -968,6 +968,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-affinity"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=228f6d0c50f1fdee4c5124603602993fc79d4c9d#228f6d0c50f1fdee4c5124603602993fc79d4c9d"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "image",
+ "ruzstd",
+]
+
+[[package]]
 name = "craft-docpath"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
@@ -4879,9 +4890,6 @@ name = "ruzstd"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
-dependencies = [
- "twox-hash",
-]
 
 [[package]]
 name = "ryu"
@@ -6067,12 +6075,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "twox-hash"
-version = "2.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86a801b3cea342a06d468c8710662aa29e5e05e4f5c0d62f00bbb7f2ad7941c2"
-
-[[package]]
 name = "type-map"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6362,11 +6364,10 @@ dependencies = [
 name = "vectorcraft-affinity"
 version = "0.24.1"
 dependencies = [
+ "craft-affinity",
  "crc32fast",
- "flate2",
  "image",
  "proptest",
- "ruzstd",
 ]
 
 [[package]]

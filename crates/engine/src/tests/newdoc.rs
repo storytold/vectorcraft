@@ -292,6 +292,57 @@ fn a_saved_preset_with_the_resolution_out_of_range_reads_in_range() {
     assert_eq!(s.doc().unwrap().doc.raster_effects_ppi, 1.0);
 }
 
+/// Advanced Options › Align New Objects to Pixel Grid starts on in the Mobile and Web presets and
+/// off in the others and without a preset; a `file.new` param overrides the preset; the document
+/// takes the value; saved presets and Recent keep it, and a saved preset from before it reads off.
+#[test]
+fn align_new_objects_to_pixel_grid_follows_the_preset() {
+    let align = |s: &Session| s.doc().unwrap().doc.setup.align_new_objects_to_pixel_grid;
+    let mut s = Session::new();
+    for category in ["Mobile", "Web"] {
+        assert!(presets(&mut s, category).iter().all(|p| p["alignNewObjectsToPixelGrid"] == true), "{category}");
+    }
+    for category in ["Print", "Film & Video", "Art & Illustration", "Branding", "Social"] {
+        assert!(presets(&mut s, category).iter().all(|p| p["alignNewObjectsToPixelGrid"] == false), "{category}");
+    }
+    s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert!(align(&s));
+    assert_eq!(presets(&mut s, "Recent")[0]["alignNewObjectsToPixelGrid"], true);
+    s.execute("file.new", &json!({"preset": "Phone 390×844"})).unwrap();
+    assert!(align(&s));
+    s.execute("file.new", &json!({"preset": "Letter"})).unwrap();
+    assert!(!align(&s));
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    assert!(!align(&s));
+    s.execute("file.new", &json!({"preset": "Web 1920×1080", "alignNewObjectsToPixelGrid": false})).unwrap();
+    assert!(!align(&s));
+    s.execute("file.new", &json!({"preset": "A4", "alignNewObjectsToPixelGrid": true})).unwrap();
+    assert!(align(&s));
+    assert!(Session::new().execute("file.new", &json!({"alignNewObjectsToPixelGrid": "on"})).is_err());
+    // A Recent entry passed back makes the document it was made as.
+    let recent = presets(&mut s, "Recent")[0].clone();
+    assert_eq!((recent["name"].as_str(), recent["alignNewObjectsToPixelGrid"].as_bool()), (Some("A4"), Some(true)));
+    s.execute("file.new", &recent).unwrap();
+    assert!(align(&s));
+    // Saved presets keep it.
+    s.execute("file.newPresets.save", &json!({"name": "Icons", "width": 64, "height": 64, "alignNewObjectsToPixelGrid": true})).unwrap();
+    s.execute("file.newPresets.save", &json!({"name": "Banner", "preset": "Web 1920×1080", "alignNewObjectsToPixelGrid": false})).unwrap();
+    let saved: Vec<Value> = presets(&mut s, "Saved").iter().map(|p| p["alignNewObjectsToPixelGrid"].clone()).collect();
+    assert_eq!(saved, [json!(true), json!(false)]);
+    s.execute("file.new", &json!({"preset": "Icons"})).unwrap();
+    assert!(align(&s));
+    s.execute("file.new", &json!({"preset": "Banner"})).unwrap();
+    assert!(!align(&s));
+    let prefs: crate::Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert_eq!(prefs.new_doc_presets, s.prefs.new_doc_presets);
+    // A saved preset from before the setting reads off, whatever its name.
+    let mut old = Session::new();
+    old.apply_prefs(serde_json::from_value(json!({"newDocPresets": [{"name": "My Web", "width": 100, "height": 100}]})).unwrap());
+    assert_eq!(presets(&mut old, "Saved")[0]["alignNewObjectsToPixelGrid"], false);
+    old.execute("file.new", &json!({"preset": "My Web"})).unwrap();
+    assert!(!align(&old));
+}
+
 #[test]
 fn rearrange_keeps_its_grid() {
     let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 3}));

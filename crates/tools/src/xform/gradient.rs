@@ -24,6 +24,14 @@
 //! dot: the bar runs from the center to where the sweep starts, its stops along it by their share
 //! of the turn.
 //!
+//! A diamond gradient shows its square instead of the ellipse, a corner at the end of the bar,
+//! with the same aspect handle and center ring and no focal dot: drag the dot across the bar to
+//! stretch the square into a rhombus, and the square elsewhere to rotate it.
+//!
+//! Dragging the aspect handle of a radial or diamond gradient whose file gave it a negative
+//! aspect starts from its size (the aspect's magnitude); only a conic's negative aspect mirrors
+//! it.
+//!
 //! On a freeform gradient the tool edits its points instead (see `freeform`).
 
 use serde_json::{Value, json};
@@ -103,7 +111,7 @@ impl Annotator {
     fn with(geom: GradientGeom, stops: &[GradientStop]) -> Self {
         Self { geom, gradient: Gradient::new(GradientKind::Linear, stops.to_vec()) }
     }
-    /// Placed by a center and an extent ellipse (radial and conic)?
+    /// Placed by a center and an extent ellipse (radial and conic) or square (diamond)?
     fn radial(&self) -> bool {
         self.gradient.kind.is_centered()
     }
@@ -116,11 +124,12 @@ impl Annotator {
     pub fn aspect_point(&self) -> Point {
         self.geom.start - self.normal() * (self.vector().hypot() * self.geom.aspect.abs())
     }
-    /// How far `p` is from a radial's extent ellipse (approximately, along the ray from the
-    /// centre).
+    /// How far `p` is from a radial's extent ellipse, or a diamond's square (approximately, along
+    /// the ray from the center).
     fn off_ellipse(&self, p: Point) -> Option<f64> {
         let m = self.geom.unit_frame()?;
-        let rho = (m.inverse() * p).to_vec2().hypot();
+        let q = (m.inverse() * p).to_vec2();
+        let rho = if self.gradient.kind == GradientKind::Diamond { q.x.abs() + q.y.abs() } else { q.hypot() };
         (rho > 1e-12).then(|| p.distance(self.geom.start) * (1.0 - 1.0 / rho).abs())
     }
     fn vector(&self) -> Vec2 {
@@ -249,14 +258,19 @@ pub struct GradientTool {
 }
 
 /// Overlays of an annotator: the bar, the handles, the midpoint diamonds and a chip per stop; a
-/// radial's extent ellipse with its aspect handle, centre ring and focal dot.
+/// radial's extent ellipse (a diamond's square) with its aspect handle, center ring and focal dot.
 fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
     let (s, e) = (a.geom.start, a.geom.end);
     let shade = Vec2::new(0.0, cx.tol(1.0));
     let mut o = vec![];
     if let Some(m) = a.geom.unit_frame().filter(|_| a.radial()) {
         // Dark dashes over a light line: readable on any art.
-        let path = vectorcraft_geom::kurbo::Ellipse::from_affine(m).to_path(cx.tol(0.25));
+        let path = if a.gradient.kind == GradientKind::Diamond {
+            // A diamond's extent is its square, a corner at the end of the vector.
+            super::polygon(&[m * Point::new(1.0, 0.0), m * Point::new(0.0, 1.0), m * Point::new(-1.0, 0.0), m * Point::new(0.0, -1.0)], true)
+        } else {
+            vectorcraft_geom::kurbo::Ellipse::from_affine(m).to_path(cx.tol(0.25))
+        };
         o.push(Overlay::Path { path: path.clone(), color: LIGHT, width: 1.0, dashed: false });
         o.push(Overlay::Path { path, color: BAR, width: 1.0, dashed: true });
         o.push(Overlay::Handle { p: a.aspect_point(), color: BAR });
@@ -331,7 +345,9 @@ impl GradientTool {
             Some((a, Part::End)) => Grab::End(a.geom),
             Some((a, Part::Rotate)) => Grab::Rotate { geom: a.geom, from: (p - a.geom.start).atan2() - a.vector().atan2() },
             Some((a, Part::Focal)) => Grab::Focal(a.geom),
-            Some((a, Part::Aspect)) => Grab::Aspect(a.geom),
+            // Only a conic's negative aspect means a mirror (a file's other kinds draw as its size).
+            Some((a, Part::Aspect)) if a.gradient.kind == GradientKind::Conic => Grab::Aspect(a.geom),
+            Some((a, Part::Aspect)) => Grab::Aspect(GradientGeom { aspect: a.geom.aspect.abs(), ..a.geom }),
             None => {
                 if cx.selection.is_empty() {
                     let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else { return out };

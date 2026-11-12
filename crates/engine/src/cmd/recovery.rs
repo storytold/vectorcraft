@@ -17,7 +17,9 @@
 //! store can, an announcement that lasts as long as the app ([`RecoveryStore::announce`]: the
 //! browser's Web Locks). Only areas nobody holds any more (their app is gone) are offered, and
 //! while their copies are restored or discarded the area is held, so two apps launched together
-//! never both take it.
+//! never both take it. An area's lock file or folder can be removed while its app runs, so each
+//! recovery save and heartbeat checks that the lock still holds the area, and locks it again or
+//! takes a new area.
 //!
 //! A heartbeat alone can't tell a gone app from one whose timers stopped (a background tab), so
 //! when unsure an area counts as held, and its app repairs what another app did meanwhile: each
@@ -99,6 +101,12 @@ pub trait RecoveryStore: Send + Sync {
     /// Hold area `area` exclusively, if the store has locks (default: it hasn't).
     fn lock(&self, _area: &str) -> std::result::Result<Lock, String> {
         Ok(Lock::Unsupported)
+    }
+    /// Does `hold`, which [`RecoveryStore::lock`] gave for area `area`, still hold it? A lock on a
+    /// file or folder that was removed or replaced since holds nothing; when that can't be told now,
+    /// it does (default: it does).
+    fn still_held(&self, _area: &str, _hold: &(dyn std::any::Any + Send + Sync)) -> bool {
+        true
     }
     /// Stores without locks: also hold area `area` in a way other apps can see that lasts exactly as
     /// long as this app runs, if the store has one (the browser's Web Locks) → it, until dropped.
@@ -416,6 +424,16 @@ impl RecoveryStore for FolderStore {
         Self::create_area(&dir)?;
         Self::lock_area(&dir)
     }
+    fn still_held(&self, area: &str, hold: &(dyn std::any::Any + Send + Sync)) -> bool {
+        let (Some(file), Ok(dir)) = (hold.downcast_ref::<std::fs::File>(), self.area(area)) else { return true };
+        let path = dir.join(LOCK_FILE);
+        // Only a lock file or folder that is gone, or another one in its place, ends the hold. One
+        // that can't be read now (a network folder that doesn't answer) still counts as held.
+        match std::fs::symlink_metadata(&path) {
+            Ok(_) => Self::own_area(&dir).is_ok() && Self::still_named(file, &path),
+            Err(e) => e.kind() != std::io::ErrorKind::NotFound,
+        }
+    }
     fn remove_area(&self, area: &str) {
         // Best effort: whatever is left is tidied at a later launch. A folder that isn't empty
         // (copies came back meanwhile) stays. The caller still holds the lock here.
@@ -457,6 +475,10 @@ pub struct Recovery {
     /// heartbeat it wrote there: that one doesn't make them look running, a newer one does (their
     /// app was only paused and came back).
     adopted: BTreeMap<String, i64>,
+    /// Copies in an area this session had to leave (`keep_hold`), by document uid, with their
+    /// store: each stays until its document has a copy in the new area, or needs none. They are
+    /// still this session's: never offered or discarded as a crash's here.
+    left: BTreeMap<u64, (Arc<dyn RecoveryStore>, String)>,
 }
 
 impl Recovery {
@@ -526,14 +548,81 @@ fn beating(store: &dyn RecoveryStore, area: &str, stale: i64, mine: Option<i64>)
 
 /// Refresh this session's hold on its area (the app does this every [`HEARTBEAT_EVERY`] seconds,
 /// so also on its first frame after its timers were paused): its heartbeat in a store without
-/// locks, and its copies ([`repair`]) → the documents whose copies went missing (write them now).
-/// Best effort: a missed beat only lets another app offer the copies once three intervals have
-/// passed.
+/// locks, and its copies ([`repair`]) → the documents whose copies went missing (write them now),
+/// and those whose only copy is in an area the session left (`keep_hold`). Best effort: a missed
+/// beat only lets another app offer the copies once three intervals have passed.
 pub fn heartbeat(s: &mut Session) -> Vec<u64> {
+    let mut lost = keep_hold(s);
     if let Some(own) = s.recovery.own.as_ref().filter(|o| o.beats) {
         let _ = beat(own.store.as_ref(), &own.area);
     }
-    repair(s)
+    // A copy that was being written when the session left its area finished there. A document
+    // that gets no copy now (a complex one) keeps the copy it has.
+    lost.extend(
+        s.recovery
+            .left
+            .keys()
+            .filter(|&&uid| s.documents().iter().any(|d| d.uid == uid && d.recovery.is_none() && skip_reason(s, d).is_none()))
+            .copied(),
+    );
+    lost.extend(repair(s));
+    lost.sort_unstable();
+    lost.dedup();
+    lost
+}
+
+/// Check that this session's lock still holds its area (stores with locks). The area's lock file,
+/// or the whole area, can be removed while the app runs (by the user, a cleaner, another program),
+/// and then another app can lock the area and offer or delete this session's copies as a crash's.
+/// The area is locked again, made again first if it went (its copies are then written again).
+/// When another app holds it now, the session takes a new area, and each copy left in the old one
+/// stays until its document has a copy in the new one. → the documents whose copies must be
+/// written again.
+fn keep_hold(s: &mut Session) -> Vec<u64> {
+    drop_left_done(s);
+    let Some(own) = &mut s.recovery.own else { return vec![] };
+    if own.beats || own.hold.as_deref().is_none_or(|h| own.store.still_held(&own.area, h)) {
+        return vec![];
+    }
+    let (store, area) = (own.store.clone(), own.area.clone());
+    // The lock held is on a file the area no longer has, so it holds nothing: it goes first (a
+    // removed file this app still has open can keep a new lock file from being made).
+    own.hold = None;
+    if let Ok(Lock::Held(h)) = store.lock(&area) {
+        own.hold = Some(h);
+        return repair(s);
+    }
+    let mut lost = vec![];
+    for st in &mut s.docs {
+        if let Some(c) = st.recovery.take() {
+            s.recovery.left.insert(st.uid, (store.clone(), c.file));
+            lost.push(st.uid);
+        }
+    }
+    s.recovery.own = None;
+    // Best effort: when no area can be taken now, the next recovery save says why.
+    let _ = claim(s, &store);
+    lost
+}
+
+/// The copies left in an area this session left whose documents were saved, reverted or closed
+/// since go.
+fn drop_left_done(s: &mut Session) {
+    let done: Vec<u64> = s.recovery.left.keys().filter(|&&uid| !s.documents().iter().any(|d| d.uid == uid && d.is_dirty())).copied().collect();
+    for uid in done {
+        drop_left(s, uid);
+    }
+}
+
+/// Document `uid`'s copy in an area this session left goes. A copy that can't be removed now stays
+/// this session's, and a later heartbeat removes it.
+fn drop_left(s: &mut Session, uid: u64) {
+    let Some((store, file)) = s.recovery.left.get(&uid) else { return };
+    let doc = store.remove(&format!("{file}{DOC_EXT}"));
+    let meta = store.remove(&format!("{file}{META_EXT}"));
+    if doc.is_ok() && meta.is_ok() {
+        s.recovery.left.remove(&uid);
+    }
 }
 
 /// Forget this session's copies that are missing from its area, so the next recovery save writes
@@ -555,10 +644,13 @@ pub fn repair(s: &mut Session) -> Vec<u64> {
 /// This session's area in `store`, taken now if it has none there yet: a fresh area, held for the
 /// session's lifetime (locked, or with a heartbeat and an announcement where the store has them).
 pub fn claim(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<String> {
-    if let Some(own) = &s.recovery.own {
-        if own.store.location() == store.location() {
+    if s.recovery.own.as_ref().is_some_and(|o| o.store.location() == store.location()) {
+        // Documents whose copies went are left without one, so the caller writes them again.
+        keep_hold(s);
+        if let Some(own) = &s.recovery.own {
             return Ok(own.area.clone());
         }
+    } else if s.recovery.own.is_some() {
         // The store moved (the preference names another folder): copies start again there.
         release(s);
     }
@@ -587,6 +679,11 @@ pub fn claim(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<String> 
 pub fn release(s: &mut Session) {
     for st in &mut s.docs {
         st.recovery = None;
+    }
+    // Copies left in an area this session had to leave go too.
+    let left: Vec<u64> = s.recovery.left.keys().copied().collect();
+    for uid in left {
+        drop_left(s, uid);
     }
     let Some(Own { store, area, hold, .. }) = s.recovery.own.take() else { return };
     let mine = |n: &String| n.split_once('/').is_some_and(|(a, _)| a == area);
@@ -750,12 +847,16 @@ pub struct RecoveryJob {
     pub title: String,
     meta: Meta,
     save: SaveJob,
+    /// The store the copy goes to (the preference can name another folder before it is finished).
+    store: Arc<dyn RecoveryStore>,
 }
 
 impl RecoveryJob {
     /// Encode the snapshot and store it with its details and the images the area doesn't have
-    /// yet → `{file, title, bytes (the document's), imageBytes (images written now)}`.
-    pub fn write(&self, store: &dyn RecoveryStore) -> std::result::Result<Value, String> {
+    /// yet, in the store the job was made for → `{file, title, bytes (the document's), imageBytes
+    /// (images written now)}`.
+    pub fn write(&self) -> std::result::Result<Value, String> {
+        let store = self.store.as_ref();
         let doc = self.save.doc();
         // A linked image keeps its preview, as a save writes it.
         let linked = doc.linked_only_images();
@@ -808,13 +909,35 @@ impl RecoveryJob {
 
     /// Once stored: the document (if still open) remembers the copy, so it isn't written again
     /// while unchanged and goes when the document is saved or closed. A document saved or closed
-    /// meanwhile has nothing left to recover: its copy goes at once.
+    /// meanwhile has nothing left to recover: its copy goes at once. So does a copy written in an
+    /// area the session left meanwhile (`keep_hold`), and its document gets a new one.
     pub fn finish(self, s: &mut Session) {
         let snapshot = self.save.snapshot().clone();
         let copy = RecoveryCopy { file: self.file.clone(), doc: snapshot };
+        let area = self.file.split_once('/').map(|(a, _)| a);
+        let current = s.recovery.own.as_ref().is_some_and(|o| o.store.location() == self.store.location() && Some(o.area.as_str()) == area);
         match s.document_mut(self.uid).filter(|st| st.is_dirty()) {
-            Some(st) => st.recovery = Some(copy),
-            None => remove_copy(s, &self.file),
+            Some(st) if current => {
+                st.recovery = Some(copy);
+                drop_left(s, self.uid);
+            }
+            // Written in an area left meanwhile: kept, in place of the copy left there before,
+            // until the document has a copy in the new area.
+            Some(st) if st.recovery.is_none() => {
+                let before = s.recovery.left.insert(self.uid, (self.store.clone(), self.file.clone()));
+                // The copy left there before, unless this one was written over it. Best effort,
+                // as in `remove_copy`.
+                if let Some((store, file)) = before.filter(|(old, f)| old.location() != self.store.location() || *f != self.file) {
+                    let _ = store.remove(&format!("{file}{DOC_EXT}"));
+                    let _ = store.remove(&format!("{file}{META_EXT}"));
+                }
+            }
+            // Best effort, as in `remove_copy`.
+            _ => {
+                let _ = self.store.remove(&format!("{}{DOC_EXT}", self.file));
+                let _ = self.store.remove(&format!("{}{META_EXT}", self.file));
+                drop_left(s, self.uid);
+            }
         }
     }
 }
@@ -867,6 +990,11 @@ fn fresh_name(area: &str, stem: &str, taken: &[String]) -> String {
 /// when it has none and a copy is needed) → (jobs, skipped: `[{title, reason}]` for modified
 /// documents that get none).
 pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<RecoveryJob>, Vec<Value>)> {
+    // A lost lock is taken again first: copies that go with it are written again, even of
+    // documents unchanged since.
+    if s.recovery.own.as_ref().is_some_and(|o| o.store.location() == store.location()) {
+        keep_hold(s);
+    }
     // Copies another app removed are written again.
     repair(s);
     let skipped: Vec<Value> = s
@@ -923,7 +1051,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             // Filled in as the copy is written.
             images: BTreeMap::new(),
         };
-        out.push(RecoveryJob { uid: st.uid, file, title, meta, save });
+        out.push(RecoveryJob { uid: st.uid, file, title, meta, save, store: store.clone() });
     }
     Ok((out, skipped))
 }
@@ -954,7 +1082,7 @@ pub(crate) fn save_copies(s: &mut Session) -> Result<()> {
         return Err(EngineError::Other("a document with unsaved changes has no recovery copy".into()));
     }
     for j in jobs {
-        j.write(store.as_ref()).map_err(EngineError::Other)?;
+        j.write().map_err(EngineError::Other)?;
         j.finish(s);
     }
     Ok(())
@@ -966,6 +1094,8 @@ pub fn forget(s: &mut Session, uid: u64) {
     if s.script_in_run {
         return;
     }
+    // So does a copy of it left in an area this session left.
+    drop_left(s, uid);
     let Some(copy) = s.document_mut(uid).and_then(|st| st.recovery.take()) else { return };
     remove_copy(s, &copy.file);
 }
@@ -975,11 +1105,15 @@ pub fn forget_all(s: &mut Session) {
     release(s);
 }
 
-/// The copies of documents with no unsaved changes left (undone back to the saved state) go.
+/// The copies of documents with no unsaved changes left (undone back to the saved state) go, and
+/// the copies left in an area this session left of documents closed since.
 pub fn forget_clean(s: &mut Session) {
     let uids: Vec<u64> = s.documents().iter().filter(|d| !d.is_dirty() && d.recovery.is_some()).map(|d| d.uid).collect();
     for uid in uids {
         forget(s, uid);
+    }
+    if !s.script_in_run {
+        drop_left_done(s);
     }
 }
 
@@ -988,7 +1122,7 @@ fn save(s: &mut Session, _: &Value) -> Result<Value> {
     let (jobs, skipped) = jobs(s, &store)?;
     let mut saved = vec![];
     for j in jobs {
-        saved.push(j.write(store.as_ref()).map_err(EngineError::Other)?);
+        saved.push(j.write().map_err(EngineError::Other)?);
         j.finish(s);
     }
     forget_clean(s);
@@ -1057,9 +1191,15 @@ fn open_copies(s: &Session) -> Vec<String> {
     s.documents().iter().filter_map(|d| d.recovery.as_ref()).map(|c| c.file.clone()).collect()
 }
 
+/// The copies of documents open now in this session that are in an area it left, in `store`.
+fn left_copies(s: &Session, store: &dyn RecoveryStore) -> Vec<String> {
+    s.recovery.left.values().filter(|(st, _)| st.location() == store.location()).map(|(_, f)| f.clone()).collect()
+}
+
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let store = need_store(s, "file.recovery.list")?;
     let open = open_copies(s);
+    let left = left_copies(s, store.as_ref());
     let copies = copies_in(&store.list().map_err(EngineError::Other)?);
     let mut rows = vec![];
     for area in store.areas().map_err(EngineError::Other)? {
@@ -1071,7 +1211,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
             let title = if meta.title.is_empty() { f.rsplit('/').next().unwrap_or(f).to_string() } else { meta.title };
             rows.push(json!({
                 "file": f, "title": title, "path": meta.path, "format": meta.format, "saved": meta.saved,
-                "open": who == Owner::Mine && open.contains(f), "running": who == Owner::Running,
+                "open": (who == Owner::Mine && open.contains(f)) || left.contains(f), "running": who == Owner::Running,
             }));
         }
         // A gone app's empty area is tidied away.
@@ -1095,7 +1235,14 @@ fn targets(s: &mut Session, store: &dyn RecoveryStore, cmd: &str, p: &Value) -> 
     {
         return Err(bad(cmd, format!("no recovery copy `{f}` (see file.recovery.list)")));
     }
-    let picked = |c: &str| file.is_none_or(|f| f == c);
+    // A copy this session left in an area it had to leave is still its own.
+    let left = left_copies(s, store);
+    if let Some(f) = file
+        && left.iter().any(|c| c == f)
+    {
+        return Err(bad(cmd, format!("`{f}` is the copy of a document open now")));
+    }
+    let picked = |c: &str| file.is_none_or(|f| f == c) && !left.iter().any(|l| l == c);
     let areas: BTreeSet<&str> = copies.iter().filter(|(_, c)| picked(c)).map(|(a, _)| a.as_str()).collect();
     let mut out = vec![];
     for area in areas {

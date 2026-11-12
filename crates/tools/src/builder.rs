@@ -37,8 +37,8 @@ use cache::{BACKGROUND_SEGMENTS, CacheKey, RegionCache};
 use live_paint::LpHover;
 use live_paint::lp_color;
 pub use live_paint::{
-    LP_BUCKET_EDGE_FRACTION, LP_BUCKET_WIDTH, LP_BUCKET_WIDTH_RANGE, LP_SELECT_WIDTH, LP_SELECT_WIDTH_RANGE, LivePaintBucketTool,
-    LivePaintSelectionTool,
+    LP_BUCKET_EDGE_FRACTION, LP_BUCKET_WIDTH, LP_BUCKET_WIDTH_RANGE, LP_FILL_CHUNK_POINTS, LP_SELECT_WIDTH, LP_SELECT_WIDTH_RANGE,
+    LivePaintBucketTool, LivePaintSelectionTool,
 };
 pub use lookup::{
     EDGE_NAME, FACE_NAME, Face, LIVE_PAINT_NAME, LIVE_PAINT_PREFIX, SOURCES_NAME, builder_members, drawn_outlines, edge_near, edges, face_at, faces,
