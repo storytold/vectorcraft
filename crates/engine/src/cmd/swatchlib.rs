@@ -472,17 +472,10 @@ fn file_name(path: &str) -> String {
 }
 
 /// May the request being served read `path` ([`crate::file_access::check_read`])? Always, without
-/// roots in force.
+/// roots in force. Another platform's absolute path ([`crate::file_access::written_elsewhere`]) is
+/// never readable under a read root.
 fn readable(path: &str) -> bool {
-    crate::file_access::check_read(path).is_ok()
-}
-
-/// Is `path`, under a read root, written as an absolute path of another platform: outside Windows, one
-/// that starts with a drive (`C:`) or a `\`? The file access check would read it as a name in the
-/// working folder.
-fn written_elsewhere(path: &str) -> bool {
-    let foreign = path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
-    !cfg!(windows) && foreign && crate::file_access::current().is_some()
+    !crate::file_access::written_elsewhere(path) && crate::file_access::check_read(path).is_ok()
 }
 
 /// The loaded library ids (`loaded/<path>`) whose file the request being served may not read, each
@@ -514,7 +507,7 @@ pub fn concealed_library_ids(s: &Session, others: impl IntoIterator<Item = Strin
                 (name, path)
             });
             match name {
-                Some((name, path)) if name != path && (written_elsewhere(path) || !readable(path)) => hidden.push((id, name)),
+                Some((name, path)) if name != path && !readable(path) => hidden.push((id, name)),
                 _ => {
                     taken.insert(id);
                 }

@@ -824,9 +824,10 @@ const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
 
 /// May the request being served read `path`? Under an automation read root (a control client's
 /// request), `ui.inspect` leaves out a path outside the root, as `ui.menu.list` leaves out a recent
-/// file or a listed script outside it.
+/// file or a listed script outside it. Another platform's absolute path
+/// ([`vectorcraft_engine::file_access::written_elsewhere`]) is never readable under a read root.
 fn readable(path: &str) -> bool {
-    vectorcraft_engine::file_access::check_read(path).is_ok()
+    !vectorcraft_engine::file_access::written_elsewhere(path) && vectorcraft_engine::file_access::check_read(path).is_ok()
 }
 
 /// Is `s` a path the request may not read, written as an absolute path (either separator, with or
