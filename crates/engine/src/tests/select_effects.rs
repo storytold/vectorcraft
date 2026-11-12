@@ -234,3 +234,160 @@ fn a_marquee_that_touches_only_a_drop_shadow_does_not_select_its_object() {
     // From above B, over B and the shadow: B only.
     assert_eq!(press(&mut s, "selection", (105.0, 5.0), (115.0, 30.0), Mods::default()), [b]);
 }
+
+/// The selection after a drag with `tool` from `from` to `to`.
+fn marquee(s: &mut Session, tool: &str, from: (f64, f64), to: (f64, f64)) -> vectorcraft_doc::Selection {
+    press(s, tool, from, to, Mods::default());
+    s.doc().unwrap().selection.clone()
+}
+
+/// The point of anchor `(si, ai)` of path `id`.
+fn anchor_point(s: &Session, id: NodeId, (si, ai): vectorcraft_doc::AnchorRef) -> Point {
+    let path = s.doc().unwrap().doc.node(id).and_then(|n| n.path_data()).unwrap();
+    path.anchors().find(|(s, i, _)| (*s, *i) == (si, ai)).map(|(.., a)| a.p).unwrap()
+}
+
+/// The anchors a marquee or a click picked on `id`, as points.
+fn picked_points(s: &Session, id: NodeId) -> Vec<Point> {
+    let refs: Vec<_> = s.doc().unwrap().selection.partial(id).into_iter().flatten().copied().collect();
+    refs.into_iter().map(|r| anchor_point(s, id, r)).collect()
+}
+
+/// The anchors the tool marks as hovered.
+fn anchor_marks(s: &mut Session) -> Vec<Point> {
+    s.overlays(ViewInfo::default())
+        .into_iter()
+        .filter_map(|o| if let vectorcraft_tools::Overlay::Anchor { p, .. } = o { Some(p) } else { None })
+        .collect()
+}
+
+fn hover(s: &mut Session, x: f64, y: f64) -> Cursor {
+    let v = ViewInfo::default();
+    s.pointer(&PointerEvent::new(PointerKind::Move, x, y), v).unwrap();
+    s.cursor(Point::new(x, y), Mods::default(), v)
+}
+
+#[test]
+fn a_direct_selection_marquee_leaves_out_a_drop_shadow() {
+    let mut s = session();
+    let (a, b) = shadow_over_b(&mut s);
+    let (a_before, b_before) = (bounds(&s, a), bounds(&s, b));
+    assert_ne!(pixel(&s, 90, 50), WHITE);
+    run(&mut s, "select.none", json!({}));
+    // Over the shadow alone: no object, no anchor, no segment.
+    let sel = marquee(&mut s, "directSelection", (85.0, 40.0), (95.0, 60.0));
+    assert!(sel.objects.is_empty() && sel.anchors.is_empty() && sel.segments.is_empty(), "{sel:?}");
+    // Over the shadow and B's upper left corner: that anchor of B, and nothing of A.
+    let sel = marquee(&mut s, "directSelection", (90.0, 5.0), (105.0, 30.0));
+    assert_eq!(sel.objects, [b]);
+    assert_eq!(picked_points(&s, b), [Point::new(100.0, 20.0)]);
+    // Across B's top edge under the shadow, with neither of its anchors inside: that segment.
+    run(&mut s, "select.none", json!({}));
+    assert_ne!(pixel(&s, 112, 25), BLUE);
+    let sel = marquee(&mut s, "directSelection", (110.0, 5.0), (115.0, 30.0));
+    assert_eq!(sel.objects, [b]);
+    assert!(sel.segments.contains_key(&b) && !sel.segments.contains_key(&a), "{sel:?}");
+    assert_eq!((bounds(&s, a), bounds(&s, b)), (a_before, b_before));
+}
+
+#[test]
+fn direct_selection_hover_leaves_out_a_drop_shadow_and_marks_the_anchor_under_it() {
+    let mut s = session();
+    let (_, b) = shadow_over_b(&mut s);
+    // B's upper left corner lies under the shadow.
+    assert_ne!(pixel(&s, 101, 21), BLUE);
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("directSelection", ViewInfo::default()).unwrap();
+    for (x, y) in [(90.0, 50.0), (110.0, 50.0)] {
+        assert_eq!(hover(&mut s, x, y), Cursor::ArrowHollow, "({x}, {y})");
+        assert!(anchor_marks(&mut s).is_empty(), "({x}, {y})");
+    }
+    assert_eq!(hover(&mut s, 101.0, 21.0), Cursor::DirectAnchor);
+    assert_eq!(anchor_marks(&mut s), [Point::new(100.0, 20.0)]);
+    // A press there picks that anchor of B.
+    assert_eq!(press(&mut s, "directSelection", (101.0, 21.0), (101.0, 21.0), Mods::default()), [b]);
+    assert_eq!(picked_points(&s, b), [Point::new(100.0, 20.0)]);
+}
+
+#[test]
+fn a_group_selection_click_on_a_drop_shadow_selects_the_object_under_it() {
+    let mut s = session();
+    let (a, b) = shadow_over_b(&mut s);
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(press(&mut s, "groupSelection", (110.0, 50.0), (110.0, 50.0), Mods::default()), [b]);
+    assert!(press(&mut s, "groupSelection", (90.0, 50.0), (90.0, 50.0), Mods::default()).is_empty());
+    assert_eq!(press(&mut s, "groupSelection", (50.0, 50.0), (50.0, 50.0), Mods::default()), [a]);
+}
+
+#[test]
+fn group_selection_clicks_on_a_drop_shadow_climb_the_groups_of_the_object_under_it() {
+    let mut s = session();
+    // B and C in one group, A and D in another above it, and A's shadow over B.
+    let b = rect(&mut s, 100.0, 20.0, 60.0, 60.0, "#0000ff");
+    let c = rect(&mut s, 170.0, 20.0, 20.0, 20.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0, c.0]}));
+    let gb = id_of(&run(&mut s, "object.group", json!({})));
+    let a = rect(&mut s, 20.0, 20.0, 60.0, 60.0, "#ff0000");
+    let d = rect(&mut s, 20.0, 120.0, 20.0, 20.0, "#ff0000");
+    run(&mut s, "select.set", json!({"ids": [a.0, d.0]}));
+    let ga = id_of(&run(&mut s, "object.group", json!({})));
+    shadow(&mut s, a, 40.0);
+    assert_ne!(pixel(&s, 110, 50), BLUE);
+    assert_ne!(pixel(&s, 90, 50), WHITE);
+    run(&mut s, "select.none", json!({}));
+    let click = |s: &mut Session, x, y| {
+        let mut sel = press(s, "groupSelection", (x, y), (x, y), Mods::default());
+        sel.sort_by_key(|n| n.0);
+        sel
+    };
+    assert_eq!(click(&mut s, 110.0, 50.0), [b]);
+    let mut both = vec![b, gb];
+    both.sort_by_key(|n| n.0);
+    assert_eq!(click(&mut s, 110.0, 50.0), both);
+    // With A selected, a click on its shadow over the canvas does not add A's group.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    assert!(click(&mut s, 90.0, 50.0).is_empty());
+    // On A itself the second click adds it.
+    assert_eq!(click(&mut s, 50.0, 50.0), [a]);
+    let mut both = vec![a, ga];
+    both.sort_by_key(|n| n.0);
+    assert_eq!(click(&mut s, 50.0, 50.0), both);
+}
+
+#[test]
+fn a_group_selection_marquee_leaves_out_a_drop_shadow() {
+    let mut s = session();
+    let (a, b) = shadow_over_b(&mut s);
+    run(&mut s, "select.none", json!({}));
+    let sel = marquee(&mut s, "groupSelection", (85.0, 40.0), (95.0, 60.0));
+    assert!(sel.objects.is_empty() && sel.anchors.is_empty(), "{sel:?}");
+    // Over the shadow and B's upper left corner: that anchor of B.
+    let sel = marquee(&mut s, "groupSelection", (90.0, 5.0), (105.0, 30.0));
+    assert_eq!(sel.objects, [b]);
+    assert_eq!(picked_points(&s, b), [Point::new(100.0, 20.0)]);
+    // With E, a marquee around B that crosses A's shadow selects B whole, and not A.
+    run(&mut s, "select.none", json!({}));
+    let v = ViewInfo::default();
+    s.select_tool("groupSelection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 95.0, 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 130.0, 50.0), v).unwrap();
+    s.tool_key(vectorcraft_tools::ToolKey::Letter('e'), Mods::default(), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 165.0, 90.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 165.0, 90.0), v).unwrap();
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!(sel.objects, [b]);
+    assert!(sel.partial(b).is_none() && sel.partial(a).is_none(), "{sel:?}");
+}
+
+#[test]
+fn group_selection_hover_over_a_drop_shadow_marks_nothing() {
+    let mut s = session();
+    let (_, b) = shadow_over_b(&mut s);
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("groupSelection", ViewInfo::default()).unwrap();
+    for (x, y) in [(90.0, 50.0), (110.0, 50.0), (101.0, 21.0)] {
+        assert_eq!(hover(&mut s, x, y), Cursor::GroupSelection, "({x}, {y})");
+        assert!(anchor_marks(&mut s).is_empty(), "({x}, {y})");
+    }
+    assert_eq!(press(&mut s, "groupSelection", (110.0, 50.0), (110.0, 50.0), Mods::default()), [b]);
+}

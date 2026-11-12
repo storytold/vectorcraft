@@ -331,6 +331,8 @@
 	Stair Step	საფეხურები
 	Gravity	გრავიტაცია
 	Type on a Path Options…	ტრაექტორიაზე ტექსტის პარამეტრები…
+	Center on Top	ზემოთ ცენტრში მოთავსება
+	Center on Bottom	ქვემოთ ცენტრში მოთავსება
 	Threaded Text	დაკავშირებული ტექსტი
 	Create	შექმნა
 	Release Selection	მონიშნულის მოხსნა
@@ -351,6 +353,10 @@
 	Arch	თაღი
 @msg	select point type or type on a path	აირჩიეთ წერტილოვანი ტექსტი ან ტრაექტორიაზე ტექსტი
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ გამოიყენებს დინამიკურ ტექსტს: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	ღია ან შედგენილ ტრაექტორიაზე ტექსტი ვერ მოთავსდება ზემოთ ან ქვემოთ ცენტრში: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	ტექსტი ვერ მოთავსდება ცენტრში ტრაექტორიაზე, რომელსაც არ აქვს სიგრძე ან სიმაღლე: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ მოთავსდება ზემოთ ან ქვემოთ ცენტრში: {frames}
+@msg	select type on a closed path	მონიშნეთ დახურულ ტრაექტორიაზე ტექსტი
 	Fill with Placeholder Text	შემავსებელი ტექსტით შევსება
 	Insert Inline Symbol	ჩადგმული სიმბოლოს ჩასმა
 	Show Hidden Characters	დამალული სიმბოლოების ჩვენება
@@ -748,6 +754,7 @@
 	Sky Gradients	ცის გრადიენტები
 	Neutral Gradients	ნეიტრალური გრადიენტები
 	Organic Fades	ორგანული გაქრობები
+	Holographic	ჰოლოგრაფიული
 	Duotone Gradients	ორტონიანი გრადიენტები
 	Radial Glows	რადიალური ნათებები
 	Save Swatch Library…	ფერის ნიმუშების ბიბლიოთეკის შენახვა…
@@ -1748,6 +1755,9 @@ digits	Malayalam	მალაიალამური
 	Right Indent	მარჯვენა შეწევა
 	Right-to-Left Paragraph Direction	აბზაცის მიმართულება მარჯვნიდან მარცხნივ
 	Roman Hanging Punctuation	ლათინური გამოწეული პუნქტუაცია
+	Korean Line Break Anywhere	კორეული სტრიქონის გადატანა ნებისმიერ ადგილას
+	East Asian Composition Settings	აღმოსავლეთ აზიური აწყობის პარამეტრები
+	Korean Composition Settings	კორეული აწყობის პარამეტრები
 	Select a text object to edit its paragraph attributes.	აბზაცის ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
 	Single-line Composer	სტრიქონის მიხედვით აწყობა
 	Toggle Line Composer	აწყობის რეჟიმის გადართვა
@@ -4339,6 +4349,7 @@ font-technology	Variable	ცვლადი
 @msg	not a valid plug-in module: {0}	ეს არ არის პლაგინის სწორი მოდული: {0}
 @msg	not an EMF or WMF file	ეს არ არის EMF ან WMF ფაილი
 @msg	not an HP-GL file	ეს არ არის HP-GL ფაილი
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` უნდა იყოს 1-დან 255-მდე #rrggbb ფერის მასივი
 @msg	not found	ვერ მოიძებნა
 @msg	not in pattern editing mode	პატერნის რედაქტირების რეჟიმი არ არის ჩართული
 @msg	finish editing the pattern first	ჯერ დაასრულეთ პატერნის რედაქტირება
@@ -5976,6 +5987,7 @@ imageTrace	Outline	კონტური
 	Ruby…	რუბი…
 	Ruby	რუბი
 	Geometric Guides	გეომეტრიული მიმმართველები
+	Optical Effects	ოპტიკური ეფექტები
 	Geometric Patterns	გეომეტრიული პატერნები
 	Grit Textures	მარცვლოვანი ტექსტურები
 	Ease In	ნელი დასაწყისი
@@ -6265,8 +6277,24 @@ axis	Y Axis	Y ღერძი
 	Charge Wave	მუხტის ტალღა
 	Spark Trail	ნაპერწკლის კვალი
 	Calligraphic Nibs	კალიგრაფიული წვერები
+	Bristle Brushes	ჯაგრის ფუნჯები
+	Fine Liner	წვრილი ხაზი
+	Pointed Flat	წაწვეტებული ბრტყელი
+	Stubby Round	მოკლე მრგვალი
+	Dry Scrub	მშრალი ხეხვა
+	Soft Dome	რბილი გუმბათი
+	Filbert	ოვალური ბრტყელი
+	Angled Round	დახრილი მრგვალი
+	Angled Flat	დახრილი ბრტყელი
+	Fan Blender	შერევის მარაო
+	Grass Fan	ბალახის მარაო
 	Pattern Borders	პატერნის ბორდიურები
 	Scatter Shapes	გაბნეული ფიგურები
+	Dry Media	მშრალი მასალები
+	Chalk Grain	ცარცის მარცვალი
+	Graphite Pencil	გრაფიტის ფანქარი
+	Wax Crayon	ცვილის ფანქარი
+	Charcoal Dust	ნახშირის მტვერი
 	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
 @msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
 @msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)
@@ -7078,3 +7106,15 @@ font-script	Japanese	იაპონური
 	Deferred Effects	გადადებული ეფექტები
 @msg	no plug-in effect is deferred	პლაგინის ეფექტი არ არის გადადებული
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	ჭრის ხელსაწყოები
+	Stencil Bridges…	ტრაფარეტის ხიდები…
+	Stencil Bridges	ტრაფარეტის ხიდები
+	Shortest Crossing	უმოკლესი გადაკვეთა
+	Direction	მიმართულება
+@msg	The selected art has no islands to bridge	მონიშნულ ნახატს არ აქვს დასაკავშირებელი კუნძულები
+@msg	No bridge of this width fits across the selected art	ამ სიგანის ხიდი მონიშნულ ნახატზე არ ეტევა
+@msg	Some islands could not be joined to the area around the art	ზოგიერთი კუნძული ვერ დაუკავშირდა ნახატის გარშემო არეს
+@msg	`width` must be from {lo} to {hi} pt	`width` უნდა იყოს {lo}-დან {hi} pt-მდე
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` უნდა იყოს მთელი რიცხვი 1-დან {MAX_BRIDGES_PER_ISLAND}-მდე

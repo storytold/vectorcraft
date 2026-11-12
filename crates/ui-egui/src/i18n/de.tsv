@@ -2323,6 +2323,10 @@ file-filter	Templates	Vorlagen
 	Arch	Rundbogen
 @msg	select point type or type on a path	wählen Sie Punkttext oder Pfadtext aus
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	Pfadtext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	Pfadtext auf einem offenen oder zusammengesetzten Pfad lässt sich nicht oben oder unten zentrieren: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	Pfadtext auf einem Pfad ohne Länge oder ohne Höhe lässt sich nicht zentrieren: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	Pfadtext in verkettetem Text lässt sich nicht oben oder unten zentrieren: {frames}
+@msg	select type on a closed path	wählen Sie Pfadtext auf einem geschlossenen Pfad aus
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
 	Options	Optionen
@@ -2330,6 +2334,7 @@ file-filter	Templates	Vorlagen
 	Options:	Optionen:
 	Options…	Optionen…
 	Organic Fades	Organische Verläufe
+	Holographic	Holografisch
 	or more spaces with a tab	oder mehr Leerzeichen durch einen Tabulator
 	Order:	Reihenfolge:
 	Ordinals	Ordinalzahlen
@@ -2884,6 +2889,9 @@ digits	Malayalam	Malayalam
 	Rise…	Ansteigend…
 	Roman Baseline	Lateinische Grundlinie
 	Roman Hanging Punctuation	Hängende Interpunktion (lateinisch)
+	Korean Line Break Anywhere	Koreanischer Zeilenumbruch überall
+	East Asian Composition Settings	Einstellungen für ostasiatischen Satz
+	Korean Composition Settings	Einstellungen für koreanischen Satz
 	Rotate	Drehen
 	Rotate 90° CW	Um 90° im Uhrzeigersinn drehen
 	Rotate Tool	Drehen-Werkzeug
@@ -3674,6 +3682,8 @@ effect	Points	Punkte
 	Type on a Path	Pfadtext
 	Type on a Path Options	Pfadtextoptionen
 	Type on a Path Options…	Pfadtextoptionen…
+	Center on Top	Oben zentrieren
+	Center on Bottom	Unten zentrieren
 	Type on a Path Tool	Pfadtext-Werkzeug
 	Type Orientation	Textrichtung
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text bleibt Text, und jede Kontur ist eine Linie mit ihrer Linienstärke und ihren Strichen.
@@ -4504,6 +4514,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
 @msg	not an HP-GL file	keine HP-GL-Datei
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` muss ein Array von 1 bis 255 Farben der Form #rrggbb sein
 @msg	not found	nicht gefunden
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus
 @msg	finish editing the pattern first	beenden Sie zuerst die Bearbeitung des Musters
@@ -5625,6 +5636,7 @@ effect	Soft	Weich
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrische Hilfslinien
+	Optical Effects	Optische Effekte
 	Geometric Patterns	Geometrische Muster
 	Grit Textures	Körnige Texturen
 	Ease In	Langsam starten
@@ -5905,8 +5917,24 @@ axis	Y Axis	Y-Achse
 	Charge Wave	Ladewelle
 	Spark Trail	Funkenspur
 	Calligraphic Nibs	Kalligrafie-Federn
+	Bristle Brushes	Borstenpinsel-Set
+	Fine Liner	Feiner Liner
+	Pointed Flat	Spitzer Flachpinsel
+	Stubby Round	Kurzer Rundpinsel
+	Dry Scrub	Trockenes Schrubben
+	Soft Dome	Weiche Kuppel
+	Filbert	Katzenzunge
+	Angled Round	Schräger Rundpinsel
+	Angled Flat	Schräger Flachpinsel
+	Fan Blender	Fächer zum Verblenden
+	Grass Fan	Grasfächer
 	Pattern Borders	Musterbordüren
 	Scatter Shapes	Streuformen
+	Dry Media	Trockene Medien
+	Chalk Grain	Kreidekorn
+	Graphite Pencil	Graphitstift
+	Wax Crayon	Wachsmalstift
+	Charcoal Dust	Kohlestaub
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)
@@ -6559,3 +6587,15 @@ breakText	Glyphs	Glyphen
 	Deferred Effects	Zurückgestellte Effekte
 @msg	no plug-in effect is deferred	kein Plug-in-Effekt ist zurückgestellt
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Mit {n} zurückgestelltem Plug-in-Effekt geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt ihn aus.|Mit {n} zurückgestellten Plug-in-Effekten geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt sie aus.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Schneidwerkzeuge
+	Stencil Bridges…	Schablonenstege…
+	Stencil Bridges	Schablonenstege
+	Shortest Crossing	Kürzeste Querung
+	Direction	Richtung
+@msg	The selected art has no islands to bridge	Das ausgewählte Bildmaterial hat keine Inseln zum Verbinden
+@msg	No bridge of this width fits across the selected art	Kein Steg dieser Breite passt über das ausgewählte Bildmaterial
+@msg	Some islands could not be joined to the area around the art	Einige Inseln konnten nicht mit der Fläche um das Bildmaterial verbunden werden
+@msg	`width` must be from {lo} to {hi} pt	`width` muss zwischen {lo} und {hi} pt liegen
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` muss eine ganze Zahl von 1 bis {MAX_BRIDGES_PER_ISLAND} sein

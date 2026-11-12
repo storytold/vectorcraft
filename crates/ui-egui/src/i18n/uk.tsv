@@ -2391,6 +2391,10 @@ file-filter	Templates	Шаблони
 	Arch	Арка
 @msg	select point type or type on a path	виберіть точковий текст або текст за контуром
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст за контуром у пов’язаному тексті не може використовувати динамічний текст: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	не можна центрувати вгорі чи внизу текст за незамкненим або складеним контуром: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	не можна центрувати текст за контуром без довжини або без висоти: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	не можна центрувати вгорі чи внизу текст за контуром у пов’язаному тексті: {frames}
+@msg	select type on a closed path	виділіть текст за замкненим контуром
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано
 	Options	Параметри
@@ -2398,6 +2402,7 @@ file-filter	Templates	Шаблони
 	Options:	Параметри:
 	Options…	Параметри…
 	Organic Fades	Органічні згасання
+	Holographic	Голографічні
 	or more spaces with a tab	або більше прогалин на табуляцію
 	Order:	Порядок:
 	Ordinals	Порядкові числівники
@@ -2952,6 +2957,9 @@ digits	Malayalam	Малаялам
 	Rise…	Підйом…
 	Roman Baseline	Римська базова лінія
 	Roman Hanging Punctuation	Римська висяча пунктуація
+	Korean Line Break Anywhere	Перенесення корейського тексту будь-де
+	East Asian Composition Settings	Параметри східноазійського набору
+	Korean Composition Settings	Параметри корейського набору
 	Rotate	Повернути
 	Rotate 90° CW	Повернути на 90° за годинниковою стрілкою
 	Rotate Tool	Інструмент «Поворот»
@@ -3759,6 +3767,8 @@ effect	Points	Точки
 	Type on a Path	Текст за контуром
 	Type on a Path Options	Параметри тексту за контуром
 	Type on a Path Options…	Параметри тексту за контуром…
+	Center on Top	Центрувати вгорі
+	Center on Bottom	Центрувати внизу
 	Type on a Path Tool	Інструмент «Текст за контуром»
 	Type Orientation	Орієнтація тексту
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Текст залишається текстом, і кожне обведення — лінія з її товщиною та штрихами.
@@ -4614,6 +4624,7 @@ axis	Both	Обидві
 @msg	not a valid plug-in module: {0}	не є допустимим модулем: {0}
 @msg	not an EMF or WMF file	не є файлом EMF або WMF
 @msg	not an HP-GL file	не є файлом HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` має бути масивом із 1–255 кольорів #rrggbb
 @msg	not found	не знайдено
 @msg	not in pattern editing mode	не в режимі редагування візерунка
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка
@@ -5639,6 +5650,7 @@ lighting	Light	Світло
 	Ruby…	Рубі…
 	Ruby	Рубі
 	Geometric Guides	Геометричні напрямні
+	Optical Effects	Оптичні ефекти
 	Geometric Patterns	Геометричні візерунки
 	Grit Textures	Зернисті текстури
 	Ease In	Плавний початок
@@ -5919,8 +5931,24 @@ axis	Y Axis	Вісь Y
 	Charge Wave	Хвиля заряду
 	Spark Trail	Слід іскор
 	Calligraphic Nibs	Каліграфічні пера
+	Bristle Brushes	Щетинні пензлі
+	Fine Liner	Тонкий лайнер
+	Pointed Flat	Загострений плаский
+	Stubby Round	Короткий круглий
+	Dry Scrub	Сухе розтирання
+	Soft Dome	М'який купол
+	Filbert	Котячий язик
+	Angled Round	Скошений круглий
+	Angled Flat	Скошений плаский
+	Fan Blender	Віяло для розтушовування
+	Grass Fan	Віяло для трави
 	Pattern Borders	Візерункові облямівки
 	Scatter Shapes	Розсіяні фігури
+	Dry Media	Сухі матеріали
+	Chalk Grain	Крейдяне зерно
+	Graphite Pencil	Графітний олівець
+	Wax Crayon	Восковий олівець
+	Charcoal Dust	Вугільний пил
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)
@@ -6573,3 +6601,15 @@ breakText	Glyphs	Гліфи
 	Deferred Effects	Відкладені ефекти
 @msg	no plug-in effect is deferred	немає відкладених ефектів модулів
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Відкрито з {n} відкладеним ефектом модуля. Ефект › Оновити відкладені ефекти виконає його.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Інструменти різання
+	Stencil Bridges…	Містки трафарету…
+	Stencil Bridges	Містки трафарету
+	Shortest Crossing	Найкоротший перетин
+	Direction	Напрямок
+@msg	The selected art has no islands to bridge	У виділеній графіці немає острівців для з’єднання
+@msg	No bridge of this width fits across the selected art	Місток такої ширини не вміщується впоперек виділеної графіки
+@msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
+@msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}

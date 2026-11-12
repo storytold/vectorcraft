@@ -2854,6 +2854,10 @@ file-filter	Templates	Sablonok
 	Arch	Boltív
 @msg	select point type or type on a path	jelöljön ki pontszöveget vagy útvonalszöveget
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	a láncolt szövegben lévő útvonalszöveg nem használhat dinamikus szöveget: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	nyitott vagy összetett útvonalon lévő útvonalszöveg nem igazítható középre felül vagy alul: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	a hossz vagy magasság nélküli útvonalon lévő útvonalszöveg nem igazítható középre: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	a láncolt szövegben lévő útvonalszöveg nem igazítható középre felül vagy alul: {frames}
+@msg	select type on a closed path	jelöljön ki zárt útvonalon lévő útvonalszöveget
 	Optimize for fast web view	Optimalizálás gyors webes megtekintéshez
 	Optimized	Optimalizált
 	Options	Beállítások
@@ -3185,6 +3189,7 @@ mark-style	Japanese	Japán
 	Radial Blur…	Körkörös elmosás…
 	Radial Glows	Körkörös ragyogások
 	Organic Fades	Organikus áttűnések
+	Holographic	Holografikus
 	Radial Gradient	Körkörös színátmenet
 	Conic Gradient	Kúpos színátmenet
 	Diamond Gradient	Rombusz színátmenet
@@ -3492,6 +3497,9 @@ mark-style	Japanese	Japán
 	Roman	Latin
 	Roman Baseline	Latin alapvonal
 	Roman Hanging Punctuation	Latin függő írásjelek
+	Korean Line Break Anywhere	Koreai sortörés bárhol
+	East Asian Composition Settings	Kelet-ázsiai szedési beállítások
+	Korean Composition Settings	Koreai szedési beállítások
 	Rotate	Elforgatás
 	Rotate 90° CW	Forgatás 90°-kal jobbra
 	Rotate Tool	Elforgatás
@@ -4437,6 +4445,8 @@ mark-style	Japanese	Japán
 	Type on a Path	Útvonalszöveg
 	Type on a Path Options	Útvonalszöveg beállításai
 	Type on a Path Options…	Útvonalszöveg beállításai…
+	Center on Top	Középre igazítás felül
+	Center on Bottom	Középre igazítás alul
 	Type on a Path Tool	Útvonalszöveg
 	Type Optimized	Szövegre optimalizált
 	Type Orientation	Szöveg iránya
@@ -5264,6 +5274,7 @@ imageTrace	Outline	Körvonal
 @msg	not a blend	nem összemosás
 @msg	not an EMF or WMF file	nem EMF- vagy WMF-fájl
 @msg	not an HP-GL file	nem HP-GL-fájl
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens`: 1–255 #rrggbb szín tömbje kell
 @msg	not found	nem található
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
 @msg	finish editing the pattern first	előbb fejezd be a mintázat szerkesztését
@@ -6019,6 +6030,7 @@ imageTrace	Outline	Körvonal
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriai segédvonalak
+	Optical Effects	Optikai effektusok
 	Geometric Patterns	Geometriai mintázatok
 	Grit Textures	Szemcsés textúrák
 	Ease In	Lassú kezdés
@@ -6297,8 +6309,24 @@ axis	Y Axis	Y tengely
 	Charge Wave	Töltéshullám
 	Spark Trail	Szikracsík
 	Calligraphic Nibs	Kalligrafikus tollhegyek
+	Bristle Brushes	Sörteecsetek
+	Fine Liner	Finom kontúr
+	Pointed Flat	Hegyes lapos
+	Stubby Round	Rövid kerek
+	Dry Scrub	Száraz dörzsölés
+	Soft Dome	Lágy kupola
+	Filbert	Macskanyelv
+	Angled Round	Ferde kerek
+	Angled Flat	Ferde lapos
+	Fan Blender	Elmosó legyező
+	Grass Fan	Fűlegyező
 	Pattern Borders	Mintázatszegélyek
 	Scatter Shapes	Szórt alakzatok
+	Dry Media	Száraz technikák
+	Chalk Grain	Krétaszemcse
+	Graphite Pencil	Grafitceruza
+	Wax Crayon	Zsírkréta
+	Charcoal Dust	Szénpor
 	Save Brush Library…	Ecsetkönyvtár mentése…
 @msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
 @msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)
@@ -6948,3 +6976,15 @@ breakText	Glyphs	Glifák
 	Deferred Effects	Elhalasztott effektusok
 @msg	no plug-in effect is deferred	nincs elhalasztott bővítményeffektus
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Vágóeszközök
+	Stencil Bridges…	Sablonhidak…
+	Stencil Bridges	Sablonhidak
+	Shortest Crossing	Legrövidebb átkelés
+	Direction	Irány
+@msg	The selected art has no islands to bridge	A kijelölt grafikán nincsenek összekötendő szigetek
+@msg	No bridge of this width fits across the selected art	Ilyen széles híd nem fér el a kijelölt grafikán
+@msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
+@msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell

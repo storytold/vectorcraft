@@ -608,6 +608,17 @@ antiAlias	Sharp	Nítid
 	Calligraphic Brush	Pinzell cal·ligràfic
 	Calligraphic Brush Options	Opcions del pinzell cal·ligràfic
 	Calligraphic Nibs	Plomes cal·ligràfiques
+	Bristle Brushes	Pinzells de cerres
+	Fine Liner	Traç fi
+	Pointed Flat	Pla punxegut
+	Stubby Round	Rodó curt
+	Dry Scrub	Fregat sec
+	Soft Dome	Cúpula suau
+	Filbert	Llengua de gat
+	Angled Round	Rodó bisellat
+	Angled Flat	Pla bisellat
+	Fan Blender	Ventall difuminador
+	Grass Fan	Ventall d'herba
 	Can't export “{name}”.	No es pot exportar “{name}”.
 	Can't open “{name}”.	No es pot obrir “{name}”.
 	Can't print these settings: see the Summary	No es poden imprimir aquests paràmetres: consulta el resum
@@ -2916,12 +2927,17 @@ digits	Malayalam	Malaiàlam
 	Opens network connections	Obre connexions de xarxa
 	Open…	Obre…
 	Optical	Òptic
+	Optical Effects	Efectes òptics
 	Optical Margin Alignment	Alineació òptica de marges
 	Dynamic Text	Text dinàmic
 	Dynamic Text Presets	Valors predefinits de text dinàmic
 	Arch	Volta
 @msg	select point type or type on a path	seleccioneu text de punt o text sobre un traçat
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el text sobre un traçat d’un text enllaçat no pot fer servir el text dinàmic: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	el text sobre un traçat obert o compost no es pot centrar a dalt o a baix: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	el text sobre un traçat sense longitud o sense alçada no es pot centrar: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	el text sobre un traçat d’un text enllaçat no es pot centrar a dalt o a baix: {frames}
+@msg	select type on a closed path	seleccioneu text sobre un traçat tancat
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat
 	Options	Opcions
@@ -2929,6 +2945,7 @@ digits	Malayalam	Malaiàlam
 	Options:	Opcions:
 	Options…	Opcions…
 	Organic Fades	Esvaïments orgànics
+	Holographic	Hologràfics
 	or more spaces with a tab	o més espais amb un tabulador
 	Orange	Taronja
 	Order:	Ordre:
@@ -3633,6 +3650,9 @@ digits	Malayalam	Malaiàlam
 	Roman	Romà
 	Roman Baseline	Línia de base romana
 	Roman Hanging Punctuation	Puntuació penjant romana
+	Korean Line Break Anywhere	Salt de línia coreà a qualsevol lloc
+	East Asian Composition Settings	Configuració de composició de l’Àsia oriental
+	Korean Composition Settings	Configuració de composició coreana
 	Rotate	Gira
 	Rotate 90° CW	Gira 90° en sentit horari
 	Rotate Tool	Eina de gir
@@ -3849,6 +3869,11 @@ digits	Malayalam	Malaiàlam
 	Scatter Brush Options	Opcions del pinzell de dispersió
 	Scatter Graph Tool	Eina de gràfic de dispersió
 	Scatter Shapes	Formes de dispersió
+	Dry Media	Tècniques seques
+	Chalk Grain	Gra de guix
+	Graphite Pencil	Llapis de grafit
+	Wax Crayon	Cera de colors
+	Charcoal Dust	Pols de carbó
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores
@@ -4697,6 +4722,8 @@ digits	Malayalam	Malaiàlam
 	Type on a Path	Text sobre un traçat
 	Type on a Path Options	Opcions de text sobre un traçat
 	Type on a Path Options…	Opcions de text sobre un traçat…
+	Center on Top	Centra a dalt
+	Center on Bottom	Centra a baix
 	Type on a Path Tool	Eina de text sobre un traçat
 	Type Optimized	Optimitzat per al text
 	Type Orientation	Orientació del text
@@ -5654,6 +5681,7 @@ digits	Malayalam	Malaiàlam
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no és un conjunt de dreceres de VectorCraft (falta `overrides`)
 @msg	not an EMF or WMF file	no és un fitxer EMF o WMF
 @msg	not an HP-GL file	no és un fitxer HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` ha de ser una matriu d’1 a 255 colors #rrggbb
 @msg	not an RTF file: it doesn't start with {\\rtf	no és un fitxer RTF: no comença amb {\\rtf
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
@@ -6945,3 +6973,15 @@ breakText	Glyphs	Glifs
 	Deferred Effects	Efectes ajornats
 @msg	no plug-in effect is deferred	no hi ha cap efecte de complement ajornat
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	S’ha obert amb {n} efecte de complement ajornat. Efecte › Actualitza els efectes ajornats l’executa.|S’ha obert amb {n} efectes de complement ajornats. Efecte › Actualitza els efectes ajornats els executa.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Eines de tall
+	Stencil Bridges…	Ponts de plantilla…
+	Stencil Bridges	Ponts de plantilla
+	Shortest Crossing	Travessia més curta
+	Direction	Direcció
+@msg	The selected art has no islands to bridge	La il·lustració seleccionada no té illes per unir
+@msg	No bridge of this width fits across the selected art	Cap pont d’aquesta amplada no cap a la il·lustració seleccionada
+@msg	Some islands could not be joined to the area around the art	Algunes illes no s’han pogut unir a l’àrea que envolta la il·lustració
+@msg	`width` must be from {lo} to {hi} pt	`width` ha d’estar entre {lo} i {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` ha de ser un nombre enter d’1 a {MAX_BRIDGES_PER_ISLAND}

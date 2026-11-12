@@ -366,6 +366,8 @@
 	Stair Step	Trappetrin
 	Gravity	Tyngdekraft
 	Type on a Path Options…	Indstillinger for tekst på kurve…
+	Center on Top	Centrer øverst
+	Center on Bottom	Centrer nederst
 	Threaded Text	Sammenkædet tekst
 	Create	Opret
 	Release Selection	Frigør markering
@@ -788,6 +790,7 @@
 	Sky Gradients	Himmelgradienter
 	Neutral Gradients	Neutrale gradienter
 	Organic Fades	Organiske toninger
+	Holographic	Holografiske
 	Duotone Gradients	Duotonegradienter
 	Radial Glows	Radiale gløder
 	Save Swatch Library…	Gem bibliotek med farveprøver…
@@ -1822,6 +1825,9 @@ digits	Malayalam	Malayalam
 	Right Indent	Højre indrykning
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
 	Roman Hanging Punctuation	Romersk hængende tegnsætning
+	Korean Line Break Anywhere	Koreansk linjeskift hvor som helst
+	East Asian Composition Settings	Indstillinger for østasiatisk komposition
+	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
 	Single-line Composer	Enlinjesætter
 	Toggle Line Composer	Skift linjesætter
@@ -4511,6 +4517,7 @@ imageTrace	Outline	Kontur
 @msg	not a valid plug-in module: {0}	ikke et gyldigt plug-in-modul: {0}
 @msg	not an EMF or WMF file	ikke en EMF- eller WMF-fil
 @msg	not an HP-GL file	ikke en HP-GL-fil
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` skal være et array af 1 til 255 #rrggbb-farver
 @msg	not found	ikke fundet
 @msg	not in pattern editing mode	ikke i mønsterredigeringstilstand
 @msg	finish editing the pattern first	afslut først redigeringen af mønsteret
@@ -5869,6 +5876,7 @@ swatch	Bright Violet	Kraftig violet
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriske hjælpelinjer
+	Optical Effects	Optiske effekter
 	Geometric Patterns	Geometriske mønstre
 	Grit Textures	Kornede teksturer
 	Ease In	Langsom start
@@ -6070,8 +6078,24 @@ axis	Y Axis	Y-akse
 	Charge Wave	Opladningsbølge
 	Spark Trail	Gnistsvær
 	Calligraphic Nibs	Kalligrafiske penne
+	Bristle Brushes	Børstepensler
+	Fine Liner	Fin streg
+	Pointed Flat	Spids flad
+	Stubby Round	Kort rund
+	Dry Scrub	Tør skrubning
+	Soft Dome	Blød kuppel
+	Filbert	Oval flad
+	Angled Round	Skrå rund
+	Angled Flat	Skrå flad
+	Fan Blender	Blendevifte
+	Grass Fan	Græsvifte
 	Pattern Borders	Mønsterborter
 	Scatter Shapes	Spredte former
+	Dry Media	Tørre medier
+	Chalk Grain	Kridtkorn
+	Graphite Pencil	Grafitblyant
+	Wax Crayon	Vokskridt
+	Charcoal Dust	Kulstøv
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
@@ -6669,3 +6693,10 @@ breakText	Glyphs	Glyffer
 # Deferred plug-in effects
 	Refresh Deferred Effects	Opdatér udskudte effekter
 	Deferred Effects	Udskudte effekter
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Skæreværktøjer
+	Stencil Bridges…	Stencilbroer…
+	Stencil Bridges	Stencilbroer
+	Shortest Crossing	Korteste krydsning
+	Direction	Retning

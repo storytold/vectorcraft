@@ -1957,6 +1957,10 @@ antiAlias	Sharp	Nítido
 	Arch	Abóbada
 @msg	select point type or type on a path	selecione texto de ponto ou texto em um caminho
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	o texto em um caminho de um texto encadeado não pode usar Texto Dinâmico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	o texto em um caminho aberto ou composto não pode ser centralizado em cima ou embaixo: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	o texto em um caminho sem comprimento ou sem altura não pode ser centralizado: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	o texto em um caminho de um texto encadeado não pode ser centralizado em cima ou embaixo: {frames}
+@msg	select type on a closed path	selecione texto em um caminho fechado
 	Optimize for fast web view	Otimizar para visualização rápida na web
 	Optimized	Otimizado
 	Options	Opções
@@ -1965,6 +1969,7 @@ antiAlias	Sharp	Nítido
 	Order:	Ordem:
 	Ordinals	Ordinais
 	Organic Fades	Esmaecimentos Orgânicos
+	Holographic	Holográficos
 	Orientation	Orientação
 	Orientation:	Orientação:
 	Original	Original
@@ -2447,6 +2452,9 @@ digits	Malayalam	Malaiala
 	Rise…	Rise…
 	Roman Baseline	Linha de Base Romana
 	Roman Hanging Punctuation	Pontuação Pendurada Romana
+	Korean Line Break Anywhere	Quebra de Linha Coreana em Qualquer Lugar
+	East Asian Composition Settings	Configurações de Composição do Leste Asiático
+	Korean Composition Settings	Configurações de Composição Coreana
 	Rotate	Girar
 	Rotate Tool	Ferramenta Girar
 	Rotate View Tool	Ferramenta Girar Visualização
@@ -3065,6 +3073,8 @@ digits	Malayalam	Malaiala
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	O texto vira contornos, e os traços que uma linha CAD não pode desenhar viram formas preenchidas.
 	Type on a Path	Texto em um Caminho
 	Type on a Path Options…	Opções de Texto em um Caminho…
+	Center on Top	Centralizar em Cima
+	Center on Bottom	Centralizar em Baixo
 	Type on a Path Tool	Ferramenta Texto em um Caminho
 	Type stays text, and every stroke is a line with its lineweight and dashes.	O texto permanece texto, e todo traço é uma linha com sua espessura e tracejados.
 	Type:	Tipo:
@@ -4117,6 +4127,7 @@ axis	Both	Ambos
 @msg	not a valid plug-in module: {0}	não é um módulo de plug-in válido: {0}
 @msg	not an EMF or WMF file	não é um arquivo EMF ou WMF
 @msg	not an HP-GL file	não é um arquivo HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` deve ser uma matriz de 1 a 255 cores #rrggbb
 @msg	not found	não encontrado
 @msg	not in pattern editing mode	não está no modo de edição de padrão
 @msg	finish editing the pattern first	termine de editar o padrão primeiro
@@ -5951,6 +5962,7 @@ mark-style	Japanese	Japonesas
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guias geométricas
+	Optical Effects	Efeitos ópticos
 	Geometric Patterns	Padrões geométricos
 	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
@@ -6229,8 +6241,24 @@ axis	Y Axis	Eixo Y
 	Charge Wave	Onda de carga
 	Spark Trail	Rastro de faíscas
 	Calligraphic Nibs	Penas Caligráficas
+	Bristle Brushes	Pincéis de Cerdas
+	Fine Liner	Traço Fino
+	Pointed Flat	Chato Pontudo
+	Stubby Round	Redondo Curto
+	Dry Scrub	Esfregado Seco
+	Soft Dome	Cúpula Suave
+	Filbert	Língua de Gato
+	Angled Round	Redondo Chanfrado
+	Angled Flat	Chato Chanfrado
+	Fan Blender	Leque Esfumador
+	Grass Fan	Leque de Grama
 	Pattern Borders	Bordas de Padrão
 	Scatter Shapes	Formas de Dispersão
+	Dry Media	Técnicas Secas
+	Chalk Grain	Grão de Giz
+	Graphite Pencil	Lápis de Grafite
+	Wax Crayon	Giz de Cera
+	Charcoal Dust	Pó de Carvão
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
 @msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
@@ -7037,3 +7065,15 @@ swatch	Yellow Green	Verde-amarelado
 	Deferred Effects	Efeitos Adiados
 @msg	no plug-in effect is deferred	nenhum efeito de plug-in está adiado
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aberto com {n} efeito de plug-in adiado. Efeito › Atualizar Efeitos Adiados o executa.|Aberto com {n} efeitos de plug-in adiados. Efeito › Atualizar Efeitos Adiados os executa.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Ferramentas de Corte
+	Stencil Bridges…	Pontes de Estêncil…
+	Stencil Bridges	Pontes de Estêncil
+	Shortest Crossing	Travessia mais curta
+	Direction	Direção
+@msg	The selected art has no islands to bridge	A arte selecionada não tem ilhas para unir
+@msg	No bridge of this width fits across the selected art	Nenhuma ponte desta largura cabe na arte selecionada
+@msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
+@msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}

@@ -2195,6 +2195,7 @@ file-filter	Templates	範本
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
 @msg	not an HP-GL file	不是 HP-GL 檔案
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必須是由 1 到 255 個 #rrggbb 格式顏色組成的陣列
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
 @msg	damaged	已損毀
@@ -3359,6 +3360,10 @@ file-filter	Templates	範本
 	Arch	拱形
 @msg	select point type or type on a path	請選取點狀文字或路徑文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串連文字中的路徑文字無法使用動態文字：{frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	開放路徑或複合路徑上的路徑文字無法在頂端或底端置中：{open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	路徑沒有長度或沒有高度時，其路徑文字無法置中：{flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	串連文字中的路徑文字無法在頂端或底端置中：{frames}
+@msg	select type on a closed path	請選取封閉路徑上的路徑文字
 	Optimize for fast web view	最佳化以便快速網頁檢視
 	Optimized	最佳化
 	Options	選項
@@ -3366,6 +3371,7 @@ file-filter	Templates	範本
 	Options:	選項：
 	Options…	選項…
 	Organic Fades	自然漸隱
+	Holographic	全像
 	or more spaces with a tab	個以上的空格取代為定位字元
 	Order:	順序：
 	Ordinals	序數字
@@ -3924,6 +3930,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Rise…	上升…
 	Roman Baseline	羅馬基線
 	Roman Hanging Punctuation	羅馬懸掛標點
+	Korean Line Break Anywhere	韓文任意位置換行
+	East Asian Composition Settings	東亞排版設定
+	Korean Composition Settings	韓文排版設定
 	Rotate	旋轉
 	Rotate 90° CW	順時針旋轉 90°
 	Rotate Tool	旋轉工具
@@ -4731,6 +4740,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Type on a Path	路徑文字
 	Type on a Path Options	路徑文字選項
 	Type on a Path Options…	路徑文字選項…
+	Center on Top	在頂端置中
+	Center on Bottom	在底端置中
 	Type on a Path Tool	路徑文字工具
 	Type Orientation	文字方向
 	Type stays text, and every stroke is a line with its lineweight and dashes.	文字維持為文字，每個筆畫都是帶有線寬與虛線的線條。
@@ -5677,6 +5688,7 @@ lighting	Light	光源
 	Ruby…	注音…
 	Ruby	注音
 	Geometric Guides	幾何參考線
+	Optical Effects	光學效果
 	Geometric Patterns	幾何圖樣
 	Grit Textures	顆粒紋理
 	Ease In	緩入
@@ -5957,8 +5969,24 @@ axis	Y Axis	Y 軸
 	Charge Wave	充能波
 	Spark Trail	火花尾跡
 	Calligraphic Nibs	書法筆尖
+	Bristle Brushes	鬃毛筆刷集
+	Fine Liner	細勾線筆
+	Pointed Flat	尖頭平筆
+	Stubby Round	短圓筆
+	Dry Scrub	乾擦
+	Soft Dome	柔和圓頂
+	Filbert	榛形筆
+	Angled Round	斜圓筆
+	Angled Flat	斜平筆
+	Fan Blender	混色扇形筆
+	Grass Fan	畫草扇形筆
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
+	Dry Media	乾性畫材
+	Chalk Grain	粉筆顆粒
+	Graphite Pencil	石墨鉛筆
+	Wax Crayon	蠟筆
+	Charcoal Dust	炭粉
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
@@ -6608,3 +6636,15 @@ breakText	Glyphs	字符
 	Deferred Effects	延後的效果
 @msg	no plug-in effect is deferred	沒有延後的增效模組效果
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	開啟時延後了 {n} 個增效模組效果。效果 › 重新整理延後的效果可執行它們。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	切割工具
+	Stencil Bridges…	鏤空版連接橋…
+	Stencil Bridges	鏤空版連接橋
+	Shortest Crossing	最短跨越
+	Direction	方向
+@msg	The selected art has no islands to bridge	所選圖稿沒有需要連接的孤島
+@msg	No bridge of this width fits across the selected art	此寬度的連接橋無法放入所選圖稿
+@msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
+@msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數

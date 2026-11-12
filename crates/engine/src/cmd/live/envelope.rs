@@ -3,7 +3,7 @@ use super::common::{fix_ids, ids_json, is_envelope, roots_param, selected_of, wr
 use super::mesh::{handle_param, index_param, whole};
 use super::{
     Affine, Appearance, Arc, Beside, Color, Document, EngineError, EnvelopeKind, EnvelopeMap, EnvelopeOptions, Node, NodeId, NodeKind, Paint,
-    PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, f64_or, f64_req, id_param, json, live, ok, switch_or, text_param,
+    PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, f64_or, f64_req, json, live, object_param, ok, switch_or, text_param,
 };
 
 // ---------- Envelope ----------
@@ -13,9 +13,14 @@ const WARP_NUMBERS: &[&str] = &["bend", "h", "v", "horizontalDistortion", "verti
 
 fn warp_kind(p: &Value, cmd: &str, cur: Option<&EnvelopeKind>) -> Result<EnvelopeKind> {
     check_numbers(p, WARP_NUMBERS, cmd)?;
-    let (mut style, mut bend, mut h, mut v, mut horizontal) = ("arc".to_string(), 50.0, 0.0, 0.0, true);
-    if let Some(EnvelopeKind::Warp { style: s0, bend: b0, h: h0, v: v0, horizontal: z0 }) = cur {
-        (style, bend, h, v, horizontal) = (s0.clone(), *b0, *h0, *v0, *z0);
+    // A new warp takes its style's Bézier net; an edited one keeps the map it has unless `version`
+    // names one.
+    let (mut style, mut bend, mut h, mut v, mut horizontal, mut version) = ("arc".to_string(), 50.0, 0.0, 0.0, true, live::WARP_NET);
+    if let Some(EnvelopeKind::Warp { style: s0, bend: b0, h: h0, v: v0, horizontal: z0, version: n0 }) = cur {
+        (style, bend, h, v, horizontal, version) = (s0.clone(), *b0, *h0, *v0, *z0, *n0);
+    }
+    if let Some(n) = p.get("version") {
+        version = live::warp_version(n).ok_or_else(|| bad(cmd, format!("`version` must be 0 or {}", live::WARP_NET)))?;
     }
     if let Some(s) = text_param(p, "style", cmd)? {
         let s = s.strip_prefix("warp.").unwrap_or(s);
@@ -32,7 +37,7 @@ fn warp_kind(p: &Value, cmd: &str, cur: Option<&EnvelopeKind>) -> Result<Envelop
         Some(o) => o == "horizontal",
         None => given,
     };
-    Ok(EnvelopeKind::Warp { style, bend, h, v, horizontal })
+    Ok(EnvelopeKind::Warp { style, bend, h, v, horizontal, version })
 }
 
 /// The options and fidelity new envelopes get (Envelope Options with no envelope selected).
@@ -206,8 +211,8 @@ pub(super) fn env_info(s: &mut Session, _: &Value) -> Result<Value> {
         return Ok(envelope_options_json(json!({ "id": null }), &options, fidelity));
     };
     let v = match &**kind {
-        EnvelopeKind::Warp { style, bend, h, v, horizontal } => {
-            json!({"type": "warp", "style": style, "bend": bend, "h": h, "v": v, "horizontal": horizontal})
+        EnvelopeKind::Warp { style, bend, h, v, horizontal, version } => {
+            json!({"type": "warp", "style": style, "bend": bend, "h": h, "v": v, "horizontal": horizontal, "version": version})
         }
         EnvelopeKind::Mesh { rows, cols, .. } => json!({"type": "mesh", "rows": rows, "cols": cols}),
         EnvelopeKind::TopObject { .. } => json!({"type": "topObject"}),
@@ -419,7 +424,7 @@ pub(super) fn env_edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn env_set_mesh_point(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.setMeshPoint";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let index = index_param(p, "index", C)?;
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let handle = handle_param(p, C)?;

@@ -2399,6 +2399,10 @@ file-filter	Templates	Modelli
 	Arch	Volta
 @msg	select point type or type on a path	seleziona testo per punti o testo su tracciato
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	il testo su tracciato in un testo concatenato non può usare il testo dinamico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	il testo su un tracciato aperto o composto non può essere centrato in alto o in basso: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	il testo su un tracciato senza lunghezza o senza altezza non può essere centrato: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	il testo su tracciato in un testo concatenato non può essere centrato in alto o in basso: {frames}
+@msg	select type on a closed path	seleziona del testo su un tracciato chiuso
 	Optimize for fast web view	Ottimizza per visualizzazione web veloce
 	Optimized	Ottimizzato
 	Options	Opzioni
@@ -2406,6 +2410,7 @@ file-filter	Templates	Modelli
 	Options:	Opzioni:
 	Options…	Opzioni…
 	Organic Fades	Dissolvenze organiche
+	Holographic	Olografici
 	or more spaces with a tab	o più spazi con una tabulazione
 	Order:	Ordine:
 	Ordinals	Ordinali
@@ -2960,6 +2965,9 @@ digits	Malayalam	Malayalam
 	Rise…	Ascesa…
 	Roman Baseline	Linea di base romana
 	Roman Hanging Punctuation	Punteggiatura sporgente romana
+	Korean Line Break Anywhere	Interruzione di riga coreana ovunque
+	East Asian Composition Settings	Impostazioni di composizione dell’Asia orientale
+	Korean Composition Settings	Impostazioni di composizione coreana
 	Rotate	Ruota
 	Rotate 90° CW	Ruota di 90° in senso orario
 	Rotate Tool	Strumento Ruota
@@ -3766,6 +3774,8 @@ digits	Malayalam	Malayalam
 	Type on a Path	Testo su tracciato
 	Type on a Path Options	Opzioni testo su tracciato
 	Type on a Path Options…	Opzioni testo su tracciato…
+	Center on Top	Centra in alto
+	Center on Bottom	Centra in basso
 	Type on a Path Tool	Strumento Testo su tracciato
 	Type Orientation	Orientamento testo
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Il testo resta testo e ogni traccia diventa una linea con il suo spessore e i suoi tratteggi.
@@ -4630,6 +4640,7 @@ axis	Both	Entrambi
 @msg	not a valid plug-in module: {0}	non è un modulo plug-in valido: {0}
 @msg	not an EMF or WMF file	non è un file EMF o WMF
 @msg	not an HP-GL file	non è un file HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` deve essere un elenco da 1 a 255 colori #rrggbb
 @msg	not found	non trovato
 @msg	not in pattern editing mode	non sei in modalità modifica motivo
 @msg	finish editing the pattern first	termina prima la modifica del motivo
@@ -5659,6 +5670,7 @@ lighting	Light	Luce
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guide geometriche
+	Optical Effects	Effetti ottici
 	Geometric Patterns	Motivi geometrici
 	Grit Textures	Texture granulose
 	Ease In	Inizio graduale
@@ -5939,8 +5951,24 @@ axis	Y Axis	Asse Y
 	Charge Wave	Onda di carica
 	Spark Trail	Scia di scintille
 	Calligraphic Nibs	Pennini calligrafici
+	Bristle Brushes	Pennelli a setole
+	Fine Liner	Tratto fine
+	Pointed Flat	Piatto appuntito
+	Stubby Round	Tondo corto
+	Dry Scrub	Strofinato secco
+	Soft Dome	Cupola morbida
+	Filbert	Lingua di gatto
+	Angled Round	Tondo obliquo
+	Angled Flat	Piatto obliquo
+	Fan Blender	Ventaglio sfumino
+	Grass Fan	Ventaglio per erba
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
+	Dry Media	Tecniche secche
+	Chalk Grain	Grana di gesso
+	Graphite Pencil	Matita di grafite
+	Wax Crayon	Pastello a cera
+	Charcoal Dust	Polvere di carboncino
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)
@@ -6593,3 +6621,15 @@ breakText	Glyphs	Glifi
 	Deferred Effects	Effetti rimandati
 @msg	no plug-in effect is deferred	nessun effetto plug-in è rimandato
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aperto con {n} effetto plug-in rimandato. Effetto › Aggiorna effetti rimandati lo esegue.|Aperto con {n} effetti plug-in rimandati. Effetto › Aggiorna effetti rimandati li esegue.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Strumenti di taglio
+	Stencil Bridges…	Ponti per stencil…
+	Stencil Bridges	Ponti per stencil
+	Shortest Crossing	Attraversamento più breve
+	Direction	Direzione
+@msg	The selected art has no islands to bridge	La grafica selezionata non ha isole da collegare
+@msg	No bridge of this width fits across the selected art	Nessun ponte di questa larghezza entra nella grafica selezionata
+@msg	Some islands could not be joined to the area around the art	Non è stato possibile collegare alcune isole all’area intorno alla grafica
+@msg	`width` must be from {lo} to {hi} pt	`width` deve essere compreso tra {lo} e {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve essere un numero intero compreso tra 1 e {MAX_BRIDGES_PER_ISLAND}

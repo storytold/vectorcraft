@@ -405,6 +405,8 @@
 	Stair Step	Schody
 	Gravity	Gravitace
 	Type on a Path Options…	Možnosti textu na cestě…
+	Center on Top	Vystředit nahoře
+	Center on Bottom	Vystředit dole
 	Threaded Text	Zřetězený text
 	Create	Vytvořit
 	Release Selection	Uvolnit výběr
@@ -425,6 +427,10 @@
 	Arch	Klenba
 @msg	select point type or type on a path	vyberte bodový text nebo text na cestě
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text na cestě ve zřetězeném textu nemůže používat dynamický text: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	text na otevřené nebo složené cestě nelze vystředit nahoře ani dole: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	text na cestě bez délky nebo bez výšky nelze vystředit: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	text na cestě ve zřetězeném textu nelze vystředit nahoře ani dole: {frames}
+@msg	select type on a closed path	vyberte text na uzavřené cestě
 	Fill with Placeholder Text	Vyplnit zástupným textem
 	Insert Inline Symbol	Vložit symbol do textu
 	Show Hidden Characters	Zobrazit skryté znaky
@@ -851,6 +857,7 @@
 	Sky Gradients	Přechody oblohy
 	Neutral Gradients	Neutrální přechody
 	Organic Fades	Organické přechody
+	Holographic	Holografické
 	Duotone Gradients	Dvoutónové přechody
 	Radial Glows	Kruhové záře
 	Save Swatch Library…	Uložit knihovnu vzorníku…
@@ -2016,6 +2023,9 @@ digits	Malayalam	Malajálamské
 	Right Indent	Odsazení zprava
 	Right-to-Left Paragraph Direction	Směr odstavce zprava doleva
 	Roman Hanging Punctuation	Visící latinková interpunkce
+	Korean Line Break Anywhere	Zalomení korejského řádku kdekoli
+	East Asian Composition Settings	Nastavení východoasijské sazby
+	Korean Composition Settings	Nastavení korejské sazby
 	Select a text object to edit its paragraph attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho odstavce.
 	Single-line Composer	Sazba jednoho řádku
 	Toggle Line Composer	Přepnout sazbu řádků
@@ -4887,6 +4897,7 @@ imageTrace	Outline	Obrys
 @msg	not a valid plug-in module: {0}	neplatný modul zásuvného modulu: {0}
 @msg	not an EMF or WMF file	nejde o soubor EMF ani WMF
 @msg	not an HP-GL file	nejde o soubor HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` musí být pole 1 až 255 barev #rrggbb
 @msg	not found	nenalezeno
 @msg	not in pattern editing mode	není aktivní režim úprav vzorku
 @msg	finish editing the pattern first	nejprve dokončete úpravy vzorku
@@ -6036,6 +6047,7 @@ mark-style	Japanese	Japonské
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrická vodítka
+	Optical Effects	Optické efekty
 	Geometric Patterns	Geometrické vzorky
 	Grit Textures	Zrnité textury
 	Ease In	Pozvolný začátek
@@ -6314,8 +6326,24 @@ axis	Y Axis	osa Y
 	Charge Wave	Nabíjecí vlna
 	Spark Trail	Jiskrová stopa
 	Calligraphic Nibs	Kaligrafická pera
+	Bristle Brushes	Štětinové štětce
+	Fine Liner	Jemná linka
+	Pointed Flat	Špičatý plochý
+	Stubby Round	Krátký kulatý
+	Dry Scrub	Suché drhnutí
+	Soft Dome	Měkká kopule
+	Filbert	Plochý oválný
+	Angled Round	Šikmý kulatý
+	Angled Flat	Šikmý plochý
+	Fan Blender	Vějíř na prolínání
+	Grass Fan	Vějíř na trávu
 	Pattern Borders	Vzorkové okraje
 	Scatter Shapes	Rozptýlené tvary
+	Dry Media	Suché techniky
+	Chalk Grain	Křídové zrno
+	Graphite Pencil	Grafitová tužka
+	Wax Crayon	Vosková pastelka
+	Charcoal Dust	Uhlový prach
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)
@@ -6964,3 +6992,15 @@ breakText	Glyphs	Glyfy
 	Deferred Effects	Odložené efekty
 @msg	no plug-in effect is deferred	žádný efekt zásuvného modulu není odložen
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otevřeno s {n} odloženým efektem zásuvného modulu. Efekt › Obnovit odložené efekty jej spustí.|Otevřeno s {n} odloženými efekty zásuvných modulů. Efekt › Obnovit odložené efekty je spustí.|Otevřeno s {n} odloženými efekty zásuvných modulů. Efekt › Obnovit odložené efekty je spustí.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Nástroje pro řezání
+	Stencil Bridges…	Můstky šablony…
+	Stencil Bridges	Můstky šablony
+	Shortest Crossing	Nejkratší přechod
+	Direction	Směr
+@msg	The selected art has no islands to bridge	Vybraná kresba nemá žádné ostrůvky k přemostění
+@msg	No bridge of this width fits across the selected art	Přes vybranou kresbu se nevejde žádný můstek této šířky
+@msg	Some islands could not be joined to the area around the art	Některé ostrůvky nebylo možné připojit k oblasti kolem kresby
+@msg	`width` must be from {lo} to {hi} pt	`width` musí být od {lo} do {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musí být celé číslo od 1 do {MAX_BRIDGES_PER_ISLAND}

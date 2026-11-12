@@ -2675,6 +2675,10 @@ digits	Hindi	Hindi
 	Arch	Vòm
 @msg	select point type or type on a path	chọn chữ điểm hoặc chữ trên đường dẫn
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	chữ trên đường dẫn trong văn bản chuỗi không thể dùng văn bản động: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	không thể căn giữa ở trên hoặc ở dưới chữ trên đường dẫn mở hoặc đường dẫn phức: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	không thể căn giữa chữ trên đường dẫn không có độ dài hoặc không có chiều cao: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	không thể căn giữa ở trên hoặc ở dưới chữ trên đường dẫn trong văn bản chuỗi: {frames}
+@msg	select type on a closed path	hãy chọn chữ trên một đường dẫn khép kín
 	Optimize for fast web view	Tối ưu để xem web nhanh
 	Optimized	Đã tối ưu
 	Options	Tùy chọn
@@ -2974,6 +2978,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
 	Organic Fades	Mờ dần tự nhiên
+	Holographic	Ảnh ba chiều
 	Radial Gradient	Chuyển sắc hướng tâm
 	Conic Gradient	Chuyển sắc hình nón
 	Diamond Gradient	Chuyển sắc hình thoi
@@ -3256,6 +3261,9 @@ mark-style	Japanese	Kiểu Nhật
 	Rise…	Nâng lên…
 	Roman Baseline	Đường cơ sở Roman
 	Roman Hanging Punctuation	Dấu câu treo Roman
+	Korean Line Break Anywhere	Ngắt dòng tiếng Hàn ở bất kỳ đâu
+	East Asian Composition Settings	Cài đặt dàn trang Đông Á
+	Korean Composition Settings	Cài đặt dàn trang tiếng Hàn
 	Rotate	Xoay
 	Rotate 90° CW	Xoay 90° theo chiều kim đồng hồ
 	Rotate Tool	Công cụ Xoay
@@ -4142,6 +4150,8 @@ mark-style	Japanese	Kiểu Nhật
 	Type on a Path	Chữ trên đường dẫn
 	Type on a Path Options	Tùy chọn chữ trên đường dẫn
 	Type on a Path Options…	Tùy chọn chữ trên đường dẫn…
+	Center on Top	Căn giữa ở trên
+	Center on Bottom	Căn giữa ở dưới
 	Type on a Path Tool	Công cụ Chữ trên đường dẫn
 	Type Orientation	Hướng chữ
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Chữ vẫn là văn bản, và mỗi nét là đường thẳng với độ dày và nét đứt.
@@ -4927,6 +4937,7 @@ theme	Appearance	Giao diện
 @msg	This shortcut file is in a form VectorCraft can't read.	Tệp phím tắt này có dạng mà VectorCraft không đọc được.
 @msg	not an EMF or WMF file	không phải tệp EMF hoặc WMF
 @msg	not an HP-GL file	không phải tệp HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` phải là mảng từ 1 đến 255 màu #rrggbb
 @msg	not found	không tìm thấy
 @msg	not in pattern editing mode	không ở chế độ chỉnh sửa họa tiết
 @msg	finish editing the pattern first	hãy hoàn tất chỉnh sửa họa tiết trước
@@ -5640,6 +5651,7 @@ theme	Appearance	Giao diện
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Đường dẫn hình học
+	Optical Effects	Hiệu ứng quang học
 	Geometric Patterns	Họa tiết hình học
 	Grit Textures	Kết cấu hạt
 	Ease In	Chậm lúc đầu
@@ -5920,8 +5932,24 @@ axis	Y Axis	Trục Y
 	Charge Wave	Sóng nạp
 	Spark Trail	Vệt tia lửa
 	Calligraphic Nibs	Ngòi bút thư pháp
+	Bristle Brushes	Bộ cọ lông
+	Fine Liner	Nét mảnh
+	Pointed Flat	Cọ dẹt nhọn
+	Stubby Round	Cọ tròn ngắn
+	Dry Scrub	Chà khô
+	Soft Dome	Vòm mềm
+	Filbert	Cọ lưỡi mèo
+	Angled Round	Cọ tròn xiên
+	Angled Flat	Cọ dẹt xiên
+	Fan Blender	Cọ quạt hòa trộn
+	Grass Fan	Cọ quạt vẽ cỏ
 	Pattern Borders	Viền họa tiết
 	Scatter Shapes	Hình phân tán
+	Dry Media	Chất liệu khô
+	Chalk Grain	Hạt phấn
+	Graphite Pencil	Bút chì than chì
+	Wax Crayon	Bút sáp màu
+	Charcoal Dust	Bụi than
 	Save Brush Library…	Lưu thư viện cọ…
 @msg	`{_1}` has no brushes to apply	`{_1}` không có cọ nào để áp dụng
 @msg	missing `library` (see brush.libraries)	thiếu `library` (xem brush.libraries)
@@ -6574,3 +6602,15 @@ breakText	Glyphs	Glyph
 	Deferred Effects	Hiệu ứng bị hoãn
 @msg	no plug-in effect is deferred	không có hiệu ứng plug-in nào bị hoãn
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Đã mở với {n} hiệu ứng plug-in bị hoãn. Hiệu ứng › Làm mới hiệu ứng bị hoãn sẽ chạy chúng.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Công cụ cắt
+	Stencil Bridges…	Cầu nối khuôn tô…
+	Stencil Bridges	Cầu nối khuôn tô
+	Shortest Crossing	Đường cắt ngắn nhất
+	Direction	Hướng
+@msg	The selected art has no islands to bridge	Hình vẽ đã chọn không có đảo nào cần nối
+@msg	No bridge of this width fits across the selected art	Không có cầu nối nào rộng như vậy vừa với hình vẽ đã chọn
+@msg	Some islands could not be joined to the area around the art	Không thể nối một số đảo với vùng xung quanh hình vẽ
+@msg	`width` must be from {lo} to {hi} pt	`width` phải từ {lo} đến {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` phải là số nguyên từ 1 đến {MAX_BRIDGES_PER_ISLAND}
