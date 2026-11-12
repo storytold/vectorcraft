@@ -225,3 +225,7 @@ sync_github_name = true
 real_name = "Hassan Nawaz Khan"
 display_name = "Hassan Nawaz Khan"
 sync_github_name = false
+
+[people.mohamedwithai]
+display_name = "HASAN CGI"
+sync_github_name = false
