@@ -2549,6 +2549,7 @@ digits	Malayalam	Malayalam
 	Radial	Radiell
 	Radial Glows	Radiellt sken
 	Radial Gradient	Radiell gradient
+	Conic Gradient	Konisk gradient
 	Radius 1	Radie 1
 	Radius 2	Radie 2
 	Radius1	Radie1
@@ -3532,6 +3533,8 @@ digits	Malayalam	Malayalam
 	Toolbar: Single/Double Column	Verktygsfält: En/två kolumner
 	Toolbar: Add Tool	Verktygsfält: Lägg till verktyg
 	Toolbar: Remove Tool	Verktygsfält: Ta bort verktyg
+	Add Tool…	Lägg till verktyg…
+	Remove Tool	Ta bort verktyg
 	Toolbar: Reset	Verktygsfält: Återställ
 	Toolbars	Verktygsfält
 	Tools	Verktyg
@@ -3973,6 +3976,13 @@ axis	Both	Båda
 	Dock Panel	Docka panel
 	Dock to Top	Docka överst
 	Dock to Bottom	Docka nederst
+	Control Bar Options	Alternativ för kontrollfältet
+	Tool Options	Verktygsalternativ
+	Object Options	Objektalternativ
+	Image Options	Bildalternativ
+	Vertical Alignment	Vertikal justering
+	Align and Distribute	Justera och fördela
+	Document Options	Dokumentalternativ
 	Dock Control Bar	Docka kontrollfältet
 	Drag to float the toolbar	Dra för att göra verktygsfältet flytande
 	Drag to the window's left or right edge to dock	Dra till fönstrets vänster- eller högerkant för att docka
@@ -4119,6 +4129,8 @@ axis	Both	Båda
 @msg	`groupColors` must be an array	`groupColors` måste vara en array
 @msg	`library` is a library id or name (see {list})	`library` är ett biblioteks-id eller biblioteksnamn (se {list})
 @msg	`mode` applies to freeform gradients	`mode` gäller för fria gradienter
+@msg	a negative `aspect` applies to conic gradients	ett negativt `aspect` gäller för koniska gradienter
+@msg	`focal` applies to radial gradients	`focal` gäller för radiella gradienter
 @msg	`preserve` must be an object	`preserve` måste vara ett objekt
 @msg	`globalAdjust` must be an object	`globalAdjust` måste vara ett objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` måste vara 1, 3 eller 5
@@ -4609,7 +4621,7 @@ axis	Both	Båda
 @msg	unknown format	okänt format
 @msg	unknown format `{f}` (Save writes {_1})	okänt format `{f}` (Spara skriver {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	okänt fritt läge `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	okänd gradienttyp `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	okänd gradienttyp `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	okänd högdager `{h}`
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
@@ -4884,7 +4896,13 @@ axis	Both	Båda
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC- eller HEIF-filen innehåller en typ av bild som inte kan läsas
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- och HEIF-bilder kan inte öppnas i den här versionen
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zippad 32-bitars PSD-bilddata med prediktion kan inte läsas
+@msg	zipped 1-bit PSD image data with prediction can't be read	zippad 1-bitars PSD-bilddata med prediktion kan inte läsas
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD-filens lagerdata använder en okänd komprimering ({m})
+@msg	the PSD file's layer records are damaged	PSD-filens lagerposter är skadade
+@msg	the PSD file's layer groups are nested too deeply	PSD-filens lagergrupper är kapslade för djupt
+@msg	a layer of the PSD file is too large to read	ett lager i PSD-filen är för stort för att läsas
+@msg	the PSD file's layers take more memory to read than allowed	PSD-filens lager kräver mer minne för att läsas än vad som tillåts
+@msg	the layers can't be read ({e}): the file opened as its merged image	lagren kan inte läsas ({e}): filen öppnades som sin sammanslagna bild
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitars PSD-filer i det här färgläget kan inte läsas
 @msg	the PSD file is cut short	PSD-filen är avkortad
 @msg	the PSD file's header is damaged	PSD-filens huvud är skadat
@@ -5751,7 +5769,7 @@ theme	Appearance	Utseende
 @msg	span must be "object" or "selection", got {v}	span måste vara "object" eller "selection", fick {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerar en `gradient`, inte en färgruta
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerar en gradient: ange `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" placerar en linjär eller radiell gradient, inte en fri
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" placerar en linjär, radiell eller konisk gradient, inte en fri
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerar själva gradienten: utelämna `start` och `end` (de placerar den redan i dokumentkoordinater)
 @msg	the Color Picker is not open	färgväljaren är inte öppen
 @msg	the Simplify slider is not open	Förenkla-reglaget är inte öppet
@@ -6091,6 +6109,7 @@ axis	Y Axis	Y-axel
 @msg	`inputs` needs the permission `doc.read`	`inputs` kräver behörigheten `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	minnesbudget (objekt {_1} behöver {size} byte indata, {left} återstår)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektbudget (fler än {MAX_OBJECTS} skrivskyddade objekt)
+@msg	the plug-in's grant can't be removed from the plug-in store	pluginets behörighet kan inte tas bort ur pluginlagret
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	behörigheten `{shown}` är reserverad för ett senare plugin-API; den här värden beviljar den inte
 @msg	unknown permission `{shown}`	okänd behörighet `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	”{name}” begär behörigheterna {asked}: en person måste godkänna dem i skrivbordsappen, eller skicka `grant` i en session som startats med --allow-plugin-grants
@@ -6466,9 +6485,12 @@ shape	Open	Öppen
 @msg	{label} must be a number	{label} måste vara ett tal
 @msg	{label} must be a number of at least 0.1	{label} måste vara ett tal på minst 0,1
 	Advanced Character Formats	Avancerade teckenformat
+	Basic Paragraph Formats	Grundläggande styckeformat
+	Composition	Sättning
 	Horizontal Scale	Horisontell skala
 	Vertical Scale	Vertikal skala
 @msg	{label} must be a number from {min} to {max}	{label} måste vara ett tal från {min} till {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} måste vara ett heltal från {min} till {max}
 	Character Color	Teckenfärg
 	OpenType Features	OpenType-funktioner
 	Stylistic Sets	Stilistiska uppsättningar
@@ -7415,7 +7437,7 @@ digits	Hindi	Hindi
 @msg	features must be a list of tags	features måste vara en lista med taggar
 @msg	fidelity must be 0..100	fidelity måste vara 0..100
 @msg	files must be {name, dataBase64}	files måste vara {name, dataBase64}
-@msg	fit must be none|autoHeight|shrinkText, got {id}	fit måste vara none|autoHeight|shrinkText, fick {id}
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit måste vara none|autoHeight|shrinkText|block, fick {id}
 @msg	Flare click coordinates must be finite numbers	Klickkoordinaterna för Ljusreflex måste vara ändliga tal
 @msg	flattener: {e}	utplattning: {e}
 @msg	flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)	flattenerPreset `{name}`: high, medium, low eller en sparad (se flattener.presets.list)
@@ -8285,6 +8307,7 @@ digits	Hindi	Hindi
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Justera mot pixelrutnät
+	Not Aligned to Pixel Grid	Inte justerade mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
 	Ignore All	Ignorera alla

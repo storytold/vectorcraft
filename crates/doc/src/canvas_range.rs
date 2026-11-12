@@ -15,7 +15,8 @@ pub struct BeyondCanvas {
     /// Objects removed whole (a layer or group keeps its children within the canvas).
     pub objects: usize,
     pub artboards: usize,
-    /// Guides beyond the canvas, and the artboard guides of the artboards removed.
+    /// Guides beyond the canvas, the artboard guides of the artboards removed, and the layer
+    /// guides of the layers removed.
     pub guides: usize,
     /// The ruler origin was beyond the canvas and is back at the origin.
     pub ruler_origin: bool,
@@ -100,11 +101,20 @@ fn layers_in(n: &Node, layers: &mut Vec<NodeId>) {
     }
 }
 
+/// How many ruler guides the layers in `n` hold, if it is a layer or group.
+fn guides_in(n: &Node) -> usize {
+    match clipping(n) {
+        None => 0,
+        Some(_) => n.children().into_iter().flatten().map(|c| if c.is_ruler_guide() { 1 } else { guides_in(c) }).sum(),
+    }
+}
+
 /// Remove the objects in `node` that reach beyond the canvas: a layer or group keeps those of its
 /// objects within it, unless its clipping path reaches beyond (see [`clips_beyond`]); anything
 /// else goes whole. Only containers holding such an object are copied. Recursion follows the
-/// nesting, which [`Document::limit_depth`] bounds. The layers removed are added to `layers`.
-fn drop_children_beyond(node: &mut Arc<Node>, dropped: &mut usize, layers: &mut Vec<NodeId>) {
+/// nesting, which [`Document::limit_depth`] bounds. The layers removed are added to `layers`, and
+/// the ruler guides they held to `guides`.
+fn drop_children_beyond(node: &mut Arc<Node>, dropped: &mut usize, layers: &mut Vec<NodeId>, guides: &mut usize) {
     if !node.children().is_some_and(|c| c.iter().any(|c| reaches_beyond(c))) {
         return;
     }
@@ -114,10 +124,11 @@ fn drop_children_beyond(node: &mut Arc<Node>, dropped: &mut usize, layers: &mut 
             return true;
         }
         if clipping(c).is_some() && !clips_beyond(c) {
-            drop_children_beyond(c, dropped, layers);
+            drop_children_beyond(c, dropped, layers, guides);
             return true;
         }
         layers_in(c, layers);
+        *guides += guides_in(c);
         *dropped += 1;
         false
     });
@@ -159,13 +170,14 @@ impl Document {
                     for c in children.iter() {
                         layers_in(c, &mut layers);
                     }
-                    // The layer's own ruler guides stay; only its art goes.
+                    // The layer's own ruler guides stay; only its art goes, with its sublayers' guides.
                     gone.objects += children.iter().filter(|c| !c.is_ruler_guide()).count();
+                    gone.guides += children.iter().filter(|c| !c.is_ruler_guide()).map(|c| guides_in(c)).sum::<usize>();
                     children.retain(|c| c.is_ruler_guide());
                     *clip = false;
                 }
             } else {
-                drop_children_beyond(layer, &mut gone.objects, &mut layers);
+                drop_children_beyond(layer, &mut gone.objects, &mut layers, &mut gone.guides);
             }
         }
         if gone.objects > 0 {
@@ -184,7 +196,7 @@ impl Document {
         let guides = self.saved_guides.len();
         self.saved_guides
             .retain(|g| in_range(g.pos) && g.artboard.is_none_or(|a| !removed.contains(&a)) && g.layer.is_none_or(|l| !layers.contains(&l)));
-        gone.guides = guides - self.saved_guides.len();
+        gone.guides += guides - self.saved_guides.len();
         let out = |n: &Node| match n.kind {
             NodeKind::RulerGuide { pos, artboard, .. } => !in_range(pos) || artboard.is_some_and(|a| removed.contains(&a)),
             _ => false,
@@ -324,6 +336,21 @@ mod tests {
         let layer = d2.layers[0].id.0;
         assert_eq!(d2.drop_beyond_canvas().objects, 1);
         assert_eq!(ids(&d2), [layer, 10]);
+        // The guides of a sublayer emptied out of a top-level layer go with it, counted.
+        let probe = Document::new(1.0, 1.0);
+        let sub = sublayer(&probe, 40, vec![rect(41, 0.0)], false);
+        let mut d3 = doc(vec![rect(10, 1e17), sub]);
+        if let NodeKind::Layer { clip, .. } = &mut Arc::make_mut(&mut d3.layers[0]).kind {
+            *clip = true;
+        }
+        d3.saved_guides =
+            vec![Guide { layer: Some(NodeId(40)), ..Guide::new(false, 5.0) }, Guide { layer: Some(d3.layers[0].id), ..Guide::new(true, 5.0) }];
+        let mut nodes = d3.clone();
+        assert_eq!(nodes.guides_into_nodes(), 2);
+        let gone = d3.drop_beyond_canvas();
+        assert_eq!((gone.objects, gone.guides), (2, 1), "the clipping path, the sublayer and its guide; the layer's own guide stays");
+        assert_eq!(nodes.drop_beyond_canvas(), gone);
+        assert_eq!(nodes.ruler_guides().len(), 1);
         assert_eq!(d.drop_beyond_canvas(), BeyondCanvas::default());
     }
 
@@ -353,8 +380,13 @@ mod tests {
         ];
         d.variables.bindings.insert(NodeId(11), ["v".to_string()].into());
         d.variables.bindings.insert(NodeId(10), ["w".to_string()].into());
+        // The same guides as nodes, as a document has them once read.
+        let mut nodes = d.clone();
+        assert_eq!(nodes.guides_into_nodes(), 2);
         let gone = d.drop_beyond_canvas();
         assert_eq!((gone.objects, gone.guides), (2, 1), "the far rectangle, the clipping sublayer and its layer guide");
+        assert_eq!(nodes.drop_beyond_canvas(), gone, "a guide node goes with its sublayer, counted as a saved one is");
+        assert_eq!(nodes.ruler_guides().len(), 1);
         assert_eq!(d.saved_guides.len(), 1, "the guide of a layer that stays, stays");
         assert_eq!(d.saved_selections[0].objects, [NodeId(10)]);
         assert_eq!(d.assets.iter().map(|a| (a.id, a.nodes.clone())).collect::<Vec<_>>(), [(2, vec![NodeId(10)])]);

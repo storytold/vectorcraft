@@ -6353,6 +6353,7 @@ dependencies = [
  "winit",
  "winresource",
  "winsafe",
+ "wl-clipboard-rs",
  "x11rb",
  "zbus",
 ]
@@ -6591,7 +6592,7 @@ dependencies = [
  "chrono",
  "getrandom 0.4.3",
  "proptest",
- "unicode-general-category",
+ "unicode-properties",
 ]
 
 [[package]]
@@ -6727,7 +6728,7 @@ name = "vectorcraft-scriptcheck"
 version = "0.24.0"
 dependencies = [
  "proptest",
- "unicode-general-category",
+ "unicode-properties",
 ]
 
 [[package]]
