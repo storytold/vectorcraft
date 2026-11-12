@@ -105,6 +105,11 @@ fn a_reply_hides_a_path_in_any_case_and_escaped() {
     let mut reply = json!({"error": "x /libs/B.svg y /libs/b.svg z /LIBS/b.svg"});
     super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&two.hidden), hiding: &two, fold: true });
     assert_eq!(reply["error"], "x B.svg y b.svg z b.svg", "{reply}");
+    // A readable id that begins with a hidden one stays whole in any case, `loaded/` included.
+    let nested = hiding(&[("loaded//libs/in", "loaded/in")], &["loaded//libs/in/a.svg"]);
+    let mut reply = json!({"error": "LOADED//LIBS/IN/A.SVG"});
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&nested.hidden), hiding: &nested, fold: true });
+    assert_eq!(reply["error"], "LOADED//LIBS/IN/A.SVG", "{reply}");
     let mut reply = json!({"error": "file:///C:/Libs/My%20Swatches/b.svg"});
     hide_under_a_root("escaped", &mut reply, &hidden);
     assert_eq!(reply["error"], "file:///b.svg", "{reply}");

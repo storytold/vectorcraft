@@ -734,8 +734,9 @@ fn begins_known_id(text: &str, at: usize, end: usize, r: &Rewrite) -> bool {
     let rest = &text[at..];
     let same = |a: &str, b: &str| if r.fold { a.eq_ignore_ascii_case(b) } else { a == b };
     let dotted = |id: &str| id.split(['/', '\\']).any(|part| part == "." || part == "..");
+    let prefixed = rest.get(.."loaded/".len()).is_some_and(|head| same(head, "loaded/"));
     r.hiding.readable.iter().filter(|known| !dotted(known)).any(|known| {
-        let id = if rest.starts_with("loaded/") { known.as_str() } else { known.strip_prefix("loaded/").unwrap_or(known) };
+        let id = if prefixed { known.as_str() } else { known.strip_prefix("loaded/").unwrap_or(known) };
         id.len() > end - at && rest.get(..id.len()).is_some_and(|head| same(head, id)) && !continues_path(&rest[id.len()..])
     })
 }
