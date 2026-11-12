@@ -51,6 +51,19 @@ pages describe it.
   unavailable while a setting of a single light differs between the selected effects.
 - Each change is one undo step. Dragging a value or a slider previews it on the artboard and records one step
   when the pointer is released; a typed value is recorded when it is entered. Drawing the panel records nothing.
+- **Quick Actions › Expand as Wireframes** sits under the Object tab (under the first tab for Revolve and Rotate,
+  which have no Object tab). It replaces each selected object that has a 3D effect, the 3D (Classic) effects included, with a group of paths, the
+  edges of the faces the effect draws for the object as it is turned and projected now (`effect.expandAsWireframes`),
+  as the public [Render 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/render-3d-vector-artwork.html)
+  page describes for converting the wireframe into editable paths. Each edge appears once: edges that meet end to
+  end form one path, closed where it comes back to its start, and curved edges stay curves. A face partly covered
+  by another face gives its whole outline. Faces turned away from the viewer are included where the effect draws
+  them (Draw Hidden Faces and the Wireframe surface of Extrude & Bevel (Classic)). Geometry effects after a 3D
+  effect, on the object or on a fill or stroke, reshape the edges as they reshape the drawn art. Shadows are not
+  part of the wireframe. The paths have a 0.5 pt black stroke with round joins and no fill, which is VectorCraft's
+  own choice. The group keeps the object's place, id, name, opacity, blending mode, opacity mask, attributes
+  and text wrap and is selected; objects without a visible 3D effect do not change. It is one undo step, and an error changes nothing
+  when no selected object has a visible 3D effect.
 - The Lighting tab also holds the Shadows switch and its settings ([Shadows](#shadows)). The Materials tab holds
   the Graphics ([Graphics](#graphics)); base materials and ray-traced rendering are not built (see below). The
   rotation and light rings on the artboard are part of the options dialog only.

@@ -24,6 +24,8 @@ pub(super) struct Writer<'a> {
     /// The name each spot color (by its swatch's name) is written with ([`Self::spot`]).
     spot_names: Vec<(String, String)>,
     pub(super) warnings: Vec<String>,
+    /// Notes on what the options asked for ([`crate::LegacyAiOutput::setting_notes`]).
+    pub(super) setting_notes: Vec<String>,
     /// The lock state the last `A` set.
     locked: bool,
     /// Symbols and live objects being written inside one another.
@@ -56,6 +58,7 @@ impl<'a> Writer<'a> {
             spots: vec![],
             spot_names: vec![],
             warnings: vec![],
+            setting_notes: vec![],
             locked: false,
             nest: 0,
             hidden: o.hidden,
@@ -68,9 +71,18 @@ impl<'a> Writer<'a> {
         }
     }
 
+    /// Note `w`, once, about something of the document that the file leaves out or that reaches
+    /// it changed. A note about an option goes to [`Self::note_setting`].
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about hidden objects left out or written visible as an option asks.
+    fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
         }
     }
 
@@ -225,7 +237,7 @@ impl<'a> Writer<'a> {
         if !n.visible && !self.in_hidden {
             match self.hidden {
                 HiddenObjects::Omit => {
-                    self.warn(HIDDEN);
+                    self.note_setting(HIDDEN);
                     return;
                 }
                 HiddenObjects::Layer => {
@@ -233,7 +245,7 @@ impl<'a> Writer<'a> {
                     self.hidden_art.push((n.clone(), locked || n.locked));
                     return;
                 }
-                HiddenObjects::Visible => self.warn(HIDDEN_SHOWN),
+                HiddenObjects::Visible => self.note_setting(HIDDEN_SHOWN),
             }
         }
         if n.opacity < 1.0 || n.blend != BlendMode::Normal || n.extras().mask.as_ref().is_some_and(|m| !m.disabled) {

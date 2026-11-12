@@ -1281,6 +1281,23 @@ fn compound_shape(mode: ShapeMode) -> Node {
     g
 }
 
+/// A compound shape's Transform effect turns its fill's drop shadow with the area it turns.
+#[test]
+fn a_compound_shapes_transform_turns_its_fills_shadow() {
+    let mut shape = compound_shape(ShapeMode::Add);
+    if let Some(item) = shape.appearance.items.first_mut() {
+        *item.effects_mut() =
+            vec![Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 10, "y": 0, "blur": 0}), visible: true }];
+    }
+    shape.appearance.effects.push(Effect { id: "distort.transform".into(), params: serde_json::json!({"rotate": 90}), visible: true });
+    let art = shape_art(None, &shape, None).unwrap();
+    let item = art.appearance.items.first().unwrap();
+    match crate::raster_effects(item.effects()).first() {
+        Some(crate::RasterFx::DropShadow { dx, dy, .. }) => assert!(dx.abs() < 1e-9 && (dy + 10.0).abs() < 1e-9, "{dx} {dy}"),
+        other => panic!("expected a drop shadow, got {other:?}"),
+    }
+}
+
 /// A compound shape draws the area its members' modes make, one unpainted path that its own
 /// appearance paints; evaluated, it is plain art painted with that appearance.
 #[test]

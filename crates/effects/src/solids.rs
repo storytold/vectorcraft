@@ -31,6 +31,9 @@ pub use graphics::{
 
 pub(crate) mod shadow;
 
+pub(crate) mod wireframe;
+pub use wireframe::three_d_wireframe_in;
+
 pub const EXTRUDE: &str = "threeD.extrude";
 pub const INFLATE: &str = "threeD.inflate";
 pub const ROTATE: &str = "threeD.rotate";
@@ -1176,6 +1179,10 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
     } else {
         let path = geometry(&path, &n.appearance.effects, &ctx);
         remaining = crate::without_geometry(&n.appearance.effects);
+        // The object's Transform effects, applied to the path above, transform the items' raster
+        // effects too.
+        let mut paints = paints;
+        crate::raster::follow_paints(&mut paints, &n.appearance.effects);
         // Every item's shadow goes behind every item's art.
         let mut shadows = vec![];
         for item in &paints {

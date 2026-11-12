@@ -5,6 +5,7 @@ mod addons;
 mod apiref;
 pub(crate) mod appearance;
 pub mod arrowheads;
+mod artboardalign;
 mod assets;
 mod attributes;
 pub mod brushlib;
@@ -106,6 +107,7 @@ mod variablecmds;
 pub(crate) mod views;
 pub mod wand;
 pub mod webexport;
+mod wireframe;
 mod xform;
 
 use serde::Serialize;
@@ -310,6 +312,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(draw2::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
+        v.extend(wireframe::specs());
         v.extend(pathops::specs());
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
@@ -336,6 +339,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(variablecmds::specs());
         v.extend(docinfo::specs());
         v.extend(panelcmds::specs());
+        v.extend(artboardalign::specs());
         v.extend(buildcmds::specs());
         v.extend(shaper::specs());
         v.extend(brushsym::specs());

@@ -54,6 +54,12 @@ pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
     }
 }
 
+/// The effects of `item`, a fill or stroke of `n`, that its raster effects are drawn from: each
+/// one following `n`'s Transform effects as well ([`effects::item_effects_in`]).
+pub(super) fn item_raster<'a>(n: &Node, item: &'a AppearanceItem) -> std::borrow::Cow<'a, [Effect]> {
+    effects::item_effects_in(&n.appearance.effects, item_effects(item))
+}
+
 /// Visual bounds including geometry effects, stroke outsets and shadows/glows (symbol instances
 /// measured by their art from `symbols`).
 pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
@@ -81,7 +87,7 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
 /// `r`, the art of `n` with its strokes, grown by how far the raster effects of `n`'s fills and
 /// strokes and then `n`'s own paint past it.
 fn with_raster_reach(symbols: &SymbolBoxes, n: &Node, r: Rect) -> Rect {
-    let r = n.appearance.items.iter().filter(|i| paints(i)).map(|i| spread(symbols, item_effects(i), r)).fold(r, |acc, b| acc.union(b));
+    let r = n.appearance.items.iter().filter(|i| paints(i)).map(|i| spread(symbols, &item_raster(n, i), r)).fold(r, |acc, b| acc.union(b));
     let o = outset(symbols, &n.appearance.effects, r);
     r.inflate(o, o)
 }
@@ -109,7 +115,7 @@ pub(crate) fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     }
     let b = art_bounds(symbols, n)?;
     let items = n.appearance.items.iter().filter(|i| paints(i) && !effects::raster_effects(item_effects(i)).is_empty());
-    Some(items.map(|i| spread(symbols, item_effects(i), item_bounds(symbols.document(), n, i).unwrap_or(b))).fold(b, |acc, r| acc.union(r)))
+    Some(items.map(|i| spread(symbols, &item_raster(n, i), item_bounds(symbols.document(), n, i).unwrap_or(b))).fold(b, |acc, r| acc.union(r)))
 }
 
 /// The bounds of what `item`, a fill or stroke of the path or compound path `n`, paints: the path

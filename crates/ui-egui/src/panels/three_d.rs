@@ -9,12 +9,13 @@
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_effects::{THREE_D_TYPES, is_three_d};
+use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
 
 use super::{live_run, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::three_d_materials as materials;
 use crate::state::Dialog;
+use crate::theme::Tokens;
 use crate::widgets::{self, Live, dim_label};
 
 /// The panel's id (`window.panel`).
@@ -251,6 +252,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let changed = changed_settings(&before, &after);
     let dragging = ctx.input(|i| i.pointer.any_down());
     send(app, &ctx, changed, dragging);
+    if quick_actions_shown(&d) {
+        ui.add_space(10.0);
+        let t = Tokens::get(ui.ctx());
+        ui.label(egui::RichText::new(tl!("Quick Actions")).font(crate::theme::semibold(13.0)).color(t.text));
+        let tip = tl!("Replace the selected 3D objects with the edges of their faces, as stroked paths.");
+        if ui.button(tl!("Expand as Wireframes")).on_hover_text(tip).clicked() {
+            finish(app, &ctx);
+            if let Err(e) = expand_as_wireframes(app) {
+                app.ui.status = e;
+            }
+        }
+    }
     if let Some(action) = action {
         run_action(app, &ctx, action);
     }
@@ -433,6 +446,20 @@ pub(crate) fn paint_graphic_handles(app: &VectorcraftApp, painter: &egui::Painte
         painter.circle_filled(c, r, t.accent);
         painter.circle_stroke(c, r, egui::Stroke::new(1.5, egui::Color32::WHITE));
     }
+}
+
+/// Does the panel show its Quick Actions? On the Object tab of the effects that have one, and on
+/// the first tab of the others (Revolve, Rotate), never on Lighting.
+fn quick_actions_shown(d: &Dialog) -> bool {
+    let effect = d.str("__effect");
+    let object_tab = [EXTRUDE, INFLATE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE].contains(&effect.as_str());
+    !crate::dialogs::revolve_gizmo::lighting(d) && (!object_tab || d.str("__tab") != "rotation")
+}
+
+/// Quick Actions › Expand as Wireframes: each selected object with a 3D effect becomes a group of
+/// the edges of its faces (`effect.expandAsWireframes`), one undo step.
+pub(crate) fn expand_as_wireframes(app: &mut VectorcraftApp) -> Result<(), String> {
+    app.run("effect.expandAsWireframes", json!({})).map(|_| ())
 }
 
 /// Sets to null each setting in `fields` (the first selected object's 3D effect) that the 3D effect

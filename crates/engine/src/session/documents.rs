@@ -89,6 +89,7 @@ impl Session {
             color_settings_file: None,
             plugin_dir: None,
             scripts_dir: None,
+            new_doc_profile_dir: None,
             plugin_output: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,
