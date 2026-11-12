@@ -9,6 +9,7 @@ use super::{
     Bevel, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, Point, Rect, Revolve, V3, View, eye_distance,
     perspective_scale,
 };
+use crate::shadow::Projection;
 
 /// Turns 3D points into document points and shades faces for one view.
 pub(super) struct Camera {
@@ -48,14 +49,19 @@ impl Camera {
     pub(super) fn brightness(&self, n: V3) -> f64 {
         crate::brightness(&self.view, n, self.light)
     }
+    /// The rotation and projection this camera draws with, for a shadow cast from its faces.
+    pub(super) fn projection(&self) -> Projection {
+        Projection { view: self.view, origin: self.origin, eye: self.eye }
+    }
 }
 
 /// A face of a solid before projection: its contours in view space (holes running the other way)
 /// and its outward normal.
 pub(crate) type Face3 = (Vec<Vec<V3>>, V3);
 
-/// What a solid's builder makes: its facets, or with a mesh asked for, its faces before projection.
-pub(crate) type Built = (Vec<Facet>, Vec<Face3>);
+/// What a solid's builder makes: its facets, or with a mesh asked for, its faces before projection,
+/// and the projection it used (`None` when nothing was built).
+pub(crate) type Built = (Vec<Facet>, Vec<Face3>, Option<Projection>);
 
 /// Facets being collected for one solid.
 pub(super) struct Builder<'a> {
@@ -250,7 +256,7 @@ impl Builder<'_> {
     /// The facets back to front, and the faces kept for a mesh (none without [`Builder::mesh`]).
     pub(super) fn finish(mut self) -> Built {
         self.facets.sort_by(|a, b| a.depth.total_cmp(&b.depth));
-        (self.facets, self.mesh.unwrap_or_default())
+        (self.facets, self.mesh.unwrap_or_default(), Some(self.camera.projection()))
     }
 }
 
@@ -492,7 +498,7 @@ fn steps(o: &Extrude) -> Vec<Step> {
 /// Extrude & Bevel: the shape's outline extruded backwards, with optional twist, taper, bevels
 /// and caps.
 pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<Vec<Facet>, String> {
-    extrude_faces(path, rule, bounds, options, view, false).map(|(facets, _)| facets)
+    extrude_faces(path, rule, bounds, options, view, false).map(|(facets, ..)| facets)
 }
 
 /// [`extrude`], or with `mesh` the solid's faces before projection instead of its facets.
@@ -602,7 +608,7 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
 /// Rotate: the flat art turned in 3D about the centre of `bounds` (which may be larger than the
 /// shape's own, so that every part of one object turns about the same point).
 pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<Vec<Facet>, String> {
-    plane_faces(path, rule, bounds, view, false).map(|(facets, _)| facets)
+    plane_faces(path, rule, bounds, view, false).map(|(facets, ..)| facets)
 }
 
 /// [`plane`], or with `mesh` its face before projection instead of its facet.
