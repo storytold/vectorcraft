@@ -271,16 +271,20 @@ fn pieces_of(doc: &Document, symbol: &Symbol) -> Result<Vec<Piece>, String> {
 
 /// `path` through `map`: exactly for an affine map, otherwise with each curve cut into
 /// [`PERSPECTIVE_PIECES`] pieces whose control points go through it (straight lines stay straight
-/// under a perspective). `None` when part of it has no page point.
-fn map_path(path: &PathData, map: &FaceMap, affine: Option<Affine>) -> Option<BezPath> {
+/// under a perspective). Fails when part of it has no page point, or when it takes more than `room`
+/// elements.
+fn map_path(path: &PathData, map: &FaceMap, affine: Option<Affine>, room: usize) -> Result<BezPath, NotMapped> {
     let bp = path.to_bezpath();
     if let Some(a) = affine {
-        return Some(a * bp);
+        return if bp.elements().len() <= room { Ok(a * bp) } else { Err(NotMapped::Full) };
     }
-    let to = |p: Point| map.to_page(p);
+    let to = |p: Point| map.to_page(p).ok_or(NotMapped::Behind);
     let mut out = BezPath::new();
     let mut at = Point::ZERO;
     for el in bp.elements() {
+        if out.elements().len() > room {
+            return Err(NotMapped::Full);
+        }
         match *el {
             PathEl::MoveTo(p) => {
                 out.move_to(to(p)?);
@@ -291,24 +295,58 @@ fn map_path(path: &PathData, map: &FaceMap, affine: Option<Affine>) -> Option<Be
                 at = p;
             }
             PathEl::QuadTo(c, p) => {
-                cubic_to(&mut out, vectorcraft_geom::kurbo::QuadBez::new(at, c, p).raise(), &to)?;
+                cubic_to(&mut out, vectorcraft_geom::kurbo::QuadBez::new(at, c, p).raise(), map).ok_or(NotMapped::Behind)?;
                 at = p;
             }
             PathEl::CurveTo(c1, c2, p) => {
-                cubic_to(&mut out, CubicBez::new(at, c1, c2, p), &to)?;
+                cubic_to(&mut out, CubicBez::new(at, c1, c2, p), map).ok_or(NotMapped::Behind)?;
                 at = p;
             }
             PathEl::ClosePath => out.close_path(),
         }
     }
-    Some(out)
+    if out.elements().len() <= room { Ok(out) } else { Err(NotMapped::Full) }
 }
 
-fn cubic_to(out: &mut BezPath, c: CubicBez, to: &dyn Fn(Point) -> Option<Point>) -> Option<()> {
+/// Why [`map_path`] drew nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NotMapped {
+    /// Part of the path has no page point: it is at or behind the eye.
+    Behind,
+    /// The path takes more elements than it has room for.
+    Full,
+}
+
+/// Curve `c` through `map`, cut into [`PERSPECTIVE_PIECES`] pieces. A piece that lies in front of
+/// the eye while a control point does not is split further ([`piece_to`]). `None` when part of a
+/// piece has no page point.
+fn cubic_to(out: &mut BezPath, c: CubicBez, map: &FaceMap) -> Option<()> {
     for k in 0..PERSPECTIVE_PIECES {
         let (t0, t1) = (k as f64 / PERSPECTIVE_PIECES as f64, (k + 1) as f64 / PERSPECTIVE_PIECES as f64);
         let s = c.subsegment(t0..t1);
-        out.curve_to(to(s.p1)?, to(s.p2)?, to(s.p3)?);
+        if !map.maps_curve([s.p0, s.p1, s.p2, s.p3]) {
+            return None;
+        }
+        piece_to(out, s, map, MAX_SPLITS)?;
+    }
+    Some(())
+}
+
+/// How many times [`piece_to`] halves a piece whose control points are behind the eye.
+const MAX_SPLITS: usize = 4;
+
+/// Piece `s`, which lies in front of the eye, through `map`: halved until the control points of
+/// each half have page points, at most `splits` times, and drawn straight past that.
+fn piece_to(out: &mut BezPath, s: CubicBez, map: &FaceMap, splits: usize) -> Option<()> {
+    let end = map.to_page(s.p3)?;
+    match (map.to_page(s.p1), map.to_page(s.p2)) {
+        (Some(c1), Some(c2)) => out.curve_to(c1, c2, end),
+        _ if splits == 0 => out.line_to(end),
+        _ => {
+            let (a, b) = s.subdivide();
+            piece_to(out, a, map, splits - 1)?;
+            piece_to(out, b, map, splits - 1)?;
+        }
     }
     Some(())
 }
@@ -316,7 +354,8 @@ fn cubic_to(out: &mut BezPath, c: CubicBez, to: &dyn Fn(Point) -> Option<Point>)
 /// The graphics `graphics` lists for `face`, drawn on caps `caps` (the faces of that end of the
 /// object's solids that the viewer sees) through `map`, for an object whose bounds have
 /// center `center`: one clipping group of every such graphic, shaded with the first cap's light.
-/// A graphic whose symbol `doc` does not have draws nothing. `elements` counts the path elements
+/// Pattern tiles keep their colors: the document's pattern draws them. A graphic whose symbol
+/// `doc` does not have draws nothing. `elements` counts the path elements
 /// the effect's graphics have drawn so far, after a perspective cuts their curves, and is shared by
 /// every call for one effect. `None` when there is nothing to draw or that count passes
 /// [`MAX_ELEMENTS`].
@@ -354,29 +393,43 @@ pub(super) fn face_art(
         for piece in pieces {
             let placed = piece.path.transformed(place);
             let added: usize = placed.subpaths.iter().map(|s| s.anchors.len() + 1).sum();
+            let before = *elements;
             *elements = elements.saturating_add(added.saturating_mul(cuts));
             if *elements > MAX_ELEMENTS {
                 return None;
             }
+            // Curves split near the eye, and the cut at it, can draw more elements than were
+            // counted: the path may take what is left of the limit, and is counted as drawn. Past
+            // the limit, the face draws nothing.
+            let room = MAX_ELEMENTS - before;
             let mut rule = piece.rule;
-            let mapped = map_path(&placed, map, affine).or_else(|| {
-                // Part of it is at or behind the eye: the part in front is drawn.
-                let part = map.mapped_part(placed.bounds()?)?;
-                let mut front = BezPath::new();
-                front.move_to(*part.first()?);
-                part.iter().skip(1).for_each(|p| front.line_to(*p));
-                front.close_path();
-                let cut = vectorcraft_pathops::boolean(
-                    &placed,
-                    piece.rule,
-                    &PathData::from_bezpath(&front),
-                    FillRule::NonZero,
-                    vectorcraft_pathops::BoolOp::Intersect,
-                );
-                rule = FillRule::NonZero;
-                map_path(&cut, map, affine)
-            });
-            let Some(mapped) = mapped else { continue };
+            let mapped = match map_path(&placed, map, affine, room) {
+                Err(NotMapped::Behind) => {
+                    // Part of it is at or behind the eye: the part in front is drawn.
+                    let Some(part) = placed.bounds().and_then(|b| map.mapped_part(b)) else { continue };
+                    let Some(&first) = part.first() else { continue };
+                    let mut front = BezPath::new();
+                    front.move_to(first);
+                    part.iter().skip(1).for_each(|p| front.line_to(*p));
+                    front.close_path();
+                    let cut = vectorcraft_pathops::boolean(
+                        &placed,
+                        piece.rule,
+                        &PathData::from_bezpath(&front),
+                        FillRule::NonZero,
+                        vectorcraft_pathops::BoolOp::Intersect,
+                    );
+                    rule = FillRule::NonZero;
+                    map_path(&cut, map, affine, room)
+                }
+                done => done,
+            };
+            let mapped = match mapped {
+                Ok(mapped) => mapped,
+                Err(NotMapped::Full) => return None,
+                Err(NotMapped::Behind) => continue,
+            };
+            *elements = (*elements).max(before.saturating_add(mapped.elements().len()));
             let mut paint = piece.paint;
             vectorcraft_doc::recolor::map_paint(&mut paint, &|c| crate::lighting::shade(c, light));
             // A pattern's tiles follow the graphic onto the face, as its gradients do below.

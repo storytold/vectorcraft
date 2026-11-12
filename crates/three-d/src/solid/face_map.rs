@@ -76,6 +76,29 @@ impl FaceMap {
         (p.x.is_finite() && p.y.is_finite() && self.homogeneous(p)[2] > self.nearest()).then_some(p)
     }
 
+    /// Does every point of the cubic Bézier curve with control points `c` lie far enough in front
+    /// of the eye for [`FaceMap::to_page`] to map it? Its control points need not.
+    pub fn maps_curve(&self, c: [Point; 4]) -> bool {
+        let [w0, w1, w2, w3] = c.map(|p| self.homogeneous(p)[2]);
+        let depth = |t: f64| {
+            let s = 1.0 - t;
+            s * s * s * w0 + 3.0 * s * s * t * w1 + 3.0 * s * t * t * w2 + t * t * t * w3
+        };
+        // The depth is least at an end or where its derivative, a t² + b t + k (times 3), is 0.
+        let (a, b, k) = (w3 - 3.0 * w2 + 3.0 * w1 - w0, 2.0 * (w2 - 2.0 * w1 + w0), w1 - w0);
+        // A missing root is NaN, which the range check leaves out.
+        let mut at = [0.0, 1.0, f64::NAN, f64::NAN];
+        if a.abs() > 1e-12 {
+            let root = (b * b - 4.0 * a * k).sqrt();
+            at[2] = (-b + root) / (2.0 * a);
+            at[3] = (-b - root) / (2.0 * a);
+        } else if b.abs() > 1e-12 {
+            at[2] = -k / b;
+        }
+        let limit = self.nearest();
+        at.into_iter().filter(|t| (0.0..=1.0).contains(t)).all(|t| depth(t) > limit)
+    }
+
     /// The part of rectangle `r` of the face's plane whose points [`FaceMap::to_page`] maps, kept
     /// back from the eye by twice its nearest distance, as a convex polygon: all of `r` without
     /// perspective. `None` when no part of `r` maps.

@@ -293,6 +293,57 @@ fn a_symbols_pattern_follows_the_graphic() {
 }
 
 #[test]
+fn a_curve_in_front_of_the_eye_maps_though_its_control_points_do_not() {
+    let bounds = Rect::new(10.0, 20.0, 70.0, 60.0);
+    let view = vectorcraft_three_d::View { rotation_x: -89.0, rotation_y: 40.0, rotation_z: 10.0, perspective: 160.0, ..Default::default() };
+    let map = vectorcraft_three_d::plane_face_map(bounds, view).unwrap();
+    // Where the page map stops along the line x = `x`, between the center and a point it does not map.
+    let edge = |x: f64| {
+        let inside = Point::new(x, bounds.center().y);
+        let far = [Point::new(x, -1e6), Point::new(x, 1e6)].into_iter().find(|p| map.to_page(*p).is_none()).unwrap();
+        let (mut a, mut b) = (inside, far);
+        for _ in 0..200 {
+            let m = a.midpoint(b);
+            if map.to_page(m).is_some() { a = m } else { b = m }
+        }
+        a
+    };
+    let (b1, b2) = (edge(40.0), edge(60.0));
+    let u = (b2 - b1).normalize();
+    let mut n = vectorcraft_geom::Vec2::new(-u.y, u.x);
+    if map.to_page(b1 + n * 10.0).is_none() {
+        n = -n;
+    }
+    // Ends 219.17 in front of that line and control points 100 and 42 past it: the curve stays
+    // about 1 in front, while a control point of one of the pieces it is cut into falls behind.
+    let at = |s: f64, t: f64| b1 + n * s + u * t;
+    let mut curve = BezPath::new();
+    curve.move_to(at(219.17, 0.0));
+    curve.curve_to(at(-100.0, 5.0), at(-42.0, 15.0), at(219.17, 20.0));
+    let c = CubicBez::new(at(219.17, 0.0), at(-100.0, 5.0), at(-42.0, 15.0), at(219.17, 20.0));
+    assert!((0..=1000).all(|k| map.to_page(c.eval(k as f64 / 1000.0)).is_some()), "the curve itself is in front");
+    let pieces = (0..PERSPECTIVE_PIECES).map(|k| c.subsegment(k as f64 / 8.0..(k + 1) as f64 / 8.0));
+    assert!(pieces.flat_map(|s| [s.p1, s.p2]).any(|p| map.to_page(p).is_none()), "a piece's control point is behind");
+    let mapped = map_path(&PathData::from_bezpath(&curve), &map, None, usize::MAX).expect("the curve maps");
+    // The split pieces count toward the room the path is given: without room, the path is full,
+    // not behind the eye, so it is not clipped.
+    assert!(mapped.elements().len() > 1 + PERSPECTIVE_PIECES);
+    assert_eq!(map_path(&PathData::from_bezpath(&curve), &map, None, PERSPECTIVE_PIECES + 1).err(), Some(NotMapped::Full));
+    assert!(mapped.elements().iter().all(|e| e.end_point().is_none_or(|p| p.x.is_finite() && p.y.is_finite())));
+    // That piece is split until its halves' control points map, so it stays a curve.
+    assert!(mapped.elements().iter().all(|e| !matches!(e, PathEl::LineTo(_))), "{mapped:?}");
+    // With its ends at 214.25 instead, the curve dips about 0.24 behind the line between the ends
+    // of two pieces, which still map: it has no page point there, and is left to the clipping.
+    let c = CubicBez::new(at(214.25, 0.0), at(-100.0, 5.0), at(-42.0, 15.0), at(214.25, 20.0));
+    assert!((0..=PERSPECTIVE_PIECES).all(|k| map.to_page(c.eval(k as f64 / 8.0)).is_some()));
+    assert!((0..=1000).any(|k| map.to_page(c.eval(k as f64 / 1000.0)).is_none()));
+    let mut dips = BezPath::new();
+    dips.move_to(c.p0);
+    dips.curve_to(c.p1, c.p2, c.p3);
+    assert_eq!(map_path(&PathData::from_bezpath(&dips), &map, None, usize::MAX).err(), Some(NotMapped::Behind));
+}
+
+#[test]
 fn members_with_their_own_blending_get_graphics_of_their_own() {
     let d = document();
     let a = square(1, Rect::new(0.0, 0.0, 50.0, 100.0), Paint::solid(Color::rgb(0.5, 0.5, 0.5)));
