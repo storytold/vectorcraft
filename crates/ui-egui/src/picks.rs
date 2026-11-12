@@ -223,6 +223,15 @@ pub(crate) fn as_entry<R>(app: &mut VectorcraftApp, entry: impl FnOnce() -> Entr
     r
 }
 
+/// Run a continuation under its own entry: a refused Save's panel must resume Save As, not retry
+/// the original Save. Restore the enclosing entry for any work it does afterwards.
+pub(crate) fn as_own_entry<R>(app: &mut VectorcraftApp, entry: Entry, f: impl FnOnce(&mut VectorcraftApp) -> R) -> R {
+    let outer = app.picks.entry.replace(entry);
+    let r = f(app);
+    app.picks.entry = outer;
+    r
+}
+
 /// Run `f` as handling the answer of a file dialog automation opened when `automated` (and inside
 /// one already, as that): [`VectorcraftApp::automation_asked`] is true meanwhile.
 pub(crate) fn as_automated<R>(app: &mut VectorcraftApp, automated: bool, f: impl FnOnce(&mut VectorcraftApp) -> R) -> R {

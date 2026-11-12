@@ -873,6 +873,17 @@ font-technology	Variable	Değişken
 	The selected character's font is not available.	Seçili karakterin yazı tipi kullanılamıyor.
 	No alternates for the selected character.	Seçili karakter için alternatif yok.
 	Double-click to replace	Değiştirmek için çift tıklayın
+	Select one character with the Type tool first.	Önce Yazım aracıyla bir karakter seçin.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph}, seçili metnin yazı tipine ({text_font}) değil, {font} yazı tipine ait bir glif.
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph}, {base} (U+{base_code}) karakterine aittir ({place}); seçiminiz {sel} (U+{code}).
+	at the start of a word	kelimenin başında
+	in the middle of a word	kelimenin ortasında
+	at the end of a word	kelimenin sonunda
+	standing alone	tek başına dururken
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph}, kendi kelimesinde durduğu hâliyle {sel} (U+{code}) karakterinin alternatifi değil.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Bunun yerine {base} (U+{code}) eklemek için çift tıklayın: sunum biçimi bağlanmaz, harf bağlanır.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Sunum biçimi yerine {base} (U+{code}) eklendi: yazı tipi onu konumuna göre komşularına bağlar.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Hiçbir OpenType özelliği bu glifi burada çizmez; bu yüzden karakterin glifinin yerine geçer ve komşu karakterlere bağlanmayabilir.
 	Double-click to insert	Eklemek için çift tıklayın
 	Double-click to rename	Yeniden adlandırmak için çift tıklayın
 	Double-click to target the contents	İçeriği hedeflemek için çift tıklayın
@@ -1828,6 +1839,8 @@ font-technology	Variable	Değişken
 	Metallic Gradients	Metalik Degradeler
 	Meters	Metre
 	Method:	Yöntem:
+	Pad	Uzat
+	Repeats	Tekrar sayısı
 	Millimeters	Milimetre
 	Minify	Küçült
 	Minimal	Asgari
@@ -2171,6 +2184,10 @@ shape	Open	Açık
 	Arch	Kemer
 @msg	select point type or type on a path	nokta metni veya yol üzerindeki yazıyı seçin
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	zincirli metindeki yol üzerindeki yazı dinamik metin kullanamaz: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	açık veya bileşik bir yol üzerindeki yazı üstte veya altta ortalanamaz: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	uzunluğu ya da yüksekliği olmayan yol üzerindeki yazı ortalanamaz: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	zincirli metindeki yol üzerindeki yazı üstte veya altta ortalanamaz: {frames}
+@msg	select type on a closed path	kapalı bir yol üzerindeki yazıyı seçin
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
 	Options	Seçenekler
@@ -3241,6 +3258,9 @@ digits	Malayalam	Malayalam
 	Split Path	Bölünmüş Yol
 	spot	nokta
 	Spot Color	Nokta Rengi
+	Spot Color Objects	Spot Renkli Nesneler
+	Pattern Objects	Desenli Nesneler
+	Gradient Objects	Degradeli Nesneler
 	Spot Colors	Nokta Renkleri
 	Spot Colors…	Nokta Renkleri…
 	Spread:	Yayılma:
@@ -3536,6 +3556,8 @@ digits	Malayalam	Malayalam
 	Type on a Path	Bir Yola Yazın
 	Type on a Path Options	Yol Seçenekleri Üzerine Yazma
 	Type on a Path Options…	Yol Seçenekleri Üzerine Yazma…
+	Center on Top	Üstte ortala
+	Center on Bottom	Altta ortala
 	Type on a Path Tool	Yola Yazma Aracı
 	Type Orientation	Tip Yönü
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Yazı metin olarak kalır ve her kontur, çizgi kalınlığı ve tireleriyle birlikte bir çizgidir.
@@ -4139,6 +4161,8 @@ axis	Both	Her İkisi
 @msg	the Color Picker is not open	Renk Seçici açık değil
 @msg	the screen color sampler is already open	ekran rengi örnekleyici zaten açık
 @msg	this system has no screen color sampler	bu sistemin ekran rengi örnekleyicisi yok
+@msg	the screen color sampler did not answer	ekran rengi örnekleyici yanıt vermedi
+@msg	the screen color sampler failed	ekran rengi örnekleyici başarısız oldu
 @msg	bad colour `{hex}` (#rrggbb)	kötü renk `{hex}` (#rrggbb)
 @msg	bad page tree	kötü sayfa ağacı
 @msg	bad shortcut	kötü kısayol
@@ -4170,6 +4194,7 @@ axis	Both	Her İkisi
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`, "#ff8800" gibi bir renk değil
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: en fazla {MAX_TABLE} renginde
 @msg	command `{0}` is not available right now: {1}	`{0}` komutu şu anda kullanılamıyor: {1}
+@msg	command `{id}` is not available right now	`{id}` komutu şu anda kullanılamıyor
 @msg	compound paths can only contain paths	bileşik yollar yalnızca yollar içerebilir
 @msg	compressed (RLE) bitmaps can't be read yet	sıkıştırılmış (RLE) bitmapler henüz okunamıyor
 @msg	damaged	hasarlı
@@ -6039,9 +6064,13 @@ axis	Y Axis	Y ekseni
 	Snap to Tangent	Teğete Yasla
 	Snap to Perpendicular	Dikeye Yasla
 	Geometric Guides	Geometrik Kılavuzlar
+	Optical Effects	Optik Efektler
 	Geometric Patterns	Geometrik Desenler
 	Grit Textures	Grenli Dokular
 @msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
+@msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat veya reflect olmalıdır
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 ile {MAX_REPEATS} arasında bir tam sayı olmalıdır
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` doğrusal, radyal, konik ve elmas degradeler için geçerlidir
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Büyük bir hesaplama bütçesi isteyen “{name}” yüklensin mi?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Her çalıştırma {minutes} dakikaya kadar sürebilir ve diğer eklentilere izin verilen işin {times} katını yapabilir. Arka planda çalışır ve iptal edebilirsiniz.
@@ -6291,6 +6320,11 @@ axis	Y Axis	Y ekseni
 	Grass Fan	Çim Yelpazesi
 	Pattern Borders	Desen Kenarlıkları
 	Scatter Shapes	Dağılım Şekilleri
+	Dry Media	Kuru Teknikler
+	Chalk Grain	Tebeşir Dokusu
+	Graphite Pencil	Grafit Kalem
+	Wax Crayon	Mum Boya
+	Charcoal Dust	Kömür Tozu
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)
@@ -6951,3 +6985,8 @@ breakText	Glyphs	Glifler
 @msg	Some islands could not be joined to the area around the art	Bazı adalar çizimin çevresindeki alana bağlanamadı
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} ile {hi} pt arasında olmalıdır
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 ile {MAX_BRIDGES_PER_ISLAND} arasında bir tam sayı olmalıdır
+	Weed Box and Lines…	Ayıklama Kutusu ve Çizgileri…
+	Weed Box and Lines	Ayıklama Kutusu ve Çizgileri
+	Margin	Kenar Boşluğu
+	Box	Kutu
+	Swatch	Renk Örneği

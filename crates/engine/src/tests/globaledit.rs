@@ -92,7 +92,50 @@ fn start_global_edit_takes_the_objects_of_the_same_shape_at_any_place_and_size()
     assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2);
     let r = s.execute("select.globalEdit", &json!({})).unwrap();
     assert_eq!(r["active"], false, "the second run is Stop Global Edit");
-    assert!(s.doc().unwrap().global_edit.is_none() && crate::cmd::globaledit::highlights(&s).is_empty());
+    assert!(s.doc().unwrap().global_edit.is_none());
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2, "with the square still selected, the objects it would take are highlighted again");
+}
+
+#[test]
+fn selecting_one_object_highlights_the_similar_objects_before_global_edit_starts() {
+    use crate::cmd::globaledit::highlights;
+    let mut s = session();
+    let [a, b, _, wide, _] = squares(&mut s);
+    assert!(highlights(&s).is_empty(), "nothing selected");
+    sel(&mut s, &[a]);
+    assert_eq!(members(&s), None, "Global Edit has not started");
+    assert_eq!(highlights(&s).len(), 2, "the copy and the smaller square");
+    s.execute("select.globalEditOptions", &json!({"size": true})).unwrap();
+    assert_eq!(highlights(&s).len(), 1, "the options narrow them: the copy only");
+    s.execute("select.globalEditOptions", &json!({"size": false})).unwrap();
+    assert_eq!(highlights(&s).len(), 2);
+    sel(&mut s, &[b]);
+    s.execute("edit.clear", &json!({})).unwrap();
+    sel(&mut s, &[a]);
+    assert_eq!(highlights(&s).len(), 1, "a deleted copy is no longer highlighted");
+    sel(&mut s, &[wide]);
+    assert!(highlights(&s).is_empty(), "the rectangle has no similar object");
+    sel(&mut s, &[a, wide]);
+    assert!(highlights(&s).is_empty(), "two objects selected");
+}
+
+#[test]
+fn the_canvas_highlights_similar_objects_before_the_start_with_the_selection_tool_only() {
+    let mut s = session();
+    let [a, b, ..] = squares(&mut s);
+    let outline = node(&s, b).stroke_path().unwrap();
+    let shown = |s: &mut Session| {
+        s.overlays(ViewInfo::default())
+            .iter()
+            .any(|o| matches!(o, vectorcraft_tools::Overlay::Path { path, width, .. } if *path == outline && *width == 1.0))
+    };
+    sel(&mut s, &[a]);
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    assert!(shown(&mut s), "the copy is highlighted with the Selection tool");
+    s.select_tool("directSelection", ViewInfo::default()).unwrap();
+    assert!(!shown(&mut s), "not with another tool before Global Edit starts");
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    assert!(shown(&mut s), "while Global Edit is on, with any tool");
 }
 
 #[test]
@@ -506,6 +549,7 @@ fn leaving_out_all_but_one_ends_global_edit_and_the_first_object_stays() {
     let r = s.execute("select.globalEditExclude", &json!({"id": b.0})).unwrap();
     assert_eq!(r, json!({"active": false, "count": 0, "ids": []}));
     assert_eq!(members(&s), None, "one object left: Global Edit ends");
+    sel(&mut s, &[wide]);
     assert!(crate::cmd::globaledit::highlights(&s).is_empty());
 }
 

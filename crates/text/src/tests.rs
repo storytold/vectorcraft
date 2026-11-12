@@ -13,6 +13,7 @@ mod composite;
 mod devanagari;
 mod embed;
 mod fit;
+mod glyph_alternates;
 mod hang;
 mod harakat;
 mod inline;

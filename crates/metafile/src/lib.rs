@@ -84,7 +84,7 @@ pub fn export(doc: &Document, region: Rect, kind: Kind) -> Result<Output, String
     let doc = baked.as_ref().unwrap_or(doc);
     let (ops, mut warnings) = scene::Scene::new(doc, r, kind == Kind::Emf).run();
     let bytes = match kind {
-        Kind::Emf => emf::write(&ops, r, &doc.title),
+        Kind::Emf => emf::write(&ops, r, doc.info_title()),
         Kind::Wmf => wmf::write(&ops, r, &mut warnings),
     };
     Ok(Output { bytes, warnings })

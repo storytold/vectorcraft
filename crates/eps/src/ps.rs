@@ -33,11 +33,19 @@ pub(crate) fn num(v: f64) -> String {
 
 /// Append [`num`]`(v)` to `s`.
 pub(crate) fn push_num(s: &mut String, v: f64) {
-    // Beyond ~1.8e304 the scaling overflows; such values have no fractional digits to round.
+    push_num_places(s, v, 4);
+}
+
+/// Append `v` to `s` with at most `places` decimals (up to 9), no trailing zeros (0 when not
+/// finite).
+pub(crate) fn push_num_places(s: &mut String, v: f64, places: u32) {
+    let places = places.min(9);
+    let scale = 10f64.powi(places as i32);
+    // Past where the scaling overflows, values have no fractional digits to round.
     let v = if !v.is_finite() {
         0.0
-    } else if (v * 10_000.0).is_finite() {
-        (v * 10_000.0).round() / 10_000.0
+    } else if (v * scale).is_finite() {
+        (v * scale).round() / scale
     } else {
         v
     };
@@ -46,7 +54,7 @@ pub(crate) fn push_num(s: &mut String, v: f64) {
         return;
     }
     let start = s.len();
-    let _ = write!(s, "{v:.4}");
+    let _ = write!(s, "{v:.*}", places as usize);
     let keep = s[start..].trim_end_matches('0').trim_end_matches('.').len();
     s.truncate(start + keep);
 }
@@ -291,7 +299,7 @@ pub(crate) fn inflate(data: &[u8], max: u64) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ascii85, ascii85_decode, num};
+    use super::{ascii85, ascii85_decode, num, push_num_places};
 
     #[test]
     fn ascii85_first_line_never_starts_with_percent() {
@@ -307,5 +315,19 @@ mod tests {
             let s = num(v);
             assert!(!s.is_empty() && s.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '.'), "{v}: got {s:?}");
         }
+    }
+
+    #[test]
+    fn numbers_keep_the_decimals_asked_for() {
+        let places = |v: f64, n: u32| {
+            let mut s = String::new();
+            push_num_places(&mut s, v, n);
+            s
+        };
+        assert_eq!(num(0.123_456_78), "0.1235");
+        assert_eq!(places(0.123_456_78, 7), "0.1234568");
+        assert_eq!(places(f64::from(0.4f32), 7), "0.4");
+        assert_eq!(places(2.5, 7), "2.5");
+        assert_eq!(places(f64::NAN, 7), "0");
     }
 }

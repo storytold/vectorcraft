@@ -106,7 +106,7 @@ VCLegacy begin
 /TE {cleartomark} bd /TZ {cleartomark} bd
 /To {pop} bd /Tp {7 {pop} repeat} bd /TP {} bd /TO {} bd
 /Tr {pop} bd /Tf {pop pop pop pop} bd /Ts {pop} bd /Tz {pop pop} bd /Tt {pop} bd /TA {pop} bd
-/Tl {pop pop} bd /Ta {pop} bd /Ti {pop pop pop} bd /Tx {pop} bd
+/Tl {pop pop} bd /Ta {pop} bd /Ti {pop pop pop} bd /Tx {pop} bd /Tv {pop} bd /TY {pop} bd
 % The page trailer (3): annotatepage marks nothing.
 /annotatepage {} bd
 end

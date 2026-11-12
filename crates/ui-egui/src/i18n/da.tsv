@@ -366,6 +366,8 @@
 	Stair Step	Trappetrin
 	Gravity	Tyngdekraft
 	Type on a Path Options…	Indstillinger for tekst på kurve…
+	Center on Top	Centrer øverst
+	Center on Bottom	Centrer nederst
 	Threaded Text	Sammenkædet tekst
 	Create	Opret
 	Release Selection	Frigør markering
@@ -1611,6 +1613,17 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Skrifttypen for det markerede tegn er ikke tilgængelig.
 	No alternates for the selected character.	Ingen alternativer til det markerede tegn.
 	Double-click to replace	Dobbeltklik for at erstatte
+	Select one character with the Type tool first.	Markér først ét tegn med tekstværktøjet.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} er et glyf i {font}, ikke i den skrifttype, den markerede tekst er sat i ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hører til {base} (U+{base_code}) {place}; din markering er {sel} (U+{code}).
+	at the start of a word	i begyndelsen af et ord
+	in the middle of a word	midt i et ord
+	at the end of a word	i slutningen af et ord
+	standing alone	når det står alene
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} er ikke et alternativ til {sel} (U+{code}), som det står i sit ord.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dobbeltklik for at indsætte {base} (U+{code}) i stedet: en præsentationsform forbindes ikke, bogstavet gør.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) er indsat i stedet for en præsentationsform: skrifttypen forbinder det med naboerne efter position.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ingen OpenType-funktion tegner dette glyf her, så det erstatter tegnets glyf og forbindes måske ikke med nabotegnene.
 	Double-click to insert	Dobbeltklik for at indsætte
 	Entire Font	Hele skrifttypen
 	glyph {id}	glyf {id}
@@ -1692,6 +1705,8 @@ digits	Malayalam	Malayalam
 	Save Image Trace Preset	Gem forudindstilling til billedsporing
 	Delete Image Trace Preset	Slet forudindstilling til billedsporing
 	Method:	Metode:
+	Pad	Forlæng
+	Repeats	Gentagelser
 	Mode:	Tilstand:
 	Noise	Støj
 	Create:	Opret:
@@ -3687,6 +3702,9 @@ theme	Appearance	Udseende
 	Select All Unused	Markér alle ubrugte
 	Sort by Kind	Sortér efter type
 	Sort by Name	Sortér efter navn
+	Spot Color Objects	Objekter med spotfarver
+	Pattern Objects	Objekter med mønstre
+	Gradient Objects	Objekter med gradienter
 	Spot Colors	Spotfarver
 	Spot Colors (0)	Spotfarver (0)
 	Swatch Options	Indstillinger for farveprøve
@@ -4361,6 +4379,7 @@ imageTrace	Outline	Kontur
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` er ikke en farve som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: højst {MAX_TABLE} farver
 @msg	command `{0}` is not available right now: {1}	kommandoen `{0}` er ikke tilgængelig lige nu: {1}
+@msg	command `{id}` is not available right now	kommandoen `{id}` er ikke tilgængelig lige nu
 @msg	compound paths can only contain paths	sammensatte kurver kan kun indeholde kurver
 @msg	compressed (RLE) bitmaps can't be read yet	komprimerede (RLE) bitmaps kan endnu ikke læses
 @msg	damaged	beskadiget
@@ -5517,6 +5536,8 @@ mark-style	Japanese	Japansk
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler
+@msg	the screen color sampler did not answer	skærmfarvesampleren svarede ikke
+@msg	the screen color sampler failed	skærmfarvesampleren mislykkedes
 swatch	[None]	[Ingen]
 swatch	[Registration]	[Passning]
 swatch	White	Hvid
@@ -5877,6 +5898,7 @@ swatch	Bright Violet	Kraftig violet
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriske hjælpelinjer
+	Optical Effects	Optiske effekter
 	Geometric Patterns	Geometriske mønstre
 	Grit Textures	Kornede teksturer
 	Ease In	Langsom start
@@ -6091,6 +6113,11 @@ axis	Y Axis	Y-akse
 	Grass Fan	Græsvifte
 	Pattern Borders	Mønsterborter
 	Scatter Shapes	Spredte former
+	Dry Media	Tørre medier
+	Chalk Grain	Kridtkorn
+	Graphite Pencil	Grafitblyant
+	Wax Crayon	Vokskridt
+	Charcoal Dust	Kulstøv
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
@@ -6694,4 +6721,9 @@ breakText	Glyphs	Glyffer
 	Stencil Bridges…	Stencilbroer…
 	Stencil Bridges	Stencilbroer
 	Shortest Crossing	Korteste krydsning
+	Weed Box and Lines…	Lugeramme og lugelinjer…
+	Weed Box and Lines	Lugeramme og lugelinjer
+	Margin	Margen
+	Box	Ramme
+	Swatch	Farveprøve
 	Direction	Retning

@@ -32,6 +32,8 @@ mod cursor_theme;
 mod gpu;
 mod hang_watch;
 #[cfg(target_os = "linux")]
+mod linux_screen_color;
+#[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
 #[cfg(all(target_os = "macos", feature = "wgpu"))]
