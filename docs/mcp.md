@@ -6851,9 +6851,11 @@ says when CSS can't describe the art exactly (`unsupported`: other shapes, image
 written as its box, or with `rasterize: true` as `background-image: url(<class>.png)`. `units` is `px` (1 px per
 point, as in SVG export), `pt`, `mm`, `cm` or `in`; `unnamed: false` leaves out unnamed objects (counted in
 `skipped`). `css.generate` does the same for the whole document, and `css.export {path?, scope?: selection|all}`
-writes the `.css` file with the PNGs of rasterized art next to it (no path: `data` and `images` as base64). Its
-`warnings` add the PNGs' notes to the CSS's, each once (an image that couldn't be decoded, type written in the
-fallback font…). In the app, `css.copy` copies the CSS and `css.exportFile` writes it through a save panel (the web
+writes the `.css` file with the PNGs of rasterized art next to it (no path: `data` and `images` as base64). A left-out
+`scope` exports the selection; a `path` or `scope` given as anything but a string, `null` included, is an error, and
+nothing is written. `css.generate` and `css.export {scope: "all"}` do not use `ids` or `id`, but a malformed one is still
+an error. Its `warnings` add the PNGs' notes to the CSS's, each once (an image that couldn't be decoded,
+type written in the fallback font…). In the app, `css.copy` copies the CSS and `css.exportFile` writes it through a save panel (the web
 downloads it) and shows the first note in the status bar, with how many there are; resting the pointer on the
 message lists up to 30 of them, fewer when the list would not fit in the window, with how many were left out.
 
