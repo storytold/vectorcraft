@@ -656,13 +656,13 @@ fn simplify_refreshes_changed_path_selection_and_undo() {
     let kept = NodeId(s.execute("path.create", &json!({"anchors": [{"x": 350, "y": 180}]})).unwrap()["id"].as_u64().unwrap());
     let unrelated = rect(&mut s, 400.0, 200.0, 40.0, 30.0);
     s.edit("selection fixture", |d, sel| {
-        d.guides.push(vectorcraft_doc::Guide::new(true, 30.0));
+        let guide = d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 30.0));
         sel.set([kept, id]);
         sel.anchors.insert(id, [(0, 19)].into_iter().collect());
         sel.anchors.insert(kept, [(0, 0)].into_iter().collect());
         sel.key = Some(kept);
         sel.target = Some(id);
-        sel.guides.push(0);
+        sel.guides.push(guide);
         Ok(())
     })
     .unwrap();
@@ -781,7 +781,7 @@ fn split_into_grid_options() {
         rect(&mut s, 10.0, 20.0, 110.0, 50.0);
         let r = s.execute("object.path.splitIntoGrid", &p).unwrap();
         let cells: Vec<Rect> = ids(&r).iter().map(|id| bounds(&s, *id)).collect();
-        let guides: Vec<(bool, f64)> = s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect();
+        let guides: Vec<(bool, f64)> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect();
         assert_eq!(r["guides"], guides.len());
         (cells, guides)
     };
@@ -812,13 +812,16 @@ fn split_into_grid_options() {
     assert!(close(bounds(&s, r[0]), Rect::new(0.0, 0.0, 40.0, 60.0), 1e-9) && close(bounds(&s, r[1]), Rect::new(60.0, 0.0, 100.0, 60.0), 1e-9));
     let st = s.doc().unwrap();
     assert!(r.iter().all(|id| node(&s, *id).appearance == node(&s, r[0]).appearance) && st.doc.node(back).is_none() && st.doc.node(front).is_none());
-    assert_eq!(st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>(), [kept, r[0], r[1]], "above the path left alone");
+    let art: Vec<NodeId> = st.doc.layers[0].children().unwrap().iter().filter(|n| !n.is_ruler_guide()).map(|n| n.id).collect();
+    assert_eq!(art, [kept, r[0], r[1]], "above the path left alone");
+    let children = st.doc.layers[0].children().unwrap();
+    assert!(children.len() == 9 && children[3..].iter().all(|n| n.is_ruler_guide()), "the six guides are above the art");
     assert_eq!(st.selection.objects, r);
-    assert!(st.doc.guides.iter().all(|g| g.layer == Some(st.doc.layers[0].id)));
+    assert!(st.doc.ruler_guides().iter().all(|g| g.layer == Some(st.doc.layers[0].id)));
     assert_eq!(st.history.undo.len(), undo + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     let st = s.doc().unwrap();
-    assert!(st.doc.node(back).is_some() && st.doc.node(front).is_some() && st.doc.guides.is_empty());
+    assert!(st.doc.node(back).is_some() && st.doc.node(front).is_some() && st.doc.ruler_guides().is_empty());
     // A grid with no room for its gutters is refused and changes nothing.
     assert!(s.execute("object.path.splitIntoGrid", &json!({"columns": 4, "gutter": 50})).is_err());
     assert!(s.execute("object.path.splitIntoGrid", &json!({"width": -5})).is_err());

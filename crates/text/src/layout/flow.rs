@@ -217,8 +217,9 @@ fn prepare_paragraph<'a, 'text>(
     // …and a quarter em between Japanese and Latin text.
     let mut wakan = if para.mojikumi == Mojikumi::LineEndHalf { space_japanese_and_latin(&mut sg) } else { vec![] };
     // Justification…: the glyphs at Desired word and letter spacing and glyph scaling, and how
-    // far a justified line may move each one from it.
-    let mut flex = apply_desired(&mut sg, &para.justification, !cx.vertical);
+    // far a justified line may move each one from it (Dynamic Text's Block on area type sets the
+    // Desired word spacing to its word gap).
+    let mut flex = apply_desired(&mut sg, &t.layout_justification(para), !cx.vertical);
     // Threaded text: a first paragraph that continues from the frame before has its first
     // line, first-line indent and list marker there.
     let continued = pi == 0 && t.first_para_continues;
@@ -389,6 +390,9 @@ struct LineGeometry {
     ax1: f64,
     width: f64,
     render_width: f64,
+    /// The tracking after the line's last character, when that character ends the line (see
+    /// [`prepare_line_geometry`]); 0 otherwise.
+    trailing: f64,
     order: Vec<usize>,
     drawn: Vec<usize>,
     opt_l: f64,
@@ -413,6 +417,9 @@ struct LineJustification {
     /// Right-aligned area type: the line's last tab, which takes the text after it to the right
     /// edge (the text before it sits at its stops, from the left edge).
     last_tab: Option<usize>,
+    /// The tracking after the line's last character that its alignment leaves out of its width:
+    /// [`LineGeometry::trailing`] for a line that isn't justified, 0 for one that is.
+    trailing: f64,
 }
 
 fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut paragraph: ParagraphData<'_, '_>) -> bool {
@@ -582,6 +589,31 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
     // ends with the empty line after it (`run_paragraph_lines`).
     let soft_return = position.end > index && sg.get(position.end - 1).is_some_and(|g| g.ch == '\u{2028}');
     let last_of_para = position.end >= n && !soft_return;
+    // The tracking after the line's last character: an aligned line is measured without it. The
+    // page of users' `.ai` files sets a centred line of tracked type half that tracking right of
+    // where a line measured with it goes, and a right-aligned one the whole tracking right (in
+    // lines that end a paragraph). The last character is the last one the line draws before a
+    // paragraph's end, a forced line break, or the spaces the layout wraps the line at (they hang
+    // past it). Spaces or a tab typed before a paragraph's end or a forced line break are the
+    // line's last characters, and the letter before them keeps its tracking: the page counts it in
+    // the 2 lines of the files that end so. Forced line breaks and wraps aren't in the files; they
+    // take the rule so that turning a wrap into a forced line break or a new paragraph (Break
+    // Text, Convert To Point Type) keeps the line where it was. A line a hyphen ends, one whose
+    // last character hangs, and vertical and right-to-left lines keep the tracking.
+    let tail = sg.get(trimmed..position.end).unwrap_or_default();
+    let ends_drawn = match tail.split_last() {
+        None => true,
+        Some((last, before)) if last.ch == '\u{2028}' => before.is_empty(),
+        // Spaces at a wrap: the paragraph goes on.
+        Some(_) => position.end < n,
+    };
+    let trailing = trimmed
+        .checked_sub(1)
+        .and_then(|k| sg.get(k))
+        .filter(|g| {
+            ends_drawn && trimmed > index && !g.level.is_rtl() && !cx.vertical && !paragraph.rtl && hyphen.is_none() && hang.is_none() && opt_r == 0.0
+        })
+        .map_or(0.0, |g| if g.tracking.is_finite() { g.tracking } else { 0.0 });
     LineGeometry {
         position,
         index,
@@ -593,6 +625,7 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
         ax1,
         width,
         render_width,
+        trailing,
         order,
         drawn,
         opt_l,
@@ -738,6 +771,9 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
         // A tab ending the line counts: its text sits at the left edge, the tab up to the right one.
         .then(|| (line.index..line.position.end).rev().find(|&j| sg.get(j).is_some_and(|g| g.ch == '\t' && g.len > 0)))
         .flatten();
+    // An aligned line is as wide as its characters without the tracking after the last one.
+    let trailing = if justify || pushed_in { 0.0 } else { line.trailing };
+    let width = width - trailing;
     let start_x = if justify || pushed_in || last_tab.is_some() {
         line.ax0 - line.opt_l
     } else if paragraph.regions.is_none() {
@@ -753,7 +789,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             _ => line.ax1 + line.opt_r - width,
         }
     };
-    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas, last_tab }
+    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas, last_tab, trailing }
 }
 
 /// The advance and leader of tab `glyph_index` of `line`, at pen position `x`: up to its stop
@@ -780,10 +816,11 @@ fn tab_glyph<'p>(
         return (advance, leader);
     }
     // The width of what follows up to the line's end (nothing, when the tab ends the line), with
-    // the hyphen a hyphenated line ends with.
+    // the hyphen a hyphenated line ends with, and without the tracking after its last character,
+    // as a right-aligned line is measured.
     let after = sg.get(glyph_index + 1..line.trimmed).unwrap_or_default();
     let hyphen = line.hyphen.as_ref().map_or(0.0, |g| g.adv);
-    let rest = if after.is_empty() { 0.0 } else { after.iter().map(|g| g.adv).sum::<f64>() - line.end_trim + hyphen };
+    let rest = if after.is_empty() { 0.0 } else { after.iter().map(|g| g.adv).sum::<f64>() - line.end_trim + hyphen - justification.trailing };
     ((line.ax1 + line.opt_r - rest - x).max(0.0), leader)
 }
 
@@ -905,6 +942,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         baseline: position.baseline,
         x0: start_x,
         x1: x_end,
+        trailing: justification.trailing,
         ascent: position.m.asc,
         descent: position.m.desc,
         first_baseline: if pen.model == LeadingModel::EmBoxTop {

@@ -160,10 +160,13 @@ pub(crate) fn font_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
 /// written by `len`.
 pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
     let mut p = Props::new();
-    // Tracking and manual kerning both add space after every character.
+    // Tracking and manual kerning both add space after every character, in thousandths of the em
+    // of the font size written (the vertical scale, see `font_props`). The canvas spaces them by
+    // the horizontal scale: a uniform scale is the same, and `textLength` stretches type scaled
+    // horizontally alone, glyphs and spacing together, from the one to the other.
     let spacing = st.tracking + st.kerning.unwrap_or(0.0);
     if spacing != 0.0 {
-        p.push(("letter-spacing", len(spacing / 1000.0 * st.size)));
+        p.push(("letter-spacing", len(spacing / 1000.0 * st.size * st.v_scale / 100.0)));
     }
     if st.kerning.is_some() {
         // Manual kerning replaces the font's pair kerning.
@@ -552,7 +555,7 @@ impl Rules<'_> {
         }
     }
 
-    /// A linear or radial gradient over `b` at `opacity`, with the stops SVG export writes
+    /// A linear, radial or conic gradient over `b` at `opacity`, with the stops SVG export writes
     /// (midpoints as stops of their own). `None` for freeform gradients.
     fn gradient(&mut self, g: &GradientPaint, b: Rect, opacity: f32) -> Option<String> {
         let geom = g.resolve(b);
@@ -590,6 +593,27 @@ impl Rules<'_> {
                 let at = format!("at {} {}", self.len(geom.start.x - b.x0), self.len(geom.start.y - b.y0));
                 Some(format!("radial-gradient({shape} {at}, {})", stops(&|t| t as f64)))
             }
+            GradientKind::Conic => {
+                // CSS sweeps clockwise from the `from` angle, 0deg straight up
+                // (https://www.w3.org/TR/css-images-4/#conic-gradients): the vector's direction is
+                // where the sweep starts. A mirrored sweep turns the other way, so its stops are
+                // written mirrored about the seam; CSS has no elliptical sweep.
+                let frame = geom.conic_frame();
+                let v = frame * Point::new(1.0, 0.0) - frame * Point::ORIGIN;
+                let from = v.x.atan2(-v.y).to_degrees().rem_euclid(360.0);
+                if (geom.aspect.abs() - 1.0).abs() > 1e-9 && geom.unit_frame().is_some() {
+                    self.warn("conic gradients are written circular (an elliptical sweep is left out)");
+                }
+                let mut stops: Vec<(f32, Color, f32)> = g.gradient.expanded().map(|(t, c, o, _)| (t, c, o)).collect();
+                if geom.is_mirrored() {
+                    stops.reverse();
+                    stops.iter_mut().for_each(|s| s.0 = 1.0 - s.0);
+                }
+                let stops: Vec<String> =
+                    stops.iter().map(|(t, c, o)| format!("{} {}%", color_css(c, o * opacity), fmt_num(f64::from(*t) * 100.0, 2))).collect();
+                let at = format!("at {} {}", self.len(geom.start.x - b.x0), self.len(geom.start.y - b.y0));
+                Some(format!("conic-gradient(from {}deg {at}, {})", fmt_num(from, 2), stops.join(", ")))
+            }
             GradientKind::Freeform => None,
         }
     }
@@ -606,12 +630,9 @@ impl Rules<'_> {
         if n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none()) {
             art.unsupported("fills or strokes on the type object");
         }
-        // Area type that Shrink Text to Fit scales down is written in the styles it draws in.
-        let fitted = matches!((&t.kind, t.area.fit), (TextKind::Area { .. }, vectorcraft_doc::AreaFit::ShrinkText { .. }))
-            .then(|| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale)
-            .filter(|f| *f != 1.0)
-            .map(|f| vectorcraft_text::scaled(t, f));
-        let t = fitted.as_ref().unwrap_or(t);
+        // Type that Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in.
+        let fitted = vectorcraft_text::drawn(t);
+        let t = &*fitted;
         let st = t.first_style();
         if t.runs.iter().any(|r| r.style != st) {
             self.warn("type with several character styles is written in its first one");

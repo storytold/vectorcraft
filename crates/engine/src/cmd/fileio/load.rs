@@ -43,10 +43,27 @@ impl Loaded {
         }
         self
     }
+
+    /// The file in the units of Preferences › Units › General when it records none of its own: a
+    /// PDF, an EPS or `.ai` without ruler units, a raster image, a metafile, an Affinity file or
+    /// what an importer plug-in reads, as the reference app opens such files (#5820). A native
+    /// document (also one that an SVG, PDF, `.ai` or EPS file carries, `restored`), an SVG (the
+    /// units of its root's size, pixels when it gives none), a DXF drawing (the unit it was read
+    /// in) and a `.ai` or EPS with ruler units keep theirs. Only the units the document shows
+    /// change, not its art.
+    pub(crate) fn with_unit_prefs(mut self, prefs: &Prefs) -> Self {
+        let records_units =
+            self.restored || self.doc.units_from_file || matches!(self.format.id, "vectorcraft" | "template" | "svg" | "svgz" | "dxf");
+        if !records_units {
+            self.doc.units = crate::units::pref_unit(&prefs.units_general);
+        }
+        self
+    }
 }
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
 /// (what browsers, PDF and SVG viewers show).
+#[derive(Clone)]
 pub struct RasterImage {
     /// Content key for `Document::images` (identical files share one blob).
     pub key: String,
@@ -289,10 +306,10 @@ pub(super) fn outlined_if_asked(mut doc: Document, warnings: Vec<String>, opts: 
     (doc, warnings)
 }
 
-/// Does `doc` hold no art: only layers, with nothing in them?
+/// Does `doc` hold no art: only layers, with nothing in them but ruler guides?
 fn draws_nothing(doc: &Document) -> bool {
     let mut art = false;
-    doc.walk(|n| art |= !n.is_layer());
+    doc.walk(|n| art |= !n.is_layer() && !n.is_ruler_guide());
     !art
 }
 
@@ -475,6 +492,16 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
         }
+        // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
+        // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
+        "psd" | "psb" if opts.layers => {
+            let cms = vectorcraft_color::cms::active();
+            match super::psdlayers::import(bytes, opts.hidden_layers, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)) {
+                Ok(Some((doc, warnings))) => (doc, warnings, false),
+                Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
+                Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
+            }
+        }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
@@ -490,7 +517,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     // document keeps its text as saved), and every frame of a thread takes its first frame's
     // Optical Margin Alignment setting and writing direction. When that changes the direction of a
     // frame of a restored document, the story flows through that frame's thread again. Threaded
-    // frames keep their size: Auto Size is off for them.
+    // frames keep their size: Auto Size is off for them. The story is laid out in the document's
+    // own composite fonts.
+    let fonts = if doc.text_threads.is_empty() { Default::default() } else { doc.composite_fonts.clone() };
+    let lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&fonts);
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
     } else if !doc.text_threads.is_empty() {
@@ -501,6 +531,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         // paragraph's first-line indent and list marker.
         crate::cmd::threads::mark_continued(&mut doc);
     }
+    drop(lent);
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
@@ -610,7 +641,8 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
 /// Make a loaded file the new active document; `links` is what became of its linked files, and
 /// `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } = loaded.with_grid_prefs(&s.prefs);
+    let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } =
+        loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
     // fallbacks must ask before overwriting the richer source they could not fully read.
     let losses: Vec<String> = warnings

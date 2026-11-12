@@ -15,6 +15,7 @@ mod pngsuite;
 mod sha256;
 mod stats;
 mod test262;
+mod ui_commands;
 mod version;
 mod web_fonts;
 
@@ -30,11 +31,12 @@ commands:
   cursors         warn about Cursor values with no entry in crates/tools/src/cursors.toml (never fails)
   i18n-report     list the strings each language's catalog lacks, shown in English (fails only on a
                   broken scan; ci runs it too)
+  ui-commands     regenerate crates/mcp/src/ui_catalog.rs from desktop UI_COMMANDS; --check fails on drift
   pdf-deps        verify immutable shared PDF writer and patched Krilla sources
   layers          enforce the crate dependency layering (plan/architecture.md §3)
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates and the web app
   test            the workspace tests (cargo nextest when installed, else cargo test), then the doctests
-  ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), layers, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), ui-commands --check, layers, wasm (stops at first failure)
   corpus [--download] [--affinity]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite,
                   --affinity the pinned public Affinity documents into corpus/affinity
@@ -59,6 +61,7 @@ fn main() -> ExitCode {
         Some("brands") => brands::run(&root()),
         Some("cursors") => cursors::run(&root()),
         Some("i18n-report") => cmd_i18n_report(),
+        Some("ui-commands") => ui_commands::run(&root(), rest.contains(&"--check")),
         Some("layers") => cmd_layers(),
         Some("pdf-deps") => pdf_deps::run(&root()),
         Some("wasm") => cmd_wasm(),
@@ -305,6 +308,7 @@ fn cmd_ci() -> Result<(), String> {
         ("brands", Box::new(|| brands::run(&root()))),
         ("cursors", Box::new(|| cursors::run(&root()))),
         ("i18n-report", Box::new(cmd_ci_i18n_report)),
+        ("ui-commands", Box::new(|| ui_commands::run(&root(), true))),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
     ];

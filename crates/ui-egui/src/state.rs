@@ -208,6 +208,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
     (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
+    (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
@@ -404,6 +405,10 @@ pub struct UiState {
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
     pub control_bar_bottom: bool,
+    /// The groups of the Control bar's options (`chrome::CONTROL_BAR_GROUPS`) that its panel menu
+    /// has off (`window.control.options`); none: every group shows.
+    #[serde(deserialize_with = "crate::chrome::read_hidden_groups")]
+    pub control_bar_hidden_groups: std::collections::BTreeSet<String>,
     pub toolbar: bool,
     pub toolbar_double: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
@@ -1018,6 +1023,7 @@ impl Default for UiState {
             find_font_in: String::new(),
             control_bar: false,
             control_bar_bottom: false,
+            control_bar_hidden_groups: Default::default(),
             toolbar: true,
             toolbar_double: false,
             toolbar_advanced: false,

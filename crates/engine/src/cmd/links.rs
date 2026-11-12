@@ -521,10 +521,25 @@ fn linked_image(bytes: &[u8]) -> Result<RasterImage> {
 /// The file read for a link: the link to it and its image.
 type FileRead = (LinkInfo, RasterImage);
 
-/// The file at `f` read for a link like `base` (its image decoded).
-fn read_image(f: &mut Found, base: &LinkInfo) -> Result<FileRead> {
+/// The images read in one operation, by the path of the file and its content hash: groups whose
+/// image keys differ but whose file is the same share one decoded image (and its encoded bytes)
+/// instead of each keeping a copy.
+type ImageReads = BTreeMap<String, (String, RasterImage)>;
+
+/// The file at `f` read for a link like `base` (its image decoded, or the one `reads` holds for
+/// the same file content).
+fn read_image(f: &mut Found, base: &LinkInfo, reads: &mut ImageReads) -> Result<FileRead> {
     let bytes = f.read()?;
-    Ok((f.link(&bytes, base), linked_image(&bytes)?))
+    let hash = hash_bytes(&bytes);
+    let img = match reads.get(&f.path) {
+        Some((h, img)) if *h == hash => img.clone(),
+        _ => {
+            let img = linked_image(&bytes)?;
+            reads.insert(f.path.clone(), (hash.clone(), img.clone()));
+            img
+        }
+    };
+    Ok((f.link_hashed(hash, base), img))
 }
 
 /// A linked file read for the objects that show it.
@@ -536,8 +551,8 @@ enum Read {
 }
 
 /// The file at `f` read for group `g`: its image, or the artboard or page `g` shows.
-fn read_for(f: &mut Found, g: &Group, cmd: &str) -> Result<Read> {
-    let Some((bounding, page_box)) = g.document else { return read_image(f, &g.link).map(Read::Image) };
+fn read_for(f: &mut Found, g: &Group, cmd: &str, reads: &mut ImageReads) -> Result<Read> {
+    let Some((bounding, page_box)) = g.document else { return read_image(f, &g.link, reads).map(Read::Image) };
     let bytes = f.read()?;
     let page = g.link.page.unwrap_or(1);
     let src = super::place::document::source(&f.path, &bytes, Some(&f.path), page, bounding, page_box, cmd)?;
@@ -922,6 +937,7 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
     // (the path as it was, the content shown, a placed document?, the link now) of each file found
     // away from its path or read again.
     let mut moved: Vec<(String, String, bool, LinkInfo)> = vec![];
+    let mut image_reads = ImageReads::new();
     for g in groups(d, None) {
         let row = rows(std::iter::once(&g), base.doc);
         let shows_preview = match g.document {
@@ -934,7 +950,7 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
             (Status::Missing, _) => out.missing.extend(row),
             (Status::Modified, Some(mut f)) if update || unread => {
                 let force = unread.then_some(Preserve::Bounds);
-                match read_for(&mut f, &g, "document.open").and_then(|read| install_read(d, &g.ids, read, force, Some(&g))) {
+                match read_for(&mut f, &g, "document.open", &mut image_reads).and_then(|read| install_read(d, &g.ids, read, force, Some(&g))) {
                     Ok(()) if unread => {}
                     Ok(()) => out.updated.extend(row),
                     Err(_) => out.missing.extend(row),
@@ -943,7 +959,7 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
             (Status::Modified, _) => out.modified.extend(row),
             // A placed document keeps its file's bytes: only lost ones are read again.
             (Status::Ok, Some(mut f)) if g.document.is_some() => {
-                let read = if stale(d, &g) { Some(read_for(&mut f, &g, "document.open")) } else { None };
+                let read = if stale(d, &g) { Some(read_for(&mut f, &g, "document.open", &mut image_reads)) } else { None };
                 match read {
                     Some(Ok(read)) => {
                         if install_read(d, &g.ids, read, Some(Preserve::Bounds), Some(&g)).is_err() {
@@ -1196,6 +1212,7 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
 fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -> Result<Value> {
     let st = s.doc()?;
     let (mut reads, mut missing) = (vec![], vec![]);
+    let mut image_reads = ImageReads::new();
     let asked = ids.is_some() || path.is_some();
     for g in groups(&st.doc, ids.as_deref()).into_iter().filter(|g| path.is_none_or(|p| g.document.is_some() && g.link.path == p)) {
         match probe(&g, LinkBase::of(st)) {
@@ -1203,7 +1220,7 @@ fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -
             // Unchanged and showing the file: nothing to read unless asked for.
             (Status::Ok, Some(_)) if !asked && !stale(&st.doc, &g) => {}
             // Unreadable as an image (or a document) counts as missing.
-            (_, Some(mut f)) => match read_for(&mut f, &g, "links.update") {
+            (_, Some(mut f)) => match read_for(&mut f, &g, "links.update", &mut image_reads) {
                 Ok(read) => reads.push((g, read)),
                 Err(_) => missing.extend(ids_json(&g.ids)),
             },
@@ -1706,13 +1723,14 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
     let ids: Vec<NodeId> = ids.into_iter().filter(|id| matches!(kind(id), Some(NodeKind::Image(_)))).collect();
     // Images showing their preview take their file's pixels first.
     let (mut done, mut reads) = (vec![], vec![]);
+    let mut image_reads = ImageReads::new();
     for g in groups(&st.doc, Some(&ids)) {
         if !previewing(&st.doc, &g.key) {
             done.extend(g.ids);
             continue;
         }
         match probe(&g, LinkBase::of(st)) {
-            (Status::Ok | Status::Modified, Some(mut f)) => match read_image(&mut f, &g.link) {
+            (Status::Ok | Status::Modified, Some(mut f)) => match read_image(&mut f, &g.link, &mut image_reads) {
                 Ok(read) => {
                     done.extend(&g.ids);
                     reads.push((g.ids, read));
@@ -1920,4 +1938,27 @@ fn placement_options(s: &mut Session, p: &Value) -> Result<Value> {
     let mut shown = first;
     set(&mut shown);
     Ok(json!({ "ids": ids_json(&ids), "placement": placement_json(shown) }))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::tests::links::{Folder, RED, png, write};
+
+    #[test]
+    fn groups_of_one_file_share_one_decoded_image() {
+        let dir = Folder::new("shared-read");
+        let path = dir.file("pic.png");
+        write(&path, &png(40, 20, RED));
+        let (mut reads, base) = (ImageReads::new(), LinkInfo::new(path.clone()));
+        let mut read = || read_image(&mut found_at(path.clone()).unwrap(), &base, &mut reads).unwrap().1;
+        let (a, b) = (read(), read());
+        assert!(Arc::ptr_eq(&a.blob.bytes, &b.blob.bytes), "one retained copy of the bytes");
+        // A changed file is decoded again.
+        write(&path, &png(40, 20, [1, 2, 3]));
+        let c = read();
+        assert!(!Arc::ptr_eq(&a.blob.bytes, &c.blob.bytes));
+    }
 }

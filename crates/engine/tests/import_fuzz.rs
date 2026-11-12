@@ -664,6 +664,26 @@ proptest! {
         survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
     }
 
+    /// Clip paths made of text, of `<use>` elements showing text, and of both with shapes, each with
+    /// hostile attributes, clipping art that may clip by them in turn.
+    #[test]
+    fn svg_text_clip_paths_never_panic(
+        text in prop::collection::vec(arb_svg_attr(), 0..5),
+        used in prop::collection::vec(arb_svg_attr(), 0..5),
+        clip in prop::collection::vec(arb_svg_attr(), 0..3),
+        body in prop::collection::vec(arb_svg_element(1), 0..3),
+    ) {
+        let svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs><text id=\"t\" font-size=\"20\"{}>ab<tspan dy=\"3\">c</tspan></text></defs><clipPath id=\"e\"{}><text y=\"30\"{}>Clip<tspan x=\"5\" y=\"60\">it</tspan></text><use href=\"#t\"{}/><rect width=\"5\" height=\"5\"/></clipPath><clipPath id=\"f\" clip-path=\"url(#e)\"><use xlink:href=\"#t\" x=\"9\"/></clipPath><rect width=\"90\" height=\"90\" clip-path=\"url(#e)\"/><g clip-path=\"url(#f)\">{}</g></svg>",
+            text.concat(),
+            clip.concat(),
+            text.concat(),
+            used.concat(),
+            body.concat()
+        );
+        survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
+    }
+
     #[test]
     fn svg_mutated_export_never_panics(
         cut in 0usize..20_000,
@@ -1785,6 +1805,27 @@ proptest! {
             let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "thumbnail": 8});
             let _ = no_panic(s.execute("file.place.info", &p));
             let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
+    }
+
+    /// Mutated copies of the PSD and PSB samples never crash opening them with their layers, hidden
+    /// ones too: the PSD's layer records, channel lengths and data, and the PSB's layer count.
+    /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`.)
+    #[test]
+    fn mutated_layered_psds_open_without_panics(which in 6usize..8, cut in 0usize..1_000_000, edits in prop::collection::vec((0usize..1_000_000, any::<u8>()), 0..12)) {
+        let (name, mut bytes) = raster_samples().swap_remove(which);
+        let len = bytes.len();
+        for (at, b) in edits {
+            if let Some(x) = bytes.get_mut(at % len) {
+                *x = b;
+            }
+        }
+        bytes.truncate((cut % (len + 1)).max(8));
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "hiddenLayers": true});
+            let _ = no_panic(s.execute("document.open", &p));
         });
         prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
     }

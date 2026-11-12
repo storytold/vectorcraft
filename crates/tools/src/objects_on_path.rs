@@ -20,13 +20,22 @@
 //! one. The distance shows next to the pointer in the document's units, the drag is previewed and
 //! kept as one undo step on release, and Escape cancels it.
 //!
+//! The Move All widget: with one Objects on Path group selected whose objects have room to move
+//! along its path, the same tools show a diamond beyond the group's first object, below it.
+//! Dragging it along the path moves every object along it as far, keeping the distances between
+//! them (`object.objectsOnPath.options` with `start`). On an open path, the widget shows only when
+//! the distance from the first object to the last is shorter than the path, and the objects stop
+//! at its ends; on a closed path they go on round across its first anchor. The first object's
+//! distance along the path shows next to the pointer in the document's units, the drag is
+//! previewed and kept as one undo step on release, and Escape cancels it.
+//!
 //! Behavior: <https://helpx.adobe.com/illustrator/using/objects-on-path.html>,
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rearrange-and-edit-objects-on-a-path.html>.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::blend::Spine;
-use vectorcraft_doc::objects_on_path::{CENTER, ObjectsOnPath, attachable_path, is_objects_on_path, layout, nth_length, path_length, stop};
-use vectorcraft_doc::{Document, NodeId, Selection};
+use vectorcraft_doc::objects_on_path::{CENTER, Member, ObjectsOnPath, attachable_path, is_objects_on_path, layout, nth_length, path_length, stop};
+use vectorcraft_doc::{Document, Node, NodeId, Selection};
 use vectorcraft_geom::{BezPath, Point, Vec2};
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
@@ -51,6 +60,14 @@ pub const SPACE_HALF_PX: f32 = 3.5;
 /// How near (screen px) the pointer must be to hit the Space widget.
 const SPACE_HIT_PX: f64 = 6.0;
 
+/// The Move All widget's center sits this far (screen px) beyond the first object, on the side its
+/// bottom faces.
+const MOVE_ALL_OFFSET_PX: f64 = 16.0;
+/// Half the diagonal of the Move All widget's diamond (screen px), as the canvas draws it.
+pub const MOVE_ALL_HALF_PX: f32 = 4.5;
+/// How near (screen px) the pointer must be to hit the Move All widget.
+const MOVE_ALL_HIT_PX: f64 = 6.0;
+
 /// The Objects on Path group the widgets show for at `zoom` (screen px per document point), with
 /// its record, its children and its path: only when the selection is that one editable group, on
 /// a path with length, and no anchors are Direct-Selected.
@@ -73,6 +90,30 @@ fn one_group<'a>(
     Some((*group, rec, children.as_slice(), path))
 }
 
+/// The direction the top of the object `m` faces: the -y direction of the frame it is drawn in
+/// (the document's y axis points down), so a reflected or sheared frame turns it with the art's
+/// top. A unit vector in the document's axes.
+fn top(m: &Member) -> Vec2 {
+    let [_, _, a2, a3, _, _] = m.frame.as_coeffs();
+    let len = a2.hypot(a3);
+    if len.is_finite() && len > 1e-12 {
+        Vec2::new(-a2 / len, -a3 / len)
+    } else {
+        let (sin, cos) = m.angle.sin_cos();
+        Vec2::new(sin, -cos)
+    }
+}
+
+/// The point `gap` (points) beyond the bounds of the object `m` (one of `children`), from its
+/// attachment point `from` in the direction `dir`. `None` when it is not finite.
+fn beside(doc: &Document, children: &[std::sync::Arc<Node>], m: &Member, from: Point, dir: Vec2, gap: f64) -> Option<Point> {
+    let b = children.iter().find(|c| c.id == m.id)?.geometric_bounds_with(&doc.symbol_boxes())?;
+    let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x0, b.y1), Point::new(b.x1, b.y1)];
+    let reach = corners.iter().map(|c| (*c - from).dot(dir)).fold(0.0, f64::max);
+    let at = from + dir * (reach + gap);
+    (at.x.is_finite() && at.y.is_finite() && from.x.is_finite() && from.y.is_finite()).then_some(at)
+}
+
 /// The Rotate All widget of a selected Objects on Path group.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RotateAllWidget {
@@ -93,23 +134,8 @@ impl RotateAllWidget {
         let (group, rec, children, path) = one_group(doc, selection, zoom)?;
         let first = rec.members.first()?;
         let (pivot, _) = stop(path, rec.members.len(), rec.spacing, rec.start, 0)?;
-        let art = children.iter().find(|c| c.id == first.id)?;
-        let b = art.geometric_bounds_with(&doc.symbol_boxes())?;
-        // The object's top is the -y direction of the frame it is drawn in (the document's y axis
-        // points down), so a reflected or sheared frame moves the widget with the art's top.
-        let [_, _, a2, a3, _, _] = first.frame.as_coeffs();
-        let len = a2.hypot(a3);
-        let up = if len.is_finite() && len > 1e-12 {
-            Vec2::new(-a2 / len, -a3 / len)
-        } else {
-            let (sin, cos) = first.angle.sin_cos();
-            Vec2::new(sin, -cos)
-        };
-        let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x0, b.y1), Point::new(b.x1, b.y1)];
-        let reach = corners.iter().map(|c| (*c - pivot).dot(up)).fold(0.0, f64::max);
-        let at = pivot + up * (reach + ROTATE_ALL_OFFSET_PX / zoom);
-        let finite = at.x.is_finite() && at.y.is_finite() && pivot.x.is_finite() && pivot.y.is_finite();
-        finite.then_some(Self { group, pivot, at, rotate: rec.rotate })
+        let at = beside(doc, children, first, pivot, top(first), ROTATE_ALL_OFFSET_PX / zoom)?;
+        Some(Self { group, pivot, at, rotate: rec.rotate })
     }
 
     /// The widget of `cx` when `p` is within reach of it.
@@ -394,6 +420,160 @@ impl SpaceDrag {
     }
 }
 
+/// The Move All widget of a selected Objects on Path group.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MoveAllWidget {
+    pub group: NodeId,
+    /// The first object's attachment point, in the document.
+    pub first: Point,
+    /// The widget's center in the document.
+    pub at: Point,
+    /// The length of the path (points).
+    pub len: f64,
+    /// Is the path closed?
+    pub closed: bool,
+    /// Where the first object attaches along the path (points from its first anchor), as drawn.
+    pub start: f64,
+    /// The farthest along an open path the first object can attach with the others still on it
+    /// (points); the path's length on a closed path.
+    pub most: f64,
+    /// The Space value a drag sets with the start: the distance between the objects as drawn, when
+    /// the saved value would draw them apart differently from another start (Auto, or a Space value
+    /// an open path is too short for). `None` keeps the saved value.
+    pub gap: Option<f64>,
+    /// The group's start, as saved.
+    pub saved: f64,
+}
+
+impl MoveAllWidget {
+    /// The widget of the selection at `zoom` (screen px per document point): only when the
+    /// selection is one editable Objects on Path group with at least one object on a path with
+    /// length, no anchors are Direct-Selected, and the objects have room to move: on an open path,
+    /// the distance from the first object to the last is shorter than the path. It sits beyond the
+    /// first object's bounds, on the side its bottom faces.
+    pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Option<Self> {
+        let (group, rec, children, path) = one_group(doc, selection, zoom)?;
+        let count = rec.members.len();
+        let first = rec.members.first()?;
+        let (len, closed) = path_length(path)?;
+        let (start, gap) = layout(len, closed, count, rec.spacing, rec.start);
+        let most = if closed { len } else { len - gap * count.saturating_sub(1) as f64 };
+        if !closed && (!most.is_finite() || most <= 1e-9) {
+            return None;
+        }
+        // On an open path, Auto and a Space value the path is too short for draw the objects apart
+        // by what is left of the path after the start, so another start would change the distance.
+        let keeps = closed || count < 2 || rec.spacing.is_some_and(|g| (g - gap).abs() < 1e-9);
+        let (at_first, _) = stop(path, count, rec.spacing, rec.start, 0)?;
+        let at = beside(doc, children, first, at_first, -top(first), MOVE_ALL_OFFSET_PX / zoom)?;
+        let finite = [len, start, most, rec.start].iter().all(|v| v.is_finite());
+        finite.then_some(Self { group, first: at_first, at, len, closed, start, most, gap: (!keeps).then_some(gap), saved: rec.start })
+    }
+
+    /// The widget of `cx` when `p` is within reach of it.
+    fn at_point(cx: &ToolContext, p: Point) -> Option<Self> {
+        Self::of(cx.doc, cx.selection, cx.zoom).filter(|w| w.at.distance(p) <= cx.tol(MOVE_ALL_HIT_PX))
+    }
+}
+
+/// Is `p` over the Move All widget?
+pub fn over_move_all(cx: &ToolContext, p: Point) -> bool {
+    MoveAllWidget::at_point(cx, p).is_some()
+}
+
+/// Dragging the Move All widget: the distance the pointer moves along the path moves every object
+/// along it as far, keeping the distances between them. On an open path the objects stop at its
+/// ends, and on a closed path they go on round across its first anchor.
+#[derive(Clone, Debug)]
+pub struct MoveAllDrag {
+    widget: MoveAllWidget,
+    start: Point,
+    began: bool,
+    /// The distance along the path to the point nearest the pointer at the last drag (points).
+    last: f64,
+    /// Where the drag puts the first object along the path (points from its first anchor).
+    to: f64,
+    at: Point,
+}
+
+impl MoveAllDrag {
+    /// The drag has left the click: the objects are moving.
+    pub fn adjusting(&self) -> bool {
+        self.began
+    }
+
+    /// Start a drag when the press `ev` is on the Move All widget.
+    pub fn hit(cx: &ToolContext, ev: &PointerEvent) -> Option<Self> {
+        let widget = MoveAllWidget::at_point(cx, ev.pos)?;
+        let (_, last) = group_spine(cx.doc, widget.group)?.nearest(ev.pos, Some(widget.start))?;
+        last.is_finite().then_some(Self { widget, start: ev.pos, began: false, last, to: widget.start, at: ev.pos })
+    }
+
+    /// The pointer moved to `p`: move the first object as far along the path as the point nearest
+    /// the pointer moved, the shorter way round a closed path. On an open path it stays between
+    /// the first anchor and [`MoveAllWidget::most`], so moving back from beyond an end moves the
+    /// objects back at once.
+    fn follow(&mut self, doc: &Document, p: Point) {
+        let w = &self.widget;
+        let Some((_, t)) = group_spine(doc, w.group).and_then(|s| s.nearest(p, Some(self.last))) else { return };
+        let step = if w.closed { (t - self.last + w.len / 2.0).rem_euclid(w.len) - w.len / 2.0 } else { t - self.last };
+        if !t.is_finite() || !step.is_finite() {
+            return;
+        }
+        self.last = t;
+        self.to = if w.closed {
+            let s = (self.to + step).rem_euclid(w.len);
+            if s.is_finite() && s < w.len { s } else { 0.0 }
+        } else {
+            (self.to + step).clamp(0.0, w.most)
+        };
+    }
+
+    /// The pointer moved to `p`.
+    pub fn drag(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        let mut out = vec![];
+        if !self.began {
+            if p.distance(self.start) < cx.tol(3.0) {
+                return out;
+            }
+            self.began = true;
+            out.push(Action::Begin("Objects on Path Options".into()));
+        }
+        self.follow(cx.doc, p);
+        self.at = p;
+        let w = &self.widget;
+        // Where the objects stay as they are drawn, the group keeps its saved values.
+        let params = if (self.to - w.start).abs() < 1e-9 {
+            json!({ "ids": [w.group.0], "start": w.saved })
+        } else if let Some(gap) = w.gap {
+            json!({ "ids": [w.group.0], "start": self.to, "spacing": gap })
+        } else {
+            json!({ "ids": [w.group.0], "start": self.to })
+        };
+        out.push(Action::Preview("object.objectsOnPath.options".into(), params));
+        out
+    }
+
+    pub fn finish(self) -> Vec<Action> {
+        if self.began { vec![Action::Commit] } else { vec![] }
+    }
+
+    /// The first object's distance along the path next to the pointer, in the document's units.
+    pub fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        if !self.began || !cx.measurement_labels {
+            return vec![];
+        }
+        vec![Overlay::Measure { p: self.at, text: cx.len(self.to) }]
+    }
+}
+
+/// The path of the Objects on Path group `g` of `doc`, to measure along.
+fn group_spine(doc: &Document, g: NodeId) -> Option<Spine> {
+    let n = doc.node(g)?;
+    let rec = n.extras().objects_on_path.as_deref()?;
+    Spine::new(attachable_path(n.children()?.iter().find(|c| c.id == rec.path)?)?)
+}
+
 /// The path a click at `p` attaches the selected objects to: the path object hit there, when it can
 /// take objects, is in no Objects on Path group, is not a clipping path or part of a compound path,
 /// blend, envelope, repeat or Intertwine group ([`vectorcraft_doc::objects_on_path::held`]), and
@@ -420,6 +600,8 @@ pub struct ObjectsOnPathTool {
     rotating: Option<RotateAllDrag>,
     /// The Space widget drag, while the button is down after a press on the widget.
     spacing: Option<SpaceDrag>,
+    /// The Move All widget drag, while the button is down after a press on the widget.
+    moving: Option<MoveAllDrag>,
     /// The reference point of each object attached next (0-8, row by row from the top left).
     pivot: u8,
     /// The angle of each object attached next, in degrees counter-clockwise from upright on the path.
@@ -428,7 +610,7 @@ pub struct ObjectsOnPathTool {
 
 impl Default for ObjectsOnPathTool {
     fn default() -> Self {
-        Self { hover: None, press: None, rotating: None, spacing: None, pivot: CENTER, rotate: 0.0 }
+        Self { hover: None, press: None, rotating: None, spacing: None, moving: None, pivot: CENTER, rotate: 0.0 }
     }
 }
 
@@ -453,9 +635,16 @@ impl Tool for ObjectsOnPathTool {
                 _ => vec![],
             };
         }
+        if let Some(d) = &mut self.moving {
+            return match ev.kind {
+                PointerKind::Drag => d.drag(cx, p),
+                PointerKind::Up => self.moving.take().map(MoveAllDrag::finish).unwrap_or_default(),
+                _ => vec![],
+            };
+        }
         match ev.kind {
             PointerKind::Move => {
-                self.hover = if over_rotate_all(cx, p) || over_space(cx, p) { None } else { target(cx, p) };
+                self.hover = if over_rotate_all(cx, p) || over_space(cx, p) || over_move_all(cx, p) { None } else { target(cx, p) };
                 vec![]
             }
             PointerKind::Down => {
@@ -466,6 +655,11 @@ impl Tool for ObjectsOnPathTool {
                 }
                 if let Some(d) = SpaceDrag::hit(cx, ev) {
                     self.spacing = Some(d);
+                    self.hover = None;
+                    return vec![];
+                }
+                if let Some(d) = MoveAllDrag::hit(cx, ev) {
+                    self.moving = Some(d);
                     self.hover = None;
                     return vec![];
                 }
@@ -492,14 +686,20 @@ impl Tool for ObjectsOnPathTool {
         if let Some(d) = &self.spacing {
             o.extend(d.overlays(cx));
         }
+        if let Some(d) = &self.moving {
+            o.extend(d.overlays(cx));
+        }
         o
     }
 
     fn cursor(&self, cx: &ToolContext, p: Point, _mods: Mods) -> Cursor {
-        if self.rotating.is_some() || (self.spacing.is_none() && over_rotate_all(cx, p)) {
+        let idle = self.spacing.is_none() && self.moving.is_none();
+        if self.rotating.is_some() || (idle && over_rotate_all(cx, p)) {
             Cursor::Rotate
-        } else if self.spacing.is_some() || over_space(cx, p) {
+        } else if self.spacing.is_some() || (self.moving.is_none() && over_space(cx, p)) {
             Cursor::ArrowHollow
+        } else if self.moving.is_some() || over_move_all(cx, p) {
+            Cursor::Move
         } else if target(cx, p).is_some() {
             Cursor::ObjectsOnPath
         } else {
@@ -508,14 +708,16 @@ impl Tool for ObjectsOnPathTool {
     }
 
     /// Escape while the button is down cancels the click, so the release attaches nothing, or the
-    /// Rotate All or Space drag, so the objects go back to the Rotate or Space they had.
+    /// Rotate All, Space or Move All drag, so the objects go back to the Rotate, Space or place
+    /// they had.
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape {
             self.press = None;
             self.hover = None;
             let rotated = self.rotating.take().is_some_and(|d| d.adjusting());
             let spaced = self.spacing.take().is_some_and(|d| d.adjusting());
-            if rotated || spaced {
+            let moved = self.moving.take().is_some_and(|d| d.adjusting());
+            if rotated || spaced || moved {
                 return vec![Action::Cancel];
             }
         }
@@ -545,11 +747,13 @@ impl Tool for ObjectsOnPathTool {
     }
 
     fn busy(&self) -> bool {
-        self.press.is_some() || self.rotating.is_some() || self.spacing.is_some()
+        self.press.is_some() || self.rotating.is_some() || self.spacing.is_some() || self.moving.is_some()
     }
 
     fn transforming(&self) -> bool {
-        self.rotating.as_ref().is_some_and(RotateAllDrag::adjusting) || self.spacing.as_ref().is_some_and(SpaceDrag::adjusting)
+        self.rotating.as_ref().is_some_and(RotateAllDrag::adjusting)
+            || self.spacing.as_ref().is_some_and(SpaceDrag::adjusting)
+            || self.moving.as_ref().is_some_and(MoveAllDrag::adjusting)
     }
 }
 
@@ -1054,6 +1258,196 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, w.at.x, w.at.y));
         assert_eq!(spaced(&t.pointer(&c, &ev(PointerKind::Drag, 236.0, 100.0))), Some((110.0, 0.0)));
         assert_eq!(spaced(&t.pointer(&c, &ev(PointerKind::Drag, 1000.0, 100.0))), Some((400.0, 0.0)), "half way round at most");
+    }
+
+    /// The start a Move All drag's last action previews, to 1/1,000,000 pt, and whether it also
+    /// sets a Space value.
+    fn moved(acts: &[Action]) -> Option<(f64, Option<f64>)> {
+        let round = |v: f64| (v * 1e6).round() / 1e6 + 0.0;
+        match acts.last() {
+            Some(Action::Preview(cmd, p)) if cmd == "object.objectsOnPath.options" && p.get("rotate").is_none() => {
+                Some((round(p["start"].as_f64()?), p.get("spacing").and_then(Value::as_f64).map(round)))
+            }
+            _ => None,
+        }
+    }
+
+    /// A document holding an Objects on Path group of one 20 × 20 square on the line from (0, 300)
+    /// to (400, 300), and a selection of the group.
+    fn single_doc() -> (Document, Selection) {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let (line, a, g) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let line = Node::path(line, shapes::line(Point::new(0.0, 300.0), Point::new(400.0, 300.0)), Appearance::default_art());
+        let a = Node::path(a, shapes::rectangle(Rect::new(50.0, 50.0, 70.0, 70.0)), Appearance::default_art());
+        let rec = vectorcraft_doc::objects_on_path::ObjectsOnPath::new(line.id, &[&a], CENTER, 0.0);
+        let mut group = Node::new(g, NodeKind::Group { children: vec![Arc::new(line), Arc::new(a)], clip: false });
+        group.extras_mut().objects_on_path = Some(Box::new(rec));
+        vectorcraft_doc::objects_on_path::place(&mut group, &Document::new(1.0, 1.0).symbol_boxes());
+        d.insert(Some(l), 0, group).unwrap();
+        let mut sel = Selection::default();
+        sel.set([g]);
+        (d, sel)
+    }
+
+    #[test]
+    fn the_move_all_widget_sits_below_the_first_object_when_the_objects_have_room() {
+        // Space 100 from 50: the first square spans 290 to 310 down the page, and the widget is
+        // 16 px below its bottom. The two objects take 100 pt of the 400 pt path, so the first
+        // one can go from 0 to 300 along it.
+        let (d, g, sel) = spaced_doc(Some(100.0), 50.0);
+        let w = MoveAllWidget::of(&d, &sel, 1.0).unwrap();
+        assert_eq!(w.group, g);
+        assert!(near(w.first, Point::new(50.0, 300.0)) && near(w.at, Point::new(50.0, 326.0)), "{w:?}");
+        assert!(w.start == 50.0 && (w.most - 300.0).abs() < 1e-9 && w.gap.is_none() && !w.closed, "{w:?}");
+        assert!(near(MoveAllWidget::of(&d, &sel, 2.0).unwrap().at, Point::new(50.0, 318.0)));
+        // Auto spreads the objects from one end of an open path to the other: no room to move.
+        let (d, _, sel) = group_doc(0.0);
+        assert!(MoveAllWidget::of(&d, &sel, 1.0).is_none(), "Auto");
+        // Nor with a Space value that reaches the end.
+        let (d, _, sel) = spaced_doc(Some(400.0), 0.0);
+        assert!(MoveAllWidget::of(&d, &sel, 1.0).is_none(), "the whole path");
+        // On a closed path the objects always have room, Auto included.
+        let (d, sel) = path_doc(shapes::rectangle(Rect::new(100.0, 100.0, 300.0, 300.0)), None);
+        let w = MoveAllWidget::of(&d, &sel, 1.0).unwrap();
+        assert!(w.closed && (w.most - 800.0).abs() < 1e-9 && w.gap.is_none(), "{w:?}");
+        // One object on an open path can move along all of it.
+        let (d, sel) = single_doc();
+        let w = MoveAllWidget::of(&d, &sel, 1.0).unwrap();
+        assert!(w.start == 0.0 && (w.most - 400.0).abs() < 1e-9 && w.gap.is_none(), "{w:?}");
+        // No widget for an object in the group, or for a locked group.
+        let (d, _, sel) = spaced_doc(Some(100.0), 50.0);
+        let children: Vec<NodeId> = d.node(sel.objects[0]).and_then(|n| n.children()).unwrap().iter().map(|c| c.id).collect();
+        let mut one = Selection::default();
+        one.set([children[1]]);
+        assert!(MoveAllWidget::of(&d, &one, 1.0).is_none());
+        let (mut d, g, sel) = spaced_doc(Some(100.0), 50.0);
+        if let Some(n) = d.node_mut(g) {
+            n.locked = true;
+        }
+        assert!(MoveAllWidget::of(&d, &sel, 1.0).is_none());
+    }
+
+    /// Dragging the widget 80 pt along the path moves both objects 80 pt, keeping the Space, with
+    /// the Selection tool and with the Objects on Path tool, previewed while dragging and kept as
+    /// one undo step on release. On an open path the objects stop at its ends, and coming back
+    /// moves them back at once.
+    #[test]
+    fn dragging_the_move_all_widget_moves_every_object_along_the_path() {
+        let (d, g, sel) = spaced_doc(Some(100.0), 50.0);
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let at = MoveAllWidget::of(&d, &sel, 1.0).unwrap().at;
+        let tools: [Box<dyn Tool>; 2] = [Box::new(crate::select::SelectionTool::default()), Box::new(ObjectsOnPathTool::default())];
+        for mut t in tools {
+            let id = t.id();
+            assert_eq!(t.cursor(&c, at, Mods::default()), Cursor::Move, "{id}");
+            assert!(t.pointer(&c, &ev(PointerKind::Down, at.x, at.y)).is_empty(), "{id}");
+            let a = t.pointer(&c, &ev(PointerKind::Drag, at.x + 80.0, at.y + 10.0));
+            assert_eq!(a.first(), Some(&Action::Begin("Objects on Path Options".into())), "{id}");
+            assert!(matches!(a.last(), Some(Action::Preview(_, p)) if p["ids"] == json!([g.0])), "{a:?}");
+            assert_eq!(moved(&a), Some((130.0, None)), "{id}: only the start changes");
+            assert!(t.transforming() && t.cursor(&c, at, Mods::default()) == Cursor::Move, "{id}");
+            let label = c.len(130.0);
+            assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if *text == label)), "{id}");
+            // Shift and Alt change nothing.
+            let mods = Mods { shift: true, alt: true, ..Mods::default() };
+            assert_eq!(moved(&t.pointer(&c, &PointerEvent { mods, ..ev(PointerKind::Drag, at.x + 90.0, at.y) })), Some((140.0, None)), "{id}");
+            // No further than where the last object reaches the end, and back at once.
+            assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, at.x + 900.0, at.y))), Some((300.0, None)), "{id}");
+            assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, at.x + 880.0, at.y))), Some((280.0, None)), "{id}");
+            assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, at.x - 900.0, at.y))), Some((0.0, None)), "{id}");
+            assert_eq!(t.pointer(&c, &ev(PointerKind::Up, at.x, at.y)), vec![Action::Commit], "{id}");
+            assert!(!t.busy(), "{id}");
+            // A click on the widget that does not move changes nothing.
+            assert!(t.pointer(&c, &ev(PointerKind::Down, at.x, at.y)).is_empty());
+            assert!(t.pointer(&c, &ev(PointerKind::Up, at.x + 1.0, at.y)).is_empty(), "{id}");
+        }
+    }
+
+    /// Where the saved Space would draw the objects apart differently from another start (Auto,
+    /// or a value the path is too short for), the drag sets the distance as drawn with the start;
+    /// back where it began, the group keeps its saved values.
+    #[test]
+    fn a_move_all_drag_keeps_the_distance_the_objects_are_drawn_at() {
+        for (spacing, what) in [(Some(1000.0), "a Space value too large for the path"), (None, "Auto")] {
+            let (d, _, sel) = spaced_doc(spacing, 100.0);
+            let paint = paint();
+            let c = cx(&d, &sel, &paint);
+            let w = MoveAllWidget::of(&d, &sel, 1.0).unwrap();
+            assert!((w.most - 100.0).abs() < 1e-9 && w.gap == Some(300.0), "{what}: {w:?}");
+            let mut t = ObjectsOnPathTool::default();
+            t.pointer(&c, &ev(PointerKind::Down, w.at.x, w.at.y));
+            assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, w.at.x - 40.0, w.at.y))), Some((60.0, Some(300.0))), "{what}");
+            let a = t.pointer(&c, &ev(PointerKind::Drag, w.at.x, w.at.y));
+            assert_eq!(moved(&a), Some((100.0, None)), "{what}: back where it began");
+        }
+    }
+
+    /// On an L-shaped path the drag counts the distance along the path, round the corner.
+    #[test]
+    fn a_move_all_drag_follows_the_path_round_a_corner() {
+        let (d, sel) = corner_doc(Some(100.0));
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let w = MoveAllWidget::of(&d, &sel, 1.0).unwrap();
+        assert!(near(w.at, Point::new(0.0, 326.0)) && (w.most - 600.0).abs() < 1e-9, "{w:?}");
+        let mut t = ObjectsOnPathTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, w.at.x, w.at.y));
+        assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, 200.0, 326.0))), Some((200.0, None)));
+        // Up the upright leg, 200 pt from the corner.
+        assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, 426.0, 100.0))), Some((600.0, None)), "no further than the end");
+        assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, 426.0, 200.0))), Some((500.0, None)));
+    }
+
+    /// On a closed path the objects go on round across the first anchor, both ways.
+    #[test]
+    fn a_move_all_drag_on_a_closed_path_goes_round_across_the_first_anchor() {
+        // The square's outline is 800 pt round, from (100, 100) to the right.
+        let (d, sel) = path_doc(shapes::rectangle(Rect::new(100.0, 100.0, 300.0, 300.0)), Some(100.0));
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let w = MoveAllWidget::of(&d, &sel, 1.0).unwrap();
+        assert!(near(w.first, Point::new(100.0, 100.0)) && near(w.at, Point::new(100.0, 126.0)), "{w:?}");
+        let mut t = ObjectsOnPathTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, w.at.x, w.at.y));
+        // Down the left side, back before the first anchor.
+        assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, 100.0, 150.0))), Some((776.0, None)));
+        // Round the corner onto the top, ahead of it again.
+        assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, 130.0, 100.0))), Some((56.0, None)));
+    }
+
+    /// One object moves along all of an open path.
+    #[test]
+    fn a_move_all_drag_moves_a_single_object_to_the_end() {
+        let (d, sel) = single_doc();
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let w = MoveAllWidget::of(&d, &sel, 1.0).unwrap();
+        let mut t = crate::select::SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, w.at.x, w.at.y));
+        assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, w.at.x + 150.0, w.at.y))), Some((150.0, None)));
+        assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, w.at.x + 600.0, w.at.y))), Some((400.0, None)));
+    }
+
+    /// Escape during a Move All drag cancels it: the readout is removed, and the release keeps
+    /// nothing.
+    #[test]
+    fn escape_cancels_a_move_all_drag() {
+        let (d, _, sel) = spaced_doc(Some(100.0), 50.0);
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let at = MoveAllWidget::of(&d, &sel, 1.0).unwrap().at;
+        let tools: [Box<dyn Tool>; 2] = [Box::new(crate::select::SelectionTool::default()), Box::new(ObjectsOnPathTool::default())];
+        for mut t in tools {
+            t.pointer(&c, &ev(PointerKind::Down, at.x, at.y));
+            assert!(moved(&t.pointer(&c, &ev(PointerKind::Drag, at.x + 40.0, at.y))).is_some());
+            assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{}", t.id());
+            assert!(!t.busy() && !t.transforming(), "{}", t.id());
+            assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { .. })), "{}", t.id());
+            assert!(t.pointer(&c, &ev(PointerKind::Drag, at.x, at.y)).is_empty(), "{}", t.id());
+            assert!(t.pointer(&c, &ev(PointerKind::Up, at.x, at.y)).is_empty(), "{}: the release keeps nothing", t.id());
+        }
     }
 
     /// Escape during a Space drag cancels it: the readout is removed, and the release keeps

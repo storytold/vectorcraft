@@ -697,3 +697,186 @@ fn ink_pixels_stop_at_the_ink_mixes_limit() {
     assert!(GradientPaint::new(perceptual).ink_pixels(b, b, 2, 1, false).is_none());
     assert!(GradientPaint::new(classic).ink_pixels(b, b, 2, 1, false).is_some());
 }
+
+/// A conic placed at `center` with its vector `dx` long to the right and aspect `aspect`.
+fn conic_at(center: Point, dx: f64, aspect: f64) -> GradientGeom {
+    GradientGeom { start: center, end: center + Vec2::new(dx, 0.0), aspect, focal: None }
+}
+
+#[test]
+fn a_conic_turns_clockwise_on_the_page_from_its_vector() {
+    // The page's y runs down: a quarter turn clockwise from a vector pointing right is straight
+    // below the center.
+    let g = conic_at(Point::new(100.0, 100.0), 50.0, 1.0);
+    let t = |x: f64, y: f64| g.param_at(GradientKind::Conic, Point::new(x, y));
+    assert!(t(200.0, 100.0).abs() < 1e-12);
+    assert!((t(100.0, 130.0) - 0.25).abs() < 1e-12);
+    assert!((t(10.0, 100.0) - 0.5).abs() < 1e-12);
+    assert!((t(100.0, 3.0) - 0.75).abs() < 1e-12);
+    // Either side of the seam: the start of the ramp just below the vector, its end just above.
+    assert!(t(200.0, 100.01) < 1e-3);
+    let before = t(200.0, 99.99);
+    assert!(before > 0.999 && before <= 1.0, "{before}");
+    // A flatter extent ellipse turns faster near the vector's line: half as tall, the point 1/8
+    // of a turn around is half as far below it.
+    let squashed = conic_at(Point::new(100.0, 100.0), 50.0, 0.5);
+    let p = Point::new(150.0, 125.0);
+    assert!((squashed.param_at(GradientKind::Conic, p) - 0.125).abs() < 1e-12);
+    assert!(g.param_at(GradientKind::Conic, p) < 0.1);
+    // Mirrored (a negative aspect), it turns counterclockwise.
+    let mirrored = conic_at(Point::new(100.0, 100.0), 50.0, -1.0);
+    assert!(mirrored.is_mirrored() && !g.is_mirrored());
+    assert!((mirrored.param_at(GradientKind::Conic, Point::new(100.0, 70.0)) - 0.25).abs() < 1e-12);
+}
+
+#[test]
+fn a_conic_follows_moves_turns_scales_and_mirrors() {
+    let c = Point::new(10.0, 20.0);
+    let g0 = conic_at(c, 30.0, 1.0);
+    let probes = [c + Vec2::new(5.0, 7.0), c + Vec2::new(-9.0, 2.0), c + Vec2::new(3.0, -11.0)];
+    for a in [
+        Affine::rotate(0.7),
+        Affine::scale(2.5),
+        Affine::translate((4.0, -9.0)) * Affine::rotate(-2.0),
+        Affine::FLIP_X,
+        Affine::FLIP_Y * Affine::rotate(1.1),
+        Affine::scale_non_uniform(2.0, 0.5),
+    ] {
+        let mut g = g0;
+        g.transform(a, GradientKind::Conic);
+        assert!(g.start.distance(a * c) < 1e-9, "{a:?}");
+        for p in probes {
+            let (want, got) = (g0.param_at(GradientKind::Conic, p), g.param_at(GradientKind::Conic, a * p));
+            assert!((want - got).abs() < 1e-9, "{a:?} at {p:?}: {want} vs {got}");
+        }
+    }
+    // A mirror and a mirror back: the same sweep.
+    let mut g = g0;
+    g.transform(Affine::FLIP_X, GradientKind::Conic);
+    assert!(g.is_mirrored());
+    g.transform(Affine::FLIP_X, GradientKind::Conic);
+    assert!(!g.is_mirrored() && (g.aspect - 1.0).abs() < 1e-12);
+    // A conic without a vector, or with a flat extent, turns the other way under a mirror too.
+    for flat in [conic_at(c, 0.0, 1.0), conic_at(c, 30.0, 0.0)] {
+        let mut g = flat;
+        g.transform(Affine::FLIP_Y, GradientKind::Conic);
+        assert!(g.is_mirrored(), "{g:?}");
+        g.transform(Affine::rotate(0.3), GradientKind::Conic);
+        assert!(g.is_mirrored(), "{g:?}");
+        g.transform(Affine::FLIP_X, GradientKind::Conic);
+        assert!(!g.is_mirrored(), "{g:?}");
+    }
+    // Under a shear the seam stays where the vector maps.
+    let shear = Affine::new([1.0, 0.0, 0.6, 1.0, 0.0, 0.0]);
+    let mut g = g0;
+    g.transform(shear, GradientKind::Conic);
+    let on_seam = shear * (c + Vec2::new(20.0, 0.0));
+    assert!(g.param_at(GradientKind::Conic, on_seam) < 1e-9, "{g:?}");
+}
+
+#[test]
+fn conic_kind_names_and_fit() {
+    for s in ["conic", "Conic", "angle", "CONICAL"] {
+        assert_eq!(GradientKind::parse(s), Some(GradientKind::Conic), "{s}");
+    }
+    assert_eq!(GradientKind::parse("spiral"), None);
+    assert_eq!(GradientKind::Conic.label(), "Conic");
+    assert!(GradientKind::Conic.is_centered() && GradientKind::Radial.is_centered() && !GradientKind::Linear.is_centered());
+    let fit = GradientGeom::fit(GradientKind::Conic, Rect::new(0.0, 0.0, 200.0, 100.0), 90.0);
+    assert_eq!(fit.start, Point::new(100.0, 50.0));
+    assert!(fit.end.distance(Point::new(100.0, -50.0)) < 1e-9);
+}
+
+/// Is `p` inside polygon `poly` (non-zero winding)?
+fn inside(poly: &[Point], p: Point) -> bool {
+    let mut w = 0i32;
+    for (i, &a) in poly.iter().enumerate() {
+        let c = poly[(i + 1) % poly.len()];
+        let cross = (c - a).cross(p - a);
+        if a.y <= p.y && c.y > p.y && cross > 0.0 {
+            w += 1;
+        } else if a.y > p.y && c.y <= p.y && cross < 0.0 {
+            w -= 1;
+        }
+    }
+    w != 0
+}
+
+#[test]
+fn conic_wedges_cover_the_box_and_meet_at_the_seam() {
+    let b = Rect::new(0.0, 0.0, 200.0, 100.0);
+    let g = conic_at(Point::new(60.0, 40.0), 30.0, 0.5);
+    let wedges = g.conic_wedges(b, 36, false);
+    assert_eq!(wedges.len(), 36);
+    // Each point of the box lies in the wedge whose share of the turn holds it.
+    for (x, y) in [(1.0, 1.0), (199.0, 99.0), (150.0, 30.0), (10.0, 90.0), (61.0, 39.0), (59.0, 41.0)] {
+        let p = Point::new(x, y);
+        let t = g.param_at(GradientKind::Conic, p);
+        let k = ((t * 36.0).floor() as usize).min(35);
+        assert!(inside(&wedges[k].0, p), "({x}, {y}) at {t} is not in wedge {k}");
+        assert!((wedges[k].1 - (k as f64 + 0.5) / 36.0).abs() < 1e-12);
+    }
+    // Overlapping wedges run on from their own start to the seam.
+    let over = g.conic_wedges(b, 36, true);
+    let frame = g.unit_frame().unwrap();
+    let on = |turn: f64| frame * Point::new(0.5 * (turn * std::f64::consts::TAU).cos(), 0.5 * (turn * std::f64::consts::TAU).sin());
+    assert!(inside(&over[0].0, on(0.5)) && inside(&over[0].0, on(35.9 / 36.0)));
+    assert!(inside(&over[20].0, on(35.9 / 36.0)) && !inside(&over[20].0, on(19.9 / 36.0)));
+    // The count is kept to what a file can hold.
+    assert_eq!(g.conic_wedges(b, 0, false).len(), 1);
+    assert_eq!(g.conic_wedges(b, usize::MAX, false).len(), MAX_CONIC_WEDGES);
+}
+
+/// A conic whose extent can't be drawn (a vector without length, an aspect of 0, or numbers out
+/// of range, as a file can hold them) sweeps from the right about its start, or the origin; the
+/// parameter, the frame and the wedges stay finite.
+#[test]
+fn a_conic_with_no_extent_or_bad_numbers_still_sweeps() {
+    let c = Point::new(50.0, 50.0);
+    for g in [
+        conic_at(c, 0.0, 1.0),
+        conic_at(c, 30.0, 0.0),
+        conic_at(c, 30.0, f64::NAN),
+        conic_at(c, 30.0, f64::INFINITY),
+        conic_at(c, f64::INFINITY, 1.0),
+        GradientGeom { end: Point::new(f64::NAN, 3.0), ..conic_at(c, 30.0, 1.0) },
+    ] {
+        assert!(g.conic_frame().as_coeffs().iter().all(|v| v.is_finite()), "{g:?}");
+        let t = |x: f64, y: f64| g.param_at(GradientKind::Conic, Point::new(x, y));
+        assert!(t(90.0, 50.0).abs() < 1e-12, "{g:?}");
+        assert!((t(50.0, 90.0) - 0.25).abs() < 1e-12, "{g:?}");
+        let wedges = g.conic_wedges(Rect::new(0.0, 0.0, 100.0, 100.0), 4, false);
+        assert!(wedges.iter().flat_map(|(pts, _)| pts).all(|p| p.is_finite()), "{g:?}");
+    }
+    // A flat extent keeps the vector's direction and the sign of its aspect.
+    let down = GradientGeom { end: Point::new(50.0, 80.0), ..conic_at(c, 30.0, 0.0) };
+    assert!(down.param_at(GradientKind::Conic, Point::new(50.0, 90.0)).abs() < 1e-12);
+    assert!((down.param_at(GradientKind::Conic, Point::new(10.0, 50.0)) - 0.25).abs() < 1e-12);
+    for g in [conic_at(c, 0.0, -1.0), conic_at(c, 30.0, -0.0), conic_at(c, 30.0, f64::NEG_INFINITY)] {
+        assert!(g.is_mirrored(), "{g:?}");
+        assert!((g.param_at(GradientKind::Conic, Point::new(50.0, 10.0)) - 0.25).abs() < 1e-12, "{g:?}");
+    }
+    let lost = GradientGeom { start: Point::new(f64::NAN, 0.0), ..conic_at(c, 30.0, 1.0) };
+    assert_eq!(lost.conic_frame(), Affine::IDENTITY);
+    for p in [Point::new(3.0, 4.0), Point::new(f64::NAN, 1.0), Point::new(f64::INFINITY, 0.0)] {
+        let t = lost.param_at(GradientKind::Conic, p);
+        assert!((0.0..=1.0).contains(&t), "{t}");
+    }
+}
+
+/// A conic's pixels (what SVG and PDF draw a dithered or Perceptual one as) follow the sweep,
+/// with one stop as well as many.
+#[test]
+fn conic_pixels_follow_the_sweep() {
+    let b = Rect::new(0.0, 0.0, 4.0, 4.0);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, Gradient::default().stops));
+    g.geom = Some(conic_at(Point::new(2.0, 2.0), 1.0, 1.0));
+    let px: Vec<[u8; 4]> = g.pixels(b, b, 4, 4, true, &Color::to_rgb).collect();
+    // Below right of the center, early in the sweep: light. Above right, late: dark.
+    assert!(px[3 * 4 + 3][0] > 180 && px[3][0] < 75, "{px:?}");
+    let one = GradientPaint { gradient: Gradient::new(GradientKind::Conic, vec![GradientStop::new(0.3, Color::rgb(1.0, 0.0, 0.0))]), ..g.clone() };
+    assert!(one.pixels(b, b, 4, 4, true, &Color::to_rgb).all(|p| p == [255, 0, 0, 255]));
+    let many = (0..=1000).map(|i| GradientStop::new(i as f32 / 1000.0, Color::gray((i % 2) as f32))).collect();
+    let many = GradientPaint { gradient: Gradient::new(GradientKind::Conic, many), ..g };
+    assert_eq!(many.pixels(b, b, 4, 4, true, &Color::to_rgb).count(), 16);
+}

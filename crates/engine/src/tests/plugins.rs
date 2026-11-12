@@ -13,6 +13,11 @@ use crate::*;
 const DESATURATE: &[u8] = include_bytes!("../../../plugins/tests/fixtures/desaturate.wasm");
 const DESATURATE_ID: &str = "org.vectorcraft.example.desaturate";
 
+/// Held by the tests that set the Additional Plug-ins Folder preference or run `plugin.reload`:
+/// the folder last loaded and its report are kept for the whole process, so another test loading
+/// its own folder between two steps would change what the next step loads or lists.
+static PREFS_FOLDER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn run(s: &mut Session, cmd: &str, p: Value) -> Value {
     s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd}: {e}"))
 }
@@ -980,6 +985,174 @@ fn painted_pieces_keep_to_the_effects_budget() {
     assert!((350..=100_000).contains(&paths), "{paths} paths");
 }
 
+/// A clock for a document's deferrals that reads `step` milliseconds later each time it is read;
+/// the test changes the step as it goes.
+fn stepping_clock(step: &std::sync::Arc<std::sync::atomic::AtomicU64>) -> vectorcraft_plugins::deferred::Clock {
+    let (now, step) = (std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)), step.clone());
+    std::sync::Arc::new(move || Some(now.fetch_add(step.load(std::sync::atomic::Ordering::Relaxed), std::sync::atomic::Ordering::Relaxed)))
+}
+
+/// While a document is drawn on screen, the plug-in effects of its first view share a time budget.
+/// A stage left out draws its input art, is listed by `effect.deferredStatus`, and stays left out
+/// on later drawings; Effect › Refresh Deferred Effects runs it again with a fresh budget, and an
+/// export draws every stage. Another document has a budget of its own.
+#[test]
+fn the_first_view_defers_plug_in_effects_past_its_budget() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let b = rect(&mut s, 30.0, "#ff0000");
+    for (id, x) in [("test.engine.deferred.a", 100.0), ("test.engine.deferred.b", 140.0)] {
+        let out = json!({"objects": [{"path": square_at(x)}]}).to_string();
+        install_wat(&mut s, &tpl::returning(&tpl::manifest(id, "effect", "{}"), &out));
+    }
+    run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": "plugin.test.engine.deferred.a"}));
+    run(&mut s, "effect.apply", json!({"ids": [b.0], "effect": "plugin.test.engine.deferred.b"}));
+    // Each reading is 3 s later: the first run's result comes back after the budget, and the
+    // second run doesn't start.
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    let img = fx.view(|| drawn(&s));
+    fx.first_view_done();
+    assert_eq!((img.pixel(15, 15), img.pixel(35, 15), img.pixel(110, 50), img.pixel(150, 50)), (RED, RED, WHITE, WHITE), "the input art");
+    assert_eq!(fx.take_report(), Some(2));
+    let status = run(&mut s, "effect.deferredStatus", json!({}));
+    let listed = |id: NodeId, plugin: &str| json!({"objectId": id.0, "effectIndex": 0, "pluginId": plugin, "reason": "budget"});
+    assert_eq!(status, json!({"budgetMs": 2000, "effects": [listed(a, "test.engine.deferred.a"), listed(b, "test.engine.deferred.b")]}));
+    assert_eq!(fx.view(|| drawn(&s)).pixel(110, 50), WHITE, "a later drawing leaves it deferred");
+
+    // Refreshed with a fresh budget, in which the clock stands still.
+    assert!(s.execute("effect.refreshDeferred", &json!({"ids": ["a"]})).is_err());
+    assert!(s.execute("effect.refreshDeferred", &json!({"ids": [999_999]})).is_err(), "not an object of the document");
+    step.store(0, std::sync::atomic::Ordering::Relaxed);
+    let refreshed = run(&mut s, "effect.refreshDeferred", json!({"ids": [a.0]}));
+    assert_eq!(refreshed, json!({"refreshed": 1, "stillDeferred": 0, "failed": 0}));
+    let img = fx.view(|| drawn(&s));
+    assert_eq!((img.pixel(110, 50), img.pixel(150, 50)), (RED, WHITE));
+    assert_eq!(run(&mut s, "effect.deferredStatus", json!({}))["effects"], json!([listed(b, "test.engine.deferred.b")]));
+
+    // An export draws every stage; the view then uses the result.
+    let svg = s.execute("document.export", &json!({"format": "svg"})).unwrap();
+    let svg = String::from_utf8(vectorcraft_format::base64_decode(svg["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    assert!(svg.contains(r#"<rect x="140" y="40" width="20" height="20""#), "the square at 140: {svg}");
+    assert_eq!(fx.view(|| drawn(&s)).pixel(150, 50), RED);
+    assert_eq!(run(&mut s, "effect.deferredStatus", json!({}))["effects"], json!([]));
+    assert!(s.execute("effect.refreshDeferred", &json!({})).is_err(), "nothing is deferred");
+
+    // Another document: its first view has a budget of its own.
+    let mut other = session();
+    let c = rect(&mut other, 50.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(170.0)}]}).to_string();
+    install_wat(&mut other, &tpl::returning(&tpl::manifest("test.engine.deferred.c", "effect", "{}"), &out));
+    run(&mut other, "effect.apply", json!({"ids": [c.0], "effect": "plugin.test.engine.deferred.c"}));
+    let still = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let fx_c = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&still));
+    other.doc_mut().unwrap().plugin_effects = fx_c.clone();
+    assert_eq!(fx_c.view(|| drawn(&other)).pixel(180, 50), RED);
+    fx_c.first_view_done();
+    assert_eq!(fx_c.take_report(), Some(0));
+}
+
+/// Deferred stages are listed where their effects are: after an effect that changes no geometry,
+/// and on a fill after a Transform effect that reaches its appearance, each of two instances of
+/// one plug-in at its own place.
+#[test]
+fn deferred_stages_are_listed_at_their_effects_places() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let b = rect(&mut s, 60.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(110.0)}]}).to_string();
+    // An effect that paints its pieces: the object is drawn from its reshaped art.
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.deferred.at", true), &out));
+    const FX: &str = "plugin.test.engine.deferred.at";
+    run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": "stylize.dropShadow"}));
+    for _ in 0..2 {
+        run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": FX}));
+    }
+    run(&mut s, "effect.apply", json!({"ids": [b.0], "effect": "distort.transform", "params": {"strokes": true}, "item": 0}));
+    for _ in 0..2 {
+        run(&mut s, "effect.apply", json!({"ids": [b.0], "effect": FX, "item": 0}));
+    }
+    // No run has time to give a result.
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    fx.view(|| drawn(&s));
+    let places = run(&mut s, "effect.deferredStatus", json!({}))["effects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| (e["objectId"].as_u64().unwrap(), e["item"].as_u64(), e["effectIndex"].as_u64().unwrap()))
+        .collect::<Vec<_>>();
+    assert_eq!(places, [(a.0, None, 1), (a.0, None, 2), (b.0, Some(0), 1), (b.0, Some(0), 2)]);
+}
+
+/// A refresh that does not draw a stage (its object, or a group holding it, is hidden) leaves it
+/// deferred, and a stage whose effect has been removed or hidden, or whose object has been removed,
+/// is no longer listed and does not enable Effect › Refresh Deferred Effects.
+#[test]
+fn refresh_keeps_stages_it_did_not_draw_and_drops_removed_ones() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let b = rect(&mut s, 30.0, "#ff0000");
+    let c = rect(&mut s, 50.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(110.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&tpl::manifest("test.engine.deferred.kept", "effect", "{}"), &out));
+    run(&mut s, "effect.apply", json!({"ids": [a.0, b.0, c.0], "effect": "plugin.test.engine.deferred.kept"}));
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    fx.view(|| drawn(&s));
+    fx.first_view_done();
+    let listed = |s: &mut Session| {
+        run(s, "effect.deferredStatus", json!({}))["effects"].as_array().unwrap().iter().map(|e| e["objectId"].as_u64().unwrap()).collect::<Vec<_>>()
+    };
+    assert_eq!(listed(&mut s), [a.0, b.0, c.0]);
+
+    s.execute("object.hide", &json!({"ids": [a.0, g.0]})).unwrap();
+    step.store(0, std::sync::atomic::Ordering::Relaxed);
+    let refreshed = run(&mut s, "effect.refreshDeferred", json!({"ids": [a.0, c.0]}));
+    assert_eq!(refreshed, json!({"refreshed": 0, "stillDeferred": 2, "failed": 0}), "a hidden object is not drawn");
+    assert_eq!(listed(&mut s), [a.0, b.0, c.0]);
+
+    run(&mut s, "effect.remove", json!({"ids": [a.0], "index": 0}));
+    assert_eq!(listed(&mut s), [b.0, c.0], "its effect was removed");
+    run(&mut s, "effect.setParams", json!({"ids": [b.0], "index": 0, "visible": false}));
+    assert_eq!(listed(&mut s), [c.0], "its effect was hidden");
+    s.execute("edit.clear", &json!({"ids": [b.0, g.0]})).unwrap();
+    assert_eq!(listed(&mut s), Vec::<u64>::new(), "its object was deleted");
+    assert!(s.execute("effect.refreshDeferred", &json!({})).is_err(), "nothing is deferred");
+}
+
+/// A deferred stage in a symbol's art is listed by the object in that art, and a refresh runs it
+/// where the symbol is placed.
+#[test]
+fn deferred_stages_in_symbol_art_are_listed_and_refreshed() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(110.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&tpl::manifest("test.engine.deferred.symbol", "effect", "{}"), &out));
+    run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": "plugin.test.engine.deferred.symbol"}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let instance = run(&mut s, "symbol.new", json!({"name": "Deferred"}))["id"].as_u64().unwrap();
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    fx.view(|| drawn(&s));
+    fx.first_view_done();
+    assert_eq!(fx.take_report(), Some(1));
+    let effects = run(&mut s, "effect.deferredStatus", json!({}))["effects"].clone();
+    let object = effects[0]["objectId"].as_u64().unwrap();
+    assert_eq!(effects.as_array().map(Vec::len), Some(1), "{effects}");
+    assert!(object != instance && s.doc().unwrap().doc.node(NodeId(object)).is_none(), "an object of the symbol's art: {effects}");
+
+    step.store(0, std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(run(&mut s, "effect.refreshDeferred", json!({})), json!({"refreshed": 1, "stillDeferred": 0, "failed": 0}));
+    assert_eq!(run(&mut s, "effect.deferredStatus", json!({}))["effects"], json!([]));
+}
+
 /// `CRAFT_PLUGIN_PAINTS_WASM=<folder>` saves a test live effect to try in the app
 /// (`stroke-width-test-effect.wasm`): it draws a triangle over the area 100,80–300,230 while its
 /// object's stroke is 5 pt wide, and hands the geometry back otherwise.
@@ -1110,6 +1283,7 @@ fn filters_keep_their_data_with_the_document() {
 
 #[test]
 fn plugin_management_commands() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     install(&mut s, DESATURATE);
     let list = run(&mut s, "plugin.list", json!({}));
@@ -1145,6 +1319,26 @@ fn plugin_management_commands() {
     assert_eq!(r["failed"].as_array().unwrap().len(), 1);
     assert_eq!(run(&mut s, "plugin.list", json!({}))["folder"]["loaded"], json!(["test.engine.folder"]));
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Clearing the Additional Plug-ins Folder forgets the folder: setting the same folder again
+/// installs what is in it, as setting any other folder does.
+#[test]
+fn plugins_folder_set_again_after_clearing_installs_its_plugins() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = crate::tests_links::Folder::new("plugin-folder-cleared");
+    let id = "test.engine.foldercleared";
+    let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+    std::fs::write(dir.0.join("cleared.wasm"), wat::parse_str(src).unwrap()).unwrap();
+    let mut s = session();
+    let folder = json!({"key": "pluginsFolder", "value": dir.0.display().to_string()});
+    run(&mut s, "prefs.set", folder.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed from the folder");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    run(&mut s, "prefs.set", json!({"key": "pluginsFolder", "value": ""}));
+    run(&mut s, "prefs.set", folder);
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again when the folder is set again");
+    run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
@@ -1779,6 +1973,125 @@ fn a_grant_that_cannot_be_removed_stops_plugin_remove() {
     assert!(!std::path::Path::new(&file).exists());
 }
 
+/// When `plugin.remove` can't remove the grant and can't move the settings back either, its error
+/// says where the settings are, and the plug-in gets no storage until they are back. A second
+/// removal that can't remove the grant moves them back rather than deleting them, and so does the
+/// next load of the plug-in.
+#[test]
+fn settings_that_cannot_be_moved_back_are_reported_and_moved_back_later() {
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-move-back");
+    let id = "test.engine.permissions.movebackfail";
+    let approved = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
+    let recorded = std::fs::read(&grants).unwrap();
+    // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
+    let entry = serde_json::from_slice::<Vec<Value>>(&recorded).unwrap().remove(0);
+    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    std::fs::write(&grants, &full).unwrap();
+    let data = crate::store::plugin_data_dir(&folder.0, id);
+    let settings = br#"{"zoom":"aGVsbG8="}"#;
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), settings).unwrap();
+    let mut aside = data.clone().into_os_string();
+    aside.push(".removed");
+    let aside = std::path::PathBuf::from(aside);
+
+    crate::store::MOVE_BACK_FAILS.set(true);
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    crate::store::MOVE_BACK_FAILS.set(false);
+    assert!(refused.contains(crate::store::GRANT_NOT_REMOVED), "{refused}");
+    assert!(refused.contains(&aside.display().to_string()) && refused.contains("the folder is in use"), "{refused}");
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "the plug-in stays installed");
+    assert!(!data.exists());
+    assert_eq!(std::fs::read(aside.join("settings.json")).unwrap(), settings);
+    assert!(vectorcraft_plugins::registry::storage(id).is_none(), "no empty settings take their place");
+
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert_eq!(refused, crate::store::GRANT_NOT_REMOVED);
+    assert_eq!(std::fs::read(data.join("settings.json")).unwrap(), settings, "the second removal moves the settings back");
+    assert!(!aside.exists());
+
+    crate::store::MOVE_BACK_FAILS.set(true);
+    assert!(s.execute("plugin.remove", &json!({"id": id})).is_err());
+    crate::store::MOVE_BACK_FAILS.set(false);
+    assert!(!data.exists());
+
+    // A folder of the plug-in's own made meanwhile is used, and a removal that can't remove the
+    // grant leaves both.
+    let newer = br#"{"zoom":"bmV3"}"#;
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), newer).unwrap();
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert_eq!(refused, crate::store::GRANT_NOT_REMOVED);
+    assert_eq!(std::fs::read(data.join("settings.json")).unwrap(), newer);
+    assert_eq!(std::fs::read(aside.join("settings.json")).unwrap(), settings, "the kept settings stay");
+    std::fs::remove_dir_all(&data).unwrap();
+
+    // A restart loads the plug-in again with its settings.
+    std::fs::write(&grants, &recorded).unwrap();
+    vectorcraft_plugins::registry::remove(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "the plug-in loads");
+    assert_eq!(std::fs::read(data.join("settings.json")).unwrap(), settings, "the load moves the settings back");
+    assert!(!aside.exists());
+
+    run(&mut next, "plugin.remove", json!({"id": id}));
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert!(!data.exists() && !aside.exists(), "the removal deletes the settings");
+    assert_eq!(std::fs::read_dir(data.parent().unwrap()).unwrap().count(), 0, "nothing is left beside them");
+}
+
+/// What a deletion left in a plug-in's renamed settings folder, marked by the `.delete` file beside
+/// it, isn't moved back. When that file can't be written, nothing is deleted, so the folder stays
+/// whole and counts as kept settings.
+#[test]
+fn a_removal_deletes_only_folders_it_marked() {
+    let folder = crate::tests_links::Folder::new("plugin-store-delete-mark");
+    let id = "test.engine.permissions.deletemark";
+    let approved = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let install = json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]});
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    let data = crate::store::plugin_data_dir(&folder.0, id);
+    let settings = br#"{"zoom":"aGVsbG8="}"#;
+    let mut aside = data.clone().into_os_string();
+    aside.push(".removed");
+    let aside = std::path::PathBuf::from(aside);
+    let mut marker = aside.clone().into_os_string();
+    marker.push(".delete");
+
+    // The next install starts with no settings, and its removal deletes the leftover and the mark.
+    std::fs::create_dir_all(&aside).unwrap();
+    std::fs::write(aside.join("settings.json"), settings).unwrap();
+    std::fs::write(&marker, b"").unwrap();
+    run(&mut next, "plugin.install", install.clone());
+    assert!(!data.exists(), "a leftover of a deletion isn't moved back");
+    run(&mut next, "plugin.remove", json!({"id": id}));
+    assert_eq!(std::fs::read_dir(data.parent().unwrap()).unwrap().count(), 0, "the leftover and its mark are deleted");
+
+    // When the mark can't be written, the removal deletes nothing: installing the id again needs
+    // `replace`, and a removal of the id that isn't installed deletes the folder.
+    run(&mut next, "plugin.install", install.clone());
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), settings).unwrap();
+    crate::store::MARKER_WRITE_FAILS.set(true);
+    let removed = next.execute("plugin.remove", &json!({"id": id}));
+    crate::store::MARKER_WRITE_FAILS.set(false);
+    assert_eq!(removed.unwrap(), json!({"removed": id}));
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert_eq!(std::fs::read(aside.join("settings.json")).unwrap(), settings, "nothing is deleted without the mark");
+    assert!(!std::path::Path::new(&marker).exists());
+    assert!(next.execute("plugin.install", &install).is_err(), "the kept settings go to a new install only with `replace`");
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert_eq!(std::fs::read(aside.join("settings.json")).unwrap(), settings);
+    run(&mut next, "plugin.remove", json!({"id": id}));
+    assert_eq!(std::fs::read_dir(data.parent().unwrap()).unwrap().count(), 0, "the removal of the id deletes the kept folder");
+}
+
 /// Windows keeps a file another program holds open without delete sharing, so the last grant can't
 /// be removed by deleting `grants.json`.
 #[cfg(windows)]
@@ -1811,6 +2124,7 @@ fn a_grants_file_that_cannot_be_deleted_keeps_the_stored_module() {
 /// the plug-in store stays, with the stored module it covers.
 #[test]
 fn a_plugin_folder_ends_the_process_grant_of_an_id_it_replaces() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     let id = "test.engine.permissions.folderstale";
     let empty = json!({"objects": []});
@@ -1988,6 +2302,7 @@ fn a_failed_store_write_keeps_the_stored_module_with_its_grant() {
 /// grants held by the process.
 #[test]
 fn a_plugin_folder_skips_a_changed_module_until_it_is_approved() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     let id = "test.engine.permissions.folderbytes";
     let plain = "test.engine.permissions.folderplain";
@@ -2216,6 +2531,7 @@ fn a_run_past_the_memory_budget_fails_before_the_plugin_starts() {
 /// until it is granted on its own.
 #[test]
 fn granted_permissions_are_kept_and_folders_skip_the_rest() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let folder = crate::tests_links::Folder::new("plugin-store-grants");
     let id = "test.engine.permissions.stored";
     let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
@@ -2304,6 +2620,7 @@ fn granted_permissions_are_kept_and_folders_skip_the_rest() {
 /// covers no module.
 #[test]
 fn a_grant_covers_only_the_module_it_was_given_to() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let folder = crate::tests_links::Folder::new("plugin-store-grant-hash");
     let id = "test.engine.granthash";
     let mut s = session();
@@ -3042,6 +3359,40 @@ fn removing_an_id_that_is_not_installed_deletes_its_storage() {
     assert_eq!(run(&mut s, "plugin.remove", json!({"id": id})), json!({"removed": id}));
     assert!(!dir.exists(), "the storage of an id that isn't installed is deleted");
     assert!(s.execute("plugin.remove", &json!({"id": id})).is_err(), "nothing left to remove");
+}
+
+/// The `plugin.*` commands that the tests running every command with `{}` run
+/// ([`crate::runs_with_empty_params`]) leave the cache of an installed plug-in as it is, so
+/// those tests can run beside the ones here that check a cache. Each command runs with `{}` in a
+/// document with two rectangles, one or both selected, as `every_command_survives_empty_params`
+/// runs it.
+#[test]
+fn plugin_commands_run_with_empty_params_keep_other_plugins_caches() {
+    let folder = crate::tests_links::Folder::new("plugin-storage-empty-params");
+    let id = "test.engine.storageemptyparams";
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(&mut s, id, WRITES);
+    run(&mut s, "plugin.run", json!({"id": id, "ids": []}));
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": id}))["cacheBytes"], json!(3));
+    let mut ran = vec![];
+    for all in [false, true] {
+        for c in crate::cmd::command_specs().iter().filter(|c| c.id.starts_with("plugin.") && crate::runs_with_empty_params(c.id)) {
+            let mut other = session();
+            let a = rect(&mut other, 10.0, "#ff0000");
+            rect(&mut other, 40.0, "#0000ff");
+            if all {
+                run(&mut other, "select.all", json!({}));
+            } else {
+                run(&mut other, "select.set", json!({"ids": [a.0]}));
+            }
+            let _ = other.execute(c.id, &json!({}));
+            ran.push(c.id);
+            assert_eq!(run(&mut s, "plugin.info", json!({"id": id}))["cacheBytes"], json!(3), "after {}", c.id);
+        }
+    }
+    assert!(ran.contains(&"plugin.list"), "{ran:?}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
 /// The settings file and the cache are checked: a file that doesn't read is moved aside and the

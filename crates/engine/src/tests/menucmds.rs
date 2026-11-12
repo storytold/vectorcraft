@@ -1461,6 +1461,42 @@ fn rasterize_replaces_selection_with_image() {
     assert_eq!(selected(&s), vec![img]);
 }
 
+/// Rasterize refuses art that would be longer than the renderer draws (32,768 pixels a side), and
+/// the art stays as it was; at a resolution that fits, the image covers all of it.
+#[test]
+fn rasterize_refuses_an_image_longer_than_the_renderer_draws() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 100.0, 5569.0);
+    sel(&mut s, &[a]);
+    let vb = s.doc().unwrap().doc.bounds_of(&[a], true).unwrap();
+    let before = (undo_len(&s), node(&s, a));
+    let e = s.execute("object.rasterize", &json!({"ppi": 600, "padding": 0})).unwrap_err().to_string();
+    assert!(e.contains("too large"), "{e}");
+    assert_eq!((undo_len(&s), node(&s, a)), before);
+    let img = id_of(&s.execute("object.rasterize", &json!({"ppi": 400, "padding": 0})).unwrap());
+    let n = node(&s, img);
+    let NodeKind::Image(im) = &n.kind else { panic!() };
+    assert!(im.height <= vectorcraft_render::MAX_RASTER_SIDE, "{} pixels", im.height);
+    let b = n.geometric_bounds().unwrap();
+    assert!(close(b.y0, vb.y0) && b.y1 >= vb.y1, "{b:?} covers {vb:?}");
+}
+
+/// Art that snaps to exactly 32,768 pixels a side is rasterized, wherever it is on the canvas.
+#[test]
+fn rasterize_takes_art_that_snaps_to_32768_pixels_a_side() {
+    let scale = 400.0 / 72.0;
+    for y in [100_000.0, 250_000.0, 333_333.3, 777_777.7] {
+        let mut s = session();
+        let probe = rect(&mut s, 10.0, y, 100.0, 5898.0);
+        let vb = s.doc().unwrap().doc.bounds_of(&[probe], true).unwrap();
+        let h = 5898.0 + (32_767.8 / scale - vb.height());
+        let a = rect(&mut s, 200.0, y, 100.0, h);
+        sel(&mut s, &[a]);
+        let r = s.execute("object.rasterize", &json!({"ppi": 400, "padding": 0})).unwrap_or_else(|e| panic!("at y = {y}: {e}"));
+        assert_eq!(r["height"].as_u64(), Some(u64::from(vectorcraft_render::MAX_RASTER_SIDE)), "at y = {y}: {r}");
+    }
+}
+
 /// Rasterize refuses a resolution given as text or as another value that is not a number, and the
 /// selected art stays as it was.
 #[test]
@@ -3650,7 +3686,7 @@ fn make_release_clear_guides() {
     s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
     let n = undo_len(&s);
     assert_eq!(s.execute("view.guides.clear", &json!({})).unwrap()["count"], 2);
-    assert!(s.doc().unwrap().doc.guides.is_empty());
+    assert!(s.doc().unwrap().doc.ruler_guides().is_empty());
     assert!(s.doc().unwrap().doc.node(a).is_none());
     assert_eq!(undo_len(&s), n + 1);
 }
@@ -3715,13 +3751,13 @@ fn ruler_guides_and_lock() {
     let mut s = session();
     assert_eq!(s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap()["index"], 0);
     s.execute("guide.move", &json!({"index": 0, "pos": 70})).unwrap();
-    assert_eq!(s.doc().unwrap().doc.guides[0].pos, 70.0);
+    assert_eq!(s.doc().unwrap().doc.ruler_guides()[0].pos, 70.0);
     assert_eq!(s.execute("view.guides.lock", &json!({})).unwrap()["locked"], true);
     assert!(s.guides_locked());
     assert!(matches!(s.execute("guide.remove", &json!({"index": 0})), Err(EngineError::Disabled(..))));
     s.execute("view.guides.lock", &json!({})).unwrap();
     s.execute("guide.remove", &json!({"index": 0})).unwrap();
-    assert!(s.doc().unwrap().doc.guides.is_empty());
+    assert!(s.doc().unwrap().doc.ruler_guides().is_empty());
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
 }
 
@@ -3768,7 +3804,7 @@ fn invalid_guide_lock_parameters_keep_guides_selected() {
     for params in [json!({"locked": "false"}), json!({"locked": 1})] {
         assert!(s.execute("view.guides.lock", &params).is_err(), "accepted {params}");
         assert!(!s.guides_locked(), "locked guides for {params}");
-        assert_eq!(s.doc().unwrap().selection.guides, vec![0], "cleared selection for {params}");
+        assert_eq!(selected_guides(&s), vec![0], "cleared selection for {params}");
         assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "recorded undo for {params}");
     }
     // Left out, or null as for every command, it toggles.
@@ -3951,11 +3987,11 @@ fn a_failed_preview_leaves_locked_guides_deselected() {
 }
 
 fn guides(s: &Session) -> Vec<(bool, f64)> {
-    s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect()
+    s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect()
 }
 
 fn selected_guides(s: &Session) -> Vec<usize> {
-    s.doc().unwrap().selection.guides.clone()
+    super::selected_guides(s)
 }
 
 /// #414: ruler guides are selected, moved, copied, nudged and deleted like art, over commands.
@@ -4183,10 +4219,12 @@ fn guides_and_art_later_cases(s: &mut Session, a: NodeId) {
     assert_eq!(guides(s).len(), 4);
     assert_eq!(guides(s)[2], (true, 210.0));
     assert_eq!(guides(s)[3], (false, 320.0));
-    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
+    // The layer's art (its ruler guides are listed after it).
+    let art = |s: &Session| s.doc().unwrap().doc.layers[0].children().unwrap().iter().filter(|c| !c.is_ruler_guide()).count();
+    assert_eq!(art(s), 2);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(guides(s).len(), 2);
-    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+    assert_eq!(art(s), 1);
 }
 
 /// #451: an artboard guide (`guide.add {artboard}`) runs across its artboard only, and is moved,
@@ -4208,7 +4246,7 @@ fn artboard_guides_go_with_their_artboard() {
     );
     let spans = |s: &Session| {
         let d = &s.doc().unwrap().doc;
-        d.guides.iter().map(|g| d.guide_span(g)).collect::<Vec<_>>()
+        d.ruler_guides().iter().map(|g| d.guide_span(g)).collect::<Vec<_>>()
     };
     assert_eq!(spans(&s), [Some((0.0, 300.0)), None]);
     for bad in [json!(5), json!("x"), json!(-1)] {
@@ -4234,7 +4272,7 @@ fn artboard_guides_go_with_their_artboard() {
     // Rearranged, they follow their artboards.
     s.execute("artboard.rearrange", &json!({"columns": 4})).unwrap();
     let d = &s.doc().unwrap().doc;
-    for (g, ab) in d.guides.iter().filter_map(|g| Some((g, d.artboards.iter().find(|a| Some(a.id) == g.artboard)?))) {
+    for (g, ab) in d.ruler_guides().iter().filter_map(|g| Some((g, d.artboards.iter().find(|a| Some(a.id) == g.artboard)?))) {
         assert_eq!(g.pos - ab.rect.x0, 160.5, "{g:?} on {ab:?}");
     }
     // Deleted, the artboard takes its guides; the selected ones left stay selected.
@@ -4369,13 +4407,16 @@ fn cmd_ruler_drags_make_guides_of_the_active_artboard_when_the_preference_is_on(
 #[test]
 fn guides_from_older_files_are_put_on_a_layer() {
     let mut s = Session::new();
-    let mut d = vectorcraft_doc::Document::new(400.0, 300.0);
-    d.guides.push(vectorcraft_doc::Guide::new(true, 50.0));
-    d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+    // A document read with its guides on no layer, as such a file holds them.
+    let mut v = serde_json::to_value(vectorcraft_doc::Document::new(400.0, 300.0)).unwrap();
+    v["guides"] = json!([{"vertical": true, "pos": 50.0}, {"vertical": false, "pos": 80.0}]);
+    let d: vectorcraft_doc::Document = serde_json::from_value(v).unwrap();
     s.add_document(d, None);
     let st = s.doc().unwrap();
     let top = st.doc.default_layer();
-    assert!(top.is_some() && st.doc.guides.iter().all(|g| g.layer == top), "{:?}", st.doc.guides);
+    let guides = st.doc.ruler_guides();
+    assert_eq!(guides.len(), 2);
+    assert!(top.is_some() && guides.iter().all(|g| g.layer == top), "{guides:?}");
 }
 
 /// Ruler guides are layer objects: made on the current layer, hidden, locked and deleted with it,
@@ -4385,10 +4426,10 @@ fn ruler_guides_live_on_layers() {
     let mut s = session();
     let first = s.doc().unwrap().current_layer().unwrap();
     s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
-    assert_eq!(s.doc().unwrap().doc.guides[0].layer, Some(first), "on the current layer");
+    assert_eq!(s.doc().unwrap().doc.ruler_guides()[0].layer, Some(first), "on the current layer");
     let second = id_of(&s.execute("layer.new", &json!({"name": "Guides"})).unwrap());
     s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
-    assert_eq!(s.doc().unwrap().doc.guides[1].layer, Some(second), "the new layer is current");
+    assert_eq!(s.doc().unwrap().doc.ruler_guides()[1].layer, Some(second), "the new layer is current");
     assert!(s.execute("guide.add", &json!({"vertical": true, "pos": 1, "layer": 99999})).is_err());
     // Hidden or locked with its layer.
     s.execute("layer.setProps", &json!({"ids": [second.0], "visible": false})).unwrap();
@@ -4399,12 +4440,12 @@ fn ruler_guides_live_on_layers() {
     s.execute("layer.setProps", &json!({"ids": [second.0], "locked": false})).unwrap();
     // Moved to the first layer, then back.
     s.execute("guide.setLayer", &json!({"index": 1, "layer": first.0})).unwrap();
-    assert_eq!(s.doc().unwrap().doc.guides[1].layer, Some(first));
+    assert_eq!(s.doc().unwrap().doc.ruler_guides()[1].layer, Some(first));
     s.execute("guide.setLayer", &json!({"index": 1, "layer": second.0})).unwrap();
     assert!(s.execute("guide.setLayer", &json!({"index": 1, "layer": 99999})).is_err());
     // Several at once, as dragging their rows onto a layer's row does.
     s.execute("guide.setLayer", &json!({"indexes": [0, 1], "layer": first.0})).unwrap();
-    assert!(s.doc().unwrap().doc.guides.iter().all(|g| g.layer == Some(first)));
+    assert!(s.doc().unwrap().doc.ruler_guides().iter().all(|g| g.layer == Some(first)));
     s.execute("guide.setLayer", &json!({"indexes": [1], "layer": second.0})).unwrap();
     assert!(s.execute("guide.setLayer", &json!({"indexes": [7], "layer": first.0})).is_err());
     // Deleting a layer deletes its guides; undo brings them back.
@@ -4440,7 +4481,7 @@ fn guides_on_hidden_or_locked_layers_are_left_alone() {
     s.execute("layer.setProps", &json!({"ids": [first.0], "locked": false})).unwrap();
     // The current layer locked: the new guide goes on the top shown, unlocked layer.
     s.execute("guide.add", &json!({"vertical": true, "pos": 20})).unwrap();
-    assert_eq!(s.doc().unwrap().doc.guides[2].layer, Some(first));
+    assert_eq!(s.doc().unwrap().doc.ruler_guides()[2].layer, Some(first));
     assert_eq!(guides(&s).len(), 3);
 }
 
@@ -4453,7 +4494,7 @@ fn guides_go_with_their_layers_when_duplicated_merged_and_flattened() {
     s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
     let second = id_of(&s.execute("layer.new", &json!({})).unwrap());
     s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
-    let on = |s: &Session, l: NodeId| s.doc().unwrap().doc.guides_on(l).map(|(_, g)| (g.vertical, g.pos)).collect::<Vec<_>>();
+    let on = |s: &Session, l: NodeId| s.doc().unwrap().doc.guides_on(l).iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
     // Duplicate Layer copies its guides onto the copy.
     let copy = s.execute("layer.duplicate", &json!({"ids": [second.0]})).unwrap()["ids"][0].as_u64().map(NodeId).unwrap();
     assert_eq!((on(&s, second), on(&s, copy)), (vec![(false, 300.0)], vec![(false, 300.0)]));

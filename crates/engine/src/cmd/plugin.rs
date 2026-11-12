@@ -846,6 +846,15 @@ pub(crate) fn sync_prefs(s: &Session) {
     *last = Some((folder.to_string(), s.plugin_dir.clone(), load_folder(s, folder)));
 }
 
+/// The Additional Plug-ins Folder preference was cleared from `old`: when `old` is the folder last
+/// loaded, it is forgotten, so setting the preference to it again loads it again.
+pub(crate) fn forget_prefs_folder(old: &str) {
+    let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    if last.as_ref().is_some_and(|(f, _, _)| f == old.trim()) {
+        *last = None;
+    }
+}
+
 /// Turns Safe Mode on for `--safe-mode`, before the plug-in folder is attached: no plug-in loads or
 /// runs in this process from then on.
 pub fn start_in_safe_mode() {
@@ -1087,7 +1096,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
             always,
             remove
         ),

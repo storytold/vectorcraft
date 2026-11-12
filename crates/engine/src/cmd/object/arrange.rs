@@ -39,7 +39,9 @@ pub(super) fn arrange(s: &mut Session, how: Arrange) -> Result<Value> {
                 group.retain(|id| d.position(*id).is_some_and(|(_, idx, _)| idx >= floor));
             }
             for (k, id) in group.iter().enumerate() {
-                let Some((_, idx, len)) = d.position(*id) else { continue };
+                let Some((_, idx, _)) = d.position(*id) else { continue };
+                // The parent's art, without the ruler guides that stay above it.
+                let len = d.children(par).map_or(0, |ch| Node::guide_run_start(ch));
                 if len <= floor {
                     continue;
                 }
@@ -73,12 +75,16 @@ pub(super) fn send_to_current_layer(s: &mut Session, _: &Value) -> Result<Value>
     }
     // When the selected objects are already the topmost in the current layer, in paint order, the
     // document and its undo history stay as they are.
-    if st.doc.children(Some(layer)).is_some_and(|c| c.iter().rev().map(|n| n.id).take(ids.len()).eq(ids.iter().rev().copied())) {
+    // (The layer's ruler guides stay above its art.)
+    let art = |c: &&std::sync::Arc<Node>| !c.is_ruler_guide();
+    if st.doc.children(Some(layer)).is_some_and(|c| c.iter().rev().filter(art).map(|n| n.id).take(ids.len()).eq(ids.iter().rev().copied())) {
         return ok();
     }
     s.edit("Send to Current Layer", |d, _| {
         let moved = d.remove_many(&ids)?;
-        d.children_mut(Some(layer))?.extend(moved);
+        let ch = d.children_mut(Some(layer))?;
+        let at = Node::guide_run_start(ch);
+        ch.splice(at..at, moved);
         Ok(())
     })?;
     ok()
@@ -176,7 +182,7 @@ fn selected_lock_hide_roots(s: &Session) -> Result<Vec<NodeId>> {
 fn collect_flag(d: &Document, f: impl Fn(&Node) -> bool) -> Vec<NodeId> {
     let mut v = vec![];
     d.walk(|n| {
-        if !n.is_layer() && f(n) {
+        if !n.is_layer() && !n.is_ruler_guide() && f(n) {
             v.push(n.id)
         }
     });
@@ -198,7 +204,7 @@ fn collect_flag_in_scope(s: &Session, cmd: &str, p: &Value, f: impl Fn(&Node) ->
             if let Some(node) = d.node(root) {
                 for child in node.children().into_iter().flatten() {
                     child.walk(&mut |n| {
-                        if !n.is_layer() && f(n) {
+                        if !n.is_layer() && !n.is_ruler_guide() && f(n) {
                             ids.push(n.id);
                         }
                     });
@@ -222,7 +228,7 @@ fn collect_flag_in_scope(s: &Session, cmd: &str, p: &Value, f: impl Fn(&Node) ->
         }
         for c in d.node(*g).and_then(Node::children).into_iter().flatten() {
             c.walk(&mut |n| {
-                if !n.is_layer() && f(n) {
+                if !n.is_layer() && !n.is_ruler_guide() && f(n) {
                     v.push(n.id)
                 }
             });

@@ -237,9 +237,10 @@ fn main() -> ExitCode {
 
 /// A headless session that remembers what the user keeps between runs: the PDF presets saved, the
 /// ICC profiles loaded, the plug-ins installed (#2168, #2174, #2541), the custom dictionary's words (#4936) and the Color Settings (#6335), in the folders
-/// and files next to the preferences that the desktop app uses too. `VECTORCRAFT_NO_PREFS` and `VECTORCRAFT_CONFIG_DIR` apply
-/// as they do there.
+/// and files next to the preferences that the desktop app uses too, and lists the scripts of the Scripts folder there
+/// (`script.listInstalled`). `VECTORCRAFT_NO_PREFS` and `VECTORCRAFT_CONFIG_DIR` apply as they do there.
 fn with_stores(mut h: Headless) -> Headless {
+    prefs_dir::attach_scripts_dir(&mut h.session);
     prefs_dir::attach_profile_store(&mut h.session);
     prefs_dir::attach_color_settings(&mut h.session);
     prefs_dir::attach_plugin_store(&mut h.session);
@@ -485,7 +486,12 @@ fn info(args: &[String]) -> Result<(), String> {
     let base = h.call("engine.execute", json!({"command": "file.info", "params": {}}))?;
     let doc = h.session.doc().map_err(|e| e.to_string())?.doc.clone();
     let mut kinds: std::collections::BTreeMap<&'static str, usize> = Default::default();
-    doc.walk(|n| *kinds.entry(n.kind_label()).or_default() += 1);
+    // Ruler guides are not counted among the objects.
+    doc.walk(|n| {
+        if !n.is_ruler_guide() {
+            *kinds.entry(n.kind_label()).or_default() += 1;
+        }
+    });
     let fonts = h.call("engine.execute", json!({"command": "text.fonts", "params": {}})).unwrap_or(Value::Null);
     let artboards: Vec<Value> =
         doc.artboards.iter().map(|a| json!({"name": a.name, "rect": [a.rect.x0, a.rect.y0, a.rect.width(), a.rect.height()]})).collect();

@@ -194,6 +194,37 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Control bar panel menu's items, its groups of options and the edges, and the label of the
+/// command that turns a group on or off.
+#[test]
+fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
+    const LABELS: [&str; 18] = [
+        "Snapping",
+        "Anchor Points",
+        "Tool Options",
+        "Object Options",
+        "Image Options",
+        "Fill and Stroke",
+        "Opacity",
+        "Graphic Style",
+        "Character",
+        "Paragraph",
+        "Vertical Alignment",
+        "Align and Distribute",
+        "Transform",
+        "Artboard Options",
+        "Document Options",
+        "Dock to Top",
+        "Dock to Bottom",
+        "Control Bar Options",
+    ];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in LABELS {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
 /// own `antiAlias` row apart from the plain "Sharp" corner row.
 #[test]
@@ -225,6 +256,24 @@ fn each_language_counts_with_its_plural_rule() {
             assert_eq!(COUNTS.map(rule), forms, "{code}");
         }
     }
+}
+
+/// The Script Console's counted phrases have a row in every complete catalog, and a count picks
+/// the language's own form.
+#[test]
+fn script_console_counts_take_each_language_s_form() {
+    const COUNTED: [(&str, &str); 3] =
+        [("{n} host call", "{n} host calls"), ("{n} earlier line dropped", "{n} earlier lines dropped"), ("{n} line cut", "{n} lines cut")];
+    for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
+        for (one, other) in COUNTED {
+            assert!(l.catalog().plural(one, other, 0).is_some(), "{} is missing the row for {other}", l.code);
+        }
+    }
+    assert_eq!([1, 2].map(|n| trn(de(), n, COUNTED[0].0, COUNTED[0].1)), ["1 Host-Aufruf", "2 Host-Aufrufe"]);
+    let ru = Lang::from_code("ru").expect("registered");
+    assert_eq!([1, 3, 5].map(|n| trn(ru, n, COUNTED[2].0, COUNTED[2].1)), ["1 строка обрезана", "3 строки обрезаны", "5 строк обрезано"]);
+    let fr = Lang::from_code("fr").expect("registered");
+    assert_eq!([0, 1].map(|n| trn(fr, n, COUNTED[1].0, COUNTED[1].1)), ["0 ligne antérieure supprimée", "1 ligne antérieure supprimée"]);
 }
 
 #[test]
@@ -2458,7 +2507,7 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("scale must be a number from {_1} to {_2}, not {_3}", &["scale"]),
     ("scale must be a number from {_1} to {_2}, not {s}", &["scale"]),
     ("show must be true or false", &["show"]),
-    ("span: \"selection\" places a linear or radial gradient, not a freeform one", &["span"]),
+    ("span: \"selection\" places a linear, radial or conic gradient, not a freeform one", &["span"]),
     ("thickness must be from 0.01 to 5000 pt", &["thickness"]),
     ("title can't be empty", &["title"]),
     ("view is required", &["view"]),
@@ -2490,6 +2539,61 @@ fn translated_messages_keep_the_keys_and_values_their_english_names() {
     let stale: Vec<&str> = NAMED_KEYS.iter().zip(&seen).filter(|(_, seen)| !**seen).map(|((english, _), _)| *english).collect();
     assert!(stale.is_empty(), "no catalog translates {stale:?}");
     assert!(missing.is_empty(), "{} rows drop a key or value their English names:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// The command ids that `s` names outside its backticked spans, such as `assets.list` or
+/// `window.panel.dock`: words of two or more dot-separated parts, each an ASCII letter or digit
+/// run that starts with a lowercase letter.
+fn command_ids(s: &str) -> Vec<&str> {
+    let mut ids = Vec::new();
+    for part in s.split('`').step_by(2) {
+        for word in part.split(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '_')) {
+            let word = word.trim_end_matches('.');
+            let segments: Vec<&str> = word.split('.').collect();
+            let dotted = segments.len() > 1
+                && segments
+                    .iter()
+                    .all(|seg| seg.chars().next().is_some_and(|c| c.is_ascii_lowercase()) && seg.chars().all(|c| c.is_ascii_alphanumeric()));
+            if dotted && word != "e.g" && word != "i.e" {
+                ids.push(word);
+            }
+        }
+    }
+    ids
+}
+
+#[test]
+fn command_ids_finds_dotted_ids_outside_backticks() {
+    assert_eq!(command_ids("no slice {n} in the image (see slice.list)"), ["slice.list"]);
+    assert_eq!(command_ids("use window.panel.dock."), ["window.panel.dock"]);
+    assert_eq!(command_ids("output.destination: {e}"), ["output.destination"]);
+    assert_eq!(command_ids("(assets.list.old देखें)"), ["assets.list.old"]);
+    assert_eq!(command_ids("see `plugin.list`, e.g. 1.5 or {name}.svg"), Vec::<&str>::new());
+}
+
+/// A translated status or error message keeps each command id its English text names without
+/// backticks, spelled as the English spells it, since that is the id a script or the command
+/// palette runs.
+#[test]
+fn translated_messages_keep_the_command_ids_their_english_names() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                let kept: Vec<&str> = command_ids(form).into_iter().chain(backticked(form)).collect();
+                for id in command_ids(english) {
+                    if !kept.contains(&id) {
+                        missing.push(format!("{}: {id} in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a command id their English names:\n{}", missing.len(), missing.join("\n"));
 }
 
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists

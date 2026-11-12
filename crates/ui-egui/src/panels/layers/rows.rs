@@ -122,7 +122,7 @@ fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
 fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     let (t, h) = (&view.t, view.h);
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
-    let Some(g) = view.doc.guides.get(i) else { return };
+    let Some(g) = view.ruler_guides.get(i) else { return };
     let selected = view.guides.contains(&i);
     let editable = view.doc.guide_editable(g);
     if editable && resp.hovered() {

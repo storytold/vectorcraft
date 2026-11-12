@@ -55,6 +55,8 @@
 	Scripts	Scripts
 	Check Script…	Script controleren…
 	Check Script	Script controleren
+	Some scripts were not listed	Sommige scripts zijn niet weergegeven
+	The Scripts folder cannot be read	De map Scripts kan niet worden gelezen
 	Other Script…	Ander script…
 	Document Setup…	Documentinstellingen…
 	Switch Units	Eenheden wisselen
@@ -379,6 +381,7 @@
 	Smart Punctuation…	Slimme interpunctie…
 	Create Outlines	Omzetten in curven
 	Optical Margin Alignment	Optische marge-uitlijning
+	Dynamic Text	Dynamische tekst
 	Fill with Placeholder Text	Vullen met plaatshoudertekst
 	Insert Inline Symbol	Inline-symbool invoegen
 	Show Hidden Characters	Verborgen tekens tonen
@@ -734,6 +737,13 @@
 	Quest Outline	Quest
 	Coin Shine	Munt
 	Boss Alert	Baas
+	Status Effects	Statuseffecten
+	Poison Tint	Gif
+	Freeze Edge	Bevriezing
+	Burn Aura	Brand
+	Stun Pulse	Verdoving
+	Stealth Fade	Sluipen
+	Shield Buff	Schild
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
 	Gradient Finishes	Verloopafwerkingen
@@ -813,6 +823,13 @@
 	Dock Panel	Paneel dokken
 	Dock to Top	Bovenaan dokken
 	Dock to Bottom	Onderaan dokken
+	Control Bar Options	Opties voor bedieningsbalk
+	Tool Options	Gereedschapsopties
+	Object Options	Objectopties
+	Image Options	Afbeeldingsopties
+	Vertical Alignment	Verticale uitlijning
+	Align and Distribute	Uitlijnen en verdelen
+	Document Options	Documentopties
 	Dock Control Bar	Bedieningsbalk dokken
 	Float Tool Group	Gereedschapsgroep laten zweven
 	Services	Diensten
@@ -1595,6 +1612,7 @@ digits	Malayalam	Malayalam
 	No gradient swatches	Geen verloopstalen
 	Points: clicks add free points	Punten: klikken voegen vrije punten toe
 	Radial Gradient	Radiaal verloop
+	Conic Gradient	Conisch verloop
 	Reset to White, Black	Herstellen naar wit, zwart
 	Reverse Gradient	Verloop omkeren
 	Save to Swatches	Opslaan in stalen
@@ -2103,6 +2121,8 @@ digits	Malayalam	Malayalam
 	Green	Groen
 	Shifts the tints of global and spot colors; other colors stay.	Verschuift de tinten van globale kleuren en spotkleuren; andere kleuren blijven ongewijzigd.
 	Tint	Tint
+	Fill Tint	Vultint
+	Stroke Tint	Contourtint
 	Color Guide Options	Opties voor kleurengids
 	Less	Minder
 	Steps:	Stappen:
@@ -2456,6 +2476,7 @@ digits	Malayalam	Malayalam
 	File Dimensions	Bestandsafmetingen
 	Transforms	Transformaties
 	Background Color:	Achtergrondkleur:
+	Guide Label:	Hulplijnlabel:
 	Show Center Mark	Middenmarkering tonen
 	Show Cross Hairs	Dradenkruis tonen
 	Show Video Safe Areas	Veilige videogebieden tonen
@@ -2701,6 +2722,7 @@ antiAlias	Sharp	Scherp
 	General › Thumbnails	Algemeen › Miniaturen
 	Grayscale images	Grijswaardenafbeeldingen
 	Include non-printing layers	Niet-afdrukbare lagen opnemen
+	Write pages longer than 200 in at full size in points	Pagina's langer dan 200 in op ware grootte in punten schrijven
 	Left:	Links:
 	Mark as trapped	Markeren als getrapt
 	Marks and Bleeds	Steker en afloop
@@ -3503,6 +3525,12 @@ theme	Appearance	Vormgeving
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
 	Render Threads (-1 = Automatic)	Renderthreads (-1 = automatisch)
 	Reset Preferences	Voorkeuren herstellen
+	Export Preferences…	Voorkeuren exporteren…
+	Import Preferences…	Voorkeuren importeren…
+	Save the applied preferences to a JSON file	De toegepaste voorkeuren in een JSON-bestand opslaan
+	Apply the preferences in a file Export Preferences saved	De voorkeuren toepassen uit een bestand dat Voorkeuren exporteren heeft opgeslagen
+	Export Preferences	Voorkeuren exporteren
+	Import Preferences	Voorkeuren importeren
 	Search Preferences	Voorkeuren doorzoeken
 	No settings found	Geen instellingen gevonden
 	Scale Corners	Hoeken schalen
@@ -4103,6 +4131,7 @@ imageTrace	Outline	Contour
 	Stop Script	Script stoppen
 	Show External Script Warning	Waarschuwing voor externe scripts tonen
 	A Script Is Running	Er wordt een script uitgevoerd
+	Script Alert	Scriptmelding
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen
 	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
@@ -4179,6 +4208,8 @@ imageTrace	Outline	Contour
 @msg	`gradient` must be an object	`gradient` moet een object zijn
 @msg	`library` is a library id or name (see {list})	`library` is een bibliotheek-id of -naam (zie {list})
 @msg	`mode` applies to freeform gradients	`mode` geldt voor verlopen met vrije vorm
+@msg	a negative `aspect` applies to conic gradients	een negatieve `aspect` geldt voor conische verlopen
+@msg	`focal` applies to radial gradients	`focal` geldt voor radiale verlopen
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` moet 1, 3 of 5 zijn
 @msg	`stops` must be an array	`stops` moet een array zijn
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` moet een object met SVG-opties zijn (zie document.formats)
@@ -4612,12 +4643,26 @@ imageTrace	Outline	Contour
 @msg	unknown format	onbekende indeling
 @msg	unknown format `{f}` (Save writes {_1})	onbekende indeling `{f}` (Opslaan schrijft {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	onbekende vrijvormmodus `{m}` (punten, lijnen)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	onbekend verlooptype `{k}` (lineair, radiaal, vrijvorm)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	onbekend verlooptype `{k}` (lineair, radiaal, conisch, vrijvorm)
 @msg	unknown highlight `{h}`	onbekende markering `{h}`
 @msg	unknown option `{path}.{k}`	onbekende optie `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (behouden, simuleren of verwerpen)
 @msg	unknown panel `{raw}`	onbekend paneel `{raw}`
 @msg	unknown preference `{key}`	onbekende voorkeur `{key}`
+@msg	Preferences imported.	Voorkeuren geïmporteerd.
+@msg	not a preferences file: {e}	geen voorkeurenbestand: {e}
+@msg	not a preferences file: no JSON object	geen voorkeurenbestand: geen JSON-object
+@msg	not a preferences file (format `{format}`)	geen voorkeurenbestand (indeling `{format}`)
+@msg	not a preferences file: no `format`	geen voorkeurenbestand: geen `format`
+@msg	not a preferences file: no `version`	geen voorkeurenbestand: geen `version`
+@msg	not a preferences file: no `prefs`	geen voorkeurenbestand: geen `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	het bestand is opgeslagen met een nieuwere versie van VectorCraft (versie {v})
+@msg	the file holds no preferences	het bestand bevat geen voorkeuren
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` geeft een map aan, en voorkeurenbestanden bevatten geen mappen
+@msg	the file is larger than 1 MB	het bestand is groter dan 1 MB
+@msg	give `path` or `data`	geef `path` of `data` op
+@msg	`{key}` must be an object	`{key}` moet een object zijn
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` wordt los uitgevoerd, niet als stap van een batch
 @msg	unknown preset (one of {_1})	onbekende voorinstelling (één van {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	onbekende voorinstelling `{name}` (hoog, middel, laag of een opgeslagen voorinstelling: zie flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	onbekende voorinstelling `{name}` (zie flattener.presets.list)
@@ -4782,6 +4827,8 @@ imageTrace	Outline	Contour
 @msg	invalid object id {value}: expected a non-negative integer	ongeldige object-id {value}: een niet-negatief geheel getal verwacht
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	item {index} van `{key}` is {value}, geen object-id (een niet-negatief geheel getal)
 @msg	no such object id {value}	er is geen object met id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} is van een hulplijn, niet van een object
+@msg	a ruler guide goes only directly in a layer or sublayer	een hulplijn kan alleen direct in een laag of sublaag staan
 @msg	automation filesystem access is not granted: read authority is absent: {path}	toegang tot het bestandssysteem voor automatisering is niet verleend: de leesbevoegdheid ontbreekt: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	toegang tot het bestandssysteem voor automatisering is niet verleend: de schrijfbevoegdheid ontbreekt: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automatiseringspad afgewezen: buiten de leesroot {root}: {path}
@@ -4798,7 +4845,13 @@ imageTrace	Outline	Contour
 @msg	the PSD file has an unknown colour mode ({m})	het PSD-bestand heeft een onbekende kleurmodus ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	de afbeeldingsgegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	de PSD-afbeelding is te groot om te lezen ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	gezipte 32-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	zipped 1-bit PSD image data with prediction can't be read	gezipte 1-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	the PSD file's layer data uses an unknown compression ({m})	de laaggegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
+@msg	the PSD file's layer records are damaged	de laagrecords van het PSD-bestand zijn beschadigd
+@msg	the PSD file's layer groups are nested too deeply	de laaggroepen van het PSD-bestand zijn te diep genest
+@msg	a layer of the PSD file is too large to read	een laag van het PSD-bestand is te groot om te lezen
+@msg	the PSD file's layers take more memory to read than allowed	de lagen van het PSD-bestand hebben meer geheugen nodig om te lezen dan toegestaan
+@msg	the layers can't be read ({e}): the file opened as its merged image	de lagen kunnen niet worden gelezen ({e}): het bestand is geopend als zijn samengevoegde afbeelding
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bits PSD-bestanden in deze kleurmodus kunnen niet worden gelezen
 @msg	the PSD file is cut short	het PSD-bestand is afgekapt
 @msg	the PSD file's header is damaged	de header van het PSD-bestand is beschadigd
@@ -5114,6 +5167,7 @@ file-filter	Swatch libraries	Stalenbibliotheken
 file-filter	Flattener presets	Afvlakvoorinstellingen
 file-filter	PDF presets	PDF-voorinstellingen
 file-filter	Print presets	Afdrukvoorinstellingen
+file-filter	Preferences	Voorkeuren
 file-filter	Export presets	Exportvoorinstellingen
 file-filter	SVG Compressed	Gecomprimeerde SVG
 file-filter	PDF-compatible .ai	PDF-compatibel .ai
@@ -5318,6 +5372,7 @@ mark-style	Japanese	Japans
 @msg	Invalid drawing scale	Ongeldige tekeningsschaal
 @msg	Invalid real scale	Ongeldige werkelijke schaal
 @msg	Measured anchor no longer exists	Gemeten ankerpunt bestaat niet meer
+@msg	Invalid measured point	Ongeldig gemeten punt
 @msg	Measured segment no longer exists	Gemeten segment bestaat niet meer
 @msg	Non-finite dimension	Niet-eindige maatlijn
 @msg	Only linear dimensions are horizontal or vertical	Alleen lineaire maatlijnen zijn horizontaal of verticaal
@@ -5347,7 +5402,7 @@ mark-style	Japanese	Japans
 @msg	span must be "object" or "selection", got {v}	span moet "object" of "selection" zijn, maar is {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" plaatst een `gradient`, geen staal
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" plaatst een verloop: geef `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" plaatst een lineair of radiaal verloop, geen vrij verloop
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" plaatst een lineair, radiaal of conisch verloop, geen vrij verloop
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" plaatst het verloop zelf: laat `start` en `end` weg (die plaatsen het al in documentcoördinaten)
 	Make Image Dynamic	Afbeelding dynamisch maken
 	Import Data Sets…	Gegevenssets importeren…
@@ -5931,6 +5986,18 @@ axis	Y Axis	Y-as
 	Flag	Vlag
 	Crosshair	Vizier
 	Checkpoint	Controlepunt
+	Inventory Icons	Inventarisiconen
+	Skill Icons	Vaardigheidsiconen
+	Attack	Aanval
+	Defend	Verdediging
+	Heal	Genezen
+	Buff	Buff
+	Ult	Ult
+	Sword	Zwaard
+	Shield	Schild
+	Potion	Drank
+	Key	Sleutel
+	Gem	Edelsteen
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…
@@ -5984,6 +6051,11 @@ axis	Y Axis	Y-as
 	Dash Trail	Streepspoor
 	Speed Line	Snelheidslijn
 	Game Trails	Spelsporen
+	Energy Beams	Energiestralen
+	Laser Bolt	Laserbout
+	Plasma Arc	Plasmaboog
+	Charge Wave	Laadgolf
+	Spark Trail	Vonkenspoor
 	Calligraphic Nibs	Kalligrafische penpunten
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen
@@ -6530,6 +6602,32 @@ breakText	Glyphs	Glyphs
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster
+	Not Aligned to Pixel Grid	Niet uitgelijnd op pixelraster
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
 	Edit Custom Dictionary	Aangepast woordenboek bewerken
 	Entry:	Item:
+# Script Console
+	Script Console	Scriptconsole
+	Clear Script Console	Scriptconsole wissen
+	Copy Script Console	Scriptconsole kopiëren
+	Copy All	Alles kopiëren
+	Copy Selected	Selectie kopiëren
+	Finished	Voltooid
+	Ended with an error	Beëindigd met een fout
+	Out of fuel	Instructielimiet bereikt
+	Ended at a host limit	Beëindigd bij een hostlimiet
+	Ended at a limit	Beëindigd bij een limiet
+	Stopped	Gestopt
+	Ended by an internal fault	Beëindigd door een interne fout
+	time unavailable	tijd niet beschikbaar
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	traagste: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} host-aanroep|{n} host-aanroepen
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eerdere regel verwijderd|{n} eerdere regels verwijderd
+@plural	{n} line cut|{n} lines cut	{n} regel ingekort|{n} regels ingekort
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
+	Deferred Effects	Uitgestelde effecten

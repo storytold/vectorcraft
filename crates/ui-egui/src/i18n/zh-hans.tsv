@@ -235,6 +235,7 @@ antiAlias	Sharp	锐利
 	Average…	平均…
 	Axis:	轴：
 	Background Color:	背景颜色：
+	Guide Label:	参考线标签：
 	Show Center Mark	显示中心标记
 	Show Cross Hairs	显示十字线
 	Show Video Safe Areas	显示视频安全区域
@@ -1217,6 +1218,7 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Preferences	首选项
 file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG
 file-filter	PDF-compatible .ai	PDF 兼容 .ai
@@ -1612,6 +1614,7 @@ file-filter	Templates	模板
 	Include Linked Files	包含链接文件
 	Include Metadata	包含元数据
 	Include non-printing layers	包含非打印图层
+	Write pages longer than 200 in at full size in points	以实际尺寸（点）写入长于 200 in 的页面
 	Include SVG Code	包含 SVG 代码
 	Include Swatches for Tints	包含淡色色板
 	Inflate…	膨胀…
@@ -2231,6 +2234,8 @@ file-filter	Templates	模板
 	Open…	打开…
 	Optical	视觉
 	Optical Margin Alignment	视觉边界对齐
+	Dynamic Text	动态文本
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
 	Options	选项
@@ -2510,6 +2515,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Radial	径向
 	Radial Glows	径向光晕
 	Radial Gradient	径向渐变
+	Conic Gradient	圆锥渐变
 	Radius 1	半径 1
 	Radius 2	半径 2
 	Radius1	半径1
@@ -2720,6 +2726,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset OpenType Features	重置 OpenType 特性
 	Reset Panel	重置面板
 	Reset Preferences	重置首选项
+	Export Preferences…	导出首选项…
+	Import Preferences…	导入首选项…
+	Save the applied preferences to a JSON file	将已应用的首选项保存到 JSON 文件
+	Apply the preferences in a file Export Preferences saved	应用“导出首选项”所保存文件中的首选项
+	Export Preferences	导出首选项
+	Import Preferences	导入首选项
 	Search Preferences	搜索首选项
 	No settings found	未找到设置
 	Reset Profiles	重置配置文件
@@ -3016,6 +3028,13 @@ digits	Malayalam	马拉雅拉姆数字
 	Quest Outline	任务
 	Coin Shine	金币
 	Boss Alert	首领
+	Status Effects	状态效果
+	Poison Tint	中毒
+	Freeze Edge	冰冻
+	Burn Aura	灼烧
+	Stun Pulse	眩晕
+	Stealth Fade	隐身
+	Shield Buff	护盾
 	Shape	形状
 	Shape Builder	形状生成器
 	Shape Builder Regions	形状生成器区域
@@ -3431,6 +3450,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Tiles are numbered across, then down; leave the range empty for every tile.	拼贴先由左至右再由上至下编号；范围留空表示全部拼贴。
 	Copies per Sheet (as many as fit, in a grid)	每张纸印多份 (尽量排满，按网格排列)
 	Tint	色调
+	Fill Tint	填色色调
+	Stroke Tint	描边色调
 	Tip extends past the end point	箭头超出端点
 	Tip on the end point	箭头位于端点
 	Title Case	词首大写
@@ -4046,6 +4067,8 @@ imageTrace	Outline	轮廓
 @msg	`gradient` must be an object	`gradient` 必须是对象
 @msg	`groupColors` must be an array	`groupColors` 必须是数组
 @msg	`mode` applies to freeform gradients	`mode` 仅适用于任意形状渐变
+@msg	a negative `aspect` applies to conic gradients	负的 `aspect` 仅适用于圆锥渐变
+@msg	`focal` applies to radial gradients	`focal` 仅适用于径向渐变
 @msg	`preserve` must be an object	`preserve` 必须是对象
 @msg	`globalAdjust` must be an object	`globalAdjust` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
@@ -4055,7 +4078,7 @@ imageTrace	Outline	轮廓
 @msg	stop {i} needs `offset`	色标 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色标 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色标 {i}：`{k}` 必须是数字
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	未知的渐变类型 `{k}` (linear、radial、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的渐变类型 `{k}` (linear、radial、conic、freeform)
 @msg	the art could not be sampled	无法对图稿取样
 @msg	the art is too light for any dots	图稿太浅，无法生成任何网点
 @msg	the document has no symbols	文档中没有符号
@@ -4152,6 +4175,20 @@ imageTrace	Outline	轮廓
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必须介于 {min} 和 {max} 之间 (实际为 {x})
 @msg	`{key}` must be one of {_1}	`{key}` 必须是 {_1} 之一
 @msg	unknown preference `{key}`	未知首选项 `{key}`
+@msg	Preferences imported.	已导入首选项。
+@msg	not a preferences file: {e}	不是首选项文件：{e}
+@msg	not a preferences file: no JSON object	不是首选项文件：没有 JSON 对象
+@msg	not a preferences file (format `{format}`)	不是首选项文件（格式 `{format}`）
+@msg	not a preferences file: no `format`	不是首选项文件：没有 `format`
+@msg	not a preferences file: no `version`	不是首选项文件：没有 `version`
+@msg	not a preferences file: no `prefs`	不是首选项文件：没有 `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	该文件由更新版本的 VectorCraft 保存（版本 {v}）
+@msg	the file holds no preferences	该文件不包含首选项
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` 指定的是文件夹，首选项文件不包含文件夹
+@msg	the file is larger than 1 MB	文件大于 1 MB
+@msg	give `path` or `data`	请提供 `path` 或 `data`
+@msg	`{key}` must be an object	`{key}` 必须是对象
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` 需单独运行，不能作为批处理步骤
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	数据恢复没有可保存副本的位置：请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	数据恢复无法将副本保存到 {path}：{e}
 @msg	Plug-ins can't be loaded from {path}: {e}	无法从 {path} 载入增效工具：{e}
@@ -4376,6 +4413,7 @@ imageTrace	Outline	轮廓
 @msg	{label}…	{label}…
 @msg	no blend options	没有混合选项
 @msg	bad color {v}	颜色 {v} 无效
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` 应为 null、图层颜色名称或 #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必须是 0.1 到 10 之间的数字
 @msg	the Color Picker is not open	拾色器未打开
 @msg	the Simplify slider is not open	简化滑块未打开
@@ -4547,6 +4585,7 @@ imageTrace	Outline	轮廓
 	Stop Script	停止脚本
 	Show External Script Warning	显示外部脚本警告
 	A Script Is Running	脚本正在运行
+	Script Alert	脚本提示
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告
 	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
@@ -4560,6 +4599,9 @@ imageTrace	Outline	轮廓
 @msg	the script is too large to run	脚本过大，无法运行
 @msg	a drag or an undo group is open; finish it before running a script	拖动或撤销组尚未结束；请在运行脚本前完成
 @msg	the script left a document that cannot be kept	脚本留下了无法保留的文档
+@msg	the script is no longer in the Scripts folder	脚本已不在 Scripts 文件夹中
+	Some scripts were not listed	部分脚本未列出
+	The Scripts folder cannot be read	无法读取 Scripts 文件夹
 @msg	the script's run is no longer available	脚本运行已不可用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
 @msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
@@ -4678,6 +4720,8 @@ imageTrace	Outline	轮廓
 @msg	invalid object id {value}: expected a non-negative integer	无效的对象 id {value}：应为非负整数
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` 中索引 {index} 处的项为 {value}，不是非负整数对象 id
 @msg	no such object id {value}	没有 id 为 {value} 的对象
+@msg	id {value} is a ruler guide, not an object	id {value} 是参考线，不是对象
+@msg	a ruler guide goes only directly in a layer or sublayer	参考线只能直接位于图层或子图层中
 @msg	id {value} is a layer, not an object	id {value} 是图层，不是对象
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是图层，不是对象；请使用 layer.move 移动图层
 @msg	automation filesystem access is not granted: read authority is absent: {path}	未授予自动化文件系统访问权限：缺少读取权限：{path}
@@ -4707,7 +4751,13 @@ imageTrace	Outline	轮廓
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 文件包含无法读取的图像类型
 @msg	HEIC and HEIF images can't be opened in this build	此版本无法打开 HEIC 和 HEIF 图像
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
-@msg	zipped 32-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 32 位 PSD 图像数据
+@msg	zipped 1-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 1 位 PSD 图像数据
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD 文件的图层数据使用了未知的压缩方式 ({m})
+@msg	the PSD file's layer records are damaged	PSD 文件的图层记录已损坏
+@msg	the PSD file's layer groups are nested too deeply	PSD 文件的图层组嵌套过深
+@msg	a layer of the PSD file is too large to read	PSD 文件的某个图层过大，无法读取
+@msg	the PSD file's layers take more memory to read than allowed	读取 PSD 文件的图层所需内存超过允许值
+@msg	the layers can't be read ({e}): the file opened as its merged image	无法读取图层 ({e})：文件已作为合并图像打开
 @msg	{depth}-bit PSD files in this colour mode can't be read	无法读取此颜色模式下的 {depth} 位 PSD 文件
 @msg	the PSD file is cut short	PSD 文件不完整
 @msg	the PSD file's header is damaged	PSD 文件头已损坏
@@ -4758,6 +4808,7 @@ imageTrace	Outline	轮廓
 @msg	Invalid drawing scale	图纸比例无效
 @msg	Invalid real scale	实际比例无效
 @msg	Measured anchor no longer exists	测量锚点已不存在
+@msg	Invalid measured point	测量点无效
 @msg	Measured segment no longer exists	测量线段已不存在
 @msg	Non-finite dimension	尺寸标注不是有限值
 @msg	Only linear dimensions are horizontal or vertical	只有线性尺寸可以是水平或垂直的
@@ -4771,7 +4822,7 @@ imageTrace	Outline	轮廓
 @msg	span must be "object" or "selection", got {v}	span 必须是 "object" 或 "selection"，实际为 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而不是色板
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 放置渐变：请给出 `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" 放置线性或径向渐变，而不是任意形状渐变
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置线性、径向或圆锥渐变，而不是任意形状渐变
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 自行放置渐变：请省略 `start` 和 `end` (它们已按文档坐标放置渐变)
 @msg	Batch: {count} processed	批处理：已处理 {count} 个
 @msg	Batch: {count} processed, {failed} failed	批处理：已处理 {count} 个，失败 {failed} 个
@@ -5184,6 +5235,13 @@ axis	Both	两者
 	Dock Panel	停放面板
 	Dock to Top	停放到顶部
 	Dock to Bottom	停放到底部
+	Control Bar Options	控制栏选项
+	Tool Options	工具选项
+	Object Options	对象选项
+	Image Options	图像选项
+	Vertical Alignment	垂直对齐
+	Align and Distribute	对齐和分布
+	Document Options	文档选项
 	Dock Control Bar	停放控制栏
 	Drag to float the toolbar	拖动以浮动工具栏
 	Drag to the window's left or right edge to dock	拖到窗口左边缘或右边缘以停放
@@ -5929,6 +5987,18 @@ axis	Y Axis	Y 轴
 	Flag	旗帜
 	Crosshair	准星
 	Checkpoint	检查点
+	Inventory Icons	物品栏图标
+	Skill Icons	技能图标
+	Attack	攻击
+	Defend	防御
+	Heal	治疗
+	Buff	增益
+	Ult	终极技
+	Sword	剑
+	Shield	盾
+	Potion	药水
+	Key	钥匙
+	Gem	宝石
 	Open Symbol Library	打开符号库
 	Save Symbol Library	保存符号库
 	Save Symbol Library…	保存符号库…
@@ -5988,6 +6058,11 @@ axis	Y Axis	Y 轴
 	Dash Trail	虚线轨迹
 	Speed Line	速度线
 	Game Trails	游戏轨迹
+	Energy Beams	能量光束
+	Laser Bolt	激光弹
+	Plasma Arc	等离子弧
+	Charge Wave	充能波
+	Spark Trail	火花尾迹
 	Calligraphic Nibs	书法笔尖
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状
@@ -6188,9 +6263,12 @@ anchor	Points:	点：
 @msg	{label} must be a number	{label} 必须是数字
 @msg	{label} must be a number of at least 0.1	{label} 必须是至少 0.1 的数字
 	Advanced Character Formats	高级字符格式
+	Basic Paragraph Formats	基本段落格式
+	Composition	排版
 	Horizontal Scale	水平缩放
 	Vertical Scale	垂直缩放
 @msg	{label} must be a number from {min} to {max}	{label} 必须是 {min} 到 {max} 之间的数字
+@msg	{label} must be a whole number from {min} to {max}	{label} 必须是 {min} 到 {max} 之间的整数
 	Character Color	字符颜色
 	OpenType Features	OpenType 特性
 	Stylistic Sets	风格集
@@ -6574,7 +6652,36 @@ breakText	Glyphs	字形
 
 # Align to Pixel Grid
 	Align to Pixel Grid	对齐像素网格
+	Not Aligned to Pixel Grid	未对齐像素网格
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`
 	Edit Custom Dictionary	编辑自定义词典
 	Entry:	条目：
+# Script Console
+	Script Console	脚本控制台
+	Clear Script Console	清除脚本控制台
+	Copy Script Console	复制脚本控制台
+	Copy All	全部复制
+	Copy Selected	复制所选内容
+	Finished	已完成
+	Ended with an error	因错误结束
+	Out of fuel	已用尽指令上限
+	Ended at a host limit	在宿主限制处结束
+	Ended at a limit	在限制处结束
+	Stopped	已停止
+	Ended by an internal fault	因内部错误结束
+	time unavailable	时间不可用
+	{ms} ms	{ms} 毫秒
+	{time}, {calls}	{time}，{calls}
+	slowest: {commands}	最慢的命令：{commands}
+	{dropped}, {cut}	{dropped}，{cut}
+@plural	{n} host call|{n} host calls	宿主调用 {n} 次
+@plural	{n} earlier line dropped|{n} earlier lines dropped	已丢弃 {n} 行较早内容
+@plural	{n} line cut|{n} lines cut	已截断 {n} 行
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必须是控制台保留的行号，且 `first` 不能在 `last` 之后
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	刷新延迟的效果
+	Deferred Effects	延迟的效果
+@msg	no plug-in effect is deferred	没有延迟的增效工具效果
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	打开时延迟了 {n} 个增效工具效果。效果 › 刷新延迟的效果可运行它们。

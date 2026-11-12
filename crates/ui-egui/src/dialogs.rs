@@ -77,6 +77,7 @@ pub mod new_text_style;
 pub mod objects_on_path_options;
 pub mod office_export;
 pub mod package;
+pub mod para_style_options;
 pub(crate) mod path_ops;
 pub mod pathfinder_options;
 pub mod pdf_presets;
@@ -333,6 +334,7 @@ registry! {
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
     CharStyleOptions: [char_style_options::KIND] => char_style_options::SPEC,
+    ParaStyleOptions: [para_style_options::KIND] => para_style_options::SPEC,
     NewTextStyle: [new_text_style::KIND] => new_text_style::SPEC,
     EffectExists: [effect::EXISTS] => effect::EXISTS_SPEC,
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
@@ -410,6 +412,7 @@ registry! {
     ScriptRun: [script_run::KIND] => script_run::SPEC,
     ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,
     ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
+    ScriptNotice: [script_run::NOTICE_KIND] => script_run::NOTICE_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
@@ -587,6 +590,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         // The growth question's Cancel button is its Stop button.
         if d.kind == script_run::GROWTH_KIND {
             app.session.script_request_stop();
+        }
+        if d.kind == script_run::NOTICE_KIND {
+            script_run::notice_cancel(app, &d);
         }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec

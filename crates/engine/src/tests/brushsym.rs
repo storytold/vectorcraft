@@ -1321,6 +1321,106 @@ fn break_link_counts_the_instances_mask_art() {
     assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }), "it stays an instance");
 }
 
+/// A hidden, a locked and a plain instance of one symbol in a group, the group selected.
+fn group_with_hidden_and_locked_instances(s: &mut Session) -> (NodeId, String) {
+    let (shown, name, _) = make_symbol(s);
+    let hidden = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    let locked = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 100})).unwrap()["id"].as_u64().unwrap());
+    select(s, &[shown, hidden, locked]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(hidden).unwrap().visible = false;
+    doc.node_mut(locked).unwrap().locked = true;
+    select(s, &[group]);
+    (group, name)
+}
+
+/// The visibility and lock state of the children of `group`, in paint order.
+fn shown_and_locked(s: &Session, group: NodeId) -> Vec<(bool, bool)> {
+    let g = node(s, group);
+    let NodeKind::Group { children, .. } = &g.kind else { panic!("a group: {}", g.kind_label()) };
+    assert!(children.iter().all(|c| !matches!(c.kind, NodeKind::SymbolInstance { .. })), "every instance is expanded");
+    children.iter().map(|c| (c.visible, c.locked)).collect()
+}
+
+/// Break Link to Symbol on a selected group keeps a hidden instance's art hidden and a locked
+/// instance's art locked, and selects only the art that can be selected.
+#[test]
+fn break_link_keeps_hidden_and_locked_instances_hidden_and_locked() {
+    let mut s = session();
+    let (group, _) = group_with_hidden_and_locked_instances(&mut s);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 3, "{r}");
+    assert_eq!(shown_and_locked(&s, group), vec![(true, false), (false, false), (true, true)]);
+    let d = &s.doc().unwrap().doc;
+    let selected: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(selected.len(), 1, "{selected:?}");
+    assert!(selected.iter().all(|id| d.node(*id).is_some_and(|n| n.visible && !n.locked)), "{selected:?}");
+}
+
+/// Break Link to Symbol on a selected group does not select the art of a shown, unlocked instance
+/// that sits in a hidden or a locked group inside it.
+#[test]
+fn break_link_leaves_art_in_hidden_or_locked_groups_unselected() {
+    let mut s = session();
+    let (shown, name, _) = make_symbol(&mut s);
+    let subgroup = |s: &mut Session, y: i64| {
+        let id = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": y})).unwrap()["id"].as_u64().unwrap());
+        select(s, &[id]);
+        NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+    };
+    let hidden = subgroup(&mut s, 200);
+    let locked = subgroup(&mut s, 100);
+    select(&mut s, &[shown, hidden, locked]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(hidden).unwrap().visible = false;
+    doc.node_mut(locked).unwrap().locked = true;
+    select(&mut s, &[group]);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 3, "{r}");
+    let d = &s.doc().unwrap().doc;
+    let selected: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(selected.len(), 1, "{selected:?}");
+    let a = d.ancestry(selected[0]).unwrap();
+    assert!(!a.contains(&hidden) && !a.contains(&locked), "{a:?}");
+}
+
+/// Break Link to Symbol on an instance just placed on a locked artboard selects the art that
+/// replaces it, which stays new art there. The art of an older instance there, named by id, is not
+/// selected.
+#[test]
+fn break_link_keeps_new_art_on_a_locked_artboard_selected() {
+    let mut s = session();
+    let (old, name, _) = make_symbol(&mut s);
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    select(&mut s, &[old]);
+    s.execute("object.move", &json!({"dx": 1000, "dy": 0})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "moved onto the locked artboard");
+    let inst = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 1100, "y": 100})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [inst], "placed art is selected");
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    let art: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(art.len(), 1, "{r}");
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), art, "the art that replaces it");
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), art, "the art stays editable");
+    let r = s.execute("symbol.breakLink", &json!({"ids": [old.0]})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 1, "{r}");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the older instance's art");
+}
+
+/// Delete Symbol, expanding the instances, keeps a hidden instance's art hidden and a locked
+/// instance's art locked.
+#[test]
+fn delete_symbol_keeps_hidden_and_locked_instances_hidden_and_locked() {
+    let mut s = session();
+    let (group, name) = group_with_hidden_and_locked_instances(&mut s);
+    s.execute("symbol.delete", &json!({"name": name})).unwrap();
+    assert_eq!(shown_and_locked(&s, group), vec![(true, false), (false, false), (true, true)]);
+}
+
 #[test]
 fn delete_duplicate_and_replace_symbols() {
     let mut s = session();
@@ -1850,4 +1950,64 @@ fn symbol_unused_lists_the_symbols_nothing_places_and_delete_takes_several() {
         assert!(s.execute("symbol.delete", &bad).is_err(), "{bad}");
     }
     assert_eq!(names(&s).len(), 6);
+}
+
+/// Symbols panel › Sort by Name: the document's symbols in name order, ignoring case, with names
+/// that differ only in case kept in their order, as one undo step that keeps the current symbol
+/// and every instance; sorting symbols already in order adds no undo step.
+#[test]
+fn symbol_sort_by_name_orders_the_symbols_in_one_undo_step() {
+    let mut s = session();
+    let names = |s: &mut Session| -> Vec<String> {
+        let list = s.execute("symbol.list", &json!({})).unwrap();
+        list["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap_or_default().to_string()).collect()
+    };
+    let current = |s: &mut Session| s.execute("symbol.list", &json!({})).unwrap()["current"].clone();
+    let made = ["leaf", "Badge", "apple", "Leaf", "Zed"];
+    for (i, name) in made.into_iter().enumerate() {
+        rect(&mut s, 20.0 * i as f64, 0.0, 10.0, 10.0);
+        s.execute("symbol.new", &json!({"name": name})).unwrap();
+    }
+    // No current symbol stored: the first one is current.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.remove("currentSymbol");
+    assert_eq!(current(&mut s), "leaf");
+    let instances = |s: &Session| {
+        let mut v = vec![];
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                v.push((n.id, symbol.clone()));
+            }
+        });
+        v
+    };
+    let placed = instances(&s);
+    assert_eq!(placed.len(), 5);
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    assert_eq!(current(&mut s), "leaf", "the current symbol stays current");
+    assert_eq!(instances(&s), placed, "every instance keeps its symbol");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before + 1, "one undo step");
+    // Already in order: nothing changes and no undo step is added.
+    let revision = s.doc().unwrap().revision;
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision), (before + 1, revision));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&mut s), made);
+    assert_eq!(current(&mut s), "leaf");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    // An explicitly current symbol stays current too.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "Zed"})).unwrap();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(current(&mut s), "Zed");
+    // Run as a batch step it sorts as well, and with no symbols it adds no undo step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("command.batch", &json!({"commands": [{"command": "symbol.sortByName", "params": {}}]})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), before);
 }

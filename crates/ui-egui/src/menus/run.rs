@@ -1,6 +1,6 @@
 use super::bar::home_key;
 use super::invoke::menu_dialog;
-use super::slots::{recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
+use super::slots::{recent_readable, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::state::{checked, selected_image};
 use super::ui_commands::UI_COMMANDS;
 use super::{Brightness, Face, SaveMode, Value, VectorcraftApp, io, json, next_zoom};
@@ -137,7 +137,7 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.exportInBackground" => Ok(io::hide_exports(app)),
         "file.cancelOpen" => Ok(crate::opening::cancel_all(app)),
         "file.openInBackground" => Ok(crate::opening::hide_all(app)),
-        id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
+        id if id.starts_with("file.openRecent") => match recent_slot(app, id).filter(|path| recent_readable(path)).cloned() {
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
         },
@@ -164,7 +164,7 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             app.ui.recent_files.clear();
             Ok(Value::Null)
         }
-        "file.recentFiles" => Ok(json!(io::recent_files(app))),
+        "file.recentFiles" => Ok(json!(io::recent_files(app).iter().filter(|path| recent_readable(path)).collect::<Vec<_>>())),
         "file.place" => crate::place::run(app, p),
         "file.place.queue" => crate::place::queue(app, p),
         "file.export.svg" if p.as_object().is_none_or(|o| o.is_empty()) => {
@@ -477,6 +477,24 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 None => Err(format!("`{key}` must be one of {}", edges.join(", "))),
             }
         }
+        // The Control bar's panel menu: a group of the bar's options on or off.
+        "window.control.options" => {
+            let groups = crate::chrome::CONTROL_BAR_GROUPS;
+            match (groups.iter().find(|g| s("group").as_deref() == Some(**g)), opt_bool(p, "visible")) {
+                (None, _) => Err(format!("`group` must be one of {}", groups.join(", "))),
+                (_, Err(e)) => Err(e),
+                (Some(&group), Ok(visible)) => {
+                    let hidden = &mut app.ui.control_bar_hidden_groups;
+                    let visible = visible.unwrap_or_else(|| hidden.contains(group));
+                    if visible {
+                        hidden.remove(group);
+                    } else {
+                        hidden.insert(group.to_string());
+                    }
+                    Ok(json!({ "group": group, "visible": visible }))
+                }
+            }
+        }
         "window.toolbar" => flag(&mut app.ui.toolbar),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
@@ -693,6 +711,11 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             None => Err("missing `name`".into()),
         },
         "ui.charStyleOptions.resetPanel" => crate::dialogs::char_style_options::reset_panel(app),
+        "ui.paraStyleOptions" => match s("name") {
+            Some(name) => crate::dialogs::para_style_options::open(app, &name),
+            None => Err("missing `name`".into()),
+        },
+        "ui.paraStyleOptions.resetPanel" => crate::dialogs::para_style_options::reset_panel(app),
         "ui.newCharStyle" => crate::panels::text_styles::open_new(app, crate::panels::text_styles::Kind::Char),
         "ui.newParaStyle" => crate::panels::text_styles::open_new(app, crate::panels::text_styles::Kind::Para),
         "ui.symbolOptions" => {
@@ -771,6 +794,7 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
+        "ui.copyScriptConsole" => crate::panels::script_console::copy(app, p),
         "window.graphicStyleLibrary" => crate::panels::graphic_styles::open_library(app, p),
         "ui.libraryPanel" => crate::panels::library_panel::command(app, p),
         "ui.libraryPanel.locate" => crate::panels::library_panel::locate(app, p),
@@ -974,6 +998,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "imageTrace.hideRuns" => Ok(crate::trace_runs::hide_all(app)),
         "ui.checkScript" => crate::dialogs::script_check::command(app, p),
         "ui.runScript" => crate::dialogs::script_run::command(app, p),
+        crate::scripts_menu::COMMAND => crate::scripts_menu::run(app, p),
         "ui.perspectiveGridDialog" => crate::dialogs::perspective_grid::open(app),
         "ui.perspectivePresetsDialog" => {
             crate::dialogs::perspective_presets::open(app, s("selected").as_deref());

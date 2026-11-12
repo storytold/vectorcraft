@@ -1,6 +1,6 @@
 use super::edit::{regenerate, spec_of, target};
 use super::series::{switch_xy, transpose};
-use super::{Document, EngineError, GraphKind, GraphSpec, NodeId, Result, Session, Value, bad, bool_or, json, str_param};
+use super::{Document, EngineError, GraphKind, GraphSpec, NodeId, Result, Session, Value, bad, json, switch_or, text_param};
 
 // ---------- data ----------
 
@@ -50,6 +50,10 @@ pub(super) fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<Option<
         .map(|l| l.trim_end_matches('\r'))
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
+            // A lone `""` line is a single blank value (`to_csv` writes it so the row isn't dropped as empty).
+            if l.trim() == "\"\"" {
+                return vec![Cell { text: String::new(), quoted: false }];
+            }
             let tabs = split_unquoted(l, '\t');
             let parts = if tabs.len() > 1 { tabs } else { split_unquoted(l, ',') };
             parts.into_iter().map(cell).collect()
@@ -97,7 +101,7 @@ pub(crate) fn apply_csv(d: &mut Document, id: NodeId, csv: &str) -> Result<()> {
         return Err(bad("graph.applyCsv", format!("node {} is not a graph", id.0)));
     };
     let mut spec = current.clone();
-    apply_data(&mut spec, &json!({ "csv": csv }));
+    apply_data(&mut spec, &json!({ "csv": csv }), "graph.applyCsv")?;
     keep_right_series(&mut spec);
     if spec == *current {
         return Ok(());
@@ -111,34 +115,58 @@ fn keep_right_series(g: &mut GraphSpec) {
     g.right_series.retain(|i| *i < count);
 }
 
-pub(super) fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {
+/// Apply the data `p` gives (`csv`, `series`, `categories`, `rows`) to `g`; true when it gave any. A null is read as a
+/// key left out. A `csv` that is not a string, a `series` or `categories` that is not a list, and `rows` that are not
+/// lists of numbers and nulls are errors, and `g` is left as it was.
+pub(super) fn apply_data(g: &mut GraphSpec, p: &Value, cmd: &str) -> Result<bool> {
+    let list = |key: &str| -> Result<Option<&Vec<Value>>> {
+        match p.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::Array(a)) => Ok(Some(a)),
+            Some(v) => Err(bad(cmd, format!("`{key}` must be a list, not {v}"))),
+        }
+    };
+    let csv = text_param(p, "csv", cmd)?;
+    let strings = |a: &Vec<Value>| a.iter().map(|x| x.as_str().map(str::to_string).unwrap_or_else(|| x.to_string())).collect::<Vec<_>>();
+    let series = list("series")?.map(strings);
+    let categories = list("categories")?.map(strings);
+    // A null is a blank cell.
+    let rows = list("rows")?
+        .map(|rows| {
+            rows.iter()
+                .map(|r| {
+                    let bad_row = || bad(cmd, format!("`rows` must be lists of numbers or nulls, not {r}"));
+                    r.as_array()
+                        .ok_or_else(bad_row)?
+                        .iter()
+                        .map(|v| if v.is_null() { Ok(None) } else { v.as_f64().map(|v| Some(v).filter(|v| v.is_finite())).ok_or_else(bad_row) })
+                        .collect::<Result<Vec<_>>>()
+                })
+                .collect::<Result<Vec<_>>>()
+        })
+        .transpose()?;
     let mut changed = false;
-    if let Some(csv) = str_param(p, "csv") {
+    if let Some(csv) = csv {
         let (s, c, r) = parse_csv(csv);
         g.series = s;
         g.categories = c;
         g.set_cells(r);
         changed = true;
     }
-    let strings =
-        |v: &Value| v.as_array().map(|a| a.iter().map(|x| x.as_str().map(str::to_string).unwrap_or_else(|| x.to_string())).collect::<Vec<_>>());
-    if let Some(s) = p.get("series").and_then(strings) {
+    if let Some(s) = series {
         g.series = s;
         changed = true;
     }
-    if let Some(c) = p.get("categories").and_then(strings) {
+    if let Some(c) = categories {
         g.categories = c;
         changed = true;
     }
-    if let Some(rows) = p.get("rows").and_then(Value::as_array) {
-        // `null` (or anything that isn't a finite number) is a blank cell.
-        g.set_cells(
-            rows.iter().map(|r| r.as_array().map(|a| a.iter().map(|v| v.as_f64().filter(|v| v.is_finite())).collect()).unwrap_or_default()).collect(),
-        );
+    if let Some(rows) = rows {
+        g.set_cells(rows);
         changed = true;
     }
     drop_empty_rows(g);
-    changed
+    Ok(changed)
 }
 
 /// Drop rows with neither a value nor a label; a label-only row stays, its values blank. Each kept row keeps its own
@@ -180,13 +208,13 @@ pub(super) fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graph.setData";
     let id = target(s, p, C)?;
     let mut spec = spec_of(s, id)?;
-    let flip = bool_or(p, "transpose", false);
-    let swap = bool_or(p, "switchXY", false);
+    let flip = switch_or(p, "transpose", false, C)?;
+    let swap = switch_or(p, "switchXY", false, C)?;
     if swap && spec.kind != GraphKind::Scatter {
         return Err(bad(C, "Switch x/y is for scatter graphs"));
     }
     // Transpose and Switch x/y act after any new data in the same call.
-    let changed = apply_data(&mut spec, p);
+    let changed = apply_data(&mut spec, p, C)?;
     if flip {
         // The categories become series: at most as many as a graph has series.
         if spec.cells().len() > vectorcraft_doc::MAX_GRAPH_SERIES {

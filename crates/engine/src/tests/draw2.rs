@@ -2380,6 +2380,82 @@ fn add_anchor_point_selects_the_path_it_was_added_to() {
     assert!(selected_anchors(&s, kept).is_empty(), "a path selected as a whole stays so");
 }
 
+fn path_from(s: &mut Session, d: &str) -> NodeId {
+    NodeId(s.execute("path.create", &json!({ "d": d })).unwrap()["id"].as_u64().unwrap())
+}
+
+fn selected_segments(s: &Session, id: NodeId) -> Vec<(usize, usize)> {
+    s.doc().unwrap().selection.segments.get(&id).map(|set| set.iter().copied().collect()).unwrap_or_default()
+}
+
+fn selected_points(s: &Session, id: NodeId) -> Vec<Point> {
+    let pd = path(s, id);
+    selected_anchors(s, id).iter().filter_map(|&(si, ai)| pd.subpaths.get(si)?.anchors.get(ai)).map(|a| a.p).collect()
+}
+
+#[test]
+fn add_anchor_point_keeps_the_same_anchors_selected() {
+    // The direct-selected anchors after the one added are numbered one higher, so the selection
+    // stays on the same points; one undo step restores the path and the selection.
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L70 0 L140 0 L210 0 L280 0 L350 0 L420 0");
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [0, 5]], "mode": "set"})).unwrap();
+    let before = selected_points(&s, id);
+    let r = s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 2, "t": 0.5})).unwrap();
+    assert_eq!(r["anchor"], 3);
+    assert_eq!(selected_anchors(&s, id), [(0, 1), (0, 6)], "the anchor at 350 is now number 6");
+    assert_eq!(selected_points(&s, id), before);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 7);
+    assert_eq!(selected_anchors(&s, id), [(0, 1), (0, 5)]);
+}
+
+#[test]
+fn add_anchor_point_on_a_selected_segment_keeps_both_halves_and_the_new_anchor_selected() {
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L70 0 L140 0 L210 0 L280 0 L350 0 L420 0");
+    s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 2], [0, 4]], "mode": "set"})).unwrap();
+    s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 2, "t": 0.5})).unwrap();
+    assert_eq!(selected_segments(&s, id), [(0, 2), (0, 3), (0, 5)]);
+    assert_eq!(selected_anchors(&s, id), [(0, 2), (0, 3), (0, 4), (0, 5), (0, 6)], "the new anchor is selected with the segment's ends");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 7);
+    assert_eq!(selected_segments(&s, id), [(0, 2), (0, 4)]);
+}
+
+#[test]
+fn add_anchor_point_on_the_closing_segment_keeps_it_selected_as_two_halves() {
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L100 0 L100 100 L0 100 Z");
+    s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 3]], "mode": "set"})).unwrap();
+    let r = s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 3, "t": 0.5})).unwrap();
+    assert_eq!(r["anchor"], 4);
+    assert_eq!(selected_segments(&s, id), [(0, 3), (0, 4)]);
+    assert_eq!(selected_anchors(&s, id), [(0, 0), (0, 3), (0, 4)]);
+    assert_eq!(selected_points(&s, id), [Point::new(0.0, 0.0), Point::new(0.0, 100.0), Point::new(0.0, 50.0)]);
+}
+
+#[test]
+fn add_anchor_point_renumbers_only_the_subpath_it_was_added_to() {
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L100 0 L200 0 M0 100 L100 100 L200 100");
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2], [1, 1], [1, 2]], "mode": "set"})).unwrap();
+    let before = selected_points(&s, id);
+    s.execute("path.insertAnchor", &json!({"id": id.0, "subpath": 1, "segment": 0, "t": 0.5})).unwrap();
+    assert_eq!(selected_anchors(&s, id), [(0, 2), (1, 2), (1, 3)]);
+    assert_eq!(selected_points(&s, id), before);
+}
+
+#[test]
+fn add_anchor_point_with_a_selected_anchor_index_past_the_end_does_not_panic() {
+    // `select.anchors` takes any index, so a selected one can name no anchor.
+    let mut s = session();
+    let id = path_from(&mut s, "M0 0 L70 0 L140 0 L210 0");
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [0, usize::MAX]], "mode": "set"})).unwrap();
+    s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 0, "t": 0.5})).unwrap();
+    assert_eq!(selected_anchors(&s, id), [(0, 2), (0, usize::MAX)]);
+}
+
 fn selected_anchors(s: &Session, id: NodeId) -> Vec<(usize, usize)> {
     s.doc().unwrap().selection.anchors.get(&id).map(|set| set.iter().copied().collect()).unwrap_or_default()
 }
@@ -3070,7 +3146,7 @@ fn shift_reshapes_the_closing_segment_of_a_rotated_square_and_undoes() {
 fn pen_drag_from_the_first_anchor_closes_the_path() {
     // #501: closing a path by dragging out of its first anchor flickered between a close and a new
     // path, and released at the wrong moment left the shape open. The press decides: the drag
-    // shapes the closing curve, symmetric, and the release closes the path wherever it ends.
+    // shapes the closing curve, and the release closes the path wherever it ends.
     let none = Mods::default();
     let v = view();
     let mut s = session();
@@ -3091,11 +3167,117 @@ fn pen_drag_from_the_first_anchor_closes_the_path() {
     let sp = &path(&s, id).subpaths[0];
     assert!(sp.closed && sp.anchors.len() == 3, "{sp:?}");
     let a = sp.anchors[0];
-    assert_eq!((a.h_in, a.h_out), (Point::new(40.0, 348.0), Point::new(160.0, 252.0)), "symmetric");
+    assert_eq!((a.h_in, a.h_out), (Point::new(40.0, 348.0), Point::new(100.0, 300.0)), "only the closing segment curves");
     assert_eq!(paths(&s).len(), 1);
     // The next click starts a new path.
     gesture(&mut s, &[(500.0, 500.0)], none);
     assert_eq!(paths(&s).len(), 2);
+}
+
+/// #6634: closing a path by dragging on its first anchor does not give that anchor symmetric
+/// handles. Its incoming handle mirrors the pointer; its outgoing handle stays where it is on a
+/// corner, so the first segment keeps its shape, and on a smooth anchor turns to stay in line at
+/// its own length. Alt keeps the outgoing handle where it was when Alt went down, Shift keeps the
+/// drag to 45° steps, and a click leaves the anchor a corner with the closing segment straight
+/// into it. Each close is one undo step.
+#[test]
+fn pen_closing_drag_does_not_make_the_first_anchor_symmetric() {
+    use vectorcraft_geom::AnchorKind;
+    let (none, alt, shift) = (Mods::default(), Mods { alt: true, ..Mods::default() }, Mods { shift: true, ..Mods::default() });
+    let v = view();
+    // Draws a path from (100, 300), dragged out to `start` when given (a smooth anchor), through
+    // (200, 200) and (300, 300), and returns it with its first anchor as drawn.
+    let draw = |s: &mut Session, start: Option<(f64, f64)>| {
+        s.select_tool("pen", v).unwrap();
+        let first = match start {
+            Some(out) => vec![(100.0, 300.0), out],
+            None => vec![(100.0, 300.0)],
+        };
+        gesture(s, &first, none);
+        gesture(s, &[(200.0, 200.0)], none);
+        gesture(s, &[(300.0, 300.0)], none);
+        let id = s.doc().unwrap().selection.objects[0];
+        let anchor = path(s, id).subpaths[0].anchors[0];
+        (id, anchor)
+    };
+    let first = |s: &Session, id: NodeId| {
+        let sp = &path(s, id).subpaths[0];
+        assert!(sp.closed, "{sp:?}");
+        sp.anchors[0]
+    };
+
+    // A corner: the first segment stays straight however the drag turns.
+    let mut s = session();
+    let (id, before) = draw(&mut s, None);
+    assert_eq!(gesture(&mut s, &[(100.0, 300.0), (80.0, 250.0), (60.0, 200.0)], none), 1, "one undo step");
+    let a = first(&s, id);
+    assert_eq!((a.h_in, a.h_out, a.kind), (Point::new(140.0, 400.0), before.h_out, AnchorKind::Corner), "{a:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!path(&s, id).subpaths[0].closed, "the undo opens the path again");
+
+    // A smooth anchor: the outgoing handle turns opposite the incoming one, keeping its length 50.
+    let mut s = session();
+    let (id, before) = draw(&mut s, Some((150.0, 300.0)));
+    assert_eq!((before.h_out, before.kind), (Point::new(150.0, 300.0), AnchorKind::Smooth));
+    gesture(&mut s, &[(100.0, 300.0), (100.0, 250.0), (100.0, 200.0)], none);
+    let a = first(&s, id);
+    assert_eq!((a.h_in, a.kind), (Point::new(100.0, 400.0), AnchorKind::Smooth), "{a:?}");
+    assert!(near(a.h_out, Point::new(100.0, 250.0)), "in line, at its own length: {a:?}");
+
+    // Alt held from the press: a corner, its outgoing handle where it was.
+    let mut s = session();
+    let (id, before) = draw(&mut s, Some((150.0, 300.0)));
+    gesture(&mut s, &[(100.0, 300.0), (100.0, 250.0), (100.0, 200.0)], alt);
+    let a = first(&s, id);
+    assert_eq!((a.h_in, a.h_out, a.kind), (Point::new(100.0, 400.0), before.h_out, AnchorKind::Corner), "{a:?}");
+
+    // Alt pressed mid-drag: the outgoing handle stays where the drag had turned it.
+    let mut s = session();
+    let (id, _) = draw(&mut s, Some((150.0, 300.0)));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 300.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 100.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 130.0, 200.0).with_mods(alt), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 130.0, 200.0).with_mods(alt), v).unwrap();
+    let a = first(&s, id);
+    assert_eq!((a.h_in, a.kind), (Point::new(70.0, 400.0), AnchorKind::Corner), "{a:?}");
+    assert!(near(a.h_out, Point::new(100.0, 250.0)), "{a:?}");
+
+    // Shift: the drag keeps to 45° steps (straight up here), at the pointer's distance from the
+    // anchor, mirrored into the incoming handle.
+    let mut s = session();
+    let (id, before) = draw(&mut s, None);
+    gesture(&mut s, &[(100.0, 300.0), (95.0, 250.0), (90.0, 200.0)], shift);
+    let a = first(&s, id);
+    assert!(near(a.h_in, Point::new(100.0, 300.0 + 10f64.hypot(100.0))) && a.h_out == before.h_out, "{a:?}");
+
+    // A click: the closing segment comes straight in, and a smooth anchor keeps its outgoing
+    // handle and becomes a corner.
+    let mut s = session();
+    let (id, before) = draw(&mut s, Some((150.0, 300.0)));
+    assert_eq!(gesture(&mut s, &[(100.0, 300.0)], none), 1);
+    let a = first(&s, id);
+    assert_eq!((a.h_in, a.h_out, a.kind), (Point::new(100.0, 300.0), before.h_out, AnchorKind::Corner), "{a:?}");
+}
+
+/// Close Path's `in` moves the first anchor's incoming handle as Move Direction Handle does, and
+/// `out` places its outgoing handle, making it a corner; `out` that is not [x, y] is refused.
+#[test]
+fn close_path_places_the_first_anchors_handles() {
+    use vectorcraft_geom::AnchorKind;
+    let mut s = session();
+    let id = curve(&mut s);
+    let a = path(&s, id).subpaths[0].anchors[0];
+    assert!(a.has_out() && a.kind == AnchorKind::Corner, "{a:?}");
+    for h in [json!("1, 2"), json!([1]), json!([1, "2"])] {
+        refuses_with(&mut s, "path.close", &json!({"id": id.0, "out": h}), "`out` must be [x, y]");
+    }
+    s.execute("path.close", &json!({"id": id.0, "in": [60.0, 140.0]})).unwrap();
+    let b = path(&s, id).subpaths[0].anchors[0];
+    assert_eq!((b.h_in, b.h_out, b.kind), (Point::new(60.0, 140.0), a.h_out, AnchorKind::Corner), "a corner keeps its outgoing handle");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("path.close", &json!({"id": id.0, "in": [60.0, 140.0], "out": [120.0, 60.0]})).unwrap();
+    let b = path(&s, id).subpaths[0].anchors[0];
+    assert_eq!((b.h_in, b.h_out, b.kind), (Point::new(60.0, 140.0), Point::new(120.0, 60.0), AnchorKind::Corner));
 }
 
 #[test]

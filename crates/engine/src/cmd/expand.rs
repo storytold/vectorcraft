@@ -5,7 +5,8 @@
 //! gradient mesh, or solid strips / concentric ellipses, inside a clip group shaped like the object; a freeform
 //! gradient becomes a mesh shaped like the object. A pattern fill becomes the tiles it paints inside a clip
 //! group shaped like the object. Create Gradient Mesh shares the sampling. A dimension whose art
-//! Expand changes becomes a plain group of that art.
+//! Expand changes becomes a plain group of that art, except one selected with art it measures,
+//! which Expand leaves as it is.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -35,6 +36,9 @@ pub const MAX_STEPS: u32 = 1000;
 const FREEFORM_MESH: u32 = 8;
 /// Columns (around the centre) of the mesh a radial gradient expands to.
 const RADIAL_MESH_COLS: usize = 8;
+/// Largest turn between a conic gradient's mesh columns, so their straight outer edges stay
+/// close enough to a circle to reach past the box.
+const CONIC_MESH_GAP: f64 = 1.0 / 32.0;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -43,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes, or one selected with the art it measures when that art is replaced, becomes a plain group of its art → {ids}",
+            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients, wedges around the center for conic ones) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked → {ids}",
             has_selection,
             expand
         ),
@@ -55,7 +59,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance, symbolArt?: {fill, stroke, gradient}} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus; symbolArt, when the selection holds symbol instances that Object expands: true when only their art holds it, which Fill and Stroke reach only with Object on)",
             has_selection,
             |s, _| {
-                let e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+                let roots = selected_roots(s)?;
+                let e = Expandable::of(&super::dimension::without_kept(&s.doc()?.doc, &roots), &roots);
                 let mut info =
                     json!({"object": e.object(), "fill": e.fill, "stroke": e.stroke, "gradient": e.gradient, "appearance": has_appearance(s)});
                 if e.symbols {
@@ -74,7 +79,9 @@ pub fn specs() -> Vec<CommandSpec> {
 /// (#3089); `object.expand` itself still bakes them.
 pub fn has_appearance(s: &Session) -> bool {
     let (Ok(st), Ok(roots)) = (s.doc(), selected_roots(s)) else { return false };
-    roots.iter().filter_map(|r| st.doc.node(*r)).any(super::effectcmd::expandable)
+    // A dimension selected with the art it measures is left as it is.
+    let kept = super::dimension::with_their_art(&st.doc, &roots);
+    roots.iter().filter_map(|r| st.doc.node(*r)).any(|n| super::effectcmd::expandable_except(n, &kept))
 }
 
 /// Every placed document in `roots` of `d` (at any depth) replaced by an editable copy of the art it
@@ -241,9 +248,18 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     let stroke = switch_or(p, "stroke", true, C)?;
     let to = GradientTo::parse(p)?;
     let from = s.doc()?.history.undo.len();
-    let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
-    // Before anything expands: outlining the art a dimension measures would remove the dimension.
+    // Before anything expands: outlining the art a dimension measures would leave the dimension unlinked.
     let before = s.doc()?.doc.clone();
+    let selected = s.doc()?.selection.objects.clone();
+    // A dimension selected with the art it measures keeps its own lines and label: it is out of the
+    // document while the art expands, so no step below reaches it.
+    let roots = selected_roots(s)?;
+    let mut lifted = vec![];
+    if !super::dimension::with_their_art(&before, &roots).is_empty() {
+        lifted = s.edit("Expand", |d, _| Ok(super::dimension::lift(d, &roots)))?;
+    }
+    let kept: Vec<NodeId> = lifted.iter().map(super::dimension::Lifted::id).collect();
+    let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
     let mut ended = vec![];
     end_dimension_links(s, &mut ended)?;
     let rev0 = s.doc()?.revision;
@@ -339,14 +355,25 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.revision == rev0 {
         return Err(EngineError::Other("Expand: nothing to expand".into()));
     }
-    if !ended.is_empty() {
-        // A dimension whose source Expand replaced stays plain: its link no longer fits that art.
-        let after = s.doc()?.doc.clone();
-        ended.retain(|e| e.source_kept(&before, &after));
-        s.edit("Expand", |d, _| {
-            super::dimension::restore_unchanged(d, std::mem::take(&mut ended));
+    if !ended.is_empty() || !lifted.is_empty() {
+        s.edit("Expand", |d, sel| {
+            if !lifted.is_empty() {
+                super::dimension::put_back(d, lifted);
+                // The dimensions put back follow what Expand made of the art they measure: a
+                // dimension whose art no longer fits its link stays where it was, no longer linked.
+                super::dimension::refresh(&before, d)?;
+                let mut ids = sel.objects.clone();
+                let again: Vec<NodeId> = kept.iter().copied().filter(|id| selected.contains(id) && !ids.contains(id)).collect();
+                ids.extend(again);
+                sel.set(ids);
+            }
+            // A dimension whose source Expand replaced stays where it was, no longer linked.
+            super::dimension::restore_unchanged(&before, d, ended);
             Ok(())
         })?;
+        if !kept.is_empty() && s.doc()?.doc.layers == before.layers {
+            return Err(EngineError::Other("Expand: nothing to expand".into()));
+        }
     }
     squash(s, from, "Expand");
     Ok(json!({ "ids": s.doc()?.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
@@ -510,7 +537,7 @@ fn expand_piece_leaves(
         }
         return;
     }
-    for c in n.children_mut().into_iter().flatten() {
+    for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
         expand_piece_leaves(d, Arc::make_mut(c), left, expanded, expand);
     }
 }
@@ -1255,7 +1282,10 @@ fn breaks(g: &Gradient, t0: f64, t1: f64, max_gap: f64) -> Vec<(f64, (Color, f32
 /// end, the vector across it (radial: the ellipse's other axis), and the parameter ranges that
 /// cover the box (linear: along the vector `t0..t1` and across it `s0..s1` in points; radial:
 /// `0..t1`, each level's ellipse centred on the way from the focal point to the start).
+/// A conic gradient also has its placement, the box and the radius in its frame that reaches
+/// past the box's corners ([`Frame::pieces`] and [`Frame::mesh`] go around its center).
 struct Frame {
+    conic: Option<(vectorcraft_color::GradientGeom, Rect, f64)>,
     radial: bool,
     start: Point,
     focal: Point,
@@ -1285,7 +1315,15 @@ impl Frame {
         }
         // Keep a sliver of span so the art maps back invertibly.
         t1 = t1.max(t0 + 1e-6);
-        Self { radial, start: geom.start, focal: geom.focal_point(), along, across, t0, t1, s0, s1 }
+        let conic = (g.gradient.kind == GradientKind::Conic).then(|| {
+            let to_unit = geom.conic_frame().inverse();
+            let reach = corners.iter().map(|c| (to_unit * *c).to_vec2().hypot()).fold(0.0f64, f64::max).max(1e-6);
+            // Past the corners, and far enough out that the chords between columns at most
+            // CONIC_MESH_GAP of a turn apart stay outside them.
+            let reach = if reach.is_finite() { reach * 1.01 / (std::f64::consts::PI * CONIC_MESH_GAP).cos() } else { 1.0 };
+            (geom, bounds, reach)
+        });
+        Self { conic, radial, start: geom.start, focal: geom.focal_point(), along, across, t0, t1, s0, s1 }
     }
 
     /// Linear: the point at parameter `t` along and `s` across. Radial: the point at parameter `t`
@@ -1301,6 +1339,18 @@ impl Frame {
     /// A gradient mesh covering the box: columns (linear) or rings (radial) where the colour
     /// changes, so it paints the gradient exactly.
     fn mesh(&self, g: &Gradient) -> GradientMesh {
+        if let Some((geom, _, reach)) = &self.conic {
+            // Columns around the center where the color changes, at most CONIC_MESH_GAP of a turn
+            // apart so the outer edge stays past the box; the seam is two columns in one place.
+            let br = breaks(g, 0.0, 1.0, CONIC_MESH_GAP);
+            let us: Vec<f64> = br.iter().map(|(t, _)| *t).collect();
+            let frame = geom.conic_frame();
+            let at = |u: f64, v: f64| {
+                let a = u * std::f64::consts::TAU;
+                frame * Point::new(reach * v * a.cos(), reach * v * a.sin())
+            };
+            return GradientMesh::from_grid(&us, &[0.0, 1.0], &at, &|_, c, _| br[c].1);
+        }
         // Rings as close as the columns around them, so the mesh draws smoothly.
         let gap = if self.radial { (self.t1 - self.t0) / RADIAL_MESH_COLS as f64 } else { f64::INFINITY };
         let br = breaks(g, self.t0, self.t1, gap);
@@ -1316,13 +1366,21 @@ impl Frame {
 
     /// `n` solid shapes covering the box in paint order, each coloured as the gradient in the
     /// middle of its band: for a linear gradient, rectangles from each band's start to the far
-    /// end, for a radial one, nested ellipses (largest first). Each paints over the ones
-    /// below except its band, so no seam shows between bands. With translucent stops each shape
-    /// is just its band, so nothing doubles up.
+    /// end, for a radial one, nested ellipses (largest first), for a conic one, wedges around the
+    /// center from each band's start to the seam. Each paints over the ones below except its
+    /// band, so no seam shows between bands. With translucent stops each shape is just its band,
+    /// so nothing doubles up.
     fn pieces(&self, g: &Gradient, n: usize) -> Vec<(PathData, (Color, f32))> {
+        let opaque = g.stops.iter().all(|s| s.opacity >= 1.0);
+        if let Some((geom, b, _)) = &self.conic {
+            return geom
+                .conic_wedges(*b, n, opaque)
+                .into_iter()
+                .map(|(pts, t)| (PathData::single(SubPath::polyline(&pts, true)), g.sample_keep_model(t as f32)))
+                .collect();
+        }
         let step = (self.t1 - self.t0) / n as f64;
         let color = |k: usize| g.sample_keep_model((self.t0 + (k as f64 + 0.5) * step) as f32);
-        let opaque = g.stops.iter().all(|s| s.opacity >= 1.0);
         if self.radial {
             let ellipse = |t: f64| {
                 let c = self.focal + (self.start - self.focal) * t;

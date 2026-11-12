@@ -312,6 +312,7 @@ font-technology	Variable	Biến thiên
 	Axis:	Trục:
 	Back	Sau
 	Background Color:	Màu nền:
+	Guide Label:	Nhãn đường căn:
 	Show Center Mark	Hiện dấu tâm
 	Show Cross Hairs	Hiện đường chữ thập
 	Show Video Safe Areas	Hiện vùng an toàn video
@@ -987,6 +988,13 @@ font-technology	Variable	Biến thiên
 	Dock Panel	Neo bảng
 	Dock to Top	Neo lên trên
 	Dock to Bottom	Neo xuống dưới
+	Control Bar Options	Tùy chọn thanh điều khiển
+	Tool Options	Tùy chọn công cụ
+	Object Options	Tùy chọn đối tượng
+	Image Options	Tùy chọn hình ảnh
+	Vertical Alignment	Căn chỉnh dọc
+	Align and Distribute	Căn chỉnh và phân bố
+	Document Options	Tùy chọn tài liệu
 	Dock Control Bar	Neo thanh điều khiển
 	Document	Tài liệu
 	Document Color Mode	Chế độ màu tài liệu
@@ -1476,6 +1484,7 @@ file-filter	Swatch libraries	Thư viện mẫu màu
 file-filter	Flattener presets	Thiết lập sẵn làm phẳng
 file-filter	PDF presets	Thiết lập sẵn PDF
 file-filter	Print presets	Thiết lập sẵn in
+file-filter	Preferences	Tùy chọn
 file-filter	Export presets	Cài đặt sẵn xuất
 file-filter	SVG Compressed	SVG nén
 file-filter	PDF-compatible .ai	.ai tương thích PDF
@@ -1949,6 +1958,7 @@ digits	Hindi	Hindi
 	Include Linked Files	Bao gồm tệp được liên kết
 	Include Metadata	Bao gồm siêu dữ liệu
 	Include non-printing layers	Bao gồm các lớp không in
+	Write pages longer than 200 in at full size in points	Ghi các trang dài hơn 200 in ở kích thước đầy đủ, theo điểm
 	Include SVG Code	Bao gồm mã SVG
 	Include Swatches for Tints	Bao gồm mẫu màu cho sắc pha
 	Increase Font Size	Tăng cỡ chữ
@@ -2633,6 +2643,8 @@ digits	Hindi	Hindi
 	Open…	Mở…
 	Optical	Quang học
 	Optical Margin Alignment	Căn lề quang học
+	Dynamic Text	Văn bản động
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	chữ trên đường dẫn trong văn bản chuỗi không thể dùng văn bản động: {frames}
 	Optimize for fast web view	Tối ưu để xem web nhanh
 	Optimized	Đã tối ưu
 	Options	Tùy chọn
@@ -2931,6 +2943,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
 	Radial Gradient	Chuyển sắc hướng tâm
+	Conic Gradient	Chuyển sắc hình nón
 	Radius	Bán kính
 	Radius 1	Bán kính 1
 	Radius 2	Bán kính 2
@@ -3127,6 +3140,12 @@ mark-style	Japanese	Kiểu Nhật
 	Reset OpenType Features	Đặt lại tính năng OpenType
 	Reset Panel	Đặt lại bảng
 	Reset Preferences	Đặt lại tùy chọn
+	Export Preferences…	Xuất tùy chọn…
+	Import Preferences…	Nhập tùy chọn…
+	Save the applied preferences to a JSON file	Lưu các tùy chọn đang áp dụng vào tệp JSON
+	Apply the preferences in a file Export Preferences saved	Áp dụng các tùy chọn trong tệp do Xuất tùy chọn lưu
+	Export Preferences	Xuất tùy chọn
+	Import Preferences	Nhập tùy chọn
 	Search Preferences	Tìm trong tùy chọn
 	No settings found	Không tìm thấy cài đặt
 	Reset Profiles	Đặt lại hồ sơ màu
@@ -3510,6 +3529,13 @@ mark-style	Japanese	Kiểu Nhật
 	Quest Outline	Nhiệm vụ
 	Coin Shine	Xu
 	Boss Alert	Trùm
+	Status Effects	Hiệu ứng trạng thái
+	Poison Tint	Độc
+	Freeze Edge	Đóng băng
+	Burn Aura	Bỏng
+	Stun Pulse	Choáng
+	Stealth Fade	Ẩn thân
+	Shield Buff	Khiên
 	Shape	Hình dạng
 	Shape Builder	Tạo hình dạng
 	Shape Builder Regions	Vùng Tạo hình dạng
@@ -3945,6 +3971,8 @@ mark-style	Japanese	Kiểu Nhật
 	Copies per Sheet (as many as fit, in a grid)	Nhiều bản sao trên một tờ (xếp vừa bao nhiêu in bấy nhiêu, theo lưới)
 	Gutter:	Khoảng cách:
 	Tint	Tông màu
+	Fill Tint	Tông màu tô
+	Stroke Tint	Tông màu nét
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng
 	Tips	Mẹo
@@ -4342,6 +4370,8 @@ theme	Appearance	Giao diện
 @msg	`colors` must be an array of colors, not {v}	`colors` phải là mảng màu, không phải {v}
 @msg	`library` is a library id or name (see {list})	`library` là id hoặc tên thư viện (xem {list})
 @msg	`mode` applies to freeform gradients	`mode` áp dụng cho chuyển sắc tự do
+@msg	a negative `aspect` applies to conic gradients	`aspect` âm áp dụng cho chuyển sắc hình nón
+@msg	`focal` applies to radial gradients	`focal` áp dụng cho chuyển sắc xuyên tâm
 @msg	`preserve` must be an object	`preserve` phải là một đối tượng
 @msg	`globalAdjust` must be an object	`globalAdjust` phải là một đối tượng
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` phải là 1, 3 hoặc 5
@@ -4476,6 +4506,7 @@ theme	Appearance	Giao diện
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis phải là "vertical", "horizontal" hoặc góc theo độ, không phải `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black hoặc màu như "#ff8800"
 @msg	bad color {v}	màu không hợp lệ {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` là null, tên một màu lớp hoặc #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio phải là một số từ 0,1 đến 10
 @msg	the Color Picker is not open	Bộ chọn màu chưa được mở
 @msg	the Simplify slider is not open	Thanh trượt Đơn giản hóa chưa được mở
@@ -4527,6 +4558,7 @@ theme	Appearance	Giao diện
 	Stop Script	Dừng tập lệnh
 	Show External Script Warning	Hiện cảnh báo tập lệnh bên ngoài
 	A Script Is Running	Một tập lệnh đang chạy
+	Script Alert	Thông báo của tập lệnh
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
 	Do not show this warning again	Không hiện lại cảnh báo này
 	Stop the script and undo what it did? Then quit again.	Dừng tập lệnh và hoàn tác những gì nó đã làm? Sau đó hãy thoát lại.
@@ -4540,6 +4572,9 @@ theme	Appearance	Giao diện
 @msg	the script is too large to run	tập lệnh quá lớn để chạy
 @msg	a drag or an undo group is open; finish it before running a script	đang có thao tác kéo hoặc nhóm hoàn tác; hãy hoàn thành trước khi chạy tập lệnh
 @msg	the script left a document that cannot be kept	tập lệnh để lại một tài liệu không thể giữ
+@msg	the script is no longer in the Scripts folder	tập lệnh không còn trong thư mục Scripts
+	Some scripts were not listed	Một số tập lệnh không được liệt kê
+	The Scripts folder cannot be read	Không thể đọc thư mục Scripts
 @msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	một lệnh thất bại đã thay đổi các bước hoàn tác không thể khôi phục, nên tập lệnh đã bị dừng
 @msg	a recovery copy could not be written, so the script was not run	không thể ghi bản sao khôi phục nên tập lệnh không được chạy
@@ -4856,6 +4891,8 @@ theme	Appearance	Giao diện
 @msg	invalid object id {value}: expected a non-negative integer	id đối tượng {value} không hợp lệ: cần một số nguyên không âm
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	mục {index} của `{key}` là {value}, không phải id đối tượng (số nguyên không âm)
 @msg	no such object id {value}	không có đối tượng nào có id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} là của đường căn, không phải của đối tượng
+@msg	a ruler guide goes only directly in a layer or sublayer	đường căn chỉ có thể nằm trực tiếp trong lớp hoặc lớp con
 @msg	id {value} is a layer, not an object	id {value} là một lớp, không phải đối tượng
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} là một lớp, không phải đối tượng; hãy di chuyển lớp bằng layer.move
 @msg	object {0} cannot have children	đối tượng {0} không thể có phần tử con
@@ -5149,7 +5186,7 @@ theme	Appearance	Giao diện
 @msg	unknown format	định dạng không xác định
 @msg	unknown format `{f}` (Save writes {_1})	định dạng không xác định `{f}` (Lưu ghi {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	chế độ tự do không xác định `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	tô sáng không xác định `{h}`
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)
@@ -5163,6 +5200,20 @@ theme	Appearance	Giao diện
 @msg	missing `{path}`	thiếu `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` phải là {expected}, không phải {got}
 @msg	unknown preference `{key}`	tùy chọn không xác định `{key}`
+@msg	Preferences imported.	Đã nhập tùy chọn.
+@msg	not a preferences file: {e}	không phải tệp tùy chọn: {e}
+@msg	not a preferences file: no JSON object	không phải tệp tùy chọn: không có đối tượng JSON
+@msg	not a preferences file (format `{format}`)	không phải tệp tùy chọn (định dạng `{format}`)
+@msg	not a preferences file: no `format`	không phải tệp tùy chọn: thiếu `format`
+@msg	not a preferences file: no `version`	không phải tệp tùy chọn: thiếu `version`
+@msg	not a preferences file: no `prefs`	không phải tệp tùy chọn: thiếu `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	tệp được lưu bằng phiên bản VectorCraft mới hơn (phiên bản {v})
+@msg	the file holds no preferences	tệp không chứa tùy chọn nào
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` chỉ định một thư mục, và tệp tùy chọn không chứa thư mục
+@msg	the file is larger than 1 MB	tệp lớn hơn 1 MB
+@msg	give `path` or `data`	hãy cung cấp `path` hoặc `data`
+@msg	`{key}` must be an object	`{key}` phải là một đối tượng
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` chạy riêng, không phải là một bước trong lô
 @msg	unknown preset (one of {_1})	thiết lập sẵn không xác định (một trong {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (high, medium, low hoặc thiết lập đã lưu: xem flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (xem flattener.presets.list)
@@ -5194,7 +5245,13 @@ theme	Appearance	Giao diện
 @msg	x and y must be provided together	x và y phải được cung cấp cùng nhau
 @msg	x and y must both be numbers	x và y đều phải là số
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Các thay đổi chưa lưu được giữ trong trình duyệt này: tải lại trang để lấy lại.
-@msg	zipped 32-bit PSD image data with prediction can't be read	dữ liệu ảnh PSD 32-bit nén với dự đoán không thể đọc được
+@msg	zipped 1-bit PSD image data with prediction can't be read	dữ liệu ảnh PSD 1-bit nén với dự đoán không thể đọc được
+@msg	the PSD file's layer data uses an unknown compression ({m})	dữ liệu lớp của tệp PSD dùng nén không xác định ({m})
+@msg	the PSD file's layer records are damaged	bản ghi lớp của tệp PSD bị hỏng
+@msg	the PSD file's layer groups are nested too deeply	các nhóm lớp của tệp PSD lồng nhau quá sâu
+@msg	a layer of the PSD file is too large to read	một lớp của tệp PSD quá lớn để đọc
+@msg	the PSD file's layers take more memory to read than allowed	các lớp của tệp PSD cần nhiều bộ nhớ để đọc hơn mức cho phép
+@msg	the layers can't be read ({e}): the file opened as its merged image	không thể đọc các lớp ({e}): tệp được mở dưới dạng ảnh đã gộp
 @msg	zone must be a string	zone phải là chuỗi
 @msg	zone must be tab, center, left, right, top or bottom	zone phải là tab, center, left, right, top hoặc bottom
 @msg	{_1} failed: {e}	{_1} thất bại: {e}
@@ -5308,6 +5365,7 @@ theme	Appearance	Giao diện
 @msg	Invalid drawing scale	Tỷ lệ bản vẽ không hợp lệ
 @msg	Invalid real scale	Tỷ lệ thực không hợp lệ
 @msg	Measured anchor no longer exists	Điểm neo được đo không còn tồn tại
+@msg	Invalid measured point	Điểm được đo không hợp lệ
 @msg	Measured segment no longer exists	Đoạn được đo không còn tồn tại
 @msg	Non-finite dimension	Kích thước không phải là số hữu hạn
 @msg	Only linear dimensions are horizontal or vertical	Chỉ kích thước tuyến tính mới nằm ngang hoặc thẳng đứng
@@ -5326,7 +5384,7 @@ theme	Appearance	Giao diện
 @msg	span must be "object" or "selection", got {v}	span phải là "object" hoặc "selection", không phải {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" đặt một `gradient`, không phải mẫu màu
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" đặt một dải chuyển màu: hãy cung cấp `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính hoặc xuyên tâm, không phải dạng tự do
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính, xuyên tâm hoặc hình nón, không phải dạng tự do
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" tự đặt dải chuyển màu: hãy bỏ `start` và `end` (chúng đã đặt nó theo tọa độ tài liệu)
 	Make Image Dynamic	Tạo hình ảnh động
 	Import Data Sets…	Nhập tập dữ liệu…
@@ -5689,6 +5747,18 @@ axis	Y Axis	Trục Y
 	Flag	Cờ
 	Crosshair	Tâm ngắm
 	Checkpoint	Điểm kiểm tra
+	Inventory Icons	Biểu tượng túi đồ
+	Skill Icons	Biểu tượng kỹ năng
+	Attack	Tấn công
+	Defend	Phòng thủ
+	Heal	Hồi máu
+	Buff	Buff
+	Ult	Ult
+	Sword	Kiếm
+	Shield	Khiên
+	Potion	Thuốc
+	Key	Chìa khóa
+	Gem	Ngọc
 	Open Symbol Library	Mở thư viện ký hiệu
 	Save Symbol Library	Lưu thư viện ký hiệu
 	Save Symbol Library…	Lưu thư viện ký hiệu…
@@ -5748,6 +5818,11 @@ axis	Y Axis	Trục Y
 	Dash Trail	Vệt đứt đoạn
 	Speed Line	Đường tốc độ
 	Game Trails	Vệt game
+	Energy Beams	Chùm năng lượng
+	Laser Bolt	Tia laser
+	Plasma Arc	Cung plasma
+	Charge Wave	Sóng nạp
+	Spark Trail	Vệt tia lửa
 	Calligraphic Nibs	Ngòi bút thư pháp
 	Pattern Borders	Viền họa tiết
 	Scatter Shapes	Hình phân tán
@@ -5948,9 +6023,12 @@ anchor	Points:	Điểm:
 @msg	{label} must be a number	{label} phải là một số
 @msg	{label} must be a number of at least 0.1	{label} phải là một số ít nhất bằng 0,1
 	Advanced Character Formats	Định dạng ký tự nâng cao
+	Basic Paragraph Formats	Định dạng đoạn văn cơ bản
+	Composition	Dàn trang
 	Horizontal Scale	Tỷ lệ ngang
 	Vertical Scale	Tỷ lệ dọc
 @msg	{label} must be a number from {min} to {max}	{label} phải là một số từ {min} đến {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} phải là một số nguyên từ {min} đến {max}
 	Character Color	Màu ký tự
 	OpenType Features	Tính năng OpenType
 	Stylistic Sets	Bộ phong cách
@@ -6335,6 +6413,7 @@ breakText	Glyphs	Glyph
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Căn theo lưới pixel
+	Not Aligned to Pixel Grid	Chưa căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`
 	Ignore All	Bỏ qua tất cả
@@ -6342,3 +6421,31 @@ breakText	Glyphs	Glyph
 	No Suggestions	Không có gợi ý
 	Edit Custom Dictionary	Chỉnh sửa từ điển tùy chỉnh
 	Entry:	Mục nhập:
+# Script Console
+	Script Console	Bảng điều khiển tập lệnh
+	Clear Script Console	Xóa bảng điều khiển tập lệnh
+	Copy Script Console	Sao chép bảng điều khiển tập lệnh
+	Copy All	Sao chép tất cả
+	Copy Selected	Sao chép mục đã chọn
+	Finished	Đã xong
+	Ended with an error	Kết thúc do lỗi
+	Out of fuel	Đã hết giới hạn lệnh
+	Ended at a host limit	Kết thúc ở giới hạn của máy chủ
+	Ended at a limit	Kết thúc ở giới hạn
+	Stopped	Đã dừng
+	Ended by an internal fault	Kết thúc do lỗi nội bộ
+	time unavailable	không có thời gian
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	chậm nhất: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} lệnh gọi máy chủ
+@plural	{n} earlier line dropped|{n} earlier lines dropped	đã bỏ {n} dòng cũ
+@plural	{n} line cut|{n} lines cut	đã cắt {n} dòng
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` và `last` phải là số thứ tự của các dòng mà bảng điều khiển đang giữ, `first` đứng trước `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn
+	Deferred Effects	Hiệu ứng bị hoãn
+@msg	no plug-in effect is deferred	không có hiệu ứng plug-in nào bị hoãn
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Đã mở với {n} hiệu ứng plug-in bị hoãn. Hiệu ứng › Làm mới hiệu ứng bị hoãn sẽ chạy chúng.

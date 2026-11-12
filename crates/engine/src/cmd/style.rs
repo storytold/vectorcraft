@@ -153,7 +153,8 @@ fn descends(n: &Node, top: bool) -> bool {
 /// The objects whose appearance a style applied to `n` sets: `n`, or its painted contents.
 fn painted<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
     match n.children() {
-        Some(ch) if descends(n, top) => ch.iter().for_each(|c| painted(c, false, out)),
+        // A layer's ruler guides have no appearance to set.
+        Some(ch) if descends(n, top) => ch.iter().filter(|c| !c.is_ruler_guide()).for_each(|c| painted(c, false, out)),
         _ => out.push(n),
     }
 }

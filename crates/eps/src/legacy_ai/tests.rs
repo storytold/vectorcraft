@@ -83,6 +83,33 @@ fn write(doc: &Document) -> LegacyAiOutput {
     write_with(doc, LegacyAiOptions::default())
 }
 
+/// The format has no conic gradient: a conic fill, and a conic stroke (written as its filled
+/// outline), are solid wedges clipped to the shape, with a warning, and print as the canvas
+/// draws them ([`write`] runs the file).
+#[test]
+fn conic_gradients_are_written_as_wedges_clipped_to_the_shape() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, stops));
+    g.geom = Some(vectorcraft_color::GradientGeom {
+        start: vectorcraft_geom::Point::new(100.0, 50.0),
+        end: vectorcraft_geom::Point::new(140.0, 30.0),
+        aspect: -0.7,
+        focal: None,
+    });
+    let conic = Paint::Gradient(Box::new(g));
+    for (fill, stroke) in [(conic.clone(), Paint::None), (Paint::None, conic)] {
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 10.0, 180.0, 90.0)), fill.clone(), stroke.clone());
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == CONIC), "{:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes);
+        assert!(!text.contains("%AI5_BeginGradient"), "no gradient stands in");
+        assert!(text.matches("\nf\n").count() >= CONIC_WEDGES, "a wedge a degree");
+    }
+}
+
 /// `doc` written with options `o`. Every file the tests write is also run as a PostScript program
 /// ([`prints_as`]) and must draw what `doc` draws.
 fn write_with(doc: &Document, o: LegacyAiOptions) -> LegacyAiOutput {
@@ -155,7 +182,10 @@ fn as_printed(doc: &Document, o: &LegacyAiOptions) -> Document {
                     AppearanceItem::Fill(f) => &mut f.paint,
                     AppearanceItem::Stroke(s) => &mut s.paint,
                 };
-                if let Paint::Gradient(g) = paint {
+                // Conic gradients are written as wedges, which print.
+                if let Paint::Gradient(g) = paint
+                    && g.gradient.kind != GradientKind::Conic
+                {
                     *paint = g.gradient.stops.first().map_or(Paint::None, |s| Paint::solid(s.color));
                 }
             }
@@ -938,6 +968,35 @@ fn names_outside_windows_1252_are_replaced_and_kept_apart() {
     let read = crate::import(&out.bytes).unwrap().document;
     let want = [Some("?"), Some("? 2"), Some("??"), Some("?"), Some("?? 2"), None].map(|n| n.map(String::from));
     assert_eq!(inks(&read), want);
+}
+
+/// #6502: the legacy writer gives Yellow, Magenta and Cyan (presets 4, 5 and 6) the file's
+/// indexes 6, 4 and 5, and they open as the same presets.
+#[test]
+fn layer_presets_are_written_with_the_files_colour_index() {
+    let mut doc = Document::new(100.0, 100.0);
+    doc.layers.clear();
+    for i in 3..8u8 {
+        let id = doc.alloc_id();
+        doc.layers.push(Arc::new(Node::layer(id, &format!("P{i}"), vectorcraft_doc::LayerColor::Preset(i))));
+    }
+    let out = write(&doc);
+    let text = String::from_utf8_lossy(&out.bytes).replace("\r\n", "\n");
+    for (i, index) in [(3, 3), (4, 6), (5, 4), (6, 5), (7, 7)] {
+        let [r, g, b] = vectorcraft_doc::LAYER_COLORS[i].1;
+        let want = format!(" 0 {index} {r} {g} {b} Lb\n(P{i}) Ln\n");
+        assert!(text.contains(&want), "missing {want:?} in\n{text}");
+    }
+    let read = crate::import(&out.bytes).unwrap().document;
+    let colors: Vec<_> = read
+        .layers
+        .iter()
+        .filter_map(|l| match l.kind {
+            NodeKind::Layer { color, .. } => Some(color),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(colors, (3..8u8).map(vectorcraft_doc::LayerColor::Preset).collect::<Vec<_>>());
 }
 
 #[test]

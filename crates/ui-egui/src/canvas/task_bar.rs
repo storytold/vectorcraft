@@ -153,6 +153,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                 TextKind::Point => items.push((tl!("Convert To Area Type"), "dc-type-area", "type.convertToAreaType", none())),
                 TextKind::OnPath { .. } => items.push((tl!("Type on a Path Options"), "dc-type-path", "type.pathOptions", none())),
             }
+            // Dynamic Text turns on or off for type on a path and area type (Block), as the Type menu's item does;
+            // left out for point type and type in a thread
+            // (<https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/adjust-formatting-and-resize-text-with-dynamic-text.html>).
+            if crate::menus::enabled(app, "type.dynamicText") {
+                items.push((tl!("Dynamic Text"), "maximize-2", "type.dynamicText", none()));
+            }
         } else if is_image {
             // Offset Path and Simplify don't apply to an image.
         } else if !anchors && direct {
@@ -233,6 +239,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     for (label, icon, cmd, params) in &items {
                         let galley = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(13.0), t.text_strong);
                         let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 38.0, 30.0), Sense::click());
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, *label));
                         if resp.hovered() {
                             ui.painter().rect_filled(r, CornerRadius::same(3), t.hover);
                         }

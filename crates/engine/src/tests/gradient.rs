@@ -32,7 +32,7 @@ fn fill_gradient(s: &Session, id: NodeId) -> GradientPaint {
 
 #[test]
 fn new_gradient_defaults_follow_the_cmyk_document_mode() {
-    for kind in ["linear", "radial", "freeform"] {
+    for kind in ["linear", "radial", "conic", "freeform"] {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width":200,"height":200,"colorMode":"cmyk"})).unwrap();
         let id = rect(&mut s, 10.0, 10.0, 100.0, 100.0);
@@ -123,7 +123,7 @@ fn bad_gradients_are_rejected_without_editing() {
         json!({"stops": [{"offset": 0, "color": "#ff0000"}, {"color": "#000000"}]}),
         json!({"stops": [{"offset": "a", "color": "#ff0000"}, {"offset": 1, "color": "#000000"}]}),
         json!({"stops": "red"}),
-        json!({"kind": "conic"}),
+        json!({"kind": "spiral"}),
         json!({"start": [0, 0]}),
         json!({"aspect": "wide"}),
     ] {
@@ -564,4 +564,186 @@ fn method_is_a_gradient_option_that_saves_and_loads() {
     s.execute("paint.setFill", &json!({"gradient": p})).unwrap();
     let back = fill_gradient(&s, id);
     assert!(back.gradient.dither && back.gradient.method == GradientMethod::Perceptual);
+}
+
+/// A conic gradient through `paint.setFill`, the Gradient panel's edits, transforms, the params
+/// agents and swatches read, and the native format.
+#[test]
+fn a_conic_gradient_is_set_edited_transformed_and_saved() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "conic"}})).unwrap();
+    let g = fill_gradient(&s, id);
+    assert_eq!(g.gradient.kind, GradientKind::Conic);
+    // Unplaced, it sweeps from the right about the box's center.
+    let geom = g.resolve(node(&s, id).geometric_bounds().unwrap());
+    assert_eq!(geom.start, Point::new(200.0, 150.0));
+    assert!((geom.param_at(GradientKind::Conic, Point::new(200.0, 190.0)) - 0.25).abs() < 1e-9);
+    // `angle` and `conical` name it too.
+    for name in ["angle", "conical", "CONICAL"] {
+        s.execute("paint.editGradient", &json!({"kind": "linear"})).unwrap();
+        s.execute("paint.editGradient", &json!({"kind": name})).unwrap();
+        assert_eq!(fill_gradient(&s, id).gradient.kind, GradientKind::Conic, "{name}");
+    }
+    let e = s.execute("paint.editGradient", &json!({"kind": "spiral"})).unwrap_err().to_string();
+    assert!(e.contains("(linear, radial, conic, freeform)"), "{e}");
+    // Placed, an angle turns the vector about the center.
+    s.execute("paint.setGradientGeom", &json!({"start": [200, 150], "end": [260, 150], "aspect": 50})).unwrap();
+    s.execute("paint.editGradient", &json!({"angle": 90})).unwrap();
+    let g = fill_geom(&s, id);
+    assert!(g.start.distance(Point::new(200.0, 150.0)) < 1e-9 && g.end.distance(Point::new(200.0, 90.0)) < 1e-9, "{g:?}");
+    // A reflection mirrors the sweep (a negative aspect): each point keeps its color.
+    let p = Point::new(230.0, 170.0);
+    let before = g.param_at(GradientKind::Conic, p);
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    let m = fill_geom(&s, id);
+    assert!(m.is_mirrored(), "{m:?}");
+    assert!((m.param_at(GradientKind::Conic, Point::new(170.0, 170.0)) - before).abs() < 1e-9);
+    // An aspect edit sets what it is given: the Gradient panel sends a mirrored conic's sign.
+    s.execute("paint.editGradient", &json!({"aspect": -80})).unwrap();
+    assert_eq!(fill_geom(&s, id).aspect, -0.8);
+    s.execute("paint.setGradientGeom", &json!({"aspect": 40})).unwrap();
+    assert_eq!(fill_geom(&s, id).aspect, 0.4);
+    // A rotation carries it along.
+    let g = fill_geom(&s, id);
+    let before = g.param_at(GradientKind::Conic, p);
+    s.execute("object.rotate", &json!({"angle": 30, "origin": [200, 150]})).unwrap();
+    let r = vectorcraft_geom::Affine::rotate_about(-30f64.to_radians(), Point::new(200.0, 150.0));
+    let after = fill_geom(&s, id).param_at(GradientKind::Conic, r * p);
+    assert!((after - before).abs() < 1e-9, "{before} vs {after}");
+    // The params give it back, and the native format keeps it.
+    s.execute("paint.editGradient", &json!({"aspect": -60})).unwrap();
+    let want = fill_gradient(&s, id);
+    let params = vectorcraft_tools::params::gradient_params(&want);
+    assert_eq!((params["kind"].as_str(), params["aspect"].as_f64()), (Some("conic"), Some(-60.0)));
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setFill", &json!({ "gradient": params })).unwrap();
+    let got = fill_gradient(&s, id);
+    assert_eq!((&got.gradient, got.geom), (&want.gradient, want.geom));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Paint::Gradient(g) = back.node(id).unwrap().appearance.fill_paint() else { panic!("the gradient is lost") };
+    assert_eq!((g.gradient.kind, g.geom), (GradientKind::Conic, want.geom));
+}
+
+/// A free distort that is not affine moves a conic as it moves a radial gradient: by the warp
+/// near its center, not near the middle of its vector.
+#[test]
+fn a_warp_moves_a_conic_by_its_center() {
+    let warped = |kind: &str| {
+        let mut s = session();
+        let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        s.execute("paint.setFill", &json!({"gradient": {"kind": kind, "start": [20, 30], "end": [90, 30], "aspect": 60}})).unwrap();
+        s.execute("object.distort", &json!({"corners": [[0, 0], [100, 0], [140, 130], [-20, 100]]})).unwrap();
+        fill_geom(&s, id)
+    };
+    let (conic, radial, linear) = (warped("conic"), warped("radial"), warped("linear"));
+    assert!(conic.start.distance(radial.start) < 1e-9, "{conic:?} vs {radial:?}");
+    assert!(conic.start.distance(linear.start) > 0.1, "a linear gradient moves by its middle: {linear:?}");
+}
+
+/// A negative aspect mirrors a conic's sweep where the gradient is given one, and a mirrored
+/// conic swatch lands mirrored on other art. Other kinds refuse a negative aspect, and a conic
+/// refuses a focal point.
+#[test]
+fn a_negative_aspect_mirrors_only_a_conic() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "conic", "aspect": -50}})).unwrap();
+    assert_eq!(fill_gradient(&s, id).geom.map(|g| g.aspect), Some(-0.5));
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "conic", "start": [0, 0], "end": [10, 0], "aspect": -200}})).unwrap();
+    assert_eq!(fill_gradient(&s, id).geom.map(|g| g.aspect), Some(-2.0));
+    let mut q = gradient_param(&fill_gradient(&s, id));
+    q["name"] = json!("Mirrored");
+    s.execute("swatch.new", &q).unwrap();
+    let b = rect(&mut s, 500.0, 300.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"swatch": "Mirrored"})).unwrap();
+    assert_eq!(fill_gradient(&s, b).geom.map(|g| g.aspect), Some(-2.0));
+    // Radial (and linear) gradients have no mirror: a negative aspect is an error, whichever
+    // command gives it, and the gradient stays as it was.
+    let before = fill_gradient(&s, b);
+    for kind in ["radial", "linear"] {
+        let e = s.execute("paint.setFill", &json!({"gradient": {"kind": kind, "aspect": -50}})).unwrap_err().to_string();
+        assert!(e.contains("aspect"), "{kind}: {e}");
+        let e = s.execute("paint.setFill", &json!({"gradient": {"kind": kind, "start": [0, 0], "end": [10, 0], "aspect": -50}})).unwrap_err();
+        assert!(e.to_string().contains("aspect"), "{kind}: {e}");
+    }
+    assert_eq!(fill_gradient(&s, b), before);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "radial", "aspect": 50}})).unwrap();
+    let radial = fill_gradient(&s, b);
+    assert!(s.execute("paint.editGradient", &json!({"aspect": -50})).is_err());
+    assert!(s.execute("paint.setGradientGeom", &json!({"aspect": -50})).is_err());
+    assert!(s.execute("paint.editGradient", &json!({"kind": "linear", "aspect": -50})).is_err());
+    assert_eq!(fill_gradient(&s, b), radial);
+    // Turned conic in the same edit, a negative aspect mirrors it.
+    s.execute("paint.editGradient", &json!({"kind": "conic", "aspect": -50})).unwrap();
+    assert_eq!(fill_gradient(&s, b).geom.map(|g| g.aspect), Some(-0.5));
+    // A conic has no focal point: one given is an error, and null is allowed.
+    let e = s.execute("paint.setFill", &json!({"gradient": {"kind": "conic", "start": [500, 300], "end": [550, 300], "focal": [510, 300]}}));
+    assert!(e.unwrap_err().to_string().contains("focal"));
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "conic", "start": [500, 300], "end": [550, 300], "focal": null}})).unwrap();
+    assert_eq!(fill_gradient(&s, b).geom.unwrap().focal, None);
+    assert!(s.execute("paint.setGradientGeom", &json!({"focal": [510, 300]})).unwrap_err().to_string().contains("focal"));
+    // A selected conic takes a negative aspect while the default paint is linear: the default
+    // takes its size.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("paint.editGradient", &json!({"kind": "conic"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("paint.editGradient", &json!({"aspect": -70})).unwrap();
+    assert_eq!(fill_gradient(&s, b).geom.map(|g| g.aspect), Some(-0.7));
+    // A linear gradient keeps no focal point, as paint.setGradientGeom leaves it.
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear", "start": [500, 300], "end": [550, 300], "focal": [510, 300]}})).unwrap();
+    assert_eq!(fill_gradient(&s, b).geom.unwrap().focal, None);
+}
+
+/// Saved as `.ai`, as PDF with its editing data and as SVG with its editing data, then opened, a
+/// mirrored, squashed conic comes back as it was; a PDF without editing data gives it back from
+/// its sweep shading.
+#[test]
+fn a_conic_survives_saving_as_ai_pdf_and_svg() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "conic", "start": [180, 140], "end": [240, 110], "aspect": -60}})).unwrap();
+    let want = fill_gradient(&s, id);
+    let reopened = |s: &mut Session, format: &str, p: Value| {
+        let mut p = p;
+        p["format"] = json!(format);
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        let mut back = session();
+        back.execute("document.open", &json!({"name": format!("t.{format}"), "dataBase64": r["dataBase64"]})).unwrap();
+        let mut found = None;
+        back.doc().unwrap().doc.walk(|n| {
+            if let (None, Paint::Gradient(g)) = (&found, n.appearance.fill_paint()) {
+                found = Some(*g.clone());
+            }
+        });
+        found.unwrap_or_else(|| panic!("{format}: the gradient is lost"))
+    };
+    for (format, p) in [("ai", json!({})), ("pdf", json!({"preserveEditing": true})), ("svg", json!({"preserveEditing": true}))] {
+        let got = reopened(&mut s, format, p);
+        assert_eq!((got.gradient.kind, got.geom), (GradientKind::Conic, want.geom), "{format}");
+    }
+    let got = reopened(&mut s, "pdf", json!({"preserveEditing": false}));
+    assert_eq!(got.gradient.kind, GradientKind::Conic);
+    let (g, w) = (got.geom.unwrap(), want.geom.unwrap());
+    assert!(g.is_mirrored() && g.start.distance(w.start) < 0.05, "{g:?}");
+    for p in [Point::new(120.0, 120.0), Point::new(280.0, 180.0), Point::new(200.0, 105.0)] {
+        assert!((g.param_at(GradientKind::Conic, p) - w.param_at(GradientKind::Conic, p)).abs() < 2e-3, "{p:?}: {g:?}");
+    }
+}
+
+/// Turning a gradient conic is one undo step, and undoing it gives the gradient back as it was.
+#[test]
+fn making_a_gradient_conic_is_one_undo_step() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}})).unwrap();
+    let (before, steps) = (fill_gradient(&s, id), s.doc().unwrap().history.undo.len());
+    s.execute("paint.editGradient", &json!({"kind": "conic", "angle": 45})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(fill_gradient(&s, id), before);
 }

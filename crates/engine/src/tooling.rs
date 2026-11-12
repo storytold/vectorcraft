@@ -22,6 +22,8 @@ pub struct ViewInfo {
     /// View → Show Guides: the ruler guides show (and, unlocked, can be picked).
     pub guides: bool,
     pub snap_to_grid: bool,
+    /// View → Pixel Preview: while it is on, the tools use no Smart Guides.
+    pub pixel_preview: bool,
     pub show_bbox: bool,
     /// View → Snap to Pixel: drawing and moving land on whole pixels (points at 72 ppi).
     pub snap_to_pixel: bool,
@@ -46,6 +48,7 @@ impl Default for ViewInfo {
             smart_guides: true,
             guides: true,
             snap_to_grid: false,
+            pixel_preview: false,
             show_bbox: true,
             snap_to_pixel: false,
             snap_to_point: true,
@@ -335,6 +338,7 @@ impl Session {
     {
         let Some(st) = self.active.and_then(|i| self.docs.get(i)) else { return R::default() };
         let (unit, stroke_unit) = (self.general_unit(), self.stroke_unit());
+        let smart_guides = view.smart_guides && !view.pixel_preview;
         let cx = ToolContext {
             doc: &st.doc,
             ruler_origin: st.doc.ruler_origin_for(view.artboard),
@@ -344,7 +348,7 @@ impl Session {
             isolation: st.isolation,
             paint: &self.paint,
             outline: view.outline,
-            smart_guides: view.smart_guides,
+            smart_guides,
             guides: view.guides && !self.menu.guides_locked,
             snap_to_grid: view.snap_to_grid,
             show_bbox: view.show_bbox,
@@ -354,7 +358,7 @@ impl Session {
             snap_to_point: view.snap_to_point,
             snap_tangent: self.prefs.snap_tangent,
             snap_perpendicular: self.prefs.snap_perpendicular,
-            snap_to_glyph: view.snap_to_glyph && view.smart_guides && !view.snap_to_grid,
+            snap_to_glyph: view.snap_to_glyph && smart_guides && !view.snap_to_grid,
             glyph_snap: self.prefs.glyph_snap,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
@@ -704,6 +708,14 @@ impl Session {
         Ok(())
     }
 
+    /// The artboard a guide made from a ruler belongs to: with the Artboard tool, its active
+    /// artboard (an artboard guide); with any other tool, none (a canvas guide).
+    pub fn ruler_guide_artboard(&self) -> Option<usize> {
+        let boards = self.active().map_or(0, |d| d.doc.artboards.len());
+        let active = (self.tool.id() == "artboard").then(|| self.tool.options()["active"].as_u64()).flatten();
+        active.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < boards)
+    }
+
     /// A guide dragged out of a ruler, whatever the tool: a vertical one out of the left ruler, a
     /// horizontal one out of the top ruler. `ev` is the pointer in document space (a drag, then the
     /// release), over the canvas or not (`on_canvas`). The guide shows where the pointer is over
@@ -718,11 +730,9 @@ impl Session {
         let g = match self.ruler_guide.take() {
             Some(g) => Some(g),
             None => {
-                let boards = self.active().map_or(0, |d| d.doc.artboards.len());
                 let artboard_tool = self.tool.id() == "artboard";
                 let swap = self.prefs.cmd_ruler_drag_artboard_guides && ev.mods.cmd;
-                let active = artboard_tool.then(|| self.tool.options()["active"].as_u64()).flatten();
-                let artboard = active.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < boards);
+                let artboard = self.ruler_guide_artboard();
                 let view_board = view.artboard;
                 self.with_tool_cx(view, |_, cx| {
                     Some(match (swap, artboard_tool) {

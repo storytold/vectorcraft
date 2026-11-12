@@ -648,6 +648,10 @@ impl<'a> Reader<'a> {
         if self.author.is_none() {
             self.author = outer.author;
         }
+        // Ruler units the editing data doesn't give: the file still records them (#5820).
+        if self.ruler_units.is_none() {
+            self.ruler_units = outer.ruler_units;
+        }
         self.names.absorb(outer.names);
         for n in outer.custom_colors {
             if self.custom_colors.len() < super::directives::MAX_CUSTOM_COLORS && !self.custom_colors.iter().any(|c| c.name == n.name) {
@@ -1209,6 +1213,7 @@ impl<'a> Reader<'a> {
                 show_video_safe_areas: b.safe_areas,
                 video_ruler_pixel_aspect_ratio: b.par,
                 color: None,
+                guide_label: None,
             })
             .collect();
         if doc.artboards.is_empty() {
@@ -1223,6 +1228,7 @@ impl<'a> Reader<'a> {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             }];
         }
         doc.opened_artboard = active.and_then(|i| doc.artboards.get(i)).map(|a| a.id);
@@ -1238,9 +1244,9 @@ impl<'a> Reader<'a> {
                     None => None,
                 };
                 let pos = if vertical { p.x } else { p.y };
-                pos.is_finite().then_some(Guide { vertical, pos, artboard, layer: None })
+                pos.is_finite().then_some(Guide { artboard, ..Guide::new(vertical, pos) })
             };
-            take_ruler_guides(&mut doc.layers, &pick, &mut doc.guides, 0);
+            take_ruler_guides(&mut doc.layers, &pick, 0);
         }
         let mut brushes = self.brush_library();
         if let Some((lib, _)) = &brushes {
@@ -1253,6 +1259,7 @@ impl<'a> Reader<'a> {
         }
         if let Some(u) = self.ruler_units.and_then(ruler_unit) {
             doc.units = u;
+            doc.units_from_file = true;
         }
         // The file's own swatches in place of the defaults, in its order and colour groups.
         let own_palette = match self.palette_swatches(&doc.patterns) {
@@ -1422,9 +1429,9 @@ fn ruler_guide(a: Point, b: Point, centre: Option<(f64, f64)>, boards: &[Rect]) 
     }
 }
 
-/// Moves the children of the layers and sublayers of `nodes` that `pick` makes a guide of into
-/// `guides`, each on its layer.
-fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Guide>, guides: &mut Vec<Guide>, depth: usize) {
+/// Makes the children of the layers and sublayers of `nodes` that `pick` makes a guide of into
+/// ruler guide nodes with the same ids, moved to the top of their layer in their order.
+fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Guide>, depth: usize) {
     if depth > MAX_DEPTH {
         return;
     }
@@ -1432,16 +1439,17 @@ fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Gu
         if !matches!(n.kind, NodeKind::Layer { .. }) {
             continue;
         }
-        let id = n.id;
         let Some(kids) = Arc::make_mut(n).children_mut() else { continue };
+        let mut guides = vec![];
         kids.retain(|k| match pick(k.id) {
             Some(g) => {
-                guides.push(Guide { layer: Some(id), ..g });
+                guides.push(Arc::new(Node::new(k.id, NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard })));
                 false
             }
             None => true,
         });
-        take_ruler_guides(kids, pick, guides, depth + 1);
+        take_ruler_guides(kids, pick, depth + 1);
+        kids.extend(guides);
     }
 }
 

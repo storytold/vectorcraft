@@ -128,7 +128,7 @@ The host is [`wasmi`](https://github.com/wasmi-labs/wasmi), a pure-Rust WebAssem
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
 | Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte | `Limit("instruction budget")` |
-| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (desktop; checked every 20 M instructions) | `Limit("time budget")` |
+| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (checked every 20 M instructions; the web build reads the page's `performance.now()`) | `Limit("time budget")` |
 | Import input | 128 MiB of the file (`vectorcraft_plugins::import::MAX_INPUT_BYTES`) | the file doesn't open; a larger file named by `path` is not read past that |
 | Call depth | 1,024 frames | trap |
 | Module shape | wasmi's strict limits (≤ 10,000 functions, 1 memory, …) | rejected |
@@ -136,6 +136,19 @@ The host is [`wasmi`](https://github.com/wasmi-labs/wasmi), a pure-Rust WebAssem
 An export runs where the export runs: with Background Export on, on the export's worker, whose Cancel stops the
 plug-in between two of those 20 M-instruction slices; nothing is written then. An import stops the same way when the
 open it runs in is cancelled, and nothing opens then.
+
+### Live effects while a document opens
+
+While the app draws a document on screen, the live-effect runs of its first view share a 2,000 ms budget
+(`vectorcraft_plugins::deferred::OPENING_BUDGET_MS`, VectorCraft's own value), measured from the first run. Each run
+takes the lesser of its 5 s limit and what is left of the budget; once the budget is spent no run starts, and a result
+that comes back after it is not used. A stage left out this way, or one that times out, traps, returns output the host
+refuses or has no plug-in, draws its input art unchanged and is deferred. The status bar then says how many stages
+are deferred, and later drawings leave them as they are until their input or parameters change. Effect › Refresh
+Deferred Effects (`effect.refreshDeferred`) runs them again with a fresh budget, and `effect.deferredStatus` lists
+them with the reason (`budget`, `timeout`, `missing`, `failed`, `safeMode`). Each document has its own budget.
+Exports, Expand Appearance and commands run every stage under the 5 s limit. The web build has the same budget,
+measured with the page's `performance.now()`.
 
 ### Heavy filters
 
@@ -157,7 +170,7 @@ much there is only once the run has ended.
   Cancel (also Esc) and Continue in Background (`plugin.cancelRuns`, `plugin.hideRuns`). When it is done its result is
   applied as `plugin.run` with the same parameters and objects, as one undo step, unless the document or the plug-in
   changed meanwhile: then nothing changes, and the status bar says to run it again. On the web, which has no threads,
-  it runs at once; the instruction budget alone bounds it there.
+  it runs at once, under the same instruction budget and 300 s limit.
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
 
@@ -323,7 +336,11 @@ still returns `1`. `vc_progress`, `vc_cancelled` and `vc_log` need `progress`; t
   and one the manifest doesn't allow (an `api` below 2, or without the import's permission) refuse the module, and the
   error names the import and the permission.
 - A filter's or an exporter's progress is shown as a share: a heavy filter's progress window and the export's progress
-  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. A plug-in that checks it can
+  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. In the desktop app a light
+  filter that lists `progress` runs in the background as a heavy one does, under its light budget, when it runs at once
+  from Object › Plug-ins or its shortcut, or when OK runs it with Preview off; with Preview on, its dialog keeps the
+  previewed run. A filter that also lists a `commandAllowlist` runs where it is called, since its command calls need
+  the document. A plug-in that checks `vc_cancelled` can
   stop early, and the host discards what it returns after the Cancel or after its time budget ran out; one that
   ignores it is still stopped by the instruction and time budgets. With a known total, a report is passed on only when
   it reaches another tenth of a percent; with an unknown total, each change of `done` is passed on. After 2,000 reports
@@ -381,11 +398,18 @@ A live effect runs while the art draws, so keep the entries it uses small.
   write leaves in the `cache` folder does not count toward the caps, and clearing the cache removes it.
 - A plug-in reaches only the storage of its own id. Replacing it with another module of the same id
   (`plugin.install` with `replace: true`, after the user agreed) keeps the storage; `plugin.remove` deletes it, and a run of the plug-in still going gets `-5` from every storage call after that.
-  `plugin.remove` first renames the folder (adding `.removed` to its name). When that fails, `plugin.remove` fails
-  and the plug-in stays installed with its storage as it was. Files that can't be deleted after the rename stay in the
-  `.removed` folder, where no plug-in reaches them. A later `plugin.remove` tries again to delete them when a plug-in
-  with that id is installed or a storage folder for the id exists, and that deletion can fail too. For an id that
-  isn't installed and has only a `.removed` folder, `plugin.remove` does not delete the folder and fails as not found.
+  `plugin.remove` first renames the folder, adding `.removed` to its name (or `.removing` while a `.removed` folder
+  holds settings an earlier removal kept). When that fails, `plugin.remove` fails and the plug-in stays installed with
+  its storage as it was. Before VectorCraft deletes a renamed folder, it writes an empty file beside it with `.delete`
+  added to the folder's name, and removes that file once the folder is gone. When that file can't be written, the
+  folder is not deleted and is treated like any renamed folder without a `.delete` file (see below). Files that can't be deleted stay in the
+  renamed folder with the `.delete` file beside it, where no plug-in reaches them. A later `plugin.remove` tries again
+  to delete them when a plug-in with that id is installed or a storage folder for the id exists, and that deletion can
+  fail too. For an id that isn't installed and has only such a folder, `plugin.remove` does not delete it and fails as
+  not found. When `plugin.remove` can't remove the grant and can't rename the folder back either, its error names the
+  renamed folder. The next load, install or `plugin.remove` of the plug-in renames a renamed folder that has no
+  `.delete` file back while the plug-in has no folder of its own; when it has one, that folder is used and the renamed
+  folder stays until `plugin.remove` deletes both.
   `plugin.remove` with the id of a plug-in that isn't installed deletes the storage kept for that id, when there is
   any.
   `plugin.clearCache` empties the cache and leaves the settings, and `plugin.list` and

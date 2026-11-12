@@ -365,6 +365,8 @@
 	Smart Punctuation…	Inteligentna interpunkcja…
 	Create Outlines	Utwórz kontury
 	Optical Margin Alignment	Optyczne wyrównanie marginesów
+	Dynamic Text	Tekst dynamiczny
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
 	Show Hidden Characters	Pokaż ukryte znaki
@@ -730,6 +732,13 @@
 	Quest Outline	Zadanie
 	Coin Shine	Moneta
 	Boss Alert	Boss
+	Status Effects	Efekty statusu
+	Poison Tint	Trucizna
+	Freeze Edge	Mróz
+	Burn Aura	Oparzenie
+	Stun Pulse	Ogłuszenie
+	Stealth Fade	Ukrycie
+	Shield Buff	Tarcza
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
 	Gradient Finishes	Wykończenia gradientowe
@@ -810,6 +819,13 @@
 	Dock Panel	Zadokuj panel
 	Dock to Top	Zadokuj u góry
 	Dock to Bottom	Zadokuj u dołu
+	Control Bar Options	Opcje paska sterowania
+	Tool Options	Opcje narzędzia
+	Object Options	Opcje obiektu
+	Image Options	Opcje obrazu
+	Vertical Alignment	Wyrównanie w pionie
+	Align and Distribute	Wyrównaj i rozmieść
+	Document Options	Opcje dokumentu
 	Dock Control Bar	Zadokuj pasek sterowania
 	Float Tool Group	Odepnij grupę narzędzi
 	Services	Usługi
@@ -1583,6 +1599,7 @@ digits	Malayalam	Malajalam
 	No gradient swatches	Brak próbek gradientów
 	Points: clicks add free points	Punkty: kliknięcia dodają wolne punkty
 	Radial Gradient	Gradient promienisty
+	Conic Gradient	Gradient stożkowy
 	Reset to White, Black	Resetuj do bieli i czerni
 	Reverse Gradient	Odwróć gradient
 	Save to Swatches	Zapisz w próbkach
@@ -2201,6 +2218,8 @@ digits	Malayalam	Malajalam
 	Green	Zielony
 	Shifts the tints of global and spot colors; other colors stay.	Przesuwa tinty kolorów globalnych i dodatkowych; pozostałe kolory bez zmian.
 	Tint	Tinta
+	Fill Tint	Tinta wypełnienia
+	Stroke Tint	Tinta obrysu
 	Color Guide Options	Opcje przewodnika kolorów
 	Less	Mniej
 	Steps:	Kroki:
@@ -2567,6 +2586,7 @@ digits	Malayalam	Malajalam
 	File Dimensions	Wymiary pliku
 	Transforms	Przekształcenia
 	Background Color:	Kolor tła:
+	Guide Label:	Etykieta linii pomocniczych:
 	Show Center Mark	Pokaż znacznik środka
 	Show Cross Hairs	Pokaż krzyż nitkowy
 	Show Video Safe Areas	Pokaż bezpieczne obszary wideo
@@ -2789,6 +2809,7 @@ antiAlias	Sharp	Ostre
 	General › Thumbnails	Ogólne › Miniatury
 	Grayscale images	Obrazy w skali szarości
 	Include non-printing layers	Uwzględnij warstwy niedrukowane
+	Write pages longer than 200 in at full size in points	Zapisuj strony dłuższe niż 200 in w pełnym rozmiarze, w punktach
 	Left:	Lewy:
 	Mark as trapped	Oznacz jako z zalewkami
 	Marks and Bleeds	Znaczniki i spady
@@ -3629,6 +3650,12 @@ theme	Appearance	Wygląd
 	Real-time Drawing and Editing	Rysowanie i edycja w czasie rzeczywistym
 	Render Threads (-1 = Automatic)	Wątki renderowania (-1 = automatycznie)
 	Reset Preferences	Resetuj preferencje
+	Export Preferences…	Eksportuj preferencje…
+	Import Preferences…	Importuj preferencje…
+	Save the applied preferences to a JSON file	Zapisz zastosowane preferencje w pliku JSON
+	Apply the preferences in a file Export Preferences saved	Zastosuj preferencje z pliku zapisanego poleceniem Eksportuj preferencje
+	Export Preferences	Eksportuj preferencje
+	Import Preferences	Importuj preferencje
 	Search Preferences	Szukaj w preferencjach
 	No settings found	Nie znaleziono ustawień
 	Scale Corners	Skaluj narożniki
@@ -4216,6 +4243,7 @@ imageTrace	Outline	Kontur
 	Stop Script	Zatrzymaj skrypt
 	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
 	A Script Is Running	Skrypt jest uruchomiony
+	Script Alert	Komunikat skryptu
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
 	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.
@@ -4229,6 +4257,9 @@ imageTrace	Outline	Kontur
 @msg	the script is too large to run	skrypt jest zbyt duży, aby go uruchomić
 @msg	a drag or an undo group is open; finish it before running a script	otwarte jest przeciąganie lub grupa cofania; zakończ je przed uruchomieniem skryptu
 @msg	the script left a document that cannot be kept	skrypt pozostawił dokument, którego nie można zachować
+@msg	the script is no longer in the Scripts folder	skryptu nie ma już w folderze Scripts
+	Some scripts were not listed	Niektóre skrypty nie zostały wyświetlone
+	The Scripts folder cannot be read	Nie można odczytać folderu Scripts
 @msg	the script's run is no longer available	uruchomienie skryptu nie jest już dostępne
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	nieudane polecenie zmieniło kroki cofania, których nie udało się przywrócić, więc skrypt został zatrzymany
 @msg	a recovery copy could not be written, so the script was not run	nie udało się zapisać kopii odzyskiwania, więc skrypt nie został uruchomiony
@@ -4310,6 +4341,8 @@ imageTrace	Outline	Kontur
 @msg	`groupColors` must be an array	`groupColors` musi być tablicą
 @msg	`library` is a library id or name (see {list})	`library` to identyfikator lub nazwa biblioteki (patrz {list})
 @msg	`mode` applies to freeform gradients	`mode` dotyczy gradientów dowolnych
+@msg	a negative `aspect` applies to conic gradients	ujemny `aspect` dotyczy gradientów stożkowych
+@msg	`focal` applies to radial gradients	`focal` dotyczy gradientów radialnych
 @msg	`preserve` must be an object	`preserve` musi być obiektem
 @msg	`globalAdjust` must be an object	`globalAdjust` musi być obiektem
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musi wynosić 1, 3 lub 5
@@ -4412,6 +4445,7 @@ imageTrace	Outline	Kontur
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musi mieć wartość "vertical", "horizontal" lub kąt w stopniach, nie `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tło {other}: transparent, white, black lub kolor, np. "#ff8800"
 @msg	bad color {v}	nieprawidłowy kolor {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` to null, nazwa koloru warstwy lub #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musi być liczbą od 0,1 do 10
 @msg	the Color Picker is not open	Próbnik kolorów nie jest otwarty
 @msg	the Simplify slider is not open	Suwak Uprość nie jest otwarty
@@ -4813,12 +4847,26 @@ imageTrace	Outline	Kontur
 @msg	unknown format	nieznany format
 @msg	unknown format `{f}` (Save writes {_1})	nieznany format `{f}` (zapis tworzy {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	nieznany tryb dowolny `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	nieznane wyróżnienie `{h}`
 @msg	unknown option `{path}.{k}`	nieznana opcja `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
 @msg	unknown panel `{raw}`	nieznany panel `{raw}`
 @msg	unknown preference `{key}`	nieznana preferencja `{key}`
+@msg	Preferences imported.	Zaimportowano preferencje.
+@msg	not a preferences file: {e}	to nie jest plik preferencji: {e}
+@msg	not a preferences file: no JSON object	to nie jest plik preferencji: brak obiektu JSON
+@msg	not a preferences file (format `{format}`)	to nie jest plik preferencji (format `{format}`)
+@msg	not a preferences file: no `format`	to nie jest plik preferencji: brak `format`
+@msg	not a preferences file: no `version`	to nie jest plik preferencji: brak `version`
+@msg	not a preferences file: no `prefs`	to nie jest plik preferencji: brak `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	plik zapisano w nowszej wersji programu VectorCraft (wersja {v})
+@msg	the file holds no preferences	plik nie zawiera preferencji
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` wskazuje folder, a pliki preferencji nie zawierają folderów
+@msg	the file is larger than 1 MB	plik jest większy niż 1 MB
+@msg	give `path` or `data`	podaj `path` lub `data`
+@msg	`{key}` must be an object	`{key}` musi być obiektem
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` działa samodzielnie, nie jako krok wsadu
 @msg	unknown preset (one of {_1})	nieznane ustawienie (jedno z: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	nieznane ustawienie `{name}` (high, medium, low lub zapisane: patrz flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	nieznane ustawienie `{name}` (patrz flattener.presets.list)
@@ -4999,6 +5047,8 @@ imageTrace	Outline	Kontur
 @msg	invalid object id {value}: expected a non-negative integer	nieprawidłowy identyfikator obiektu {value}: oczekiwano nieujemnej liczby całkowitej
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} w `{key}` to {value}, a nie identyfikator obiektu (nieujemna liczba całkowita)
 @msg	no such object id {value}	brak obiektu o identyfikatorze {value}
+@msg	id {value} is a ruler guide, not an object	identyfikator {value} należy do linii pomocniczej, a nie do obiektu
+@msg	a ruler guide goes only directly in a layer or sublayer	linia pomocnicza może się znajdować tylko bezpośrednio w warstwie lub podwarstwie
 @msg	id {value} is a layer, not an object	identyfikator {value} oznacza warstwę, a nie obiekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	identyfikator {value} oznacza warstwę, a nie obiekt; warstwy przenosi się za pomocą layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	nie przyznano dostępu automatyzacji do systemu plików: brak uprawnień do odczytu: {path}
@@ -5028,7 +5078,13 @@ imageTrace	Outline	Kontur
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	plik HEIC lub HEIF zawiera rodzaj obrazu, którego nie można odczytać
 @msg	HEIC and HEIF images can't be opened in this build	obrazów HEIC i HEIF nie można otworzyć w tej wersji
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD jest zbyt duży, aby go odczytać ({_1} × {_2} pikseli)
-@msg	zipped 32-bit PSD image data with prediction can't be read	nie można odczytać spakowanych 32-bitowych danych obrazu PSD z predykcją
+@msg	zipped 1-bit PSD image data with prediction can't be read	nie można odczytać spakowanych 1-bitowych danych obrazu PSD z predykcją
+@msg	the PSD file's layer data uses an unknown compression ({m})	dane warstw pliku PSD używają nieznanej kompresji ({m})
+@msg	the PSD file's layer records are damaged	rekordy warstw pliku PSD są uszkodzone
+@msg	the PSD file's layer groups are nested too deeply	grupy warstw pliku PSD są zagnieżdżone zbyt głęboko
+@msg	a layer of the PSD file is too large to read	warstwa pliku PSD jest zbyt duża, aby ją odczytać
+@msg	the PSD file's layers take more memory to read than allowed	odczytanie warstw pliku PSD wymaga więcej pamięci, niż jest dozwolone
+@msg	the layers can't be read ({e}): the file opened as its merged image	nie można odczytać warstw ({e}): plik otwarto jako jego scalony obraz
 @msg	{depth}-bit PSD files in this colour mode can't be read	nie można odczytać {depth}-bitowych plików PSD w tym trybie koloru
 @msg	the PSD file is cut short	plik PSD jest ucięty
 @msg	the PSD file's header is damaged	nagłówek pliku PSD jest uszkodzony
@@ -5397,6 +5453,7 @@ file-filter	Swatch libraries	Biblioteki próbek
 file-filter	Flattener presets	Ustawienia spłaszczania
 file-filter	PDF presets	Ustawienia PDF
 file-filter	Print presets	Ustawienia drukowania
+file-filter	Preferences	Preferencje
 file-filter	Export presets	Ustawienia eksportu
 file-filter	SVG Compressed	SVG skompresowany
 file-filter	PDF-compatible .ai	.ai zgodny z PDF
@@ -5567,6 +5624,7 @@ mark-style	Japanese	Japońskie
 @msg	Invalid drawing scale	Nieprawidłowa skala rysunku
 @msg	Invalid real scale	Nieprawidłowa skala rzeczywista
 @msg	Measured anchor no longer exists	Mierzony punkt kontrolny już nie istnieje
+@msg	Invalid measured point	Nieprawidłowy mierzony punkt
 @msg	Measured segment no longer exists	Mierzony odcinek już nie istnieje
 @msg	Non-finite dimension	Wymiar nie jest liczbą skończoną
 @msg	Only linear dimensions are horizontal or vertical	Tylko wymiary liniowe są poziome lub pionowe
@@ -5585,7 +5643,7 @@ mark-style	Japanese	Japońskie
 @msg	span must be "object" or "selection", got {v}	span musi mieć wartość "object" lub "selection", a nie {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umieszcza `gradient`, a nie próbkę
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umieszcza gradient: podaj `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" umieszcza gradient liniowy lub radialny, a nie dowolny
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" umieszcza gradient liniowy, radialny lub stożkowy, a nie dowolny
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umieszcza sam gradient: pomiń `start` i `end` (one już umieszczają go we współrzędnych dokumentu)
 	Make Image Dynamic	Uczyń obraz dynamicznym
 	Import Data Sets…	Importuj zestawy danych…
@@ -5945,6 +6003,18 @@ axis	Y Axis	Oś Y
 	Flag	Flaga
 	Crosshair	Celownik
 	Checkpoint	Punkt kontrolny
+	Inventory Icons	Ikony ekwipunku
+	Skill Icons	Ikony umiejętności
+	Attack	Atak
+	Defend	Obrona
+	Heal	Leczenie
+	Buff	Wzmocnienie
+	Ult	Ult
+	Sword	Miecz
+	Shield	Tarcza
+	Potion	Mikstura
+	Key	Klucz
+	Gem	Klejnot
 	Open Symbol Library	Otwórz bibliotekę symboli
 	Save Symbol Library	Zapisz bibliotekę symboli
 	Save Symbol Library…	Zapisz bibliotekę symboli…
@@ -6004,6 +6074,11 @@ axis	Y Axis	Oś Y
 	Dash Trail	Ślad kreskowany
 	Speed Line	Linia prędkości
 	Game Trails	Ślady gry
+	Energy Beams	Wiązki energii
+	Laser Bolt	Pocisk laserowy
+	Plasma Arc	Łuk plazmowy
+	Charge Wave	Fala ładunku
+	Spark Trail	Ślad iskier
 	Calligraphic Nibs	Stalówki kaligraficzne
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone
@@ -6202,9 +6277,12 @@ anchor	Points:	Punkty:
 @msg	{label} must be a number	{label} musi być liczbą
 @msg	{label} must be a number of at least 0.1	{label} musi być liczbą co najmniej 0,1
 	Advanced Character Formats	Zaawansowane formaty znaków
+	Basic Paragraph Formats	Podstawowe formaty akapitu
+	Composition	Skład
 	Horizontal Scale	Skala pozioma
 	Vertical Scale	Skala pionowa
 @msg	{label} must be a number from {min} to {max}	{label} musi być liczbą od {min} do {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} musi być liczbą całkowitą od {min} do {max}
 	Character Color	Kolor znaków
 	OpenType Features	Funkcje OpenType
 	Stylistic Sets	Zestawy stylistyczne
@@ -6589,6 +6667,7 @@ breakText	Glyphs	Glify
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Wyrównaj do siatki pikseli
+	Not Aligned to Pixel Grid	Niewyrównane do siatki pikseli
 @msg	only paths and compound paths can be aligned to the pixel grid	do siatki pikseli można wyrównać tylko ścieżki i ścieżki złożone
 @msg	side is left or right, not `{s}`	side to left lub right, a nie `{s}`
 	Ignore All	Ignoruj wszystko
@@ -6596,3 +6675,31 @@ breakText	Glyphs	Glify
 	No Suggestions	Brak sugestii
 	Edit Custom Dictionary	Edytuj słownik użytkownika
 	Entry:	Wpis:
+# Script Console
+	Script Console	Konsola skryptów
+	Clear Script Console	Wyczyść konsolę skryptów
+	Copy Script Console	Kopiuj konsolę skryptów
+	Copy All	Kopiuj wszystko
+	Copy Selected	Kopiuj zaznaczenie
+	Finished	Zakończono
+	Ended with an error	Zakończono z błędem
+	Out of fuel	Wyczerpano limit instrukcji
+	Ended at a host limit	Zakończono na limicie hosta
+	Ended at a limit	Zakończono na limicie
+	Stopped	Zatrzymano
+	Ended by an internal fault	Zakończono z powodu błędu wewnętrznego
+	time unavailable	czas niedostępny
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	najwolniejsze: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} wywołanie hosta|{n} wywołania hosta|{n} wywołań hosta
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} odrzucony wcześniejszy wiersz|{n} odrzucone wcześniejsze wiersze|{n} odrzuconych wcześniejszych wierszy
+@plural	{n} line cut|{n} lines cut	{n} skrócony wiersz|{n} skrócone wiersze|{n} skróconych wierszy
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` muszą być numerami wierszy przechowywanych w konsoli, `first` przed `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Odśwież odroczone efekty
+	Deferred Effects	Odroczone efekty
+@msg	no plug-in effect is deferred	żaden efekt wtyczki nie jest odroczony
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otwarto z {n} odroczonym efektem wtyczki. Efekt › Odśwież odroczone efekty go uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.

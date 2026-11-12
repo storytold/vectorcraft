@@ -152,6 +152,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "edit.findNext",
     "edit.findReplace",
     "effect.apply",
+    "effect.deferredStatus",
     "effect.duplicate",
     "effect.expandAppearance",
     "effect.list",
@@ -395,6 +396,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "paraStyle.apply",
     "paraStyle.delete",
     "paraStyle.duplicate",
+    "paraStyle.edit",
     "paraStyle.list",
     "paraStyle.new",
     "paraStyle.redefine",
@@ -483,6 +485,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "select.object.brushStrokes",
     "select.object.clippingMasks",
     "select.object.directionHandles",
+    "select.object.notAlignedToPixelGrid",
     "select.object.pointText",
     "select.object.slices",
     "select.object.strayPoints",
@@ -577,6 +580,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "symbol.replace",
     "symbol.selectInstances",
     "symbol.setCurrent",
+    "symbol.sortByName",
     "symbol.spray",
     "symbol.unused",
     "symbol.update",
@@ -630,6 +634,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "type.convertToAreaType",
     "type.convertToPointType",
     "type.createOutlines",
+    "type.dynamicText",
     "type.fillPlaceholder",
     "type.fitHeadline",
     "type.insert",
@@ -662,11 +667,13 @@ pub(super) const ALLOWED: &[&str] = &[
 ];
 
 /// Commands a plug-in may not call although no rule refuses them, in order: they change the
-/// preferences, a tool's options, a drag's state or the font names the whole app knows.
+/// preferences, a tool's options, a drag's state or the font names the whole app knows, or run
+/// plug-ins again.
 pub(super) const DENIED: &[&str] = &[
     "addon.cleanup.splitText",
     "addon.pathtools.movePointsTogether",
     "addon.pen.nextSegment",
+    "effect.refreshDeferred",
     "graphicStyle.setOptions",
     "object.blend.options",
     "object.liquify",

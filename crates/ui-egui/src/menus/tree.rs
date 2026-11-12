@@ -62,7 +62,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Export Selection…", "file.exportSelection"),
                 Sep,
                 c("Package…", "ui.packageDialog"),
-                sub("Scripts", vec![c("Check Script…", "ui.checkScript"), c("Other Script…", "ui.runScript")]),
+                sub("Scripts", crate::scripts_menu::items()),
                 Sep,
                 c("Document Setup…", "file.documentSetup"),
                 sub(
@@ -399,6 +399,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         .chain([Sep, c("Type on a Path Options…", "type.pathOptions")])
                         .collect(),
                 ),
+                c("Dynamic Text", "type.dynamicText"),
                 sub(
                     "Threaded Text",
                     vec![
@@ -490,6 +491,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Slices", "select.object.slices"),
                         c("Stray Points", "select.object.strayPoints"),
                         c("Open Paths", "select.object.openPaths"),
+                        c("Not Aligned to Pixel Grid", "select.object.notAlignedToPixelGrid"),
                         Sep,
                         c("All Text Objects", "select.object.textObjects"),
                         c("Point Text Objects", "select.object.pointText"),
@@ -664,6 +666,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Pathfinder", "pathfinder"),
                 panel("Pattern Options", "patternOptions"),
                 panel("Properties", "properties"),
+                panel("Script Console", crate::panels::script_console::ID),
                 panel("Separations Preview", "separations"),
                 panel("Stroke", "stroke"),
                 panel("SVG Interactivity", crate::panels::svg_interactivity::ID),

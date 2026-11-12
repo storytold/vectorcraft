@@ -385,6 +385,7 @@ font-technology	Variable	Változó
 	B4	B4
 	B5	B5
 	Background Color:	Háttérszín:
+	Guide Label:	Segédvonalak címkéje:
 	Show Center Mark	Középjel megjelenítése
 	Show Cross Hairs	Szálkereszt megjelenítése
 	Show Video Safe Areas	Biztonságos videoterületek megjelenítése
@@ -1097,6 +1098,13 @@ font-technology	Variable	Változó
 	Dock Panel	Panel dokkolása
 	Dock to Top	Dokkolás felülre
 	Dock to Bottom	Dokkolás alulra
+	Control Bar Options	Vezérlősáv beállításai
+	Tool Options	Eszközbeállítások
+	Object Options	Objektumbeállítások
+	Image Options	Képbeállítások
+	Vertical Alignment	Függőleges igazítás
+	Align and Distribute	Igazítás és elosztás
+	Document Options	Dokumentumbeállítások
 	Dock Control Bar	Vezérlősáv dokkolása
 	Document	Dokumentum
 	Document Color Mode	Dokumentum színmódja
@@ -1573,6 +1581,7 @@ file-filter	Swatch libraries	Színminta-könyvtárak
 file-filter	Flattener presets	Lapítási előbeállítások
 file-filter	PDF presets	PDF-előbeállítások
 file-filter	Print presets	Nyomtatási előbeállítások
+file-filter	Preferences	Beállítások
 file-filter	Export presets	Exportálási előbeállítások
 file-filter	SVG Compressed	Tömörített SVG
 file-filter	PDF-compatible .ai	PDF-kompatibilis .ai
@@ -2068,6 +2077,7 @@ file-filter	Templates	Sablonok
 	Include Linked Files	Csatolt fájlok hozzáadása
 	Include Metadata	Metaadatok hozzáadása
 	Include non-printing layers	Nem nyomtatandó rétegek hozzáadása
+	Write pages longer than 200 in at full size in points	200 in-nél hosszabb oldalak írása teljes méretben, pontban
 	Include SVG Code	SVG-kód hozzáadása
 	Include Swatches for Tints	Tónusok színmintáinak felvétele
 	Include tagged source profiles	Címkézett forrásprofilok beágyazása
@@ -2820,6 +2830,8 @@ file-filter	Templates	Sablonok
 	Open…	Megnyitás…
 	Optical	Optikai
 	Optical Margin Alignment	Optikai margóigazítás
+	Dynamic Text	Dinamikus szöveg
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	a láncolt szövegben lévő útvonalszöveg nem használhat dinamikus szöveget: {frames}
 	Optimize for fast web view	Optimalizálás gyors webes megtekintéshez
 	Optimized	Optimalizált
 	Options	Beállítások
@@ -3150,6 +3162,7 @@ mark-style	Japanese	Japán
 	Radial Blur…	Körkörös elmosás…
 	Radial Glows	Körkörös ragyogások
 	Radial Gradient	Körkörös színátmenet
+	Conic Gradient	Kúpos színátmenet
 	Radial Repeat	Körkörös ismétlés
 	Radius	Sugár
 	Radius 1	Sugár 1
@@ -3363,6 +3376,12 @@ mark-style	Japanese	Japán
 	Reset Painting	Painting visszaállítása
 	Reset Panel	Panel visszaállítása
 	Reset Preferences	Beállítások visszaállítása
+	Export Preferences…	Beállítások exportálása…
+	Import Preferences…	Beállítások importálása…
+	Save the applied preferences to a JSON file	Az alkalmazott beállítások mentése JSON-fájlba
+	Apply the preferences in a file Export Preferences saved	A Beállítások exportálása paranccsal mentett fájl beállításainak alkalmazása
+	Export Preferences	Beállítások exportálása
+	Import Preferences	Beállítások importálása
 	Search Preferences	Keresés a beállításokban
 	No settings found	Nincs ilyen beállítás
 	Reset Printing and Proofing	Printing and Proofing visszaállítása
@@ -3764,6 +3783,13 @@ mark-style	Japanese	Japán
 	Quest Outline	Küldetés
 	Coin Shine	Érme
 	Boss Alert	Főellenség
+	Status Effects	Állapot hatások
+	Poison Tint	Méreg
+	Freeze Edge	Fagy
+	Burn Aura	Égés
+	Stun Pulse	Kábítás
+	Stealth Fade	Lopakodás
+	Shield Buff	Pajzs
 	Shape	Alakzat
 	Shape Builder	Alakzatépítő
 	Shape Builder Regions	Alakzatépítő területei
@@ -4242,6 +4268,8 @@ mark-style	Japanese	Japán
 	Tilt	Dőlés
 	Copies per Sheet (as many as fit, in a grid)	Példány laponként (ahány elfér, rácsban)
 	Tint	Tónus
+	Fill Tint	Kitöltés tónusa
+	Stroke Tint	Körvonal tónusa
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok
 	Tips	Tippek
@@ -4689,6 +4717,8 @@ imageTrace	Outline	Körvonal
 @msg	`colors` must be an array of colors, not {v}	`colors`: színek tömbje kell, ez nem az: {v}
 @msg	`library` is a library id or name (see {list})	a `library` könyvtárazonosító vagy -név lehet (lásd: {list})
 @msg	`mode` applies to freeform gradients	a `mode` a szabad formájú színátmenetekre vonatkozik
+@msg	a negative `aspect` applies to conic gradients	a negatív `aspect` a kúpos színátmenetekre vonatkozik
+@msg	`focal` applies to radial gradients	a `focal` a sugaras színátmenetekre vonatkozik
 @msg	`preserve` must be an object	`preserve`: objektum kell
 @msg	`globalAdjust` must be an object	`globalAdjust`: objektum kell
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize`: 1, 3 vagy 5 kell
@@ -4827,6 +4857,7 @@ imageTrace	Outline	Körvonal
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	az axis értéke "vertical", "horizontal" vagy fokban megadott szög lehet, ez nem az: `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black vagy egy szín, például "#ff8800"
 @msg	bad color {v}	hibás szín: {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	a `guideLabel` értéke null, egy rétegszín neve vagy #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio: 0,1 és 10 közötti szám kell
 @msg	the Color Picker is not open	a Színválasztó nincs megnyitva
 @msg	the Simplify slider is not open	az Egyszerűsítés csúszka nincs megnyitva
@@ -4878,6 +4909,7 @@ imageTrace	Outline	Körvonal
 	Stop Script	Parancsfájl leállítása
 	Show External Script Warning	Figyelmeztetés külső parancsfájlok előtt
 	A Script Is Running	Egy parancsfájl fut
+	Script Alert	Parancsfájl-értesítés
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
 	Stop the script and undo what it did? Then quit again.	Leállítja a parancsfájlt, és visszavonja a módosításait? Ezután lépjen ki újra.
@@ -4891,6 +4923,9 @@ imageTrace	Outline	Körvonal
 @msg	the script is too large to run	a parancsfájl túl nagy a futtatáshoz
 @msg	a drag or an undo group is open; finish it before running a script	húzás vagy visszavonási csoport van folyamatban; fejezze be a parancsfájl futtatása előtt
 @msg	the script left a document that cannot be kept	a parancsfájl olyan dokumentumot hagyott hátra, amely nem tartható meg
+@msg	the script is no longer in the Scripts folder	a parancsfájl már nincs a Scripts mappában
+	Some scripts were not listed	Néhány szkript nem szerepel a listában
+	The Scripts folder cannot be read	A Scripts mappa nem olvasható
 @msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
 @msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
@@ -5201,6 +5236,8 @@ imageTrace	Outline	Körvonal
 @msg	invalid object id {value}: expected a non-negative integer	érvénytelen objektumazonosító: {value} (nemnegatív egész szám kell)
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` {index} indexű eleme {value}, nem objektumazonosító (nemnegatív egész szám kell)
 @msg	no such object id {value}	nincs ilyen objektumazonosító: {value}
+@msg	id {value} is a ruler guide, not an object	ez az azonosító segédvonalé, nem objektumé: {value}
+@msg	a ruler guide goes only directly in a layer or sublayer	segédvonal csak közvetlenül rétegben vagy alrétegben lehet
 @msg	id {value} is a layer, not an object	a(z) {value} azonosító egy réteg, nem objektum
 @msg	id {value} is a layer, not an object; move layers with layer.move	a(z) {value} azonosító egy réteg, nem objektum; a rétegeket a layer.move paranccsal helyezheti át
 @msg	object {0} cannot have children	ennek az objektumnak nem lehetnek gyermekei: {0}
@@ -5489,12 +5526,26 @@ imageTrace	Outline	Körvonal
 @msg	unknown format	ismeretlen formátum
 @msg	unknown format `{f}` (Save writes {_1})	ismeretlen formátum: `{f}` (a Mentés ezeket írja: {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	ismeretlen szabad formájú mód: `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	ismeretlen színátmenet-fajta: `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	ismeretlen színátmenet-fajta: `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	ismeretlen kiemelés: `{h}`
 @msg	unknown option `{path}.{k}`	ismeretlen beállítás: `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
 @msg	unknown panel `{raw}`	ismeretlen panel: `{raw}`
 @msg	unknown preference `{key}`	ismeretlen beállítás: `{key}`
+@msg	Preferences imported.	A beállítások importálva.
+@msg	not a preferences file: {e}	nem beállításfájl: {e}
+@msg	not a preferences file: no JSON object	nem beállításfájl: nincs JSON-objektum
+@msg	not a preferences file (format `{format}`)	nem beállításfájl (formátum: `{format}`)
+@msg	not a preferences file: no `format`	nem beállításfájl: nincs `format`
+@msg	not a preferences file: no `version`	nem beállításfájl: nincs `version`
+@msg	not a preferences file: no `prefs`	nem beállításfájl: nincs `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	a fájlt a VectorCraft újabb verziója mentette (verzió: {v})
+@msg	the file holds no preferences	a fájl nem tartalmaz beállításokat
+@msg	`{key}` names a folder, which preferences files leave out	a(z) `{key}` mappát ad meg, a beállításfájlok pedig nem tartalmaznak mappákat
+@msg	the file is larger than 1 MB	a fájl nagyobb 1 MB-nál
+@msg	give `path` or `data`	adja meg a `path` vagy a `data` értékét
+@msg	`{key}` must be an object	a(z) `{key}` értékének objektumnak kell lennie
+@msg	`prefs.import` runs on its own, not as a batch step	a `prefs.import` önállóan fut, nem kötegelt lépésként
 @msg	unknown preset (one of {_1})	ismeretlen előbeállítás (ezek egyike lehet: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (high, medium, low vagy egy mentett; lásd: flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (lásd: flattener.presets.list)
@@ -5526,7 +5577,13 @@ imageTrace	Outline	Körvonal
 @msg	x and y must be provided together	az x és az y csak együtt adható meg
 @msg	x and y must both be numbers	az x és az y is szám kell legyen
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	A nem mentett módosításaidat ez a böngésző megőrizte: töltsd újra az oldalt a visszakapásukhoz.
-@msg	zipped 32-bit PSD image data with prediction can't be read	a predikcióval tömörített 32 bites PSD-képadatok nem olvashatók
+@msg	zipped 1-bit PSD image data with prediction can't be read	a predikcióval tömörített 1 bites PSD-képadatok nem olvashatók
+@msg	the PSD file's layer data uses an unknown compression ({m})	a PSD-fájl rétegadatai ismeretlen tömörítést használnak ({m})
+@msg	the PSD file's layer records are damaged	a PSD-fájl rétegrekordjai sérültek
+@msg	the PSD file's layer groups are nested too deeply	a PSD-fájl rétegcsoportjai túl mélyen vannak egymásba ágyazva
+@msg	a layer of the PSD file is too large to read	a PSD-fájl egyik rétege túl nagy a beolvasáshoz
+@msg	the PSD file's layers take more memory to read than allowed	a PSD-fájl rétegeinek beolvasása több memóriát igényel a megengedettnél
+@msg	the layers can't be read ({e}): the file opened as its merged image	a rétegek nem olvashatók ({e}): a fájl az egyesített képeként nyílt meg
 @msg	zone must be a string	a zone értéke szöveg lehet
 @msg	zone must be tab, center, left, right, top or bottom	a zone értéke tab, center, left, right, top vagy bottom lehet
 @msg	{_1} failed: {e}	sikertelen: {_1}: {e}
@@ -5697,6 +5754,7 @@ imageTrace	Outline	Körvonal
 @msg	Invalid drawing scale	Érvénytelen rajzlépték
 @msg	Invalid real scale	Érvénytelen valós lépték
 @msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
+@msg	Invalid measured point	Érvénytelen mért pont
 @msg	Measured segment no longer exists	A mért szakasz már nem létezik
 @msg	Non-finite dimension	Nem véges méret
 @msg	Only linear dimensions are horizontal or vertical	Csak a lineáris méretek lehetnek vízszintesek vagy függőlegesek
@@ -5715,7 +5773,7 @@ imageTrace	Outline	Körvonal
 @msg	span must be "object" or "selection", got {v}	a span értéke "object" vagy "selection" lehet, nem {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" egy `gradient` értéket helyez el, nem színmintát
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" színátmenetet helyez el: adja meg a `gradient` értéket
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" lineáris vagy sugaras színátmenetet helyez el, nem szabad formájút
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" lineáris, sugaras vagy kúpos színátmenetet helyez el, nem szabad formájút
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" magát a színátmenetet helyezi el: hagyja el a `start` és `end` értéket (ezek már a dokumentum koordinátáiban helyezik el)
 	Make Image Dynamic	Kép dinamikussá tétele
 	Import Data Sets…	Adatkészletek importálása…
@@ -6074,6 +6132,18 @@ axis	Y Axis	Y tengely
 	Flag	Zászló
 	Crosshair	Célkereszt
 	Checkpoint	Ellenőrzőpont
+	Inventory Icons	Leltári ikonok
+	Skill Icons	Képességikonok
+	Attack	Támadás
+	Defend	Védelem
+	Heal	Gyógyítás
+	Buff	Erősítés
+	Ult	Ult
+	Sword	Kard
+	Shield	Pajzs
+	Potion	Bájital
+	Key	Kulcs
+	Gem	Drágakő
 	Open Symbol Library	Szimbólumkönyvtár megnyitása
 	Save Symbol Library	Szimbólumkönyvtár mentése
 	Save Symbol Library…	Szimbólumkönyvtár mentése…
@@ -6133,6 +6203,11 @@ axis	Y Axis	Y tengely
 	Dash Trail	Szaggatott nyom
 	Speed Line	Sebességvonal
 	Game Trails	Játéknyomok
+	Energy Beams	Energianyalábok
+	Laser Bolt	Lézervillám
+	Plasma Arc	Plazmaív
+	Charge Wave	Töltéshullám
+	Spark Trail	Szikracsík
 	Calligraphic Nibs	Kalligrafikus tollhegyek
 	Pattern Borders	Mintázatszegélyek
 	Scatter Shapes	Szórt alakzatok
@@ -6331,9 +6406,12 @@ anchor	Points:	Pontok:
 @msg	{label} must be a number	{label}: szám kell
 @msg	{label} must be a number of at least 0.1	{label} legalább 0,1 értékű szám kell legyen
 	Advanced Character Formats	Speciális karakterformátumok
+	Basic Paragraph Formats	Alapvető bekezdésformátumok
+	Composition	Szedés
 	Horizontal Scale	Vízszintes méretezés
 	Vertical Scale	Függőleges méretezés
 @msg	{label} must be a number from {min} to {max}	{label} {min} és {max} közötti szám kell legyen
+@msg	{label} must be a whole number from {min} to {max}	{label} {min} és {max} közötti egész szám kell legyen
 	Character Color	Karakterszín
 	OpenType Features	OpenType-funkciók
 	Stylistic Sets	Stíluskészletek
@@ -6717,6 +6795,7 @@ breakText	Glyphs	Glifák
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Igazítás a pixelrácshoz
+	Not Aligned to Pixel Grid	Pixelrácshoz nem igazított
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
 @msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`
 	Ignore All	Az összes kihagyása
@@ -6724,3 +6803,31 @@ breakText	Glyphs	Glifák
 	No Suggestions	Nincs javaslat
 	Edit Custom Dictionary	Egyéni szótár szerkesztése
 	Entry:	Bejegyzés:
+# Script Console
+	Script Console	Parancsfájlkonzol
+	Clear Script Console	Parancsfájlkonzol törlése
+	Copy Script Console	Parancsfájlkonzol másolása
+	Copy All	Összes másolása
+	Copy Selected	Kijelölés másolása
+	Finished	Befejeződött
+	Ended with an error	Hibával ért véget
+	Out of fuel	Elfogyott az utasításkeret
+	Ended at a host limit	Gazdakorlátnál ért véget
+	Ended at a limit	Korlátnál ért véget
+	Stopped	Leállítva
+	Ended by an internal fault	Belső hiba miatt ért véget
+	time unavailable	az idő nem érhető el
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	leglassabbak: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} gazdahívás
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} korábbi sor elvetve
+@plural	{n} line cut|{n} lines cut	{n} sor levágva
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Elhalasztott effektusok frissítése
+	Deferred Effects	Elhalasztott effektusok
+@msg	no plug-in effect is deferred	nincs elhalasztott bővítményeffektus
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.

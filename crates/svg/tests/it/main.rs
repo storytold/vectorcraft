@@ -4,8 +4,10 @@
 
 mod basic_shapes;
 mod blend_export;
+mod clip_text;
 mod colorized_images;
 mod colour_glyphs;
+mod conic;
 mod container_export;
 mod css_rules;
 mod dash_align;

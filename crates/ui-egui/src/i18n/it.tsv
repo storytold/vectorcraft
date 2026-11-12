@@ -289,6 +289,7 @@ font-technology	Variable	Variabili
 	Average…	Media…
 	Axis:	Asse:
 	Background Color:	Colore di sfondo:
+	Guide Label:	Etichetta delle guide:
 	Show Center Mark	Mostra segno centrale
 	Show Cross Hairs	Mostra mirino
 	Show Video Safe Areas	Mostra aree sicure video
@@ -1279,6 +1280,7 @@ file-filter	Swatch libraries	Librerie campioni
 file-filter	Flattener presets	Preset di appiattimento
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset di stampa
+file-filter	Preferences	Preferenze
 file-filter	Export presets	Predefiniti di esportazione
 file-filter	SVG Compressed	SVG compresso
 file-filter	PDF-compatible .ai	.ai compatibile con PDF
@@ -1685,6 +1687,7 @@ file-filter	Templates	Modelli
 	Include Linked Files	Includi file collegati
 	Include Metadata	Includi metadati
 	Include non-printing layers	Includi livelli non stampabili
+	Write pages longer than 200 in at full size in points	Scrivi le pagine più lunghe di 200 in a grandezza reale, in punti
 	Include SVG Code	Includi codice SVG
 	Include Swatches for Tints	Includi campioni per tinte
 	Inflate…	Gonfia…
@@ -2363,6 +2366,8 @@ file-filter	Templates	Modelli
 	Open…	Apri…
 	Optical	Ottica
 	Optical Margin Alignment	Allineamento ottico dei margini
+	Dynamic Text	Testo dinamico
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	il testo su tracciato in un testo concatenato non può usare il testo dinamico: {frames}
 	Optimize for fast web view	Ottimizza per visualizzazione web veloce
 	Optimized	Ottimizzato
 	Options	Opzioni
@@ -2642,6 +2647,7 @@ digits	Malayalam	Malayalam
 	Radial	Radiale
 	Radial Glows	Bagliori radiali
 	Radial Gradient	Sfumatura radiale
+	Conic Gradient	Sfumatura conica
 	Radius 1	Raggio 1
 	Radius 2	Raggio 2
 	Radius1	Raggio1
@@ -2854,6 +2860,12 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Reimposta funzioni OpenType
 	Reset Panel	Reimposta pannello
 	Reset Preferences	Reimposta preferenze
+	Export Preferences…	Esporta preferenze…
+	Import Preferences…	Importa preferenze…
+	Save the applied preferences to a JSON file	Salva le preferenze applicate in un file JSON
+	Apply the preferences in a file Export Preferences saved	Applica le preferenze di un file salvato con Esporta preferenze
+	Export Preferences	Esporta preferenze
+	Import Preferences	Importa preferenze
 	Search Preferences	Cerca nelle preferenze
 	No settings found	Nessuna impostazione trovata
 	Reset Profiles	Reimposta profili
@@ -3186,6 +3198,13 @@ digits	Malayalam	Malayalam
 	Quest Outline	Missione
 	Coin Shine	Moneta
 	Boss Alert	Boss
+	Status Effects	Effetti di stato
+	Poison Tint	Veleno
+	Freeze Edge	Gelo
+	Burn Aura	Bruciatura
+	Stun Pulse	Stordimento
+	Stealth Fade	Furtività
+	Shield Buff	Scudo
 	Shape	Forma
 	Shape Builder	Generatore forme
 	Shape Builder Regions	Aree del Generatore forme
@@ -3605,6 +3624,8 @@ digits	Malayalam	Malayalam
 	Copies per Sheet (as many as fit, in a grid)	Copie per foglio (quante ne entrano, in griglia)
 	Gutter:	Spazio intermedio:
 	Tint	Tinta
+	Fill Tint	Tinta riempimento
+	Stroke Tint	Tinta traccia
 	Tip extends past the end point	La punta si estende oltre il punto finale
 	Tip on the end point	Punta sul punto finale
 	Title Case	Iniziali maiuscole
@@ -4072,6 +4093,13 @@ axis	Both	Entrambi
 	Dock Panel	Ancora pannello
 	Dock to Top	Ancora in alto
 	Dock to Bottom	Ancora in basso
+	Control Bar Options	Opzioni barra di controllo
+	Tool Options	Opzioni strumento
+	Object Options	Opzioni oggetto
+	Image Options	Opzioni immagine
+	Vertical Alignment	Allineamento verticale
+	Align and Distribute	Allinea e distribuisci
+	Document Options	Opzioni documento
 	Dock Control Bar	Ancora barra di controllo
 	Drag to float the toolbar	Trascina per rendere mobile la barra degli strumenti
 	Drag to the window's left or right edge to dock	Trascina sul bordo sinistro o destro della finestra per ancorare
@@ -4125,6 +4153,7 @@ axis	Both	Entrambi
 	Stop Script	Interrompi script
 	Show External Script Warning	Mostra avviso per gli script esterni
 	A Script Is Running	È in esecuzione uno script
+	Script Alert	Avviso dello script
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Uno script può modificare i documenti aperti e scrivere file tramite i comandi che esegue. Esegui solo script di cui ti fidi.
 	Do not show this warning again	Non mostrare più questo avviso
 	Stop the script and undo what it did? Then quit again.	Interrompere lo script e annullare ciò che ha fatto? Poi esci di nuovo.
@@ -4138,6 +4167,9 @@ axis	Both	Entrambi
 @msg	the script is too large to run	lo script è troppo grande per essere eseguito
 @msg	a drag or an undo group is open; finish it before running a script	è aperto un trascinamento o un gruppo di annullamento; completalo prima di eseguire uno script
 @msg	the script left a document that cannot be kept	lo script ha lasciato un documento che non può essere conservato
+@msg	the script is no longer in the Scripts folder	lo script non è più nella cartella Scripts
+	Some scripts were not listed	Alcuni script non sono stati elencati
+	The Scripts folder cannot be read	Impossibile leggere la cartella Scripts
 @msg	the script's run is no longer available	l'esecuzione dello script non è più disponibile
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando non riuscito ha modificato passaggi di annullamento che non è stato possibile ripristinare, quindi lo script è stato interrotto
 @msg	a recovery copy could not be written, so the script was not run	non è stato possibile scrivere una copia di recupero, quindi lo script non è stato eseguito
@@ -4220,6 +4252,8 @@ axis	Both	Entrambi
 @msg	`groupColors` must be an array	`groupColors` deve essere un array
 @msg	`library` is a library id or name (see {list})	`library` è l'id o il nome di una libreria (vedi {list})
 @msg	`mode` applies to freeform gradients	`mode` si applica alle sfumature a forma libera
+@msg	a negative `aspect` applies to conic gradients	un `aspect` negativo si applica alle sfumature coniche
+@msg	`focal` applies to radial gradients	`focal` si applica alle sfumature radiali
 @msg	`preserve` must be an object	`preserve` deve essere un oggetto
 @msg	`globalAdjust` must be an object	`globalAdjust` deve essere un oggetto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` deve essere 1, 3 o 5
@@ -4322,6 +4356,7 @@ axis	Both	Entrambi
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis deve essere "vertical", "horizontal" o un angolo in gradi, non `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	sfondo {other}: transparent, white, black o un colore come "#ff8800"
 @msg	bad color {v}	colore non valido {v}
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` è null, il nome di un colore di livello o #rrggbb
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio deve essere un numero da 0,1 a 10
 @msg	the Color Picker is not open	il Selettore colore non è aperto
 @msg	the Simplify slider is not open	il cursore Semplifica non è aperto
@@ -4721,12 +4756,26 @@ axis	Both	Entrambi
 @msg	unknown format	formato sconosciuto
 @msg	unknown format `{f}` (Save writes {_1})	formato sconosciuto `{f}` (Salva scrive {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modalità a forma libera sconosciuta `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	tipo di sfumatura sconosciuto `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo di sfumatura sconosciuto `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	evidenziazione sconosciuta `{h}`
 @msg	unknown option `{path}.{k}`	opzione sconosciuta `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	valore di sovrastampa sconosciuto `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	pannello sconosciuto `{raw}`
 @msg	unknown preference `{key}`	preferenza sconosciuta `{key}`
+@msg	Preferences imported.	Preferenze importate.
+@msg	not a preferences file: {e}	non è un file di preferenze: {e}
+@msg	not a preferences file: no JSON object	non è un file di preferenze: nessun oggetto JSON
+@msg	not a preferences file (format `{format}`)	non è un file di preferenze (formato `{format}`)
+@msg	not a preferences file: no `format`	non è un file di preferenze: manca `format`
+@msg	not a preferences file: no `version`	non è un file di preferenze: manca `version`
+@msg	not a preferences file: no `prefs`	non è un file di preferenze: manca `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	il file è stato salvato da una versione più recente di VectorCraft (versione {v})
+@msg	the file holds no preferences	il file non contiene preferenze
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` indica una cartella, e i file di preferenze non includono cartelle
+@msg	the file is larger than 1 MB	il file supera 1 MB
+@msg	give `path` or `data`	specifica `path` o `data`
+@msg	`{key}` must be an object	`{key}` deve essere un oggetto
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` viene eseguito da solo, non come passo di un batch
 @msg	unknown preset (one of {_1})	preset sconosciuto (uno dei seguenti: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preset sconosciuto `{name}` (high, medium, low o uno salvato: vedi flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preset sconosciuto `{name}` (vedi flattener.presets.list)
@@ -4933,6 +4982,8 @@ axis	Both	Entrambi
 @msg	invalid object id {value}: expected a non-negative integer	ID oggetto {value} non valido: è richiesto un intero non negativo
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	la voce {index} di `{key}` è {value}, non un ID oggetto (intero non negativo)
 @msg	no such object id {value}	nessun oggetto con ID {value}
+@msg	id {value} is a ruler guide, not an object	l’ID {value} è di una guida, non di un oggetto
+@msg	a ruler guide goes only directly in a layer or sublayer	una guida può stare solo direttamente in un livello o sottolivello
 @msg	id {value} is a layer, not an object	l’ID {value} è un livello, non un oggetto
 @msg	id {value} is a layer, not an object; move layers with layer.move	l’ID {value} è un livello, non un oggetto; sposta i livelli con layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	l'automazione non ha accesso al file system: manca l'autorizzazione di lettura: {path}
@@ -4962,7 +5013,13 @@ axis	Both	Entrambi
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	il file HEIC o HEIF contiene un tipo di immagine che non può essere letto
 @msg	HEIC and HEIF images can't be opened in this build	le immagini HEIC e HEIF non possono essere aperte in questa build
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'immagine PSD è troppo grande per essere letta ({_1} × {_2} pixel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	i dati immagine PSD a 32 bit compressi ZIP con previsione non possono essere letti
+@msg	zipped 1-bit PSD image data with prediction can't be read	i dati immagine PSD a 1 bit compressi ZIP con previsione non possono essere letti
+@msg	the PSD file's layer data uses an unknown compression ({m})	i dati dei livelli del file PSD usano una compressione sconosciuta ({m})
+@msg	the PSD file's layer records are damaged	i record dei livelli del file PSD sono danneggiati
+@msg	the PSD file's layer groups are nested too deeply	i gruppi di livelli del file PSD sono annidati troppo in profondità
+@msg	a layer of the PSD file is too large to read	un livello del file PSD è troppo grande per essere letto
+@msg	the PSD file's layers take more memory to read than allowed	i livelli del file PSD richiedono più memoria del consentito per essere letti
+@msg	the layers can't be read ({e}): the file opened as its merged image	i livelli non possono essere letti ({e}): il file è stato aperto come immagine unita
 @msg	{depth}-bit PSD files in this colour mode can't be read	i file PSD a {depth} bit in questo metodo colore non possono essere letti
 @msg	the PSD file is cut short	il file PSD è troncato
 @msg	the PSD file's header is damaged	l'intestazione del file PSD è danneggiata
@@ -5327,6 +5384,7 @@ lighting	Light	Luce
 @msg	Invalid drawing scale	Scala del disegno non valida
 @msg	Invalid real scale	Scala reale non valida
 @msg	Measured anchor no longer exists	Il punto di ancoraggio misurato non esiste più
+@msg	Invalid measured point	Punto misurato non valido
 @msg	Measured segment no longer exists	Il segmento misurato non esiste più
 @msg	Non-finite dimension	Quota non finita
 @msg	Only linear dimensions are horizontal or vertical	Solo le quote lineari sono orizzontali o verticali
@@ -5345,7 +5403,7 @@ lighting	Light	Luce
 @msg	span must be "object" or "selection", got {v}	span deve essere "object" o "selection", non {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiziona un `gradient`, non un campione
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiziona una sfumatura: indica `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" posiziona una sfumatura lineare o radiale, non una sfumatura a forma libera
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" posiziona una sfumatura lineare, radiale o conica, non una sfumatura a forma libera
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" posiziona la sfumatura stessa: ometti `start` e `end` (la posizionano già in coordinate del documento)
 	Make Image Dynamic	Rendi immagine dinamica
 	Import Data Sets…	Importa set di dati…
@@ -5708,6 +5766,18 @@ axis	Y Axis	Asse Y
 	Flag	Bandiera
 	Crosshair	Mirino
 	Checkpoint	Punto di controllo
+	Inventory Icons	Icone inventario
+	Skill Icons	Icone abilità
+	Attack	Attacco
+	Defend	Difesa
+	Heal	Cura
+	Buff	Potenziamento
+	Ult	Ult
+	Sword	Spada
+	Shield	Scudo
+	Potion	Pozione
+	Key	Chiave
+	Gem	Gemma
 	Open Symbol Library	Apri libreria simboli
 	Save Symbol Library	Salva libreria simboli
 	Save Symbol Library…	Salva libreria simboli…
@@ -5767,6 +5837,11 @@ axis	Y Axis	Asse Y
 	Dash Trail	Scia tratteggiata
 	Speed Line	Linea di velocità
 	Game Trails	Scia di gioco
+	Energy Beams	Raggi di energia
+	Laser Bolt	Dardo laser
+	Plasma Arc	Arco al plasma
+	Charge Wave	Onda di carica
+	Spark Trail	Scia di scintille
 	Calligraphic Nibs	Pennini calligrafici
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
@@ -5967,9 +6042,12 @@ anchor	Points:	Punti:
 @msg	{label} must be a number	{label} deve essere un numero
 @msg	{label} must be a number of at least 0.1	{label} deve essere un numero di almeno 0,1
 	Advanced Character Formats	Formati carattere avanzati
+	Basic Paragraph Formats	Formati paragrafo di base
+	Composition	Composizione
 	Horizontal Scale	Scala orizzontale
 	Vertical Scale	Scala verticale
 @msg	{label} must be a number from {min} to {max}	{label} deve essere un numero da {min} a {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} deve essere un numero intero da {min} a {max}
 	Character Color	Colore carattere
 	OpenType Features	Funzioni OpenType
 	Stylistic Sets	Set stilistici
@@ -6354,6 +6432,7 @@ breakText	Glyphs	Glifi
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Allinea alla griglia pixel
+	Not Aligned to Pixel Grid	Non allineato alla griglia pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	solo i tracciati e i tracciati composti possono essere allineati alla griglia pixel
 @msg	side is left or right, not `{s}`	side è left o right, non `{s}`
 	Ignore All	Ignora tutto
@@ -6361,3 +6440,31 @@ breakText	Glyphs	Glifi
 	No Suggestions	Nessun suggerimento
 	Edit Custom Dictionary	Modifica dizionario personalizzato
 	Entry:	Voce:
+# Script Console
+	Script Console	Console script
+	Clear Script Console	Cancella console script
+	Copy Script Console	Copia console script
+	Copy All	Copia tutto
+	Copy Selected	Copia selezione
+	Finished	Terminato
+	Ended with an error	Terminato con un errore
+	Out of fuel	Limite di istruzioni esaurito
+	Ended at a host limit	Terminato a un limite dell'host
+	Ended at a limit	Terminato a un limite
+	Stopped	Interrotto
+	Ended by an internal fault	Terminato per un errore interno
+	time unavailable	tempo non disponibile
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	più lenti: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} chiamata all'host|{n} chiamate all'host
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} riga precedente scartata|{n} righe precedenti scartate
+@plural	{n} line cut|{n} lines cut	{n} riga tagliata|{n} righe tagliate
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Aggiorna effetti rimandati
+	Deferred Effects	Effetti rimandati
+@msg	no plug-in effect is deferred	nessun effetto plug-in è rimandato
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aperto con {n} effetto plug-in rimandato. Effetto › Aggiorna effetti rimandati lo esegue.|Aperto con {n} effetti plug-in rimandati. Effetto › Aggiorna effetti rimandati li esegue.

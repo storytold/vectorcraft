@@ -28,11 +28,13 @@ fn align_to_key_object_makes_a_selected_guide_the_key() {
     let ctx = egui::Context::default();
     let ([_, key, _], left) = panel_buttons(&mut app, &ctx);
     click(&ctx, &mut app, key.center(), show);
-    assert_eq!(app.session.active().unwrap().selection.key_guide, Some(0), "{}", app.ui.status);
+    let st = app.session.active().unwrap();
+    let key = st.selection.key_guide.map(|k| vectorcraft_engine::cmd::guide_indexes(&st.doc, &[k]));
+    assert_eq!(key, Some(vec![0]), "{}", app.ui.status);
     assert_eq!(align_to(&app), AlignTo::Key);
     click(&ctx, &mut app, left.center(), show);
     assert_eq!(left_edge(&app, &a), 120.0, "on the guide, not the artboard: {}", app.ui.status);
-    assert_eq!(app.session.active().unwrap().doc.guides[0].pos, 120.0);
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides()[0].pos, 120.0);
 }
 
 /// A Shift-click that leaves the key object selected on its own lets the key go, and the align
@@ -532,13 +534,13 @@ fn the_distribute_buttons_send_the_spacing_with_a_key_guide() {
     app.ui.align_spacing = 15.0;
     click(&ctx, &mut app, left.center(), show);
     assert_eq!(lefts(&app), [70.0, 85.0, 115.0], "15 pt apart, outward from the guide: {}", app.ui.status);
-    assert_eq!(app.session.active().unwrap().doc.guides[0].pos, 100.0, "the guide stays put");
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides()[0].pos, 100.0, "the guide stays put");
     // Horizontal Distribute Space with 15: the object before the guide ends 15 pt before it,
     // the one after it starts 15 pt after it.
     click(&ctx, &mut app, space.center(), show);
     assert_eq!(sent(&app), ("object.distributeSpacing".to_string(), json!("key"), Some(json!(15.0))));
     assert_eq!(lefts(&app), [10.0, 45.0, 115.0], "{}", app.ui.status);
-    assert_eq!(app.session.active().unwrap().doc.guides[0].pos, 100.0, "the guide stays put");
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides()[0].pos, 100.0, "the guide stays put");
 }
 
 /// Three vertical ruler guides selected without objects: Align Objects buttons are on, and
@@ -560,7 +562,7 @@ fn the_align_buttons_align_guides_selected_alone_to_artboard() {
     row.sort_by(|a, b| a.left().total_cmp(&b.left()));
     assert!(row[0].width() > 0.0, "Horizontal Align Left is enabled");
     click(&ctx, &mut app, row[0].center(), show);
-    let pos = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| g.pos).collect::<Vec<_>>();
+    let pos = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().iter().map(|g| g.pos).collect::<Vec<_>>();
     assert_eq!(pos(&app), [0.0, 0.0, 0.0], "{}", app.ui.status);
 }
 
@@ -585,7 +587,7 @@ fn the_distribute_buttons_space_guides_selected_alone() {
     assert_eq!(row.len(), 6, "the Distribute row");
     // Its fifth button is Horizontal Distribute Center.
     click(&ctx, &mut app, row[4].center(), show);
-    let pos = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| g.pos).collect::<Vec<_>>();
+    let pos = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().iter().map(|g| g.pos).collect::<Vec<_>>();
     assert_eq!(pos(&app), [20.0, 100.0, 180.0], "{}", app.ui.status);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(pos(&app), [20.0, 50.0, 180.0], "one undo step");
