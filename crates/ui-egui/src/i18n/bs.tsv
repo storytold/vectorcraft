@@ -4768,6 +4768,7 @@ imageTrace	Outline	Obris
 @msg	not a valid plug-in module: {0}	nije važeći modul dodatka: {0}
 @msg	not an EMF or WMF file	nije EMF ni WMF datoteka
 @msg	not an HP-GL file	nije HP-GL datoteka
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` mora biti niz od 1 do 255 boja #rrggbb
 @msg	not an export presets file (format `{_1}`)	nije datoteka predložaka izvoza (format `{_1}`)
 @msg	not an export presets file: {e}	nije datoteka predložaka izvoza: {e}
 @msg	not found	nije pronađeno

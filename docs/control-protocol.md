@@ -796,6 +796,9 @@ EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or
 dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and
 Place read `.emf` and `.wmf`; a paste of `image/emf` from a system clipboard service runs `clipboard.importEmf`.
 
+HP-GL: Export As… lists it (`file.exportAs {format: "hpgl"}`); it has no options dialog, so `ui.dialog.confirm` asks
+for the path and writes the `.plt` file with the default options (one per artboard with Use Artboards).
+
 TIFF, BMP and Targa Options: Export As… with the TIFF, BMP or Targa format (`file.exportAs {format: "tiff"}`, then
 the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster rows of PNG Options (`ppi`,
 `background`, `antiAlias`), then TIFF's `colorModel` (`rgb`, `cmyk`, `gray`; a CMYK document starts on `cmyk`),
