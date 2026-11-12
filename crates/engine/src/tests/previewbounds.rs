@@ -581,11 +581,13 @@ fn set_bounds_measures_paths_turned_together_square_to_their_box() {
 fn a_size_below_what_the_kept_strokes_of_several_paths_add_gives_them_no_width() {
     // With no width, the paths have a visual box 10 pt wide, the width of the thick stroke. A width
     // of 0 or more below 10 gives both paths no width, and the left edge of the visual box stays at
-    // -2. A negative width turns the paths over, as it does one path.
+    // -2. With no width each path turns back at its top and bottom, where the miter join bevels,
+    // so the visual box runs from y 100 to 150. A negative width turns the paths over, as it does
+    // one path.
     let mut wrong = vec![];
     for (width, paths, visual) in [
-        (8.0, [Rect::new(3.0, 100.0, 3.0, 150.0); 2], Rect::new(-2.0, 95.0, 8.0, 155.0)),
-        (0.0, [Rect::new(3.0, 100.0, 3.0, 150.0); 2], Rect::new(-2.0, 95.0, 8.0, 155.0)),
+        (8.0, [Rect::new(3.0, 100.0, 3.0, 150.0); 2], Rect::new(-2.0, 100.0, 8.0, 150.0)),
+        (0.0, [Rect::new(3.0, 100.0, 3.0, 150.0); 2], Rect::new(-2.0, 100.0, 8.0, 150.0)),
         (-37.0, [Rect::new(-44.0, 100.0, 0.0, 150.0), Rect::new(-44.0, 100.0, -13.2, 150.0)], Rect::new(-49.0, 95.0, 1.0, 155.0)),
     ] {
         let (mut s, ids) = thin_and_thick();
@@ -664,6 +666,28 @@ fn set_bounds_gives_a_butt_path_with_slanted_corners_the_size_out_of_proportion(
     run(&mut s, "object.setBounds", json!({"width": 60, "height": 20, "reference": 0, "strokes": false}));
     let v = s.transform_bounds(&[id]).unwrap();
     assert!((v.width() - 60.0).abs() < 1e-6 && (v.height() - 20.0).abs() < 1e-6, "{v:?}");
+}
+
+#[test]
+fn set_bounds_gives_a_closed_path_with_beveled_or_mitered_corners_the_size_out_of_proportion() {
+    // The bevel at the triangle's tip, the miter the limit bevels there and the miter spikes it
+    // keeps reach past the path by margins that follow the slanted segments' directions, which a
+    // scale out of proportion changes.
+    let mut wrong = vec![];
+    for (join, limit) in [("bevel", 10.0), ("miter", 2.0), ("miter", 10.0)] {
+        let mut s = session();
+        let anchors = json!([{"x": 100, "y": 150}, {"x": 110, "y": 100}, {"x": 120, "y": 150}]);
+        let id = NodeId(run(&mut s, "path.create", json!({"anchors": anchors, "closed": true}))["id"].as_u64().unwrap());
+        run(&mut s, "stroke.set", json!({"weight": 2, "cap": "round", "join": join, "miterLimit": limit}));
+        preview(&mut s, true);
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        run(&mut s, "object.setBounds", json!({"width": 60, "height": 20, "reference": 0, "strokes": false}));
+        let v = s.transform_bounds(&[id]).unwrap();
+        if (v.width() - 60.0).abs() > 1e-6 || (v.height() - 20.0).abs() > 1e-6 {
+            wrong.push(format!("{join} {limit}: {v:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:?}");
 }
 
 #[test]
