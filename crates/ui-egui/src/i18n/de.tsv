@@ -679,6 +679,15 @@ font-technology	Variable	Variabel
 	Created:	Erstellt:
 	Crop	Schnittmengenfläche
 	Crop Image	Bild beschneiden
+	Image Tools	Bildwerkzeuge
+	Remove Background…	Hintergrund entfernen…
+	Remove Background	Hintergrund entfernen
+	Background	Hintergrund
+	Edge Color	Randfarbe
+	Picked Colors	Ausgewählte Farben
+	Corner Color	Eckfarbe
+	Contiguous	Zusammenhängend
+	Each Channel	Jeder Kanal
 	Edit Path	Pfad bearbeiten
 	Mask	Maske
 	Crop Marks	Schnittmarken
@@ -4526,6 +4535,14 @@ theme	Appearance	Erscheinungsbild
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	diese Nachzeichnung würde mehr als {max} Ankerpunkte erzeugen, mehr als das Dokument flüssig darstellen kann: Erhöhen Sie „Rauschen“, verringern Sie „Pfade“ oder „Farben“ oder wählen Sie eine Vorgabe mit geringerer Genauigkeit
 @msg	select an envelope	wählen Sie eine Hülle aus
 @msg	select an image	wählen Sie ein Bild aus
+@msg	`background` must be edges, corners or colors	`background` muss edges, corners oder colors sein
+@msg	`match` must be distance or channels	`match` muss distance oder channels sein
+@msg	`{key}` must be from 0 to 100	`{key}` muss von 0 bis 100 sein
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` muss 1 bis 16 Farben enthalten, jede hexadezimal (#rrggbb oder #rgb) oder als black, white, red, green oder blue
+@msg	the linked image shows its preview: embed or relink it first	das verknüpfte Bild zeigt seine Vorschau: Betten Sie es zuerst ein oder verknüpfen Sie es neu
+@msg	a CMYK image has no transparency to set	ein CMYK-Bild hat keine Transparenz, die festgelegt werden kann
+@msg	every pixel matches the background: no image would be left	jedes Pixel entspricht dem Hintergrund: Es würde kein Bild übrig bleiben
+@msg	an image of {w} × {h} pixels is too large to change	ein Bild mit {w} × {h} Pixeln ist zu groß, um geändert zu werden
 @msg	select an object in perspective	wählen Sie ein Objekt in der Perspektive aus
 @msg	select artwork (or a colour group) to recolor	wählen Sie eine Grafik (oder eine Farbgruppe) zum Neufärben aus
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Neufärben abgeschlossen; unverändert: {locked} und {hidden}

@@ -161,6 +161,15 @@
 	Expand…	გაშლა…
 	Expand Appearance	იერსახის გაშლა
 	Crop Image	გამოსახულების ჩამოჭრა
+	Image Tools	გამოსახულების ხელსაწყოები
+	Remove Background…	ფონის მოშორება…
+	Remove Background	ფონის მოშორება
+	Background	ფონი
+	Edge Color	კიდის ფერი
+	Picked Colors	არჩეული ფერები
+	Corner Color	კუთხეების ფერი
+	Contiguous	მომიჯნავე
+	Each Channel	თითოეული არხი
 	Mask	ნიღაბი
 	Rasterize…	რასტრირება…
 	Create Gradient Mesh…	გრადიენტული ბადის შექმნა…
@@ -4357,6 +4366,14 @@ font-technology	Variable	ცვლადი
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ეს ვექტორიზაცია {max}-ზე მეტ საყრდენ წერტილს შექმნიდა, რასაც დოკუმენტი შეუფერხებლად ვერ აჩვენებს: გაზარდეთ ხმაური, შეამცირეთ ტრაექტორიები ან ფერები, ან აირჩიეთ ნაკლები სიზუსტის პრესეტი
 @msg	select an envelope	მონიშნეთ გარსი
 @msg	select an image	მონიშნეთ გამოსახულება
+@msg	`background` must be edges, corners or colors	`background` უნდა იყოს edges, corners ან colors
+@msg	`match` must be distance or channels	`match` უნდა იყოს distance ან channels
+@msg	`{key}` must be from 0 to 100	`{key}` უნდა იყოს 0-დან 100-მდე
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` უნდა შეიცავდეს 1-დან 16-მდე ფერს, თითოეულს თექვსმეტობით ფორმატში (#rrggbb ან #rgb) ან როგორც black, white, red, green ან blue
+@msg	the linked image shows its preview: embed or relink it first	დაკავშირებული გამოსახულება გადახედვას აჩვენებს: ჯერ ჩააშენეთ ან ხელახლა მიაბით
+@msg	a CMYK image has no transparency to set	CMYK გამოსახულებას არ აქვს დასაყენებელი გამჭვირვალობა
+@msg	every pixel matches the background: no image would be left	ყველა პიქსელი ემთხვევა ფონს: გამოსახულება აღარ დარჩებოდა
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} პიქსელის გამოსახულება შესაცვლელად ზედმეტად დიდია
 @msg	select an object in perspective	მონიშნეთ ობიექტი პერსპექტივაში
 @msg	select artwork (or a colour group) to recolor	მონიშნეთ ხელახლა შესაფერადებელი ნახატი (ან ფერთა ჯგუფი)
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {locked} და {hidden}

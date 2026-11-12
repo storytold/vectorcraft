@@ -700,6 +700,15 @@ font-technology	Variable	Variables
 	Created:	Creado:
 	Crop	Recortar
 	Crop Image	Recortar imagen
+	Image Tools	Herramientas de imagen
+	Remove Background…	Quitar fondo…
+	Remove Background	Quitar fondo
+	Background	Fondo
+	Edge Color	Color del borde
+	Picked Colors	Colores elegidos
+	Corner Color	Color de las esquinas
+	Contiguous	Contiguo
+	Each Channel	Cada canal
 	Edit Path	Editar trazado
 	Mask	Máscara
 	Crop Marks	Marcas de corte
@@ -4609,6 +4618,14 @@ axis	Both	Ambos
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	este calco crearía más de {max} puntos de ancla, más de los que el documento puede mostrar con fluidez: sube Ruido, baja Trazados o Colores, o elige un preajuste de menor fidelidad
 @msg	select an envelope	selecciona una envolvente
 @msg	select an image	selecciona una imagen
+@msg	`background` must be edges, corners or colors	`background` debe ser edges, corners o colors
+@msg	`match` must be distance or channels	`match` debe ser distance o channels
+@msg	`{key}` must be from 0 to 100	`{key}` debe estar entre 0 y 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` debe contener de 1 a 16 colores, cada uno en hexadecimal (#rrggbb o #rgb) o como black, white, red, green o blue
+@msg	the linked image shows its preview: embed or relink it first	la imagen vinculada muestra su vista previa: incrústala o vuelve a vincularla primero
+@msg	a CMYK image has no transparency to set	una imagen CMYK no tiene transparencia que establecer
+@msg	every pixel matches the background: no image would be left	todos los píxeles coinciden con el fondo: no quedaría ninguna imagen
+@msg	an image of {w} × {h} pixels is too large to change	una imagen de {w} × {h} píxeles es demasiado grande para cambiarla
 @msg	select an object in perspective	selecciona un objeto en perspectiva
 @msg	select artwork (or a colour group) to recolor	selecciona la ilustración (o un grupo de colores) que quieres volver a colorear
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloreado completado; sin cambios: {locked} y {hidden}

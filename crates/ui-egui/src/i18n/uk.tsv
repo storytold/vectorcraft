@@ -694,6 +694,15 @@ font-technology	Variable	Варіативні
 	Created:	Створено:
 	Crop	Обрізати
 	Crop Image	Обрізати зображення
+	Image Tools	Інструменти зображення
+	Remove Background…	Видалити фон…
+	Remove Background	Видалити фон
+	Background	Фон
+	Edge Color	Колір краю
+	Picked Colors	Вибрані кольори
+	Corner Color	Колір кутів
+	Contiguous	Суміжні
+	Each Channel	Кожен канал
 	Edit Path	Редагувати контур
 	Mask	Маска
 	Crop Marks	Мітки обрізання
@@ -4636,6 +4645,14 @@ axis	Both	Обидві
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	це трасування створило б більше {max} опорних точок, що більше, ніж документ може плавно відобразити: збільште «Шум», зменште «Контури» або «Кольори» або виберіть набір з меншою точністю
 @msg	select an envelope	виділіть оболонку
 @msg	select an image	виділіть зображення
+@msg	`background` must be edges, corners or colors	`background` має бути edges, corners або colors
+@msg	`match` must be distance or channels	`match` має бути distance або channels
+@msg	`{key}` must be from 0 to 100	`{key}` має бути від 0 до 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` має містити від 1 до 16 кольорів, кожен у шістнадцятковому вигляді (#rrggbb або #rgb) або як black, white, red, green чи blue
+@msg	the linked image shows its preview: embed or relink it first	пов’язане зображення показує попередній перегляд: спочатку вбудуйте його або відновіть зв’язок
+@msg	a CMYK image has no transparency to set	зображення CMYK не має прозорості, яку можна задати
+@msg	every pixel matches the background: no image would be left	кожен піксель збігається з фоном: від зображення нічого не залишилося б
+@msg	an image of {w} × {h} pixels is too large to change	зображення розміром {w} × {h} пікселів завелике для зміни
 @msg	select an object in perspective	виділіть об’єкт у перспективі
 @msg	select artwork (or a colour group) to recolor	виділіть малюнок (або колірну групу) для перефарбовування
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перефарбовування завершено; без змін: {locked} і {hidden}

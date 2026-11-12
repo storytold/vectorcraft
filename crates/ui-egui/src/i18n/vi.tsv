@@ -801,6 +801,15 @@ font-technology	Variable	Biến thiên
 	Created:	Ngày tạo:
 	Crop	Cắt xén
 	Crop Image	Cắt xén ảnh
+	Image Tools	Công cụ hình ảnh
+	Remove Background…	Xóa nền…
+	Remove Background	Xóa nền
+	Background	Nền
+	Edge Color	Màu cạnh
+	Picked Colors	Màu đã chọn
+	Corner Color	Màu góc
+	Contiguous	Liền kề
+	Each Channel	Từng kênh
 	Edit Path	Sửa đường dẫn
 	Crop Marks	Dấu cắt xén
 	Crop To	Cắt xén đến
@@ -5015,6 +5024,14 @@ theme	Appearance	Giao diện
 @msg	a symbol can't hold an instance of itself	ký hiệu không thể chứa đối tượng của chính nó
 @msg	select an envelope	hãy chọn một Envelope
 @msg	select an image	hãy chọn ảnh
+@msg	`background` must be edges, corners or colors	`background` phải là edges, corners hoặc colors
+@msg	`match` must be distance or channels	`match` phải là distance hoặc channels
+@msg	`{key}` must be from 0 to 100	`{key}` phải nằm trong khoảng 0 đến 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` phải liệt kê từ 1 đến 16 màu, mỗi màu viết dạng hex (#rrggbb hoặc #rgb) hoặc là black, white, red, green hay blue
+@msg	the linked image shows its preview: embed or relink it first	hình ảnh được liên kết đang hiển thị bản xem trước: hãy nhúng hoặc liên kết lại trước
+@msg	a CMYK image has no transparency to set	ảnh CMYK không có độ trong suốt để đặt
+@msg	every pixel matches the background: no image would be left	mọi điểm ảnh đều khớp với nền: sẽ không còn lại ảnh nào
+@msg	an image of {w} × {h} pixels is too large to change	ảnh {w} × {h} điểm ảnh quá lớn nên không thể thay đổi
 @msg	select an Image Trace object	hãy chọn đối tượng vector hóa ảnh
 @msg	select an object in perspective	hãy chọn đối tượng trong phối cảnh
 @msg	select artwork (or a colour group) to recolor	hãy chọn tác phẩm (hoặc nhóm màu) để tô lại

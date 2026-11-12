@@ -231,6 +231,15 @@ digits	Malayalam	マラヤーラム数字
 	Expand…	分割・拡張…
 	Expand Appearance	アピアランスを分割
 	Crop Image	画像の切り抜き
+	Image Tools	画像ツール
+	Remove Background…	背景を削除…
+	Remove Background	背景を削除
+	Background	背景
+	Edge Color	端の色
+	Picked Colors	選択したカラー
+	Corner Color	角の色
+	Contiguous	隣接
+	Each Channel	各チャンネル
 	Edit Path	パスを編集
 	Mask	マスク
 	Rasterize…	ラスタライズ…
@@ -4854,6 +4863,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such view	指定された表示が見つかりません
 @msg	printing isn't available here	この環境ではプリントできません
 @msg	select an image	画像を選択してください
+@msg	`background` must be edges, corners or colors	`background` は edges、corners または colors にしてください
+@msg	`match` must be distance or channels	`match` は distance または channels にしてください
+@msg	`{key}` must be from 0 to 100	`{key}` は 0 から 100 までの値にしてください
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` には 16 進数（#rrggbb または #rgb）か black、white、red、green、blue で書いたカラーを 1〜16 個指定してください
+@msg	the linked image shows its preview: embed or relink it first	リンク画像はプレビューを表示しています: 先に埋め込むか再リンクしてください
+@msg	a CMYK image has no transparency to set	CMYK 画像には設定できる透明部分がありません
+@msg	every pixel matches the background: no image would be left	すべてのピクセルが背景に一致します: 画像が残りません
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} ピクセルの画像は大きすぎて変更できません
 @msg	the document has no artboards	ドキュメントにアートボードがありません
 @msg	tool (a tool id) is required	tool (ツール ID) を指定してください
 @msg	unknown tool `{t}`	`{t}` は不明なツールです

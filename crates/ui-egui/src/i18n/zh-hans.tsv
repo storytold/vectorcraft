@@ -645,6 +645,15 @@ antiAlias	Sharp	锐利
 	Created:	创建时间：
 	Crop	裁剪
 	Crop Image	裁剪图像
+	Image Tools	图像工具
+	Remove Background…	移除背景…
+	Remove Background	移除背景
+	Background	背景
+	Edge Color	边缘颜色
+	Picked Colors	选取的颜色
+	Corner Color	转角颜色
+	Contiguous	连续
+	Each Channel	每个通道
 	Edit Path	编辑路径
 	Mask	蒙版
 	Crop Marks	裁切标记
@@ -4554,6 +4563,14 @@ imageTrace	Outline	轮廓
 @msg	no such view	没有此视图
 @msg	printing isn't available here	此处无法打印
 @msg	select an image	请选择一个图像
+@msg	`background` must be edges, corners or colors	`background` 必须为 edges、corners 或 colors
+@msg	`match` must be distance or channels	`match` 必须为 distance 或 channels
+@msg	`{key}` must be from 0 to 100	`{key}` 必须介于 0 到 100 之间
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` 必须列出 1 到 16 种颜色，每种写为十六进制（#rrggbb 或 #rgb）或 black、white、red、green、blue
+@msg	the linked image shows its preview: embed or relink it first	链接图像显示的是预览：请先嵌入或重新链接
+@msg	a CMYK image has no transparency to set	CMYK 图像没有可设置的透明度
+@msg	every pixel matches the background: no image would be left	每个像素都与背景匹配：不会留下任何图像
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的图像过大，无法更改
 @msg	the document has no artboards	文档没有画板
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知工具 `{t}`

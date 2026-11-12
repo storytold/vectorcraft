@@ -686,6 +686,15 @@ font-technology	Variable	Променливи
 	Created:	Създадено:
 	Crop	Изрязване
 	Crop Image	Изрязване на изображение
+	Image Tools	Инструменти за изображения
+	Remove Background…	Премахване на фона…
+	Remove Background	Премахване на фона
+	Background	Фон
+	Edge Color	Цвят на ръба
+	Picked Colors	Избрани цветове
+	Corner Color	Цвят на ъглите
+	Contiguous	Съседни
+	Each Channel	Всеки канал
 	Edit Path	Редактиране на контура
 	Mask	Маска
 	Crop Marks	Знаци за изрязване

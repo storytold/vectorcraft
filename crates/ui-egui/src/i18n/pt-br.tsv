@@ -626,6 +626,15 @@ antiAlias	Sharp	Nítido
 	Created:	Criado:
 	Crop	Recortar
 	Crop Image	Recortar Imagem
+	Image Tools	Ferramentas de imagem
+	Remove Background…	Remover Fundo…
+	Remove Background	Remover Fundo
+	Background	Fundo
+	Edge Color	Cor da Borda
+	Picked Colors	Cores Escolhidas
+	Corner Color	Cor dos Cantos
+	Contiguous	Contíguo
+	Each Channel	Cada Canal
 	Edit Path	Editar caminho
 	Mask	Máscara
 	Crop Marks	Marcas de Corte
@@ -4149,6 +4158,14 @@ axis	Both	Ambos
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	esta vetorização geraria mais de {max} pontos de ancoragem, mais do que o documento consegue exibir com fluidez: aumente Ruído, reduza Traçados ou Cores, ou escolha uma predefinição de menor fidelidade
 @msg	select an envelope	selecione um envelope
 @msg	select an image	selecione uma imagem
+@msg	`background` must be edges, corners or colors	`background` deve ser edges, corners ou colors
+@msg	`match` must be distance or channels	`match` deve ser distance ou channels
+@msg	`{key}` must be from 0 to 100	`{key}` deve estar entre 0 e 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` deve listar de 1 a 16 cores, cada uma em hexadecimal (#rrggbb ou #rgb) ou como black, white, red, green ou blue
+@msg	the linked image shows its preview: embed or relink it first	a imagem vinculada mostra sua prévia: incorpore-a ou revincule-a primeiro
+@msg	a CMYK image has no transparency to set	uma imagem CMYK não tem transparência para definir
+@msg	every pixel matches the background: no image would be left	todos os pixels correspondem ao fundo: nenhuma imagem restaria
+@msg	an image of {w} × {h} pixels is too large to change	uma imagem de {w} × {h} pixels é grande demais para ser alterada
 @msg	select an object in perspective	selecione um objeto em perspectiva
 @msg	select artwork (or a colour group) to recolor	selecione uma arte-final (ou um grupo de cores) para recolorir
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloração concluída; sem alteração: {locked} e {hidden}
