@@ -71,16 +71,18 @@ pub fn is_hpgl(bytes: &[u8]) -> bool {
 
 /// Does `bytes` hold HP-GL instructions as [`is_hpgl`] checks? When `strict` is false, any of them
 /// may come first: a file picked by its extension may start with one a plot file seldom starts
-/// with (`SI`, `DI`).
+/// with (`SI`, `DI`). Either way, at least one of the instructions checked must be one the reader
+/// knows.
 fn holds_instructions(bytes: &[u8], strict: bool) -> bool {
     let mut lex = Lexer::new(bytes);
     let mut terminator = lex::ETX;
     let mut first = 0;
+    let mut any_known = false;
     for n in 0..8 {
         if n > 0 && lex.pos() > first + 4096 {
-            return true;
+            return any_known;
         }
-        let Some(op) = lex.op(true) else { return n > 0 && lex.done() };
+        let Some(op) = lex.op(true) else { return n > 0 && any_known && lex.done() };
         if n == 0 {
             first = lex.pos();
         }
@@ -88,6 +90,7 @@ fn holds_instructions(bytes: &[u8], strict: bool) -> bool {
             return false;
         }
         let known = PLAYED.contains(&op) || IGNORED.contains(&op);
+        any_known |= known;
         match &op {
             b"CO" => {
                 if !lex.comment() {
@@ -114,11 +117,12 @@ fn holds_instructions(bytes: &[u8], strict: bool) -> bool {
             }
         }
     }
-    true
+    any_known
 }
 
 /// Read an HP-GL file. It may start with any instruction the reader knows, or one of another set
-/// that a semicolon ends; the rest of [`is_hpgl`]'s check applies.
+/// that a semicolon ends; the rest of [`is_hpgl`]'s check applies, and at least one instruction the
+/// reader knows must be among those it checks.
 pub fn import(bytes: &[u8]) -> Result<Imported, String> {
     if !holds_instructions(bytes, false) {
         return Err("not an HP-GL file".into());

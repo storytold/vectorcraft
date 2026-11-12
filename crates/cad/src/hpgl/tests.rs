@@ -451,6 +451,11 @@ fn a_plot_file_may_start_with_any_instruction() {
     for f in [&b"GC5"[..], b"SIhello world", b"set terminal png\n"] {
         assert_eq!(import(f).err().as_deref(), Some("not an HP-GL file"), "{:?}", String::from_utf8_lossy(f));
     }
+    // Instructions of another set alone, however many or long, are not taken for HP-GL.
+    let long = [&b"GC"[..], "1".repeat(5000).as_bytes(), b";ZZ1;"].concat();
+    for f in [&b"GC5;"[..], b"GC5;ZZ1;", b"GC5;ZZ1;YY2;XX3;WW4;VV5;UU6;TT7;", &long] {
+        assert_eq!(import(f).err().as_deref(), Some("not an HP-GL file"), "{:?}", String::from_utf8_lossy(f));
+    }
 }
 
 #[test]
