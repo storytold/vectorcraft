@@ -3455,6 +3455,7 @@ theme	Appearance	Wygląd
 	Move Mesh Points	Przesuń punkty siatki
 	Move Spine Point	Przesuń punkt grzbietu
 	Reshape Spine Segment	Zmień kształt segmentu grzbietu
+	Blend Easing	Wygładzanie przejścia
 	Reset with Mesh	Resetuj z siatką
 	Reset with Warp	Resetuj z wypaczeniem
 	Set Mesh Point Color	Ustaw kolor punktu siatki

@@ -1421,7 +1421,7 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
             // Even position of the step, then where the easing puts its shape and its colours.
             let u = j as f64 / (n + 1) as f64;
             // Easing needs a spine: a blend made without one keeps its steps evenly spaced.
-            let eased = rail.is_some() && !spec.no_spine;
+            let eased = rail.is_some() && spec.eases_along_spine();
             let (t, tc) = (if eased { spec.ease.apply(u) } else { u }, spec.color_position(u));
             let mut s = lerp.at_eased(t, tc);
             if let Some(r) = &rail {

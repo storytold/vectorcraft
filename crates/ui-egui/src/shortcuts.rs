@@ -723,8 +723,20 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
     // The arrows while dragging: a polygon's sides, a grid's rows (↑/↓) and columns (←/→)…
     let arrows = [(Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down), (Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right)];
     for (k, tk) in arrows {
+        // The press's Shift and Alt (the consume below takes those presses too) go to a tool that
+        // claims the arrow (Shift steps a blend widget by ten); other tools get the plain arrow.
+        let pressed = ctx.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Key { key, pressed: true, modifiers, .. } if *key == k && !(modifiers.command || modifiers.ctrl) => Some(*modifiers),
+                _ => None,
+            })
+        });
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k)) {
-            let _ = app.session.tool_key(tk, Mods::default(), view);
+            let mods = match pressed {
+                Some(m) if app.session.tool_claims_key(tk, view) => crate::canvas::mods(m, false),
+                _ => Mods::default(),
+            };
+            let _ = app.session.tool_key(tk, mods, view);
         }
     }
     // Digits (5 while dragging with the Perspective Selection tool), once per press.

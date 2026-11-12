@@ -2288,6 +2288,7 @@ antiAlias	Sharp	날카롭게
 	Move Slices	슬라이스 이동
 	Move Spine Point	스파인 포인트 이동
 	Reshape Spine Segment	스파인 세그먼트 모양 변경
+	Blend Easing	블렌드 이징
 	Move Brush	브러시 이동
 	Move Swatch	견본 이동
 	Move Up	위로 이동

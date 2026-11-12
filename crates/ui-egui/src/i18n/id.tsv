@@ -3313,6 +3313,7 @@ theme	Appearance	Tampilan
 	Move Mesh Points	Pindahkan titik-titik mesh
 	Move Spine Point	Pindahkan titik spine
 	Reshape Spine Segment	Bentuk ulang segmen spine
+	Blend Easing	Easing blend
 	Reset with Mesh	Atur ulang dengan mesh
 	Reset with Warp	Atur ulang dengan warp
 	Set Mesh Point Color	Tetapkan warna titik mesh

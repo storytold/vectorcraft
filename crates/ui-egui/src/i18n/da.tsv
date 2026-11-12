@@ -3313,6 +3313,7 @@ theme	Appearance	Udseende
 	Move Mesh Points	Flyt meshpunkter
 	Move Spine Point	Flyt rygradpunkt
 	Reshape Spine Segment	Omform rygradsegment
+	Blend Easing	Blandingens acceleration
 	Reset with Mesh	Nulstil med mesh
 	Reset with Warp	Nulstil med forvrængning
 	Set Mesh Point Color	Angiv farve for meshpunkt

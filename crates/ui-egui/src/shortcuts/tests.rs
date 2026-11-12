@@ -2728,6 +2728,38 @@ fn a_plain_up_nudges_unless_a_corner_widget_is_pressed() {
     assert_eq!(kind2, CornerKind::InvertedRound, "Up stepped the kind");
 }
 
+/// While a blend widget is pressed, an arrow steps its value by one and Shift with an arrow by ten.
+#[test]
+fn shift_arrows_step_a_pressed_blend_widget_by_ten() {
+    use vectorcraft_doc::{NodeId, NodeKind};
+    use vectorcraft_tools::blendwidget::BlendWidget;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let rect = |app: &mut VectorcraftApp, x: f64| {
+        app.session.execute("shape.rectangle", &json!({"x": x, "y": 190, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 90.0), rect(&mut app, 290.0));
+    app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let id = NodeId(app.session.execute("object.blend.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let shift = |app: &VectorcraftApp| {
+        let NodeKind::Blend { spec, .. } = &app.session.active().unwrap().doc.node(id).unwrap().kind else { panic!("not a blend") };
+        spec.color_shift
+    };
+    let view = app.view_info();
+    let st = app.session.active().unwrap();
+    let at = BlendWidget::of(&st.doc, &st.selection, view.zoom, vectorcraft_geom::Vec2::new(0.0, -1.0))[0].at;
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y), view).unwrap();
+    frame(&mut app, press(Key::ArrowUp, Modifiers::SHIFT));
+    assert_eq!(shift(&app), 10.0, "Shift+Up steps by ten");
+    frame(&mut app, press(Key::ArrowUp, Modifiers::NONE));
+    assert_eq!(shift(&app), 11.0, "Up steps by one");
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y), view).unwrap();
+    assert_eq!(shift(&app), 11.0);
+}
+
 /// #5218: the status bar navigator's four buttons are commands of their own, listed in Edit ›
 /// Keyboard Shortcuts without a default key, so a user can give them one (Page Up and Page Down
 /// here) and step through the artboards from the keyboard.

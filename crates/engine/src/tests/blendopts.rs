@@ -405,6 +405,137 @@ fn a_document_with_bad_blend_easing_numbers_opens_clamped_while_commands_refuse(
     }
 }
 
+/// `object.blend.setEasing` sets one blend's easing and color shift, records no undo step when
+/// nothing changes, and refuses bad values, a blend whose steps follow no spine (easing only), a
+/// hidden or locked blend and a target that is not a blend, leaving the blend and the history alone.
+#[test]
+fn set_easing_edits_one_blend_and_refuses_what_it_cannot_set() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0));
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.blend.make", &json!({"steps": 3})).unwrap());
+    let depth = |s: &Session| s.doc().unwrap().history.undo.len();
+    let d0 = depth(&s);
+    // Align to Page along the straight lines between the keys: the steps follow no spine.
+    for bad in [json!({"ramp": 30}), json!({"easingType": "easeOut"})] {
+        let e = s.execute("object.blend.setEasing", &bad).unwrap_err().to_string();
+        assert!(e.contains("the blend has no spine"), "{e}");
+    }
+    assert_eq!(depth(&s), d0);
+    let r = s.execute("object.blend.setEasing", &json!({"colorShift": 25})).unwrap();
+    assert_eq!(r, json!({"id": g.0, "easingType": "easeIn", "ramp": 0.0, "colorShift": 25.0, "changed": true}));
+    assert_eq!((spec(&s, g).1.color_shift, depth(&s)), (25.0, d0 + 1));
+    let r = s.execute("object.blend.setEasing", &json!({"colorShift": 25})).unwrap();
+    assert_eq!((&r["changed"], depth(&s)), (&json!(false), d0 + 1), "an unchanged value records no undo step");
+    // Along the spine each of the four types keeps its kind through a ramp change and its undo.
+    s.execute("object.blend.options", &json!({"orientation": "path"})).unwrap();
+    for kind in ["easeIn", "easeOut", "easeInOut", "easeOutIn"] {
+        s.execute("object.blend.setEasing", &json!({"easingType": kind, "ramp": 60})).unwrap();
+        let r = s.execute("object.blend.setEasing", &json!({"ramp": 20})).unwrap();
+        assert_eq!((&r["easingType"], &r["ramp"], &r["colorShift"]), (&json!(kind), &json!(20.0), &json!(25.0)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        let sp = spec(&s, g).1;
+        assert_eq!((sp.ease.kind.id(), sp.ease.ramp, sp.color_shift), (kind, 0.6, 25.0));
+    }
+    let before = spec(&s, g).1;
+    let d1 = depth(&s);
+    for bad in [
+        json!({"ramp": 101}),
+        json!({"ramp": -1}),
+        json!({"ramp": "x"}),
+        json!({"colorShift": 1e308}),
+        json!({"colorShift": -101}),
+        json!({"easingType": "sideways"}),
+        json!({"id": "abc", "ramp": 10}),
+        json!({"id": a.0, "ramp": 10}),
+    ] {
+        assert!(s.execute("object.blend.setEasing", &bad).is_err(), "{bad}");
+        assert_eq!((spec(&s, g).1, depth(&s)), (before.clone(), d1), "{bad}");
+    }
+    // An explicit id works with nothing selected; nothing selected and no id is an error.
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("object.blend.setEasing", &json!({"ramp": 10})).is_err());
+    s.execute("object.blend.setEasing", &json!({"id": g.0, "ramp": 10})).unwrap();
+    assert_eq!(spec(&s, g).1.ease.ramp, 0.1);
+    // A hidden or locked blend is refused.
+    for hide in [true, false] {
+        s.edit("state", |d, _| {
+            let n = d.node_mut(g).unwrap();
+            (n.visible, n.locked) = (!hide, !hide);
+            Ok(())
+        })
+        .unwrap();
+        let (before, d2) = (spec(&s, g).1, depth(&s));
+        let e = s.execute("object.blend.setEasing", &json!({"id": g.0, "colorShift": 5})).unwrap_err().to_string();
+        assert!(e.contains("the object is hidden or locked"), "{e}");
+        assert_eq!((spec(&s, g).1, depth(&s)), (before, d2));
+    }
+    // A blend made without a spine takes no easing, Align to Path included; its color shift still
+    // changes.
+    let (c, d) = (rect(&mut s, 0.0, 300.0, 40.0), rect(&mut s, 200.0, 300.0, 40.0));
+    sel(&mut s, &[c, d]);
+    let n = id_of(&s.execute("object.blend.make", &json!({"createSpine": "never", "orientation": "path"})).unwrap());
+    let d3 = depth(&s);
+    let e = s.execute("object.blend.setEasing", &json!({"id": n.0, "ramp": 30})).unwrap_err().to_string();
+    assert!(e.contains("the blend has no spine"), "{e}");
+    assert_eq!(depth(&s), d3);
+    s.execute("object.blend.setEasing", &json!({"id": n.0, "colorShift": 10})).unwrap();
+    assert_eq!(spec(&s, n).1.color_shift, 10.0);
+}
+
+/// Dragging a blend widget with the Selection tool or the Blend tool is one undo step; a click, a
+/// drag that ends at its starting value and a drag canceled with Escape record none, and Escape
+/// puts the value back.
+#[test]
+fn dragging_a_blend_widget_is_one_undo_step_and_a_click_or_escape_none() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0));
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.blend.make", &json!({"steps": 3, "orientation": "path", "easingType": "easeOut"})).unwrap());
+    let v = ViewInfo::default();
+    let depth = |s: &Session| s.doc().unwrap().history.undo.len();
+    let ptr = |s: &mut Session, kind: PointerKind, x: f64, y: f64| {
+        s.pointer(&PointerEvent::new(kind, x, y), ViewInfo::default()).unwrap();
+    };
+    s.select_tool("selection", v).unwrap();
+    sel(&mut s, &[g]);
+    let d0 = depth(&s);
+    // The Easing widget sits 16 px below the spine's halfway point (120, 20).
+    ptr(&mut s, PointerKind::Down, 120.0, 36.0);
+    ptr(&mut s, PointerKind::Drag, 135.0, 36.0);
+    ptr(&mut s, PointerKind::Drag, 150.0, 36.0);
+    ptr(&mut s, PointerKind::Up, 150.0, 36.0);
+    let sp = spec(&s, g).1;
+    assert_eq!((sp.ease.kind.id(), sp.ease.ramp, sp.color_shift, depth(&s)), ("easeOut", 0.3, 0.0, d0 + 1));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![g], "the blend stays selected");
+    // A click, and a drag back to where it started.
+    ptr(&mut s, PointerKind::Down, 120.0, 36.0);
+    ptr(&mut s, PointerKind::Up, 120.0, 36.0);
+    ptr(&mut s, PointerKind::Down, 120.0, 36.0);
+    ptr(&mut s, PointerKind::Drag, 160.0, 36.0);
+    ptr(&mut s, PointerKind::Drag, 120.0, 36.0);
+    ptr(&mut s, PointerKind::Up, 120.0, 36.0);
+    assert_eq!((spec(&s, g).1.ease.ramp, depth(&s)), (0.3, d0 + 1));
+    // Escape during a drag puts the value back.
+    ptr(&mut s, PointerKind::Down, 120.0, 36.0);
+    ptr(&mut s, PointerKind::Drag, 170.0, 36.0);
+    assert_eq!(spec(&s, g).1.ease.ramp, 0.8, "the drag previews");
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    ptr(&mut s, PointerKind::Up, 170.0, 36.0);
+    assert_eq!((spec(&s, g).1.ease.ramp, depth(&s)), (0.3, d0 + 1));
+    // The Blend tool drags the Appearance widget, 16 px above: the color shift alone.
+    s.select_tool("blend", v).unwrap();
+    sel(&mut s, &[g]);
+    ptr(&mut s, PointerKind::Down, 120.0, 4.0);
+    ptr(&mut s, PointerKind::Drag, 100.0, 4.0);
+    ptr(&mut s, PointerKind::Up, 100.0, 4.0);
+    let sp = spec(&s, g).1;
+    assert_eq!((sp.ease.kind.id(), sp.ease.ramp, sp.color_shift, depth(&s)), ("easeOut", 0.3, -20.0, d0 + 2));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, g).1.color_shift, 0.0);
+}
+
 #[test]
 fn native_blend_easing_values_clamp_and_non_finite_become_default() {
     for (bad, ramp, shift) in [

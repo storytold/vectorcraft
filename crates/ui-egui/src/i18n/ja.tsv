@@ -2298,6 +2298,7 @@ antiAlias	Sharp	シャープ
 	Move Slices	スライスを移動
 	Move Spine Point	スパインポイントを移動
 	Reshape Spine Segment	スパインセグメントをシェイプ変形
+	Blend Easing	ブレンドのイージング
 	Move Brush	ブラシを移動
 	Move Swatch	スウォッチを移動
 	Move Up	上へ移動

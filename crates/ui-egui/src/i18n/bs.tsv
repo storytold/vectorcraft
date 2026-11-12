@@ -3526,6 +3526,7 @@ theme	Appearance	Izgled
 	Move Mesh Points	Pomjeri tačke mreže
 	Move Spine Point	Pomjeri tačku kičme
 	Reshape Spine Segment	Preoblikuj segment kičme
+	Blend Easing	Ublažavanje stapanja
 	Reset with Mesh	Vrati mrežom
 	Reset with Warp	Vrati iskrivljenjem
 	Set Mesh Point Color	Postavi boju tačke mreže

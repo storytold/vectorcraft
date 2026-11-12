@@ -8626,6 +8626,23 @@ so its point at `t` moves by (dx, dy), turning a straight spine into a curve (`p
 {"name":"run_command","arguments":{"command":"object.blend.spine.moveAnchor","params":{"id":40,"anchor":1,"x":150,"y":20}}}
 ```
 
+`object.blend.setEasing {id?, easingType?, ramp?, colorShift?}` sets one blend's easing and color shift (the
+first selected blend without `id`) and returns `{id, easingType, ramp, colorShift, changed}`; omitted values are kept.
+`ramp` is 0 to 100 and `colorShift` -100 to 100. `easingType` and `ramp` need a blend whose steps follow a spine (a
+replaced or edited spine, or `orientation: "path"`) and not made without one (`createSpine: "never"`), as the Blend
+panel's Type and Ramp do. A value out of range, a hidden or locked blend and a target that is not a blend are errors,
+and a call that changes nothing records no undo step (`changed: false`). With one blend selected that has a spine,
+the Selection and Blend tools show the same two values as widgets
+16 px above and below the spine's halfway point (where the boxes of three or more other visible objects hold that
+spot, a widget moves out in 16 px steps, up to 144 px, joined to the halfway point by a line): the upper one sets
+`colorShift` and the lower one `ramp`, by one per screen pixel dragged along the spine and by one per arrow key
+during the drag (ten with Shift). Each drag is one undo step, and `press_key` Escape or a switch to another tool
+during it puts the value back:
+
+```json
+{"name":"run_command","arguments":{"command":"object.blend.setEasing","params":{"id":40,"ramp":35}}}
+```
+
 How blends interpolate: closed shapes start where they twist least unless `starts` picks the anchors; strokes
 interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale
 and width profiles, while caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one kind with
