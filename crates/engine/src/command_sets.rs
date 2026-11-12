@@ -28,7 +28,7 @@ pub const FIT_ACTIVE_ARTBOARD: [&str; 2] = ["artboard.fitToArt", "artboard.fitTo
 /// Artboard tool had selected for its commands and for Paste in Place, in Front and in Back; the artboards and art Cut and Copy took with that
 /// tool chosen; the view's center the app passes to Edit Symbol); an action leaves them out
 /// ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 29] = [
+const REPLAY_ONLY: [(&str, &str); 35] = [
     ("file.new", "created"),
     ("edit.newDocumentFromState", "created"),
     ("document.save", "modified"),
@@ -50,6 +50,12 @@ const REPLAY_ONLY: [(&str, &str); 29] = [
     ("artboard.cut", "selectedArtboards"),
     ("artboard.rename", "selectedArtboards"),
     ("artboard.switchOrientation", "selectedArtboards"),
+    ("artboard.align", "selectedArtboards"),
+    ("artboard.align", "activeArtboard"),
+    ("artboard.distribute", "selectedArtboards"),
+    ("artboard.distribute", "activeArtboard"),
+    ("artboard.distributeSpacing", "selectedArtboards"),
+    ("artboard.distributeSpacing", "activeArtboard"),
     ("edit.copy", "selectedArtboards"),
     ("edit.copy", "art"),
     ("edit.cut", "selectedArtboards"),

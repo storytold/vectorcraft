@@ -4,6 +4,7 @@ pub mod actionset;
 mod addons;
 mod apiref;
 pub(crate) mod appearance;
+mod artboardalign;
 mod assets;
 mod attributes;
 pub mod brushlib;
@@ -334,6 +335,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(variablecmds::specs());
         v.extend(docinfo::specs());
         v.extend(panelcmds::specs());
+        v.extend(artboardalign::specs());
         v.extend(buildcmds::specs());
         v.extend(shaper::specs());
         v.extend(brushsym::specs());
