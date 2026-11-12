@@ -1902,6 +1902,7 @@ file-filter	Templates	範本
 @msg	`preserve` must be an object	`preserve` 必須是物件
 @msg	`globalAdjust` must be an object	`globalAdjust` 必須是物件
 @msg	`stops` must be an array	`stops` 必須是陣列
+@msg	`{key}` must be an array	`{key}` 必須是陣列
 @msg	`{k}` must be [x, y]	`{k}` 必須是 [x, y]
 @msg	a gradient needs at least two stops	漸層至少需要兩個色標
 @msg	give both `start` and `end` [x, y] (or neither)	請同時提供 `start` 和 `end` [x, y] (或兩者都不提供)
@@ -6156,6 +6157,10 @@ anchor	Points:	點：
 @msg	features lists at most {max} tags	features 最多包含 {max} 個標籤
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 功能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必須是大於 0 且不超過 {max} 的數字
+@msg	{label} must be at most {max} characters	{label} 最多 {max} 個字元
+@msg	{label} must be one character	{label} 必須是一個字元
+@msg	at most {max} tab stops	最多 {max} 個定位點
+@msg	unknown align `{other}`	未知的對齊方式 `{other}`
 @msg	no character style `{name}`	找不到字元樣式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

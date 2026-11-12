@@ -7807,7 +7807,9 @@ touches (a caret, `start == end`, touches its paragraph). Without a range they c
 targeted objects, as before. With a range, the character attributes of `text.setStyle` and `text.setFormat` style
 that range of characters. When every paragraph that `text.tabs.set` or `text.tabs.clear` targets already has those
 stops, the command changes nothing and records no undo step. `text.tabs.set` rejects a supplied `align`, `leader`, or
-`alignOn` value that is not a string, and an empty `alignOn` value.
+`alignOn` value that is not a string, an empty `alignOn` value or one of more than one character, a leader of more than
+8 characters, a position outside 0 to 100000 pt, and more than 256 stops. It sorts the stops by position and keeps the
+first of stops at one position.
 
 `text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
 paragraph at `start`; `paraStyle.list` counts paragraphs as uses, and `charStyle.list` counts runs; both count the type in
@@ -7824,7 +7826,7 @@ is the document's. A loaded style that is the same as the style of
 its name, or of its name with a number (`Body 2`), is not added again; any other is added under a free name. The
 document's styles and the type that uses them keep their attributes, and the file's Normal styles are not loaded. The
 reply lists the names `added` and `existing` in the document and the names `skipped` in the file (a style whose
-attributes do not read or are out of the range `charStyle.new` takes, or whose name is empty); `textStyle.loadAll`
+attributes do not read or are out of the range `charStyle.new` or `paraStyle.new` takes, or whose name is empty); `textStyle.loadAll`
 replies `{charStyles, paraStyles}`, and `charStyle.load` and `paraStyle.load` list only the styles of their own kind. A Return the Type tool types (or `text.editRange`
 inserting `\n`) continues the style of the paragraph it splits; deleting a break keeps the first paragraph's style;
 `text.setText` gives every paragraph the first one's attributes. Threaded text keeps each paragraph's attributes as
@@ -7889,12 +7891,19 @@ the Paragraph Styles panel, or Paragraph Style Options… in its menu, does the 
 `paraStyle.edit {name, to, attrs}`, which takes the same arguments as `charStyle.edit` and replaces the style's
 name and attributes in one undo step; the paragraphs that use the style keep their local overrides. OK with no field
 changed records no undo step, and Preview updates the paragraphs while the dialog is open (Cancel restores them).
-The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `composition`, `hyphenation` or
+The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `tabs`, `composition`, `hyphenation` or
 `justification`) and `preview`, and these fields:
 
 - Basic Paragraph Formats: `justify` (`Auto`, `Left`, `Center`, `Right`, `JustifyLeft`, `JustifyCenter`,
   `JustifyRight` or `JustifyAll`), and `left_indent`, `right_indent`, `first_line_indent`, `space_before` and
   `space_after`, typed in the General unit of Preferences or with a unit of their own.
+- Tabs: `tabs`, the style's stops, each `{position, align, leader, alignOn}`: `position` typed like the distances
+  above, `align` `left`, `center`, `right` or `decimal`, `leader` up to 8 characters, and `alignOn` one character
+  (used by decimal stops). The section edits the selected stop with Alignment, X: (Y: for vertical type), Leader:
+  and Align On:. Add puts a left stop 36 pt past the furthest stop (at 36 pt when there is none, and at most at
+  100000 pt); it is disabled at 256 stops or when a stop is already at that position. Delete Tab removes the selected
+  stop, and Clear All Tabs leaves the style with no stops, which it then sets. OK sorts the stops by
+  position; of two stops at one position it keeps the one edited last.
 - Composition: `composer` (`singleLine` or `everyLine`) and the `roman_hanging` checkbox.
 - Hyphenation: the `hyphenate` checkbox, `words_longer_than`, `after_first`, `before_last`, `hyphen_limit`,
   `hyphenation_zone` and the `hyphenate_capitalized` checkbox. The options are inactive while Hyphenation is off, and
@@ -7905,15 +7914,17 @@ The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `co
 
 A field left as it was keeps the attribute as the style has it, and an empty field leaves its attribute unset; an
 empty Hyphenation or Justification field takes its default while another field of that section is set. Attributes
-the dialog does not show, such as tabs and character attributes, stay as they are.
+the dialog does not show, such as character attributes, stay as they are.
 `paraStyle.new`, `paraStyle.setAttrs` and `paraStyle.edit` reject a changed indent, space before or space after outside
 -1296 to 1296 pt, Words Longer Than outside 1 to 25, After First or Before Last outside 1 to 15, Hyphen Limit outside
 0 to 25, Hyphenation Zone outside 0 to 1296 pt, Word Spacing outside 0 to 1000%, Letter Spacing outside -100 to 500%,
 Glyph Scaling outside 50 to 200%, Minimum, Desired and Maximum values out of that order, Auto Leading outside 0 to
-500%, and a tab position outside 0 to 100000 pt. A value the style already has is kept. An invalid value leaves the
+500%, and changed tabs with more than 256 stops, or with a changed stop whose position is outside 0 to 100000 pt or
+whose leader is longer than 8 characters. They sort changed tabs by position and keep the first of stops at one
+position. A value the style already has is kept. An invalid value leaves the
 style, its paragraphs and Undo history unchanged, and keeps the dialog open.
 Reset Panel removes the section's attributes from the definition: Basic Paragraph Formats removes `justify` and the
-five distances, Composition removes `composer` and `roman_hanging`, Hyphenation removes `hyphenate` and
+five distances, Tabs removes `tabs`, Composition removes `composer` and `roman_hanging`, Hyphenation removes `hyphenate` and
 `hyphenation`, and
 Justification removes `justification`. `ui.paraStyleOptions.resetPanel {}` performs that reset for the section
 selected in Paragraph Style Options or New Paragraph Style; it is disabled on General.

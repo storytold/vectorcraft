@@ -5081,6 +5081,7 @@ digits	Malayalam	Malaiàlam
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` ha de ser 1, 3 o 5
 @msg	`select` must be true or false	`select` ha de ser true o false
 @msg	`stops` must be an array	`stops` ha de ser una matriu
+@msg	`{key}` must be an array	`{key}` ha de ser una matriu
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` ha de ser un objecte d’opcions SVG (vegeu document.formats)
 @msg	`to` must be "corner" or "smooth"	`to` ha de ser "corner" o "smooth"
 @msg	`{_1}` has no brushes to apply	`{_1}` no té pinzells per aplicar
@@ -6482,6 +6483,10 @@ anchor	Points:	Punts:
 @msg	features lists at most {max} tags	features admet com a màxim {max} etiquetes
 @msg	unknown OpenType feature `{t}`	funció OpenType desconeguda `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} ha de ser un nombre superior a 0 i com a màxim {max}
+@msg	{label} must be at most {max} characters	{label} ha de tenir com a màxim {max} caràcters
+@msg	{label} must be one character	{label} ha de ser un sol caràcter
+@msg	at most {max} tab stops	com a màxim {max} tabulacions
+@msg	unknown align `{other}`	alineació desconeguda `{other}`
 @msg	no character style `{name}`	No s'ha trobat l'estil de caràcter `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

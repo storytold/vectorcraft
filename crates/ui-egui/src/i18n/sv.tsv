@@ -4161,6 +4161,7 @@ axis	Both	Båda
 @msg	`globalAdjust` must be an object	`globalAdjust` måste vara ett objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` måste vara 1, 3 eller 5
 @msg	`stops` must be an array	`stops` måste vara en array
+@msg	`{key}` must be an array	`{key}` måste vara en array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` måste vara ett objekt med SVG-alternativ (se document.formats)
 @msg	`{_1}` is no save command	`{_1}` är inget sparkommando
 @msg	`{area}` is no recovery area name	`{area}` är inget namn på ett återställningsområde
@@ -6556,6 +6557,9 @@ shape	Open	Öppen
 @msg	features lists at most {max} tags	features får innehålla högst {max} taggar
 @msg	unknown OpenType feature `{t}`	okänd OpenType-funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} måste vara ett tal över 0 och högst {max}
+@msg	{label} must be at most {max} characters	{label} får innehålla högst {max} tecken
+@msg	{label} must be one character	{label} måste vara ett tecken
+@msg	at most {max} tab stops	högst {max} tabbstopp
 @msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

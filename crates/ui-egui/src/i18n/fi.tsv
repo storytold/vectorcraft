@@ -4474,6 +4474,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`globalAdjust` must be an object	`globalAdjust` on oltava objekti
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` on oltava 1, 3 tai 5
 @msg	`stops` must be an array	`stops` on oltava taulukko
+@msg	`{key}` must be an array	`{key}` on oltava taulukko
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` on oltava SVG-asetusten objekti (ks. document.formats)
 @msg	`{_1}` is no save command	`{_1}` ei ole tallennuskomento
 @msg	`{area}` is no recovery area name	`{area}` ei ole palautusalueen nimi
@@ -6540,6 +6541,10 @@ anchor	Points:	Pisteet:
 @msg	features lists at most {max} tags	features sisältää enintään {max} tunnistetta
 @msg	unknown OpenType feature `{t}`	tuntematon OpenType-ominaisuus `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}
+@msg	{label} must be at most {max} characters	{label} saa olla enintään {max} merkkiä
+@msg	{label} must be one character	{label} on oltava yksi merkki
+@msg	at most {max} tab stops	enintään {max} sarkainkohtaa
+@msg	unknown align `{other}`	tuntematon tasaus `{other}`
 @msg	no character style `{name}`	Merkkityyliä `{name}` ei löytynyt
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
