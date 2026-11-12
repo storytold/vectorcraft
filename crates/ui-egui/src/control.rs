@@ -1027,8 +1027,9 @@ const DOCKING_ACTION: &str = "action";
 /// errors included, an error from a panic too: the libraries hidden before it ran and after it. The
 /// error of a failed request also hides the paths outside the read root that the request sent
 /// ([`sent_paths`]). A reply with no `/`, `\` or `%` in it is not searched, since every hidden path
-/// holds a separator, written or escaped. A deferred reply (a screenshot, a `ui.pointer` reply sent
-/// after the tool's edit) holds no library id or path.
+/// holds a separator, written or escaped. A screenshot's reply is hidden when it is sent
+/// ([`hide_in_deferred_reply`]); a `ui.pointer` reply sent after the tool's edit holds no library id
+/// or path.
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
     if vectorcraft_engine::file_access::current().is_none() {
         return dispatch(app, ctx, req);
@@ -1056,18 +1057,33 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         }
     };
     let Outcome::Done(mut reply) = outcome else { return outcome };
-    if !holds_a_separator(&reply) {
-        return Outcome::Done(reply);
+    hide_in_reply(app, &mut reply, &req.params, before);
+    Outcome::Done(reply)
+}
+
+/// Hides in `reply` the libraries hidden now and in `before`, and for a failed request the paths
+/// outside the read root that `sent`, the request's params, holds ([`handle`]).
+fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: Hiding) {
+    if !holds_a_separator(reply) {
+        return;
     }
     let mut hiding = unreadable_library_ids(app);
     hiding.merge(before);
     if reply.get("ok").and_then(Value::as_bool) == Some(false) {
-        let mut sent = Vec::new();
-        sent_paths(&req.params, &mut sent);
-        hiding.set_hidden(sent, cfg!(windows));
+        let mut paths = Vec::new();
+        sent_paths(sent, &mut paths);
+        hiding.set_hidden(paths, cfg!(windows));
     }
-    hide_library_ids(&mut reply, &hiding);
-    Outcome::Done(reply)
+    hide_library_ids(reply, &hiding);
+}
+
+/// Hides in a reply sent after its request was handled (a screenshot's) what [`handle`] hides in a
+/// reply, with `sent` as the request's params. Without a read root in force it leaves the reply as
+/// it is.
+pub(crate) fn hide_in_deferred_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value) {
+    if vectorcraft_engine::file_access::current().is_some() {
+        hide_in_reply(app, reply, sent, Hiding::default());
+    }
 }
 
 /// The control methods that send synthetic input.
