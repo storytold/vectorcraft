@@ -166,6 +166,10 @@ pub struct VectorcraftApp {
     /// `ui.pointer` replies waiting for their events and the edit the tool computes on another
     /// thread ([`control::Outcome::AfterToolEdit`]), with the numbers of those events.
     pointer_replies: Vec<control::PendingPointerReply>,
+    /// The id each library loaded from outside the automation read roots is shown under, kept while
+    /// the UI state or the session refers to the library, so that the id a control client was given
+    /// keeps naming the same library.
+    shown_library_ids: std::cell::RefCell<Vec<(String, String)>>,
     /// Admitted captures whose settled frame has not come yet (issued one at a time).
     queued_screenshots: Vec<QueuedScreenshot>,
     screenshot_token: u64,

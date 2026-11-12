@@ -131,9 +131,10 @@ the suite) keep the agent to the folders you give it:
   documents still being read; in `ui.recent_files`, the recent files; a library panel's `path` in `ui.library_panels`;
   in a recorded action's steps in `ui.action_sets`, also in a batch step's commands, the `path`, `paths`, `file`,
   `files` and `folder` params, a param whose name ends in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
-  `destinationFolder`), the entries of a list under such a param, and under any other param or in any list an
-  absolute path or a `file:` URL outside the roots (any case of `file:`, `%XX` escapes decoded; a URL that names
-  another host is always left out); and the folder
+  `destinationFolder`), the entries of a list under such a param, and under any other param, as a key or in any
+  list, an absolute path or a `file:` URL outside the roots (any case of `file:`, `%XX` escapes decoded; a URL that
+  names another host is always left out), and `~`, a path under `~` or a path that starts with `./` or `../`
+  (either separator) that resolves outside the roots from the app's working folder; and the folder
   preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
   (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
   empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
@@ -142,17 +143,25 @@ the suite) keep the agent to the folders you give it:
   params of a recorded action's steps in `ui.action_sets`, also when its panel is closed. A path written with
   either separator counts as a path, also one saved on another platform. When another hidden library has the same
   file name, the libraries take `loaded/<file name>`,
-  `loaded/<file name> (2)`, `(3)` and so on in the order of their full ids, and each one keeps its id in both
-  replies. A hidden library skips an id that a library loaded without a path already has. The other entries keep
-  their order, and the app's own state is not changed. A request may name such a library or its panel by the id
+  `loaded/<file name> (2)`, `(3)` and so on: first the libraries loaded in the session (swatch, graphic style,
+  symbol and brush libraries, each kind in the order it was loaded), then the library panels in their order, the
+  Color Guide's limit and the other ids. Each one keeps its id in both replies, and from one request to the next
+  while the app refers to it, also when another library with the same file name is loaded later. A hidden library skips an id that
+  a library loaded without a path already has. The other entries keep their order, and the app's own state is not
+  changed. A request may name such a library or its panel by the id
   shown in a `panel`, `library` or `panels` param, in a docking destination (`anchor`, `before`, `onto`, `above`,
   `below`) and in `window.panel.layout`'s `action` (`ui.set {panel: "library:swatches:loaded/<file name>"}`
   reopens its panel), and the reply to such a request shows that id and file name wherever the library's id or path
   appears, an error included. Every reply under the read roots shows a hidden library's id as the id shown and its
   path as the file name in every string and key, the status text (`ui.status`), dialogs, the command palette query
-  (`ui.palette_query`) and a script's report (`scriptReport`) included. A longer path that begins with a hidden one
-  keeps its text only when it lies inside the read roots, so a readable library's id that begins with a hidden one
-  stays. Encoded file data (`dataBase64`, `pngBase64`) is sent as it is.
+  (`ui.palette_query`), a script's report (`scriptReport`) and the error from an internal fault included, for the
+  libraries hidden before the request ran and after it. The path is also matched with `%XX` escapes as a `file:`
+  URL writes it, and on Windows in any case of its letters. A longer text that begins with a hidden id or path
+  keeps it only when the longer text is another loaded library's id with no `.` or `..` part, so a readable
+  library's id that begins with a hidden one stays. The error of a failed request also shows a path outside the
+  read roots that the request sent by its file name, whether or not a library was loaded from it, so that the
+  error reads the same either way. Encoded file data, a base64 string under `dataBase64`,
+  `pngBase64` or `thumbnailBase64`, is sent as it is.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
