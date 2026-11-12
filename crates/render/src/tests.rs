@@ -5,6 +5,7 @@ use vectorcraft_geom::shapes;
 
 mod adjust;
 mod alternate;
+mod arearesize;
 mod bitmapglyphs;
 mod blend;
 mod changed;

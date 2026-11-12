@@ -716,6 +716,11 @@ fn collect_files(folder: &str, include_subdirs: bool, depth: usize) -> Result<Ve
         }
     }
     files.sort();
+    // Names that are not valid text come back lossily, so different names can give one path: each
+    // folder is listed once.
+    files.dedup();
+    subdirs.sort();
+    subdirs.dedup();
     for sub in subdirs {
         let mut nested = collect_files(&sub, true, depth + 1)?;
         files.append(&mut nested);
@@ -747,6 +752,22 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn folders_whose_names_alias_after_lossy_conversion_are_listed_once() {
+        use std::os::unix::ffi::OsStrExt;
+        let root = tmp("alias");
+        // `a\u{FFFD}` is a real folder; two others with bytes that aren't text give the same name.
+        let real = root.join("a\u{FFFD}");
+        std::fs::create_dir_all(&real).unwrap();
+        write_svg(&real, "x.svg", "red");
+        for bad in [b"a\xFF", b"a\xFE"] {
+            let _ = std::fs::create_dir_all(root.join(std::ffi::OsStr::from_bytes(bad)));
+        }
+        let files = collect_files(&root.to_string_lossy(), true, 0).unwrap();
+        assert_eq!(files.len(), 1, "{files:?}");
     }
 
     fn write_svg(dir: &std::path::Path, name: &str, fill: &str) -> std::path::PathBuf {

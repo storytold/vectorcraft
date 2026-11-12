@@ -2191,9 +2191,22 @@ fn the_control_bar_snapping_menu_shares_glyph_and_alignment_settings() {
 /// The window the Control bar docking tests draw the bar in.
 const DOCK_SCREEN: egui::Rect = egui::Rect { min: egui::Pos2::ZERO, max: egui::pos2(1200.0, 300.0) };
 
+/// The window the Control bar panel menu tests draw the bar in, tall enough for the whole menu.
+const MENU_SCREEN: egui::Rect = egui::Rect { min: egui::Pos2::ZERO, max: egui::pos2(1200.0, 700.0) };
+
 /// One headless frame of the Control bar alone; returns its accessibility nodes.
 fn control_bar_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::accesskit::Node> {
-    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(DOCK_SCREEN), ..Default::default() }, |ui| super::control_bar(app, ui));
+    control_bar_frame_in(app, ctx, DOCK_SCREEN, events)
+}
+
+/// [`control_bar_frame`] in window `screen`.
+fn control_bar_frame_in(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    screen: egui::Rect,
+    events: Vec<egui::Event>,
+) -> Vec<egui::accesskit::Node> {
+    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
     out.textures_delta.clear();
     out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
 }
@@ -2219,29 +2232,67 @@ fn the_control_bar_panel_menu_docks_it_to_the_top_or_the_bottom() {
     let ctx = egui::Context::default();
     ctx.enable_accesskit();
     crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut crate::VectorcraftApp, events| control_bar_frame_in(app, &ctx, MENU_SCREEN, events);
     let pick = |app: &mut crate::VectorcraftApp, item: &str| {
-        control_bar_frame(app, &ctx, vec![]);
-        let menu = node_center(&control_bar_frame(app, &ctx, vec![]), "Panel menu").unwrap_or_else(|| panic!("the bar has a panel menu"));
-        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(menu), press_at(menu, true)]);
-        control_bar_frame(app, &ctx, vec![press_at(menu, false)]);
-        let nodes = control_bar_frame(app, &ctx, vec![]);
-        let checked: Vec<String> = nodes.iter().filter_map(|n| n.label()).filter(|l| l.starts_with('✓')).map(str::to_string).collect();
+        frame(app, vec![]);
+        let menu = node_center(&frame(app, vec![]), "Panel menu").unwrap_or_else(|| panic!("the bar has a panel menu"));
+        frame(app, vec![egui::Event::PointerMoved(menu), press_at(menu, true)]);
+        frame(app, vec![press_at(menu, false)]);
+        let nodes = frame(app, vec![]);
+        // The groups of options are listed first, every one on; the edge items follow.
+        let checked: Vec<String> =
+            nodes.iter().filter_map(|n| n.label()).filter(|l| l.starts_with('✓') && l.contains("Dock")).map(str::to_string).collect();
+        let groups = nodes.iter().filter_map(|n| n.label()).filter(|l| CONTROL_BAR_GROUP_LABELS.iter().any(|g| *l == format!("✓ {g}"))).count();
+        assert_eq!(groups, CONTROL_BAR_GROUP_LABELS.len(), "every group is listed, on");
         let at = node_center(&nodes, item).unwrap_or_else(|| panic!("the menu lists {item}"));
         // Below the button at the top, and above it at the bottom: the menu opens inside the window.
-        assert!(DOCK_SCREEN.contains(at) && (at.y < menu.y) == app.ui.control_bar_bottom, "{item} at {at:?}, the button at {menu:?}");
-        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
-        control_bar_frame(app, &ctx, vec![press_at(at, false)]);
-        control_bar_frame(app, &ctx, vec![]);
-        let menu = node_center(&control_bar_frame(app, &ctx, vec![]), "Panel menu").unwrap_or_else(|| panic!("the bar still shows"));
+        assert!(MENU_SCREEN.contains(at) && (at.y < menu.y) == app.ui.control_bar_bottom, "{item} at {at:?}, the button at {menu:?}");
+        frame(app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(app, vec![press_at(at, false)]);
+        frame(app, vec![]);
+        let menu = node_center(&frame(app, vec![]), "Panel menu").unwrap_or_else(|| panic!("the bar still shows"));
         (checked, menu.y)
     };
     let (checked, y) = pick(&mut app, "Dock to Bottom");
     assert_eq!(checked, ["✓ Dock to Top"], "the bar starts docked at the top");
     assert!(app.ui.control_bar_bottom, "Dock to Bottom docks it at the bottom");
-    assert!(y > DOCK_SCREEN.bottom() - 34.0, "the bar is drawn along the bottom of the window: {y}");
+    assert!(y > MENU_SCREEN.bottom() - 34.0, "the bar is drawn along the bottom of the window: {y}");
     let (checked, y) = pick(&mut app, "Dock to Top");
     assert_eq!(checked, ["✓ Dock to Bottom"]);
     assert!(!app.ui.control_bar_bottom && y < 34.0, "Dock to Top docks it at the top again: {y}");
+}
+
+/// In a window too short for the whole Control bar panel menu, the menu stays inside the window and
+/// scrolls, so Dock to Bottom, its last item, can still be reached and clicked.
+#[test]
+fn the_control_bar_panel_menu_scrolls_in_a_short_window() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    control_bar_frame(&mut app, &ctx, vec![]);
+    let menu = node_center(&control_bar_frame(&mut app, &ctx, vec![]), "Panel menu").unwrap_or_else(|| panic!("the bar has a panel menu"));
+    control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(menu), press_at(menu, true)]);
+    control_bar_frame(&mut app, &ctx, vec![press_at(menu, false)]);
+    let nodes = control_bar_frame(&mut app, &ctx, vec![]);
+    let first = node_center(&nodes, "Snapping").filter(|p| p.y > 34.0).unwrap_or_else(|| panic!("the menu lists Snapping"));
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -200.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    for _ in 0..6 {
+        control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(first), wheel.clone()]);
+    }
+    let nodes = control_bar_frame(&mut app, &ctx, vec![]);
+    let at = node_center(&nodes, "Dock to Bottom").unwrap_or_else(|| panic!("the menu lists Dock to Bottom"));
+    assert!(DOCK_SCREEN.shrink(1.0).contains(at), "scrolled into the window: {at:?}");
+    control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+    control_bar_frame(&mut app, &ctx, vec![press_at(at, false)]);
+    assert!(app.ui.control_bar_bottom, "Dock to Bottom docks the bar at the bottom");
 }
 
 /// Dragging the Control bar's gripper docks the bar at the edge of the window the pointer is
@@ -2287,6 +2338,243 @@ fn the_control_bar_dock_command_takes_top_or_bottom() {
     }
     assert_eq!(app.run("window.control.dock", json!({"edge": "top"})).unwrap(), json!({"edge": "top"}));
     assert!(!app.ui.control_bar_bottom);
+}
+
+/// The labels of the Control bar panel menu's groups of options, in the menu's order.
+const CONTROL_BAR_GROUP_LABELS: [&str; 15] = [
+    "Snapping",
+    "Anchor Points",
+    "Tool Options",
+    "Object Options",
+    "Image Options",
+    "Fill and Stroke",
+    "Opacity",
+    "Graphic Style",
+    "Character",
+    "Paragraph",
+    "Vertical Alignment",
+    "Align and Distribute",
+    "Transform",
+    "Artboard Options",
+    "Document Options",
+];
+
+/// Opens the Control bar's panel menu, at the right end of the bar `control_frame` draws, unless
+/// it is open, and returns the text the bar and the menu show.
+fn open_control_bar_menu(app: &mut crate::VectorcraftApp, ctx: &egui::Context) -> Vec<(String, egui::Rect)> {
+    use crate::tests_removeanchors::{click_control, control_frame};
+    let open = |texts: &[(String, egui::Rect)]| texts.iter().any(|(t, _)| t.ends_with("Dock to Bottom"));
+    let texts = control_frame(app, ctx, vec![]);
+    if open(&texts) {
+        return texts;
+    }
+    click_control(app, ctx, egui::pos2(1387.0, 17.0));
+    let texts = control_frame(app, ctx, vec![]);
+    assert!(open(&texts), "the panel menu opens: {texts:?}");
+    texts
+}
+
+/// Turns group `label` of the Control bar's panel menu on or off with a click on its item, which
+/// shows checked while the group is on.
+fn toggle_control_bar_group(app: &mut crate::VectorcraftApp, ctx: &egui::Context, label: &str, on: bool) {
+    let menu = open_control_bar_menu(app, ctx);
+    let item = if on { format!("✓ {label}") } else { format!("   {label}") };
+    crate::tests_removeanchors::click_control(app, ctx, crate::tests_removeanchors::at(&menu, &item));
+}
+
+/// The Control bar's panel menu lists every group of options, each checked while it is on, and a
+/// click on one turns that group off or on again. A group that is off stays out of the bar when
+/// the selection changes, the other groups and the menu button stay, and with no document the
+/// menu still lists every group.
+#[test]
+fn the_control_bar_panel_menu_turns_each_group_on_or_off() {
+    use crate::tests_removeanchors::{control_frame, has};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let on = |app: &crate::VectorcraftApp, group: &str| crate::menus::checked(app, "window.control.options", &json!({ "group": group }));
+    let menu = open_control_bar_menu(&mut app, &ctx);
+    for label in CONTROL_BAR_GROUP_LABELS {
+        assert!(has(&menu, &format!("✓ {label}")), "{label} is listed, on");
+    }
+    assert!(has(&menu, "✓ Dock to Top") && has(&menu, "   Dock to Bottom"), "the edge items stay: {menu:?}");
+    toggle_control_bar_group(&mut app, &ctx, "Fill and Stroke", true);
+    assert_eq!(on(&app, "fillStroke"), Some(false));
+    assert!(has(&open_control_bar_menu(&mut app, &ctx), "   Fill and Stroke"), "listed, off, with no document");
+    toggle_control_bar_group(&mut app, &ctx, "Fill and Stroke", false);
+    assert_eq!(on(&app, "fillStroke"), Some(true));
+
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    for s in ["Snapping", "Stroke:", "Opacity:", "Style:", "Transform"] {
+        assert!(has(&bar, s), "{s} shows with every group on");
+    }
+    toggle_control_bar_group(&mut app, &ctx, "Fill and Stroke", true);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(!has(&bar, "Stroke:"), "Fill and Stroke is off");
+    for s in ["Snapping", "Opacity:", "Style:", "Transform"] {
+        assert!(has(&bar, s), "{s} stays");
+    }
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(has(&bar, "Document Setup") && !has(&bar, "Stroke:"), "still off with nothing selected");
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    assert!(!has(&control_frame(&mut app, &ctx, vec![]), "Stroke:"), "still off with the rectangle selected again");
+    toggle_control_bar_group(&mut app, &ctx, "Fill and Stroke", false);
+    assert!(has(&control_frame(&mut app, &ctx, vec![]), "Stroke:"), "on again");
+}
+
+/// With every group of options off, the Control bar keeps its gripper, the selection's label and
+/// its panel menu, which lists every group off; nothing selected shows no Document Setup either.
+#[test]
+fn the_control_bar_keeps_its_label_and_menu_with_every_group_off() {
+    use crate::tests_removeanchors::{control_frame, has};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    for group in crate::chrome::CONTROL_BAR_GROUPS {
+        app.run("window.control.options", json!({ "group": group, "visible": false })).unwrap();
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(has(&bar, crate::panels::appearance::object_label(&app)), "the label stays: {bar:?}");
+    for s in ["Snapping", "Stroke:", "Opacity:", "Style:", "Transform", "X:"] {
+        assert!(!has(&bar, s), "{s} is off");
+    }
+    let menu = open_control_bar_menu(&mut app, &ctx);
+    for label in CONTROL_BAR_GROUP_LABELS {
+        assert!(has(&menu, &format!("   {label}")), "{label} is listed, off");
+    }
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(!has(&bar, "Document Setup") && !has(&bar, "Preferences"), "{bar:?}");
+}
+
+/// `window.control.options {group, visible?}` turns a group of the Control bar's options on or
+/// off, or toggles it, and the panel menu's item shows it; an unknown or missing group, or a
+/// `visible` that is not true or false, is an error and changes nothing.
+#[test]
+fn the_control_bar_options_command_turns_a_group_on_or_off() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let checked = |app: &crate::VectorcraftApp, group: &str| crate::menus::checked(app, "window.control.options", &json!({ "group": group }));
+    for group in crate::chrome::CONTROL_BAR_GROUPS {
+        assert_eq!(checked(&app, group), Some(true), "{group} starts on");
+    }
+    let run = |app: &mut crate::VectorcraftApp, p: serde_json::Value| app.run("window.control.options", p);
+    assert_eq!(run(&mut app, json!({"group": "opacity", "visible": false})).unwrap(), json!({"group": "opacity", "visible": false}));
+    assert_eq!(checked(&app, "opacity"), Some(false));
+    assert_eq!(run(&mut app, json!({"group": "opacity", "visible": false})).unwrap(), json!({"group": "opacity", "visible": false}), "off stays off");
+    assert_eq!(run(&mut app, json!({"group": "opacity"})).unwrap(), json!({"group": "opacity", "visible": true}), "toggled on");
+    assert_eq!(run(&mut app, json!({"group": "transform"})).unwrap(), json!({"group": "transform", "visible": false}), "toggled off");
+    assert_eq!(run(&mut app, json!({"group": "transform", "visible": null})).unwrap(), json!({"group": "transform", "visible": true}));
+    assert_eq!(run(&mut app, json!({"group": "paragraph", "visible": false})).unwrap()["visible"], json!(false));
+    let before = app.ui.control_bar_hidden_groups.clone();
+    for (p, err) in [
+        (json!({"group": "stroke"}), "`group` must be one of"),
+        (json!({"group": "Opacity"}), "`group` must be one of"),
+        (json!({"group": 1}), "`group` must be one of"),
+        (json!({}), "`group` must be one of"),
+        (json!({"group": "paragraph", "visible": "true"}), "`visible` must be true or false"),
+        (json!({"group": "opacity", "visible": 0}), "`visible` must be true or false"),
+    ] {
+        let e = run(&mut app, p.clone()).unwrap_err();
+        assert!(e.starts_with(err), "{p}: {e}");
+        assert_eq!(app.ui.control_bar_hidden_groups, before, "{p} changes nothing");
+    }
+    assert_eq!(checked(&app, "paragraph"), Some(false));
+    assert_eq!(checked(&app, "stroke"), Some(false), "an unknown group is never checked");
+}
+
+/// A group of options that is off takes no room in the Control bar: with Fill and Stroke, Opacity
+/// and Graphic Style off, or Transform off, the Align buttons fit a narrower window, and the panel
+/// menu button still shows there.
+#[test]
+fn groups_that_are_off_leave_their_room_to_the_later_groups() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let ids: Vec<serde_json::Value> =
+        [10, 100].iter().map(|x| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone()).collect();
+    app.run("select.set", json!({ "ids": ids })).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    // The narrowest window, in steps of 10 points, whose bar shows the Align buttons.
+    let narrowest = |app: &mut crate::VectorcraftApp| {
+        (40..=240).map(|w| w as f32 * 10.0).find(|&w| {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 300.0));
+            control_bar_frame_in(app, &ctx, screen, vec![]);
+            let nodes = control_bar_frame_in(app, &ctx, screen, vec![]);
+            node_center(&nodes, "Horizontal Align Left").is_some() && node_center(&nodes, "Panel menu").is_some()
+        })
+    };
+    let all = narrowest(&mut app).expect("the Align buttons show in a wide window");
+    for group in ["fillStroke", "opacity", "graphicStyle"] {
+        app.run("window.control.options", json!({ "group": group, "visible": false })).unwrap();
+    }
+    let fewer = narrowest(&mut app).expect("they show with fewer groups");
+    assert!(fewer < all, "the Align buttons fit {fewer} wide with three groups off, {all} with every group on");
+    for group in ["fillStroke", "opacity", "graphicStyle"] {
+        app.run("window.control.options", json!({ "group": group, "visible": true })).unwrap();
+    }
+    app.run("window.control.options", json!({"group": "transform", "visible": false})).unwrap();
+    let no_transform = narrowest(&mut app).expect("they show without Transform");
+    assert!(no_transform < all, "without the Transform link's room the Align buttons fit {no_transform} wide, {all} with it");
+}
+
+/// With the Artboard tool, the Artboard Options group holds the artboard's own controls and the
+/// Transform group the Transform link and the X/Y/W/H fields; each one off leaves the other, and
+/// with Artboard Options off the fields find room in a window that is too narrow for them otherwise.
+#[test]
+fn the_artboard_tool_s_control_bar_follows_its_two_groups() {
+    use crate::tests_removeanchors::{control_frame, has};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    for s in ["Artboard", "Name:", "Transform", "Move Artwork with Artboard"] {
+        assert!(has(&bar, s), "{s} shows with every group on: {bar:?}");
+    }
+    assert!(!has(&bar, "X:"), "the fields need more room than is left: {bar:?}");
+    app.run("window.control.options", json!({"group": "artboardOptions", "visible": false})).unwrap();
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(!has(&bar, "Name:") && !has(&bar, "Move Artwork with Artboard"), "{bar:?}");
+    assert!(has(&bar, "Artboard") && has(&bar, "Transform") && has(&bar, "X:"), "{bar:?}");
+    app.run("window.control.options", json!({"group": "artboardOptions", "visible": true})).unwrap();
+    app.run("window.control.options", json!({"group": "transform", "visible": false})).unwrap();
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(!has(&bar, "Transform") && !has(&bar, "X:"), "{bar:?}");
+    assert!(has(&bar, "Name:") && has(&bar, "Move Artwork with Artboard"), "{bar:?}");
+}
+
+/// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps
+/// its Anchor Point label.
+#[test]
+fn the_anchor_points_group_holds_convert_and_anchors() {
+    use crate::tests_removeanchors::{control_frame, has};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0]]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(has(&bar, "Convert:") && has(&bar, "Anchors:"), "{bar:?}");
+    app.run("window.control.options", json!({"group": "anchors", "visible": false})).unwrap();
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(!has(&bar, "Convert:") && !has(&bar, "Anchors:"), "{bar:?}");
+    assert!(has(&bar, "Anchor Point") && has(&bar, "Stroke:"), "{bar:?}");
 }
 
 /// Menus stop above a Control bar docked at the bottom when the status bar is hidden, above the
