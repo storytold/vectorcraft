@@ -3004,6 +3004,42 @@ fn live_paint_bucket_drag_crosses_thin_grid_cells_and_can_cancel() {
 }
 
 #[test]
+fn live_paint_bucket_long_drag_keeps_late_turns_and_release_as_one_undo() {
+    for cancel in [false, true] {
+        let mut s = session();
+        let ids = [rect(&mut s, 0.0, 0.0, 150.0, 100.0), line(&mut s, (50.0, 0.0), (50.0, 100.0)), line(&mut s, (100.0, 0.0), (100.0, 100.0))];
+        s.execute("select.set", &json!({"ids": ids.map(|id| id.0)})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.prefs.real_time_drawing = false;
+        s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+        s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+        for i in 1..4096 {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 25.0 + f64::from(i) / 10000.0, 50.0), v).unwrap();
+        }
+        // Turn around the middle face after the chunk limit, then enter the right face on Up.
+        for (x, y) in [(25.0, 150.0), (125.0, 150.0)] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, x, y), v).unwrap();
+        }
+        if cancel {
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+        if !cancel {
+            let g = s.doc().unwrap().selection.objects[0];
+            let gn = node(&s, g);
+            for x in [25.0, 125.0] {
+                assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().appearance.fill_paint(), s.paint.fill);
+            }
+            assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(75.0, 50.0)).unwrap().appearance.fill_paint(), Paint::solid(Color::WHITE));
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert!(s.doc().unwrap().doc == before, "long drag is one cancellable undo step");
+    }
+}
+
+#[test]
 fn live_paint_bucket_drag_rejects_invalid_points_atomically() {
     let mut s = session();
     let g = live(&mut s);
@@ -3012,6 +3048,13 @@ fn live_paint_bucket_drag_rejects_invalid_points_atomically() {
         [json!([]), json!([[26.0, 50.0]]), json!([[25.0, 50.0], [null, 0]]), json!([[25.0, 50.0], [1e30, 0]]), json!(vec![[25.0, 50.0]; 4097])]
     {
         assert!(s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": points})).is_err());
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    for continuation in [json!(null), json!([[[26.0, 50.0], [125.0, 50.0]]]), json!([vec![[25.0, 50.0]; 4097]])] {
+        assert!(
+            s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": [[25.0, 50.0]], "continuation": continuation}))
+                .is_err()
+        );
         assert_eq!(s.doc().unwrap().doc, before);
     }
 }

@@ -1046,6 +1046,25 @@ fn live_square(d: &mut Document, r: Rect) -> (NodeId, [NodeId; 4]) {
 }
 
 #[test]
+fn bucket_long_drag_keeps_turns_and_release_after_the_point_limit() {
+    let (d, gid, ..) = live_group_doc();
+    let s = Selection::default();
+    let paint = paint();
+    let cx = cx(&d, &s, &paint);
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
+    for i in 1..4096 {
+        t.pointer(&cx, &ev(PointerKind::Drag, 25.0 + f64::from(i) / 10000.0, 25.0));
+    }
+    t.pointer(&cx, &ev(PointerKind::Drag, 25.0, 100.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 100.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
+    let [Action::Preview(id, params), Action::Commit] = acts.as_slice() else { panic!("release must extend the drag before committing") };
+    assert_eq!(id, "livePaint.fill");
+    assert_eq!(params["group"], gid.0);
+}
+
+#[test]
 fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     let (d, gid, f2, _e) = live_group_doc();
     assert_eq!(live_paint_at(&d, Point::new(75.0, 25.0)), Some(gid));

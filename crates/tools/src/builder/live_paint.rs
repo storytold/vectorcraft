@@ -132,13 +132,16 @@ pub struct LivePaintBucketTool {
     /// Where the pointer last moved, and whether Shift and Alt were held.
     at: Option<(Point, bool, bool)>,
     /// The fill command and polyline previewed from the press's snapshot.
-    fill_drag: Option<(Value, Vec<Point>)>,
+    fill_drag: Option<(Value, Vec<Vec<Point>>)>,
     fills: bool,
     strokes: bool,
     highlight: bool,
     color: [u8; 3],
     width: f64,
 }
+
+/// Maximum points in one Live Paint fill path chunk.
+pub const LP_FILL_CHUNK_POINTS: usize = 4096;
 
 impl Default for LivePaintBucketTool {
     fn default() -> Self {
@@ -158,18 +161,32 @@ impl Default for LivePaintBucketTool {
 
 impl LivePaintBucketTool {
     fn begin_fill(&mut self, params: Value, p: Point) -> Vec<Action> {
-        self.fill_drag = Some((params.clone(), vec![p]));
+        self.fill_drag = Some((params.clone(), vec![vec![p]]));
         vec![Action::Begin("Live Paint Bucket".into()), Action::Preview("livePaint.fill".into(), params)]
     }
 
     fn drag_fill(&mut self, p: Point) -> Vec<Action> {
-        let Some((params, points)) = &mut self.fill_drag else { return vec![] };
-        if points.last() == Some(&p) || points.len() >= 4096 {
+        let Some((params, chunks)) = &mut self.fill_drag else { return vec![] };
+        let Some(points) = chunks.last_mut() else { return vec![] };
+        let Some(&last) = points.last() else { return vec![] };
+        if last == p {
             return vec![];
         }
-        points.push(p);
+        if points.len() == LP_FILL_CHUNK_POINTS {
+            // Share the boundary point so no segment is lost between chunks.
+            chunks.push(vec![last, p]);
+        } else {
+            points.push(p);
+        }
         let mut params = params.clone();
-        params["points"] = json!(points.iter().map(|p| [p.x, p.y]).collect::<Vec<_>>());
+        let mut chunks = chunks.iter().map(|chunk| json!(chunk.iter().map(|p| [p.x, p.y]).collect::<Vec<_>>()));
+        if let Some(first) = chunks.next() {
+            params["points"] = first;
+        }
+        let continuation: Vec<_> = chunks.collect();
+        if !continuation.is_empty() {
+            params["continuation"] = Value::Array(continuation);
+        }
         vec![Action::Preview("livePaint.fill".into(), params)]
     }
 

@@ -272,17 +272,34 @@ pub(super) fn lp_gap_options(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "livePaint.fill";
     let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
-    let points = if let Some(input) = p.get("points") {
-        if input.as_array().is_none_or(|points| points.is_empty() || points.len() > 4096) {
-            return Err(bad(C, "points must contain 1 to 4096 points"));
+    let parse_chunk = |input: &Value, start: Point| -> Result<Vec<Point>> {
+        let values = input
+            .as_array()
+            .filter(|points| !points.is_empty() && points.len() <= b::LP_FILL_CHUNK_POINTS)
+            .ok_or_else(|| bad(C, "each path chunk must contain 1 to 4096 points"))?;
+        let points: Vec<_> = values
+            .iter()
+            .map(|point| {
+                let pair = point.as_array().filter(|pair| pair.len() == 2).ok_or_else(|| bad(C, "points must be [x,y] pairs"))?;
+                let x = pair.first().and_then(Value::as_f64).ok_or_else(|| bad(C, "point x must be a number"))?;
+                let y = pair.get(1).and_then(Value::as_f64).ok_or_else(|| bad(C, "point y must be a number"))?;
+                let point = Point::new(x, y);
+                if !finite(point) {
+                    return Err(bad(C, "points must be finite canvas points"));
+                }
+                Ok(point)
+            })
+            .collect::<Result<_>>()?;
+        if points.first() != Some(&start) {
+            return Err(bad(C, "path chunks must share their boundary point"));
         }
-        let points = super::points_param(p, "points").ok_or_else(|| bad(C, "points must be [[x,y]...]"))?;
-        if points.first() != Some(&pt) || !points.iter().all(|q| finite(*q)) {
-            return Err(bad(C, "points must start at point and contain 1 to 4096 finite canvas points"));
-        }
-        Some(points)
-    } else {
-        None
+        Ok(points)
+    };
+    let points = p.get("points");
+    let continuation = match p.get("continuation") {
+        None => &[][..],
+        Some(input) if points.is_some() => input.as_array().ok_or_else(|| bad(C, "continuation must be an array of path chunks"))?.as_slice(),
+        Some(_) => return Err(bad(C, "continuation requires points")),
     };
     crate::cmd::paint::check_keep_model(p, C)?;
     let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone());
@@ -314,8 +331,8 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
             .and_then(|n| b::visible_face_at(n, pt))
             .map(|f| f.id)
             .ok_or_else(|| EngineError::Other("no Live Paint face at that point".into()))?;
-        let mut targets = vec![fid];
-        if let Some(points) = &points {
+        let mut targets = std::collections::BTreeSet::from([fid]);
+        if let Some(points) = points {
             let n = d.node(gid).ok_or(EngineError::NoNode(gid))?;
             // Use the existing region-crossing probes, so even a face narrower than the distance
             // between pointer events is filled. Reversing matches visible_face_at's front first.
@@ -331,9 +348,12 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             let map = b::BuilderMap { regions, ..Default::default() };
-            targets.extend(map.hits_along(points, None).regions.iter().filter_map(|i| face_ids.get(*i).copied()));
-            targets.sort();
-            targets.dedup();
+            let mut last = pt;
+            for input in std::iter::once(points).chain(continuation) {
+                let chunk = parse_chunk(input, last)?;
+                last = chunk.last().copied().unwrap_or(last);
+                targets.extend(map.hits_along(&chunk, None).regions.iter().filter_map(|i| face_ids.get(*i).copied()));
+            }
         }
         for target in targets {
             d.node_mut(target).ok_or(EngineError::NoNode(target))?.appearance.set_fill(paint.clone());
