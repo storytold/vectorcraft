@@ -496,6 +496,8 @@
 	Extrude & Bevel…	Vysunutí a zkosení…
 	3D (Classic)	3D (klasické)
 	Extrude & Bevel (Classic)…	Vysunutí a zkosení (klasické)…
+	Revolve (Classic)…	Rotační těleso (klasické)…
+	Rotate (Classic)…	Otočit (klasické)…
 	Surface	Povrch
 	Wireframe	Drátový model
 	No Shading	Bez stínování
@@ -849,6 +851,7 @@
 	Sky Gradients	Přechody oblohy
 	Neutral Gradients	Neutrální přechody
 	Organic Fades	Organické přechody
+	Holographic	Holografické
 	Duotone Gradients	Dvoutónové přechody
 	Radial Glows	Kruhové záře
 	Save Swatch Library…	Uložit knihovnu vzorníku…
@@ -2014,6 +2017,9 @@ digits	Malayalam	Malajálamské
 	Right Indent	Odsazení zprava
 	Right-to-Left Paragraph Direction	Směr odstavce zprava doleva
 	Roman Hanging Punctuation	Visící latinková interpunkce
+	Korean Line Break Anywhere	Zalomení korejského řádku kdekoli
+	East Asian Composition Settings	Nastavení východoasijské sazby
+	Korean Composition Settings	Nastavení korejské sazby
 	Select a text object to edit its paragraph attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho odstavce.
 	Single-line Composer	Sazba jednoho řádku
 	Toggle Line Composer	Přepnout sazbu řádků
@@ -4887,6 +4893,7 @@ imageTrace	Outline	Obrys
 @msg	not a valid plug-in module: {0}	neplatný modul zásuvného modulu: {0}
 @msg	not an EMF or WMF file	nejde o soubor EMF ani WMF
 @msg	not an HP-GL file	nejde o soubor HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` musí být pole 1 až 255 barev #rrggbb
 @msg	not found	nenalezeno
 @msg	not in pattern editing mode	není aktivní režim úprav vzorku
 @msg	finish editing the pattern first	nejprve dokončete úpravy vzorku
@@ -6314,6 +6321,17 @@ axis	Y Axis	osa Y
 	Charge Wave	Nabíjecí vlna
 	Spark Trail	Jiskrová stopa
 	Calligraphic Nibs	Kaligrafická pera
+	Bristle Brushes	Štětinové štětce
+	Fine Liner	Jemná linka
+	Pointed Flat	Špičatý plochý
+	Stubby Round	Krátký kulatý
+	Dry Scrub	Suché drhnutí
+	Soft Dome	Měkká kopule
+	Filbert	Plochý oválný
+	Angled Round	Šikmý kulatý
+	Angled Flat	Šikmý plochý
+	Fan Blender	Vějíř na prolínání
+	Grass Fan	Vějíř na trávu
 	Pattern Borders	Vzorkové okraje
 	Scatter Shapes	Rozptýlené tvary
 	Save Brush Library…	Uložit knihovnu štětců…
@@ -6689,6 +6707,10 @@ breakText	Glyphs	Glyfy
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Tahy používají jeden nebo více z těchto štětců. Odebrat štětce z těchto tahů a odstranit štětce?
 	Remove Strokes	Odebrat tahy
 	Place Brush Art	Umístit kresbu štětce
+	Replace Brush Art	Nahradit kresbu štětce
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Tahy používají tento štětec. Použít novou kresbu na tyto tahy, nebo je ponechat beze změny a přidat kopii štětce s novou kresbou?
+	Apply to Strokes	Použít na tahy
+	Leave Strokes	Ponechat tahy
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nemá kresbu (mají ji jen rozptylové, obrazové a vzorkové štětce)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Nástroje uspořádání
@@ -6942,8 +6964,33 @@ breakText	Glyphs	Glyfy
 @plural	{n} line cut|{n} lines cut	{n} řádek zkrácen|{n} řádky zkráceny|{n} řádků zkráceno
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` a `last` musí být čísla řádků, které konzole uchovává, `first` před `last`
 
+# Learn panel
+	Learn	Výuka
+	Explore tutorials	Prozkoumat výukové kurzy
+	For you	Pro vás
+	Skills	Dovednosti
+	Get started	Začínáme
+	Quick skill guide	Rychlý průvodce dovednostmi
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Krátké praktické výukové kurzy k základním nástrojům, seřazené podle dovedností. Vyberte dovednost a zobrazí se její kurzy.
+	List Tutorials	Vypsat výukové kurzy
+	Show Tutorial	Zobrazit výukový kurz
+@msg	missing `tutorial` (see learn.list)	chybí `tutorial` (viz learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	neznámý výukový kurz `{id}` (viz learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Obnovit odložené efekty
 	Deferred Effects	Odložené efekty
 @msg	no plug-in effect is deferred	žádný efekt zásuvného modulu není odložen
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otevřeno s {n} odloženým efektem zásuvného modulu. Efekt › Obnovit odložené efekty jej spustí.|Otevřeno s {n} odloženými efekty zásuvných modulů. Efekt › Obnovit odložené efekty je spustí.|Otevřeno s {n} odloženými efekty zásuvných modulů. Efekt › Obnovit odložené efekty je spustí.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Nástroje pro řezání
+	Stencil Bridges…	Můstky šablony…
+	Stencil Bridges	Můstky šablony
+	Shortest Crossing	Nejkratší přechod
+	Direction	Směr
+@msg	The selected art has no islands to bridge	Vybraná kresba nemá žádné ostrůvky k přemostění
+@msg	No bridge of this width fits across the selected art	Přes vybranou kresbu se nevejde žádný můstek této šířky
+@msg	Some islands could not be joined to the area around the art	Některé ostrůvky nebylo možné připojit k oblasti kolem kresby
+@msg	`width` must be from {lo} to {hi} pt	`width` musí být od {lo} do {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musí být celé číslo od 1 do {MAX_BRIDGES_PER_ISLAND}

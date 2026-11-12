@@ -206,11 +206,31 @@ fn no_targets(ids: &[vectorcraft_doc::NodeId], p: &Value) -> bool {
     ids.is_empty() && p.get("ids").is_none() && p.get("id").is_none()
 }
 
+/// The objects `stroke.set` edits with no `item`: a selected group or layer with a stroke row of
+/// its own edits that row, as the Stroke panel does with the group targeted (#6739); the other
+/// targets reach their painted leaves, as before.
+fn own_stroke_or_leaves(s: &Session, p: &Value) -> Result<Vec<vectorcraft_doc::NodeId>> {
+    let picked = super::targets(s, p)?;
+    let d = &s.doc()?.doc;
+    let own = |id: &vectorcraft_doc::NodeId| {
+        d.node(*id).is_some_and(|n| {
+            matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !n.is_compound_shape() && n.appearance.stroke().is_some()
+        })
+    };
+    let (mut out, rest): (Vec<_>, Vec<_>) = picked.into_iter().partition(own);
+    for id in super::leaf_targets(s, &rest)? {
+        if !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    Ok(out)
+}
+
 fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.set";
     let change = StrokeChange::parse(p, C)?;
     let item = item_target(s, p, C)?.of_kind(s, false);
-    let mut ids = item.targets(s, p)?;
+    let mut ids = if item == ItemTarget::Top { own_stroke_or_leaves(s, p)? } else { item.targets(s, p)? };
     let new_art = no_targets(&ids, p);
     if item == ItemTarget::Top {
         // Images and symbol instances take no stroke from the panel.
@@ -261,7 +281,11 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
             return Ok(());
         }
         if index.is_none() && n.appearance.stroke().is_none() {
-            n.appearance.set_stroke(Paint::solid(Color::BLACK));
+            // Options alone (cap, join, miter limit, dashes, alignment) don't make a stroke
+            // visible: the row made for them has no paint. A weight, an arrowhead or a profile
+            // still gives the object the black stroke the panel draws (#6739).
+            let visible = change.weight.is_some() || sa.is_some() || ea.is_some() || profile.is_some();
+            n.appearance.set_stroke(if visible { Paint::solid(Color::BLACK) } else { Paint::None });
         }
         if let Some(st) = n.appearance.stroke_at_mut(index) {
             set(st);

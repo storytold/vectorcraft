@@ -1094,6 +1094,8 @@ antiAlias	Sharp	锐利
 	Extrude & Bevel…	突出与斜角…
 	3D (Classic)	3D (经典)
 	Extrude & Bevel (Classic)…	突出与斜角 (经典)…
+	Revolve (Classic)…	回转 (经典)…
+	Rotate (Classic)…	旋转 (经典)…
 	Surface	表面
 	Wireframe	线框
 	No Shading	无底纹
@@ -2262,6 +2264,7 @@ file-filter	Templates	模板
 	Options:	选项：
 	Options…	选项…
 	Organic Fades	自然渐隐
+	Holographic	全息
 	or more spaces with a tab	或多个空格加一个制表符
 	Order:	顺序：
 	Ordinals	序数字
@@ -2813,6 +2816,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Rise…	上升…
 	Roman Baseline	罗马基线
 	Roman Hanging Punctuation	西文悬挂标点
+	Korean Line Break Anywhere	韩文任意位置换行
+	East Asian Composition Settings	东亚排版设置
+	Korean Composition Settings	韩文排版设置
 	Rotate	旋转
 	Rotate 90° CW	顺时针旋转 90°
 	Rotate Tool	旋转工具
@@ -4398,6 +4404,7 @@ imageTrace	Outline	轮廓
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
 @msg	not an HP-GL file	不是 HP-GL 文件
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必须是由 1 到 255 个 #rrggbb 格式颜色组成的数组
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
 @msg	damaged	已损坏
@@ -6152,6 +6159,17 @@ axis	Y Axis	Y 轴
 	Charge Wave	充能波
 	Spark Trail	火花尾迹
 	Calligraphic Nibs	书法笔尖
+	Bristle Brushes	鬃毛画笔集
+	Fine Liner	细勾线笔
+	Pointed Flat	尖头平笔
+	Stubby Round	短圆笔
+	Dry Scrub	干擦
+	Soft Dome	柔和圆顶
+	Filbert	榛形笔
+	Angled Round	斜圆笔
+	Angled Flat	斜平笔
+	Fan Blender	混色扇形笔
+	Grass Fan	画草扇形笔
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状
 	Save Brush Library…	保存画笔库…
@@ -6530,6 +6548,10 @@ breakText	Glyphs	字形
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有描边使用了其中一个或多个画笔。要从这些描边移除画笔并删除画笔吗？
 	Remove Strokes	移除描边
 	Place Brush Art	置入画笔图稿
+	Replace Brush Art	替换画笔图稿
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有描边使用了此画笔。要将新图稿应用到这些描边，还是保留描边不变并添加一个使用新图稿的画笔副本？
+	Apply to Strokes	应用于描边
+	Leave Strokes	保留描边
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 没有图稿 (只有散布画笔、艺术画笔和图案画笔有图稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
@@ -6780,8 +6802,33 @@ breakText	Glyphs	字形
 @plural	{n} line cut|{n} lines cut	已截断 {n} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必须是控制台保留的行号，且 `first` 不能在 `last` 之后
 
+# Learn panel
+	Learn	学习
+	Explore tutorials	浏览教程
+	For you	为你推荐
+	Skills	技能
+	Get started	入门
+	Quick skill guide	快速技能指南
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	针对基本工具的简短实操教程，按技能分组。选择一项技能即可查看其教程。
+	List Tutorials	列出教程
+	Show Tutorial	显示教程
+@msg	missing `tutorial` (see learn.list)	缺少 `tutorial` (请参阅 learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	未知教程 `{id}` (请参阅 learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	刷新延迟的效果
 	Deferred Effects	延迟的效果
 @msg	no plug-in effect is deferred	没有延迟的增效工具效果
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	打开时延迟了 {n} 个增效工具效果。效果 › 刷新延迟的效果可运行它们。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	切割工具
+	Stencil Bridges…	镂空版连接桥…
+	Stencil Bridges	镂空版连接桥
+	Shortest Crossing	最短跨越
+	Direction	方向
+@msg	The selected art has no islands to bridge	所选图稿没有需要连接的孤岛
+@msg	No bridge of this width fits across the selected art	此宽度的连接桥无法放入所选图稿
+@msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
+@msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数
