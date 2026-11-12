@@ -664,6 +664,10 @@ fn automation_cannot_approve_a_plugin_install() {
     let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
     refused(&r, "Only the person at the keyboard");
     assert!(app.ui.dialog.is_some() && vectorcraft_plugins::registry::get(id).is_none());
+    // Shown for long enough for a person's OK, it still refuses automation.
+    super::plugins::show_approval(&mut app);
+    let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
+    refused(&r, "Only the person at the keyboard");
     app.synthetic_frame = true;
     assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains("Only the person at the keyboard"));
     assert!(vectorcraft_plugins::registry::get(id).is_none());

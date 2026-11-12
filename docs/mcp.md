@@ -7829,7 +7829,9 @@ runs it where it is called, so the call may take minutes; `notifications/cancell
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
 needs a person's approval too, and `plugin.install` refuses `grant: [permission]` from a request. With a desktop
 app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,
-`ui.dialog.confirm` and injected input can't confirm it. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
+`ui.dialog.confirm` and injected input can't confirm it. Its OK takes input only once the question has been on screen
+in the focused window for half a second, counted again for every new question and after the window gets the focus
+back. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
 accepts `grant` and `allowHeavy` from any request, in that session only (headless; it can't be combined with
 `--connect`, `--automation-read-root` or `--automation-write-root`). A server confined to folders has no plug-in
 store, so it reads no `grants.json`, and a module that lists permissions or asks for a heavy budget does not install
