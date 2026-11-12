@@ -8104,8 +8104,14 @@ laid-out box, and so does type inside any other object, such as a blend, a repea
 VectorCraft's own rule, and envelopes of type in saved files redraw by it.
 Everything inside bends with the envelope: images as a raster mesh warp (cut into pieces by Fidelity, each a clipped
 image under its own affine map; SVG shares the pixels between the pieces), symbol instances as their symbol's art,
-and with Distort Appearance strokes (as their filled outlines) and geometry effects; with it, Distort Linear Gradients
-bends linear gradients and Distort Pattern Fills the pattern tiles. A transformed envelope keeps its warp in its own
+and with Distort Appearance the strokes of paths (as their filled outlines) and geometry effects; with it, Distort
+Linear Gradients bends linear gradients and Distort Pattern Fills the pattern tiles. Type's strokes (its characters'
+and those on its own appearance) don't bend, with Distort Appearance or without: they paint along the bent glyph
+outlines at their own weight, as `.ai` files draw type in an envelope, so a squeezed or stretched envelope keeps them
+as wide as they are, also in an envelope inside an envelope (#6644). Their geometry effects and an opacity mask on
+the type still bend, and Expand gives the bent outlines with the strokes on them, which Object › Expand or Outline
+Stroke outlines later. Before #6644, VectorCraft bent type's strokes too, so envelopes of stroked type made earlier
+now draw their strokes at their own weight. A transformed envelope keeps its warp in its own
 frame (`kind.frame` in `document.inspect`; rotating a warp envelope turns the warp with it), and move and scale keep
 it square to the page.
 
