@@ -354,6 +354,51 @@ fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     assert!(texts.iter().any(|(t, _)| t == "0%"));
 }
 
+/// A mirrored conic's Aspect Ratio field shows the extent's size, and a typed value keeps the
+/// sweep mirrored.
+#[test]
+fn the_aspect_field_keeps_a_mirrored_conic_mirrored() {
+    let mut app = app(json!({"gradient": {"kind": "conic", "aspect": -50}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let field = texts.iter().find(|(t, _)| t == "50%").unwrap_or_else(|| panic!("the aspect field: {texts:?}")).1;
+    p.click(&mut app, field);
+    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    let geom = fill(&app).geom.unwrap();
+    assert!((geom.aspect + 0.8).abs() < 1e-9 && geom.is_mirrored(), "{geom:?}");
+}
+
+/// The Type row's Diamond button (the fourth of five) makes the gradient a diamond, and the
+/// Aspect Ratio field then edits its aspect.
+#[test]
+fn the_diamond_button_makes_a_diamond_whose_aspect_field_edits_it() {
+    let mut app = app(json!({"gradient": {"kind": "linear", "start": [150, 150], "end": [200, 150]}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let label = texts.iter().find(|(t, _)| t == "Type:").unwrap_or_else(|| panic!("the Type row: {texts:?}")).1;
+    let buttons = p.row_after(label, 24.0);
+    assert_eq!(buttons.len(), 5, "Linear, Radial, Conic, Diamond and Freeform");
+    p.click(&mut app, buttons[3].center());
+    assert_eq!(fill(&app).gradient.kind, GradientKind::Diamond);
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    // The aspect field is the first 100% (above Opacity's).
+    let field = texts
+        .iter()
+        .filter(|(t, _)| t == "100%")
+        .map(|(_, at)| *at)
+        .min_by(|a, b| a.y.total_cmp(&b.y))
+        .unwrap_or_else(|| panic!("the aspect field: {texts:?}"));
+    p.click(&mut app, field);
+    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    let g = fill(&app);
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    assert!((g.geom.unwrap().aspect - 0.8).abs() < 1e-9, "{:?}", g.geom);
+}
+
 #[test]
 fn the_thumbnail_menu_applies_gradient_swatches_and_saves_one() {
     let mut app = app(json!({"color": "#336699"}));

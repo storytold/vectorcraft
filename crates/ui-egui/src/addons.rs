@@ -7,6 +7,7 @@ pub mod compounds;
 pub mod contour;
 pub mod document;
 pub mod enclosing_lasso;
+pub mod image;
 pub mod pathtools;
 pub mod pen;
 pub mod select;
@@ -26,6 +27,7 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Contour", contour::menu()),
         Item::Sub("Document Tools", document::menu()),
         Item::Sub("Enclosing Lasso", enclosing_lasso::menu()),
+        Item::Sub("Image Tools", image::menu()),
         Item::Sub("Path Precision Tools", pathtools::menu()),
         Item::Sub("Selection Tools", select::menu()),
         Item::Sub("Smart Pen", pen::menu()),

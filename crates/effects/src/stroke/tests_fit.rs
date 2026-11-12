@@ -155,9 +155,10 @@ fn each_dash_takes_its_width_from_the_profile_along_the_whole_path() {
         s.dash = Some(Dash { pattern: vec![10.0, 10.0], offset: 0.0, align_corners: false });
     });
     let o = line_outline(&line(100.0), &st, 10.0, 1e-3);
-    // The dash over 40..50 is near the lens's widest point; the one over 0..10 near its tip.
+    // The dash over 40..50 is near the lens's widest point; the one over 0..10 near its tip,
+    // where the smooth profile is thinner than a straight ramp (a parabola's first tenth).
     assert!(o.contains(Point::new(45.0, 4.0)) && o.contains(Point::new(45.0, -4.0)), "middle dash is wide");
-    assert!(!o.contains(Point::new(5.0, 2.0)) && o.contains(Point::new(5.0, 0.3)), "first dash is thin");
+    assert!(o.contains(Point::new(5.0, 0.8)) && !o.contains(Point::new(5.0, 1.2)), "first dash is thin");
     assert!(!o.contains(Point::new(15.0, 0.0)), "gaps stay empty");
     // Dots too: a round dot near the middle is bigger than one near an end.
     let st = stroke(10.0, |s| {
@@ -166,7 +167,7 @@ fn each_dash_takes_its_width_from_the_profile_along_the_whole_path() {
         s.dash = Some(Dash { pattern: vec![0.0, 10.0], offset: 0.0, align_corners: false });
     });
     let o = line_outline(&line(100.0), &st, 10.0, 1e-3);
-    assert!(o.contains(Point::new(50.0, 4.5)) && !o.contains(Point::new(10.0, 1.5)) && o.contains(Point::new(10.0, 0.5)));
+    assert!(o.contains(Point::new(50.0, 4.5)) && o.contains(Point::new(10.0, 1.4)) && !o.contains(Point::new(10.0, 2.0)));
 }
 
 /// An L whose corner turns 90° at (100, 0), or a sharp V turning back at (100, 0).

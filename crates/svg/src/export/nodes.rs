@@ -226,7 +226,7 @@ impl Writer<'_> {
                     if let (Some(g), Some(b)) = (pixel_gradient(&f.paint, true), bounds) {
                         p.extend((f.opacity < 1.0).then(|| ("opacity", fmt_num(f.opacity as f64, 3))));
                         p.extend(blend);
-                        self.raster_paint(g, b, &[d.to_string()], rule, &p, "", true);
+                        self.raster_paint(g, b, b, &[d.to_string()], rule, &p, "", true);
                     } else {
                         self.fill_props(f, rule, bounds, &mut p);
                         p.extend(blend);
@@ -263,13 +263,19 @@ impl Writer<'_> {
                             let clip = self.path_d(&PathData::from_bezpath(&outline), self.xf);
                             p.extend(opacity);
                             p.extend(blend);
-                            self.raster_paint(g, b, &[clip], FillRule::NonZero, &p, &side, false);
+                            let reach =
+                                if outline.elements().is_empty() { b } else { b.union(vectorcraft_geom::kurbo::Shape::bounding_box(&outline)) };
+                            self.raster_paint(g, b, reach, &[clip], FillRule::NonZero, &p, &side, false);
                         }
                         (WrittenShape::Fill(outlines), Some((g, b))) if s.path_gradient().is_none() => {
                             let clip: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
                             p.extend(opacity);
                             p.extend(blend);
-                            self.raster_paint(g, b, &clip, FillRule::NonZero, &p, &side, false);
+                            let reach = outlines
+                                .iter()
+                                .filter(|o| !o.elements().is_empty())
+                                .fold(b, |r, o| r.union(vectorcraft_geom::kurbo::Shape::bounding_box(o)));
+                            self.raster_paint(g, b, reach, &clip, FillRule::NonZero, &p, &side, false);
                         }
                         (WrittenShape::Stroke { width }, _) => {
                             p.push(("fill", "none".into()));
@@ -633,6 +639,10 @@ impl Writer<'_> {
 
     /// An object, inside `<a>` when it links to a URL (Attributes panel).
     pub(super) fn node(&mut self, n: &Node) {
+        // Ruler guides are not written, not even as a link.
+        if n.is_ruler_guide() {
+            return;
+        }
         let layer = usize::from(n.is_layer());
         self.layer_nest += layer;
         match n.url().filter(|_| n.visible && !self.anonymous) {
@@ -717,7 +727,7 @@ impl Writer<'_> {
                     self.line("</g>");
                 }
             }
-            NodeKind::Path { guide: true, .. } => {}
+            NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => {}
             NodeKind::Path { path, rule, .. } => {
                 if path.is_empty() {
                     return;

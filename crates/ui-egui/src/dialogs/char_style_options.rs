@@ -26,9 +26,9 @@ const NUMBERS: &[&str] = &["size", "leading", "kerning", "tracking"];
 /// The on, off or unset checkboxes.
 const SWITCHES: &[&str] = &["underline", "strikethrough", "standardVerticalRoman"];
 /// The attributes of Advanced Character Formats, in the order the section shows them.
-const ADVANCED: &[&str] = &["h_scale", "v_scale", "baseline_shift", "rotation", "language"];
+const ADVANCED: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "language"];
 /// The number fields of Advanced Character Formats.
-const ADVANCED_NUMBERS: &[&str] = &["h_scale", "v_scale", "baseline_shift", "rotation"];
+const ADVANCED_NUMBERS: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation"];
 /// The attributes of Character Color.
 const COLOR: &[&str] = &["fill", "stroke", "stroke_width", "overprint_fill", "overprint_stroke"];
 /// The fields of Character Color: the fill and stroke paints, their tints in percent, the stroke
@@ -78,6 +78,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "h_scale",
             "v_scale",
             "baseline_shift",
+            "tcyUpDown",
+            "tcyLeftRight",
             "rotation",
             "language",
             "fill",
@@ -250,6 +252,8 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
         "h_scale" => tl!("Horizontal Scale"),
         "v_scale" => tl!("Vertical Scale"),
         "baseline_shift" => tl!("Baseline Shift"),
+        "tcyUpDown" => tl!("Tate-chu-yoko Up/Down"),
+        "tcyLeftRight" => tl!("Tate-chu-yoko Left/Right"),
         "rotation" => tl!("Character Rotation"),
         "fill_tint" => tl!("Fill Tint"),
         "stroke_tint" => tl!("Stroke Tint"),
@@ -281,7 +285,7 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
             if ["h_scale", "v_scale"].contains(&key) && !(1.0..=10000.0).contains(&n) {
                 return Err(format!("{label} must be a number from 1 to 10000"));
             }
-            if key == "baseline_shift" && !(-1296.0..=1296.0).contains(&n) {
+            if ["baseline_shift", "tcyUpDown", "tcyLeftRight"].contains(&key) && !(-1296.0..=1296.0).contains(&n) {
                 return Err(format!("{label} must be a number from -1296 to 1296"));
             }
             // Weight from 0 to the document limit, a tint from 0% to 100%.
@@ -564,7 +568,7 @@ pub(crate) fn reset_basic(d: &mut Dialog) {
     }
 }
 
-/// Reset Panel in Advanced Character Formats: its five attributes become unset.
+/// Reset Panel in Advanced Character Formats: its seven attributes become unset.
 pub(crate) fn reset_advanced(d: &mut Dialog) {
     d.fields.insert("__resetAdvanced".into(), json!(true));
     for key in ADVANCED_NUMBERS {
@@ -718,14 +722,16 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-/// Advanced Character Formats: Horizontal Scale, Vertical Scale, Baseline Shift, Character Rotation
-/// and Language, each empty (unset) or set.
+/// Advanced Character Formats: Horizontal Scale, Vertical Scale, Baseline Shift, the Tate-chu-yoko
+/// Up/Down and Left/Right, Character Rotation and Language, each empty (unset) or set.
 pub(crate) fn advanced_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("character-style-advanced").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         for (key, caption, unit) in [
             ("h_scale", tl!("Horizontal Scale"), "%"),
             ("v_scale", tl!("Vertical Scale"), "%"),
             ("baseline_shift", tl!("Baseline Shift"), "pt"),
+            ("tcyUpDown", tl!("Tate-chu-yoko Up/Down"), "pt"),
+            ("tcyLeftRight", tl!("Tate-chu-yoko Left/Right"), "pt"),
             ("rotation", tl!("Character Rotation"), "°"),
         ] {
             let row = ui.label(caption);
@@ -1473,11 +1479,19 @@ mod tests {
     }
 
     #[test]
-    fn advanced_section_shows_its_five_controls() {
+    fn advanced_section_shows_its_seven_controls() {
         let mut d = dialog_for(json!({}));
         let mut app = app();
         let shown = crate::tests_labels::painted_text(&mut app, |_, ui| advanced_body(ui, &mut d));
-        for label in ["Horizontal Scale", "Vertical Scale", "Baseline Shift", "Character Rotation", "Language:"] {
+        for label in [
+            "Horizontal Scale",
+            "Vertical Scale",
+            "Baseline Shift",
+            "Tate-chu-yoko Up/Down",
+            "Tate-chu-yoko Left/Right",
+            "Character Rotation",
+            "Language:",
+        ] {
             assert!(shown.contains(label), "{label}: {shown}");
         }
     }
@@ -1567,6 +1581,85 @@ mod tests {
         let def = doc.char_styles.iter().find(|def| def.name == "Raised").unwrap();
         assert_eq!((def.attrs["baseline_shift"].clone(), def.attrs["language"].clone()), (json!(3.0), json!("fr")));
         assert!(!def.attrs.contains_key("v_scale"));
+    }
+
+    #[test]
+    fn tate_chu_yoko_offsets_show_set_reset_and_keep_their_limits() {
+        let d = dialog_for(json!({"tcyUpDown": 2.0, "size": 12.0}));
+        assert_eq!((d.fields["tcyUpDown"].clone(), d.fields["tcyLeftRight"].clone()), (json!(2.0), json!("")));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tcyUpDown": 2.0, "size": 12.0})));
+        // A value a style captured from scaled text stays while its field is untouched.
+        assert_eq!(edited_attrs(&dialog_for(json!({"tcyLeftRight": 3000.0}))).unwrap(), attrs(json!({"tcyLeftRight": 3000.0})));
+
+        let mut d = dialog_for(json!({"tcyUpDown": 2.0}));
+        d.fields.insert("tcyUpDown".into(), json!(""));
+        d.fields.insert("tcyLeftRight".into(), json!("-1296"));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tcyLeftRight": -1296.0})));
+        d.fields.insert("tcyLeftRight".into(), json!("0"));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tcyLeftRight": 0.0})));
+        for (key, value, message) in [
+            ("tcyUpDown", "1296.1", "Tate-chu-yoko Up/Down must be a number from -1296 to 1296"),
+            ("tcyLeftRight", "-1296.1", "Tate-chu-yoko Left/Right must be a number from -1296 to 1296"),
+            ("tcyUpDown", "high", "Tate-chu-yoko Up/Down must be a number"),
+            ("tcyLeftRight", "NaN", "Tate-chu-yoko Left/Right must be a number"),
+        ] {
+            let mut d = dialog_for(json!({}));
+            d.fields.insert(key.into(), json!(value));
+            assert_eq!(edited_attrs(&d).unwrap_err(), message, "{key} {value}");
+        }
+
+        let mut d = dialog_for(json!({"tcyUpDown": 2.0, "tcyLeftRight": -1.0, "size": 12.0}));
+        d.fields.insert("section".into(), json!("advanced"));
+        reset_section(&mut d);
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0})));
+    }
+
+    #[test]
+    fn tate_chu_yoko_offsets_preview_cancel_and_commit_to_the_style_and_its_text() {
+        let mut app = app();
+        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0, "tcyLeftRight": 0.0}})).unwrap();
+        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
+        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+        app.run("text.setRangeStyle", json!({"id": id, "start": 2, "end": 4, "tcyLeftRight": 5.0})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        open(&mut app, "Body").unwrap();
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("section".into(), json!("advanced"));
+            d.fields.insert("tcyUpDown".into(), json!("4"));
+        }
+        frame(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc.char_styles[0].attrs["tcyUpDown"], json!(4.0));
+        super::super::cancel(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, before);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+
+        open(&mut app, "Body").unwrap();
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("tcyUpDown".into(), json!("4"));
+            d.fields.insert("tcyLeftRight".into(), json!("-3"));
+        }
+        super::super::confirm(&mut app).unwrap();
+        let state = app.session.doc().unwrap();
+        assert_eq!(state.history.undo.len(), undo + 1);
+        assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "tcyUpDown": 4.0, "tcyLeftRight": -3.0})));
+        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert_eq!(t.runs.iter().map(|r| (r.style.tcy_up_down, r.style.tcy_left_right)).collect::<Vec<_>>(), [(4.0, -3.0), (4.0, 5.0)]);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, before);
+
+        app.run("ui.newCharStyle", json!({})).unwrap();
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("name".into(), json!("Shifted"));
+            d.fields.insert("tcyLeftRight".into(), json!("6"));
+        }
+        super::super::confirm(&mut app).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        let def = doc.char_styles.iter().find(|def| def.name == "Shifted").unwrap();
+        assert_eq!(def.attrs["tcyLeftRight"], json!(6.0));
     }
 
     /// The negated tags of the twenty stylistic sets: an explicit empty Stylistic Sets choice.

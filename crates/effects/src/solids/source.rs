@@ -191,7 +191,7 @@ impl Resolver<'_> {
         let mut changed = false;
         for c in children {
             self.spend(1)?;
-            if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+            if !c.visible || c.is_guide() {
                 continue;
             }
             if matches!(c.kind, NodeKind::Image(_)) {
@@ -279,7 +279,7 @@ impl Resolver<'_> {
                 kids = nest(n, cut, 0);
             } else {
                 for c in n.children().into_iter().flatten() {
-                    if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+                    if !c.visible || c.is_guide() {
                         continue;
                     }
                     if let Some(c) = self.clipped(c, clip, depth + 1)? {

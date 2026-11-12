@@ -76,7 +76,7 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// A dropdown of the `kind` profiles after `extra` (a built-in entry, shown in the UI language);
 /// profile names are shown as they are. Returns the chosen name.
-fn profile_dropdown(ui: &mut Ui, id: &str, current: &str, kind: ProfileKind, extra: Option<&str>) -> Option<String> {
+pub(crate) fn profile_dropdown(ui: &mut Ui, id: &str, current: &str, kind: ProfileKind, extra: Option<&str>) -> Option<String> {
     let names: Vec<String> =
         extra.map(str::to_string).into_iter().chain(cms::profiles().into_iter().filter(|p| p.kind == kind).map(|p| p.name)).collect();
     let refs: Vec<&str> = names.iter().map(|n| super::label_or_name(n, extra == Some(n.as_str()))).collect();

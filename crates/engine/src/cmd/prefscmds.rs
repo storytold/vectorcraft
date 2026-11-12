@@ -693,6 +693,10 @@ impl Session {
         for e in self.prefs.keep_folders(&mut p) {
             log::warn!("{e}");
         }
+        // Saved gradient presets get names no built-in preset or other saved one has.
+        for (old, new) in super::gradpresets::rename_clashing_presets(&mut p.gradient_presets) {
+            log::warn!("saved gradient preset {old} is listed as {new}: another preset has its name");
+        }
         // The edit the active tool computes on another thread is applied first (the Preferences
         // dialog applies its settings here, outside a command). A failure to apply it was the
         // edit's own, and the preferences apply all the same.
@@ -703,6 +707,9 @@ impl Session {
         let history_changed = p.history_states != self.prefs.history_states;
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
+        if p.plugins_folder.trim().is_empty() && !self.prefs.plugins_folder.trim().is_empty() {
+            super::plugin::forget_prefs_folder(&self.prefs.plugins_folder);
+        }
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
         let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
         let lock_guides_changed = p.lock_guides_by_default != self.prefs.lock_guides_by_default;

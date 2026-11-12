@@ -143,7 +143,21 @@ pub fn specs() -> Vec<CommandSpec> {
         |s, p| edit_style(s, p, Kind::Char),
         true,
     ));
-    v.extend(style_cmds!(Kind::Para, "paraStyle", "Paragraph Styles", "Paragraph", ""));
+    v.extend(style_cmds!(
+        Kind::Para,
+        "paraStyle",
+        "Paragraph Styles",
+        "Paragraph",
+        "; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; tab positions 0..=100000 pt"
+    ));
+    v.push(spec(
+        "paraStyle.edit",
+        "Edit Paragraph Style",
+        &[],
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; tab positions 0..=100000 pt",
+        |s, p| edit_style(s, p, Kind::Para),
+        true,
+    ));
     v.push(spec("textStyle.loadAll", "Load All Styles…", &["Window", "Type"], LOAD_PARAMS, |s, p| load(s, p, &[Kind::Char, Kind::Para]), true));
     v
 }
@@ -554,12 +568,92 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     }
                     char_attrs(&st)
                 }
-                Kind::Para => para_attrs(&with_attrs(&ParaStyle::default(), m, &c)?),
+                Kind::Para => {
+                    let st = with_attrs(&ParaStyle::default(), m, &c)?;
+                    para_ranges(&st, m, kept, &c)?;
+                    para_attrs(&st)
+                }
             };
             Ok(Some(m.keys().filter_map(|k| full.get(k).map(|v| (k.clone(), v.clone()))).collect()))
         }
         Some(_) => Err(bad(&kind.cmd(verb), "attrs must be an object")),
     }
+}
+
+/// The range of a paragraph style's indents, space before and space after, and Hyphenation Zone (pt),
+/// as `text.setFormat` keeps them.
+const PARA_DISTANCE: f64 = 1296.0;
+
+/// Check the paragraph attributes of `st` (read from `attrs`) that differ from `kept` against the
+/// ranges `text.setFormat` keeps them to: the indents and the space before and after, each
+/// Hyphenation option, each Justification option (Minimum, Desired and Maximum in order, as
+/// `attrs` gives them) and the position of each tab stop. A value `kept` has is not checked.
+fn para_ranges(st: &ParaStyle, attrs: &Map<String, Value>, kept: Option<&Map<String, Value>>, c: &str) -> Result<()> {
+    let within = |key: &str, value: f64, lo: f64, hi: f64| {
+        if (lo..=hi).contains(&value) { Ok(()) } else { Err(bad(c, format!("`{key}` must be from {lo} to {hi}"))) }
+    };
+    let changed = |key: &str| attrs.contains_key(key) && kept.and_then(|k| k.get(key)) != attrs.get(key);
+    let nested_changed = |key: &str, field: &str| {
+        changed(key) && attrs.get(key).and_then(|v| v.get(field)) != kept.and_then(|k| k.get(key)).and_then(|v| v.get(field))
+    };
+    for (key, value) in [
+        ("left_indent", st.left_indent),
+        ("right_indent", st.right_indent),
+        ("first_line_indent", st.first_line_indent),
+        ("space_before", st.space_before),
+        ("space_after", st.space_after),
+    ] {
+        if changed(key) {
+            within(key, value, -PARA_DISTANCE, PARA_DISTANCE)?;
+        }
+    }
+    let h = &st.hyphenation;
+    for (field, value, lo, hi) in [
+        ("words_longer_than", f64::from(h.words_longer_than), 1.0, 25.0),
+        ("after_first", f64::from(h.after_first), 1.0, 15.0),
+        ("before_last", f64::from(h.before_last), 1.0, 15.0),
+        ("hyphen_limit", f64::from(h.hyphen_limit), 0.0, 25.0),
+        ("zone", h.zone, 0.0, PARA_DISTANCE),
+    ] {
+        if nested_changed("hyphenation", field) {
+            within(&format!("hyphenation.{field}"), value, lo, hi)?;
+        }
+    }
+    // Read as given: a paragraph's attributes keep justification options in range as they load.
+    if let Some(given) = attrs.get("justification").filter(|_| changed("justification")) {
+        let j: vectorcraft_doc::JustificationOptions = serde_json::from_value(given.clone()).map_err(|e| bad(c, e.to_string()))?;
+        for (field, values, (lo, hi)) in [
+            ("word_spacing", j.word_spacing, vectorcraft_doc::JustificationOptions::WORD_SPACING),
+            ("letter_spacing", j.letter_spacing, vectorcraft_doc::JustificationOptions::LETTER_SPACING),
+            ("glyph_scaling", j.glyph_scaling, vectorcraft_doc::JustificationOptions::GLYPH_SCALING),
+        ] {
+            if !nested_changed("justification", field) {
+                continue;
+            }
+            let name = format!("justification.{field}");
+            for value in values {
+                within(&name, value, lo, hi)?;
+            }
+            if !(values[0] <= values[1] && values[1] <= values[2]) {
+                return Err(bad(c, format!("`{name}`: Minimum must not exceed Desired, nor Desired Maximum")));
+            }
+        }
+        if nested_changed("justification", "auto_leading") {
+            let (lo, hi) = vectorcraft_doc::JustificationOptions::AUTO_LEADING;
+            within("justification.auto_leading", j.auto_leading, lo, hi)?;
+        }
+    }
+    if changed("tabs") {
+        let kept_tabs: Vec<f64> = kept
+            .and_then(|k| k.get("tabs"))
+            .and_then(Value::as_array)
+            .map(|stops| stops.iter().filter_map(|s| s.get("position").and_then(Value::as_f64)).collect())
+            .unwrap_or_default();
+        for stop in st.tabs.iter().filter(|stop| !kept_tabs.contains(&stop.position)) {
+            within("tabs.position", stop.position, 0.0, 100_000.0)?;
+        }
+    }
+    Ok(())
 }
 
 /// Check a character style's `fill` or `stroke` (`key`): each solid color and gradient stop has a
@@ -976,12 +1070,12 @@ fn load(s: &mut Session, p: &Value, kinds: &[Kind]) -> Result<Value> {
     }
     let (chars, paras) = (kinds.contains(&Kind::Char), kinds.contains(&Kind::Para));
     let mut trial = (*s.doc()?.doc).clone();
-    let mut placed = import_text_styles(&src, &mut trial, chars, paras);
+    let mut placed = import_text_styles(&src, &mut trial, chars, paras)?;
     // An undo step only when the document changes. The step takes the document the import made,
     // unless the edit first ends a typing session, which can change the document it starts from.
     if trial != *s.doc()?.doc {
         if super::typing_in_progress(s) {
-            placed = s.edit(label, |d, _| Ok(import_text_styles(&src, d, chars, paras)))?;
+            placed = s.edit(label, |d, _| import_text_styles(&src, d, chars, paras))?;
         } else {
             s.edit(label, |d, _| {
                 *d = trial;

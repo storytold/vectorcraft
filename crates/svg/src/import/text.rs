@@ -51,6 +51,10 @@ const SVG_NS: &str = "http://www.w3.org/2000/svg";
 /// Most line breaks one absolutely positioned character adds before itself.
 const MAX_LINE_GAP: f64 = 10_000.0;
 
+/// Most blank lines (breaks past the first newline of each gap) the absolutely positioned
+/// characters of one text add in all: past it, a gap is one break as wide as the gap.
+const MAX_LINE_BREAKS: usize = 10_000;
+
 /// A whitespace/comma separated list.
 fn list(v: &str) -> impl Iterator<Item = &str> {
     v.split(|c: char| c.is_whitespace() || c == ',').filter(|t| !t.is_empty())
@@ -1060,6 +1064,7 @@ impl Ctx {
         } else if obj.plain_text().split('\n').any(|p| vectorcraft_text::paragraph_is_rtl(p, None)) {
             obj.edit_paras(None, |pa| pa.direction = Some(ParaDirection::LeftToRight));
         }
+        keep_reader_anchors(&mut obj);
         // The placeholder covers the text (laid out when a paint server needs its bounding box).
         let b = if paints.is_empty() { obj.bounds() } else { Some(obj.xf.transform_rect_bbox(measure(&obj).bounds)) }.unwrap_or_default();
         let marker = Rect::new(b.x0, b.y0, b.x1.max(b.x0 + 1.0), b.y1.max(b.y0 + 1.0));
@@ -1154,6 +1159,12 @@ fn justify_of(anchor: f64) -> Justify {
     }
 }
 
+/// How far a line's leading may differ from its spacing and still count as it: 0.01 absolute, but
+/// never more than a thousandth of the spacing itself (tiny type has tiny gaps).
+fn leading_tolerance(spacing: f64) -> f64 {
+    0.01_f64.min(spacing.abs() * 1e-3)
+}
+
 /// Point type: line breaks, baseline shifts and kerning from the positioning lists. Returns the
 /// justification, the x of the first line's left (or anchor) edge and, when no character is
 /// placed on its own, each line's first character and anchor x.
@@ -1174,6 +1185,7 @@ fn lines(
     // Line starts (first character, anchor x) and absolutely placed characters (index, x).
     let mut lines = vec![(0, x0)];
     let mut targets: Vec<(usize, f64)> = vec![];
+    let mut added = 0usize;
     for i in 1..n {
         let ny = y[i].unwrap_or(cur) + dy[i];
         let lead = cells[i].style.effective_leading();
@@ -1182,7 +1194,9 @@ fn lines(
             // Whole multiples of the auto leading add blank lines (not without limit: a far-off y
             // mustn't ask for billions); other spacing is one break.
             let count = (gap / lead).round().clamp(1.0, MAX_LINE_GAP);
-            let count = if (gap / count - lead).abs() <= lead * 0.05 { count } else { 1.0 };
+            // The first newline just ends the previous line: only the others are blank lines.
+            let count = if (gap / count - lead).abs() <= lead * 0.05 && added + (count as usize - 1) <= MAX_LINE_BREAKS { count } else { 1.0 };
+            added += count as usize - 1;
             breaks.push(Break { at: i, count: count as usize, leading: gap / count });
             lines.push((i, ax + dx[i]));
             (base, cur) = (ny, ny);
@@ -1198,7 +1212,8 @@ fn lines(
     // A line's characters take its spacing as leading unless it is their auto leading.
     for (k, b) in breaks.iter().enumerate() {
         let end = breaks.get(k + 1).map_or(n, |nb| nb.at);
-        if cells[b.at..end].iter().any(|c| (c.style.effective_leading() - b.leading).abs() > 0.01) {
+        let tolerance = leading_tolerance(b.leading);
+        if cells[b.at..end].iter().any(|c| (c.style.effective_leading() - b.leading).abs() > tolerance) {
             for c in &mut cells[b.at..end] {
                 c.style.leading = Some(b.leading);
             }
@@ -1264,6 +1279,55 @@ fn lines(
     (Justify::Left, left, None)
 }
 
+/// Centred and right-aligned lines of point type `obj` where a reader draws them. `text-anchor`
+/// aligns a line's advance, which ends after the letter spacing of its last character (SVG
+/// export anchors lines so); VectorCraft aligns a line without that tracking
+/// ([`vectorcraft_text::LineInfo::trailing`]). Each such line moves back by its share of it: the
+/// type moves when every line moves alike, otherwise each paragraph's right indent takes the
+/// tracking (a line of imported point type is a paragraph). Browsers add that letter spacing
+/// today; CSS WG issue 1518 and Firefox bugs 1907305 and 1913554 may drop it at a line's end.
+fn keep_reader_anchors(obj: &mut TextObject) {
+    let share = |j: Justify| match j {
+        Justify::Center => 0.5,
+        Justify::Right => 1.0,
+        _ => 0.0,
+    };
+    // Laid out only when a line may move: tracked type with a centred or right-aligned paragraph.
+    if !matches!(obj.kind, TextKind::Point)
+        || obj.vertical
+        || obj.runs.iter().all(|r| r.style.tracking == 0.0)
+        || obj.paragraph_styles().iter().all(|p| share(p.justify) == 0.0)
+    {
+        return;
+    }
+    let plain = obj.plain_text();
+    // Each line's paragraph, its tracking left out and how far that moves it.
+    let lines: Vec<(usize, f64, f64)> = measure(obj)
+        .lines
+        .iter()
+        .map(|l| {
+            let para = plain.get(..l.start).map_or(0, |before| before.matches('\n').count());
+            let trailing = if l.trailing.is_finite() { l.trailing } else { 0.0 };
+            (para, trailing, share(obj.para_at(para).justify) * trailing)
+        })
+        .collect();
+    let Some(&(_, _, first)) = lines.first() else { return };
+    if first == 0.0 && lines.iter().all(|l| l.2 == 0.0) {
+        return;
+    }
+    if lines.iter().all(|l| (l.2 - first).abs() < 1e-9) {
+        obj.xf *= Affine::translate((-first, 0.0));
+        return;
+    }
+    let mut styles = obj.paragraph_styles();
+    for &(para, trailing, moves) in &lines {
+        if let Some(style) = styles.get_mut(para).filter(|_| moves != 0.0) {
+            style.right_indent += trailing;
+        }
+    }
+    obj.set_paragraph_styles(styles);
+}
+
 /// A left-aligned point text of `runs` at the origin (for measuring).
 fn with_runs(runs: Vec<TextRun>) -> TextObject {
     let mut t = TextObject::point(Point::ZERO, "", CharStyle::default());
@@ -1322,7 +1386,7 @@ fn assemble(cells: &[Cell], breaks: &[Break]) -> (Runs, Vec<usize>) {
             let key = (prev.fill, prev.stroke);
             push(&mut out, '\n', prev.final_style(), key);
             let mut blank = prev.final_style();
-            if (blank.effective_leading() - b.leading).abs() > 0.01 {
+            if (blank.effective_leading() - b.leading).abs() > leading_tolerance(b.leading) {
                 blank.leading = Some(b.leading);
             }
             for _ in 1..b.count {

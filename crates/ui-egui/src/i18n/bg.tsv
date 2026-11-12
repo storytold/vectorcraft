@@ -249,6 +249,7 @@ font-technology	Variable	Променливи
 	Asset Export Settings	Настройки за експортиране на активи
 	Assets	Активи
 	Assign	Задаване
+	Assign Profile	Задаване на профил
 	Assign Profile…	Задаване на профил…
 	Assign:	Задаване:
 	Attach to Active Plane	Прикрепване към активната равнина
@@ -686,6 +687,15 @@ font-technology	Variable	Променливи
 	Created:	Създадено:
 	Crop	Изрязване
 	Crop Image	Изрязване на изображение
+	Image Tools	Инструменти за изображения
+	Remove Background…	Премахване на фона…
+	Remove Background	Премахване на фона
+	Background	Фон
+	Edge Color	Цвят на ръба
+	Picked Colors	Избрани цветове
+	Corner Color	Цвят на ъглите
+	Contiguous	Съседни
+	Each Channel	Всеки канал
 	Edit Path	Редактиране на контура
 	Mask	Маска
 	Crop Marks	Знаци за изрязване
@@ -1604,6 +1614,7 @@ font-technology	Variable	Променливи
 	Include Linked Files	Включване на свързаните файлове
 	Include Metadata	Включване на метаданни
 	Include non-printing layers	Включване на слоеве, които не се печат
+	Write pages longer than 200 in at full size in points	Записване на страници, по-дълги от 200 in, в пълен размер в точки
 	Include SVG Code	Включване на SVG код
 	Include Swatches for Tints	Включване на образци за тонове
 	Inflate…	Издуване…
@@ -2262,12 +2273,16 @@ font-technology	Variable	Променливи
 	Open…	Отваряне…
 	Optical	Оптично
 	Optical Margin Alignment	Подравняване по оптично поле
+	Dynamic Text	Динамичен текст
+	Dynamic Text Presets	Шаблони за динамичен текст
+	Arch	Арка
 	Optimize for fast web view	Оптимизиране за бърз уеб преглед
 	Optimized	Оптимизирано
 	Options	Опции
 	Options for Selection…	Опции за селектиране…
 	Options:	Опции:
 	Options…	Опции…
+	Organic Fades	Органични преливания
 	or more spaces with a tab	или повече интервала с табулация
 	Order:	Ред:
 	Ordinals	Поредни номера
@@ -2459,6 +2474,7 @@ font-technology	Variable	Променливи
 	Presets:	Предварителни настройки:
 	Press 	Натиснете 
 	Preview	Преглед
+	Preview:	Преглед:
 	Preview All Layers	Преглед на всички слоеве
 	Preview in Browser	Преглед в браузър
 	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
@@ -2537,6 +2553,8 @@ digits	Malayalam	Малаялам
 	Radial	Радиален
 	Radial Glows	Лъчисти сияния
 	Radial Gradient	Лъчист градиент
+	Conic Gradient	Конусен градиент
+	Diamond Gradient	Ромбовиден градиент
 	Radius 1	Радиус 1
 	Radius 2	Радиус 2
 	Radius1	Радиус1
@@ -3078,6 +3096,15 @@ digits	Malayalam	Малаялам
 	Stun Pulse	Зашеметяване
 	Stealth Fade	Скритост
 	Shield Buff	Щит
+	Textures	Текстури
+	Fine Grain	Фино зърно
+	Canvas Weave	Тъкано платно
+	Burlap Sack	Зебло
+	Cracked Glaze	Напукана глазура
+	Mosaic Floor	Мозаечен под
+	Quilted Squares	Капитонирани квадрати
+	Leaded Glass	Оловно стъкло
+	Damp Paper	Влажна хартия
 	Shape	Фигура
 	Shape Builder	Създател на фигури
 	Shape Builder Regions	Области на създателя на фигури
@@ -3140,6 +3167,7 @@ digits	Malayalam	Малаялам
 	Show Modified	Показване на променените
 	Show Note	Показване на бележка
 	Show Options	Показване на опциите
+	Show Recent Colors	Показване на скорошните цветове
 	Show Original Path	Показване на оригиналния път
 	Open this dialog with these settings next time	Отваряне на този прозорец с тези настройки следващия път
 	Auto-Simplify	Автоматично опростяване
@@ -3443,6 +3471,8 @@ digits	Malayalam	Малаялам
 	Scale at Center	Мащабиране от центъра
 	Up/Down:	Нагоре/надолу:
 	Left/Right:	Наляво/надясно:
+	Tate-chu-yoko Up/Down	Тате-чу-йоко нагоре/надолу
+	Tate-chu-yoko Left/Right	Тате-чу-йоко наляво/надясно
 	Temperature	Температура
 	Temperature/Tint…	Температура/Нюанс…
 	Template	Шаблон
@@ -3512,6 +3542,8 @@ digits	Malayalam	Малаялам
 	Toolbar: Single/Double Column	Лента с инструменти: Една/Две колони
 	Toolbar: Add Tool	Лента с инструменти: Добавяне на инструмент
 	Toolbar: Remove Tool	Лента с инструменти: Премахване на инструмент
+	Add Tool…	Добавяне на инструмент…
+	Remove Tool	Премахване на инструмент
 	Toolbar: Reset	Лента с инструменти: Нулиране
 	Toolbars	Ленти с инструменти
 	Tools	Инструменти
@@ -3775,6 +3807,7 @@ digits	Malayalam	Малаялам
 	Windows	Windows
 	Working CMYK	Работен CMYK
 	Working CMYK (don't tag)	Работен CMYK (без етикет)
+	Working RGB (don't tag)	Работен RGB (без етикет)
 	Workspace	Работно пространство
 	Workspace {i}	Работно пространство {i}
 	Wrinkle Tool	Инструмент „Набръчкване“
@@ -3953,6 +3986,13 @@ axis	Both	И двете
 	Dock Panel	Закотвен панел
 	Dock to Top	Закотвяне горе
 	Dock to Bottom	Закотвяне долу
+	Control Bar Options	Опции на контролната лента
+	Tool Options	Опции за инструмент
+	Object Options	Опции за обект
+	Image Options	Опции за изображение
+	Vertical Alignment	Вертикално подравняване
+	Align and Distribute	Подравняване и разпределение
+	Document Options	Опции за документ
 	Dock Control Bar	Закотвяне на контролната лента
 	Drag to float the toolbar	Плъзнете, за да направите лентата с инструменти плаваща
 	Drag to the window's left or right edge to dock	Плъзнете до левия или десния ръб на прозореца за закотвяне
@@ -4066,6 +4106,8 @@ axis	Both	И двете
 @msg	`gradient` must be an object	`gradient` трябва да бъде обект
 @msg	`library` is a library id or name (see {list})	`library` е идентификатор или име на библиотека (вижте {list})
 @msg	`mode` applies to freeform gradients	`mode` се прилага към свободни разградки
+@msg	a negative `aspect` applies to conic gradients	отрицателен `aspect` се прилага към конусни градиенти
+@msg	`focal` applies to radial gradients	`focal` се прилага към радиални градиенти
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` трябва да бъде 1, 3 или 5
 @msg	`stops` must be an array	`stops` трябва да бъде масив
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` трябва да бъде обект с опции за SVG (вижте document.formats)
@@ -4350,6 +4392,7 @@ axis	Both	И двете
 @msg	not a stored central record	не е съхранен централен запис
 @msg	not a valid plug-in module: {0}	не е валиден модул за плъгин: {0}
 @msg	not an EMF or WMF file	не е EMF или WMF файл
+@msg	not an HP-GL file	не е HP-GL файл
 @msg	not found	не е открито
 @msg	not in pattern editing mode	не е в режим на редактиране на мостра
 @msg	finish editing the pattern first	първо завършете редактирането на мострата
@@ -4522,7 +4565,7 @@ axis	Both	И двете
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (точки, линии)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	непознат вид градиент `{k}` (линеен, радиален, свободна форма)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, ромбовиден, свободна форма)
 @msg	unknown highlight `{h}`	непознат акцент `{h}`
 @msg	unknown option `{path}.{k}`	непозната опция `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
@@ -4755,6 +4798,8 @@ axis	Both	И двете
 @msg	invalid object id {value}: expected a non-negative integer	невалиден идентификатор на обект {value}: очаква се неотрицателно цяло число
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} на `{key}` е {value}, а не идентификатор на обект (неотрицателно цяло число)
 @msg	no such object id {value}	няма обект с идентификатор {value}
+@msg	id {value} is a ruler guide, not an object	идентификатор {value} е на водач, а не на обект
+@msg	a ruler guide goes only directly in a layer or sublayer	водачът може да е само пряко в слой или подслой
 @msg	automation filesystem access is not granted: read authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за четене: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за запис: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	пътят за автоматизация е отхвърлен: извън корена за четене {root}: {path}
@@ -4771,7 +4816,13 @@ axis	Both	И двете
 @msg	the PSD file has an unknown colour mode ({m})	PSD файлът има непознат цветови режим ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	образните данни на PSD файла използват непознато компресиране ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD изображението е твърде голямо за четене ({_1} × {_2} пиксела)
-@msg	zipped 32-bit PSD image data with prediction can't be read	архивирани (zipped) 32-битови PSD образни данни с предсказване не могат да бъдат прочетени
+@msg	zipped 1-bit PSD image data with prediction can't be read	архивирани (zipped) 1-битови PSD образни данни с предсказване не могат да бъдат прочетени
+@msg	the PSD file's layer data uses an unknown compression ({m})	данните на слоевете на PSD файла използват непознато компресиране ({m})
+@msg	the PSD file's layer records are damaged	записите на слоевете на PSD файла са повредени
+@msg	the PSD file's layer groups are nested too deeply	групите слоеве на PSD файла са вложени твърде дълбоко
+@msg	a layer of the PSD file is too large to read	слой на PSD файла е твърде голям за четене
+@msg	the PSD file's layers take more memory to read than allowed	слоевете на PSD файла изискват повече памет за четене от позволеното
+@msg	the layers can't be read ({e}): the file opened as its merged image	слоевете не могат да бъдат прочетени ({e}): файлът е отворен като обединеното си изображение
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-битови PSD файлове в този цветови режим не могат да бъдат прочетени
 @msg	the PSD file is cut short	PSD файлът е непълен
 @msg	the PSD file's header is damaged	заглавната част (header) на PSD файла е повредена
@@ -5490,6 +5541,11 @@ theme	Appearance	Външен вид
 	Softness	Мекота
 	Ambient Light	Околна светлина
 	Light behind the object	Светлина зад обекта
+	Shadows	Сенки
+	Distance from Object	Разстояние от обекта
+	Shadow Bounds	Граници на сянката
+	Behind Object	Зад обекта
+	Below Object	Под обекта
 	3D Lighting Preset	Предварителна настройка за 3D осветление
 	Standard	Стандартно
 	Diffuse	Дифузно
@@ -5613,7 +5669,7 @@ theme	Appearance	Външен вид
 @msg	span must be "object" or "selection", got {v}	span трябва да е "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" поставя `gradient`, а не мостра
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" поставя градиент: задайте `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" поставя линеен или радиален градиент, а не свободен
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" поставя линеен, радиален, конусен или ромбовиден градиент, а не свободен
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" поставя самия градиент: пропуснете `start` и `end` (те вече го поставят в координатите на документа)
 	Make Image Dynamic	Динамично изображение
 	Import Data Sets…	Импортиране на набори от данни…
@@ -5867,6 +5923,16 @@ axis	Y Axis	Y ос
 @msg	message must be text	message трябва да бъде текст
 @msg	allowContinue must be true or false	allowContinue трябва да бъде true или false
 @msg	Batch cannot play an action with a stop	Пакет не може да изпълни действие със спиране
+	Insert Menu Item…	Вмъкване на елемент от меню…
+	Insert Menu Item	Вмъкване на елемент от меню
+	Menu Item:	Елемент от меню:
+	No menu item matches.	Няма съвпадащ елемент от меню.
+	Several menu items match. Choose one from the list.	Съвпадат няколко елемента от меню. Изберете един от списъка.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Елементите, които отварят диалогов прозорец, и елементите от менютата „Файл“, „Прозорец“ и „Помощ“ не са изброени.
+@msg	command must be text	command трябва да бъде текст
+@msg	no menu item that can be inserted runs this command	няма елемент от меню за вмъкване, който изпълнява тази команда
+@msg	the action already has 10,000 steps	действието вече има 10 000 стъпки
+@msg	the action set would be larger than 8 MiB	наборът от действия ще стане по-голям от 8 MiB
 	Playback Options	Опции за възпроизвеждане
 	Accelerated	Ускорено
 	Step by Step	Стъпка по стъпка
@@ -5900,6 +5966,12 @@ axis	Y Axis	Y ос
 	Crosshair	Мерник
 	Checkpoint	Контролна точка
 	Inventory Icons	Икони на инвентара
+	Skill Icons	Икони на умения
+	Attack	Атака
+	Defend	Защита
+	Heal	Лечение
+	Buff	Усилване
+	Ult	Улт
 	Sword	Меч
 	Shield	Щит
 	Potion	Отвара
@@ -5958,6 +6030,11 @@ axis	Y Axis	Y ос
 	Dash Trail	Пунктирна следа
 	Speed Line	Линия на скорост
 	Game Trails	Игрови следи
+	Energy Beams	Енергийни лъчи
+	Laser Bolt	Лазерен болт
+	Plasma Arc	Плазмена дъга
+	Charge Wave	Вълна на заряд
+	Spark Trail	Следа от искри
 	Calligraphic Nibs	Калиграфски писци
 	Pattern Borders	Бордюри с мостри
 	Scatter Shapes	Разсеяни фигури
@@ -6485,6 +6562,11 @@ breakText	Glyphs	Глифи
 	No importer plug-ins installed	Няма инсталирани плъгини за импортиране
 	Read files you open in its format and make documents from them	Четене на файлове, които отваряте в неговия формат, и създаване на документи от тях
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копиране на информация за отстраняване на проблеми
+@msg	Copied the troubleshooting info	Информацията за отстраняване на проблеми е копирана
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Последната сесия на VectorCraft спря да отговаря, преди да се затвори. Помощ › Копиране на информация за отстраняване на проблеми копира подробностите за доклад за грешка
+
 # Safe Mode
 	Safe Mode…	Безопасен режим…
 	Safe Mode	Безопасен режим
@@ -6505,6 +6587,8 @@ breakText	Glyphs	Глифи
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Подравняване към пикселната мрежа
+	Align New Objects to Pixel Grid	Подравняване на новите обекти към пикселната мрежа
+	Not Aligned to Pixel Grid	Неподравнени към пикселната мрежа
 @msg	side is left or right, not `{s}`	side е left или right, а не `{s}`
 	Edit Custom Dictionary	Редактиране на потребителски речник
 	Entry:	Запис:
