@@ -161,7 +161,8 @@ mod tests {
         let art = |end_opacity: f32| {
             let mut end = GradientStop::new(1.0, Color::BLACK);
             end.opacity = end_opacity;
-            let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, BLUE), end]))));
+            let gradient =
+                Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, BLUE), end]))));
             let mut b = BezPath::new();
             b.move_to((150.0, 60.0));
             b.line_to((170.0, 60.0));
