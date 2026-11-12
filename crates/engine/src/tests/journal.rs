@@ -128,6 +128,39 @@ fn a_batch_passes_its_artboard_to_each_step_when_it_runs() {
     assert_eq!(s.doc().unwrap().doc.artboards.len(), 1, "in the new document");
 }
 
+/// A Paste in Place, in Front or in Back step that names `artboards` keeps them inside a batch
+/// given `artboard`, and pastes a copy on each; one that names neither takes the batch's artboard,
+/// unless the Artboard tool is chosen with several artboards selected: then it pastes on those.
+#[test]
+fn a_batch_keeps_the_artboards_a_paste_step_names() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<_> = s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    s.execute("shape.rectangle", &json!({"x": boards[0].x0 + 10.0, "y": boards[0].y0 + 10.0, "width": 20, "height": 20})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let step = |command: &str, params: Value| json!({"command": command, "params": params});
+    for id in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let origins = |r: &Value, s: &Session| {
+            let ids = r["results"][0]["ids"].as_array().unwrap().iter().map(|i| vectorcraft_doc::NodeId(i.as_u64().unwrap())).collect::<Vec<_>>();
+            ids.iter().map(|i| s.doc().unwrap().doc.bounds_of(&[*i], false).unwrap().origin().x).collect::<Vec<_>>()
+        };
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({"artboards": [0, 2]}))]})).unwrap();
+        assert_eq!(origins(&r, &s), [boards[0].x0 + 10.0, boards[2].x0 + 10.0], "{id}");
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({}))]})).unwrap();
+        assert_eq!(origins(&r, &s), [boards[1].x0 + 10.0], "{id}: the batch's artboard");
+    }
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([2, 0]));
+    for id in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({}))]})).unwrap();
+        let ids = r["results"][0]["ids"].as_array().unwrap().iter().map(|i| vectorcraft_doc::NodeId(i.as_u64().unwrap())).collect::<Vec<_>>();
+        let xs: Vec<f64> = ids.iter().map(|i| s.doc().unwrap().doc.bounds_of(&[*i], false).unwrap().origin().x).collect();
+        assert_eq!(xs, [boards[0].x0 + 10.0, boards[2].x0 + 10.0], "{id}: the Artboard tool's selection");
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({"artboard": 1}))]})).unwrap();
+        assert_eq!(r["results"][0]["ids"].as_array().map(Vec::len), Some(1), "{id}: a step's own `artboard` wins");
+    }
+}
+
 /// A batch passes its `artboard` to each Fit to Artwork Bounds and Fit to Selected Art step that
 /// names no `index`, as their `index` (past the document's last artboard, the last one), and a
 /// step's own `index` is kept. A recorded action leaves out the `index` or `indices` the app
