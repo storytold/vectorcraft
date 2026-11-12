@@ -122,7 +122,7 @@ pub(crate) fn boards_and_art_noted(s: &mut Session, p: &Value, cmd: &str) -> Res
 /// Add `selectedArtboards` to the running command's journal entry when `p` names no artboard, so a
 /// replay acts on the artboards the Artboard tool had selected. An action leaves it out
 /// (`REPLAY_ONLY`) and keeps an `index` or `indices` the call gave.
-fn note_artboards(s: &mut Session, p: &Value, indices: &[usize]) {
+pub(crate) fn note_artboards(s: &mut Session, p: &Value, indices: &[usize]) {
     if p.get("index").is_none() && p.get("indices").is_none() {
         s.note_journal("selectedArtboards", json!(indices));
     }
@@ -130,7 +130,7 @@ fn note_artboards(s: &mut Session, p: &Value, indices: &[usize]) {
 
 /// The artboards `cmd` acts on: `index` or `indices`, else `selectedArtboards` (a replay of the
 /// journal), else those the Artboard tool has selected, else its active one.
-fn named_or_selected(s: &Session, p: &Value, cmd: &str) -> Result<Vec<usize>> {
+pub(crate) fn named_or_selected(s: &Session, p: &Value, cmd: &str) -> Result<Vec<usize>> {
     let t = s.tool_options_of("artboard");
     let d = &s.doc()?.doc;
     if p.get("index").is_some() || p.get("indices").is_some() {
