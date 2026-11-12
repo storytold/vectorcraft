@@ -3782,6 +3782,10 @@ antiAlias	Sharp	शार्प
 	Remove Selected Entry	सिलेक्टेड प्रविष्टि निकालें
 	Remove Strokes	स्ट्रोक हटाएँ
 	Place Brush Art	ब्रश आर्टवर्क रखें
+	Replace Brush Art	ब्रश आर्टवर्क बदलें
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	स्ट्रोक्स इस ब्रश का उपयोग कर रहे हैं। नया आर्टवर्क उन स्ट्रोक्स पर लागू करें, या उन्हें जैसा है वैसा छोड़कर नए आर्टवर्क वाले ब्रश की एक कॉपी जोड़ें?
+	Apply to Strokes	स्ट्रोक्स पर लागू करें
+	Leave Strokes	स्ट्रोक्स जैसे हैं वैसे छोड़ें
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` में कोई आर्टवर्क नहीं है (आर्टवर्क केवल स्कैटर, आर्ट और पैटर्न ब्रश में होता है)
 	Remove the shortcut	शॉर्टकट निकालें
 	Remove Threading	थ्रेडिंग निकालें

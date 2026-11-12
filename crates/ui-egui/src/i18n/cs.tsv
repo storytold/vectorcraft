@@ -6688,6 +6688,10 @@ breakText	Glyphs	Glyfy
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Tahy používají jeden nebo více z těchto štětců. Odebrat štětce z těchto tahů a odstranit štětce?
 	Remove Strokes	Odebrat tahy
 	Place Brush Art	Umístit kresbu štětce
+	Replace Brush Art	Nahradit kresbu štětce
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Tahy používají tento štětec. Použít novou kresbu na tyto tahy, nebo je ponechat beze změny a přidat kopii štětce s novou kresbou?
+	Apply to Strokes	Použít na tahy
+	Leave Strokes	Ponechat tahy
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nemá kresbu (mají ji jen rozptylové, obrazové a vzorkové štětce)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Nástroje uspořádání

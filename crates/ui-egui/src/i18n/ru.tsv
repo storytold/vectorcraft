@@ -6665,6 +6665,10 @@ breakText	Glyphs	Глифы
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Обводки используют одну или несколько из этих кистей. Убрать кисти с этих обводок и удалить кисти?
 	Remove Strokes	Убрать обводки
 	Place Brush Art	Поместить рисунок кисти
+	Replace Brush Art	Заменить рисунок кисти
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обводки используют эту кисть. Применить новый рисунок к этим обводкам или оставить их как есть и добавить копию кисти с новым рисунком?
+	Apply to Strokes	Применить к обводкам
+	Leave Strokes	Оставить обводки
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	у `{name}` нет рисунка (он есть только у кистей-распылений, художественных и узорных кистей)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Инструменты размещения
