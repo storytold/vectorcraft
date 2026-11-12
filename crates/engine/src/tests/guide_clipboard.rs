@@ -12,7 +12,7 @@ fn run(s: &mut Session, id: &str, p: Value) -> Value {
 
 /// The active document's guides: (vertical, pos, layer).
 fn guides(s: &Session) -> Vec<(bool, f64, Option<NodeId>)> {
-    s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos, g.layer)).collect()
+    s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos, g.layer)).collect()
 }
 
 #[test]
@@ -31,7 +31,7 @@ fn ruler_guides_copy_and_paste_into_another_document() {
     let r = run(&mut s, "edit.paste", json!({}));
     assert_eq!(r["guides"], 2);
     assert_eq!(guides(&s), [(true, 120.0, Some(layer)), (false, 80.0, Some(layer))], "where they were, not offset");
-    assert_eq!(s.doc().unwrap().selection.guides, [0, 1]);
+    assert_eq!(super::selected_guides(&s), [0, 1]);
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     run(&mut s, "edit.undo", json!({}));
     assert!(guides(&s).is_empty());
@@ -104,9 +104,9 @@ fn two_pastes_add_their_own_guides_on_the_current_layer_and_svg_has_none() {
     assert!(s.clipboard.flavour_types(true, true).is_empty(), "nor any other format (the app empties the system clipboard)");
     let layer = NodeId(run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap());
     run(&mut s, "edit.paste", json!({}));
-    assert_eq!(s.doc().unwrap().selection.guides, [1], "the first paste selects its own guide");
+    assert_eq!(super::selected_guides(&s), [1], "the first paste selects its own guide");
     run(&mut s, "edit.paste", json!({}));
-    assert_eq!(s.doc().unwrap().selection.guides, [2], "the second paste selects its own guide");
+    assert_eq!(super::selected_guides(&s), [2], "the second paste selects its own guide");
     let g = guides(&s);
     assert_eq!(g.len(), 3, "two pastes, two more guides: {g:?}");
     assert_eq!((g[1].2, g[2].2), (Some(layer), Some(layer)), "on the layer new art goes to");
@@ -116,7 +116,7 @@ fn two_pastes_add_their_own_guides_on_the_current_layer_and_svg_has_none() {
     // Hiding that layer hides the guides pasted on it: they follow its visibility (and lock).
     run(&mut s, "layer.setProps", json!({"id": layer.0, "visible": false}));
     let st = s.doc().unwrap();
-    let shown: Vec<bool> = st.doc.guides.iter().map(|g| st.doc.guide_shown(g)).collect();
+    let shown: Vec<bool> = st.doc.ruler_guides().iter().map(|g| st.doc.guide_shown(g)).collect();
     assert_eq!(shown, [true, false, false]);
     // With an object, the SVG holds the object and no guide.
     run(&mut s, "layer.setProps", json!({"id": layer.0, "visible": true}));

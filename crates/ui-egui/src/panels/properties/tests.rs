@@ -1733,7 +1733,7 @@ fn selected_guides_show_their_position_in_a_transform_section() {
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     let v = app.run("guide.add", json!({"vertical": true, "pos": 30})).unwrap()["index"].as_u64().unwrap();
     let h = app.run("guide.add", json!({"vertical": false, "pos": 20})).unwrap()["index"].as_u64().unwrap();
-    let pos = |app: &VectorcraftApp, i: u64| app.session.doc().unwrap().doc.guides[i as usize].pos;
+    let pos = |app: &VectorcraftApp, i: u64| app.session.doc().unwrap().doc.ruler_guides()[i as usize].pos;
     let ctx = egui::Context::default();
     // Steps the field labelled `label` up by one with ↑.
     let step = |app: &mut VectorcraftApp, label: &str| {
@@ -1945,4 +1945,39 @@ fn vertical_alignment_buttons_align_the_selected_area_type() {
     app.run("text.thread.create", json!({})).unwrap();
     app.run("select.set", json!({"ids": [a]})).unwrap();
     assert_eq!(vertical_align::shown(&app).map(|s| s.enabled), Some(false));
+}
+
+/// With area type selected, the Paragraph section shows a Dynamic Text checkbox, and Word Gap and
+/// Line Gap while Block is on in every selected frame. Point type in the selection shows none;
+/// threaded frames turn the checkbox off.
+#[test]
+fn dynamic_text_rows_follow_the_selected_area_type() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 500, "height": 400})).unwrap();
+    let make = |app: &mut VectorcraftApp, x: f64, y: f64| {
+        app.run("text.create", json!({"x": x, "y": y, "text": "Panel\ntext", "area": {"width": 100, "height": 120}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (make(&mut app, 10.0, 10.0), make(&mut app, 200.0, 10.0));
+    let point = app.run("text.create", json!({"x": 10, "y": 350, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, point]})).unwrap();
+    assert_eq!(dynamic_text::shown(&app), None, "point type selected too: no rows");
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let off = dynamic_text::Shown { on: Some(false), word_gap: Some(100.0), line_gap: Some(0.0), enabled: true };
+    assert_eq!(dynamic_text::shown(&app), Some(off));
+    let ctx = egui::Context::default();
+    let texts = panel_frame(&mut app, &ctx, vec![], type_sections);
+    assert!(texts.iter().any(|(t, _)| t == "Dynamic Text") && !texts.iter().any(|(t, _)| t == "Word Gap"), "{texts:?}");
+    app.run("type.dynamicText", json!({"on": true, "lineGap": 2})).unwrap();
+    let on = dynamic_text::Shown { on: Some(true), word_gap: Some(100.0), line_gap: Some(2.0), enabled: true };
+    assert_eq!(dynamic_text::shown(&app), Some(on));
+    let texts = panel_frame(&mut app, &ctx, vec![], type_sections);
+    assert!(texts.iter().any(|(t, _)| t == "Word Gap") && texts.iter().any(|(t, _)| t == "Line Gap"), "{texts:?}");
+    // Differing gaps and settings show as mixed.
+    app.run("type.dynamicText", json!({"ids": [b], "wordGap": 200})).unwrap();
+    assert_eq!(dynamic_text::shown(&app).map(|s| (s.on, s.word_gap, s.line_gap)), Some((Some(true), None, Some(2.0))));
+    app.run("type.dynamicText", json!({"ids": [b], "on": false})).unwrap();
+    assert_eq!(dynamic_text::shown(&app).map(|s| (s.on, s.word_gap)), Some((None, None)));
+    // A threaded frame turns the checkbox off.
+    app.run("text.thread.create", json!({})).unwrap();
+    assert_eq!(dynamic_text::shown(&app).map(|s| (s.on, s.enabled)), Some((Some(false), false)));
 }

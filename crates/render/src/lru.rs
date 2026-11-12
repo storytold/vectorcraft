@@ -243,10 +243,14 @@ pub(crate) fn path_bytes(p: &BezPath) -> usize {
     size_of_val(p.elements())
 }
 
-/// Approximate bytes of node `n` and its members: the nodes and their path anchors.
+/// Approximate bytes of node `n` and its members: the nodes and their path anchors. Ruler guides
+/// are not drawn art and are not counted.
 pub(crate) fn node_bytes(n: &Node) -> usize {
     let mut b = 0;
     n.walk(&mut |c| {
+        if c.is_ruler_guide() {
+            return;
+        }
         b += size_of::<Node>() + NODE_OVERHEAD;
         if let Some(p) = c.path_data() {
             b += p.subpaths.iter().map(|s| size_of::<SubPath>() + s.anchors.len() * size_of::<Anchor>()).sum::<usize>();

@@ -272,12 +272,44 @@ fn closing_a_document_releases_only_its_layer_thumbnails() {
     });
 }
 
+/// From now on each reading of this thread's render budget clock is `ms` later than the one before.
+/// A render reads it before and after, so each row thumbnail rendered takes `ms` of the budget.
+fn clock_steps(ms: f64) {
+    let mut now = 0.0;
+    THUMBS.with(|c| {
+        c.borrow_mut().clock = Some(Box::new(move || {
+            now += ms;
+            now
+        }))
+    });
+}
+
+/// Rendering on the UI thread stops for the pass once the thumbnails rendered in it took the
+/// budget, and the rest render in the next passes.
+#[test]
+fn row_thumbnails_past_the_render_budget_wait_for_the_next_pass() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let renders = || THUMBS.with(|c| c.borrow().renders);
+    // Each render takes 5 ms: after two renders the pass has used 10 ms, past the 8 ms budget.
+    clock_steps(5.0);
+    let mut per_pass = vec![];
+    for _ in 0..4 {
+        let before = renders();
+        frame(&mut app, &ctx, vec![], false);
+        per_pass.push(renders() - before);
+    }
+    assert_eq!(per_pass, [2, 1, 0, 0], "the layer's and two objects' thumbnails, two in the first pass");
+}
+
 #[test]
 fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let (mut app, _, _) = two_rects();
     app.session.execute("select.all", &json!({})).unwrap();
     let ctx = egui::Context::default();
     let renders = || THUMBS.with(|c| c.borrow().renders);
+    // Renders take no time, so every row's thumbnail fits in a pass however busy the machine is.
+    clock_steps(0.0);
     frame(&mut app, &ctx, vec![], false);
     let first = renders();
     assert!(first >= 1, "the rows' thumbnails render at once");
@@ -650,14 +682,17 @@ fn guide_rows_select_and_move_their_guides() {
     let (circles, _) = frame(&mut app, &ctx, vec![], false);
     assert_eq!(circles.len(), 3);
     let guide_row = egui::pos2(150.0, (circles[1].y + circles[2].y) / 2.0);
-    let guides = |app: &VectorcraftApp| app.session.active().unwrap().selection.guides.clone();
+    let guides = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides)
+    };
     click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
     assert_eq!(guides(&app), [0], "its row selects it");
     // Dragged onto Layer 2's row, it goes on Layer 2, in one undo step.
     let undo = app.session.active().unwrap().history.undo.len();
     drag(&mut app, &ctx, guide_row, egui::pos2(150.0, circles[0].y), false);
     let st = app.session.active().unwrap();
-    assert_eq!((st.doc.guides[0].layer, st.history.undo.len()), (Some(second), undo + 1));
+    assert_eq!((st.doc.ruler_guides()[0].layer, st.history.undo.len()), (Some(second), undo + 1));
     // Now under Layer 2: locked, its row neither selects nor drags it.
     run(&mut app, "layer.setProps", json!({"ids": [second.0], "locked": true}));
     assert!(guides(&app).is_empty(), "deselected with its layer locked");
@@ -666,7 +701,7 @@ fn guide_rows_select_and_move_their_guides() {
     click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
     assert!(guides(&app).is_empty());
     drag(&mut app, &ctx, guide_row, egui::pos2(150.0, circles[2].y), false);
-    assert_eq!(app.session.active().unwrap().doc.guides[0].layer, Some(second));
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides()[0].layer, Some(second));
 }
 
 /// The selection squares drawn: (big ones on rows whose object is selected, small ones on rows
@@ -1782,4 +1817,49 @@ fn a_blends_spine_is_a_row_below_its_keys_that_selects_the_blend() {
     run(&mut app, "layer.setProps", json!({"ids": [blend.0], "locked": true}));
     click_with(&mut app, &ctx, spine_row, egui::Modifiers::NONE);
     assert!(selected(&app).is_empty(), "a locked blend's spine can't be selected");
+}
+
+/// A ruler guide node gets no object row, and a layer that holds only one has no rows to open.
+#[test]
+fn ruler_guide_nodes_get_no_object_row() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let rect = NodeId(app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap());
+    expand(&mut app, &json!({})).unwrap();
+    let st = app.session.active_mut().unwrap();
+    let doc = Arc::make_mut(&mut st.doc);
+    let (first, second) = (doc.layers[0].id, doc.add_layer(Some("Guides only")));
+    for l in [first, second] {
+        let g = Node::new(doc.alloc_id(), NodeKind::RulerGuide { vertical: true, pos: 20.0, artboard: None });
+        doc.insert(Some(l), usize::MAX, g).unwrap();
+    }
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let ids: Vec<NodeId> = rows.iter().filter(|r| r.guide.is_none()).map(|r| r.node.id).collect();
+    assert_eq!(ids, [second, first, rect]);
+    // Each guide is a guide row of its layer instead.
+    let guide_rows: Vec<NodeId> = rows.iter().filter(|r| r.guide.is_some()).map(|r| r.node.id).collect();
+    assert_eq!(guide_rows, [first], "the open layer lists its guide");
+    assert!(rows[0].opens, "a layer with only a ruler guide opens to its guide row");
+}
+
+/// A layer lists its guide rows by `guide.list` index, the highest first, whatever the order of
+/// the guide nodes in the layer (`guide.setLayer` puts a moved guide at the top of its new layer).
+#[test]
+fn guide_rows_list_by_index_whatever_the_node_order() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    for pos in [10, 20, 30] {
+        app.session.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+    }
+    let st = app.session.active_mut().unwrap();
+    let doc = Arc::make_mut(&mut st.doc);
+    let layer = doc.layers[0].id;
+    // The guide of index 0 moves to the top of the layer's guides.
+    let first = doc.ruler_guides()[0].id.unwrap();
+    doc.move_node(first, Some(layer), usize::MAX).unwrap();
+    let kids: Vec<NodeId> = doc.layers[0].children().unwrap().iter().map(|c| c.id).collect();
+    assert_eq!(kids.last(), Some(&first));
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let indexes: Vec<usize> = rows.iter().filter_map(|r| r.guide).collect();
+    assert_eq!(indexes, [2, 1, 0]);
 }

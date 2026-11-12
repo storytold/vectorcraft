@@ -46,6 +46,8 @@ struct Sub {
     ends: Vec<usize>,
     /// The box of each run of segments ([`segment_bounds`]).
     boxes: Vec<Option<Rect>>,
+    /// The box of the points of each run of segments: their ends and their control points.
+    controls: Vec<Option<Rect>>,
     /// The box of the miter tips of `tips_of` at the joints whose first segment is in each run.
     tips: Vec<Option<Rect>>,
 }
@@ -122,6 +124,15 @@ fn end(el: &PathEl) -> Option<Point> {
     }
 }
 
+/// The box of the points of segment `s`: its ends and its control points.
+fn segment_controls(s: PathSeg) -> Rect {
+    match s {
+        PathSeg::Line(l) => Rect::from_points(l.p0, l.p1),
+        PathSeg::Quad(q) => Rect::from_points(q.p0, q.p2).union_pt(q.p1),
+        PathSeg::Cubic(c) => Rect::from_points(c.p0, c.p3).union_pt(c.p1).union_pt(c.p2),
+    }
+}
+
 /// The ends of the runs of a subpath of `segs` segments measured whole: [`RUN`] segments each.
 fn whole_runs(segs: usize) -> Vec<usize> {
     (1..=segs.div_ceil(RUN)).map(|r| (r * RUN).min(segs)).collect()
@@ -146,8 +157,10 @@ impl Sub {
     /// Subpath `sp`, its MoveTo at `start` in `els`, measured whole, with the tips of `st`.
     fn measured(sp: &SubPath, start: usize, els: &[PathEl], st: Option<&StrokeLayer>) -> Self {
         let segs = sp.segment_count();
-        let mut sub = Sub { start, segs, anchors: sp.anchors.len(), closed: sp.closed, ends: whole_runs(segs), boxes: vec![], tips: vec![] };
+        let ends = whole_runs(segs);
+        let mut sub = Sub { start, segs, anchors: sp.anchors.len(), closed: sp.closed, ends, boxes: vec![], controls: vec![], tips: vec![] };
         sub.boxes = (0..sub.runs()).map(|r| sub.run_box(els, r)).collect();
+        sub.controls = (0..sub.runs()).map(|r| sub.run_controls(els, r)).collect();
         if let Some(st) = st {
             sub.tips = (0..sub.runs()).map(|r| sub.run_tips(els, r, st)).collect();
         }
@@ -189,6 +202,22 @@ impl Sub {
     /// The box of the segments of run `r`.
     fn run_box(&self, els: &[PathEl], r: usize) -> Option<Rect> {
         self.range(r).filter_map(|i| self.seg(els, i)).map(segment_bounds).reduce(|a, b| a.union(b))
+    }
+
+    /// The box of the points of the segments of run `r`: their ends and their control points.
+    fn run_controls(&self, els: &[PathEl], r: usize) -> Option<Rect> {
+        self.range(r).filter_map(|i| self.seg(els, i)).map(segment_controls).reduce(|a, b| a.union(b))
+    }
+
+    /// Measure again the box and the box of the points of run `r`.
+    fn measure_run(&mut self, els: &[PathEl], r: usize) {
+        let (b, c) = (self.run_box(els, r), self.run_controls(els, r));
+        if let Some(slot) = self.boxes.get_mut(r) {
+            *slot = b;
+        }
+        if let Some(slot) = self.controls.get_mut(r) {
+            *slot = c;
+        }
     }
 
     /// The segment with length that follows segment `i` (round to the start when closed), or
@@ -297,10 +326,7 @@ impl Sub {
         let mut boxes: Vec<usize> = if all { (0..self.runs()).collect() } else { segs.iter().map(|&i| self.run_of(i)).collect() };
         boxes.dedup();
         for r in boxes {
-            let b = self.run_box(els, r);
-            if let Some(slot) = self.boxes.get_mut(r) {
-                *slot = b;
-            }
+            self.measure_run(els, r);
         }
         let Some(st) = st else { return };
         // A joint's tip changes with its segments and with which segment with length comes next:
@@ -380,11 +406,8 @@ impl Sub {
         self.anchors = n1;
         self.closed = c1;
         let els: &[PathEl] = els;
-        for (r, _) in stale.iter().enumerate().filter(|(_, s)| **s) {
-            let b = self.run_box(els, r);
-            if let Some(slot) = self.boxes.get_mut(r) {
-                *slot = b;
-            }
+        for r in stale.iter().enumerate().filter(|(_, s)| **s).map(|(r, _)| r) {
+            self.measure_run(els, r);
         }
         let Some(st) = st else { return Some(()) };
         let mut runs: Vec<usize> = stale.iter().enumerate().filter(|(_, s)| **s).map(|(r, _)| r).collect();
@@ -422,7 +445,7 @@ impl Sub {
         let len = last.checked_sub(first)?;
         let segs = self.segs.checked_add(new)?.checked_sub(old)?;
         let after: Vec<usize> = self.ends.get(r1..)?.iter().map(|&e| e.checked_add(new)?.checked_sub(old)).collect::<Option<_>>()?;
-        if r1 > self.boxes.len() || r1 > stale.len() {
+        if r1 > self.boxes.len() || r1 > self.controls.len() || r1 > stale.len() {
             return None;
         }
         let count = if len > 2 * RUN { len.div_ceil(RUN) } else { usize::from(len > 0) };
@@ -430,6 +453,7 @@ impl Sub {
         self.ends.extend(after);
         self.ends.splice(r0..r1, (1..=count).map(|j| if j == count { last } else { first + j * RUN }));
         self.boxes.splice(r0..r1, std::iter::repeat_n(None, count));
+        self.controls.splice(r0..r1, std::iter::repeat_n(None, count));
         if tips {
             self.tips.splice(r0.min(self.tips.len())..r1.min(self.tips.len()), std::iter::repeat_n(None, count));
         }
@@ -600,6 +624,15 @@ impl KeptPath {
             };
             vectorcraft_geom::union_opt(acc, b)
         })
+    }
+
+    /// The box of the points of the path's elements, as [`BezPath::control_box`] measures it: each
+    /// subpath's MoveTo and the boxes of the points of its runs, joined.
+    pub(crate) fn control_box(&self) -> Rect {
+        let els = self.path.elements();
+        let start = |s: &Sub| els.get(s.start).and_then(end).filter(|_| s.anchors > 0).map(|p| Rect::from_points(p, p));
+        let runs = |s: &Sub| s.controls.iter().flatten().copied().reduce(|a, b| a.union(b));
+        self.parts.iter().flatten().flat_map(|s| [start(s), runs(s)]).flatten().reduce(|a, b| a.union(b)).unwrap_or_default()
     }
 
     /// The box of the miter tips of `st` at every joint of the path ([`StrokeLayer::miter_tip`]),

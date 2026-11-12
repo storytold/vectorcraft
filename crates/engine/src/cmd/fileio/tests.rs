@@ -48,6 +48,19 @@ fn image_of(s: &Session) -> vectorcraft_doc::ImageObject {
     }
 }
 
+/// A path outside a confined request's read roots shows as its file name, after the last `/` or `\`
+/// on every platform; one that ends in no name shows as nothing. Without roots it shows whole.
+#[test]
+fn a_hidden_path_shows_as_its_file_name_on_every_platform() {
+    let windows = "C:\\Users\\someone\\art\\red.png";
+    crate::file_access::confine(Some(&crate::file_access::AutomationRoots::none()), || {
+        for (path, name) in [("/home/someone/art/red.png", "red.png"), (windows, "red.png"), ("/home/someone/..", ""), ("C:\\Users\\someone\\", "")] {
+            assert_eq!(shown_path(path), name, "{path}");
+        }
+    });
+    assert_eq!(shown_path(windows), windows);
+}
+
 #[test]
 fn opens_every_readable_format() {
     let mut s = session(200.0, 100.0, 1);

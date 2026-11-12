@@ -19,7 +19,7 @@ impl Node {
 
     fn push_clip_shapes(&self, text: Outliner, out: &mut Vec<(BezPath, FillRule)>) {
         match &self.kind {
-            NodeKind::Path { guide: true, .. } | NodeKind::SymbolInstance { .. } => {}
+            NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } | NodeKind::SymbolInstance { .. } => {}
             NodeKind::Path { path, rule, .. } => out.push((path.to_bezpath(), *rule)),
             NodeKind::Compound { children, rule } => {
                 let mut bp = BezPath::new();

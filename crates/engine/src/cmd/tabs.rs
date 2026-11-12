@@ -13,7 +13,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Tab Stops",
             ["Window", "Tabs"],
             None,
-            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?|id?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches); supplied align, leader and alignOn must be strings, and alignOn cannot be empty",
+            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?|id?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches); at most 256 stops, positions 0..=100000 pt; supplied align, leader and alignOn must be strings, a leader has at most 8 characters and alignOn exactly one; stops are sorted by position, and of stops at one position the first given is kept",
             has_selection,
             set
         ),
@@ -38,10 +38,14 @@ pub fn specs() -> Vec<CommandSpec> {
 fn parse_stops(p: &Value) -> Result<Vec<TabStop>> {
     const C: &str = "text.tabs.set";
     let arr = p.get("stops").and_then(Value::as_array).ok_or_else(|| bad(C, "missing stops"))?;
+    let max = TabStop::MAX_STOPS;
+    if arr.len() > max {
+        return Err(bad(C, format!("at most {max} tab stops")));
+    }
     let mut stops = vec![];
     for s in arr {
         let position = s.get("position").and_then(Value::as_f64).ok_or_else(|| bad(C, "each stop needs a position"))?;
-        if !(0.0..=100_000.0).contains(&position) {
+        if !(0.0..=TabStop::MAX_POSITION).contains(&position) {
             return Err(bad(C, "positions must be between 0 and 100000 pt"));
         }
         let align = match s.get("align") {
@@ -60,16 +64,25 @@ fn parse_stops(p: &Value) -> Result<Vec<TabStop>> {
             None | Some(Value::Null) => "",
             Some(Value::String(value)) => value.as_str(),
             Some(_) => return Err(bad(C, "`leader` must be a string")),
+        };
+        let (label, max) = ("`leader`", TabStop::MAX_LEADER);
+        if leader.chars().count() > max {
+            return Err(bad(C, format!("{label} must be at most {max} characters")));
         }
-        .chars()
-        .take(8)
-        .collect();
         let align_on = match s.get("alignOn") {
             None | Some(Value::Null) => '.',
-            Some(Value::String(value)) => value.chars().next().ok_or_else(|| bad(C, "`alignOn` cannot be empty"))?,
+            Some(Value::String(value)) => {
+                let mut chars = value.chars();
+                let c = chars.next().ok_or_else(|| bad(C, "`alignOn` cannot be empty"))?;
+                if chars.next().is_some() {
+                    let label = "`alignOn`";
+                    return Err(bad(C, format!("{label} must be one character")));
+                }
+                c
+            }
             Some(_) => return Err(bad(C, "`alignOn` must be a string")),
         };
-        stops.push(TabStop { position, align, leader, align_on });
+        stops.push(TabStop { position, align, leader: leader.to_string(), align_on });
     }
     stops.sort_by(|a, b| a.position.total_cmp(&b.position));
     stops.dedup_by(|a, b| (a.position - b.position).abs() < 1e-6);
@@ -128,7 +141,7 @@ fn get(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use crate::Session;
 
@@ -137,6 +150,21 @@ mod tests {
         for stop in [json!({"position": 40, "align": false}), json!({"position": 40, "leader": 1}), json!({"position": 40, "alignOn": ""})] {
             assert!(super::parse_stops(&json!({"stops": [stop.clone()]})).is_err(), "accepted {stop}");
         }
+    }
+
+    /// A leader of more than eight characters, an `alignOn` of more than one character and a list
+    /// of more than 256 stops are errors, not cut short.
+    #[test]
+    fn long_leaders_long_align_on_and_too_many_stops_are_errors() {
+        let err = |stops: Value| super::parse_stops(&json!({ "stops": stops })).unwrap_err().to_string();
+        assert!(err(json!([{"position": 40, "leader": "123456789"}])).contains("`leader` must be at most 8 characters"));
+        assert!(err(json!([{"position": 40, "alignOn": ",."}])).contains("`alignOn` must be one character"));
+        let many: Vec<Value> = (0..257).map(|i| json!({"position": i})).collect();
+        assert!(err(Value::from(many.clone())).contains("at most 256 tab stops"));
+        let ok = super::parse_stops(&json!({ "stops": &many[..256] })).unwrap();
+        assert_eq!(ok.len(), 256);
+        let ok = super::parse_stops(&json!({"stops": [{"position": 0, "leader": "12345678", "alignOn": "€"}]})).unwrap();
+        assert_eq!((ok[0].leader.as_str(), ok[0].align_on), ("12345678", '€'));
     }
 
     #[test]
