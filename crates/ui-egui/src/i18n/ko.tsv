@@ -524,6 +524,8 @@ digits	Malayalam	말라얄람어
 	Extrude & Bevel…	돌출 및 경사…
 	3D (Classic)	3D(클래식)
 	Extrude & Bevel (Classic)…	돌출 및 경사(클래식)…
+	Revolve (Classic)…	회전체(클래식)…
+	Rotate (Classic)…	회전(클래식)…
 	Surface	표면
 	Wireframe	와이어프레임
 	No Shading	셰이딩 없음
@@ -6276,6 +6278,10 @@ breakText	Glyphs	글리프
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	선에서 이 브러시 중 하나 이상을 사용합니다. 해당 선에서 브러시를 제거하고 브러시를 삭제하시겠습니까?
 	Remove Strokes	선 제거
 	Place Brush Art	브러시 아트 배치
+	Replace Brush Art	브러시 아트 바꾸기
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	선에서 이 브러시를 사용합니다. 새 아트를 해당 선에 적용하시겠습니까, 아니면 선을 그대로 두고 새 아트로 브러시 사본을 추가하시겠습니까?
+	Apply to Strokes	선에 적용
+	Leave Strokes	선 유지
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}`에는 아트가 없습니다 (흩뿌리기, 아트, 패턴 브러시에만 아트가 있습니다)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	배치 도구
@@ -6528,6 +6534,19 @@ breakText	Glyphs	글리프
 @plural	{n} earlier line dropped|{n} earlier lines dropped	이전 줄 {n}개 삭제됨
 @plural	{n} line cut|{n} lines cut	줄 {n}개 잘림
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다
+
+# Learn panel
+	Learn	학습
+	Explore tutorials	튜토리얼 살펴보기
+	For you	추천
+	Skills	기술
+	Get started	시작하기
+	Quick skill guide	빠른 기술 가이드
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	기본 도구를 익히는 짧은 실습 튜토리얼을 기술별로 모았습니다. 기술을 선택하면 해당 튜토리얼이 표시됩니다.
+	List Tutorials	튜토리얼 목록
+	Show Tutorial	튜토리얼 표시
+@msg	missing `tutorial` (see learn.list)	`tutorial`이 없습니다(learn.list 참조)
+@msg	unknown tutorial `{id}` (see learn.list)	알 수 없는 튜토리얼 `{id}`(learn.list 참조)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	보류된 효과 새로 고침

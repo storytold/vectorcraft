@@ -2450,6 +2450,26 @@ kept with the workspace, and built-in workspaces and workspaces saved without it
 {"name":"invoke_menu","arguments":{"command":"window.toolsBesideCanvas","params":{"on":true}}}
 ```
 
+## Learn panel
+
+Window › Learn and the Explore tutorials button beside the search icon at the right end of the app bar show and hide
+the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
+the Skills tab. The Skills tab lists VectorCraft's own skills, each with its number of tutorials and an empty progress
+ring. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and Back goes up one level.
+The tutorial text is English. `window.learn {show?}` shows the panel (`show: true`), hides it (`show: false`) or
+toggles it (`show` omitted or null), and answers whether it shows; Window › Learn and Explore tutorials run it.
+The panel counts as hidden while the dock is hidden or a full screen mode hides the panels. Showing it shows a hidden
+dock; in a full screen mode it makes Learn the front panel, which shows when the mode ends, and answers false. Any
+other value of `show` is an error and changes nothing. `learn.list {}` → `{skills: [{id, title, tutorials: [{id, title, steps}]}]}`, in the order the Skills tab
+lists them, where `steps` is the number of steps. `learn.show {tutorial}` shows the panel on its Skills tab with that
+tutorial's steps → `{skill, tutorial, title, steps: [text]}`. A missing, non-string or unknown `tutorial` is an error
+and changes nothing. Behavior reference:
+[Quick skill guide](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/learn-skills-quick-skill-guide.html).
+
+```json
+{"name":"invoke_menu","arguments":{"command":"learn.show","params":{"tutorial":"pen-paths"}}}
+```
+
 ## Ruler guides
 
 Each ruler guide is an object of a layer or sublayer, directly in it and above its art, and takes an id from the
@@ -2964,6 +2984,21 @@ Tile, Start Tile or End Tile. A tile with a repeat frame has an unpainted rectan
 the frame. A symbol instance in the art is measured by its symbol's art. A calligraphic or bristle brush is refused
 with "`<name>` has no art (only scatter, art and pattern brushes do)".
 
+`brush.replaceArt {name, ids?|id?, applyToStrokes?}` makes the selected art the brush's art and keeps its other
+options; several objects become one group, as in `brush.new`. A pattern brush takes a group named for a tile, or a
+group of such groups, tile by tile: an unpainted rectangle at the back of a tile group becomes that tile's repeat frame,
+a tile group's art goes back without that group, and the tiles that are not given stay as they are. Of two groups named
+for the same tile, the frontmost one counts. Other art becomes the side tile. When strokes use the brush and
+`applyToStrokes` is `false`, the brush and its strokes stay as they were, and a copy of the brush with the new art,
+named "`<name>` copy", goes after it and becomes the current brush. Otherwise, and for a brush no stroke uses, the brush
+changes and its strokes redraw. It replies `{name}`, the brush that has the new art, and refuses a calligraphic or
+bristle brush, an empty selection and art (or a tile it is given, such as a tile group left with only its frame's
+rectangle) with no width. `brush.replaceArt` and `brush.new` measure a symbol instance in the art by its symbol's art.
+In the app, art Alt-dragged (Option-dragged on macOS) from the canvas onto a scatter, art or pattern brush in the
+Brushes panel runs it. When strokes use the brush, the app checks the art first and shows why in the status bar when
+the brush cannot take it; otherwise a dialog (`brushReplaceArt`) asks: Apply to Strokes, Leave Strokes
+(`applyToStrokes: false`) or Cancel.
+
 `variable.bind`, `variable.unbind`, `variable.delete`, `dataset.set`, `dataset.update`, `dataset.delete`,
 `dataset.select`, `dataset.next` and `dataset.prev` add no undo step when they leave the document as it was, such as
 binding art to a variable it already has or applying the active data set again: the steps to redo stay, and a saved
@@ -3123,8 +3158,8 @@ See [Revolve](revolve.md) for the scope and limitations.
 replaces the lighting rig and ambient of an existing Revolve, Extrude & Bevel, Inflate or Rotate
 effect. `item: null` addresses object-level effects; an item index addresses a fill/stroke's
 effects. All targets must have a 3D effect at `index`, otherwise nothing changes. Extrude & Bevel
-(Classic) has no lighting presets: a target with it at `index` is an error, nothing changes, and
-`effect.setParams` sets its lights. The operation is one undo step and preserves Shading, geometry, source paint and the view.
+(Classic), Revolve (Classic) and Rotate (Classic) have no lighting presets: a target with any of them at `index` is an
+error, nothing changes, and `effect.setParams` sets its lights. The operation is one undo step and preserves Shading, geometry, source paint and the view.
 
 The four original rigs use one white front light at 80% intensity. Standard keeps the existing
 default; Diffuse uses 100% Softness and 35% Ambient Light, Top Left uses Rotation 135 and Height
@@ -3156,7 +3191,7 @@ art", and a loaded file draws the source path, as it does for a solid past its l
 documentation names the controls and their ranges
 ([3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)).
 The settings are saved in the native file; SVG and PDF exports draw the shadow, and `effect.expandAppearance` keeps
-it as a path. Extrude & Bevel (Classic) has no shadow. See [three-d.md](three-d.md#shadows).
+it as a path. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow. See [three-d.md](three-d.md#shadows).
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"shadow":true,"shadowPosition":"below","shadowDistance":10,"shadowBounds":150}}}}
@@ -3230,6 +3265,51 @@ an unknown surface or shading color is refused with an error and the document is
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicExtrude","item":null,"params":{"depth":40,"bevel":"rounded","bevelHeight":6,"surface":"diffuse","blendSteps":64}}}}
+```
+
+## Revolve (Classic)
+
+`effect.apply {effect: "threeD.classicRevolve", params: {...}, ids?, item?}` is Effect › 3D and Materials ›
+3D (Classic) › Revolve (Classic)…. It sweeps the profile round a vertical axis as `threeD.revolve` does, at 64 segments
+for a full turn, and draws every face, back to front, with the classic surfaces. Parameters: `angle` (degrees,
+0..360, default 360), `cap` (true closes the profile's open ends, false leaves the surface hollow), `offset` (points,
+0..1000, default 0; the axis's distance from the profile, so a value above 0 makes a ring), `edge` (`left`, the
+default, or `right`: the edge of the profile's bounds the axis is at), `rotationX/Y/Z` and `perspectiveAngle` as
+above, and `surface`, the lights, `ambient`, `highlightIntensity`, `highlightSize`, `blendSteps`, `shadingColor` and
+`shadingCustom` as Extrude & Bevel (Classic) takes them. It has no `drawHiddenFaces`. The effect also goes on a group
+or layer, whose members turn about one shared axis, or on a fill or stroke. The public documentation describes the
+dialog ([Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html))
+and its Angle (0 to 360), Cap, Offset (0 to 1000) and Left Edge or Right Edge settings
+([Revolve options](https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=283));
+the defaults are VectorCraft's own. An unknown parameter (`segments` included), a number out of range, a flag that
+is not true or false, another `edge`, surface or shading color is refused with an error and the document is not
+changed.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicRevolve","item":null,"params":{"angle":270,"offset":10,"surface":"diffuse","blendSteps":64}}}}
+```
+
+## Rotate (Classic)
+
+`effect.apply {effect: "threeD.classicRotate", params: {...}, ids?, item?}` is Effect › 3D and Materials ›
+3D (Classic) › Rotate (Classic)…. It turns every fill and stroke as one flat plane about the center of the object's
+bounds, as `threeD.rotate` does, each in its own paint, and draws the plane from either side. Parameters:
+`rotationX/Y/Z` and `perspectiveAngle` as above; `surface` (`diffuse`, the default, lights the art softly, and
+`none` keeps the paint unlit); and the lights, `ambient`, `blendSteps`, `shadingColor` and `shadingCustom` as Extrude &
+Bevel (Classic) takes them. It has no highlight, no `drawHiddenFaces` and no shadow. The effect also goes on a group
+or layer, whose members turn about one shared center, or on a fill or stroke. The public documentation describes the
+dialog's Position and Surface settings
+([Rotate objects in 3D](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/rotate-objects-in-3d.html)),
+the Position presets, rotations from -180 to 180 and Perspective from 0 to 160
+([Set 3D rotation position options](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=270)),
+and No Shading and Diffuse Shading as the only surfaces for an object that uses only this effect
+([Surface shading options](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=271)).
+The defaults and the shading are VectorCraft's own. An unknown parameter (`highlightSize` and `drawHiddenFaces`
+included), a number out of range, a flag that is not true or false, a surface other than `none` or `diffuse`, or
+another shading color is refused with an error and the document is not changed.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicRotate","item":null,"params":{"rotationX":0,"rotationY":40,"rotationZ":0,"surface":"diffuse","blendSteps":64}}}}
 ```
 
 
@@ -7793,12 +7873,12 @@ its look, in one undo step. Point type in the selection is left as it is, and ar
 ([Dynamic Text: Block](#dynamic-text-block)). Type on a path in a
 thread is refused with an error that names it, and the menu item and the task bar item are not offered for it;
 `text.thread.create` and `text.thread.add` turn Dynamic Text off on the frames they thread, at their drawn sizes, and
-list them in `dynamicTextOff`. When every object already has the setting asked for, nothing changes and no undo step
+list them in `dynamicTextOff`; `addon.type.releasePath` turns it off at the drawn sizes on the point type it makes. When every object already has the setting asked for, nothing changes and no undo step
 is recorded. It replies `{on, ids, fitScale}` (the first object's factor, 1 when off), and the menu item is checked
 while the first selected type on a path or area type has it on. `document.inspect` reports `dynamicText` and `fitScale` for type
-on a path. New type and documents from before it have it off, and it is saved only when on. SVG, PDF, EPS and the
-editing data for other apps write the type at its drawn sizes; the editing data does not hold the setting and says
-so in a warning.
+on a path. New type and documents from before it have it off, and it is saved only when on. SVG, PDF, EPS, legacy
+`.ai` and the editing data for other apps write the type at its drawn sizes; legacy `.ai` and the editing data do not
+hold the setting, and each says so in a warning.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.dynamicText","params":{"on":true}}}
@@ -9654,7 +9734,9 @@ VectorCraft addition and changes no parity score.
 - **The text** keeps its runs with their character attributes and its paragraph attributes, and becomes point type on
   one straight line along the object's own axis, with the baseline starting where the first character sat on the path
   (type with no characters starts at its start bracket). Type on a Path Options (effect, align to path, spacing, flip,
-  brackets) don't apply to point type and are dropped. Without `keepOriginal` the type object itself becomes the point
+  brackets) don't apply to point type and are dropped. Type with Dynamic Text on (`type.dynamicText`) becomes point
+  type with it off, at the sizes it was drawn at: each size, leading and baseline shift is multiplied by the fit factor.
+  Without `keepOriginal` the type object itself becomes the point
   type, keeping its id, so a frame of threaded text leaves its thread with the text it holds, as
   `type.convertToPointType` does for area type.
 - It acts on the type on a path among `ids` (or `id`, else the selection), groups included; other objects are left

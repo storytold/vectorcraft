@@ -1329,6 +1329,8 @@ font-technology	Variable	Biến thiên
 	Extrude & Bevel…	Kéo dài & vát…
 	3D (Classic)	3D (cổ điển)
 	Extrude & Bevel (Classic)…	Kéo dài & vát (cổ điển)…
+	Revolve (Classic)…	Xoay tròn (cổ điển)…
+	Rotate (Classic)…	Xoay (cổ điển)…
 	Surface	Bề mặt
 	Wireframe	Khung dây
 	No Shading	Không tô bóng
@@ -6296,6 +6298,10 @@ breakText	Glyphs	Glyph
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Có nét đang dùng một hoặc nhiều cọ này. Gỡ cọ khỏi các nét đó và xóa cọ?
 	Remove Strokes	Gỡ nét
 	Place Brush Art	Đặt đối tượng của cọ
+	Replace Brush Art	Thay đối tượng của cọ
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Có nét đang dùng cọ này. Áp dụng đối tượng mới cho các nét đó, hay giữ nguyên chúng và thêm một bản sao của cọ với đối tượng mới?
+	Apply to Strokes	Áp dụng cho nét
+	Leave Strokes	Giữ nguyên nét
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` không có đối tượng (chỉ cọ phân tán, cọ bản vẽ và cọ họa tiết mới có)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Công cụ sắp xếp
@@ -6548,6 +6554,19 @@ breakText	Glyphs	Glyph
 @plural	{n} earlier line dropped|{n} earlier lines dropped	đã bỏ {n} dòng cũ
 @plural	{n} line cut|{n} lines cut	đã cắt {n} dòng
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` và `last` phải là số thứ tự của các dòng mà bảng điều khiển đang giữ, `first` đứng trước `last`
+
+# Learn panel
+	Learn	Học
+	Explore tutorials	Khám phá hướng dẫn
+	For you	Dành cho bạn
+	Skills	Kỹ năng
+	Get started	Bắt đầu
+	Quick skill guide	Hướng dẫn nhanh về kỹ năng
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Các hướng dẫn thực hành ngắn cho những công cụ thiết yếu, xếp theo kỹ năng. Chọn một kỹ năng để xem các hướng dẫn của nó.
+	List Tutorials	Liệt kê hướng dẫn
+	Show Tutorial	Hiện hướng dẫn
+@msg	missing `tutorial` (see learn.list)	thiếu `tutorial` (xem learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	hướng dẫn không xác định `{id}` (xem learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn

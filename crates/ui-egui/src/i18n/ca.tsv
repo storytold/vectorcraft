@@ -1573,6 +1573,8 @@ antiAlias	Sharp	Nítid
 	Extrude & Bevel…	Extrudeix i bisella…
 	3D (Classic)	3D (clàssic)
 	Extrude & Bevel (Classic)…	Extrudeix i bisella (clàssic)…
+	Revolve (Classic)…	Revoluciona (clàssic)…
+	Rotate (Classic)…	Gira (clàssic)…
 	Surface	Superfície
 	Wireframe	Filferro
 	No Shading	Sense ombra
@@ -6667,6 +6669,10 @@ breakText	Glyphs	Glifs
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Hi ha traços que fan servir un o més d’aquests pinzells. Voleu treure els pinzells d’aquests traços i suprimir els pinzells?
 	Remove Strokes	Elimina els traços
 	Place Brush Art	Col·loca l’art del pinzell
+	Replace Brush Art	Substitueix l’art del pinzell
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
+	Apply to Strokes	Aplica als traços
+	Leave Strokes	Deixa els traços
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` no té art (només en tenen els pinzells de dispersió, artístics i de motiu)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Eines d’organització
@@ -6919,6 +6925,19 @@ breakText	Glyphs	Glifs
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} línia anterior descartada|{n} línies anteriors descartades
 @plural	{n} line cut|{n} lines cut	{n} línia tallada|{n} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
+
+# Learn panel
+	Learn	Aprèn
+	Explore tutorials	Explora els tutorials
+	For you	Per a vós
+	Skills	Habilitats
+	Get started	Primers passos
+	Quick skill guide	Guia ràpida d’habilitats
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorials pràctics breus de les eines essencials, agrupats per habilitat. Trieu una habilitat per veure’n els tutorials.
+	List Tutorials	Llista els tutorials
+	Show Tutorial	Mostra el tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats
