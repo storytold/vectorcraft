@@ -668,6 +668,27 @@ fn expanding_a_gradient_fill_keeps_each_piece_s_own_paint() {
     }
 }
 
+/// `object.expand.info` measures each piece a painted effect returns: a piece whose repeating
+/// gradient needs more runs across it than are written (1,000) reports no gradient to expand, as
+/// Expand leaves it a gradient, and the same gradient in 10 runs reports one.
+#[test]
+fn expand_info_measures_the_gradient_on_each_painted_piece() {
+    for (end, expands) in [(120.0, true), (100.2, false)] {
+        let mut s = session();
+        let id = rect(&mut s, 10.0, "#ff0000");
+        let gradient = json!({"kind": "linear", "spread": "repeat", "repeats": 10, "start": [100, 50], "end": [end, 50]});
+        run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": gradient}));
+        let out = json!({"objects": [{"path": square_at(100.0)}]}).to_string();
+        install_wat(&mut s, &tpl::returning(&painting("test.engine.expandruns", true), &out));
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.expandruns"}));
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        let info = s.execute("object.expand.info", &json!({})).unwrap();
+        assert_eq!((info["gradient"].clone(), info["fill"].clone()), (json!(expands), json!(expands)), "{end}");
+        let only_fill = s.execute("object.expand", &json!({"object": false, "fill": true, "stroke": false}));
+        assert_eq!(only_fill.is_ok(), expands, "{end}: {only_fill:?}");
+    }
+}
+
 /// Object › Expand of a pattern fill works piece by piece: a piece that keeps the pattern has its
 /// tiles expanded, and a piece with a paint of its own keeps that paint.
 #[test]

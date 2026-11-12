@@ -1205,8 +1205,11 @@ legacy `.ai`), and for a radial or diamond gradient no farther from its center t
 times the smallest gap between its stops (measured in runs) when that is less. Past those it pads, with a warning.
 The `.ai` editing data has no spread either: it holds the stops repeated across the shape, at most 256 of them, with
 a warning. When the runs need more stops than these limits allow, every run is still written, without the stops that
-change its colors least (its ends, sharp steps and swatch-linked stops stay); the same applies to a gradient along
-or across a stroke, and to CSS's conic gradient, past 16,384 stops, and to Outline Stroke's mesh past 1,024. PDF
+change its colors least. Each run keeps its ends; sharp steps and swatch-linked stops are the last to be left out,
+but a run with more of them than its share of the limit loses some. The same applies to a gradient along or across a
+stroke, and to CSS's conic gradient, past 16,384 stops, and to Outline Stroke's mesh past 1,024. For CSS the 16,384
+counts the gradient's stops before they are written: CSS then adds a stop for each midpoint, and for a Perceptual
+gradient stops along each span's curve, so the written gradient can hold more. PDF
 import finds a sharp step between two colors in an axial or radial shading by halving the spans between its samples,
 so the step reads back where it is in the file (to 1/64 × 2^-14 of the axis) instead of blurred across the samples
 around it. A shading takes at most 16,384 samples, so the steps past the point where that budget runs out stay

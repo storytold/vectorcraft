@@ -510,14 +510,30 @@ fn a_spread_gradient_expands_into_whole_bands_for_each_run() {
 
 /// A gradient that repeats across a box in more runs than are written (700 runs of 0.2 pt) is not
 /// expanded into its first runs and a flat last color: the fill stays a gradient, and the rest of
-/// the object (its stroke) still expands.
+/// the object (its stroke) still expands. `object.expand.info` reports no gradient or fill to
+/// expand, and Expand with only Fill on reports nothing to expand; the same gradient in 70 runs
+/// (10 repeats) reports both.
 #[test]
 fn a_spread_gradient_with_more_runs_than_written_stays_a_gradient() {
+    let gradient = |repeats: u32| {
+        json!({"kind": "linear", "spread": "repeat", "repeats": repeats, "start": [30, 100], "end": [50, 100],
+            "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]})
+    };
+    for (repeats, expands) in [(10, true), (100, false)] {
+        let mut s = session();
+        gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gradient(repeats), true);
+        let info = s.execute("object.expand.info", &json!({})).unwrap();
+        assert_eq!(
+            (info["gradient"].clone(), info["fill"].clone(), info["stroke"].clone()),
+            (json!(expands), json!(expands), json!(true)),
+            "{repeats}"
+        );
+        let only_fill = s.execute("object.expand", &json!({"object": false, "stroke": false}));
+        assert_eq!(only_fill.is_ok(), expands, "{repeats}: {only_fill:?}");
+    }
     for to in [json!({"steps": 240}), json!({"gradient": "mesh"})] {
         let mut s = session();
-        let gr = json!({"kind": "linear", "spread": "repeat", "repeats": 100, "start": [30, 100], "end": [50, 100],
-            "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]});
-        gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gr, true);
+        gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gradient(100), true);
         let before = render(&s);
         run(&mut s, "object.expand", to.clone());
         let after = render(&s);

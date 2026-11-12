@@ -194,10 +194,12 @@ impl Expandable {
                 NodeKind::Text(t) => t.runs.iter().any(|r| r.style.has_stroke()),
                 _ => shape && !c.appearance.stroke_paint().is_none(),
             };
-            e.gradient |= match &c.kind {
-                NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
-                _ => shape && c.appearance.items.iter().any(|i| gradient_fill(i).is_some()),
-            };
+            // Once one is found, the next path is not measured.
+            e.gradient = e.gradient
+                || match &c.kind {
+                    NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
+                    _ => shape && gradient_expands(d, c),
+                };
             e.fill |= e.gradient;
             e.fill |= match &c.kind {
                 NodeKind::Text(t) => t.runs.iter().any(|r| matches!(&r.style.fill, Paint::Pattern { pattern, .. } if d.pattern(pattern).is_some())),
@@ -220,6 +222,43 @@ fn gradient_fill(i: &AppearanceItem) -> Option<(&FillLayer, &GradientPaint)> {
         },
         _ => None,
     }
+}
+
+/// Whether path `l` has a gradient fill that Fill expands ([`expand_fills`]): one that repeats or
+/// reflects stays a gradient when its box needs more runs than are written ([`padded_on`]). For a
+/// path that live-effect plug-ins paint, whether a piece of the art they paint has one
+/// ([`expand_pieces`]).
+fn gradient_expands(d: &Document, l: &Node) -> bool {
+    if !l.appearance.items.iter().any(|i| gradient_fill(i).is_some()) {
+        return false;
+    }
+    if !vectorcraft_render::effects::has_painted_effects(l) {
+        return piece_gradient_expands(d, l);
+    }
+    let Some(art) = vectorcraft_render::effects::reshape(Some(d), l, None) else { return false };
+    let mut any = false;
+    art.walk(&mut |c| {
+        any = any
+            || (matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+                && !c.is_ruler_guide()
+                && c.appearance.items.iter().any(|i| gradient_fill(i).is_some())
+                && piece_gradient_expands(d, c));
+    });
+    any
+}
+
+/// [`gradient_expands`] for a path that no live-effect plug-in paints ([`expand_piece_fills`]).
+fn piece_gradient_expands(d: &Document, l: &Node) -> bool {
+    if !l.appearance.items.iter().filter_map(gradient_fill).any(|(_, g)| g.gradient.is_spread()) {
+        return l.appearance.items.iter().any(|i| gradient_fill(i).is_some());
+    }
+    let reshaped = reshaped(d, l);
+    let l = reshaped.as_ref().unwrap_or(l);
+    let Some((path, _)) = node_path(l) else { return false };
+    let Some(bounds) = path.bounds() else { return false };
+    l.appearance.items.iter().filter(|i| gradient_fill(i).is_some()).any(|item| {
+        fill_shape(d, l, item, &path, bounds).is_some_and(|(_, _, b, moved)| gradient_fill(&moved).is_some_and(|(_, g)| padded_on(g, b).is_some()))
+    })
 }
 
 /// The definition and placement of a visible pattern fill whose pattern `d` defines.
