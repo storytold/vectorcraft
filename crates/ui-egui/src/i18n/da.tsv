@@ -758,6 +758,14 @@
 	Damp Paper	Fugtigt papir
 	Outlines and Rules	Konturer og linjer
 	Hand-Drawn	Håndtegnet
+	Painted and Sketched	Malet og skitseret
+	Washed Blue	Udvasket blå
+	Bristle Ochre	Børsteokker
+	Pastel Heather	Pastellyng
+	Charcoal Shade	Kulskygge
+	Ink Contour	Blækkontur
+	Wet Ink	Vådt blæk
+	Fine Pen	Fin pen
 	Gradient Finishes	Gradientfinish
 	Shape Effects	Formeffekter
 	Blends and Transparency	Blandinger og gennemsigtighed
@@ -5859,6 +5867,7 @@ swatch	Bright Violet	Kraftig violet
 	Ruby	Ruby
 	Geometric Guides	Geometriske hjælpelinjer
 	Geometric Patterns	Geometriske mønstre
+	Grit Textures	Kornede teksturer
 	Ease In	Langsom start
 	Ease Out	Langsom slutning
 	Ease In Out	Langsom start og slutning
@@ -6401,6 +6410,8 @@ breakText	Glyphs	Glyffer
 	Delete the selected brushes?	Slet de valgte pensler?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Streger bruger en eller flere af disse pensler. Fjern penslerne fra stregerne, og slet penslerne?
 	Remove Strokes	Fjern streger
+	Place Brush Art	Placér penselgrafik
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` har ingen grafik (det har kun sprednings-, grafik- og mønsterpensler)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Arrangeringsværktøjer
 	Arrange in Grid…	Arrangér i gitter…

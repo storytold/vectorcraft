@@ -812,6 +812,14 @@
 	Damp Paper	Kostea paperi
 	Outlines and Rules	Ääriviivat ja viivat
 	Hand-Drawn	Käsin piirretyt
+	Painted and Sketched	Maalatut ja luonnostellut
+	Washed Blue	Haalea sininen
+	Bristle Ochre	Harjasokra
+	Pastel Heather	Pastellikanerva
+	Charcoal Shade	Hiilivarjo
+	Ink Contour	Mustekontuuri
+	Wet Ink	Märkä muste
+	Fine Pen	Hieno kynä
 	Gradient Finishes	Liukuväriviimeistelyt
 	Shape Effects	Muototehosteet
 	Blends and Transparency	Sulautukset ja läpinäkyvyys
@@ -4474,6 +4482,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`globalAdjust` must be an object	`globalAdjust` on oltava objekti
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` on oltava 1, 3 tai 5
 @msg	`stops` must be an array	`stops` on oltava taulukko
+@msg	`{key}` must be an array	`{key}` on oltava taulukko
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` on oltava SVG-asetusten objekti (ks. document.formats)
 @msg	`{_1}` is no save command	`{_1}` ei ole tallennuskomento
 @msg	`{area}` is no recovery area name	`{area}` ei ole palautusalueen nimi
@@ -6055,6 +6064,7 @@ swatch	Bright Violet	Kirkas violetti
 	Ruby	Ruby
 	Geometric Guides	Geometriset apuviivat
 	Geometric Patterns	Geometriset kuviot
+	Grit Textures	Rakeiset tekstuurit
 	Ease In	Hidas alku
 	Ease Out	Hidas loppu
 	Ease In Out	Hidas alku ja loppu
@@ -6540,6 +6550,10 @@ anchor	Points:	Pisteet:
 @msg	features lists at most {max} tags	features sisältää enintään {max} tunnistetta
 @msg	unknown OpenType feature `{t}`	tuntematon OpenType-ominaisuus `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}
+@msg	{label} must be at most {max} characters	{label} saa olla enintään {max} merkkiä
+@msg	{label} must be one character	{label} on oltava yksi merkki
+@msg	at most {max} tab stops	enintään {max} sarkainkohtaa
+@msg	unknown align `{other}`	tuntematon tasaus `{other}`
 @msg	no character style `{name}`	Merkkityyliä `{name}` ei löytynyt
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6701,6 +6715,8 @@ breakText	Glyphs	Merkit
 	Delete the selected brushes?	Poistetaanko valitut siveltimet?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Viivat käyttävät yhtä tai useampaa näistä siveltimistä. Irrotetaanko siveltimet näistä viivoista ja poistetaanko siveltimet?
 	Remove Strokes	Poista viivat
+	Place Brush Art	Sijoita siveltimen kuvitus
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` ei sisällä kuvitusta (kuvitus on vain sirote-, taide- ja kuviosiveltimissä)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Järjestelytyökalut
 	Arrange in Grid…	Järjestä ruudukkoon…

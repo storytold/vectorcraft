@@ -123,6 +123,18 @@ the suite) keep the agent to the folders you give it:
 - Every file a command writes must lie inside a **write root**: `save_file`, `export`, the save and
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
   library and preset saves to a path, the copies `links.relink {copy}` makes.
+- A path the agent gives stays in a save or export reply, with the files written beside it. Paths it did not
+  give are left out when they are outside the read roots. `save_file`, `document.save` and `file.save` without
+  a `path` write the document's own file: the reply then has no `path`, and `files` and `linked` name the files
+  written beside it by their file names. A save without a path known (`file.saveAs` and `file.saveCopy` without
+  one, a document never saved) leaves out the suggested `folder`. `document.exportForScreens` into the `folder`
+  of its `exportPreset` leaves out the ZIP's `path` and lists `files` relative to that folder, and an error
+  for that export names the folder by its name alone.
+  `document.exportSettings`, `document.exportPresets.list` and `document.exportPresets.export` (as data and as
+  a file) leave out a kept `folder` outside the read roots. `file.package`
+  names the document's file and the linked files outside the read roots by their file names in `warnings`, in
+  `missingLinks` and in its report. `document.info` gives `link: null` for an image linked to a file outside them,
+  and its Linked Images rows and text report name that file alone. `action.batch` returns the replies of its steps as these commands give them.
 - `file.list {path}` (through `run_command`) lists a folder's files and folders, held to the read roots like any read, so an agent can see what it was given (#1163).
 - `file.recentFiles` and the control channel's `ui.menu.list` leave out the recent files outside the read roots. The
   other File › Open Recent Files rows keep their ids (`file.openRecent3` still opens the third file), and
@@ -1648,9 +1660,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   `menuCommand` or `e4x`), each with a count and its lines.
 - `dom.members` lists the document-model member chains as the script writes them
   (`app.activeDocument.layers[].name`, with `[]` for an index and `()` for a call); a variable assigned from a chain
-  is replaced by that chain, and a name written with `\u` escapes is read as the name it spells. `dom.types` lists
-  the type names the script compares with `.typename` or creates with `new`, apart from the language's, the platform's
-  and the script's own functions.
+  is replaced by that chain, and a name written with `\uXXXX` or `\u{…}` escapes is read as the name it spells.
+  `dom.types` lists the type names the script compares with `.typename` or creates with `new`, apart from the
+  language's, the platform's and the script's own functions.
 - `menuCommands.strings` lists the string literals the script passes to `executeMenuCommand`
   (`app.executeMenuCommand('…')`), each with a count and its lines, and `menuCommands.dynamic` counts the calls
   whose argument isn't a string literal.
@@ -1662,7 +1674,10 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   template literals and XML literals that aren't closed, brackets that don't match, syntax newer than ES3 and
   unknown directives) and notes on its text (bytes that aren't valid UTF-8, mixed line endings, and nesting deeper
   than the check follows: more than 4,096 open brackets, or XML literals and the code in their braces nested more
-  than 4,096 levels deep).
+  than 4,096 levels deep). Newer syntax includes a private name (`#name`, given with its escapes read, unless the
+  name they spell would make the line a directive) and a `\u{…}` escape in a name (given as written). A `#` and a
+  name at the start of a line is a private name, not a directive, when the name starts with an escape, or when the
+  line is inside braces and the name is not a directive's.
 
 Each entry of `targets`, `directives`, `includes` and `problems` has the `line` it is on (a problem with the whole
 text has none) and, when it is in an included file, that file's path as `file`. `features`, `menuCommands.strings`
@@ -2940,6 +2955,15 @@ Brushes panel's New Brush button, its menu's New Brush… and art dropped on the
 Brush Options for the new brush; for a scatter, art or pattern brush they preview the art from `brush.selectionArt`.
 Their OK runs `brush.new {type, name, params, ids?}`, and Cancel adds no brush.
 
+`brush.placeArt {name, x?, y?}` places a copy of the art a scatter, art or pattern brush is made of, centered on
+(`x`, `y`) (default: the center of the first artboard), and selects it, in one undo step. The app runs it when a
+brush is dragged from the Brushes panel onto an empty part of the canvas; dropped on a path, a brush is applied to it
+(`brush.apply`). A pattern brush places its tiles left to right, 10 pt apart, in the order side, outer corner, inner
+corner, start, end (only the tiles it has art for), each in a group named Side Tile, Outer Corner Tile, Inner Corner
+Tile, Start Tile or End Tile. A tile with a repeat frame has an unpainted rectangle at the back of its group that marks
+the frame. A symbol instance in the art is measured by its symbol's art. A calligraphic or bristle brush is refused
+with "`<name>` has no art (only scatter, art and pattern brushes do)".
+
 `variable.bind`, `variable.unbind`, `variable.delete`, `dataset.set`, `dataset.update`, `dataset.delete`,
 `dataset.select`, `dataset.next` and `dataset.prev` add no undo step when they leave the document as it was, such as
 binding art to a variable it already has or applying the active data set again: the steps to redo stay, and a saved
@@ -3349,8 +3373,9 @@ in the `swatch.list` shape (`library` is an id or a name). `swatch.library.add {
 into the document as one undo step: a colour group's name brings the whole group, a swatch's name the swatch alone,
 no names the whole library; swatches the document already has (same name and paint) are reported under `existing`
 and not added again. `apply: "fill"|"stroke"` also applies the first one, in the same undo step (what clicking a
-swatch in the library panel does). The pattern library Geometric Patterns (`geometric-patterns`, category
-`patterns`) holds pattern swatches drawn in code; adding one also adds its pattern, as pasting art painted with it does
+swatch in the library panel does). The pattern libraries Geometric Patterns (`geometric-patterns`) and Grit Textures
+(`grit-textures`: seamless black grain, grit, sand, speckle, stipple, scratch and fleck tiles), category `patterns`,
+hold pattern swatches drawn in code; adding one also adds its pattern, as pasting art painted with it does
 (the same pattern the document has is reused, and a name another pattern or swatch has gets a number).
 `swatch.resetDefaults {replace?}` brings back the missing default swatches.
 
@@ -3398,7 +3423,7 @@ as a value left out.
 ## Graphic style libraries
 
 Graphic style libraries are read-only sets of graphic styles generated in code (Shadows and Glows, Outlines and
-Rules, Hand-Drawn, Textures, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD, Status Effects). Textures
+Rules, Hand-Drawn, Textures, Painted and Sketched, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD, Status Effects). Textures
 (`textures`) paints its fills and strokes with the texture effects: Fine Grain (`texture.grain`), Canvas Weave and Burlap
 Sack (`texture.texturizer`), Cracked Glaze (`texture.craquelure`), Mosaic Floor (`texture.mosaicTiles`), Quilted Squares
 (`texture.patchwork`), Leaded Glass (`texture.stainedGlass`) and Damp Paper (`sketch.waterPaper`). `graphicStyle.libraries` lists them
@@ -3410,6 +3435,13 @@ the patterns the styles paint with come along. `apply: true` also applies the fi
 (`add: true` adds its appearance on top instead), in the same undo step: what clicking a style in the library panel
 does. Library styles keep placed gradients in unit-box space, so each object gets them at the same place relative to
 its bounds.
+
+Painted and Sketched (`painted-sketched`) holds Washed Blue, Bristle Ochre, Pastel Heather, Charcoal Shade, Ink
+Contour, Wet Ink and Fine Pen. Each is a solid fill (Bristle Ochre and Ink Contour add a 1 pt stroke) under one object
+effect that repaints fill and stroke together: `artistic.watercolor`, `artistic.dryBrush`, `artistic.roughPastels`,
+`sketch.charcoal`, `brushStrokes.inkOutlines`, `brushStrokes.sumiE` and `sketch.graphicPen`, in that order. The
+colors and effect settings are VectorCraft's own. These are raster effects, so the document's raster effects
+resolution sets how fine they draw.
 
 ```json
 {"name":"run_command","arguments":{"command":"graphicStyle.library","params":{"library":"hand-drawn"}}}
@@ -6516,7 +6548,8 @@ point, as in SVG export), `pt`, `mm`, `cm` or `in`; `unnamed: false` leaves out 
 writes the `.css` file with the PNGs of rasterized art next to it (no path: `data` and `images` as base64). Its
 `warnings` add the PNGs' notes to the CSS's, each once (an image that couldn't be decoded, type written in the
 fallback font…). In the app, `css.copy` copies the CSS and `css.exportFile` writes it through a save panel (the web
-downloads it) and shows the first note in the status bar.
+downloads it) and shows the first note in the status bar, with how many there are; resting the pointer on the
+message lists up to 30 of them, fewer when the list would not fit in the window, with how many were left out.
 
 ```json
 {"name":"run_command","arguments":{"command":"css.selection","params":{"units":"px","position":true}}}
@@ -7807,7 +7840,9 @@ touches (a caret, `start == end`, touches its paragraph). Without a range they c
 targeted objects, as before. With a range, the character attributes of `text.setStyle` and `text.setFormat` style
 that range of characters. When every paragraph that `text.tabs.set` or `text.tabs.clear` targets already has those
 stops, the command changes nothing and records no undo step. `text.tabs.set` rejects a supplied `align`, `leader`, or
-`alignOn` value that is not a string, and an empty `alignOn` value.
+`alignOn` value that is not a string, an empty `alignOn` value or one of more than one character, a leader of more than
+8 characters, a position outside 0 to 100000 pt, and more than 256 stops. It sorts the stops by position and keeps the
+first of stops at one position.
 
 `text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
 paragraph at `start`; `paraStyle.list` counts paragraphs as uses, and `charStyle.list` counts runs; both count the type in
@@ -7824,7 +7859,7 @@ is the document's. A loaded style that is the same as the style of
 its name, or of its name with a number (`Body 2`), is not added again; any other is added under a free name. The
 document's styles and the type that uses them keep their attributes, and the file's Normal styles are not loaded. The
 reply lists the names `added` and `existing` in the document and the names `skipped` in the file (a style whose
-attributes do not read or are out of the range `charStyle.new` takes, or whose name is empty); `textStyle.loadAll`
+attributes do not read or are out of the range `charStyle.new` or `paraStyle.new` takes, or whose name is empty); `textStyle.loadAll`
 replies `{charStyles, paraStyles}`, and `charStyle.load` and `paraStyle.load` list only the styles of their own kind. A Return the Type tool types (or `text.editRange`
 inserting `\n`) continues the style of the paragraph it splits; deleting a break keeps the first paragraph's style;
 `text.setText` gives every paragraph the first one's attributes. Threaded text keeps each paragraph's attributes as
@@ -7889,12 +7924,19 @@ the Paragraph Styles panel, or Paragraph Style Options… in its menu, does the 
 `paraStyle.edit {name, to, attrs}`, which takes the same arguments as `charStyle.edit` and replaces the style's
 name and attributes in one undo step; the paragraphs that use the style keep their local overrides. OK with no field
 changed records no undo step, and Preview updates the paragraphs while the dialog is open (Cancel restores them).
-The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `composition`, `hyphenation` or
+The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `tabs`, `composition`, `hyphenation` or
 `justification`) and `preview`, and these fields:
 
 - Basic Paragraph Formats: `justify` (`Auto`, `Left`, `Center`, `Right`, `JustifyLeft`, `JustifyCenter`,
   `JustifyRight` or `JustifyAll`), and `left_indent`, `right_indent`, `first_line_indent`, `space_before` and
   `space_after`, typed in the General unit of Preferences or with a unit of their own.
+- Tabs: `tabs`, the style's stops, each `{position, align, leader, alignOn}`: `position` typed like the distances
+  above, `align` `left`, `center`, `right` or `decimal`, `leader` up to 8 characters, and `alignOn` one character
+  (used by decimal stops). The section edits the selected stop with Alignment, X: (Y: for vertical type), Leader:
+  and Align On:. Add puts a left stop 36 pt past the furthest stop (at 36 pt when there is none, and at most at
+  100000 pt); it is disabled at 256 stops or when a stop is already at that position. Delete Tab removes the selected
+  stop, and Clear All Tabs leaves the style with no stops, which it then sets. OK sorts the stops by
+  position; of two stops at one position it keeps the one edited last.
 - Composition: `composer` (`singleLine` or `everyLine`) and the `roman_hanging` checkbox.
 - Hyphenation: the `hyphenate` checkbox, `words_longer_than`, `after_first`, `before_last`, `hyphen_limit`,
   `hyphenation_zone` and the `hyphenate_capitalized` checkbox. The options are inactive while Hyphenation is off, and
@@ -7905,15 +7947,17 @@ The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `co
 
 A field left as it was keeps the attribute as the style has it, and an empty field leaves its attribute unset; an
 empty Hyphenation or Justification field takes its default while another field of that section is set. Attributes
-the dialog does not show, such as tabs and character attributes, stay as they are.
+the dialog does not show, such as character attributes, stay as they are.
 `paraStyle.new`, `paraStyle.setAttrs` and `paraStyle.edit` reject a changed indent, space before or space after outside
 -1296 to 1296 pt, Words Longer Than outside 1 to 25, After First or Before Last outside 1 to 15, Hyphen Limit outside
 0 to 25, Hyphenation Zone outside 0 to 1296 pt, Word Spacing outside 0 to 1000%, Letter Spacing outside -100 to 500%,
 Glyph Scaling outside 50 to 200%, Minimum, Desired and Maximum values out of that order, Auto Leading outside 0 to
-500%, and a tab position outside 0 to 100000 pt. A value the style already has is kept. An invalid value leaves the
+500%, and changed tabs with more than 256 stops, or with a changed stop whose position is outside 0 to 100000 pt or
+whose leader is longer than 8 characters. They sort changed tabs by position and keep the first of stops at one
+position. A value the style already has is kept. An invalid value leaves the
 style, its paragraphs and Undo history unchanged, and keeps the dialog open.
 Reset Panel removes the section's attributes from the definition: Basic Paragraph Formats removes `justify` and the
-five distances, Composition removes `composer` and `roman_hanging`, Hyphenation removes `hyphenate` and
+five distances, Tabs removes `tabs`, Composition removes `composer` and `roman_hanging`, Hyphenation removes `hyphenate` and
 `hyphenation`, and
 Justification removes `justification`. `ui.paraStyleOptions.resetPanel {}` performs that reset for the section
 selected in Paragraph Style Options or New Paragraph Style; it is disabled on General.
@@ -8002,13 +8046,15 @@ drawings leave a deferred stage as it is until its input or parameters change, w
 the active document (`reason`: `budget`, `timeout`, `missing`, `failed` or `safeMode`; `item` is the fill or stroke
 whose effect it is; `objectId` can be an object in the art of a symbol, pattern, brush or opacity mask; an empty list
 when none is deferred). A stage whose object is deleted, or whose plug-in effect is
-removed, moved from its place in the list or hidden (or whose fill or stroke is hidden), is no longer listed. `effect.refreshDeferred {ids?}` (Effect › Refresh
+removed, moved from its place in the list or hidden (or whose fill or stroke is hidden), is no longer listed. `effect.refreshDeferred {ids?|id?}` (Effect › Refresh
 Deferred Effects, enabled while a stage is deferred) runs the deferred stages of those objects (default: all of them)
 again with a fresh 2,000 ms budget and returns `{refreshed, stillDeferred, failed}`: `stillDeferred` counts stages left
 out for want of time again, the stages of an object that is hidden or in a hidden group or layer, which is not drawn,
 and the stages with a part of their input too small for the drawing the refresh makes, and `failed` those that
 timed out, failed or have no plug-in. `id` names one object in place of
-`ids`, and an entry that is not an object id of the document is an error. Each document has its own budget and its own deferred stages. Exports, Expand
+`ids`. An entry can name an object in the document's layers or in the art of a symbol, pattern, brush or opacity mask;
+an object without a deferred stage adds nothing to the counts, and an entry that is not an object of the document is
+an error. Each document has its own budget and its own deferred stages. Exports, Expand
 Appearance and commands run every stage under the per-call limit, so an export never leaves out a stage that was only
 deferred for time, and the canvas then draws the result. The web build measures the budget and the per-call
 limit with the page's `performance.now()`. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
