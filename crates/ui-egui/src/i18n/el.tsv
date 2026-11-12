@@ -3095,6 +3095,10 @@ theme	Appearance	Εμφάνιση
 	Arch	Αψίδα
 @msg	select point type or type on a path	επιλέξτε κείμενο σημείου ή κείμενο σε διαδρομή
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	το κείμενο σε διαδρομή μέσα σε συνδεδεμένο κείμενο δεν μπορεί να χρησιμοποιήσει δυναμικό κείμενο: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	κείμενο σε ανοιχτή ή σύνθετη διαδρομή δεν μπορεί να κεντραριστεί επάνω ή κάτω: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	κείμενο σε διαδρομή χωρίς μήκος ή χωρίς ύψος δεν μπορεί να κεντραριστεί: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	το κείμενο σε διαδρομή μέσα σε συνδεδεμένο κείμενο δεν μπορεί να κεντραριστεί επάνω ή κάτω: {frames}
+@msg	select type on a closed path	επιλέξτε κείμενο σε κλειστή διαδρομή
 	Optimize for fast web view	Βελτιστοποίηση για γρήγορη προβολή στον ιστό
 	Options for Selection…	Επιλογές για την επιλογή…
 	or more spaces with a tab	ή περισσότερα διαστήματα με στηλοθέτη
@@ -4067,6 +4071,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Type on a Path	Κείμενο σε διαδρομή
 	Type on a Path Options	Επιλογές κειμένου σε διαδρομή
 	Type on a Path Options…	Επιλογές κειμένου σε διαδρομή…
+	Center on Top	Κεντράρισμα επάνω
+	Center on Bottom	Κεντράρισμα κάτω
 	Type on a Path Tool	Κείμενο σε διαδρομή (Type on a Path Tool)
 	Type Orientation	Προσανατολισμός κειμένου
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Το κείμενο διατηρείται ως κείμενο και κάθε περίγραμμα γίνεται γραμμή με το πάχος και τις παύλες του.
@@ -5991,6 +5997,7 @@ effect	Points	Σημεία
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Γεωμετρικοί οδηγοί
+	Optical Effects	Οπτικά εφέ
 	Geometric Patterns	Γεωμετρικά μοτίβα
 	Grit Textures	Κοκκώδεις υφές
 	Ease In	Ομαλή αρχή

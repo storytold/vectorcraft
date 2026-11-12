@@ -208,6 +208,34 @@ fn type_on_a_path_offers_dynamic_text() {
     assert!(!has(&texts, "Dynamic Text"), "{texts:?}");
 }
 
+/// Type on a closed path offers Center on Top and Center on Bottom; type on an open path does not.
+#[test]
+fn type_on_a_closed_path_offers_center_on_top_and_bottom() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let line = id(app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap());
+    let open = id(app.run("text.createInPath", json!({"path": line, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap());
+    select(&mut app, &[open]);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Type on a Path Options") && !has(&texts, "Center on Top") && !has(&texts, "Center on Bottom"), "{texts:?}");
+    let circle = id(app.run("path.create", json!({"d": "M100 300 A100 100 0 1 1 300 300 A100 100 0 1 1 100 300 Z"})).unwrap());
+    let t = id(app.run("text.createInPath", json!({"path": circle, "mode": "onPath", "text": "Round", "at": [90, 300]})).unwrap());
+    select(&mut app, &[t]);
+    let start = |app: &VectorcraftApp| match kind(app, t) {
+        NodeKind::Text(t) => match t.kind {
+            TextKind::OnPath { start, .. } => start,
+            k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Center on Top") && has(&texts, "Center on Bottom"), "{texts:?}");
+    click(&mut app, "Center on Top");
+    assert!((start(&app) - 0.75).abs() < 1e-3, "{}", start(&app));
+    click(&mut app, "Center on Bottom");
+    assert!((start(&app) - 0.25).abs() < 1e-3, "{}", start(&app));
+}
+
 /// Area type offers Dynamic Text beside Convert To Point Type, which turns Block on and off; area
 /// type in a thread does not.
 #[test]

@@ -889,9 +889,16 @@ pub(in crate::ai_editing) fn same_appearance(a: &Appearance, b: &Appearance) -> 
 }
 
 /// Effect `e`'s settings with its defaults filled in, its blending mode in lower case and its color as
-/// `#rrggbb`.
+/// `#rrggbb`. A Warp's map `version` is left out: the file holds the warp's settings, and the reader
+/// gives every warp it reads the newest map, so a warp saved before the version existed is written
+/// with its settings as before.
 fn normalized_params(e: &Effect) -> Value {
     let mut p = vectorcraft_effects::merged_params(&e.id, &e.params);
+    if e.id.starts_with("warp.")
+        && let Value::Object(m) = &mut p
+    {
+        m.remove("version");
+    }
     if let Some(m) = word(&p, "mode") {
         p["mode"] = Value::String(m);
     }

@@ -398,6 +398,8 @@
 	Stair Step	Stepenice
 	Gravity	Gravitacija
 	Type on a Path Options…	Opcije teksta na putanji…
+	Center on Top	Centriraj na vrhu
+	Center on Bottom	Centriraj na dnu
 	Threaded Text	Povezani tekst
 	Create	Kreiraj
 	Release Selection	Oslobodi odabir
@@ -5875,6 +5877,7 @@ mark-style	Japanese	Japanski
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrijske vodilice
+	Optical Effects	Optički efekti
 	Geometric Patterns	Geometrijski uzorci
 	Grit Textures	Zrnaste teksture
 	Ease In	Ublaži ulaz
