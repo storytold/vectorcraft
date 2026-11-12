@@ -654,7 +654,9 @@ pub fn member_hover(cx: &ToolContext, p: Point) -> Option<Overlay> {
 /// pointer, and the objects between it and its place move one place toward where it was, except
 /// hidden and locked ones (`object.objectsOnPath.moveMember`). On an open path a pointer beyond
 /// an end takes the place at that end; on a closed path the pointer goes on round across the first
-/// anchor. Where two places are as near, the one the drag is at stays. A click without a drag, and
+/// anchor. Where the path passes as near the pointer more than once, as where it runs back over
+/// itself, the drag follows the part nearest along the path to where it was. Where two places are
+/// as near, the one the drag is at stays. A click without a drag, and
 /// the release of a drag, choose the object (`object.objectsOnPath.selectMember`).
 #[derive(Clone, Debug)]
 pub struct MemberDrag {
@@ -671,7 +673,7 @@ pub struct MemberDrag {
     closed: bool,
     start: Point,
     began: bool,
-    /// The distance along the path to the point nearest the pointer at the last drag (points).
+    /// The distance along the path the drag was last at (points).
     last: f64,
     /// The place the drag puts the object at.
     target: usize,
@@ -732,7 +734,14 @@ impl MemberDrag {
             out.push(Action::Begin("Move Object on Path".into()));
         }
         let w = &self.widget;
-        let Some((_, t)) = group_spine(cx.doc, w.group).and_then(|s| s.nearest(p, Some(self.last))) else { return out };
+        let Some(spine) = group_spine(cx.doc, w.group) else { return out };
+        let Some((near, t)) = spine.nearest(p, None) else { return out };
+        // Where the path passes as near the pointer more than once, the point nearest along the path
+        // to where the drag was counts.
+        let t = match spine.nearest(p, Some(self.last)) {
+            Some((d, s)) if d - spine.apart(s, self.last) / 2.0 - near <= 1e-9 * (1.0 + near) => s,
+            _ => t,
+        };
         if !t.is_finite() {
             return out;
         }
@@ -1870,6 +1879,44 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, 100.0, 200.0));
         let a = t.pointer(&c, &ev(PointerKind::Drag, 100.0, 120.0));
         assert_eq!(previewed_target(&a), Some(ids[0].0), "{a:?}");
+    }
+
+    /// On an open path that turns back on itself, a drag takes the place nearest the pointer even
+    /// when that place is far along the path from where the drag is.
+    #[test]
+    fn a_select_move_drag_takes_the_place_under_the_pointer_on_a_path_that_turns_back() {
+        // The path runs 210 pt from (0, 0) right, down and back left to (0, 10): the four objects
+        // sit at 0, 70, 140 and 210 pt along it, the last one 10 pt below the first.
+        let corners = [Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 10.0), Point::new(0.0, 10.0)];
+        let path = vectorcraft_geom::PathData::new(vec![vectorcraft_geom::SubPath::polyline(&corners, false)]);
+        let (d, _, sel, ids) = members_doc(path, 4, None);
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let mut t = ObjectsOnPathTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 0.0, 0.0));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 0.0, 9.0));
+        assert_eq!(previewed_target(&a), Some(ids[3].0), "{a:?}");
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 0.0, 9.0)), vec![Action::Commit, choose(ids[0])]);
+    }
+
+    /// Where an open path runs back over itself, a drag along the part that runs back stays on that
+    /// part.
+    #[test]
+    fn a_select_move_drag_follows_the_part_it_is_on_where_a_path_runs_back_over_itself() {
+        // The path runs 540 pt from (0, 0) right to (300, 0) and back left to (60, 0): the four
+        // objects sit at 0, 180, 360 and 540 pt along it, at x 0, 180, 240 and 60.
+        let corners = [Point::new(0.0, 0.0), Point::new(300.0, 0.0), Point::new(60.0, 0.0)];
+        let path = vectorcraft_geom::PathData::new(vec![vectorcraft_geom::SubPath::polyline(&corners, false)]);
+        let (d, _, sel, ids) = members_doc(path, 4, None);
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let mut t = ObjectsOnPathTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 240.0, 0.0));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 220.0, 0.0));
+        assert!(previewed_target(&a).is_none(), "nearer its own place: {a:?}");
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 80.0, 0.0));
+        assert_eq!(previewed_target(&a), Some(ids[3].0), "{a:?}");
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 80.0, 0.0)), vec![Action::Commit, choose(ids[2])]);
     }
 
     /// A hidden or locked object has no widget, and a drag does not take its place: the first
