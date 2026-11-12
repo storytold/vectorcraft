@@ -653,6 +653,11 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
         None => e,
     })?;
     remember(s, &p);
+    // A prepared export is written later, maybe on another thread: it names the folder as this
+    // request may see it.
+    if let (Some(folder), Some(Some(export))) = (hidden, s.screens_hand_off.as_mut()) {
+        export.hidden = Some((folder.to_string(), super::access::error_name(folder)));
+    }
     if !given && let Some(folder) = str_param(&p, "folder").filter(|f| !f.is_empty()) {
         leave_out_unreadable_folder(&mut r, folder);
     }
@@ -664,9 +669,14 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
 /// `path` is left out and `files` names each file written relative to `folder` (`2x/Logo@2x.png`),
 /// as the reply of an export to a ZIP names them.
 fn leave_out_unreadable_folder(r: &mut Value, folder: &str) {
-    if super::access::shown(folder) {
-        return;
+    if !super::access::shown(folder) {
+        leave_out_folder(r, folder);
     }
+}
+
+/// The reply `r` of an export into `folder` with the ZIP's `path` left out and `files` named
+/// relative to `folder` ([`leave_out_unreadable_folder`]).
+fn leave_out_folder(r: &mut Value, folder: &str) {
     let Some(o) = r.as_object_mut() else { return };
     o.remove("path");
     let inside = format!("{folder}/");
@@ -1039,7 +1049,7 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     // Include Artboard Fill off: the encoders leave the background colors out.
     let fill = if o.include_artboard_fill == Some(false) { json!({ "includeArtboardFill": false }) } else { json!({}) };
     let rows = rows.into_iter().map(|r| Row { options: merge(with_black_output(s, &r.options), fill.clone()), ..r }).collect();
-    let export = ScreenExport { cmd: C, o, rows, naming, items };
+    let export = ScreenExport { cmd: C, o, rows, naming, items, hidden: None };
     match &mut s.screens_hand_off {
         Some(slot) => {
             *slot = Some(export);
@@ -1060,9 +1070,27 @@ pub struct ScreenExport {
     rows: Vec<Row>,
     naming: Naming,
     items: Vec<Item>,
+    /// The export folder and the name the request that prepared the export may see it by, when the
+    /// folder came from the `exportPreset` and is outside that request's read roots: the reply and
+    /// the errors of [`ScreenExport::write`] name it as [`export_for_screens`] does.
+    hidden: Option<(String, String)>,
 }
 
 impl Session {
+    /// The folder `document.exportForScreens` (`id`) with `params` writes into, the client's
+    /// `folder` or else the one its `exportPreset` keeps, with the name the request being served may
+    /// see it by when the reply leaves it out: a preset's folder outside the read roots, named by
+    /// its own name ([`super::access::shown_path`]). `assets.export` takes no preset, so for it the
+    /// folder is the client's. → `None` without a folder (the files come back in the reply) or for
+    /// an unknown preset, which the export itself refuses.
+    pub fn screen_export_folder(&self, id: &str, params: &Value) -> Option<(String, Option<String>)> {
+        let given = params.get("folder").is_some();
+        let p = if given || id == ASSETS { params.clone() } else { with_preset(self, params).ok()? };
+        let folder = str_param(&p, "folder").filter(|f| !f.is_empty())?.to_string();
+        let hidden = (!given && !super::access::shown(&folder)).then(|| super::access::shown_path(&folder).into_owned());
+        Some((folder, hidden))
+    }
+
     /// Run `assets.export` when `id` names it, else `document.exportForScreens`, with `params` as
     /// a command (checked and journaled as any other; Export for Screens remembers its settings)
     /// that encodes and writes nothing → the export it prepared, which [`ScreenExport::write`]
@@ -1088,10 +1116,19 @@ impl ScreenExport {
     /// return → the reply of `document.exportForScreens`. It reports one progress step per file
     /// ([`vectorcraft_doc::cancel::progress`]), and a cancel stops it before it encodes or writes
     /// another file.
-    pub fn write(self, writer: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+    pub fn write(mut self, writer: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
         let cmd = self.cmd;
+        let hidden = self.hidden.take();
         // A refusal names `assets.export` when that command prepared the export, as its reply does.
-        encode_and_write(self, writer).map_err(|e| if cmd == C { e } else { crate::cmd::assets::of_cmd(cmd, e) })
+        let r = encode_and_write(self, writer).map_err(|e| if cmd == C { e } else { crate::cmd::assets::of_cmd(cmd, e) });
+        match hidden {
+            Some((folder, name)) => {
+                let mut r = r.map_err(|e| super::access::naming_as(e, &folder, &name))?;
+                leave_out_folder(&mut r, &folder);
+                Ok(r)
+            }
+            None => r,
+        }
     }
 }
 

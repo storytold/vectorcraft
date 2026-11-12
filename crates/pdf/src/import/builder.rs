@@ -1,9 +1,10 @@
 use super::cid::{CidText, FontInfo, comparable, font_chars, identify_glyph, matching_face, replacement, unify_radical};
 use super::entry::{
-    MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, TEXT_OUTLINES, TOO_MANY_OBJECTS, UNMATCHED_GLYPHS_NOTE,
+    MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, RESHAPED_TEXT_NOTE, TEXT_OUTLINES, TOO_MANY_OBJECTS, UNMATCHED_GLYPHS_NOTE,
     UNNAMED_CHARACTERS_NOTE, max_objects,
 };
-use super::state::{Builder, Frame, FrameKind, Saved, bounds, grouped, line_width, mean_scale, paints, round3, stroke_layer};
+use super::reshaped;
+use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, line_width, mean_scale, paints, round3, stroke_layer};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
     FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
@@ -22,6 +23,7 @@ impl<'p> Builder<'p> {
             page: Rect::ZERO,
             glyphs: None,
             text: None,
+            text_glyphs: vec![],
             text_as,
             actual: Default::default(),
             images: HashMap::new(),
@@ -101,6 +103,7 @@ impl<'p> Builder<'p> {
         self.blend = BlendMode::Normal;
         self.glyphs = None;
         self.text = None;
+        self.text_glyphs.clear();
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
@@ -376,18 +379,56 @@ impl<'p> Builder<'p> {
     }
 
     pub(super) fn flush_text(&mut self) {
-        let Some(mut line) = self.text.take() else { return };
+        if self.end_text() {
+            self.flush_glyphs();
+        }
+    }
+
+    /// Finish the open line of type. `true`: it was kept as outlines instead ([`reshaped`]), which
+    /// are left open as the glyph run for an outline drawn next to join.
+    pub(super) fn end_text(&mut self) -> bool {
+        let glyphs = std::mem::take(&mut self.text_glyphs);
+        let Some(mut line) = self.text.take() else { return false };
         let held = std::mem::take(&mut line.held);
+        // Type the file names itself (ActualText) is in reading order as it stands.
+        let checked = !glyphs.is_empty() && line.mapped();
+        let mut outlined = false;
         if let Some((t, opacity, facts)) = line.finish() {
-            let mut n = Node::new(self.id(), NodeKind::Text(Box::new(t)));
-            n.opacity = opacity;
-            self.lines.insert(n.id, facts);
-            self.push_node(n);
+            if checked && reshaped::reshapes(&t.plain_text()) && !reshaped::draws_as(&t, &facts.ink) {
+                outlined = true;
+                for g in glyphs {
+                    let same = self.glyphs.as_ref().is_some_and(|r| {
+                        r.paint == g.paint
+                            && r.opacity == g.opacity
+                            && r.overprint == g.overprint
+                            && r.stroke.is_some() == g.stroke.is_some()
+                            && r.stroke.as_ref().map(|s| s.line_width) == g.stroke.as_ref().map(|s| s.line_width)
+                            && (r.scale - g.scale).abs() < 1e-9
+                    });
+                    match &mut self.glyphs {
+                        Some(r) if same => r.path.extend(g.path.iter()),
+                        _ => {
+                            self.flush_glyphs();
+                            self.glyphs = Some(g);
+                        }
+                    }
+                }
+                self.warn(RESHAPED_TEXT_NOTE);
+            } else {
+                let mut n = Node::new(self.id(), NodeKind::Text(Box::new(t)));
+                n.opacity = opacity;
+                self.lines.insert(n.id, facts);
+                self.push_node(n);
+            }
+        }
+        if outlined && !held.is_empty() {
+            self.flush_glyphs();
         }
         // The strokes of its glyphs' outlines, right after it ([`import_lines`] makes them its stroke).
         for n in held {
             self.push_node(n);
         }
+        outlined
     }
 
     /// A stroke of the outline of the glyph just drawn, in the glyph's own paint, while every glyph
@@ -737,6 +778,27 @@ impl<'p> Builder<'p> {
         n
     }
 
+    /// Glyph `o` of the open line of type, placed by `m` and drawn with `drawn` (its paint, and its
+    /// stroke when it is stroked), as the outline it is kept as if the line is
+    /// ([`Self::end_text`]). Nothing for a glyph that shows nothing.
+    fn keep_glyph(
+        &mut self,
+        o: &craft_pdf::interpret::font::OutlineGlyph,
+        m: Affine,
+        drawn: Option<(Paint, Option<StrokeProps>)>,
+        opacity: f32,
+        scale: f64,
+        overprint: bool,
+    ) {
+        let Some((paint, stroke)) = drawn else { return };
+        let mut path = o.outline();
+        if path.elements().is_empty() {
+            return;
+        }
+        path.apply_affine(m);
+        self.text_glyphs.push(GlyphRun { path, paint, opacity, stroke, scale, overprint });
+    }
+
     /// Glyph `o` as type: added to the line being gathered (or starting one). `false`: it keeps
     /// its outline (no Unicode text, mirrored, or not type mode). No `paint`: invisible text,
     /// type with neither fill nor stroke.
@@ -794,8 +856,11 @@ impl<'p> Builder<'p> {
             return false;
         }
         let width = o.advance_width().filter(|w| w.is_finite());
-        // Set vertically (WMode 1): no horizontal advance.
-        let upright = width.is_some_and(|w| w.abs() <= 1.0);
+        // Set vertically (WMode 1): no horizontal advance. Not in a font the file says is written
+        // horizontally: there a glyph without an advance is a mark over the letter before it (a
+        // vowel sign, an anusvara), which stays on its line (#5235).
+        let horizontal = self.fonts.get(&key).is_some_and(|f| f.vertical.is_none());
+        let upright = !horizontal && width.is_some_and(|w| w.abs() <= 1.0);
         let mut info = self.font_name(key, o);
         // A font the file doesn't carry is drawn with a stand-in: its glyphs can't tell which
         // style of the installed family it is, so the name decides.
@@ -841,6 +906,8 @@ impl<'p> Builder<'p> {
             }
             None => (None, 1.0),
         };
+        // What the glyph is drawn with as an outline, should its line be kept so.
+        let drawn = paint.clone().map(|p| (p, stroke.cloned()));
         let stroke = stroke.zip(paint.clone()).map(|(p, paint)| (paint, line_width(p, scale)));
         let look = Look {
             font: key,
@@ -879,6 +946,7 @@ impl<'p> Builder<'p> {
             && look.fill.is_none()
             && line.stroke_last(key, at, s.clone(), overprint)
         {
+            self.keep_glyph(o, m, drawn, opacity, scale, overprint);
             return true;
         }
         if !self.text.as_mut().is_some_and(place) {
@@ -889,6 +957,9 @@ impl<'p> Builder<'p> {
         }
         // Its ink: a stroke the file draws as outlines of the glyphs is told by it.
         let mut ink = o.outline();
+        if top.is_none() {
+            self.keep_glyph(o, m, drawn, opacity, scale, overprint);
+        }
         if let Some(line) = &mut self.text
             && !ink.elements().is_empty()
         {

@@ -77,11 +77,23 @@ pub(crate) fn naming_in_error(e: EngineError, path: &str) -> EngineError {
     if path.is_empty() || shown(path) {
         return e;
     }
+    naming_as(e, path, &error_name(path))
+}
+
+/// What an error names `path` by when it is outside the read roots: [`shown_path`], or
+/// [`UNNAMED`] when that is empty or holds a replacement character.
+pub(crate) fn error_name(path: &str) -> String {
     let name = shown_path(path);
-    let name = if name.is_empty() || name.contains('\u{FFFD}') { UNNAMED } else { &name };
+    if name.is_empty() || name.contains('\u{FFFD}') { UNNAMED.to_string() } else { name.into_owned() }
+}
+
+/// [`naming_in_error`] with `path` named `name`, whether or not it is [`shown`] (a name worked out
+/// earlier, for the request that prepared the work).
+pub(crate) fn naming_as(e: EngineError, path: &str, name: &str) -> EngineError {
     match e {
         EngineError::Other(msg) => EngineError::Other(naming_in_message(&msg, path, name)),
         EngineError::BadParams { cmd, msg } => EngineError::BadParams { cmd, msg: naming_in_message(&msg, path, name) },
+        EngineError::ReadOnlyLocation(msg) => EngineError::ReadOnlyLocation(naming_in_message(&msg, path, name)),
         e => e,
     }
 }
@@ -154,6 +166,31 @@ pub fn write_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write)
     vectorcraft_doc::cancel::check()?;
     may_write(path)?;
     vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| EngineError::Other(format!("{path}: {e}")))
+}
+
+/// The save commands' writer: preserves a filesystem location refusal as a typed error. Other
+/// writers keep their existing errors; an automation-root refusal is never reclassified.
+pub fn write_save_file(path: &str, bytes: &[u8]) -> Result<()> {
+    write_save_file_with(path, &mut |w| w.write_all(bytes))
+}
+
+/// [`write_save_file`] for a streamed save.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn write_save_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
+    vectorcraft_doc::cancel::check()?;
+    may_write(path)?;
+    vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| save_write_error(path, e))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn save_write_error(path: &str, error: std::io::Error) -> EngineError {
+    let reason = format!("{path}: {error}");
+    if vectorcraft_format::read_only_location(&error) { EngineError::ReadOnlyLocation(reason) } else { EngineError::Other(reason) }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn write_save_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
+    write_file_with(path, fill)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -516,6 +553,10 @@ mod tests {
         assert_eq!(io, "doc.svg: disk full");
         let bad = named(EngineError::BadParams { cmd: "x".into(), msg: format!("{file}: not a file") }, &file);
         assert_eq!(bad, "invalid parameters for `x`: doc.svg: not a file");
+        // A save refused by the file system keeps its type and its code.
+        let read_only = confine(roots.as_ref(), || naming_in_error(EngineError::ReadOnlyLocation(format!("{file}: Permission denied")), &file));
+        assert!(matches!(&read_only, EngineError::ReadOnlyLocation(_)));
+        assert_eq!(read_only.to_string(), format!("{}: doc.svg: Permission denied", crate::READ_ONLY_LOCATION));
         // A Windows path written with `\`, a path that ends in no name and a name that isn't text.
         let win = r"C:\Users\me\secret\doc.svg";
         assert_eq!(named(EngineError::Other(format!("{win}: denied")), win), "doc.svg: denied");

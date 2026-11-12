@@ -49,7 +49,6 @@ mod depth;
 mod files;
 mod fx;
 mod linear_rgb;
-mod spread;
 mod symbol_units;
 mod text;
 mod vector_effect;

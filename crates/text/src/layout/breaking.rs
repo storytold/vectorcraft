@@ -4,6 +4,7 @@ use super::{
     Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, KinsokuShoriType, LeadingModel, SGlyph,
     hyphen_glyph, is_cjk, no_line_end, no_line_start, points_for, soft_line_start,
 };
+use crate::justify::is_format_control;
 
 /// Vertical metrics of a line: (ascent, descent, leading, cap height, x height).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -659,7 +660,7 @@ fn push_in(
                 || (a + 2 == last && punct(last - 1))
                 || (a + 3 == last && punct(last - 2) && quote(last - 1)))
     };
-    let room: f64 = (i..end - 1).filter(|&a| closes(g, a) && !may_hang(a)).map(|a| PUSH_IN_SQUEEZE * squeeze_em(&g[a], vertical)).sum();
+    let room: f64 = (i..end - 1).filter(|&a| closes(g, a, end) && !may_hang(a)).map(|a| PUSH_IN_SQUEEZE * squeeze_em(&g[a], vertical)).sum();
     if x - line_end_credit(g, line_end, last) - width > room + EPS {
         return None;
     }
@@ -685,9 +686,11 @@ fn push_in(
 
 /// May a push-in close the gap after glyph `a`? A gap between two characters, at least one of them
 /// CJK, outside a tate-chu-yoko block, a list marker and a shaped cluster, and not next to a space,
-/// a tab or an inline graphic before it.
-fn closes(g: &[SGlyph], a: usize) -> bool {
-    let (Some(p), Some(n)) = (g.get(a), g.get(a + 1)) else { return false };
+/// a tab or an inline graphic before it. Zero-width format controls take no gap: the gap is the
+/// one between the visible characters on either side, before `end`, as the layout justifies it.
+fn closes(g: &[SGlyph], a: usize, end: usize) -> bool {
+    let Some(p) = g.get(a).filter(|p| !is_format_control(p.ch)) else { return false };
+    let Some(n) = g.get(a + 1..end).and_then(|rest| rest.iter().find(|n| !is_format_control(n.ch))) else { return false };
     p.len > 0
         && p.byte != n.byte
         && p.inline.is_none()

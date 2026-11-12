@@ -119,13 +119,18 @@ pub(crate) fn smooth_closed(p: &[Point], sigma: f64) -> Vec<Point> {
 }
 
 /// Gaussian smoothing of an open run with both ends pinned (the run is extended by odd reflection
-/// so tangents at the ends survive).
+/// so tangents at the ends survive), by at most an eighth of the run's samples.
 pub(crate) fn smooth_open(p: &[Point], sigma: f64) -> Vec<Point> {
+    smooth_pinned(p, sigma.max(0.4).min(p.len() as f64 / 8.0))
+}
+
+/// [`smooth_open`] by `sigma` (in samples, at least 0.4) whatever the run's length.
+pub(crate) fn smooth_pinned(p: &[Point], sigma: f64) -> Vec<Point> {
     let n = p.len();
     if n < 5 {
         return p.to_vec();
     }
-    let s = sigma.max(0.4).min(n as f64 / 8.0).max(0.4);
+    let s = sigma.max(0.4);
     let k = kernel(s);
     let r = (k.len() - 1) / 2;
     let r_ext = r.min(n - 2);
