@@ -839,6 +839,26 @@ fn the_mask_of_a_masks_art_copied_whole_takes_its_copies() {
     assert_eq!(own.geometric_bounds(), Some(Rect::new(0.0, 0.0, 40.0, 10.0)), "its mask covers the copy too");
 }
 
+/// The mask of a mask's art copied whole stays in the budget while that art is copied: when the
+/// budget has no room for that mask's copy, the art keeps its shape with its masks.
+#[test]
+fn the_mask_of_a_masks_art_copied_whole_counts_against_the_budget() {
+    let transform = Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30, "copies": 1}), visible: true };
+    let parts = Node::group(NodeId(3), vec![Arc::new(white_square(4)), sq(5, 5.0, Color::WHITE)]);
+    let mask_art = masked_by(parts, white_square(6), true);
+    let inner = masked_by(Node::group(NodeId(2), vec![Arc::new(white_square(1))]), mask_art, true);
+    let mut art = Node::group(NodeId(10), vec![Arc::new(inner)]);
+    let one = crate::Budget::of(white_square(1).path_data().unwrap()).lines;
+    // Room for the four squares and the copies of three of them, not for the copy of the fourth.
+    let budget = crate::Budget { anchors: usize::MAX / 4, lines: 7 * one };
+    crate::reshape::reshape_leaves_within(&mut art, &[&transform], budget, None);
+    let inner = &art.children().unwrap()[0];
+    let square = Some(Rect::new(0.0, 0.0, 10.0, 10.0));
+    assert_eq!(inner.geometric_bounds(), square, "the path keeps its shape");
+    let mask = &inner.extras().mask.as_deref().unwrap().art;
+    assert_eq!(mask.geometric_bounds(), Some(Rect::new(0.0, 0.0, 15.0, 10.0)), "and so does its mask");
+}
+
 /// When a member group's linked mask can't take all the Transform copies its paths take (past the
 /// budget), the art keeps its shape under the effect, so the mask still covers the paths.
 #[test]
@@ -951,6 +971,211 @@ fn a_mask_whose_art_passes_the_budget_stays_whole() {
     let member = &art.children().unwrap()[0];
     assert_eq!(member.path_data(), Some(&square), "the member keeps its shape with its mask");
     assert_eq!(*member.extras().mask.as_deref().unwrap().art, mask_art, "the mask stays whole");
+}
+
+/// Live objects in a member's linked mask are evaluated before the group's geometry effects run
+/// over the mask's art, so the mask still covers the member: a Repeat in it moves and bends with
+/// the member.
+#[test]
+fn a_groups_effects_reshape_a_live_object_in_a_members_mask() {
+    let mut grid = vectorcraft_doc::RepeatSpec::grid(vec![Arc::new(white_square(5))], 0.0, 0.0);
+    if let vectorcraft_doc::RepeatKind::Grid { rows, cols, .. } = &mut grid.kind {
+        (*rows, *cols) = (1, 1);
+    }
+    let repeat = Node::new(NodeId(4), NodeKind::Repeat(grid));
+    let drawn: Vec<Node> = crate::expand_live(None, &repeat);
+    let leaf = |n: &Node| {
+        let mut found = None;
+        n.walk(&mut |c| found = found.take().or_else(|| c.path_data().cloned()));
+        found
+    };
+    assert_eq!(drawn.iter().find_map(leaf), white_square(1).path_data().cloned(), "the Repeat draws one square over the member");
+    for e in [reshaping_effects()[0].clone(), reshaping_effects()[4].clone()] {
+        let member = masked_by(white_square(1), repeat.clone(), true);
+        let mut g = Node::group(NodeId(10), vec![Arc::new(member), sq(2, 20.0, Color::BLACK)]);
+        g.appearance.effects.push(e.clone());
+        let art = evaluate_container(None, &g).unwrap();
+        let member = &art.children().unwrap()[0];
+        let mask = &member.extras().mask.as_deref().unwrap().art;
+        assert!(member.path_data() != white_square(1).path_data(), "{}: the member is reshaped", e.id);
+        assert_eq!(leaf(mask), member.path_data().cloned(), "{}: the mask's square takes the effect with it", e.id);
+    }
+}
+
+/// Type in a member's linked mask is outlined before the group's Transform effect moves the mask's
+/// art with the member.
+#[test]
+fn a_groups_transform_moves_type_in_a_members_mask() {
+    if skip_without_craft_fonts() {
+        return;
+    }
+    let member = masked_by(white_square(1), type_h(), true);
+    let before = crate::reshape::outline_text(&type_h()).unwrap().geometric_bounds().unwrap();
+    let mut g = Node::group(NodeId(10), vec![Arc::new(member)]);
+    g.appearance.effects.push(reshaping_effects()[0].clone());
+    let art = evaluate_container(None, &g).unwrap();
+    let mask = &art.children().unwrap()[0].extras().mask.as_deref().unwrap().art;
+    let mut text = false;
+    mask.walk(&mut |c| text |= matches!(c.kind, NodeKind::Text(_)));
+    assert!(!text, "the type is outlined");
+    let after = mask.geometric_bounds().unwrap();
+    assert!((after.x0 - before.x0 - 30.0).abs() < 0.5 && (after.y0 - before.y0).abs() < 0.5, "{before:?} -> {after:?}");
+}
+
+/// The linked mask of a compound path in a group, and of a path in a layer, takes the geometry
+/// effects with the art it masks.
+#[test]
+fn a_compound_paths_and_a_layers_members_masks_take_the_effects() {
+    let geometry = |n: &Node| crate::reshape::leaf_geometry(n).map(|(p, _)| p);
+    for e in reshaping_effects() {
+        let square = white_square(1);
+        let compound = Node::new(NodeId(1), NodeKind::Compound { children: vec![Arc::new(square.clone())], rule: FillRule::NonZero });
+        let compound = masked_by(compound, white_square(4), true);
+        let mut g = Node::group(NodeId(10), vec![Arc::new(compound), sq(2, 20.0, Color::BLACK)]);
+        g.appearance.effects.push(e.clone());
+        let art = evaluate_container(None, &g).unwrap();
+        let member = &art.children().unwrap()[0];
+        assert!(geometry(member) != square.path_data().cloned(), "{}: the compound path is reshaped", e.id);
+        assert_eq!(geometry(&member.extras().mask.as_deref().unwrap().art), geometry(member), "{}: compound path", e.id);
+
+        let mut layer = Node::layer(NodeId(10), "Layer", vectorcraft_doc::LayerColor::Preset(0));
+        if let Some(ch) = layer.children_mut() {
+            ch.extend([Arc::new(masked_by(square.clone(), white_square(4), true)), sq(2, 20.0, Color::BLACK)]);
+        }
+        layer.appearance.effects.push(e.clone());
+        let art = evaluate_container(None, &layer).unwrap();
+        let member = &art.children().unwrap()[0];
+        assert!(member.path_data() != square.path_data(), "{}: the layer's path is reshaped", e.id);
+        assert_eq!(member.extras().mask.as_deref().unwrap().art.path_data(), member.path_data(), "{}: layer", e.id);
+    }
+}
+
+/// A group's Transform effect moves a symbol instance member's linked mask with the instance.
+#[test]
+fn a_groups_transform_moves_a_symbol_instance_members_linked_mask() {
+    let instance = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "s".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let mut g = Node::group(NodeId(10), vec![Arc::new(masked_by(instance, white_square(4), true)), sq(2, 20.0, Color::BLACK)]);
+    g.appearance.effects.push(reshaping_effects()[0].clone());
+    let art = evaluate_container(None, &g).unwrap();
+    let instance = &art.children().unwrap()[0];
+    let NodeKind::SymbolInstance { xf, .. } = &instance.kind else { panic!("an instance: {instance:?}") };
+    assert!((xf.translation().x - 30.0).abs() < 1e-9, "the instance moves: {xf:?}");
+    let mask = instance.extras().mask.as_deref().unwrap().art.geometric_bounds().unwrap();
+    assert!((mask.x0 - 30.0).abs() < 1e-9 && (mask.x1 - 40.0).abs() < 1e-9, "its mask moves with it: {mask:?}");
+}
+
+/// With Scale Strokes & Effects on, a group's Transform effect scales the stroke of an image
+/// member's linked mask as it scales that of a path member's mask.
+#[test]
+fn a_transform_with_scale_strokes_scales_the_masks_of_images_and_paths_alike() {
+    let stroked =
+        Node::path(NodeId(4), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(Paint::None, Paint::solid(Color::WHITE), 2.0));
+    let im = vectorcraft_doc::ImageObject {
+        key: "k".into(),
+        width: 10,
+        height: 10,
+        xf: vectorcraft_geom::Affine::IDENTITY,
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let image = masked_by(Node::new(NodeId(1), NodeKind::Image(Box::new(im))), stroked.clone(), true);
+    let path = masked_by(white_square(2), stroked, true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(image), Arc::new(path)]);
+    let params = serde_json::json!({"scaleH": 200, "scaleV": 200, "strokes": true});
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+    let art = evaluate_container(None, &g).unwrap();
+    let width = |n: &Node| n.extras().mask.as_deref().unwrap().art.appearance.stroke().map(|s| s.width);
+    let ch = art.children().unwrap();
+    assert_eq!(width(&ch[1]), Some(4.0), "the path's mask");
+    assert_eq!(width(&ch[0]), width(&ch[1]), "the image's mask");
+}
+
+/// The art of a member group's mask is copied as it was before the first effect: a mask of one
+/// path takes a second Transform effect's copies path by path, as the path it masks does, though
+/// the first effect (with Scale Strokes & Effects) made it a group of copies.
+#[test]
+fn a_masks_art_is_copied_as_it_was_before_the_first_effect() {
+    let inner = masked_by(Node::group(NodeId(2), vec![Arc::new(white_square(1))]), white_square(4), true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(inner)]);
+    for strokes in [true, false] {
+        let params = serde_json::json!({"moveH": 30, "copies": 2, "strokes": strokes});
+        g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+    }
+    let art = evaluate_container(None, &g).unwrap();
+    let inner = &art.children().unwrap()[0];
+    let mask = &inner.extras().mask.as_deref().unwrap().art;
+    assert_eq!(mask.geometric_bounds(), inner.geometric_bounds());
+    let kinds = |n: &Node| n.children().unwrap().iter().map(|c| std::mem::discriminant(&c.kind)).collect::<Vec<_>>();
+    let paths = &inner.children().unwrap()[0];
+    assert_eq!(kinds(paths).len(), 3, "the first effect's three paths");
+    assert!(paths.children().unwrap().iter().all(|c| matches!(c.kind, NodeKind::Compound { .. })), "each with its copies");
+    assert_eq!(kinds(mask), kinds(paths), "the mask's art takes the copies as the paths do");
+}
+
+/// A 10 × 10 image with id `id` at the origin.
+fn image_node(id: u64) -> Node {
+    let im = vectorcraft_doc::ImageObject {
+        key: "k".into(),
+        width: 10,
+        height: 10,
+        xf: vectorcraft_geom::Affine::IDENTITY,
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    Node::new(NodeId(id), NodeKind::Image(Box::new(im)))
+}
+
+/// A linked mask whose art is an image moves with the path it masks under a group's Transform
+/// effect, and a member group's image mask takes the copies its paths take.
+#[test]
+fn a_groups_transform_moves_a_linked_mask_whose_art_is_an_image() {
+    let mut g = Node::group(NodeId(10), vec![Arc::new(masked_by(white_square(1), image_node(4), true)), sq(2, 20.0, Color::BLACK)]);
+    g.appearance.effects.push(reshaping_effects()[0].clone());
+    let art = evaluate_container(None, &g).unwrap();
+    let member = &art.children().unwrap()[0];
+    assert_eq!(member.geometric_bounds(), Some(Rect::new(30.0, 0.0, 40.0, 10.0)));
+    assert_eq!(member.extras().mask.as_deref().unwrap().art.geometric_bounds(), member.geometric_bounds());
+
+    let inner = masked_by(Node::group(NodeId(2), vec![Arc::new(white_square(1))]), image_node(4), true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(inner)]);
+    let params = serde_json::json!({"moveH": 30, "copies": 2});
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+    let art = evaluate_container(None, &g).unwrap();
+    let inner = &art.children().unwrap()[0];
+    assert_eq!(inner.geometric_bounds(), Some(Rect::new(0.0, 0.0, 70.0, 10.0)));
+    let mask = &inner.extras().mask.as_deref().unwrap().art;
+    assert_eq!(mask.geometric_bounds(), inner.geometric_bounds(), "the image and its copies");
+}
+
+/// An image in a linked mask's art takes no geometry effect but Transform, so under a Warp effect
+/// the art keeps its shape with its mask.
+#[test]
+fn art_whose_mask_holds_an_image_keeps_its_shape_under_a_warp() {
+    let member = masked_by(white_square(1), Node::group(NodeId(3), vec![Arc::new(image_node(4))]), true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(member), sq(2, 20.0, Color::BLACK)]);
+    g.appearance.effects.push(reshaping_effects()[4].clone());
+    let art = evaluate_container(None, &g).unwrap();
+    let member = &art.children().unwrap()[0];
+    assert_eq!(member.path_data(), white_square(1).path_data(), "the path keeps its shape");
+    assert_eq!(member.extras().mask.as_deref().unwrap().art.geometric_bounds(), Some(Rect::new(0.0, 0.0, 10.0, 10.0)));
+}
+
+/// A symbol instance in perspective projects the linked masks of the objects in its art with them.
+#[test]
+fn perspective_projects_the_masks_in_a_symbols_art() {
+    let art = Node::group(NodeId(20), vec![Arc::new(masked_by(white_square(21), white_square(22), true))]);
+    let mut instance = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "s".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let mut at = vectorcraft_doc::PerspectiveAttachment::new("left", 0.0);
+    at.projection = Some([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.01, 0.0, 1.0]);
+    instance.extras_mut().perspective = Some(Box::new(at));
+    let out = crate::reshape::reshape(None, &instance, Some(&art)).unwrap();
+    let mut masked = vec![];
+    out.walk(&mut |c| masked.extend(c.extras().mask.as_deref().map(|m| (c.path_data().cloned(), m.art.path_data().cloned()))));
+    let [(path, mask)] = masked.as_slice() else { panic!("one masked path: {masked:?}") };
+    assert!(path != &white_square(21).path_data().cloned(), "the path is projected");
+    assert_eq!(mask, path, "and so is its mask");
 }
 
 /// A group with `effect` holding `n` vertical then `n` horizontal bars, 2 wide on a 4-unit

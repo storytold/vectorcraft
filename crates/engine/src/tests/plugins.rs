@@ -505,6 +505,30 @@ fn a_painted_group_effect_links_to_the_document_s_swatches() {
     assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (GREEN, WHITE), "the group's piece, green");
 }
 
+/// A painted effect on a group leaves the group's art as it is when a path in it has a linked
+/// opacity mask, which can't take the pieces as the path does: the mask still covers the path.
+#[test]
+fn a_painted_group_effect_leaves_art_with_a_linked_mask_as_it_is() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let m = rect(&mut s, 10.0, "#ffffff");
+    run(&mut s, "select.set", json!({"ids": [a.0, m.0]}));
+    run(&mut s, "transparency.makeOpacityMask", json!({}));
+    rect(&mut s, 100.0, "#0000ff");
+    run(&mut s, "select.all", json!({}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.maskedpaint", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "plugin.test.engine.maskedpaint"}));
+    let art = vectorcraft_render::effects::evaluate_container(Some(&s.doc().unwrap().doc), &node(&s, g)).unwrap();
+    let mut masked = vec![];
+    art.walk(&mut |c| masked.extend(c.extras().mask.as_ref().map(|k| (c.geometric_bounds(), k.art.geometric_bounds()))));
+    assert!(!masked.is_empty(), "the masked path");
+    for (path, mask) in masked {
+        assert_eq!(path, mask, "the mask covers the path");
+    }
+}
+
 /// The output of a painted effect that returns one green square linked to swatch `Leaf`.
 fn leaf_square() -> String {
     let mut leaf = solid("#00ff00");

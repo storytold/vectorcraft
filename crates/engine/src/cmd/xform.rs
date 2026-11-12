@@ -104,7 +104,7 @@ impl Projective {
 }
 
 /// Warp `n`'s anchors and handles; gradients (pinned first if unplaced) follow the warp's affine
-/// approximation at their centre. The art of a linked opacity mask is warped with the object it
+/// approximation at their center. The art of a linked opacity mask is warped with the object it
 /// masks; an unlinked one stays where it is.
 fn warp_node(n: &mut Node, pr: &Projective) {
     n.pin_gradients();
