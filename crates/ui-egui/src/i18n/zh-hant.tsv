@@ -864,6 +864,17 @@ font-technology	Variable	可變
 	The selected character's font is not available.	選取字元的字體無法使用。
 	No alternates for the selected character.	選取的字元沒有替代字。
 	Double-click to replace	按兩下以取代
+	Select one character with the Type tool first.	請先用文字工具選取一個字元。
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} 是 {font} 的字形，不是所選文字所用字體（{text_font}）的字形。
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} 屬於 {base}（U+{base_code}）{place}；您選取的是 {sel}（U+{code}）。
+	at the start of a word	位於詞首
+	in the middle of a word	位於詞中
+	at the end of a word	位於詞尾
+	standing alone	單獨出現時
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} 不是 {sel}（U+{code}）在其單字中所處位置的替代字。
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	按兩下以改為插入 {base}（U+{code}）：表現形式不會連接，字母會連接。
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	已插入 {base}（U+{code}）以取代表現形式：字體會依位置將其與相鄰字元連接。
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	沒有任何 OpenType 功能會在此處繪製該字形，因此它會取代該字元的字形，且可能無法與相鄰字元連接。
 	Double-click to insert	按兩下以插入
 	Double-click to rename	按兩下以重新命名
 	Double-click to target the contents	按兩下以指定內容
@@ -3943,6 +3954,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Rotate View Tool	旋轉檢視工具
 	Trackpad Gesture to Rotate View	使用觸控式軌跡板手勢旋轉檢視
 	Hold a Tool Shortcut to Use the Tool Temporarily	按住工具快速鍵以暫時使用該工具
+	Show Bounding Box While Moving and Drawing	移動和繪製時顯示邊框
 	Rotate…	旋轉…
 	Rotation	旋轉
 	Roughen…	粗糙效果…
@@ -6658,3 +6670,8 @@ breakText	Glyphs	字符
 @msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數
+	Weed Box and Lines…	除廢框與除廢線…
+	Weed Box and Lines	除廢框與除廢線
+	Margin	邊距
+	Box	框
+	Swatch	色票

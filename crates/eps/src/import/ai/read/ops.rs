@@ -1260,8 +1260,11 @@ pub(crate) fn read_style_list(section: &[u8]) -> Vec<String> {
 
 /// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
 /// with a style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads
-/// it on objects other than type. `None` when the section doesn't define it, the reader doesn't read
-/// it, or it paints with a pattern, a brush or a gradient that isn't the object's own.
+/// it on objects other than type. A stroke that names a brush is read with that brush's name, as
+/// [`styled`] reads it on a path or compound path when the Brushes panel keeps that brush at those
+/// settings, which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the section
+/// doesn't define it, the reader doesn't read it, or it paints with a pattern or a gradient that
+/// isn't the object's own.
 pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&Paint>) -> Option<StyleRead> {
     use crate::import::ai::style::StyleItem;
     let mut st = crate::import::ai::style::art_styles(section).remove(name)?;
@@ -1273,7 +1276,21 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
             }
         }
     }
-    let appearance = appearance_from_art_style(&st)?;
+    // The brush names, by item; `appearance_from_art_style` reads a style's items in order.
+    let brushes: Vec<Option<String>> = st
+        .items
+        .iter_mut()
+        .map(|item| match item {
+            StyleItem::Stroke { brush, .. } => brush.take().map(|(name, _)| name),
+            _ => None,
+        })
+        .collect();
+    let mut appearance = appearance_from_art_style(&st)?;
+    for (item, brush) in appearance.items.iter_mut().zip(brushes) {
+        if let (AppearanceItem::Stroke(s), Some(brush)) = (item, brush) {
+            s.brush = Some(brush);
+        }
+    }
     Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder, transparency: st.transparency })
 }
 

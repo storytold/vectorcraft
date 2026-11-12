@@ -828,6 +828,8 @@ const ANYTHING: Under = Under { strokes: true, patterns: true };
 /// The Transform effect `f` (the factor and radian entries; the percent and degree ones are what
 /// its dialog shows). `None` keeps the drawn look: an entry not read, Random (the file holds no
 /// seed), or a missing Scale Strokes & Effects or Transform Patterns that would change `under`.
+/// The keys are LiveEffect XML's
+/// (https://community.adobe.com/questions-652/how-to-define-values-in-action-menu-command-816878).
 fn transform(f: &Filter, under: Under) -> Option<serde_json::Value> {
     for key in ["scaleH_Percent", "scaleV_Percent", "rotate_Degrees"] {
         entry(f, key, Kind::Real).ok()?;
@@ -877,6 +879,9 @@ fn transform(f: &Filter, under: Under) -> Option<serde_json::Value> {
 /// corners are measured in: the distorted box is laid over the object's own bounds, as the catalog
 /// effect lays it, also when the frame is another size (a unit square, or bounds with the stroke).
 /// No corners is no change; some but not all, or a frame that isn't an upright rectangle, isn't read.
+/// The keys are LiveEffect XML's (https://community.adobe.com/questions-652/pageitem-applyeffect-liveeffectxml-769450),
+/// with the corners in that order
+/// (https://raw.githubusercontent.com/mark1bean/live-effect-functions-for-illustrator/master/scripts/LE_Functions.js).
 fn free_distort(f: &Filter) -> Option<serde_json::Value> {
     let mut corners = [[[0.0; 2]; 4]; 2];
     let mut held = 0;
@@ -931,8 +936,10 @@ fn points(f: &Filter) -> Option<&'static str> {
     Some(if switch(f, "roundness", Kind::Real).ok()?.unwrap_or(false) { "smooth" } else { "corner" })
 }
 
-/// The Tweak effect `f` (`Adobe Scribble and Tweak`): relative unless `absoluteness` says otherwise,
-/// moving anchors and both handles unless the dictionary turns them off.
+/// The Tweak effect `f` (`TWEAK`): relative unless `absoluteness` says otherwise,
+/// moving anchors and both handles unless the dictionary turns them off. The keys are LiveEffect
+/// XML's: `horz` and `vert` relative, `ahor` and `aver` absolute, and `anch`, `in` and `out`
+/// (https://raw.githubusercontent.com/mark1bean/live-effect-functions-for-illustrator/master/scripts/LE_Functions.js).
 fn tweak(f: &Filter) -> Option<serde_json::Value> {
     let (absolute, h) = sized(f, false, "horz", "ahor")?;
     let (_, v) = sized(f, false, "vert", "aver")?;
@@ -942,7 +949,9 @@ fn tweak(f: &Filter) -> Option<serde_json::Value> {
 }
 
 /// The Zig Zag effect `f`: absolute unless `absoluteness` says otherwise, 4 ridges and Corner points
-/// when they are missing.
+/// when they are missing. The keys are LiveEffect XML's: `amount` absolute, `relAmount` relative,
+/// `ridges` and `roundness` (https://community.adobe.com/questions-652/pageitem-applyeffect-liveeffectxml-769450,
+/// https://raw.githubusercontent.com/mark1bean/live-effect-functions-for-illustrator/master/scripts/LE_Functions.js).
 fn zig_zag(f: &Filter) -> Option<serde_json::Value> {
     let (absolute, size) = sized(f, true, "relAmount", "amount")?;
     let ridges = real(f, "ridges", 4.0, 0.0..=100.0).filter(|r| r.fract() == 0.0)?;
@@ -1203,6 +1212,8 @@ fn effect(f: &Filter, under: Under) -> Option<Effect> {
         TRANSFORM => ("distort.transform", transform(f, under)?),
         FREE_DISTORT => ("distort.freeDistort", free_distort(f)?),
         // Negative puckers (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+        // Pucker & Bloat's `d_factor` and Twist's `angle` are LiveEffect XML's keys
+        // (https://community.adobe.com/questions-652/pageitem-applyeffect-liveeffectxml-769450).
         PUCKER_BLOAT => ("distort.puckerBloat", json!({"amount": real(f, "d_factor", 0.0, -200.0..=200.0)?})),
         TWEAK => ("distort.tweak", tweak(f).filter(still)?),
         // A positive angle turns clockwise in both.

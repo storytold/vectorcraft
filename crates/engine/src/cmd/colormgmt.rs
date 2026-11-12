@@ -274,14 +274,17 @@ fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(())
         })?;
         let mut st = cms::active_settings();
+        let before = st.clone();
         if let Some(r) = &rgb {
             st.rgb = r.clone();
         }
         if let Some(c) = &cmyk {
             st.cmyk = c.clone();
         }
-        cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
-        touch_all(s);
+        if st != before {
+            cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
+            touch_all(s);
+        }
     }
     Ok(json!({"rgb": rgb, "cmyk": cmyk}))
 }

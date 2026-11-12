@@ -1019,13 +1019,38 @@ fn is_loss(note: &str) -> bool {
 /// Another name keeps the original file, with all it has.
 pub(crate) fn check_not_lossy_overwrite(st: &crate::DocState, target: &str, p: &Value, cmd: &str) -> Result<()> {
     let Some(losses) = overwrite_losses(st, target, p) else { return Ok(()) };
+    Err(lossy_overwrite(target, losses, cmd))
+}
+
+/// The refusal to write `target`, the file the document was read from, when reading it left out `losses`.
+fn lossy_overwrite(target: &str, losses: &[String], cmd: &str) -> EngineError {
     let what = losses_summary(losses);
-    Err(bad(
+    bad(
         cmd,
         format!(
             "{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway"
         ),
-    ))
+    )
+}
+
+/// The file the document was read from and what reading it left out, when a write to that file
+/// needs `acknowledgeLoss` and `p` does not have it ([`overwrite_losses`]).
+pub(crate) fn lossy_source(st: &crate::DocState, p: &Value) -> Option<(String, Vec<String>)> {
+    let source = st.imported_from.as_deref().filter(|_| !st.import_losses.is_empty())?;
+    (!bool_or(p, "acknowledgeLoss", false)).then(|| (source.to_string(), st.import_losses.clone()))
+}
+
+/// None of the files `targets` (every file a save writes, before any is written) is the
+/// `source` file that reading left `losses` out of ([`lossy_source`]).
+pub(crate) fn check_files_not_lossy_overwrite<'a>(
+    source: &(String, Vec<String>),
+    targets: impl IntoIterator<Item = &'a str>,
+    cmd: &str,
+) -> Result<()> {
+    match targets.into_iter().find(|t| same_file(&source.0, t)) {
+        Some(target) => Err(lossy_overwrite(target, &source.1, cmd)),
+        None => Ok(()),
+    }
 }
 
 /// What writing the file `target` for document `st` would lose for good: the notes of what reading

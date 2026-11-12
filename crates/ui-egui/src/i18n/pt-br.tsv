@@ -804,6 +804,17 @@ antiAlias	Sharp	Nítido
 	The selected character's font is not available.	A fonte do caractere selecionado não está disponível.
 	No alternates for the selected character.	Nenhuma alternativa para o caractere selecionado.
 	Double-click to replace	Clique duplo para substituir
+	Select one character with the Type tool first.	Primeiro selecione um caractere com a ferramenta Texto.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} é um glifo de {font}, não da fonte do texto selecionado ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertence a {base} (U+{base_code}) {place}; sua seleção é {sel} (U+{code}).
+	at the start of a word	no início de uma palavra
+	in the middle of a word	no meio de uma palavra
+	at the end of a word	no fim de uma palavra
+	standing alone	quando está sozinho
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} não é uma alternativa de {sel} (U+{code}) como ele está em sua palavra.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Clique duplo para inserir {base} (U+{code}) no lugar: uma forma de apresentação não se une, a letra sim.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) foi inserido no lugar de uma forma de apresentação: a fonte o une aos vizinhos conforme a posição.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nenhum recurso OpenType desenha este glifo aqui, então ele substitui o glifo do caractere e pode não se unir aos caracteres vizinhos.
 	Double-click to insert	Clique duplo para inserir
 	Double-click to rename	Clique duplo para renomear
 	Double-click to target the contents	Clique duplo para direcionar o conteúdo
@@ -2461,6 +2472,7 @@ digits	Malayalam	Malaiala
 	Rotate View Tool	Ferramenta Girar Visualização
 	Trackpad Gesture to Rotate View	Girar Visualização com Gesto do Trackpad
 	Hold a Tool Shortcut to Use the Tool Temporarily	Manter o Atalho de uma Ferramenta Pressionado para Usá-la Temporariamente
+	Show Bounding Box While Moving and Drawing	Mostrar Caixa Delimitadora ao Mover e Desenhar
 	Rotate…	Girar…
 	Rotation	Rotação
 	Roughen…	Enrugar…
@@ -7087,3 +7099,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
 @msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Caixa e Linhas de Descasque…
+	Weed Box and Lines	Caixa e Linhas de Descasque
+	Margin	Margem
+	Box	Caixa
+	Swatch	Amostra

@@ -15,6 +15,7 @@ use vectorcraft_pathops::BoolOp;
 use crate::ai_ops::{self, unit};
 use crate::ps;
 
+mod brushes;
 mod images;
 mod paints;
 mod styles;
@@ -22,6 +23,8 @@ mod symbols;
 mod texts;
 mod variables;
 
+#[cfg(test)]
+pub(super) use brushes::BRUSHES;
 pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_objects};
 #[cfg(test)]
 pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, same_appearance};
@@ -51,7 +54,7 @@ pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths tha
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
 pub(super) const LIVE: &str =
     "blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
-const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
+pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
     "the opacity and blending modes of single fills and strokes are left out of the editing data for other apps";
 pub(super) const LAYER_MASKS: &str = "opacity masks on layers are left out of the editing data for other apps";
@@ -255,6 +258,10 @@ pub(super) struct Writer<'a> {
     /// An object's drawn look is being written: no object in it is written with a style, and its
     /// effects are the style's.
     in_look: bool,
+    /// The brushes written ([`brushes`]).
+    brush_set: brushes::Brushes,
+    /// Brushes may be written; false on a large canvas, where they are left out.
+    pub(super) brushes_live: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -310,6 +317,8 @@ impl<'a> Writer<'a> {
             styled: HashMap::new(),
             styles: styles::Styles::default(),
             in_look: false,
+            brush_set: brushes::Brushes::default(),
+            brushes_live: true,
             objects: 0,
             left_out: 0,
             definition_objects: 0,
@@ -1028,7 +1037,12 @@ impl<'a> Writer<'a> {
             AppearanceItem::Fill(f) => self.fill_object(path, rule, f, xy),
             AppearanceItem::Stroke(s) if self.direct_stroke(s) => self.path_object(path, rule, None, Some(s), xy),
             AppearanceItem::Stroke(s) => {
-                self.warn(STROKES);
+                // In a drawn look a brushed stroke is kept by the object's art style, which is written
+                // only when the reader reads the brush back from it; a styled group's members are
+                // written again after the look, and warn there.
+                if !(self.in_look && s.brush.is_some()) {
+                    self.warn(STROKES);
+                }
                 self.wrote_fixed = true;
                 if self.brush_art(path, s, xy) {
                     return;

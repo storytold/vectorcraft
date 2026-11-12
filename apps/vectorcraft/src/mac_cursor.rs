@@ -35,7 +35,6 @@ trait Backend {
     fn suspend(&mut self, window: &Self::Window);
     fn restore(&mut self, window: &Self::Window);
     fn build(&mut self, request: &Request) -> Option<Self::Cursor>;
-    fn current(&self) -> Option<Self::Cursor>;
     fn set(&mut self, cursor: &Self::Cursor);
 }
 
@@ -73,9 +72,10 @@ impl<B: Backend> State<B> {
             && *key == request.key
             && *owned == window
         {
-            if self.backend.current().as_ref() != Some(cursor) {
-                self.backend.set(cursor);
-            }
+            // AppKit can show the system arrow when the pointer moves while
+            // `NSCursor.currentCursor` (the app's last set cursor) still reads as ours, so a
+            // comparison would keep the arrow. Setting the cursor again costs nothing.
+            self.backend.set(cursor);
             return;
         }
         self.release();
@@ -134,9 +134,6 @@ impl Backend for AppKit {
     }
     fn build(&mut self, request: &Request) -> Option<Self::Cursor> {
         build(&request.bitmap)
-    }
-    fn current(&self) -> Option<Self::Cursor> {
-        Some(NSCursor::currentCursor())
     }
     fn set(&mut self, cursor: &Self::Cursor) {
         cursor.set();

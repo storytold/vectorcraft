@@ -570,6 +570,30 @@ fn eps_save_with_use_artboards_and_a_named_artboard_reports_it_as_the_range() {
 }
 
 #[test]
+fn eps_save_with_use_artboards_refuses_to_replace_the_file_read_from_before_writing_any_file() {
+    let d = dir("eps-artboards-lossy-sibling");
+    let eps_path = path(&d, "Art.eps");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut s);
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let r = s.execute("document.save", &json!({"path": eps_path, "options": options})).unwrap();
+    let sibling = r["files"][1].as_str().unwrap().to_string();
+    let original = std::fs::read(&sibling).unwrap();
+    std::fs::remove_file(&eps_path).unwrap();
+    let st = s.doc_mut().unwrap();
+    st.imported_from = Some(sibling.clone());
+    st.import_losses.push("test import omitted artwork".into());
+    let err = s.execute("document.save", &json!({"path": eps_path, "options": options})).unwrap_err().to_string();
+    assert!(err.contains("acknowledgeLoss") && err.contains(&sibling), "{err}");
+    assert_eq!(std::fs::read(&sibling).unwrap(), original);
+    assert!(!std::path::Path::new(&eps_path).exists(), "no file of the set is written when one is refused");
+    s.execute("document.save", &json!({"path": eps_path, "options": options, "acknowledgeLoss": true})).unwrap();
+    assert!(std::path::Path::new(&eps_path).exists());
+    std::fs::remove_dir_all(d).unwrap();
+}
+
+#[test]
 fn eps_save_with_use_artboards_writes_the_central_file_and_one_per_artboard() {
     let d = dir("eps-artboards");
     let eps_path = path(&d, "Art.eps");
