@@ -1,6 +1,6 @@
 # Development
 
-> **Last updated:** 2026-11-12 · **Change:** Tests canonicalize temporary roots before comparing preset refusal paths or probing a case-variant script folder (#6860); production access checks unchanged.
+> **Last updated:** 2026-11-12 · **Change:** Tests canonicalize temporary roots and normalize Windows verbatim prefixes before comparing preset refusal paths or probing a case-variant script folder (#6860); production access checks unchanged.
 > **Last updated:** 2026-11-06 · **Change:** Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending.
 > **Last updated:** 2026-11-01 · **Change:** Linux: Automatic Linux Display Server opens the window through XWayland when a pen is attached on a Wayland session, so the pen draws (#4967); `VECTORCRAFT_NATIVE_WAYLAND=1` keeps Wayland.
 > **Last updated:** 2026-10-31 · **Change:** files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance`.
