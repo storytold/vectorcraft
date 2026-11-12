@@ -24,6 +24,10 @@ pub struct Workspace {
     /// The Control bar is docked to the bottom of the window (built-in workspaces, and workspaces
     /// saved without this field: the top).
     pub control_bar_bottom: bool,
+    /// The groups of the Control bar's options its panel menu has off (built-in workspaces, and
+    /// workspaces saved without this field: none).
+    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty", deserialize_with = "crate::chrome::read_hidden_groups")]
+    pub control_bar_hidden_groups: std::collections::BTreeSet<String>,
     pub rulers: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
@@ -186,6 +190,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         name: name.into(),
         control_bar: ui.control_bar,
         control_bar_bottom: ui.control_bar_bottom,
+        control_bar_hidden_groups: ui.control_bar_hidden_groups.clone(),
         rulers: ui.view.rulers,
         toolbar: ui.toolbar,
         toolbar_double: ui.toolbar_double,
@@ -216,6 +221,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
 pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.control_bar = w.control_bar;
     ui.control_bar_bottom = w.control_bar_bottom;
+    ui.control_bar_hidden_groups = w.control_bar_hidden_groups.clone();
     ui.view.rulers = w.rulers;
     ui.toolbar = w.toolbar;
     ui.toolbar_double = w.toolbar_double;
@@ -805,5 +811,45 @@ mod tests {
         let old: Workspace = serde_json::from_value(old).unwrap();
         apply(&mut ui, &old);
         assert!(ui.control_bar && !ui.control_bar_bottom, "an older workspace docks the bar at the top");
+    }
+
+    /// A workspace keeps the groups of Control bar options its panel menu has off: switching
+    /// brings each workspace's back, Reset turns a built-in workspace's on again, and they survive
+    /// the preferences' JSON. A workspace or preferences saved without them, or with groups the bar
+    /// does not have, show every group, or the ones they name that it has.
+    #[test]
+    fn saved_workspaces_restore_the_control_bar_groups() {
+        let hidden = |ids: &[&str]| ids.iter().map(|s| s.to_string()).collect::<std::collections::BTreeSet<String>>();
+        let mut ui = UiState { control_bar: true, control_bar_hidden_groups: hidden(&["opacity", "transform"]), ..Default::default() };
+        save_as(&mut ui, "Lean").unwrap();
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert!(ui.control_bar_hidden_groups.is_empty(), "Essentials shows every group");
+        ui.control_bar_hidden_groups = hidden(&["snapping"]);
+        switch(&mut ui, "Lean").unwrap();
+        assert_eq!(ui.control_bar_hidden_groups, hidden(&["opacity", "transform"]), "the saved workspace's groups");
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert_eq!(ui.control_bar_hidden_groups, hidden(&["snapping"]), "Essentials as it was left");
+        reset(&mut ui);
+        assert!(ui.control_bar_hidden_groups.is_empty(), "Reset Essentials shows every group again");
+        switch(&mut ui, "Lean").unwrap();
+        let json = serde_json::to_value(&ui).unwrap();
+        assert_eq!(json["custom_workspaces"][0]["controlBarHiddenGroups"], serde_json::json!(["opacity", "transform"]));
+        let back: UiState = serde_json::from_value(json).unwrap();
+        assert_eq!(back.control_bar_hidden_groups, hidden(&["opacity", "transform"]), "kept in the preferences");
+        assert_eq!(back.custom_workspaces[0].control_bar_hidden_groups, hidden(&["opacity", "transform"]), "kept with the workspace");
+        let mut old = serde_json::to_value(&back.custom_workspaces[0]).unwrap();
+        assert!(old.as_object_mut().unwrap().remove("controlBarHiddenGroups").is_some());
+        let old: Workspace = serde_json::from_value(old).unwrap();
+        apply(&mut ui, &old);
+        assert!(ui.control_bar_hidden_groups.is_empty(), "an older workspace shows every group");
+        let mut prefs = serde_json::to_value(&back).unwrap();
+        prefs["control_bar_hidden_groups"] = serde_json::json!(["opacity", "stroke", 3, "paragraph"]);
+        prefs["custom_workspaces"][0]["controlBarHiddenGroups"] = serde_json::json!("opacity");
+        let read: UiState = serde_json::from_value(prefs.clone()).unwrap();
+        assert_eq!(read.control_bar_hidden_groups, hidden(&["opacity", "paragraph"]), "groups the bar does not have are dropped");
+        assert!(read.custom_workspaces[0].control_bar_hidden_groups.is_empty(), "a value that is not a list shows every group");
+        prefs.as_object_mut().unwrap().remove("control_bar_hidden_groups");
+        let read: UiState = serde_json::from_value(prefs).unwrap();
+        assert!(read.control_bar_hidden_groups.is_empty(), "older preferences show every group");
     }
 }

@@ -45,7 +45,7 @@ pub(crate) use symbols::{
 };
 use symbols::{
     symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_instance_reset_transform, symbol_list, symbol_new, symbol_options,
-    symbol_place, symbol_replace, symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
+    symbol_place, symbol_replace, symbol_select_instances, symbol_set_current, symbol_sort, symbol_spray, symbol_unused, symbol_update,
 };
 
 const SIZES_KEY: &str = vectorcraft_doc::SYMBOL_SIZES;
@@ -311,6 +311,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} → {names: [the symbols nothing places, in panel order]} (the Symbols panel selects them): instances in the art (opacity masks included), graph designs, pattern tiles (with the tiles that pattern editing's Cancel puts back) and brush art count, and so do instances in the art of a symbol that is used",
             has_doc,
             symbol_unused
+        ),
+        cmd!(
+            "symbol.sortByName",
+            "Sort by Name",
+            ["Window", "Symbols"],
+            None,
+            "{} sort the document's symbols by name, ignoring case (symbols whose names differ only in case keep their order), as one undo step; the current symbol stays current; no undo step is added when they are already in order",
+            has_doc,
+            symbol_sort
         ),
         cmd!(query "symbol.selectInstances", "Select All Instances", [], None, "{name} select every instance of a symbol → {count}", has_doc, symbol_select_instances),
         cmd!(

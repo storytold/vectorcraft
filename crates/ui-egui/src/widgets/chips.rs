@@ -82,7 +82,11 @@ pub(super) fn gradient_chip_colors(gp: &vectorcraft_color::GradientPaint, width:
     }
     // A placed gradient keeps its direction; a fresh one is fitted to the chip at its angle.
     let angle = gp.geom.map_or(gp.angle, |g| g.angle_deg());
-    let geom = GradientGeom::fit(gp.gradient.kind, b, if angle.is_finite() { angle } else { 0.0 });
+    let mut geom = GradientGeom::fit(gp.gradient.kind, b, if angle.is_finite() { angle } else { 0.0 });
+    // A mirrored conic's chip turns the way the gradient does on its object.
+    if gp.gradient.kind == GradientKind::Conic && gp.geom.is_some_and(|g| g.is_mirrored()) {
+        geom.aspect = -1.0;
+    }
     (0..n)
         .map(|k| {
             let t = geom.param_at(gp.gradient.kind, at(k)).clamp(0.0, 1.0) as f32;

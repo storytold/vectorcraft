@@ -56,6 +56,37 @@ pub struct Raster {
     pub rgba: Vec<u8>,
 }
 
+/// The pixels the first frame of GIF `bytes` declares in its image descriptor, which the decoder
+/// allocates for before it crops the frame to the logical screen the dimension check reads. `None`
+/// when the bytes aren't a GIF or hold no frame header.
+fn gif_first_frame_pixels(bytes: &[u8]) -> Option<u64> {
+    if !bytes.starts_with(b"GIF8") {
+        return None;
+    }
+    let flags = *bytes.get(10)?;
+    let mut at = 13 + if flags & 0x80 != 0 { 3 << ((flags & 7) + 1) } else { 0 };
+    loop {
+        match *bytes.get(at)? {
+            // An extension: its data sub-blocks end at a zero length.
+            0x21 => {
+                at += 2;
+                loop {
+                    let len = usize::from(*bytes.get(at)?);
+                    at += 1 + len;
+                    if len == 0 {
+                        break;
+                    }
+                }
+            }
+            0x2C => {
+                let d = bytes.get(at + 5..at + 9)?;
+                return Some(u64::from(u16::from_le_bytes([d[0], d[1]])) * u64::from(u16::from_le_bytes([d[2], d[3]])));
+            }
+            _ => return None,
+        }
+    }
+}
+
 impl Raster {
     /// A raster from RGBA bytes, which must be exactly `width * height * 4` of them: any other
     /// length (bytes from a file, a plug-in or a message) is a [`TraceError::Decode`] error, not
@@ -85,7 +116,7 @@ impl Raster {
         if w == 0 || h == 0 {
             return Err(TraceError::Empty);
         }
-        if u64::from(w) * u64::from(h) > MAX_PIXELS {
+        if u64::from(w) * u64::from(h) > MAX_PIXELS || gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
             return Err(TraceError::TooLarge { width: w, height: h, max: MAX_PIXELS >> 20 });
         }
         let img = image::load_from_memory(bytes).map_err(decode_err)?.to_rgba8();
@@ -112,6 +143,9 @@ impl Raster {
         }
         // Decoded within the allocation the source limit needs; the web keeps file import's 512 MB.
         // A deeper image (16 bits a channel) that needs more fails with a decode error.
+        if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_SOURCE_PIXELS) {
+            return Err(TraceError::TooLarge { width: w, height: h, max: MAX_SOURCE_PIXELS >> 20 });
+        }
         let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| TraceError::Decode(e.to_string()))?;
         let mut limits = image::Limits::default();
         limits.max_alloc = Some(if cfg!(target_arch = "wasm32") { 512 << 20 } else { MAX_SOURCE_PIXELS * 4 });

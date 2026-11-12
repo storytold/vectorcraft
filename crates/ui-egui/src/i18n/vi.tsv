@@ -988,6 +988,13 @@ font-technology	Variable	Biến thiên
 	Dock Panel	Neo bảng
 	Dock to Top	Neo lên trên
 	Dock to Bottom	Neo xuống dưới
+	Control Bar Options	Tùy chọn thanh điều khiển
+	Tool Options	Tùy chọn công cụ
+	Object Options	Tùy chọn đối tượng
+	Image Options	Tùy chọn hình ảnh
+	Vertical Alignment	Căn chỉnh dọc
+	Align and Distribute	Căn chỉnh và phân bố
+	Document Options	Tùy chọn tài liệu
 	Dock Control Bar	Neo thanh điều khiển
 	Document	Tài liệu
 	Document Color Mode	Chế độ màu tài liệu
@@ -2935,6 +2942,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
 	Radial Gradient	Chuyển sắc hướng tâm
+	Conic Gradient	Chuyển sắc hình nón
 	Radius	Bán kính
 	Radius 1	Bán kính 1
 	Radius 2	Bán kính 2
@@ -3988,6 +3996,8 @@ mark-style	Japanese	Kiểu Nhật
 	Toolbar: Add Tool	Thanh công cụ: Thêm công cụ
 	Toolbar: Advanced / Basic	Thanh công cụ: Nâng cao / Cơ bản
 	Toolbar: Remove Tool	Thanh công cụ: Gỡ công cụ
+	Add Tool…	Thêm công cụ…
+	Remove Tool	Gỡ công cụ
 	Toolbar: Reset	Thanh công cụ: Đặt lại
 	Toolbar: Single/Double Column	Thanh công cụ: Một/Hai cột
 	Toolbars	Thanh công cụ
@@ -4361,6 +4371,8 @@ theme	Appearance	Giao diện
 @msg	`colors` must be an array of colors, not {v}	`colors` phải là mảng màu, không phải {v}
 @msg	`library` is a library id or name (see {list})	`library` là id hoặc tên thư viện (xem {list})
 @msg	`mode` applies to freeform gradients	`mode` áp dụng cho chuyển sắc tự do
+@msg	a negative `aspect` applies to conic gradients	`aspect` âm áp dụng cho chuyển sắc hình nón
+@msg	`focal` applies to radial gradients	`focal` áp dụng cho chuyển sắc xuyên tâm
 @msg	`preserve` must be an object	`preserve` phải là một đối tượng
 @msg	`globalAdjust` must be an object	`globalAdjust` phải là một đối tượng
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` phải là 1, 3 hoặc 5
@@ -5175,7 +5187,7 @@ theme	Appearance	Giao diện
 @msg	unknown format	định dạng không xác định
 @msg	unknown format `{f}` (Save writes {_1})	định dạng không xác định `{f}` (Lưu ghi {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	chế độ tự do không xác định `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	tô sáng không xác định `{h}`
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)
@@ -5234,7 +5246,13 @@ theme	Appearance	Giao diện
 @msg	x and y must be provided together	x và y phải được cung cấp cùng nhau
 @msg	x and y must both be numbers	x và y đều phải là số
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Các thay đổi chưa lưu được giữ trong trình duyệt này: tải lại trang để lấy lại.
-@msg	zipped 32-bit PSD image data with prediction can't be read	dữ liệu ảnh PSD 32-bit nén với dự đoán không thể đọc được
+@msg	zipped 1-bit PSD image data with prediction can't be read	dữ liệu ảnh PSD 1-bit nén với dự đoán không thể đọc được
+@msg	the PSD file's layer data uses an unknown compression ({m})	dữ liệu lớp của tệp PSD dùng nén không xác định ({m})
+@msg	the PSD file's layer records are damaged	bản ghi lớp của tệp PSD bị hỏng
+@msg	the PSD file's layer groups are nested too deeply	các nhóm lớp của tệp PSD lồng nhau quá sâu
+@msg	a layer of the PSD file is too large to read	một lớp của tệp PSD quá lớn để đọc
+@msg	the PSD file's layers take more memory to read than allowed	các lớp của tệp PSD cần nhiều bộ nhớ để đọc hơn mức cho phép
+@msg	the layers can't be read ({e}): the file opened as its merged image	không thể đọc các lớp ({e}): tệp được mở dưới dạng ảnh đã gộp
 @msg	zone must be a string	zone phải là chuỗi
 @msg	zone must be tab, center, left, right, top or bottom	zone phải là tab, center, left, right, top hoặc bottom
 @msg	{_1} failed: {e}	{_1} thất bại: {e}
@@ -5302,6 +5320,11 @@ theme	Appearance	Giao diện
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
+	Shadows	Bóng đổ
+	Distance from Object	Khoảng cách từ đối tượng
+	Shadow Bounds	Giới hạn bóng
+	Behind Object	Phía sau đối tượng
+	Below Object	Bên dưới đối tượng
 	3D Lighting Preset	Thiết lập sẵn ánh sáng 3D
 	Standard	Tiêu chuẩn
 	Diffuse	Khuếch tán
@@ -5367,7 +5390,7 @@ theme	Appearance	Giao diện
 @msg	span must be "object" or "selection", got {v}	span phải là "object" hoặc "selection", không phải {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" đặt một `gradient`, không phải mẫu màu
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" đặt một dải chuyển màu: hãy cung cấp `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính hoặc xuyên tâm, không phải dạng tự do
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính, xuyên tâm hoặc hình nón, không phải dạng tự do
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" tự đặt dải chuyển màu: hãy bỏ `start` và `end` (chúng đã đặt nó theo tọa độ tài liệu)
 	Make Image Dynamic	Tạo hình ảnh động
 	Import Data Sets…	Nhập tập dữ liệu…
@@ -5657,6 +5680,11 @@ axis	Y Axis	Trục Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` cần quyền `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	ngân sách bộ nhớ (đối tượng {_1} cần {size} byte đầu vào, còn lại {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ngân sách đối tượng (hơn {MAX_OBJECTS} đối tượng chỉ đọc)
+@msg	instruction budget	ngân sách lệnh
+@msg	time budget	ngân sách thời gian
+@msg	memory budget (the selection is too large to hand over)	ngân sách bộ nhớ (vùng chọn quá lớn để chuyển giao)
+@msg	output size ({what} is {len} bytes, limit {max})	kích thước đầu ra ({what} là {len} byte, giới hạn {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	không thể xóa quyền của plug-in khỏi kho plug-in
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	quyền `{shown}` được dành cho một API plug-in sau này; máy chủ này không cấp quyền đó
 @msg	unknown permission `{shown}`	quyền không xác định `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” yêu cầu các quyền {asked}: cần một người phê duyệt trong ứng dụng máy tính, hoặc truyền `grant` trong phiên khởi động bằng --allow-plugin-grants
@@ -5693,6 +5721,16 @@ axis	Y Axis	Trục Y
 @msg	message must be text	message phải là văn bản
 @msg	allowContinue must be true or false	allowContinue phải là true hoặc false
 @msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
+	Insert Menu Item…	Chèn mục menu…
+	Insert Menu Item	Chèn mục menu
+	Menu Item:	Mục menu:
+	No menu item matches.	Không có mục menu nào khớp.
+	Several menu items match. Choose one from the list.	Có nhiều mục menu khớp. Hãy chọn một mục trong danh sách.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Các mục mở hộp thoại và các mục trong menu Tệp, Cửa sổ và Trợ giúp không được liệt kê.
+@msg	command must be text	command phải là văn bản
+@msg	no menu item that can be inserted runs this command	không có mục menu nào có thể chèn chạy lệnh này
+@msg	the action already has 10,000 steps	hành động đã có 10.000 bước
+@msg	the action set would be larger than 8 MiB	bộ hành động sẽ lớn hơn 8 MiB
 	Playback Options	Tùy chọn phát lại
 	Accelerated	Tăng tốc
 	Step by Step	Từng bước
@@ -6006,9 +6044,12 @@ anchor	Points:	Điểm:
 @msg	{label} must be a number	{label} phải là một số
 @msg	{label} must be a number of at least 0.1	{label} phải là một số ít nhất bằng 0,1
 	Advanced Character Formats	Định dạng ký tự nâng cao
+	Basic Paragraph Formats	Định dạng đoạn văn cơ bản
+	Composition	Dàn trang
 	Horizontal Scale	Tỷ lệ ngang
 	Vertical Scale	Tỷ lệ dọc
 @msg	{label} must be a number from {min} to {max}	{label} phải là một số từ {min} đến {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} phải là một số nguyên từ {min} đến {max}
 	Character Color	Màu ký tự
 	OpenType Features	Tính năng OpenType
 	Stylistic Sets	Bộ phong cách
@@ -6393,6 +6434,7 @@ breakText	Glyphs	Glyph
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Căn theo lưới pixel
+	Not Aligned to Pixel Grid	Chưa căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`
 	Ignore All	Bỏ qua tất cả
