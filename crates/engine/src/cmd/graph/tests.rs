@@ -2638,9 +2638,12 @@ fn counts_come_back_from_the_dialog_as_floats_and_are_capped() {
     s.execute("graph.setType", &json!({"tickMarks": 3.0, "ticks": 4.0, "categoryTickMarks": 2.6})).unwrap();
     let g = spec(&s, id);
     assert_eq!((g.tick_marks, g.ticks, g.category_tick_marks), (3, 4, 3));
-    s.execute("graph.setType", &json!({"categoryTickMarks": 0, "rightTickMarks": 1e300, "rightTicks": -2.0})).unwrap();
+    s.execute("graph.setType", &json!({"categoryTickMarks": 0, "rightTickMarks": 1e300})).unwrap();
     let g = spec(&s, id);
     assert_eq!((g.category_tick_marks, g.right_tick_marks, g.right_ticks), (1, 20, 0));
+    // A negative count is refused.
+    s.execute("graph.setType", &json!({"rightTicks": -2.0})).unwrap_err();
+    assert_eq!(spec(&s, id).right_ticks, 0);
     // A file's values come back as drawn.
     let mut fields = s.execute("graph.setType", &json!({})).unwrap();
     assert_eq!(fields["rightTickMarks"], 20);
@@ -4497,4 +4500,94 @@ fn a_legend_label_with_kept_negative_space_before_stays_below_the_entry_above_it
     };
     let (first, next) = (bounds("2024"), bounds("20\n25"));
     assert!(next.y0 >= first.y1, "the second legend label starts below the first one: {first:?} {next:?}");
+}
+
+/// A graph command given a value of the wrong type refuses it, naming the key, and leaves the graph and the undo
+/// history as they were; a null axis bound still goes back to the calculated value.
+#[test]
+fn graph_commands_refuse_params_of_the_wrong_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = graph(&mut s, "line");
+    s.execute("graph.setType", &json!({"id": id.0, "axisMin": 0, "axisMax": 10})).unwrap();
+    let spec = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_deref().cloned().unwrap();
+    let undo_len = |s: &Session| s.doc().unwrap().history.undo.len();
+    let (before, steps) = (spec(&s), undo_len(&s));
+    let refused = |s: &mut Session, cmd: &str, p: serde_json::Value, msg: &str| {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{cmd} {p}: {e}");
+    };
+    for (key, v, msg) in [
+        ("axisMin", json!("10"), "`axisMin` must be a number or null, not \"10\""),
+        ("axisMax", json!(true), "`axisMax` must be a number or null"),
+        ("rightAxisMin", json!([1]), "`rightAxisMin` must be a number or null"),
+        ("rightAxisMax", json!({}), "`rightAxisMax` must be a number or null"),
+        ("columnWidth", json!("50"), "`columnWidth` must be a number, not \"50\""),
+        ("clusterWidth", json!(false), "`clusterWidth` must be a number"),
+        ("ticks", json!("5"), "`ticks` must be a number, not \"5\""),
+        ("ticks", json!(-2), "`ticks` must be 0 or more"),
+        ("rightTicks", json!("5"), "`rightTicks` must be a number"),
+        ("tickMarks", json!("2"), "`tickMarks` must be a number"),
+        ("rightTickMarks", json!(-1), "`rightTickMarks` must be 0 or more"),
+        ("categoryTickMarks", json!(true), "`categoryTickMarks` must be a number"),
+        ("legend", json!("false"), "`legend` must be true or false"),
+        ("markPoints", json!(0), "`markPoints` must be true or false"),
+        ("connectPoints", json!("no"), "`connectPoints` must be true or false"),
+        ("edgeToEdge", json!(1), "`edgeToEdge` must be true or false"),
+        ("separateScales", json!("true"), "`separateScales` must be true or false"),
+        ("ticksBetweenLabels", json!(1), "`ticksBetweenLabels` must be true or false"),
+        ("firstRowInFront", json!("yes"), "`firstRowInFront` must be true or false"),
+        ("firstColumnInFront", json!(0), "`firstColumnInFront` must be true or false"),
+        ("filledLines", json!("on"), "`filledLines` must be true or false"),
+        ("dropShadow", json!(1), "`dropShadow` must be true or false"),
+        ("legendAcrossTop", json!("x"), "`legendAcrossTop` must be true or false"),
+        ("type", json!(5), "`type` must be a string"),
+        ("valueAxis", json!(true), "`valueAxis` must be a string"),
+        ("tickLength", json!(1), "`tickLength` must be a string"),
+        ("rightTickLength", json!(1), "`rightTickLength` must be a string"),
+        ("categoryTickLength", json!(1), "`categoryTickLength` must be a string"),
+        ("prefix", json!(1), "`prefix` must be a string"),
+        ("suffix", json!(true), "`suffix` must be a string"),
+        ("rightPrefix", json!([]), "`rightPrefix` must be a string"),
+        ("rightSuffix", json!(2), "`rightSuffix` must be a string"),
+        ("pieLegend", json!(1), "`pieLegend` must be a string"),
+        ("piePosition", json!(1), "`piePosition` must be a string"),
+        ("pieSort", json!(1), "`pieSort` must be a string"),
+    ] {
+        refused(&mut s, "graph.setType", json!({"id": id.0, key: v}), msg);
+    }
+    for (key, v, msg) in [
+        ("csv", json!(5), "`csv` must be a string"),
+        ("series", json!("a"), "`series` must be a list, not \"a\""),
+        ("categories", json!({}), "`categories` must be a list"),
+        ("rows", json!("1,2"), "`rows` must be a list"),
+        ("rows", json!([1, 2]), "`rows` must be lists of numbers or nulls, not 1"),
+        ("rows", json!([[1, "2"]]), "`rows` must be lists of numbers or nulls"),
+        ("transpose", json!("true"), "`transpose` must be true or false"),
+        ("switchXY", json!(1), "`switchXY` must be true or false"),
+    ] {
+        refused(&mut s, "graph.setData", json!({"id": id.0, key: v}), msg);
+    }
+    assert_eq!(spec(&s), before);
+    assert_eq!(undo_len(&s), steps);
+    let count = |s: &Session| s.doc().unwrap().doc.node_count();
+    let objects = count(&s);
+    for (key, v, msg) in [
+        ("type", json!(1), "`type` must be a string"),
+        ("width", json!("300"), "`width` must be a number, not \"300\""),
+        ("height", json!(true), "`height` must be a number"),
+        ("csv", json!(1), "`csv` must be a string"),
+        ("rows", json!([[true]]), "`rows` must be lists of numbers or nulls"),
+    ] {
+        let mut p = json!({"type": "column", "x": 0, "y": 0, "width": 100, "height": 100});
+        p[key] = v;
+        refused(&mut s, "graph.create", p, msg);
+    }
+    assert_eq!((count(&s), undo_len(&s)), (objects, steps));
+    // A null is a key left out, except for an axis bound, where it goes back to the calculated value.
+    s.execute("graph.setType", &json!({"id": id.0, "legend": null, "ticks": null, "prefix": null, "axisMin": null})).unwrap();
+    assert_eq!(spec(&s).axis_min, None);
+    assert_eq!(spec(&s).axis_max, Some(10.0));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, null], [2, 3]], "series": null, "transpose": null})).unwrap();
+    assert_eq!(spec(&s).cells(), vec![vec![Some(1.0), None], vec![Some(2.0), Some(3.0)]]);
 }

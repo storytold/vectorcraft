@@ -78,7 +78,9 @@ pub struct EnvelopeOptions {
     /// Rasters: Preserve Shape Using.
     pub preserve_shape: PreserveShape,
     /// Distort Appearance: strokes and live effects are applied before the distortion, so they
-    /// bend with the art (off: they apply to the distorted paths).
+    /// bend with the art (off: they apply to the distorted paths). Type's strokes are the exception:
+    /// they paint along its distorted glyph outlines at their own weight either way, as `.ai` files
+    /// draw them (#6644).
     pub distort_appearance: bool,
     /// Distort Linear Gradients (with Distort Appearance): placed gradients bend with the art.
     pub distort_linear_gradients: bool,
@@ -638,6 +640,7 @@ pub(super) fn expand_envelope(
         hooks,
         options,
         depth: 0,
+        type_outlines: false,
     };
     content.iter().map(|c| map_node(c, &w)).collect()
 }

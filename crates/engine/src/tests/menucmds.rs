@@ -4107,6 +4107,60 @@ fn invalid_clear_guides_parameters_delete_nothing() {
     assert_eq!(guides(&s).len(), 1);
 }
 
+/// Run `cmd` with `params`, expect an error naming `msg`, and check that the documents, the undo
+/// history, the guides, the saved selections and the selection are as they were.
+fn refuses_wrong_type(s: &mut Session, cmd: &str, params: Value, msg: &str) {
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (s.documents().len(), undo_len(s), guides(s), st.doc.saved_selections.clone(), st.selection.clone())
+    };
+    let before = state(s);
+    match s.execute(cmd, &params) {
+        Ok(v) => panic!("{cmd} accepted {params}: {v}"),
+        Err(e) => assert!(e.to_string().contains(msg), "{cmd} {params}: {e}"),
+    }
+    assert!(state(s) == before, "{cmd} changed something for {params}");
+}
+
+#[test]
+fn edit_guide_and_slice_commands_refuse_params_of_the_wrong_type() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    let slice = s.execute("object.slice.fromSelection", &json!({"ids": [a.0]})).unwrap()["id"].as_u64().unwrap();
+    sel(&mut s, &[a]);
+    s.execute("select.save", &json!({"name": "A"})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    for (cmd, params, msg) in [
+        ("edit.duplicate", json!({"dx": "5"}), "`dx` must be a number, not \"5\""),
+        ("edit.duplicate", json!({"dy": true}), "`dy` must be a number, not true"),
+        ("edit.paste", json!({"dx": "5"}), "`dx` must be a number, not \"5\""),
+        ("edit.paste", json!({"dy": [1]}), "`dy` must be a number, not [1]"),
+        ("document.node", json!({"id": a.0, "summary": "yes"}), "`summary` must be true or false"),
+        ("file.close", json!({"index": "0"}), "`index` must be a non-negative integer"),
+        ("guide.add", json!({"pos": 50, "vertical": "true"}), "`vertical` must be true or false"),
+        ("guide.select", json!({"indexes": [0], "toggle": 1}), "`toggle` must be true or false"),
+        ("select.save", json!({"name": 5}), "`name` must be a string"),
+        ("select.editSaved", json!({"name": "A", "delete": "yes"}), "`delete` must be true or false"),
+        ("select.editSaved", json!({"name": "A", "newName": 5}), "`newName` must be a string"),
+    ] {
+        refuses_wrong_type(&mut s, cmd, params, msg);
+    }
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    refuses_wrong_type(&mut s, "guide.move", json!({"dx": "10"}), "`dx` must be a number, not \"10\"");
+    refuses_wrong_type(&mut s, "guide.move", json!({"dy": 5, "copy": "yes"}), "`copy` must be true or false");
+    s.execute("object.slice.select", &json!({"slices": [slice]})).unwrap();
+    refuses_wrong_type(&mut s, "object.slice.duplicate", json!({"dx": "10"}), "`dx` must be a number, not \"10\"");
+    refuses_wrong_type(&mut s, "object.slice.select", json!({"slices": [slice], "toggle": "no"}), "`toggle` must be true or false");
+    s.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    refuses_wrong_type(&mut s, "edit.undoGroup.end", json!({"cancel": "yes"}), "`cancel` must be true or false");
+    // Null is read as a key left out.
+    s.execute("edit.undoGroup.end", &json!({"cancel": null})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("guide.move", &json!({"dx": 10, "dy": null, "copy": null})).unwrap();
+    assert_eq!(guides(&s), vec![(true, 210.0)]);
+}
+
 /// When ruler guides and art are selected together, moving the art moves the guides as well;
 /// copy leaves both in place and moves the copies; single undo reverts both.
 #[test]
