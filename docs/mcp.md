@@ -131,7 +131,9 @@ the suite) keep the agent to the folders you give it:
   written beside it by their file names. A save without a path known (`file.saveAs` and `file.saveCopy` without
   one, a document never saved) leaves out the suggested `folder`. `document.exportForScreens` into the `folder`
   of its `exportPreset` leaves out the ZIP's `path` and lists `files` relative to that folder, and an error
-  for that export names the folder by its name alone.
+  for that export names the folder by its name alone. With Background Export on, an export into the `folder` of
+  its `exportPreset` runs in the background as one into a `folder` the agent gives, and its replies, errors and
+  status bar text name that folder the same way.
   `document.exportSettings`, `document.exportPresets.list` and `document.exportPresets.export` (as data and as
   a file) leave out a kept `folder` outside the read roots. `file.package`
   names the document's file and the linked files outside the read roots by their file names in `warnings`, in
