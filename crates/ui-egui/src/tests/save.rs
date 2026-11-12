@@ -299,6 +299,37 @@ fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
 }
 
 #[test]
+fn a_save_does_not_replace_the_file_read_from_through_a_file_written_beside_the_path() {
+    let d = dir("lossy-beside");
+    let path = d.join("Art.eps").to_string_lossy().to_string();
+    let mut app = app();
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut app);
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+    crate::background::wait_all(&mut app);
+    let mut siblings: Vec<_> = std::fs::read_dir(&d)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("Art_")))
+        .collect();
+    siblings.sort();
+    assert_eq!(siblings.len(), 2, "{siblings:?}");
+    let sibling = siblings[0].to_string_lossy().to_string();
+    let saved = std::fs::read(&sibling).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.imported_from = Some(sibling.clone());
+    st.import_losses = vec!["hidden type".into()];
+    rect(&mut app);
+    let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+    crate::background::wait_all(&mut app);
+    assert_eq!(std::fs::read(&sibling).unwrap(), saved);
+    assert!(!std::path::Path::new(&path).exists(), "no file of the set is written when one is refused");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
 fn native_saves_stream_into_the_file() {
     let d = dir("stream");
     let streamed = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
