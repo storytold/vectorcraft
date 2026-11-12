@@ -917,12 +917,43 @@ fn reload(s: &mut Session, p: &Value) -> Result<Value> {
     if folder.is_empty() {
         return Err(bad(C, "no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder"));
     }
+    let given = p.get("path").is_some();
     let report = load_folder(s, &folder);
-    if let Some(e) = report.get("error").and_then(Value::as_str) {
+    let shown = if given { report.clone() } else { report_as_shown(report.clone()) };
+    if let Some(e) = shown.get("error").and_then(Value::as_str) {
         return Err(EngineError::Other(e.to_string()));
     }
-    *FOLDER.lock().unwrap_or_else(|e| e.into_inner()) = Some((folder, s.plugin_dir.clone(), report.clone()));
-    Ok(report)
+    *FOLDER.lock().unwrap_or_else(|e| e.into_inner()) = Some((folder, s.plugin_dir.clone(), report));
+    Ok(shown)
+}
+
+/// The report of a plug-in folder load as the request being served may see it: the folder and each
+/// file it names that is outside the read roots is named by its file name
+/// ([`super::fileio::shown_path`]), also in the errors ([`super::fileio::naming_in_error`]).
+fn report_as_shown(mut report: Value) -> Value {
+    use super::fileio::{naming_in_error, shown_path};
+
+    if crate::file_access::current().is_none() {
+        return report;
+    }
+    let naming = |msg: &str, path: &str| naming_in_error(EngineError::Other(msg.to_string()), path).to_string();
+    let Some(o) = report.as_object_mut() else { return report };
+    if let Some(folder) = o.get("folder").and_then(Value::as_str).map(str::to_string) {
+        if let Some(Value::String(e)) = o.get_mut("error") {
+            *e = naming(e, &folder);
+        }
+        o.insert("folder".into(), json!(shown_path(&folder)));
+    }
+    if let Some(Value::Array(rows)) = o.get_mut("failed") {
+        for row in rows.iter_mut().filter_map(Value::as_object_mut) {
+            let Some(file) = row.get("file").and_then(Value::as_str).map(str::to_string) else { continue };
+            if let Some(Value::String(e)) = row.get_mut("error") {
+                *e = naming(e, &file);
+            }
+            row.insert("file".into(), json!(shown_path(&file)));
+        }
+    }
+    report
 }
 
 /// [`describe`] for an installed plug-in, with the bytes its cache holds (`cacheBytes`).
@@ -933,7 +964,7 @@ fn describe_installed(p: &Plugin) -> Value {
 }
 
 fn list(_: &mut Session, _: &Value) -> Result<Value> {
-    let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r)| r.clone());
+    let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r)| report_as_shown(r.clone()));
     let disabled: Vec<Value> = safe_mode::disabled().iter().map(safe_mode::Item::to_json).collect();
     Ok(
         json!({"plugins": registry::list().iter().map(|p| describe_installed(p)).collect::<Vec<_>>(), "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled}),
@@ -1055,7 +1086,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null (a folder or file outside the automation read roots is named by its file name, also in an error), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1118,7 +1149,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reload Plug-ins",
             ["Object", "Plug-ins"],
             None,
-            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it (desktop; a bad module, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}]}",
+            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it (desktop; a bad module, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode; without path, a folder or file outside the automation read roots is named by its file name in the reply and in an error) → {folder, loaded: [id], failed: [{file, error}]}",
             always,
             reload
         ),

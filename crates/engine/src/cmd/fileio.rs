@@ -127,7 +127,8 @@ pub use access::write_file_with;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::{Placed, copy_new, file_metadata};
 pub(crate) use access::{
-    absolute_path, create_dir, document_path, file_created, file_stamp, read_file, read_file_head, shown_link, shown_path, write_file, write_new_file,
+    absolute_path, create_dir, document_path, file_created, file_stamp, naming_in_error, read_file, read_file_head, shown_link, shown_path,
+    write_file, write_new_file,
 };
 #[cfg(all(test, windows))]
 pub(crate) use access::{document_path_on, document_path_with};

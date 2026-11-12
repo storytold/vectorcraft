@@ -1433,6 +1433,37 @@ fn plugins_folder_set_again_after_clearing_installs_its_plugins() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// The Additional Plug-ins Folder, seen by a client whose read roots don't hold it: `plugin.list`
+/// names the folder and the files that failed by their names, and `plugin.reload` without a path is
+/// refused naming the folder by its name and keeping the root. A folder the client gives stays whole.
+#[test]
+fn a_plugins_folder_outside_the_read_roots_is_named_by_its_name() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = crate::tests_links::Folder::new("plugin-folder-hidden");
+    let work = crate::tests_links::Folder::new("plugin-folder-work");
+    std::fs::write(dir.0.join("broken.wasm"), b"\0asm?").unwrap();
+    let mut s = session();
+    let shown = dir.0.display().to_string();
+    let name = dir.0.file_name().unwrap().to_string_lossy().into_owned();
+    run(&mut s, "prefs.set", json!({"key": "pluginsFolder", "value": shown}));
+    let roots = AutomationRoots::new(&[work.0.as_path()], &[]).unwrap();
+    let root = crate::cmd::findfiles::plain(std::fs::canonicalize(&work.0).unwrap()).display().to_string();
+
+    let list = confine(roots.as_ref(), || run(&mut s, "plugin.list", json!({})));
+    assert_eq!(list["folder"]["folder"], json!(name), "{list}");
+    assert_eq!(list["folder"]["failed"][0]["file"], json!("broken.wasm"), "{list}");
+    assert!(!list.to_string().contains(&shown), "{list}");
+    let e = confine(roots.as_ref(), || s.execute("plugin.reload", &json!({}))).unwrap_err().to_string();
+    assert_eq!(e, format!("automation path rejected: outside the read root {root}: {name}"));
+    let e = confine(roots.as_ref(), || s.execute("plugin.reload", &json!({"path": shown}))).unwrap_err().to_string();
+    assert_eq!(e, format!("automation path rejected: outside the read root {root}: {shown}"));
+    // Unconfined, the report names the folder whole.
+    assert_eq!(run(&mut s, "plugin.list", json!({}))["folder"]["folder"], json!(shown));
+    run(&mut s, "prefs.set", json!({"key": "pluginsFolder", "value": ""}));
+}
+
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
 /// session that attaches the store, and Remove Plug-in takes it out of the store.
 #[test]

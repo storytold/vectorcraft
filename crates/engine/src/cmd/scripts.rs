@@ -253,7 +253,8 @@ fn list_installed(s: &mut Session, _: &Value) -> Result<Value> {
         return Ok(json!({"folder": null, "scripts": [], "truncated": false, "unreadable": false}));
     };
     let folder = root.to_string_lossy();
-    crate::file_access::check_read(&folder).map_err(EngineError::Other)?;
+    // The Scripts folder is the app's: a refusal names it as the request may see it.
+    crate::file_access::check_read(&folder).map_err(|e| super::fileio::naming_in_error(EngineError::Other(e), &folder))?;
     let listing = script::folder::list(root);
     let scripts: Vec<Value> = listing
         .scripts()
