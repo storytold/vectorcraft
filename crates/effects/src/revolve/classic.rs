@@ -152,6 +152,49 @@ mod tests {
         assert!(colors.iter().any(|c| c[2] > c[0]) && colors.iter().any(|c| c[0] == c[2]), "both members' paints are drawn");
     }
 
+    /// A group member in a gradient with transparent stops keeps the shared back-to-front order of
+    /// every member's faces: its faces go in runs that carry its opacity mask, and the other
+    /// member's faces are drawn between them where they are in front of some and behind others.
+    #[test]
+    fn a_member_in_a_transparent_gradient_keeps_the_shared_face_order() {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        let art = |end_opacity: f32| {
+            let mut end = GradientStop::new(1.0, Color::BLACK);
+            end.opacity = end_opacity;
+            let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, BLUE), end]))));
+            let mut b = BezPath::new();
+            b.move_to((150.0, 60.0));
+            b.line_to((170.0, 60.0));
+            b.line_to((170.0, 140.0));
+            let outer = Node::path(NodeId(2), PathData::from_bezpath(&b), Appearance::basic(gradient, Paint::None, 0.0));
+            let mut g = Node::group(NodeId(3), vec![std::sync::Arc::new(outer), std::sync::Arc::new(profile())]);
+            g.appearance.effects.push(crate::new_effect(CLASSIC_REVOLVE, &json!({})).unwrap());
+            crate::revolve_art(&g).unwrap()
+        };
+        // The drawing order: `M` for a group with an opacity mask, `F` for a face outside one.
+        fn visit(n: &Node, order: &mut String) {
+            if n.extras().mask.is_some() {
+                order.push('M');
+                return;
+            }
+            if n.path_data().is_some() {
+                order.push('F');
+            }
+            for c in n.children().into_iter().flatten() {
+                visit(c, order);
+            }
+        }
+        let order = |art: &Node| {
+            let mut order = String::new();
+            visit(art, &mut order);
+            order
+        };
+        assert!(!order(&art(1.0)).contains('M'), "an opaque gradient needs no mask");
+        let masked = order(&art(0.5));
+        let (first, last) = (masked.find('M').unwrap(), masked.rfind('M').unwrap());
+        assert!(masked.get(first..last).is_some_and(|between| between.contains('F')), "faces between the member's runs: {masked}");
+    }
+
     #[test]
     fn bad_parameters_are_refused() {
         let check = |p: Value| crate::validate_three_d(&profile(), CLASSIC_REVOLVE, &crate::merged_params(CLASSIC_REVOLVE, &p));
