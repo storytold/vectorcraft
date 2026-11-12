@@ -165,7 +165,8 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 "file.saveCopy" => SaveMode::Copy,
                 _ => SaveMode::Template,
             };
-            io::save(app, mode, p, true).map(|mut r| {
+            let saved = if mode == SaveMode::Save { io::save_current(app, p) } else { io::save(app, mode, p, true) };
+            saved.map(|mut r| {
                 vectorcraft_engine::cmd::fileio::leave_out_unreadable_save_paths(&mut r, p.get("path").and_then(Value::as_str));
                 r
             })
