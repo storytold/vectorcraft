@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
             has_doc,
             info
         ),
@@ -348,7 +348,8 @@ type PaintNames<'a> = dyn Fn(&Paint) -> Vec<String> + 'a;
 
 /// The spot colors, patterns or gradients (`label`: [`spot_labels`], [`pattern_label`] or
 /// [`gradient_label`], each paint's names) that `n`'s own fills and strokes paint, each once. A
-/// hidden fill or stroke and a stroke with no width paint nothing, and neither does any fill or
+/// hidden fill or stroke, a fill or stroke at an opacity of 0 and a stroke with no width paint
+/// nothing, and neither does any fill or
 /// stroke of a guide (drawn in the guide color), of a compound path's member (`members`: the
 /// compound path's own fills and strokes paint it) or of type whose layout draws nothing
 /// (`painted_runs`). An image's fills and strokes paint only where an effect gives them a shape.
@@ -372,7 +373,7 @@ fn own_paints(
         .then(|| vectorcraft_render::effects::image_paint(Some(d), n).into_iter().flat_map(|(_, _, item)| label(item.paint())).collect());
     let mut out: Vec<String> = vec![];
     for item in &n.appearance.items {
-        if !item.visible() || matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0) {
+        if !item.visible() || item.opacity() <= 0.0 || matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0) {
             continue;
         }
         for name in label(item.paint()) {
@@ -390,7 +391,7 @@ fn one_label(label: fn(&Paint) -> Option<String>) -> impl Fn(&Paint) -> Vec<Stri
 }
 
 /// The brushes `n`'s own strokes draw with, in the order of its appearance. A hidden stroke, a
-/// stroke with no paint and a stroke with no width draw nothing, and neither does any stroke of a
+/// stroke at an opacity of 0, a stroke with no paint and a stroke with no width draw nothing, and neither does any stroke of a
 /// guide (drawn in the guide color) or of a compound path's member (`members`: the compound path's
 /// own strokes draw it). An image's strokes draw only where an effect gives them a shape, and only
 /// paths, compound paths, type and images draw strokes of their own.
@@ -399,7 +400,7 @@ fn applied_brushes(d: &Document, n: &Node, members: &HashSet<*const Node>) -> Ve
         return vec![];
     }
     let brush = |item: &vectorcraft_doc::AppearanceItem| match item {
-        vectorcraft_doc::AppearanceItem::Stroke(st) if item.visible() && !st.paint.is_none() && st.width > 0.0 => {
+        vectorcraft_doc::AppearanceItem::Stroke(st) if item.visible() && st.opacity > 0.0 && !st.paint.is_none() && st.width > 0.0 => {
             st.brush.clone().filter(|b| !b.is_empty())
         }
         _ => None,
@@ -827,8 +828,8 @@ mod tests {
         assert_eq!(selected(&mut s)["brushNames"], json!([]));
     }
 
-    /// Document Info › Brushes leaves out brushes on strokes that draw nothing (hidden, with no
-    /// width or paint, a guide's, a compound path member's, a path's with no segment, type's that
+    /// Document Info › Brushes leaves out brushes on strokes that draw nothing (hidden, at an
+    /// opacity of 0, with no width or paint, a guide's, a compound path member's, a path's with no segment, type's that
     /// draws no characters, a group's own), lists a brush the Brushes panel does
     /// not hold with no type, and gives a name two panel brushes share the type the renderer uses.
     #[test]
@@ -839,8 +840,8 @@ mod tests {
             s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap()
         };
         let (hidden, thin, guide, missing) = (square(&mut s, 0.0), square(&mut s, 20.0), square(&mut s, 40.0), square(&mut s, 60.0));
-        let empty = square(&mut s, 80.0);
-        s.execute("brush.apply", &json!({"ids": [hidden, thin, guide, missing, empty], "name": "Charcoal"})).unwrap();
+        let (empty, faint) = (square(&mut s, 80.0), square(&mut s, 200.0));
+        s.execute("brush.apply", &json!({"ids": [hidden, thin, guide, missing, empty, faint], "name": "Charcoal"})).unwrap();
         let (p, q) = (square(&mut s, 100.0), square(&mut s, 120.0));
         s.execute("select.set", &json!({"ids": [p, q]})).unwrap();
         let compound = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
@@ -852,6 +853,8 @@ mod tests {
         member.stroke_mut().unwrap().brush = Some("Dots".into());
         d.node_mut(NodeId(hidden)).unwrap().appearance.stroke_mut().unwrap().visible = false;
         d.node_mut(NodeId(thin)).unwrap().appearance.stroke_mut().unwrap().width = 0.0;
+        // A stroke at an opacity of 0 draws nothing.
+        d.node_mut(NodeId(faint)).unwrap().appearance.stroke_mut().unwrap().opacity = 0.0;
         if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(guide)).unwrap().kind {
             *g = true;
         }
@@ -1009,6 +1012,11 @@ mod tests {
         s.execute("paint.setFill", &json!({"ids": [e], "none": true})).unwrap();
         s.execute("paint.setStroke", &json!({"ids": [e], "swatch": "Dots"})).unwrap();
         s.execute("appearance.setItem", &json!({"ids": [e], "index": 1, "weight": 0})).unwrap();
+        // Nor does a pattern fill at an opacity of 0.
+        let clear = square(&mut s, 220.0);
+        s.execute("paint.setStroke", &json!({"ids": [clear], "none": true})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [clear], "swatch": "Dots"})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [clear], "index": 0, "opacity": 0})).unwrap();
         // A type object with no characters paints nothing either.
         let empty = s.execute("text.create", &json!({"x": 0, "y": 300, "text": ""})).unwrap()["id"].clone();
         s.execute("paint.setFill", &json!({"ids": [empty], "swatch": "Dots"})).unwrap();
@@ -1069,7 +1077,7 @@ mod tests {
         assert_eq!(i["patternNames"], json!(["Dots"]));
         // Objects counts the objects that Pattern Objects lists.
         assert_eq!(i["objects"]["patterns"].as_u64(), Some(5), "{}", i["objects"]);
-        s.execute("select.set", &json!({"ids": [d, e, empty, blank, guide, compound, image.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [d, e, clear, empty, blank, guide, compound, image.0]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["patterns"].is_null() && i["patternObjects"] == json!([]), "{}", i["objects"]);
         let i = s.execute("document.info", &json!({"category": "patterns"})).unwrap();
