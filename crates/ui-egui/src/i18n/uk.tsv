@@ -256,6 +256,7 @@ font-technology	Variable	Варіативні
 	Asset Export Settings	Параметри експорту ресурсів
 	Assets	Ресурси
 	Assign	Призначити
+	Assign Profile	Призначити профіль
 	Assign Profile…	Призначити профіль…
 	Assign:	Призначити:
 	Attach to Active Plane	Прикріпити до активної площини
@@ -2367,6 +2368,9 @@ file-filter	Templates	Шаблони
 	Optical	Оптичний
 	Optical Margin Alignment	Оптичне вирівнювання полів
 	Dynamic Text	Динамічний текст
+	Dynamic Text Presets	Набори параметрів динамічного тексту
+	Arch	Арка
+@msg	select point type or type on a path	виберіть точковий текст або текст за контуром
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст за контуром у пов’язаному тексті не може використовувати динамічний текст: {frames}
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано
@@ -2648,6 +2652,7 @@ digits	Malayalam	Малаялам
 	Radial Glows	Радіальні світіння
 	Radial Gradient	Радіальний градієнт
 	Conic Gradient	Конічний градієнт
+	Diamond Gradient	Ромбоподібний градієнт
 	Radius 1	Радіус 1
 	Radius 2	Радіус 2
 	Radius1	Радіус1
@@ -3205,6 +3210,15 @@ digits	Malayalam	Малаялам
 	Stun Pulse	Оглушення
 	Stealth Fade	Невидимість
 	Shield Buff	Щит
+	Textures	Текстури
+	Fine Grain	Дрібне зерно
+	Canvas Weave	Полотняне плетіння
+	Burlap Sack	Мішковина
+	Cracked Glaze	Потріскана глазур
+	Mosaic Floor	Мозаїчна підлога
+	Quilted Squares	Стьобані квадрати
+	Leaded Glass	Вітражне скло
+	Damp Paper	Вологий папір
 	Shape	Фігура
 	Shape Builder	Створення фігур
 	Shape Builder Regions	Області створення фігур
@@ -3911,6 +3925,7 @@ effect	Points	Точки
 	Windows	Windows
 	Working CMYK	Робочий CMYK
 	Working CMYK (don't tag)	Робочий CMYK (без позначки)
+	Working RGB (don't tag)	Робочий RGB (без позначки)
 	Workspace	Робоче середовище
 	Workspace {i}	Робоче середовище {i}
 	Wrinkle Tool	Інструмент «Зморшки»
@@ -4268,6 +4283,7 @@ axis	Both	Обидві
 @msg	`{key}` must be a number, not {v}	`{key}` має бути числом, а не {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} має бути часом Unix у секундах (цілим числом) або null
 @msg	`{key}` must be a string	`{key}` має бути рядком
+@msg	`{key}` must be a profile name or null	`{key}` має бути назвою профілю або null
 @msg	`{key}` must be a whole number	`{key}` має бути цілим числом
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` має бути цілим числом від {min} до {max} (отримано {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` має бути від {min} до {max} (отримано {x})
@@ -4763,7 +4779,7 @@ axis	Both	Обидві
 @msg	unknown format	невідомий формат
 @msg	unknown format `{f}` (Save writes {_1})	невідомий формат `{f}` (збереження записує {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	невідомий режим довільної форми `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	невідоме виділення `{h}`
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
@@ -5411,7 +5427,7 @@ lighting	Light	Світло
 @msg	span must be "object" or "selection", got {v}	span має бути "object" або "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" розміщує `gradient`, а не зразок
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" розміщує градієнт: вкажіть `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний або конічний градієнт, а не довільний
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний, конічний або ромбоподібний градієнт, а не довільний
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам розміщує градієнт: приберіть `start` і `end` (вони вже задають його в координатах документа)
 	Make Image Dynamic	Зробити зображення динамічним
 	Import Data Sets…	Імпортувати набори даних…
@@ -6466,6 +6482,7 @@ breakText	Glyphs	Гліфи
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
+	Align New Objects to Pixel Grid	Вирівнювати нові об’єкти за піксельною сіткою
 	Not Aligned to Pixel Grid	Не вирівняні за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
 @msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`

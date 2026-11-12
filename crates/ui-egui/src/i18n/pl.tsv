@@ -121,6 +121,7 @@
 	PDF Presets…	Ustawienia PDF…
 	Perspective Grid Presets…	Ustawienia siatki perspektywy…
 	Color Settings…	Ustawienia kolorów…
+	Assign Profile	Przypisz profil
 	Assign Profile…	Przypisz profil…
 	Keyboard Shortcuts…	Skróty klawiaturowe…
 	Preferences…	Preferencje…
@@ -375,6 +376,9 @@
 	Create Outlines	Utwórz kontury
 	Optical Margin Alignment	Optyczne wyrównanie marginesów
 	Dynamic Text	Tekst dynamiczny
+	Dynamic Text Presets	Ustawienia predefiniowane tekstu dynamicznego
+	Arch	Sklepienie
+@msg	select point type or type on a path	zaznacz tekst punktowy lub tekst na ścieżce
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
@@ -748,6 +752,15 @@
 	Stun Pulse	Ogłuszenie
 	Stealth Fade	Ukrycie
 	Shield Buff	Tarcza
+	Textures	Tekstury
+	Fine Grain	Drobne ziarno
+	Canvas Weave	Splot płótna
+	Burlap Sack	Worek jutowy
+	Cracked Glaze	Spękana glazura
+	Mosaic Floor	Mozaikowa posadzka
+	Quilted Squares	Pikowane kwadraty
+	Leaded Glass	Witraż ołowiany
+	Damp Paper	Wilgotny papier
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
 	Gradient Finishes	Wykończenia gradientowe
@@ -1614,6 +1627,7 @@ digits	Malayalam	Malajalam
 	Points: clicks add free points	Punkty: kliknięcia dodają wolne punkty
 	Radial Gradient	Gradient promienisty
 	Conic Gradient	Gradient stożkowy
+	Diamond Gradient	Gradient rombowy
 	Reset to White, Black	Resetuj do bieli i czerni
 	Reverse Gradient	Odwróć gradient
 	Save to Swatches	Zapisz w próbkach
@@ -1990,6 +2004,7 @@ digits	Malayalam	Malajalam
 	Simulate Paper	Symuluj papier
 	Use Black Point Compensation	Użyj kompensacji punktu czerni
 	Working CMYK (don't tag)	Roboczy CMYK (bez znacznika)
+	Working RGB (don't tag)	Roboczy RGB (bez znacznika)
 	{name} (spot)	{name} (dodatkowy)
 	Add to Profiles…	Dodaj do profili…
 	Align Stroke to Center	Wyrównaj obrys do środka
@@ -4373,6 +4388,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a number, not {v}	`{key}` musi być liczbą, nie {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} musi być czasem Unix w sekundach (liczbą całkowitą) lub null
 @msg	`{key}` must be a string	`{key}` musi być ciągiem znaków
+@msg	`{key}` must be a profile name or null	`{key}` musi być nazwą profilu lub null
 @msg	`{key}` must be a whole number	`{key}` musi być liczbą całkowitą
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` musi być liczbą całkowitą od {min} do {max} (podano {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musi mieścić się w zakresie od {min} do {max} (podano {x})
@@ -4870,7 +4886,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	nieznany format
 @msg	unknown format `{f}` (Save writes {_1})	nieznany format `{f}` (zapis tworzy {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	nieznany tryb dowolny `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	nieznane wyróżnienie `{h}`
 @msg	unknown option `{path}.{k}`	nieznana opcja `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
@@ -5671,7 +5687,7 @@ mark-style	Japanese	Japońskie
 @msg	span must be "object" or "selection", got {v}	span musi mieć wartość "object" lub "selection", a nie {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umieszcza `gradient`, a nie próbkę
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umieszcza gradient: podaj `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" umieszcza gradient liniowy, radialny lub stożkowy, a nie dowolny
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" umieszcza gradient liniowy, radialny, stożkowy lub rombowy, a nie dowolny
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umieszcza sam gradient: pomiń `start` i `end` (one już umieszczają go we współrzędnych dokumentu)
 	Make Image Dynamic	Uczyń obraz dynamicznym
 	Import Data Sets…	Importuj zestawy danych…
@@ -6721,6 +6737,7 @@ breakText	Glyphs	Glify
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Wyrównaj do siatki pikseli
+	Align New Objects to Pixel Grid	Wyrównaj nowe obiekty do siatki pikseli
 	Not Aligned to Pixel Grid	Niewyrównane do siatki pikseli
 @msg	only paths and compound paths can be aligned to the pixel grid	do siatki pikseli można wyrównać tylko ścieżki i ścieżki złożone
 @msg	side is left or right, not `{s}`	side to left lub right, a nie `{s}`

@@ -747,6 +747,18 @@ mod gradient_chip_tests {
         assert!(at(&mirrored, 2, 4).abs_diff(64) <= 2 && at(&mirrored, 2, 0).abs_diff(191) <= 2, "{mirrored:?}");
     }
 
+    /// A diamond chip runs from the center out to a square whose edges pass through the chip's
+    /// corners: halfway along an edge and halfway to a corner are the same color.
+    #[test]
+    fn diamond_chip_runs_out_to_the_corners() {
+        let at = |colors: &[Color32], i: usize, j: usize| colors[j * 5 + i].r();
+        let chip = gradient_chip_colors(&paint(GradientKind::Diamond, 0.0), 20.0, 20.0, 4, 4);
+        assert_eq!((at(&chip, 2, 2), at(&chip, 0, 0), at(&chip, 4, 4)), (255, 0, 0), "{chip:?}");
+        for (i, j) in [(2, 0), (0, 2), (1, 1), (3, 3)] {
+            assert!(at(&chip, i, j).abs_diff(128) <= 2, "({i}, {j}): {chip:?}");
+        }
+    }
+
     #[test]
     fn radial_chip_runs_from_the_centre_out() {
         let colors = gradient_chip_colors(&paint(GradientKind::Radial, 0.0), 20.0, 20.0, 4, 4);

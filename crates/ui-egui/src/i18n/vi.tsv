@@ -289,6 +289,7 @@ font-technology	Variable	Biến thiên
 	Asset Export Settings	Cài đặt xuất asset
 	Assets	Asset
 	Assign	Gán
+	Assign Profile	Gán hồ sơ màu
 	Assign Profile…	Gán hồ sơ màu…
 	Assign:	Gán:
 	Attach to Active Plane	Gắn vào mặt phẳng đang hoạt động
@@ -2652,6 +2653,9 @@ digits	Hindi	Hindi
 	Optical	Quang học
 	Optical Margin Alignment	Căn lề quang học
 	Dynamic Text	Văn bản động
+	Dynamic Text Presets	Thiết lập sẵn văn bản động
+	Arch	Vòm
+@msg	select point type or type on a path	chọn chữ điểm hoặc chữ trên đường dẫn
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	chữ trên đường dẫn trong văn bản chuỗi không thể dùng văn bản động: {frames}
 	Optimize for fast web view	Tối ưu để xem web nhanh
 	Optimized	Đã tối ưu
@@ -2952,6 +2956,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial Glows	Ánh sáng hướng tâm
 	Radial Gradient	Chuyển sắc hướng tâm
 	Conic Gradient	Chuyển sắc hình nón
+	Diamond Gradient	Chuyển sắc hình thoi
 	Radius	Bán kính
 	Radius 1	Bán kính 1
 	Radius 2	Bán kính 2
@@ -3544,6 +3549,15 @@ mark-style	Japanese	Kiểu Nhật
 	Stun Pulse	Choáng
 	Stealth Fade	Ẩn thân
 	Shield Buff	Khiên
+	Textures	Kết cấu
+	Fine Grain	Hạt mịn
+	Canvas Weave	Vải canvas
+	Burlap Sack	Bao bố
+	Cracked Glaze	Men rạn
+	Mosaic Floor	Sàn khảm
+	Quilted Squares	Ô chần bông
+	Leaded Glass	Kính chì
+	Damp Paper	Giấy ẩm
 	Shape	Hình dạng
 	Shape Builder	Tạo hình dạng
 	Shape Builder Regions	Vùng Tạo hình dạng
@@ -4281,6 +4295,7 @@ mark-style	Japanese	Kiểu Nhật
 	Windows	Windows
 	Working CMYK	CMYK làm việc
 	Working CMYK (don't tag)	CMYK làm việc (không gắn thẻ)
+	Working RGB (don't tag)	RGB làm việc (không gắn thẻ)
 	Workspace	Không gian làm việc
 	Workspace {i}	Không gian làm việc {i}
 	Wrinkle Tool	Công cụ nhăn
@@ -4404,6 +4419,7 @@ theme	Appearance	Giao diện
 @msg	`{key}` must be a number, not {v}	`{key}` phải là một số, không phải {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} phải là thời gian Unix tính bằng giây (số nguyên) hoặc null
 @msg	`{key}` must be a string	`{key}` phải là một chuỗi
+@msg	`{key}` must be a profile name or null	`{key}` phải là tên hồ sơ màu hoặc null
 @msg	`{key}` must be a whole number	`{key}` phải là số nguyên
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` phải là số nguyên từ {min} đến {max} (nhận được {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` phải nằm trong khoảng {min} đến {max} (nhận được {x})
@@ -5209,7 +5225,7 @@ theme	Appearance	Giao diện
 @msg	unknown format	định dạng không xác định
 @msg	unknown format `{f}` (Save writes {_1})	định dạng không xác định `{f}` (Lưu ghi {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	chế độ tự do không xác định `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	tô sáng không xác định `{h}`
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)
@@ -5412,7 +5428,7 @@ theme	Appearance	Giao diện
 @msg	span must be "object" or "selection", got {v}	span phải là "object" hoặc "selection", không phải {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" đặt một `gradient`, không phải mẫu màu
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" đặt một dải chuyển màu: hãy cung cấp `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính, xuyên tâm hoặc hình nón, không phải dạng tự do
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính, xuyên tâm, hình nón hoặc hình thoi, không phải dạng tự do
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" tự đặt dải chuyển màu: hãy bỏ `start` và `end` (chúng đã đặt nó theo tọa độ tài liệu)
 	Make Image Dynamic	Tạo hình ảnh động
 	Import Data Sets…	Nhập tập dữ liệu…
@@ -6467,6 +6483,7 @@ breakText	Glyphs	Glyph
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Căn theo lưới pixel
+	Align New Objects to Pixel Grid	Căn đối tượng mới theo lưới pixel
 	Not Aligned to Pixel Grid	Chưa căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`

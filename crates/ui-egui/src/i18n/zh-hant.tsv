@@ -220,6 +220,7 @@ font-technology	Variable	可變
 	Asset Export Settings	資產匯出設定
 	Assets	資產
 	Assign	指定
+	Assign Profile	指定描述檔
 	Assign Profile…	指定描述檔…
 	Assign:	指定：
 	Attach to Active Plane	附加至作用中平面
@@ -1899,7 +1900,7 @@ file-filter	Templates	範本
 @msg	stop {i} needs `offset`	色標 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色標 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色標 {i}：`{k}` 必須是數字
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的漸層類型 `{k}` (linear、radial、conic、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	未知的漸層類型 `{k}` (linear、radial、conic、diamond、freeform)
 @msg	the art could not be sampled	無法對圖稿取樣
 @msg	the art is too light for any dots	圖稿太淡，無法產生任何網點
 @msg	the document has no symbols	文件中沒有符號
@@ -1991,6 +1992,7 @@ file-filter	Templates	範本
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` 必須是 `auto` 或語言代碼，例如 `en` 或 `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` 必須是 #rrggbb 顏色
 @msg	`{key}` must be a string	`{key}` 必須是字串
+@msg	`{key}` must be a profile name or null	`{key}` 必須是描述檔名稱或 null
 @msg	`{key}` must be a whole number	`{key}` 必須是整數
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` 必須是介於 {min} 和 {max} 之間的整數 (收到 {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必須介於 {min} 和 {max} 之間 (收到 {x})
@@ -2652,7 +2654,7 @@ file-filter	Templates	範本
 @msg	span must be "object" or "selection", got {v}	span 必須是 "object" 或 "selection"，收到 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而非色票
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 會放置漸層：請提供 `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置線性、放射狀或圓錐漸層，而非任意形狀漸層
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" 放置線性、放射狀、圓錐或菱形漸層，而非任意形狀漸層
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 會自行放置漸層：請不要提供 `start` 和 `end` (它們已依文件座標放置漸層)
 @msg	Batch: {count} processed	批次：已處理 {count} 個
 @msg	Batch: {count} processed, {failed} failed	批次：已處理 {count} 個，失敗 {failed} 個
@@ -3333,6 +3335,9 @@ file-filter	Templates	範本
 	Optical	視覺
 	Optical Margin Alignment	視覺邊界對齊
 	Dynamic Text	動態文字
+	Dynamic Text Presets	動態文字預設集
+	Arch	拱形
+@msg	select point type or type on a path	請選取點狀文字或路徑文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串連文字中的路徑文字無法使用動態文字：{frames}
 	Optimize for fast web view	最佳化以便快速網頁檢視
 	Optimized	最佳化
@@ -3618,6 +3623,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Radial Glows	放射狀光暈
 	Radial Gradient	放射狀漸層
 	Conic Gradient	圓錐漸層
+	Diamond Gradient	菱形漸層
 	Radius 1	半徑 1
 	Radius 2	半徑 2
 	Radius1	半徑1
@@ -4173,6 +4179,15 @@ digits	Malayalam	馬來亞拉姆數字
 	Stun Pulse	暈眩
 	Stealth Fade	隱身
 	Shield Buff	護盾
+	Textures	紋理
+	Fine Grain	細顆粒
+	Canvas Weave	帆布紋
+	Burlap Sack	麻布袋
+	Cracked Glaze	裂紋釉
+	Mosaic Floor	馬賽克地面
+	Quilted Squares	絎縫方格
+	Leaded Glass	鉛條玻璃
+	Damp Paper	濕紙
 	Shape	形狀
 	Shape Builder	形狀建立
 	Shape Builder Regions	形狀建立區域
@@ -4898,6 +4913,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Windows	Windows
 	Working CMYK	使用中的 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加標記)
+	Working RGB (don't tag)	工作 RGB (不加標記)
 	Workspace	工作區
 	Workspace {i}	工作區 {i}
 	Wrinkle Tool	皺摺工具
@@ -6504,6 +6520,7 @@ breakText	Glyphs	字符
 
 # Align to Pixel Grid
 	Align to Pixel Grid	對齊像素格點
+	Align New Objects to Pixel Grid	將新物件對齊像素格點
 	Not Aligned to Pixel Grid	未對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`

@@ -247,6 +247,7 @@ font-technology	Variable	Değişken
 	Asset Export Settings	Varlık Dışa Aktarma Ayarları
 	Assets	Varlıklar
 	Assign	Ata
+	Assign Profile	Profil Ata
 	Assign Profile…	Profil Ata…
 	Assign:	Ata:
 	Attach to Active Plane	Etkin Düzlem'e Ekle
@@ -2156,6 +2157,9 @@ shape	Open	Açık
 	Optical	Optik
 	Optical Margin Alignment	Optik Kenar Boşluğu Hizalaması
 	Dynamic Text	Dinamik Metin
+	Dynamic Text Presets	Dinamik Metin Hazır Ayarları
+	Arch	Kemer
+@msg	select point type or type on a path	nokta metni veya yol üzerindeki yazıyı seçin
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	zincirli metindeki yol üzerindeki yazı dinamik metin kullanamaz: {frames}
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
@@ -2431,6 +2435,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Radyal Parıltılar
 	Radial Gradient	Radyal Gradyan
 	Conic Gradient	Konik Gradyan
+	Diamond Gradient	Elmas Gradyan
 	Radius 1	Yarıçap 1
 	Radius 2	Yarıçap 2
 	Radius1	Yarıçap1
@@ -3004,6 +3009,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Sersemletme
 	Stealth Fade	Gizlilik
 	Shield Buff	Kalkan
+	Textures	Dokular
+	Fine Grain	İnce Gren
+	Canvas Weave	Kanvas Dokuma
+	Burlap Sack	Çuval Bezi
+	Cracked Glaze	Çatlak Sır
+	Mosaic Floor	Mozaik Zemin
+	Quilted Squares	Kapitone Kareler
+	Leaded Glass	Kurşunlu Cam
+	Damp Paper	Nemli Kâğıt
 	Shape	Şekil
 	Shape Builder	Şekil Oluşturucu
 	Shape Builder Regions	Şekil Oluşturucu Bölgeleri
@@ -3687,6 +3701,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMYK'de çalışıyor
 	Working CMYK (don't tag)	CMYK çalışıyor (etiketlemeyin)
+	Working RGB (don't tag)	Çalışan RGB (etiketlemeyin)
 	Workspace	Çalışma Alanı
 	Workspace {i}	Çalışma Alanı {i}
 	Wrinkle Tool	Kırışıklık Aracı
@@ -4028,6 +4043,7 @@ axis	Both	Her İkisi
 @msg	`{key}` must be a #rrggbb colour	`{key}` bir #rrggbb rengi olmalıdır
 @msg	`{key}` must be a number	`{key}` bir sayı olmalıdır
 @msg	`{key}` must be a string	`{key}` bir dize olmalıdır
+@msg	`{key}` must be a profile name or null	`{key}` bir profil adı ya da null olmalıdır
 @msg	`{key}` must be a whole number	`{key}` bir tam sayı olmalıdır
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında bir tam sayı olmalıdır ({x}'yi aldı)
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında olmalıdır ({x}'yi aldı)
@@ -4483,7 +4499,7 @@ axis	Both	Her İkisi
 @msg	unknown format	bilinmeyen format
 @msg	unknown format `{f}` (Save writes {_1})	bilinmeyen format `{f}` (Kaydet, {_1} yazar)
 @msg	unknown freeform mode `{m}` (points, lines)	bilinmeyen serbest biçimli mod `{m}` (noktalar, çizgiler)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, serbest biçimli)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, elmas, serbest biçimli)
 @msg	unknown highlight `{h}`	bilinmeyen vurgu `{h}`
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (koru, benzet veya at)
@@ -5494,7 +5510,7 @@ theme	Appearance	Görünüm
 @msg	span must be "object" or "selection", got {v}	span "object" veya "selection" olmalıdır, {v} değil
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" bir renk örneği değil, bir `gradient` yerleştirir
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" bir degrade yerleştirir: `gradient` verin
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal, radyal veya konik bir degrade yerleştirir
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal, radyal, konik veya elmas bir degrade yerleştirir
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" degradenin kendisini yerleştirir: `start` ve `end` değerlerini vermeyin (bunlar degradeyi zaten belge koordinatlarına yerleştirir)
 	Make Image Dynamic	Görüntüyü Dinamik Hale Getirin
 	Import Data Sets…	Veri Kümelerini İçe Aktar…
@@ -6821,6 +6837,7 @@ breakText	Glyphs	Glifler
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Piksel Izgarasına Hizala
+	Align New Objects to Pixel Grid	Yeni Nesneleri Piksel Izgarasına Hizala
 	Not Aligned to Pixel Grid	Piksel Izgarasına Hizalanmamış
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
 @msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil
