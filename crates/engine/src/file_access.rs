@@ -215,20 +215,6 @@ pub fn check_read(path: &str) -> Result<(), String> {
     current().map_or(Ok(()), |r| r.check(path, Access::Read))
 }
 
-/// Is `path`, under a read root, written as an absolute path of another platform: outside Windows, one
-/// that starts with a drive (`C:`) or a `\`? [`check_read`] reads it as a name in the working folder.
-pub fn written_elsewhere(path: &str) -> bool {
-    let foreign = path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
-    !cfg!(windows) && foreign && current().is_some()
-}
-
-/// Does a command param named `key` hold a file or folder path: `path`, `paths`, `file`, `files`,
-/// `folder`, or a name ending in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
-/// `destinationFolder`)?
-pub fn is_path_key(key: &str) -> bool {
-    matches!(key, "path" | "paths" | "file" | "files" | "folder") || ["Path", "Paths", "File", "Files", "Folder"].iter().any(|end| key.ends_with(end))
-}
-
 /// May `path` be written here? Always, without roots in force.
 pub fn check_write(path: &str) -> Result<(), String> {
     current().map_or(Ok(()), |r| r.check(path, Access::Write))?;

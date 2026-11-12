@@ -2293,6 +2293,7 @@ font-technology	Variable	Променливи
 	Options:	Опции:
 	Options…	Опции…
 	Organic Fades	Органични преливания
+	Holographic	Холографски
 	or more spaces with a tab	или повече интервала с табулация
 	Order:	Ред:
 	Ordinals	Поредни номера
@@ -2841,6 +2842,9 @@ digits	Malayalam	Малаялам
 	Rise…	Издигане…
 	Roman Baseline	Латинска основна линия
 	Roman Hanging Punctuation	Латинска висяща пунктуация
+	Korean Line Break Anywhere	Пренасяне на корейски текст навсякъде
+	East Asian Composition Settings	Настройки за източноазиатска композиция
+	Korean Composition Settings	Настройки за корейска композиция
 	Rotate	Завъртане
 	Rotate 90° CW	Завъртане на 90° по часовниковата стрелка
 	Rotate Tool	Инструмент „Завъртане“
@@ -4409,6 +4413,7 @@ axis	Both	И двете
 @msg	not a valid plug-in module: {0}	не е валиден модул за плъгин: {0}
 @msg	not an EMF or WMF file	не е EMF или WMF файл
 @msg	not an HP-GL file	не е HP-GL файл
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` трябва да бъде масив от 1 до 255 цвята във формат #rrggbb
 @msg	not found	не е открито
 @msg	not in pattern editing mode	не е в режим на редактиране на мостра
 @msg	finish editing the pattern first	първо завършете редактирането на мострата
@@ -6054,6 +6059,17 @@ axis	Y Axis	Y ос
 	Charge Wave	Вълна на заряд
 	Spark Trail	Следа от искри
 	Calligraphic Nibs	Калиграфски писци
+	Bristle Brushes	Четки с косъм
+	Fine Liner	Тънък контур
+	Pointed Flat	Заострена плоска
+	Stubby Round	Къса кръгла
+	Dry Scrub	Сухо търкане
+	Soft Dome	Мек купол
+	Filbert	Плоска овална
+	Angled Round	Скосена кръгла
+	Angled Flat	Скосена плоска
+	Fan Blender	Ветрило за смесване
+	Grass Fan	Ветрило за трева
 	Pattern Borders	Бордюри с мостри
 	Scatter Shapes	Разсеяни фигури
 	Save Brush Library…	Запази библиотека с четки…
@@ -6654,3 +6670,10 @@ breakText	Glyphs	Глифи
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновяване на отложените ефекти
 	Deferred Effects	Отложени ефекти
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Инструменти за рязане
+	Stencil Bridges…	Мостчета на шаблона…
+	Stencil Bridges	Мостчета на шаблона
+	Shortest Crossing	Най-късо пресичане
+	Direction	Посока

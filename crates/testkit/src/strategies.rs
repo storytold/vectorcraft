@@ -502,17 +502,15 @@ pub fn param_keys(doc: &str) -> Vec<String> {
     out
 }
 
-/// Parameter-name keys that name a file or folder a command may write
-/// ([`vectorcraft_engine::file_access::is_path_key`]): fuzzing these with arbitrary strings could
-/// write files anywhere, so callers substitute a temp path.
+/// Parameter-name keys that name a file or folder a command may write: fuzzing these with
+/// arbitrary strings could write files anywhere, so callers substitute a temp path.
 pub fn is_path_key(k: &str) -> bool {
-    vectorcraft_engine::file_access::is_path_key(k)
+    matches!(k, "path" | "diffPath") || is_folder_key(k)
 }
 
-/// Path keys that name a folder a command creates or writes files into: `folder` or a name ending in
-/// `Folder` (`destinationFolder`).
+/// Path keys that name a folder a command creates or writes files into.
 pub fn is_folder_key(k: &str) -> bool {
-    k == "folder" || k.ends_with("Folder")
+    matches!(k, "folder" | "destinationFolder")
 }
 
 /// The location to send under the path key `k`: `safe_path` for a file, a folder next to it for
