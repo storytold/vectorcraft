@@ -99,6 +99,10 @@ pub struct SavePlan {
     /// `preview`, `precision`) given beside the path, and each key of `options`, that the format
     /// doesn't read, naming the file the save writes.
     pub notes: Vec<String>,
+    /// The file the document was read from and what reading it left out, when the save needs
+    /// `acknowledgeLoss` to write over it and was not given it: every file the save writes is
+    /// checked against it before the first is written.
+    pub lossy_source: Option<(String, Vec<String>)>,
 }
 
 impl SavePlan {
@@ -313,7 +317,8 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         .chain(nested.filter(|k| !reads_option(format, k)).map(|k| format!("options.{k}")))
         .map(|k| format!("`{k}` was not used: {} files don't read it", written.label))
         .collect();
-    Ok(SavePlan { mode, path, format, options, name, folder, modified, notes })
+    let lossy_source = super::lossy_source(st, p);
+    Ok(SavePlan { mode, path, format, options, name, folder, modified, notes, lossy_source })
 }
 
 /// The native save options, which a save also takes beside the path.
@@ -910,6 +915,9 @@ impl SaveJob {
             return Ok(out);
         };
         let files = enc.named(doc, path);
+        if let Some(source) = &plan.lossy_source {
+            super::check_files_not_lossy_overwrite(source, files.iter().map(|(p, _)| p.as_str()), plan.mode.command())?;
+        }
         if let Some(stopped) = stop(&files.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>()) {
             return Ok(stopped);
         }
