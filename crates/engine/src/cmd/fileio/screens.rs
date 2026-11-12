@@ -196,7 +196,7 @@ pub(super) fn name_without_device(name: &str) -> String {
 pub(crate) const ROW_KEYS: [&str; 7] = ["format", "scale", "ppi", "width", "height", "suffix", "folder"];
 
 /// The writable formats a format row can't name.
-pub(crate) const UNWRITTEN_FORMATS: [&str; 5] = ["template", "txt", "dxf", "emf", "wmf"];
+pub(crate) const UNWRITTEN_FORMATS: [&str; 6] = ["template", "txt", "dxf", "emf", "wmf", "hpgl"];
 
 /// One format row: what to write, at which size, with which suffix, into which sub-folder.
 struct Row {
@@ -644,10 +644,98 @@ impl Output {
 /// File → Export for Screens: [`export`] (over the settings of `exportPreset`, when given), with
 /// the params remembered in the document (`document.exportSettings`).
 pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
+    // A folder the client gave, as against the one its `exportPreset` keeps.
+    let given = p.get("folder").is_some();
     let p = with_preset(s, p)?;
-    let r = export(s, &p)?;
+    let hidden = if given { None } else { str_param(&p, "folder").filter(|f| !f.is_empty() && !super::access::shown(f)) };
+    let mut r = export(s, &p).map_err(|e| match hidden {
+        Some(folder) => leave_out_folder_from_error(e, folder),
+        None => e,
+    })?;
     remember(s, &p);
+    // A prepared export is written later, maybe on another thread: it names the folder as this
+    // request may see it.
+    if let (Some(folder), Some(Some(export))) = (hidden, s.screens_hand_off.as_mut()) {
+        export.hidden = Some((folder.to_string(), super::access::shown_path(folder).into_owned()));
+    }
+    if !given && let Some(folder) = str_param(&p, "folder").filter(|f| !f.is_empty()) {
+        leave_out_unreadable_folder(&mut r, folder);
+    }
     Ok(r)
+}
+
+/// An error of an export into `folder`, a folder outside the read roots that the client did not
+/// give: `folder` as the path the error is about names it by its own name
+/// ([`super::access::shown_path`]), and the rest of the message stays.
+fn leave_out_folder_from_error(e: EngineError, folder: &str) -> EngineError {
+    leave_out_folder_named(e, folder, &super::access::shown_path(folder))
+}
+
+/// [`leave_out_folder_from_error`] with `folder` named `name`.
+fn leave_out_folder_named(e: EngineError, folder: &str, name: &str) -> EngineError {
+    match e {
+        EngineError::Other(msg) => EngineError::Other(leave_out_folder_from_message(&msg, folder, name)),
+        EngineError::BadParams { cmd, msg } => EngineError::BadParams { cmd, msg: leave_out_folder_from_message(&msg, folder, name) },
+        e => e,
+    }
+}
+
+/// `msg` with `folder` given as `name` where it begins a path the message is about: at the start
+/// of `msg` (`<path>: <reason>`), after a `: ` (`... outside the write root <root>: <path>`) or
+/// after `cannot resolve `, followed by the end, a separator, a `:` or a space. A root the message
+/// names stays whole, even one inside `folder`.
+fn leave_out_folder_from_message(msg: &str, folder: &str, name: &str) -> String {
+    const BEFORE: [&str; 2] = [": ", "cannot resolve "];
+    let mut out = String::with_capacity(msg.len());
+    let mut rest = msg;
+    loop {
+        if let Some(after) = rest.strip_prefix(folder)
+            && after.chars().next().is_none_or(|c| matches!(c, '/' | '\\' | ':' | ' '))
+        {
+            out.push_str(name);
+            rest = after;
+        }
+        let Some((i, len)) = BEFORE.iter().filter_map(|b| rest.find(b).map(|i| (i, b.len()))).min() else { break };
+        out.push_str(&rest[..i + len]);
+        rest = &rest[i + len..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The reply `r` of an export into `folder`, a folder the client did not give, as the request being
+/// served may see it: when `folder` is outside the read roots ([`super::access::shown`]), the ZIP's
+/// `path` is left out and `files` names each file written relative to `folder` (`2x/Logo@2x.png`),
+/// as the reply of an export to a ZIP names them.
+fn leave_out_unreadable_folder(r: &mut Value, folder: &str) {
+    if !super::access::shown(folder) {
+        leave_out_folder(r, folder);
+    }
+}
+
+/// The reply `r` of an export into `folder` with the ZIP's `path` left out and `files` named
+/// relative to `folder` ([`leave_out_unreadable_folder`]).
+fn leave_out_folder(r: &mut Value, folder: &str) {
+    let Some(o) = r.as_object_mut() else { return };
+    o.remove("path");
+    let inside = format!("{folder}/");
+    if let Some(Value::Array(files)) = o.get_mut("files") {
+        for file in files {
+            // A ZIP's files are named relative to it already.
+            if let Some(name) = file.as_str().and_then(|path| path.strip_prefix(&inside)) {
+                *file = json!(name);
+            }
+        }
+    }
+}
+
+/// Export settings kept in the document or a preset, as the request being served may see them: a
+/// `folder` outside the read roots ([`super::access::shown`]) is left out.
+fn leave_out_unreadable_settings_folder(mut settings: Map<String, Value>) -> Map<String, Value> {
+    if settings.get("folder").and_then(Value::as_str).is_some_and(|f| !f.is_empty() && !super::access::shown(f)) {
+        settings.remove("folder");
+    }
+    settings
 }
 
 // ---------- export presets ----------
@@ -727,7 +815,13 @@ pub fn preset_list(saved: &[ScreenExportPreset]) -> Value {
 }
 
 pub(super) fn presets_list(s: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({ "presets": preset_list(&s.prefs.screen_export_presets) }))
+    let saved: Vec<ScreenExportPreset> = s
+        .prefs
+        .screen_export_presets
+        .iter()
+        .map(|p| ScreenExportPreset { name: p.name.clone(), settings: leave_out_unreadable_settings_folder(p.settings.clone()) })
+        .collect();
+    Ok(json!({ "presets": preset_list(&saved) }))
 }
 
 /// The [`PRESET_KEYS`] of `given`, refused as an error of command `cmd` when an export would
@@ -831,6 +925,8 @@ pub(super) fn presets_export(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(too_many());
     }
     let count = presets.len();
+    let presets: Vec<ScreenExportPreset> =
+        presets.into_iter().map(|p| ScreenExportPreset { settings: leave_out_unreadable_settings_folder(p.settings), ..p }).collect();
     let text = serde_json::to_string_pretty(&PresetFile { format: PRESET_FILE_FORMAT.into(), presets }).map_err(|e| bad(EXPORT, e.to_string()))?;
     if text.len() > MAX_PRESET_FILE_BYTES {
         return Err(bad(EXPORT, format!("export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes")));
@@ -992,7 +1088,7 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     // Include Artboard Fill off: the encoders leave the background colors out.
     let fill = if o.include_artboard_fill == Some(false) { json!({ "includeArtboardFill": false }) } else { json!({}) };
     let rows = rows.into_iter().map(|r| Row { options: merge(with_black_output(s, &r.options), fill.clone()), ..r }).collect();
-    let export = ScreenExport { cmd: C, o, rows, naming, items };
+    let export = ScreenExport { cmd: C, o, rows, naming, items, hidden: None };
     match &mut s.screens_hand_off {
         Some(slot) => {
             *slot = Some(export);
@@ -1013,9 +1109,27 @@ pub struct ScreenExport {
     rows: Vec<Row>,
     naming: Naming,
     items: Vec<Item>,
+    /// The export folder and the name the request that prepared the export may see it by, when the
+    /// folder came from the `exportPreset` and is outside that request's read roots: the reply and
+    /// the errors of [`ScreenExport::write`] name it as [`export_for_screens`] does.
+    hidden: Option<(String, String)>,
 }
 
 impl Session {
+    /// The folder `document.exportForScreens` (`id`) with `params` writes into, the client's
+    /// `folder` or else the one its `exportPreset` keeps, with the name the request being served may
+    /// see it by when the reply leaves it out: a preset's folder outside the read roots, named by
+    /// its own name ([`super::access::shown_path`]). `assets.export` takes no preset, so for it the
+    /// folder is the client's. → `None` without a folder (the files come back in the reply) or for
+    /// an unknown preset, which the export itself refuses.
+    pub fn screen_export_folder(&self, id: &str, params: &Value) -> Option<(String, Option<String>)> {
+        let given = params.get("folder").is_some();
+        let p = if given || id == ASSETS { params.clone() } else { with_preset(self, params).ok()? };
+        let folder = str_param(&p, "folder").filter(|f| !f.is_empty())?.to_string();
+        let hidden = (!given && !super::access::shown(&folder)).then(|| super::access::shown_path(&folder).into_owned());
+        Some((folder, hidden))
+    }
+
     /// Run `assets.export` when `id` names it, else `document.exportForScreens`, with `params` as
     /// a command (checked and journaled as any other; Export for Screens remembers its settings)
     /// that encodes and writes nothing → the export it prepared, which [`ScreenExport::write`]
@@ -1041,10 +1155,19 @@ impl ScreenExport {
     /// return → the reply of `document.exportForScreens`. It reports one progress step per file
     /// ([`vectorcraft_doc::cancel::progress`]), and a cancel stops it before it encodes or writes
     /// another file.
-    pub fn write(self, writer: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+    pub fn write(mut self, writer: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
         let cmd = self.cmd;
+        let hidden = self.hidden.take();
         // A refusal names `assets.export` when that command prepared the export, as its reply does.
-        encode_and_write(self, writer).map_err(|e| if cmd == C { e } else { crate::cmd::assets::of_cmd(cmd, e) })
+        let r = encode_and_write(self, writer).map_err(|e| if cmd == C { e } else { crate::cmd::assets::of_cmd(cmd, e) });
+        match hidden {
+            Some((folder, name)) => {
+                let mut r = r.map_err(|e| leave_out_folder_named(e, &folder, &name))?;
+                leave_out_folder(&mut r, &folder);
+                Ok(r)
+            }
+            None => r,
+        }
     }
 }
 
@@ -1388,12 +1511,31 @@ pub(crate) fn store_settings(s: &mut Session, mut settings: Map<String, Value>) 
 
 /// `document.exportSettings`: the Export for Screens settings the document last exported with.
 pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({ "settings": s.doc()?.doc.export_settings }))
+    Ok(json!({ "settings": leave_out_unreadable_settings_folder(s.doc()?.doc.export_settings.clone()) }))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Output, ScreenSize, safe_file_name};
+    use super::{Output, ScreenSize, leave_out_folder_from_message, safe_file_name};
+
+    /// A hidden export folder is named by its name where a message is about it, and a root that
+    /// starts with the same text, or a longer path, stays whole.
+    #[test]
+    fn a_hidden_folder_is_named_by_its_name_in_a_message() {
+        let f = "/work/out";
+        let cases = [
+            (
+                "automation path rejected: outside the write root /work/out/in: /work/out",
+                "automation path rejected: outside the write root /work/out/in: out",
+            ),
+            ("automation path rejected: cannot resolve /work/out: denied", "automation path rejected: cannot resolve out: denied"),
+            ("/work/out/2x/a.png: disk full", "out/2x/a.png: disk full"),
+            ("automation path rejected: outside the write root /a: /work/outer", "automation path rejected: outside the write root /a: /work/outer"),
+        ];
+        for (msg, want) in cases {
+            assert_eq!(leave_out_folder_from_message(msg, f, "out"), want, "{msg}");
+        }
+    }
 
     /// Files given one name are numbered in turn, each numbering going on from the last one (so
     /// thousands of them don't each try every number used before), and a file asking again for

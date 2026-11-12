@@ -897,6 +897,17 @@ font-technology	Variable	Variables
 	The selected character's font is not available.	La police du caractère sélectionné n’est pas disponible.
 	No alternates for the selected character.	Aucune variante pour le caractère sélectionné.
 	Double-click to replace	Double-cliquez pour remplacer
+	Select one character with the Type tool first.	Sélectionnez d’abord un caractère avec l’outil Texte.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} est un glyphe de {font}, et non de la police du texte sélectionné ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} appartient à {base} (U+{base_code}) {place} ; votre sélection est {sel} (U+{code}).
+	at the start of a word	au début d’un mot
+	in the middle of a word	au milieu d’un mot
+	at the end of a word	à la fin d’un mot
+	standing alone	isolé
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} n’est pas une variante de {sel} (U+{code}) tel qu’il se trouve dans son mot.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Double-cliquez pour insérer {base} (U+{code}) à la place : une forme de présentation ne se lie pas, la lettre si.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) a été inséré à la place d’une forme de présentation : la police le lie à ses voisins selon la position.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Aucune fonction OpenType ne dessine ce glyphe ici : il remplace le glyphe du caractère et peut ne pas se lier aux caractères voisins.
 	Double-click to insert	Double-cliquez pour insérer
 	Double-click to rename	Double-cliquez pour renommer
 	Double-click to target the contents	Double-cliquez pour cibler le contenu
@@ -1148,6 +1159,8 @@ font-technology	Variable	Variables
 	Extrude & Bevel…	Extrusion et biseautage…
 	3D (Classic)	3D (classique)
 	Extrude & Bevel (Classic)…	Extrusion et biseautage (classique)…
+	Revolve (Classic)…	Révolution (classique)…
+	Rotate (Classic)…	Rotation (classique)…
 	Surface	Surface
 	Wireframe	Fil de fer
 	No Shading	Sans ombrage
@@ -1447,6 +1460,14 @@ font-technology	Variable	Variables
 	Hair Space	Espace ultrafine
 	Hand Tool	Outil Main
 	Hand-Drawn	Dessiné à la main
+	Painted and Sketched	Peint et esquissé
+	Washed Blue	Bleu lavé
+	Bristle Ochre	Ocre à la brosse
+	Pastel Heather	Bruyère pastel
+	Charcoal Shade	Ombre au fusain
+	Ink Contour	Contour encré
+	Wet Ink	Encre humide
+	Fine Pen	Plume fine
 	Handles	Poignées
 	Hard Light	Lumière crue
 	Hard Mix	Mélange maximal
@@ -1978,6 +1999,8 @@ font-technology	Variable	Variables
 	Metallic Gradients	Dégradés métalliques
 	Meters	Mètres
 	Method:	Méthode :
+	Pad	Prolonger
+	Repeats	Répétitions
 	Millimeters	Millimètres
 	Minify	Minifier
 	Minimal	Minimal
@@ -2342,6 +2365,10 @@ font-technology	Variable	Variables
 	Arch	Voûte
 @msg	select point type or type on a path	sélectionnez du texte de point ou du texte curviligne
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	le texte curviligne d’un texte lié ne peut pas utiliser le texte dynamique : {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	un texte curviligne sur un tracé ouvert ou un tracé transparent ne peut pas être centré en haut ou en bas : {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	un texte curviligne sur un tracé sans longueur ou sans hauteur ne peut pas être centré : {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	le texte curviligne d’un texte lié ne peut pas être centré en haut ou en bas : {frames}
+@msg	select type on a closed path	sélectionnez un texte curviligne sur un tracé fermé
 	Optimize for fast web view	Optimiser pour un affichage web rapide
 	Optimized	Optimisé
 	Options	Options
@@ -2349,6 +2376,7 @@ font-technology	Variable	Variables
 	Options:	Options :
 	Options…	Options…
 	Organic Fades	Fondus organiques
+	Holographic	Holographiques
 	or more spaces with a tab	espaces ou plus par une tabulation
 	Order:	Ordre :
 	Ordinals	Ordinaux
@@ -2898,6 +2926,9 @@ digits	Malayalam	Malayalam
 	Rise…	Élévation…
 	Roman Baseline	Ligne de base romaine
 	Roman Hanging Punctuation	Ponctuation romaine hors justification
+	Korean Line Break Anywhere	Saut de ligne coréen n’importe où
+	East Asian Composition Settings	Paramètres de composition d’Asie orientale
+	Korean Composition Settings	Paramètres de composition coréenne
 	Rotate	Rotation
 	Rotate 90° CW	Rotation de 90° horaire
 	Rotate Tool	Outil Rotation
@@ -3392,6 +3423,9 @@ digits	Malayalam	Malayalam
 	Split Path	Scinder le tracé
 	spot	ton direct
 	Spot Color	Ton direct
+	Spot Color Objects	Objets avec tons directs
+	Pattern Objects	Objets avec motifs
+	Gradient Objects	Objets avec dégradés
 	Spot Colors	Tons directs
 	Spot Colors…	Tons directs…
 	Spread:	Étendue :
@@ -3700,6 +3734,8 @@ digits	Malayalam	Malayalam
 	Type on a Path	Texte curviligne
 	Type on a Path Options	Options de texte curviligne
 	Type on a Path Options…	Options de texte curviligne…
+	Center on Top	Centrer en haut
+	Center on Bottom	Centrer en bas
 	Type on a Path Tool	Outil Texte curviligne
 	Type Orientation	Orientation du texte
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Le texte reste du texte, et chaque contour devient une ligne avec son épaisseur et ses tirets.
@@ -4240,6 +4276,7 @@ axis	Both	Les deux
 @msg	`globalAdjust` must be an object	`globalAdjust` doit être un objet
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` doit valoir 1, 3 ou 5
 @msg	`stops` must be an array	`stops` doit être un tableau
+@msg	`{key}` must be an array	`{key}` doit être un tableau
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` doit être un objet d’options SVG (voir document.formats)
 @msg	`{_1}` is no save command	`{_1}` n’est pas une commande d’enregistrement
 @msg	`{area}` is no recovery area name	`{area}` n’est pas un nom de zone de récupération
@@ -4346,6 +4383,8 @@ axis	Both	Les deux
 @msg	the Smooth slider is not open	le curseur Lisser n’est pas ouvert
 @msg	the screen color sampler is already open	l’outil de prélèvement de couleur à l’écran est déjà ouvert
 @msg	this system has no screen color sampler	ce système n’a pas d’outil de prélèvement de couleur à l’écran
+@msg	the screen color sampler did not answer	l’outil de prélèvement de couleur à l’écran n’a pas répondu
+@msg	the screen color sampler failed	l’outil de prélèvement de couleur à l’écran a échoué
 @msg	bad colour `{hex}` (#rrggbb)	couleur non valide `{hex}` (#rrggbb)
 @msg	bad page tree	arborescence des pages non valide
 @msg	bad shortcut	raccourci non valide
@@ -4375,6 +4414,7 @@ axis	Both	Les deux
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what} : `{h}` n’est pas une couleur comme "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what} : {MAX_TABLE} couleurs au maximum
 @msg	command `{0}` is not available right now: {1}	la commande `{0}` n’est pas disponible pour le moment : {1}
+@msg	command `{id}` is not available right now	la commande `{id}` n’est pas disponible pour le moment
 @msg	compound paths can only contain paths	les tracés transparents ne peuvent contenir que des tracés
 @msg	compressed (RLE) bitmaps can't be read yet	les images bitmap compressées (RLE) ne peuvent pas encore être lues
 @msg	damaged	endommagé
@@ -4556,6 +4596,7 @@ axis	Both	Les deux
 @msg	not a valid plug-in module: {0}	ce n’est pas un module de plug-in valide : {0}
 @msg	not an EMF or WMF file	ce n’est pas un fichier EMF ou WMF
 @msg	not an HP-GL file	ce n’est pas un fichier HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` doit être une liste de 1 à 255 couleurs #rrggbb
 @msg	not found	introuvable
 @msg	not in pattern editing mode	pas en mode d’édition de motif
 @msg	finish editing the pattern first	terminez d’abord la modification du motif
@@ -6019,7 +6060,9 @@ theme	Appearance	Apparence
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Repères géométriques
+	Optical Effects	Effets optiques
 	Geometric Patterns	Motifs géométriques
+	Grit Textures	Textures granuleuses
 	Ease In	Accélération progressive
 	Ease Out	Décélération progressive
 	Ease In Out	Accélération et décélération
@@ -6060,6 +6103,9 @@ axis	Y Axis	Axe Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` s’applique aux fonds en dégradé (paint.setFill)
 @msg	`dither` must be true or false	`dither` doit valoir true ou false
 @msg	`method` must be classic or perceptual	`method` doit être classic ou perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` doit être pad, repeat ou reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` doit être un nombre entier de 1 à {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’applique aux dégradés linéaires, radiaux, coniques et en losange
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installer « {name} », qui demande un budget de calcul important ?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Chaque exécution peut durer jusqu’à {minutes} minutes et faire {times} fois le travail permis aux autres modules externes. Elle s’exécute en arrière-plan, et vous pouvez l’annuler.
@@ -6296,8 +6342,24 @@ axis	Y Axis	Axe Y
 	Charge Wave	Vague de charge
 	Spark Trail	Traînée d'étincelles
 	Calligraphic Nibs	Plumes calligraphiques
+	Bristle Brushes	Pinceaux à soies
+	Fine Liner	Traceur fin
+	Pointed Flat	Plat pointu
+	Stubby Round	Rond court
+	Dry Scrub	Frottis sec
+	Soft Dome	Dôme doux
+	Filbert	Langue de chat
+	Angled Round	Rond biseauté
+	Angled Flat	Plat biseauté
+	Fan Blender	Éventail estompeur
+	Grass Fan	Éventail à herbe
 	Pattern Borders	Bordures de motif
 	Scatter Shapes	Formes de dispersion
+	Dry Media	Techniques sèches
+	Chalk Grain	Grain de craie
+	Graphite Pencil	Crayon graphite
+	Wax Crayon	Craie grasse
+	Charcoal Dust	Poussière de fusain
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)
@@ -6505,6 +6567,10 @@ anchor	Points:	Points :
 @msg	features lists at most {max} tags	features contient au plus {max} balises
 @msg	unknown OpenType feature `{t}`	fonction OpenType inconnue `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} doit être un nombre supérieur à 0 et au plus égal à {max}
+@msg	{label} must be at most {max} characters	{label} doit compter au plus {max} caractères
+@msg	{label} must be one character	{label} doit être un seul caractère
+@msg	at most {max} tab stops	au plus {max} taquets de tabulation
+@msg	unknown align `{other}`	alignement inconnu `{other}`
 @msg	no character style `{name}`	Style de caractère `{name}` introuvable
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6666,6 +6732,12 @@ breakText	Glyphs	Glyphes
 	Delete the selected brushes?	Supprimer les formes sélectionnées ?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Des contours utilisent une ou plusieurs de ces formes. Retirer les formes de ces contours et supprimer les formes ?
 	Remove Strokes	Supprimer les contours
+	Place Brush Art	Placer l’illustration de la forme
+	Replace Brush Art	Remplacer l’illustration de la forme
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Des contours utilisent cette forme. Appliquer la nouvelle illustration à ces contours, ou les laisser tels quels et ajouter une copie de la forme avec la nouvelle illustration ?
+	Apply to Strokes	Appliquer aux contours
+	Leave Strokes	Conserver les contours
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` n’a pas d’illustration (seules les formes diffuses, artistiques et de motif en ont)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Outils de disposition
 	Arrange in Grid…	Disposer en grille…
@@ -6918,8 +6990,38 @@ breakText	Glyphs	Glyphes
 @plural	{n} line cut|{n} lines cut	{n} ligne coupée|{n} lignes coupées
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` et `last` doivent être des numéros de lignes que la console contient, `first` avant `last`
 
+# Learn panel
+	Learn	Apprendre
+	Explore tutorials	Découvrir les tutoriels
+	For you	Pour vous
+	Skills	Compétences
+	Get started	Prise en main
+	Quick skill guide	Guide rapide des compétences
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Courts tutoriels pratiques sur les outils essentiels, regroupés par compétence. Choisissez une compétence pour voir ses tutoriels.
+	List Tutorials	Lister les tutoriels
+	Show Tutorial	Afficher le tutoriel
+@msg	missing `tutorial` (see learn.list)	`tutorial` manquant (voir learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutoriel inconnu `{id}` (voir learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualiser les effets différés
 	Deferred Effects	Effets différés
 @msg	no plug-in effect is deferred	aucun effet de plug-in n’est différé
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Ouvert avec {n} effet de plug-in différé. Effet › Actualiser les effets différés l’exécute.|Ouvert avec {n} effets de plug-in différés. Effet › Actualiser les effets différés les exécute.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Outils de découpe
+	Stencil Bridges…	Ponts de pochoir…
+	Stencil Bridges	Ponts de pochoir
+	Shortest Crossing	Traversée la plus courte
+	Direction	Direction
+@msg	The selected art has no islands to bridge	L’illustration sélectionnée n’a aucun îlot à relier
+@msg	No bridge of this width fits across the selected art	Aucun pont de cette largeur ne tient en travers de l’illustration sélectionnée
+@msg	Some islands could not be joined to the area around the art	Certains îlots n’ont pas pu être reliés à la zone autour de l’illustration
+@msg	`width` must be from {lo} to {hi} pt	`width` doit être compris entre {lo} et {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` doit être un nombre entier compris entre 1 et {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Cadre et lignes d’échenillage…
+	Weed Box and Lines	Cadre et lignes d’échenillage
+	Margin	Marge
+	Box	Cadre
+	Swatch	Nuance

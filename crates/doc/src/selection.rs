@@ -59,6 +59,11 @@ pub struct Selection {
     /// that object ([`crate::symbol_overrides`]). Any other selection change clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol_part: Option<SymbolPart>,
+    /// An object of an Objects on Path group, chosen with its Select/Move widget: the group is the
+    /// one selected object, and the object is one of its objects on the path
+    /// ([`crate::objects_on_path::ObjectsOnPath::members`]). Any other selection change clears it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_path_member: Option<NodeId>,
 }
 
 /// See [`Selection::symbol_part`].
@@ -94,6 +99,13 @@ impl Selection {
         self.guides.clear();
         self.key_guide = None;
         self.symbol_part = None;
+        self.on_path_member = None;
+    }
+    /// Select only the Objects on Path group `group`, with its object `member` (see
+    /// [`Selection::on_path_member`]).
+    pub fn set_on_path_member(&mut self, group: NodeId, member: NodeId) {
+        self.set([group]);
+        self.on_path_member = Some(member);
     }
     /// Select only instance `instance`, with the object at `path` of its symbol's art (see
     /// [`Selection::symbol_part`]).
@@ -115,6 +127,7 @@ impl Selection {
         self.target = None;
         self.slices.clear();
         self.symbol_part = None;
+        self.on_path_member = None;
         if !self.objects.contains(&id) {
             self.objects.push(id);
         }
@@ -123,6 +136,7 @@ impl Selection {
         self.target = None;
         self.slices.clear();
         self.symbol_part = None;
+        self.on_path_member = None;
         self.objects.retain(|x| *x != id);
         self.anchors.remove(&id);
         self.segments.remove(&id);
@@ -152,6 +166,7 @@ impl Selection {
     /// Shift-click on a guide).
     pub fn toggle_guide(&mut self, i: NodeId) {
         self.symbol_part = None;
+        self.on_path_member = None;
         if let Some(k) = self.guides.iter().position(|g| *g == i) {
             self.guides.remove(k);
             if self.key_guide == Some(i) {
@@ -257,6 +272,22 @@ impl Selection {
         });
         if !part_kept {
             self.symbol_part = None;
+        }
+        // A chosen object on a path needs its Objects on Path group selected alone, with no anchors
+        // or guides, and still one of the group's objects, neither hidden nor locked.
+        let member_kept = self.on_path_member.is_some_and(|m| {
+            let [g] = self.objects.as_slice() else { return false };
+            self.anchors.is_empty()
+                && self.guides.is_empty()
+                && doc.is_editable(m)
+                && found
+                    .get(g)
+                    .and_then(|p| doc.node_at(p))
+                    .and_then(|n| n.extras().objects_on_path.as_deref().filter(|_| crate::objects_on_path::is_objects_on_path(n)))
+                    .is_some_and(|rec| rec.members.iter().any(|x| x.id == m))
+        });
+        if !member_kept {
+            self.on_path_member = None;
         }
     }
     /// Deselect the objects that are hidden or locked, themselves or through a group or layer

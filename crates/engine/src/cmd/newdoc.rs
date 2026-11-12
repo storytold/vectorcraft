@@ -286,8 +286,8 @@ impl DocSettings {
         if let Some(h) = length("height", self.units)? {
             self.height = h;
         }
-        if !(self.width > 0.0 && self.height > 0.0) || self.width > MAX_SIDE || self.height > MAX_SIDE {
-            return Err(bad(cmd, "width/height must be positive and within the canvas"));
+        if !side_in_range(self.width) || !side_in_range(self.height) {
+            return Err(side_error(cmd, self.units));
         }
         match p.get("orientation").and_then(Value::as_str) {
             None => {}
@@ -504,8 +504,29 @@ fn image_keys(v: &Value) -> std::collections::HashSet<&str> {
     keys
 }
 
-/// Largest artboard side `file.new` accepts, points.
-const MAX_SIDE: f64 = 16383.0 * 10.0;
+/// Largest artboard side `file.new` and `artboard.new` accept, points: the span of the canvas
+/// ([`crate::MAX_COORD`] from the origin) less the largest bleed on both sides, 3,999,856 pt.
+pub(crate) const MAX_SIDE: f64 = crate::MAX_COORD - 2.0 * vectorcraft_doc::setup::MAX_BLEED;
+
+/// Is `side` an artboard side `file.new` and `artboard.new` accept: more than 0 and at most [`MAX_SIDE`]?
+pub(crate) fn side_in_range(side: f64) -> bool {
+    side > 0.0 && side <= MAX_SIDE
+}
+
+/// The error of an artboard side outside [`side_in_range`]: the limit in points, and in `units` as
+/// well when they aren't points, rounded down to the decimals [`Unit::number`] shows so the value
+/// shown is one the commands take.
+pub(crate) fn side_error(cmd: &str, units: Unit) -> crate::EngineError {
+    let limit = match units {
+        Unit::Points => format!("{MAX_SIDE} pt"),
+        u => {
+            let step = if matches!(u, Unit::Pixels | Unit::Picas | Unit::Q | Unit::Ha) { 1e3 } else { 1e4 };
+            let shown = (u.from_pt(MAX_SIDE) * step).floor() / step;
+            format!("{MAX_SIDE} pt ({} {})", u.number(u.to_pt(shown)), u.suffix())
+        }
+    };
+    bad(cmd, format!("width and height must be more than 0 and at most {limit}"))
+}
 /// Largest artboard spacing, points.
 const MAX_SPACING: f64 = 1.0e5;
 

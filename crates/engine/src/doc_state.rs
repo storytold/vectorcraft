@@ -34,6 +34,9 @@ pub struct DocState {
     /// Select › Start Global Edit: the objects edited together until Stop Global Edit or Escape
     /// ([`cmd::globaledit`]). Editing state: not saved, not undoable.
     pub global_edit: Option<cmd::globaledit::GlobalEdit>,
+    /// The objects Start Global Edit would take, highlighted before it starts
+    /// ([`cmd::globaledit::similar`]), as of a revision. Not saved, not undoable.
+    pub(crate) similar_outlines: cmd::globaledit::SimilarCache,
     /// What leaving symbol editing mode goes back to ([`cmd::symboledit`]).
     pub(crate) symbol_edit_return: cmd::symboledit::Return,
     pub interaction: Option<Interaction>,
@@ -302,6 +305,7 @@ impl DocState {
             variables_highlight: None,
             isolation: None,
             global_edit: None,
+            similar_outlines: Default::default(),
             symbol_edit_return: Default::default(),
             interaction: None,
             undo_group: None,

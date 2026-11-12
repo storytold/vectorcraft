@@ -9,7 +9,9 @@ use crate::theme::Brightness;
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
-    /// Screen points per document point (1.0 = 100%).
+    /// The zoom (1.0 = 100%): points of the screen per document point, counted before
+    /// Preferences › User Interface › UI Scaling, which scales the interface and not the art.
+    /// [`Self::screen_zoom`] is the zoom in the interface's points.
     pub zoom: f64,
     /// Document point at the centre of the canvas.
     pub center: Point,
@@ -54,6 +56,19 @@ impl View {
             artboard: 0,
             outline: false,
         })
+    }
+
+    /// The interface's points per document point when the interface is zoomed by `ui_zoom` (egui's
+    /// zoom factor, which Preferences › User Interface › UI Scaling sets). A document point then
+    /// covers the same device pixels at every UI Scaling.
+    pub fn screen_zoom(&self, ui_zoom: f32) -> f64 {
+        self.zoom / f64::from(ui_zoom)
+    }
+
+    /// This view with its zoom in the interface's points ([`Self::screen_zoom`]), as the canvas
+    /// renders it.
+    pub(crate) fn on_screen(&self, ui_zoom: f32) -> Self {
+        Self { zoom: self.screen_zoom(ui_zoom), ..*self }
     }
 }
 
@@ -209,6 +224,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
+    (crate::panels::learn::ID, "Learn", "graduation-cap"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
@@ -401,6 +417,9 @@ pub struct UiState {
     /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
     #[serde(skip)]
     pub find_font_in: String,
+    /// The Learn panel's tab, skill and tutorial, kept while the app runs.
+    #[serde(skip)]
+    pub learn: crate::panels::learn::View,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -537,8 +556,9 @@ pub struct UiState {
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
-    /// The notes of the last open that gave any, with the status text that names the first of
-    /// them: hovering that text lists them when there are several. Not saved.
+    /// The notes of the last open that gave any, or of the last save or export, with the status
+    /// text that names the first of them: hovering that text lists them when there are several.
+    /// Not saved.
     #[serde(skip)]
     pub status_notes: Option<(String, Vec<String>)>,
     pub palette_open: bool,
@@ -1030,6 +1050,7 @@ impl Default for UiState {
             transient_focus: false,
             color_settings_scroll: false,
             find_font_in: String::new(),
+            learn: Default::default(),
             control_bar: false,
             control_bar_bottom: false,
             control_bar_hidden_groups: Default::default(),

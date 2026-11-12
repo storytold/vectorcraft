@@ -804,6 +804,17 @@ antiAlias	Sharp	Nítido
 	The selected character's font is not available.	A fonte do caractere selecionado não está disponível.
 	No alternates for the selected character.	Nenhuma alternativa para o caractere selecionado.
 	Double-click to replace	Clique duplo para substituir
+	Select one character with the Type tool first.	Primeiro selecione um caractere com a ferramenta Texto.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} é um glifo de {font}, não da fonte do texto selecionado ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertence a {base} (U+{base_code}) {place}; sua seleção é {sel} (U+{code}).
+	at the start of a word	no início de uma palavra
+	in the middle of a word	no meio de uma palavra
+	at the end of a word	no fim de uma palavra
+	standing alone	quando está sozinho
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} não é uma alternativa de {sel} (U+{code}) como ele está em sua palavra.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Clique duplo para inserir {base} (U+{code}) no lugar: uma forma de apresentação não se une, a letra sim.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) foi inserido no lugar de uma forma de apresentação: a fonte o une aos vizinhos conforme a posição.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nenhum recurso OpenType desenha este glifo aqui, então ele substitui o glifo do caractere e pode não se unir aos caracteres vizinhos.
 	Double-click to insert	Clique duplo para inserir
 	Double-click to rename	Clique duplo para renomear
 	Double-click to target the contents	Clique duplo para direcionar o conteúdo
@@ -1046,6 +1057,8 @@ antiAlias	Sharp	Nítido
 	Extrude & Bevel…	Extrusão e Bisel…
 	3D (Classic)	3D (Clássico)
 	Extrude & Bevel (Classic)…	Extrusão e Bisel (Clássico)…
+	Revolve (Classic)…	Revolver (Clássico)…
+	Rotate (Classic)…	Girar (Clássico)…
 	Surface	Superfície
 	Wireframe	Aramado
 	No Shading	Sem Sombreamento
@@ -1278,6 +1291,14 @@ antiAlias	Sharp	Nítido
 	Hair Space	Espaço Fino
 	Hand Tool	Ferramenta Mão
 	Hand-Drawn	Desenhado à Mão
+	Painted and Sketched	Pintado e Esboçado
+	Washed Blue	Azul Lavado
+	Bristle Ochre	Ocre de Cerdas
+	Pastel Heather	Urze Pastel
+	Charcoal Shade	Sombra a Carvão
+	Ink Contour	Contorno a Nanquim
+	Wet Ink	Nanquim Úmido
+	Fine Pen	Pena Fina
 	Handles	Alças
 	Hard Light	Luz Forte
 	Hard Mix	Mistura definida
@@ -1691,6 +1712,8 @@ antiAlias	Sharp	Nítido
 	Metallic Gradients	Gradientes Metálicos
 	Meters	Metros
 	Method:	Método:
+	Pad	Prolongar
+	Repeats	Repetições
 	Millimeters	Milímetros
 	Minify	Minificar
 	Minimize	Minimizar
@@ -1946,6 +1969,10 @@ antiAlias	Sharp	Nítido
 	Arch	Abóbada
 @msg	select point type or type on a path	selecione texto de ponto ou texto em um caminho
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	o texto em um caminho de um texto encadeado não pode usar Texto Dinâmico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	o texto em um caminho aberto ou composto não pode ser centralizado em cima ou embaixo: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	o texto em um caminho sem comprimento ou sem altura não pode ser centralizado: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	o texto em um caminho de um texto encadeado não pode ser centralizado em cima ou embaixo: {frames}
+@msg	select type on a closed path	selecione texto em um caminho fechado
 	Optimize for fast web view	Otimizar para visualização rápida na web
 	Optimized	Otimizado
 	Options	Opções
@@ -1954,6 +1981,7 @@ antiAlias	Sharp	Nítido
 	Order:	Ordem:
 	Ordinals	Ordinais
 	Organic Fades	Esmaecimentos Orgânicos
+	Holographic	Holográficos
 	Orientation	Orientação
 	Orientation:	Orientação:
 	Original	Original
@@ -2436,6 +2464,9 @@ digits	Malayalam	Malaiala
 	Rise…	Rise…
 	Roman Baseline	Linha de Base Romana
 	Roman Hanging Punctuation	Pontuação Pendurada Romana
+	Korean Line Break Anywhere	Quebra de Linha Coreana em Qualquer Lugar
+	East Asian Composition Settings	Configurações de Composição do Leste Asiático
+	Korean Composition Settings	Configurações de Composição Coreana
 	Rotate	Girar
 	Rotate Tool	Ferramenta Girar
 	Rotate View Tool	Ferramenta Girar Visualização
@@ -2852,6 +2883,9 @@ digits	Malayalam	Malaiala
 	Split Into Grid…	Dividir em Grade…
 	Split Path	Dividir Caminho
 	Spot Color	Cor Spot
+	Spot Color Objects	Objetos com cores spot
+	Pattern Objects	Objetos com padrões
+	Gradient Objects	Objetos com gradientes
 	Spot Colors	Cores Spot
 	Spot Colors…	Cores Spot…
 	Spread:	Propagação:
@@ -3054,6 +3088,8 @@ digits	Malayalam	Malaiala
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	O texto vira contornos, e os traços que uma linha CAD não pode desenhar viram formas preenchidas.
 	Type on a Path	Texto em um Caminho
 	Type on a Path Options…	Opções de Texto em um Caminho…
+	Center on Top	Centralizar em Cima
+	Center on Bottom	Centralizar em Baixo
 	Type on a Path Tool	Ferramenta Texto em um Caminho
 	Type stays text, and every stroke is a line with its lineweight and dashes.	O texto permanece texto, e todo traço é uma linha com sua espessura e tracejados.
 	Type:	Tipo:
@@ -3798,6 +3834,7 @@ axis	Both	Ambos
 @msg	`globalAdjust` must be an object	`globalAdjust` deve ser um objeto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` deve ser 1, 3 ou 5
 @msg	`stops` must be an array	`stops` deve ser uma matriz
+@msg	`{key}` must be an array	`{key}` deve ser uma matriz
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` deve ser um objeto com opções de SVG (veja document.formats)
 @msg	`{_1}` is no save command	`{_1}` não é um comando de salvar
 @msg	`{area}` is no recovery area name	`{area}` não é o nome de uma área de recuperação
@@ -3926,6 +3963,7 @@ axis	Both	Ambos
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` não é uma cor como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: no máximo {MAX_TABLE} cores
 @msg	command `{0}` is not available right now: {1}	o comando `{0}` não está disponível agora: {1}
+@msg	command `{id}` is not available right now	o comando `{id}` não está disponível agora
 @msg	compound paths can only contain paths	traçados compostos só podem conter traçados
 @msg	compressed (RLE) bitmaps can't be read yet	bitmaps compactados (RLE) ainda não podem ser lidos
 @msg	damaged	danificado
@@ -4105,6 +4143,7 @@ axis	Both	Ambos
 @msg	not a valid plug-in module: {0}	não é um módulo de plug-in válido: {0}
 @msg	not an EMF or WMF file	não é um arquivo EMF ou WMF
 @msg	not an HP-GL file	não é um arquivo HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` deve ser uma matriz de 1 a 255 cores #rrggbb
 @msg	not found	não encontrado
 @msg	not in pattern editing mode	não está no modo de edição de padrão
 @msg	finish editing the pattern first	termine de editar o padrão primeiro
@@ -5771,6 +5810,8 @@ mark-style	Japanese	Japonesas
 @msg	the Smooth slider is not open	o controle deslizante Suavizar não está aberto
 @msg	the screen color sampler is already open	o coletor de cores da tela já está aberto
 @msg	this system has no screen color sampler	este sistema não tem coletor de cores da tela
+@msg	the screen color sampler did not answer	o coletor de cores da tela não respondeu
+@msg	the screen color sampler failed	o coletor de cores da tela falhou
 	Darkness	Escuridão
 	Dimension	Cota
 	Dimension Tool Options	Opções da Ferramenta Cota
@@ -5939,7 +5980,9 @@ mark-style	Japanese	Japonesas
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guias geométricas
+	Optical Effects	Efeitos ópticos
 	Geometric Patterns	Padrões geométricos
+	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
 	Ease Out	Saída suave
 	Ease In Out	Entrada e saída suaves
@@ -5980,6 +6023,9 @@ axis	Y Axis	Eixo Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a preenchimentos em gradiente (paint.setFill)
 @msg	`dither` must be true or false	`dither` deve ser true ou false
 @msg	`method` must be classic or perceptual	`method` deve ser classic ou perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` deve ser pad, repeat ou reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve ser um número inteiro de 1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a gradientes lineares, radiais, cônicos e em losango
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Instalar “{name}”, que pede um orçamento de processamento grande?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Cada execução pode levar até {minutes} minutos e fazer {times} vezes o trabalho permitido a outros plug-ins. Ela é executada em segundo plano, e você pode cancelá-la.
@@ -6216,8 +6262,24 @@ axis	Y Axis	Eixo Y
 	Charge Wave	Onda de carga
 	Spark Trail	Rastro de faíscas
 	Calligraphic Nibs	Penas Caligráficas
+	Bristle Brushes	Pincéis de Cerdas
+	Fine Liner	Traço Fino
+	Pointed Flat	Chato Pontudo
+	Stubby Round	Redondo Curto
+	Dry Scrub	Esfregado Seco
+	Soft Dome	Cúpula Suave
+	Filbert	Língua de Gato
+	Angled Round	Redondo Chanfrado
+	Angled Flat	Chato Chanfrado
+	Fan Blender	Leque Esfumador
+	Grass Fan	Leque de Grama
 	Pattern Borders	Bordas de Padrão
 	Scatter Shapes	Formas de Dispersão
+	Dry Media	Técnicas Secas
+	Chalk Grain	Grão de Giz
+	Graphite Pencil	Lápis de Grafite
+	Wax Crayon	Giz de Cera
+	Charcoal Dust	Pó de Carvão
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
 @msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
@@ -6426,6 +6488,10 @@ anchor	Points:	Pontos:
 @msg	features lists at most {max} tags	features aceita no máximo {max} marcas
 @msg	unknown OpenType feature `{t}`	recurso OpenType desconhecido `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve ser um número maior que 0 e no máximo {max}
+@msg	{label} must be at most {max} characters	{label} deve ter no máximo {max} caracteres
+@msg	{label} must be one character	{label} deve ser um único caractere
+@msg	at most {max} tab stops	no máximo {max} paradas de tabulação
+@msg	unknown align `{other}`	alinhamento desconhecido `{other}`
 @msg	no character style `{name}`	Estilo de caractere `{name}` não encontrado
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6589,6 +6655,12 @@ breakText	Glyphs	Glifos
 	Delete the selected brushes?	Excluir os pincéis selecionados?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Traçados usam um ou mais destes pincéis. Remover os pincéis desses traçados e excluir os pincéis?
 	Remove Strokes	Remover Traçados
+	Place Brush Art	Colocar Arte do Pincel
+	Replace Brush Art	Substituir Arte do Pincel
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Traçados usam este pincel. Aplicar a nova arte a esses traçados, ou deixá-los como estão e adicionar uma cópia do pincel com a nova arte?
+	Apply to Strokes	Aplicar aos Traçados
+	Leave Strokes	Manter Traçados
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` não tem arte (só os pincéis de dispersão, de arte e de padrão têm)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Ferramentas de Organização
 	Arrange in Grid…	Organizar em Grade…
@@ -6996,8 +7068,38 @@ swatch	Yellow Green	Verde-amarelado
 @plural	{n} line cut|{n} lines cut	{n} linha cortada|{n} linhas cortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`
 
+# Learn panel
+	Learn	Aprender
+	Explore tutorials	Explorar tutoriais
+	For you	Para você
+	Skills	Habilidades
+	Get started	Primeiros passos
+	Quick skill guide	Guia rápido de habilidades
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriais práticos curtos das ferramentas essenciais, agrupados por habilidade. Escolha uma habilidade para ver os tutoriais dela.
+	List Tutorials	Listar Tutoriais
+	Show Tutorial	Mostrar Tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Atualizar Efeitos Adiados
 	Deferred Effects	Efeitos Adiados
 @msg	no plug-in effect is deferred	nenhum efeito de plug-in está adiado
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aberto com {n} efeito de plug-in adiado. Efeito › Atualizar Efeitos Adiados o executa.|Aberto com {n} efeitos de plug-in adiados. Efeito › Atualizar Efeitos Adiados os executa.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Ferramentas de Corte
+	Stencil Bridges…	Pontes de Estêncil…
+	Stencil Bridges	Pontes de Estêncil
+	Shortest Crossing	Travessia mais curta
+	Direction	Direção
+@msg	The selected art has no islands to bridge	A arte selecionada não tem ilhas para unir
+@msg	No bridge of this width fits across the selected art	Nenhuma ponte desta largura cabe na arte selecionada
+@msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
+@msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Caixa e Linhas de Descasque…
+	Weed Box and Lines	Caixa e Linhas de Descasque
+	Margin	Margem
+	Box	Caixa
+	Swatch	Amostra

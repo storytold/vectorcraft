@@ -241,6 +241,31 @@ fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, Str
     fileio::save_plan(&app.session, mode, p).map_err(|e| e.to_string())
 }
 
+/// Ordinary File > Save alone offers another destination when its own location refuses writes.
+/// Save Changes during Close/Quit continues to use [`save`].
+pub(crate) fn save_current(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    save_current_in(app, p, fileio::documents_dialog_folder())
+}
+
+/// The same entry with a resolved Documents folder (also permits deterministic host-free tests).
+pub(super) fn save_current_in(app: &mut VectorcraftApp, p: &Value, folder: Option<String>) -> Result<Value, String> {
+    remember_view(app);
+    let first = plan(app, SaveMode::Save, &acknowledged(p))?;
+    let own = !app.automation_asked()
+        && !is_web(app)
+        && p.get("path").is_none_or(Value::is_null)
+        && first.path.is_some()
+        && app.session.active().is_some_and(|st| !st.converted && !st.recovered && st.path == first.path && st.format == first.format.id);
+    if !own {
+        return save(app, SaveMode::Save, p, true);
+    }
+    if let Some(r) = first.path.as_deref().and_then(|path| ask_before_losing(app, path, "file.save", p)) {
+        return Ok(r);
+    }
+    let retry = super::read_only_save::Retry::new(&first, folder);
+    write_plan(app, first, ("file.save", p.clone()), Some(retry))
+}
+
 /// File → Save, Save As…, Save a Copy…, Save as Template… and the options dialogs' OK. `p` is the
 /// engine command's `{path?, format?, options?, svg?}`.
 ///
@@ -253,6 +278,17 @@ fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, Str
 /// → `{path, format, warnings…}` once written, or `{pending: <dialog kind>,
 /// path?}` while a dialog is open.
 pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bool) -> Result<Value, String> {
+    save_suggesting(app, mode, p, ask_options, None)
+}
+
+/// Reuse Save As with a captured name and folder, without changing the document before writing.
+pub(super) fn save_suggesting(
+    app: &mut VectorcraftApp,
+    mode: SaveMode,
+    p: &Value,
+    ask_options: bool,
+    suggestion: Option<&FilePick>,
+) -> Result<Value, String> {
     remember_view(app);
     // Writing over the file the document was read from is asked about here, not refused.
     let first = plan(app, mode, &acknowledged(p))?;
@@ -264,7 +300,7 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         if ask && matches!(mode, SaveMode::SaveAs | SaveMode::Copy) && matches!(first.format.id, "svg" | "svgz") {
             return ask_format_options(app, mode, first.format, &path);
         }
-        return write_plan(app, first);
+        return write_plan(app, first, (save_command(mode), with_path(p, &path)), None);
     }
     if is_web(app) && ask_options {
         return Ok(open_options(app, mode.command(), first.format, &first.name, true));
@@ -273,25 +309,70 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         SaveMode::Template => fileio::template_filters(first.format.id),
         _ => fileio::save_filters(first.format.id),
     });
-    let pick = FilePick { name: first.name.clone(), folder: first.folder.clone(), filters };
-    let picked = pick_finished(app, &pick, |picked, file_type| with_picked_type(picked, &first.name, file_type, first.format, mode))?;
+    let pick = FilePick {
+        name: suggestion.map_or_else(|| first.name.clone(), |s| s.name.clone()),
+        folder: suggestion.map_or_else(|| first.folder.clone(), |s| s.folder.clone()),
+        filters,
+    };
+    let picked = pick_finished(app, &pick, |picked, file_type| with_picked_type(picked, &pick.name, file_type, first.format, mode))?;
+    // Only the read-only retry carries options for the original format through Save As.
+    // A different format must use its own normal options flow instead.
+    let changed_retry_format = suggestion.is_some() && fileio::format_for_name(&picked).is_some_and(|f| f.id != first.format.id);
     // The picked file type wins over a `format` param.
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = q.as_object_mut() {
         o.remove("format");
+        if changed_retry_format {
+            o.remove("options");
+        }
         o.insert("path".into(), json!(picked));
     }
     let chosen = plan(app, mode, &acknowledged(&q))?;
     if let Some(r) = chosen.path.as_deref().and_then(|path| ask_before_losing(app, path, save_command(mode), &q)) {
         return Ok(r);
     }
-    if ask && asks_options(mode, chosen.format) {
+    if (ask || changed_retry_format) && asks_options(mode, chosen.format) {
         let path = chosen.path.clone().unwrap_or_default();
         let r = ask_format_options(app, mode, chosen.format, &path);
         crate::dialogs::opened_by_panel(app);
         return r;
     }
-    write_plan(app, chosen)
+    write_plan(app, chosen, (save_command(mode), q), None)
+}
+
+/// `p` (an object, else none) with `path`.
+pub(super) fn with_path(p: &Value, path: &str) -> Value {
+    let mut p = if p.is_object() { p.clone() } else { json!({}) };
+    p["path"] = json!(path);
+    p
+}
+
+/// The files among `paths` that a write to `path` replaces although the save panel asked only
+/// about `path`: every other one that `exists` finds, but those in `known`. None without `exists`.
+pub(super) fn replaced_files<'a>(
+    exists: Option<&crate::ExistsFn>,
+    path: &str,
+    known: &[String],
+    paths: impl IntoIterator<Item = &'a str>,
+) -> Vec<String> {
+    let Some(exists) = exists else { return Vec::new() };
+    paths.into_iter().filter(|p| *p != path && !known.iter().any(|k| k == p) && exists(p)).map(str::to_string).collect()
+}
+
+/// The `exists` service with which a save or export checks the files it writes beside the one
+/// picked ([`replaced_files`]), none on the web (downloads), and the files it replaces without
+/// asking: those the OK of the question about them allowed while it runs that again.
+pub(super) fn checks_replaced(app: &VectorcraftApp) -> (Option<crate::ExistsFn>, Vec<String>) {
+    (app.services.exists.clone().filter(|_| !is_web(app)), app.picks.replace_files_ok.clone())
+}
+
+/// Ask before a save or export of the document `doc` (its uid) replaces `files`, files that are
+/// there beside the one picked in the save panel (a file per artboard, a linked image), which the
+/// panel did not ask about. OK runs `command` with `params` again, replacing them and `allowed`
+/// (those an earlier OK allowed); Cancel writes nothing → `{pending}`.
+pub(super) fn ask_to_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[String], allowed: &[String], command: &str, params: &Value) -> Value {
+    dialogs::confirm::ask_replace_files(app, doc, files, allowed, command, params.clone());
+    json!({ "pending": dialogs::confirm::REPLACE_FILES })
 }
 
 /// The UI command that runs a save in `mode`.
@@ -394,20 +475,35 @@ pub(super) fn view_file(app: &mut VectorcraftApp, path: &str) {
     }
 }
 
-/// "Saved <path>", with the first of the result's warnings.
+/// "Saved <path>", with the first of the result's warnings and how many there are; hovering the
+/// message lists up to 30 of them, fewer when the window is small, with how many were left out
+/// ([`show_with_notes`]).
 pub(crate) fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
-    app.status(saved_status(path, r));
+    show_with_notes(app, saved_status(path, r), notes_of(r));
+}
+
+/// The warnings of a reply `r`, in the reply's order (a save's notes start with what the format
+/// loses).
+pub(crate) fn notes_of(r: &Value) -> Vec<String> {
+    r["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect()
+}
+
+/// Show `status`, which names the first of `notes`, in the status bar and keep `notes` for its
+/// hover ([`crate::state::UiState::status_notes`]). Without notes nothing is kept.
+pub(crate) fn show_with_notes(app: &mut VectorcraftApp, status: String, notes: Vec<String>) {
+    app.status(status);
+    app.ui.status_notes = (!notes.is_empty()).then(|| (app.ui.status.clone(), notes));
 }
 
 /// [`report_saved`]'s message.
 pub(crate) fn saved_status(path: &str, r: &Value) -> String {
-    let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let warnings = notes_of(r);
     match warnings.first() {
         Some(first) => crate::i18n::msg_n(
             warnings.len() as u64,
             "Saved {path} with {n} note: {first}",
             "Saved {path} with {n} notes: {first}",
-            &[("path", path), ("first", first)],
+            &[("path", path), ("first", first.as_str())],
         ),
         None => format!("Saved {path}"),
     }
@@ -418,7 +514,15 @@ pub(crate) fn saved_status(path: &str, r: &Value) -> String {
 /// ([`background`]): this returns `{path, background: true, status, format, warnings}` at once
 /// (`warnings`: what the format loses, then the save's notes on its params, such as an option the format
 /// doesn't read), and the document takes the file (and counts as saved, as of the snapshot) once it is written.
-fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String> {
+/// A file it writes beside the one at its path that is there already, and that the document's last
+/// save did not write, is asked about before anything is written; `again` (a command and its params)
+/// runs the save again once the question's OK allows it ([`ask_to_replace_files`]).
+fn write_plan(
+    app: &mut VectorcraftApp,
+    plan: SavePlan,
+    again: (&'static str, Value),
+    retry: Option<super::read_only_save::Retry>,
+) -> Result<Value, String> {
     let uid = app.session.active().ok_or("no document")?.uid;
     // Saves of one document finish in order.
     if app.background.busy_with(uid) {
@@ -444,24 +548,74 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     let enabled = app.session.prefs.background_save && target.is_some();
     // The work writes the file; the copy makes it the document's own afterwards.
     let done = job.clone();
+    // Capture the caller before background work leaves the request: it must never open a panel
+    // or error dialog later, when answering_control has been reset.
+    let by_control = app.automation_asked();
+    let location_refused = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let refused_by_work = location_refused.clone();
+    let own_path = target.clone();
+    let save_write = app.services.save_write.clone().filter(|_| !is_web(app));
+    let save_stream = app.services.save_stream.clone().filter(|_| job.streams() && !is_web(app));
     // A native file streams into the file as it is encoded (desktop; not to a download).
     let stream = app.services.stream_shared.clone().filter(|_| job.streams() && !is_web(app));
+    let (exists, allowed) = checks_replaced(app);
+    let known: Vec<String> = allowed.iter().chain(app.picks.written_beside.get(&uid).into_iter().flatten()).cloned().collect();
     let work = move |write: Writer| {
-        match stream {
-            Some(stream) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(EngineError::Other)),
-            None => job.write(|p, b| write(p, b).map_err(EngineError::Other)),
-        }
-        .map_err(|e| e.to_string())
+        let mut own_refused = false;
+        let mut observed = |p: &str, r: vectorcraft_engine::Result<()>| {
+            own_refused = own_path.as_deref() == Some(p) && matches!(&r, Err(EngineError::ReadOnlyLocation(_)));
+            r
+        };
+        let check = |paths: &[&str]| {
+            let path = job.plan().path.as_deref().unwrap_or_default();
+            let replaced = replaced_files(exists.as_ref(), path, &known, paths.iter().copied());
+            (!replaced.is_empty()).then(|| json!({ "replaces": replaced }))
+        };
+        let r = match (save_stream, save_write, stream) {
+            (Some(stream), _, _) => job.write_streamed(&mut |p, fill| observed(p, stream(p, fill))),
+            (_, Some(write), _) => job.write_unless(check, |p, b| observed(p, write(p, b))),
+            (_, _, Some(stream)) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(EngineError::Other)),
+            _ => job.write_unless(check, |p, b| write(p, b).map_err(EngineError::Other)),
+        };
+        r.map_err(|e| {
+            if let EngineError::ReadOnlyLocation(reason) = &e {
+                refused_by_work.store(own_refused, std::sync::atomic::Ordering::Relaxed);
+                if !by_control {
+                    return reason.clone();
+                }
+            }
+            e.to_string()
+        })
     };
     let failed = target.clone().unwrap_or_default();
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
+        if r.is_err()
+            && location_refused.load(std::sync::atomic::Ordering::Relaxed)
+            && let Some(retry) = retry
+            && let Some(r) = retry.instead(app, uid)
+        {
+            return r;
+        }
         // Not written: the document keeps its file, format and modified state, and the user is told.
-        let r = r.inspect_err(|e| report_write_error(app, false, &failed, e))?;
+        let r = r.inspect_err(|e| {
+            if !by_control {
+                report_write_error(app, false, &failed, e);
+            }
+        })?;
+        // Nothing written either: asked first.
+        if let Some(files) = r.get("replaces").and_then(Value::as_array) {
+            let files: Vec<String> = files.iter().filter_map(Value::as_str).map(str::to_string).collect();
+            return Ok(ask_to_replace_files(app, uid, &files, &allowed, again.0, &again.1));
+        }
         // The document may have closed meanwhile: the file is written all the same.
         done.complete(&mut app.session, uid);
         let path = r["path"].as_str().unwrap_or_default().to_string();
         if retargets {
             note_recent(app, &path);
+            // The files written beside the document's file, which its next save replaces.
+            let beside = ["files", "linked"].iter().flat_map(|k| r[*k].as_array().into_iter().flatten()).filter_map(Value::as_str);
+            let beside: Vec<String> = beside.filter(|p| *p != path).map(str::to_string).collect();
+            app.picks.written_beside.insert(uid, beside);
         }
         report_saved(app, &path, &r);
         Ok(r)

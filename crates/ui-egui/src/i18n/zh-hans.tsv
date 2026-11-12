@@ -836,6 +836,17 @@ antiAlias	Sharp	锐利
 	The selected character's font is not available.	所选字符的字体不可用。
 	No alternates for the selected character.	所选字符没有替代字。
 	Double-click to replace	双击以替换
+	Select one character with the Type tool first.	请先用文字工具选择一个字符。
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} 是 {font} 的字形，不是所选文本所用字体（{text_font}）的字形。
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} 属于 {base}（U+{base_code}）{place}；您选择的是 {sel}（U+{code}）。
+	at the start of a word	位于词首
+	in the middle of a word	位于词中
+	at the end of a word	位于词尾
+	standing alone	单独出现时
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} 不是 {sel}（U+{code}）在其单词中所处位置的替代字。
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	双击以改为插入 {base}（U+{code}）：表现形式不会连接，字母会连接。
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	已插入 {base}（U+{code}）以代替表现形式：字体会按位置将其与相邻字符连接。
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	没有任何 OpenType 功能会在此处绘制该字形，因此它会替换该字符的字形，并且可能无法与相邻字符连接。
 	Double-click to insert	双击以插入
 	Double-click to rename	双击以重命名
 	Double-click to target the contents	双击以指定内容
@@ -1094,6 +1105,8 @@ antiAlias	Sharp	锐利
 	Extrude & Bevel…	突出与斜角…
 	3D (Classic)	3D (经典)
 	Extrude & Bevel (Classic)…	突出与斜角 (经典)…
+	Revolve (Classic)…	回转 (经典)…
+	Rotate (Classic)…	旋转 (经典)…
 	Surface	表面
 	Wireframe	线框
 	No Shading	无底纹
@@ -1403,6 +1416,14 @@ file-filter	Templates	模板
 	Hair Space	极细空格
 	Hand Tool	抓手工具
 	Hand-Drawn	手绘
+	Painted and Sketched	绘画与素描
+	Washed Blue	水洗蓝
+	Bristle Ochre	干刷土黄
+	Pastel Heather	粉彩淡紫
+	Charcoal Shade	炭笔阴影
+	Ink Contour	墨线轮廓
+	Wet Ink	湿墨
+	Fine Pen	细笔
 	Handles	手柄
 	Hard Light	强光
 	Hard Mix	实色混合
@@ -1893,6 +1914,8 @@ file-filter	Templates	模板
 	Metallic Gradients	金属渐变
 	Meters	米
 	Method:	方法：
+	Pad	延伸
+	Repeats	重复次数
 	Millimeters	毫米
 	Minify	压缩
 	Minimal	最少
@@ -2248,12 +2271,17 @@ file-filter	Templates	模板
 	Arch	拱形
 @msg	select point type or type on a path	请选择点文字或路径文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	开放路径或复合路径上的路径文字无法在顶部或底部居中：{open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	路径没有长度或没有高度时，其路径文字无法居中：{flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	串接文本中的路径文字无法在顶部或底部居中：{frames}
+@msg	select type on a closed path	请选择闭合路径上的路径文字
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
 	Options	选项
 	Options:	选项：
 	Options…	选项…
 	Organic Fades	自然渐隐
+	Holographic	全息
 	or more spaces with a tab	或多个空格加一个制表符
 	Order:	顺序：
 	Ordinals	序数字
@@ -2805,6 +2833,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Rise…	上升…
 	Roman Baseline	罗马基线
 	Roman Hanging Punctuation	西文悬挂标点
+	Korean Line Break Anywhere	韩文任意位置换行
+	East Asian Composition Settings	东亚排版设置
+	Korean Composition Settings	韩文排版设置
 	Rotate	旋转
 	Rotate 90° CW	顺时针旋转 90°
 	Rotate Tool	旋转工具
@@ -3265,6 +3296,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Split Path	分割路径
 	spot	专色
 	Spot Color	专色
+	Spot Color Objects	使用专色的对象
+	Pattern Objects	使用图案的对象
+	Gradient Objects	使用渐变的对象
 	Spot Colors	专色
 	Spot Colors…	专色…
 	Spread:	扩散：
@@ -3575,6 +3609,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Type on a Path	路径文字
 	Type on a Path Options	路径文字选项
 	Type on a Path Options…	路径文字选项…
+	Center on Top	在顶部居中
+	Center on Bottom	在底部居中
 	Type on a Path Tool	路径文字工具
 	Type Orientation	文字方向
 	Type stays text, and every stroke is a line with its lineweight and dashes.	文字维持为文字，每个描边都是带有线宽与虚线的线条。
@@ -4108,6 +4144,7 @@ imageTrace	Outline	轮廓
 @msg	`preserve` must be an object	`preserve` 必须是对象
 @msg	`globalAdjust` must be an object	`globalAdjust` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
+@msg	`{key}` must be an array	`{key}` 必须是数组
 @msg	`{k}` must be [x, y]	`{k}` 必须是 [x, y]
 @msg	a gradient needs at least two stops	渐变至少需要两个色标
 @msg	give both `start` and `end` [x, y] (or neither)	请同时给出 `start` 和 `end` [x, y] (或都不给出)
@@ -4275,6 +4312,7 @@ imageTrace	Outline	轮廓
 @msg	nothing to distort	没有可扭曲的内容
 @msg	unknown option `{path}.{k}`	未知选项 `{path}.{k}`
 @msg	command `{0}` is not available right now: {1}	命令 `{0}` 当前不可用：{1}
+@msg	command `{id}` is not available right now	命令 `{id}` 当前不可用
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` 中出现内部错误：{msg} (文档保持原样；请报告此错误)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` 的参数无效：{msg}
 @msg	no active document	没有活动文档
@@ -4386,6 +4424,7 @@ imageTrace	Outline	轮廓
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
 @msg	not an HP-GL file	不是 HP-GL 文件
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必须是由 1 到 255 个 #rrggbb 格式颜色组成的数组
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
 @msg	damaged	已损坏
@@ -4459,6 +4498,8 @@ imageTrace	Outline	轮廓
 @msg	the Smooth slider is not open	平滑滑块未打开
 @msg	the screen color sampler is already open	屏幕取色器已打开
 @msg	this system has no screen color sampler	此系统没有屏幕取色器
+@msg	the screen color sampler did not answer	屏幕取色器没有响应
+@msg	the screen color sampler failed	屏幕取色器出错
 @msg	Corners edits the corners of a path	转角用于编辑路径的转角
 @msg	give corners of the path: anchors where its sides meet at an angle	请给出路径的转角：其各边以一定角度相交处的锚点
 @msg	select one path, or give its `id`	请选择一条路径，或给出其 `id`
@@ -5861,7 +5902,9 @@ lighting	Light	光源
 	Ruby…	注音…
 	Ruby	注音
 	Geometric Guides	几何参考线
+	Optical Effects	光学效果
 	Geometric Patterns	几何图案
+	Grit Textures	颗粒纹理
 	Ease In	缓入
 	Ease Out	缓出
 	Ease In Out	缓入缓出
@@ -5903,6 +5946,9 @@ axis	Y Axis	Y 轴
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 适用于渐变填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必须是 true 或 false
 @msg	`method` must be classic or perceptual	`method` 必须是 classic 或 perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` 必须是 pad、repeat 或 reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必须是 1 到 {MAX_REPEATS} 之间的整数
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 适用于线性、径向、圆锥和菱形渐变
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	要安装需要大量计算预算的“{name}”吗？
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	每次运行最多可能需要 {minutes} 分钟，并可完成其他插件所允许工作量的 {times} 倍。它在后台运行，可以随时取消。
@@ -6139,8 +6185,24 @@ axis	Y Axis	Y 轴
 	Charge Wave	充能波
 	Spark Trail	火花尾迹
 	Calligraphic Nibs	书法笔尖
+	Bristle Brushes	鬃毛画笔集
+	Fine Liner	细勾线笔
+	Pointed Flat	尖头平笔
+	Stubby Round	短圆笔
+	Dry Scrub	干擦
+	Soft Dome	柔和圆顶
+	Filbert	榛形笔
+	Angled Round	斜圆笔
+	Angled Flat	斜平笔
+	Fan Blender	混色扇形笔
+	Grass Fan	画草扇形笔
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状
+	Dry Media	干性画材
+	Chalk Grain	粉笔颗粒
+	Graphite Pencil	石墨铅笔
+	Wax Crayon	蜡笔
+	Charcoal Dust	炭粉
 	Save Brush Library…	保存画笔库…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
 @msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）
@@ -6351,6 +6413,10 @@ anchor	Points:	点：
 @msg	features lists at most {max} tags	features 最多包含 {max} 个标签
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 特性 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必须是大于 0 且不超过 {max} 的数字
+@msg	{label} must be at most {max} characters	{label} 最多 {max} 个字符
+@msg	{label} must be one character	{label} 必须是一个字符
+@msg	at most {max} tab stops	最多 {max} 个制表位
+@msg	unknown align `{other}`	未知的对齐方式 `{other}`
 @msg	no character style `{name}`	找不到字符样式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6512,6 +6578,12 @@ breakText	Glyphs	字形
 	Delete the selected brushes?	删除选中的画笔吗？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有描边使用了其中一个或多个画笔。要从这些描边移除画笔并删除画笔吗？
 	Remove Strokes	移除描边
+	Place Brush Art	置入画笔图稿
+	Replace Brush Art	替换画笔图稿
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有描边使用了此画笔。要将新图稿应用到这些描边，还是保留描边不变并添加一个使用新图稿的画笔副本？
+	Apply to Strokes	应用于描边
+	Leave Strokes	保留描边
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 没有图稿 (只有散布画笔、艺术画笔和图案画笔有图稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
 	Arrange in Grid…	按网格排列…
@@ -6761,8 +6833,38 @@ breakText	Glyphs	字形
 @plural	{n} line cut|{n} lines cut	已截断 {n} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必须是控制台保留的行号，且 `first` 不能在 `last` 之后
 
+# Learn panel
+	Learn	学习
+	Explore tutorials	浏览教程
+	For you	为你推荐
+	Skills	技能
+	Get started	入门
+	Quick skill guide	快速技能指南
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	针对基本工具的简短实操教程，按技能分组。选择一项技能即可查看其教程。
+	List Tutorials	列出教程
+	Show Tutorial	显示教程
+@msg	missing `tutorial` (see learn.list)	缺少 `tutorial` (请参阅 learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	未知教程 `{id}` (请参阅 learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	刷新延迟的效果
 	Deferred Effects	延迟的效果
 @msg	no plug-in effect is deferred	没有延迟的增效工具效果
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	打开时延迟了 {n} 个增效工具效果。效果 › 刷新延迟的效果可运行它们。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	切割工具
+	Stencil Bridges…	镂空版连接桥…
+	Stencil Bridges	镂空版连接桥
+	Shortest Crossing	最短跨越
+	Direction	方向
+@msg	The selected art has no islands to bridge	所选图稿没有需要连接的孤岛
+@msg	No bridge of this width fits across the selected art	此宽度的连接桥无法放入所选图稿
+@msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
+@msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数
+	Weed Box and Lines…	除废框和除废线…
+	Weed Box and Lines	除废框和除废线
+	Margin	边距
+	Box	框
+	Swatch	色板

@@ -672,6 +672,44 @@ fn organic_fades_add_with_their_method_midpoints_and_opacities_in_rgb_and_cmyk()
 }
 
 #[test]
+fn holographic_glows_add_whole_in_rgb_and_cmyk_as_one_undo_step() {
+    let lib = vectorcraft_color::libraries::builtin_library("holographic").unwrap();
+    let Paint::Gradient(want) = &lib.swatch("Mint Halo").unwrap().paint else { panic!("Mint Halo is a gradient") };
+    for mode in ["rgb", "cmyk"] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 100, "height": 100, "colorMode": mode}));
+        let list = run(&mut s, "swatch.library.list", json!({}));
+        let row = list["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "holographic").unwrap().clone();
+        assert_eq!((row["name"].as_str(), row["category"].as_str(), row["count"].as_u64()), (Some("Holographic"), Some("gradients"), Some(14)));
+        let got = run(&mut s, "swatch.library.get", json!({"library": "holographic"}));
+        assert!(got.to_string().contains("Mint Halo"), "{mode}: get lists Mint Halo");
+        let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].clone();
+        let node = vectorcraft_doc::NodeId(id.as_u64().unwrap());
+        let before = undo_len(&s);
+        let r = run(&mut s, "swatch.library.add", json!({"library": "holographic", "names": ["Mint Halo"], "apply": "fill"}));
+        assert_eq!((r["added"].clone(), r["applied"].clone()), (json!(["Mint Halo"]), json!("Mint Halo")), "{mode}");
+        assert_eq!(undo_len(&s), before + 1, "{mode}: added and applied as one step");
+        // The swatch comes as the library has it: kind, stops (RGB colors, opacities, midpoints) and method.
+        let Paint::Gradient(added) = &doc(&s).swatch("Mint Halo").unwrap().paint else { panic!("{mode}: a gradient swatch") };
+        assert_eq!(added.gradient, want.gradient, "{mode}");
+        assert!(added.gradient.stops.iter().all(|st| matches!(st.color, Color::Rgb { .. })), "{mode}: the stops stay RGB");
+        assert_eq!(added.gradient.stops.last().map(|st| st.opacity), Some(0.0), "{mode}: clear at the edge");
+        let Paint::Gradient(fill) = doc(&s).node(node).unwrap().appearance.fill_paint() else { panic!("{mode}: a gradient fill") };
+        assert_eq!((fill.gradient.kind, fill.gradient.method), (want.gradient.kind, want.gradient.method), "{mode}");
+        assert_eq!(fill.gradient.stops, want.gradient.stops, "{mode}");
+        run(&mut s, "edit.undo", json!({}));
+        assert!(doc(&s).swatch("Mint Halo").is_none(), "{mode}: undo removes the add");
+        assert!(!matches!(doc(&s).node(node).unwrap().appearance.fill_paint(), Paint::Gradient(_)), "{mode}: and the fill");
+        // A document swatch already named Mint Halo stays; the glow comes in under a number.
+        run(&mut s, "swatch.new", json!({"name": "Mint Halo", "color": "#123456"}));
+        let r = run(&mut s, "swatch.library.add", json!({"library": "holographic", "names": ["Mint Halo"]}));
+        assert_eq!(r["added"], json!(["Mint Halo 2"]), "{mode}");
+        assert!(doc(&s).swatch("Mint Halo").unwrap().paint.color().is_some(), "{mode}: the document's swatch is kept");
+        assert!(matches!(&doc(&s).swatch("Mint Halo 2").unwrap().paint, Paint::Gradient(g) if g.gradient == want.gradient));
+    }
+}
+
+#[test]
 fn pattern_libraries_bring_their_patterns_and_add_each_once() {
     let mut s = session();
     let list = run(&mut s, "swatch.library.list", json!({}));
@@ -796,6 +834,82 @@ fn a_pattern_library_adds_only_the_picked_pattern_and_it_undoes_and_saves() {
     assert_eq!(back.patterns, doc(&s).patterns);
     assert!(has(&back));
     assert_eq!(back.swatch("Checkerboard").map(|w| &w.paint), doc(&s).swatch("Checkerboard").map(|w| &w.paint));
+}
+
+/// Grit Textures is listed after Geometric Patterns. One of its patterns comes in with its swatch
+/// once, as one undo step that also takes both away, and both stay after a save and reopen.
+#[test]
+fn a_grit_texture_adds_once_undoes_and_saves() {
+    let mut s = session();
+    let list = run(&mut s, "swatch.library.list", json!({}));
+    let ids: Vec<&str> =
+        list["libraries"].as_array().unwrap().iter().filter(|l| l["category"] == "patterns").map(|l| l["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["geometric-patterns", "grit-textures", "optical-effects"]);
+    let got = run(&mut s, "swatch.library.get", json!({"library": "Grit Textures"}));
+    let names: Vec<&str> = got["swatches"].as_array().unwrap().iter().map(|w| w["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Fine Grain", "Coarse Grit", "Sand", "Speckle", "Stipple", "Scratches", "Sparse Flecks", "Dense Flecks"]);
+    let counts = |d: &vectorcraft_doc::Document| (d.patterns.len(), d.swatches_iter().count());
+    let empty = counts(doc(&s));
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.library.add", json!({"library": "grit-textures", "names": ["Stipple"]}));
+    assert_eq!(r["added"], json!(["Stipple"]));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1));
+    let def = doc(&s).pattern("Stipple").expect("the pattern comes with its swatch").clone();
+    assert!(def.art.len() >= 144, "{} marks", def.art.len());
+    assert!(matches!(doc(&s).swatch("Stipple").map(|w| &w.paint), Some(Paint::Pattern { pattern, .. }) if pattern == "Stipple"));
+    let r = run(&mut s, "swatch.library.add", json!({"library": "grit-textures", "names": ["Stipple"]}));
+    assert_eq!((r["added"].clone(), r["existing"].clone()), (json!([]), json!(["Stipple"])));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1), "added once");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(counts(doc(&s)), empty);
+    assert!(doc(&s).pattern("Stipple").is_none() && doc(&s).swatch("Stipple").is_none());
+    run(&mut s, "edit.redo", json!({}));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc(&s), false)).unwrap();
+    assert_eq!(back.pattern("Stipple"), Some(&def));
+    assert_eq!(back.swatch("Stipple").map(|w| &w.paint), doc(&s).swatch("Stipple").map(|w| &w.paint));
+}
+
+/// Optical Effects is listed after Grit Textures, and reading it adds nothing. Clicking one of
+/// its patterns brings it with its swatch and fills the selection with it, once, as one undo step
+/// that also takes both away, and both stay after a save and reopen.
+#[test]
+fn an_optical_effect_adds_once_fills_undoes_and_saves() {
+    let mut s = session();
+    let counts = |d: &vectorcraft_doc::Document| (d.patterns.len(), d.swatches_iter().count());
+    let empty = counts(doc(&s));
+    let list = run(&mut s, "swatch.library.list", json!({}));
+    let ids: Vec<&str> =
+        list["libraries"].as_array().unwrap().iter().filter(|l| l["category"] == "patterns").map(|l| l["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["geometric-patterns", "grit-textures", "optical-effects"]);
+    let got = run(&mut s, "swatch.library.get", json!({"library": "Optical Effects"}));
+    let names: Vec<&str> = got["swatches"].as_array().unwrap().iter().map(|w| w["name"].as_str().unwrap()).collect();
+    assert_eq!(
+        names,
+        ["Sine Bands", "Ripple Lines", "Interference Rings", "Offset Rings", "Warped Checks", "Pinched Stripes", "Chevron Pulse", "Radiating Lenses"]
+    );
+    assert_eq!(counts(doc(&s)), empty, "reading a library adds no pattern or swatch");
+    let id = vectorcraft_doc::NodeId(run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.library.add", json!({"library": "optical-effects", "names": ["Warped Checks"], "apply": "fill"}));
+    assert_eq!((r["added"].clone(), r["applied"].clone()), (json!(["Warped Checks"]), json!("Warped Checks")));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1));
+    let def = doc(&s).pattern("Warped Checks").expect("the pattern comes with its swatch").clone();
+    assert_eq!(def.art.len(), 32, "the black cells of an 8 × 8 checkerboard");
+    assert!(matches!(doc(&s).swatch("Warped Checks").map(|w| &w.paint), Some(Paint::Pattern { pattern, .. }) if pattern == "Warped Checks"));
+    let filled = |d: &vectorcraft_doc::Document| matches!(d.node(id).unwrap().appearance.fill_paint(), Paint::Pattern { pattern, .. } if pattern == "Warped Checks");
+    assert!(filled(doc(&s)));
+    let r = run(&mut s, "swatch.library.add", json!({"library": "optical-effects", "names": ["Warped Checks"]}));
+    assert_eq!((r["added"].clone(), r["existing"].clone()), (json!([]), json!(["Warped Checks"])));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1), "added once");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(counts(doc(&s)), empty);
+    assert!(doc(&s).pattern("Warped Checks").is_none() && doc(&s).swatch("Warped Checks").is_none() && !filled(doc(&s)));
+    run(&mut s, "edit.redo", json!({}));
+    assert!(filled(doc(&s)));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc(&s), false)).unwrap();
+    assert_eq!(back.pattern("Warped Checks"), Some(&def));
+    assert_eq!(back.swatch("Warped Checks").map(|w| &w.paint), doc(&s).swatch("Warped Checks").map(|w| &w.paint));
+    assert!(filled(&back));
 }
 
 /// A device name is saved with a `-` after it, which can be another library's own name: neither

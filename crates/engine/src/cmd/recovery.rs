@@ -19,7 +19,9 @@
 //! while their copies are restored or discarded the area is held, so two apps launched together
 //! never both take it. An area's lock file or folder can be removed while its app runs, so each
 //! recovery save and heartbeat checks that the lock still holds the area, and locks it again or
-//! takes a new area.
+//! takes a new area. The copies it had in the old area stay there until it has written them again
+//! in the new one, and an entry `<new area>/keeps-<old area>` ([`mark_left`]) tells other apps
+//! that those copies belong to a running app, so none of them offers or discards them meanwhile.
 //!
 //! A heartbeat alone can't tell a gone app from one whose timers stopped (a background tab), so
 //! when unsure an area counts as held, and its app repairs what another app did meanwhile: each
@@ -61,6 +63,9 @@ const BLOB_EXT: &str = ".blob";
 /// The heartbeat entry of an area in a store without locks: when its app last said it runs (Unix
 /// seconds, as text).
 const BEAT: &str = "heartbeat";
+/// The start of an entry `<area>/keeps-<left area>`: the app holding `<area>` still keeps the copies
+/// it left in `<left area>` ([`mark_left`]).
+const KEEPS: &str = "keeps-";
 /// The least time without a heartbeat after which an area's app counts as gone (seconds); else
 /// three Data Recovery intervals.
 const MIN_STALE: i64 = 180;
@@ -92,6 +97,10 @@ pub trait RecoveryStore: Send + Sync {
     fn remove(&self, name: &str) -> std::result::Result<(), String>;
     /// Where the entries are, as the user knows it (a folder, "browser storage").
     fn location(&self) -> String;
+    /// Is [`RecoveryStore::location`] a folder on this computer (default: no)?
+    fn in_folder(&self) -> bool {
+        false
+    }
     /// The areas in the store (default: those with entries).
     fn areas(&self) -> std::result::Result<Vec<String>, String> {
         let names = self.list()?;
@@ -274,7 +283,60 @@ impl FolderStore {
         builder.recursive(true);
         #[cfg(unix)]
         std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
-        builder.create(dir).map_err(|e| format!("{}: {e}", dir.display()))
+        builder.create(dir).map_err(|e| Self::folder_error(dir, &e, true))
+    }
+
+    /// The first folder on the way to `dir` (`dir` included), from the top down, that is not a
+    /// folder (`true`) or is missing (`false`). None when every one of them is a folder or one of
+    /// them can't be checked.
+    fn in_the_way(dir: &std::path::Path) -> Option<(&std::path::Path, bool)> {
+        let mut way: Vec<&std::path::Path> = dir.ancestors().filter(|p| !p.as_os_str().is_empty()).collect();
+        way.reverse();
+        for p in way {
+            match std::fs::metadata(p) {
+                Ok(m) if m.is_dir() => {}
+                Ok(_) => return Some((p, true)),
+                Err(m) if m.kind() == std::io::ErrorKind::NotFound => return Some((p, false)),
+                Err(_) => return None,
+            }
+        }
+        None
+    }
+
+    /// The message for error `e` on folder `dir`, which was being made (`making`) or read. It
+    /// names the first folder on the way to `dir` that is not a folder, or is missing (when
+    /// `making`, the one that couldn't be made), and otherwise `dir`.
+    fn folder_error(dir: &std::path::Path, e: &std::io::Error, making: bool) -> String {
+        match Self::in_the_way(dir) {
+            Some((p, true)) => format!("{} is not a folder: {e}", p.display()),
+            Some((p, false)) if making => format!("couldn't make {}: {e}", p.display()),
+            Some((p, false)) if p != dir => format!("{} is missing", p.display()),
+            _ => format!("{}: {e}", dir.display()),
+        }
+    }
+
+    /// The message for error `e` on file `f`. It names the first folder on the way to `f` that is
+    /// not a folder or is missing, and otherwise `f`.
+    fn file_error(f: &std::path::Path, e: &std::io::Error) -> String {
+        match f.parent().and_then(Self::in_the_way) {
+            Some((p, true)) => format!("{} is not a folder: {e}", p.display()),
+            Some((p, false)) => format!("{} is missing", p.display()),
+            None => format!("{}: {e}", f.display()),
+        }
+    }
+
+    /// The outcome `r` of removing file `f`. A file that is not there counts as removed, unless a
+    /// file is on the way to it: Windows reports that as a missing file, and it is named as for a
+    /// listing.
+    pub(crate) fn removed(f: &std::path::Path, r: std::io::Result<()>) -> std::result::Result<(), String> {
+        match r {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => match f.parent().and_then(Self::in_the_way) {
+                Some((p, true)) => Err(format!("{} is not a folder: {e}", p.display())),
+                _ => Ok(()),
+            },
+            Err(e) => Err(Self::file_error(f, &e)),
+            Ok(()) => Ok(()),
+        }
     }
 
     /// Refuse area folder `dir` unless it is a folder itself, not a link to one, and (on Unix)
@@ -282,7 +344,7 @@ impl FolderStore {
     /// linked to a folder of its own in a shared recovery folder looked free, and claiming it
     /// wrote the copies through the link.
     fn own_area(dir: &std::path::Path) -> std::result::Result<(), String> {
-        let m = std::fs::symlink_metadata(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        let m = std::fs::symlink_metadata(dir).map_err(|e| Self::folder_error(dir, &e, false))?;
         if !m.file_type().is_dir() {
             return Err(format!("{}: not a folder of its own", dir.display()));
         }
@@ -294,11 +356,17 @@ impl FolderStore {
     }
 
     /// The plain names of the files (or, `dirs`, folders) in `dir`; none when it doesn't exist.
+    /// A file on the way to `dir` is an error: Windows reports such a folder as missing.
     fn names(dir: &std::path::Path, dirs: bool) -> std::result::Result<Vec<String>, String> {
         let entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
-            Err(e) => return Err(format!("{}: {e}", dir.display())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return match Self::in_the_way(dir) {
+                    Some((p, true)) => Err(format!("{} is not a folder: {e}", p.display())),
+                    _ => Ok(vec![]),
+                };
+            }
+            Err(e) => return Err(Self::folder_error(dir, &e, false)),
         };
         Ok(entries
             .filter_map(|e| e.ok())
@@ -333,7 +401,7 @@ impl FolderStore {
         match e.kind() {
             std::io::ErrorKind::NotFound => Ok(Lock::Busy),
             std::io::ErrorKind::PermissionDenied if std::fs::symlink_metadata(path).is_ok() => Ok(Lock::Busy),
-            _ => Err(format!("{}: {e}", path.display())),
+            _ => Err(Self::file_error(path, &e)),
         }
     }
 
@@ -345,7 +413,7 @@ impl FolderStore {
             Ok(()) | Err(std::fs::TryLockError::WouldBlock) => Ok(Lock::Busy),
             // The lock file was removed meanwhile, and locking it failed instead.
             Err(std::fs::TryLockError::Error(_)) if !Self::still_named(&file, path) => Ok(Lock::Busy),
-            Err(std::fs::TryLockError::Error(e)) => Err(format!("{}: {e}", path.display())),
+            Err(std::fs::TryLockError::Error(e)) => Err(Self::file_error(path, &e)),
         }
     }
 
@@ -393,10 +461,10 @@ impl RecoveryStore for FolderStore {
         if let Some(dir) = f.parent() {
             Self::own_area(dir)?;
         }
-        if !std::fs::symlink_metadata(&f).map_err(|e| format!("{}: {e}", f.display()))?.file_type().is_file() {
+        if !std::fs::symlink_metadata(&f).map_err(|e| Self::file_error(&f, &e))?.file_type().is_file() {
             return Err(format!("{}: not a plain file", f.display()));
         }
-        std::fs::read(&f).map_err(|e| format!("{}: {e}", f.display()))
+        std::fs::read(&f).map_err(|e| Self::file_error(&f, &e))
     }
     fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
         let f = self.file(name)?;
@@ -404,17 +472,17 @@ impl RecoveryStore for FolderStore {
             Self::create_area(dir)?;
             Self::own_area(dir)?;
         }
-        vectorcraft_format::write_atomic(&f, bytes).map_err(|e| format!("{}: {e}", f.display()))
+        vectorcraft_format::write_atomic(&f, bytes).map_err(|e| Self::file_error(&f, &e))
     }
     fn remove(&self, name: &str) -> std::result::Result<(), String> {
         let f = self.file(name)?;
-        match std::fs::remove_file(&f) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", f.display())),
-            _ => Ok(()),
-        }
+        Self::removed(&f, std::fs::remove_file(&f))
     }
     fn location(&self) -> String {
         self.0.to_string_lossy().into_owned()
+    }
+    fn in_folder(&self) -> bool {
+        true
     }
     fn areas(&self) -> std::result::Result<Vec<String>, String> {
         Self::names(&self.0, true)
@@ -479,6 +547,8 @@ pub struct Recovery {
     /// store: each stays until its document has a copy in the new area, or needs none. They are
     /// still this session's: never offered or discarded as a crash's here.
     left: BTreeMap<u64, (Arc<dyn RecoveryStore>, String)>,
+    /// The `<own area>/keeps-<left area>` entries this session wrote in its area ([`mark_left`]).
+    marked: BTreeSet<String>,
 }
 
 impl Recovery {
@@ -553,6 +623,15 @@ fn beating(store: &dyn RecoveryStore, area: &str, stale: i64, mine: Option<i64>)
 /// beat only lets another app offer the copies once three intervals have passed.
 pub fn heartbeat(s: &mut Session) -> Vec<u64> {
     let mut lost = keep_hold(s);
+    // An entry that couldn't be written before, or that was removed since (by the user, a
+    // cleaner), is written now.
+    if let Some(own) = &s.recovery.own
+        && !s.recovery.marked.is_empty()
+        && let Ok(names) = own.store.list()
+    {
+        s.recovery.marked.retain(|n| names.contains(n));
+    }
+    mark_left(s);
     if let Some(own) = s.recovery.own.as_ref().filter(|o| o.beats) {
         let _ = beat(own.store.as_ref(), &own.area);
     }
@@ -622,6 +701,36 @@ fn drop_left(s: &mut Session, uid: u64) {
     let meta = store.remove(&format!("{file}{META_EXT}"));
     if doc.is_ok() && meta.is_ok() {
         s.recovery.left.remove(&uid);
+        mark_left(s);
+    }
+}
+
+/// Record in this session's area each area it left that still holds copies of its documents: an
+/// entry `<own area>/keeps-<left area>`, so another app leaves those copies alone while this one
+/// runs ([`keeper`]). The entries of areas that hold none of its copies any more go. Best effort:
+/// an entry not written or removed now is written or removed at the next heartbeat.
+fn mark_left(s: &mut Session) {
+    let Some(own) = &s.recovery.own else { return };
+    let (store, area) = (own.store.clone(), own.area.clone());
+    let want: BTreeSet<String> = s
+        .recovery
+        .left
+        .values()
+        .filter(|(st, _)| st.location() == store.location())
+        .filter_map(|(_, f)| f.split_once('/').map(|(a, _)| a))
+        .filter(|a| *a != area)
+        .map(|a| format!("{area}/{KEEPS}{a}"))
+        .collect();
+    let gone: Vec<String> = s.recovery.marked.difference(&want).cloned().collect();
+    for n in gone {
+        if store.remove(&n).is_ok() {
+            s.recovery.marked.remove(&n);
+        }
+    }
+    for n in want {
+        if !s.recovery.marked.contains(&n) && store.write(&n, b"").is_ok() {
+            s.recovery.marked.insert(n);
+        }
     }
 }
 
@@ -670,6 +779,9 @@ pub fn claim(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<String> 
             }
         };
         s.recovery.own = Some(Own { store: store.clone(), area: area.clone(), hold, beats });
+        // The entries written before are in the area this session had (released or left).
+        s.recovery.marked.clear();
+        mark_left(s);
         return Ok(area);
     }
     Err(EngineError::Other("no free recovery area".into()))
@@ -686,6 +798,8 @@ pub fn release(s: &mut Session) {
         drop_left(s, uid);
     }
     let Some(Own { store, area, hold, .. }) = s.recovery.own.take() else { return };
+    // Its `keeps-` entries go with the area's other entries.
+    s.recovery.marked.clear();
     let mine = |n: &String| n.split_once('/').is_some_and(|(a, _)| a == area);
     for name in store.list().unwrap_or_default().iter().filter(|n| mine(n)) {
         let _ = store.remove(name);
@@ -831,6 +945,21 @@ fn sweep(store: &dyn RecoveryStore, area: &str) {
     }
 }
 
+/// The document's file `path` as a reply names it: under automation read roots, only inside them.
+fn shown_path(path: Option<String>) -> Option<String> {
+    path.filter(|p| crate::file_access::check_read(p).is_ok())
+}
+
+/// Where `store` keeps its copies, as a reply names it: a recovery folder outside the automation
+/// read roots is `null`.
+fn shown_location(store: &dyn RecoveryStore) -> Value {
+    let location = store.location();
+    if store.in_folder() && crate::file_access::check_read(&location).is_err() {
+        return Value::Null;
+    }
+    json!(location)
+}
+
 fn read_meta(store: &dyn RecoveryStore, file: &str) -> Meta {
     store.read(&format!("{file}{META_EXT}")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
@@ -931,6 +1060,7 @@ impl RecoveryJob {
                     let _ = store.remove(&format!("{file}{DOC_EXT}"));
                     let _ = store.remove(&format!("{file}{META_EXT}"));
                 }
+                mark_left(s);
             }
             // Best effort, as in `remove_copy`.
             _ => {
@@ -1127,7 +1257,7 @@ fn save(s: &mut Session, _: &Value) -> Result<Value> {
     }
     forget_clean(s);
     heartbeat(s);
-    Ok(json!({ "saved": saved, "skipped": skipped, "location": store.location() }))
+    Ok(json!({ "saved": saved, "skipped": skipped, "location": shown_location(store.as_ref()) }))
 }
 
 /// Who an area of the store belongs to.
@@ -1152,6 +1282,10 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
     }
     match store.lock(area) {
         Ok(Lock::Held(h)) => {
+            // Copies an app left here when it had to leave the area stay its own while it runs.
+            if let Some(who) = keeper(s, store, area) {
+                return who;
+            }
             hold.push(h);
             Owner::Gone
         }
@@ -1160,11 +1294,50 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
             if store.announced(area).unwrap_or(false) || beating(store, area, stale_after(s), s.recovery.adopted.get(area).copied()) {
                 return Owner::Running;
             }
+            if let Some(who) = keeper(s, store, area) {
+                return who;
+            }
             // Best effort: without it another app might offer the copies too, which loses nothing.
             if take && let Ok(t) = beat(store, area) {
                 s.recovery.adopted.insert(area.to_string(), t);
             }
             Owner::Gone
+        }
+    }
+}
+
+/// Who keeps the copies left in `area` by an app that had to leave it, from the entries
+/// `<its area>/keeps-<area>` ([`mark_left`]): this session, or another app that is running. `None`:
+/// no app that runs keeps them. An entry counts only in an area this account can lock or tell is
+/// held ([`holder`]), so an entry in a folder of another account, or in one whose lock can't be
+/// checked, keeps nothing. A store that can't be listed now keeps them (a copy kept loses nothing).
+fn keeper(s: &Session, store: &dyn RecoveryStore, area: &str) -> Option<Owner> {
+    let Ok(names) = store.list() else { return Some(Owner::Running) };
+    let mark = format!("/{KEEPS}{area}");
+    let mut who = None;
+    for k in names.iter().filter_map(|n| n.strip_suffix(mark.as_str())).filter(|k| *k != area) {
+        match holder(s, store, k) {
+            Owner::Mine => return Some(Owner::Mine),
+            Owner::Running => who = Some(Owner::Running),
+            Owner::Gone => {}
+        }
+    }
+    who
+}
+
+/// Whose area `area` is, without taking it over: this session's, a running app's, or nobody's (a
+/// lock taken to tell goes at once). An area whose lock fails (not a recovery area of this
+/// account, a lock file that can't be opened) is nobody's.
+fn holder(s: &Session, store: &dyn RecoveryStore, area: &str) -> Owner {
+    if s.recovery.own.as_ref().is_some_and(|o| o.area == area && o.store.location() == store.location()) {
+        return Owner::Mine;
+    }
+    match store.lock(area) {
+        Ok(Lock::Held(_)) | Err(_) => Owner::Gone,
+        Ok(Lock::Busy) => Owner::Running,
+        Ok(Lock::Unsupported) => {
+            let runs = store.announced(area).unwrap_or(false) || beating(store, area, stale_after(s), s.recovery.adopted.get(area).copied());
+            if runs { Owner::Running } else { Owner::Gone }
         }
     }
 }
@@ -1210,7 +1383,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
             let meta = read_meta(store.as_ref(), f);
             let title = if meta.title.is_empty() { f.rsplit('/').next().unwrap_or(f).to_string() } else { meta.title };
             rows.push(json!({
-                "file": f, "title": title, "path": meta.path, "format": meta.format, "saved": meta.saved,
+                "file": f, "title": title, "path": shown_path(meta.path), "format": meta.format, "saved": meta.saved,
                 "open": (who == Owner::Mine && open.contains(f)) || left.contains(f), "running": who == Owner::Running,
             }));
         }
@@ -1219,7 +1392,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
             tidy(store.as_ref(), &area, hold);
         }
     }
-    Ok(json!({ "copies": rows, "location": store.location() }))
+    Ok(json!({ "copies": rows, "location": shown_location(store.as_ref()) }))
 }
 
 /// A gone app's area to act on: its name, the copies to act on, and its lock.
@@ -1332,7 +1505,10 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     // The copy stays until the document is saved or closed.
     st.recovery = Some(RecoveryCopy { file: mine.clone(), doc: st.doc.clone() });
     let title = st.title();
-    Ok(super::fileio::merge(json!({ "index": index, "title": title, "file": mine, "path": meta.path, "warnings": warnings }), links.to_json()))
+    Ok(super::fileio::merge(
+        json!({ "index": index, "title": title, "file": mine, "path": shown_path(meta.path), "warnings": warnings }),
+        links.to_json(),
+    ))
 }
 
 fn restore(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1376,7 +1552,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Recovery Data",
             [],
             None,
-            "{} write a recovery copy of every modified document changed since its last copy, in this app's own area of the store (the app does this every autosaveInterval minutes while autosaveRecovery is on; documents of more than 20000 objects are skipped while recoveryOffForComplex is on). Images are stored apart, each once while unchanged. A copy goes when its document is saved, reverted or closed → {saved: [{file, title, bytes, imageBytes (images written this time)}], skipped: [{title, reason}], location} (location: the recovery folder, or browser storage on the web)",
+            "{} write a recovery copy of every modified document changed since its last copy, in this app's own area of the store (the app does this every autosaveInterval minutes while autosaveRecovery is on; documents of more than 20000 objects are skipped while recoveryOffForComplex is on). Images are stored apart, each once while unchanged. A copy goes when its document is saved, reverted or closed → {saved: [{file, title, bytes, imageBytes (images written this time)}], skipped: [{title, reason}], location} (location: the recovery folder, or browser storage on the web; null under automation read roots when the folder is outside them)",
             has_store,
             save
         ),
@@ -1385,7 +1561,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recovery Data",
             [],
             None,
-            "{} the recovery copies in the store → {copies: [{file (\"<area>/<name>\"), title, path (the document's file, if it had one), format, saved (Unix seconds or null), open (the copy of a document open here), running (kept by another VectorCraft that is running)}], location}; copies neither open nor running were left behind by a crash",
+            "{} the recovery copies in the store → {copies: [{file (\"<area>/<name>\"), title, path (the document's file, if it had one), format, saved (Unix seconds or null), open (the copy of a document open here), running (kept by another VectorCraft that is running)}], location}; copies neither open nor running were left behind by a crash; under automation read roots, path is null when the document's file is outside them, and location when the recovery folder is",
             has_store,
             list
         ),
@@ -1394,7 +1570,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Restore Recovered Documents",
             [],
             None,
-            "{file?} open a copy left behind by a crash (default: every one; a running VectorCraft's copies are never taken) as a new document titled \"<name> [Recovered]\": modified, and Save asks where to save it (suggesting its original file) → {restored: [{index, title, file, path, warnings, missingLinks, modifiedLinks, updatedLinks}], failed: [{file, error}] (damaged copies, when restoring every one; a named one fails the command)}. The copy moves to this app's area and stays until the document is saved or closed",
+            "{file?} open a copy left behind by a crash (default: every one; a running VectorCraft's copies are never taken) as a new document titled \"<name> [Recovered]\": modified, and Save asks where to save it (suggesting its original file) → {restored: [{index, title, file, path, warnings, missingLinks, modifiedLinks, updatedLinks}], failed: [{file, error}] (damaged copies, when restoring every one; a named one fails the command)}; under automation read roots, path is null when the original file is outside them. The copy moves to this app's area and stays until the document is saved or closed",
             has_store,
             restore
         ),
