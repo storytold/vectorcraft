@@ -180,6 +180,17 @@ the suite) keep the agent to the folders you give it:
   `null`; an empty folder and the scratch disk choices `Startup` and `None` stay. In `prefs.get {}` and
   `prefs.reset`, an export preset in `screenExportPresets` leaves out its `folder` when the folder is outside the
   read roots, and the preset stays. The preferences themselves are not changed.
+- `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
+  outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
+  folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
+  (also in `plugin.info`) are named by their file name, in the errors too. A plug-in turned off for the next
+  launch (`disabled`, and `pendingItem` in `plugin.safeMode`) has a file outside the read roots named by its file
+  name. `plugin.setEnabled {file}` takes that name, and a plug-in's `source` name, when no other listed file has
+  it. In `file.recovery.list` and `file.recovery.restore`, a
+  document's original file in `path` is `null`, and so is the recovery folder in `location` (`file.recovery.save`
+  too); the restored documents keep their files. In `scriptReport`, a file the run wrote (`written`) and the
+  included file a failed run stopped in (`file`, also in `message` and the run's error lines in `console`) are named
+  by their file name; what the script wrote itself (`log` and its output lines) stays as written.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
@@ -2317,9 +2328,12 @@ everything in it, and `select.all`, `select.allOnArtboard` and `select.inverse` 
 `brush.list`), whatever the brush is named; a brush of another type with "Bristle" in its name does not count.
 `select.object.notAlignedToPixelGrid` (Select › Object › Not Aligned to Pixel Grid) selects the paths and compound
 paths whose pixel-aligned property (`object.setPixelAligned`) is off and returns `{count}`. It goes by the property,
-not by where the anchors are: a path on whole points with the property off is selected. Guide paths, type, images,
-groups and other objects are not, nor are the paths inside a compound path, which takes the property as one object.
-It looks into groups, replaces the selection, and with no such object clears it; it records no undo step.
+not by where the anchors are: a path on whole points with the property off is selected. Guide paths, type (point,
+area and on a path), images, symbol instances, gradient meshes, placed documents, groups and other objects are not,
+nor are the paths inside a compound path, which takes the property as one object. A path with effects is selected
+as the path it is. It looks into groups, clip groups, blends, envelopes, repeats and Intertwine groups and selects the
+paths they hold, not the objects that hold them. It replaces the selection, and with no such object clears it; it
+records no undo step.
 `select.nextAbove` and `select.nextBelow` select the nearest such object above or below the first selected object
 among the objects beside it in its group or layer, passing over hidden and locked objects and sublayers. When there
 is no such object, the selection stays as it is.
@@ -3597,8 +3611,9 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: seven generated in code (Art Ribbons, Calligraphic Nibs, Bristle
-Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Game Trails, Energy Beams), the `.vectorcraft` files in the user library folder of the desktop app (User
+Brush libraries are read-only sets of brushes: eight generated in code (Art Ribbons, Calligraphic Nibs, Bristle
+Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
+Charcoal Dust art brushes, id `dry-media`), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
 `brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
@@ -7122,8 +7137,8 @@ chosen artboards draw all of them. A PDF leaves out the layers that don't print 
 ### Dynamic Text: Block
 
 `type.dynamicText {ids?|id?, on?: bool, wordGap?, lineGap?}` (Type › Dynamic Text, and the Contextual Task Bar for
-area type outside a thread) turns Block on or off for the
-selected area type, as it turns Dynamic Text on or off for type on a path ([Dynamic Text](#dynamic-text)). Area Type
+area type outside a thread and for point type) turns Block on or off for the
+selected area type, and turning it on makes point type area type with Block on (below), as it turns Dynamic Text on or off for type on a path ([Dynamic Text](#dynamic-text)). Area Type
 Options › Block is the same setting, and the Properties panel's Paragraph section has a Dynamic Text checkbox, which
 shows Word Gap and Line Gap while it is on. The [Dynamic Text overview](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/dynamic-text-overview.html)
 describes Block as text that scales to fill a rectangular box, with settings for the spacing between words and between
@@ -7137,7 +7152,7 @@ lines. The rest are VectorCraft's own rules:
 - The layout sets every paragraph with `wordGap` as its Desired word spacing (Justification…), and its Minimum or
   Maximum word spacing moves out to `wordGap` when `wordGap` lies outside it. The paragraphs keep their own
   Justification… values, which apply again when Block is off. Each character's leading is its size plus `lineGap`. A
-  gap given with no area type in the selection is an error.
+  gap given with no area type in the selection, and no point type that it turns into area type, is an error.
 - The sizes are written into the characters, so every export and the Character panel see them. After every edit to
   the text or the frame (typing, `text.editRange`, character and paragraph changes, `text.areaOptions {width}`, a
   frame resize) the lines are fitted again, in the edit's own undo step. The lines are then measured again, in at
@@ -7146,13 +7161,26 @@ lines. The rest are VectorCraft's own rules:
 - An empty line, or a line of spaces, keeps its size. At 1,296 pt a line can be narrower than the frame; at 0.1 pt it
   can still wrap. A frame with no room along its lines changes nothing. Right-to-left lines are fitted as left-to-right
   ones are.
-- Off keeps the sizes the text was drawn at. On replaces Auto Size and Shrink Text to Fit. Point type in the selection
-  is left as it is. Area type in a thread is refused with an error that names it (`text.areaOptions {fit: "block"}`
+- Off keeps the sizes the text was drawn at. On replaces Auto Size and Shrink Text to Fit. Area type in a thread is refused with an error that names it (`text.areaOptions {fit: "block"}`
   refuses it too); threading a frame turns Block off, keeping its sizes. Without `on`, it toggles from the first
   object's setting, or turns on when a gap is given. A value that is not a boolean, or a gap outside its range, is an
   error. When nothing changes, no undo step is recorded.
 - Saved and opened, the native file keeps Block on with its gaps and the sizes in the characters; with Block off it
   keeps the sizes.
+
+Turning it on also takes point type, in the same undo step (the Contextual Task Bar offers it beside Convert To Area
+Type). [Adjust formatting and resize text](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/adjust-formatting-and-resize-text-with-dynamic-text.html)
+applies Dynamic Text, Block among its shapes, to existing text. VectorCraft's own rules for point type:
+
+- It becomes area type with Block on and the default Area Type Options, keeping only its gaps: options it kept from
+  an earlier frame (columns, inset, vertical alignment, first baseline) do not carry over. Along its lines, the frame
+  is as wide as the widest line as typed with its paragraph's indents, so that line keeps its size and stays where it
+  was across the page by its own alignment; the other lines are set to that width. When negative indents take more
+  than the widest line's width, the frame is as wide as that line, and Block makes it larger. The frame starts at the
+  top of the text and then grows down (to the left for vertical type) to hold every fitted line, around any Text Wrap
+  objects above it, so nothing overflows.
+- The gaps given apply to its frame. Point type with no line to fit (empty, or only spaces and breaks) is left as it
+  is, and so is point type when `on` is false. Without `on`, point type counts as off.
 
 The reply is `{on, ids, fitScale, wordGap, lineGap}` (`fitScale` as for type on a path, 1 when the first object is area
 type; the gaps are the first area type's).
@@ -8009,8 +8037,8 @@ and tate-chu-yoko offsets by one factor, so runs keep their proportions; Type on
 scaled. The first character's size, in document points, moves in steps of 0.1 pt within 0.1 to 1,296 pt; text that
 still runs past the end bracket at 0.1 pt overflows. Reshaping or scaling the path fits the text again. The stored
 sizes do not change: turning Dynamic Text off writes the sizes the text was drawn at into its characters, so it keeps
-its look, in one undo step. Point type in the selection is left as it is, and area type in it takes Block
-([Dynamic Text: Block](#dynamic-text-block)). Type on a path in a
+its look, in one undo step. Area type in the selection takes Block, and turning it on makes point type in the
+selection area type with Block on ([Dynamic Text: Block](#dynamic-text-block)). Type on a path in a
 thread is refused with an error that names it, and the menu item and the task bar item are not offered for it;
 `text.thread.create` and `text.thread.add` turn Dynamic Text off on the frames they thread, at their drawn sizes, and
 list them in `dynamicTextOff`; `addon.type.releasePath` turns it off at the drawn sizes on the point type it makes. When every object already has the setting asked for, nothing changes and no undo step
@@ -8994,6 +9022,30 @@ pointer back moves them back at once; on a closed path they go on round across t
 value the open path is too short for sets the distance, the drag also sets `spacing` to the distance as drawn, so the
 objects stay that far apart. Shift and Alt do not change the drag. With measurement labels on, the first object's
 distance along the path shows next to the pointer in the document's units. Escape cancels the drag.
+
+The same tools show a Select/Move widget, a small ring, on each object's attachment point; the ring under the pointer
+is highlighted. A click on one chooses its object: it sends `object.objectsOnPath.selectMember {member}`, which
+selects the group alone with the object chosen, and the chosen object's ring is filled blue. Any other selection
+change clears the choice. A click on the object's art away from the ring selects the group as before. Dragging a ring
+along the path moves its
+object to the place of the object whose attachment point is nearest the pointer along the path, and previews
+`object.objectsOnPath.moveMember {group, member, target}`; the release keeps it as one undo step and chooses the
+object. A drag that ends on the object's own place, and Escape, keep nothing. On an open path a pointer beyond an end
+takes the place at that end; on a closed path the drag goes on round across the first anchor. Where two places are as
+near, the drag stays at the place it is at. A hidden or locked object has no widget, and a drag does not take or
+shift its place. Shift and Alt do not change the drag. The widgets for Rotate All, Space and
+Move All take a press before a Select/Move widget, and of Select/Move widgets on the same point a press takes the
+chosen one, else the first along the path.
+
+`object.objectsOnPath.moveMember {member, target, group?}` moves `member` to `target`'s place along the path: the
+objects between them each move one place toward where `member` was, except hidden and locked objects, which keep
+their places and are passed over. Both must be objects of the same Objects on Path
+group (not its path), and neither they nor the group may be hidden or locked; `group`, when given, must be that
+group. Only the
+order along the path changes: Space, the start, Pivot, Rotate and the children's order in the Layers panel stay. A
+`target` that is `member` changes nothing and records no undo step. It returns `{group, member, index}`, the object's
+new place along the path counted from 0. `object.objectsOnPath.selectMember {member}` takes the same kind of `member`
+and returns `{group, member}`.
 
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"objectsOnPath","values":{"pivot":7,"rotate":30}}}}

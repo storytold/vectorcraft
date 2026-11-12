@@ -6289,6 +6289,11 @@ axis	Y Axis	Y ღერძი
 	Grass Fan	ბალახის მარაო
 	Pattern Borders	პატერნის ბორდიურები
 	Scatter Shapes	გაბნეული ფიგურები
+	Dry Media	მშრალი მასალები
+	Chalk Grain	ცარცის მარცვალი
+	Graphite Pencil	გრაფიტის ფანქარი
+	Wax Crayon	ცვილის ფანქარი
+	Charcoal Dust	ნახშირის მტვერი
 	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
 @msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
 @msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)

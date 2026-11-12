@@ -6338,6 +6338,11 @@ axis	Y Axis	osa Y
 	Grass Fan	Vějíř na trávu
 	Pattern Borders	Vzorkové okraje
 	Scatter Shapes	Rozptýlené tvary
+	Dry Media	Suché techniky
+	Chalk Grain	Křídové zrno
+	Graphite Pencil	Grafitová tužka
+	Wax Crayon	Vosková pastelka
+	Charcoal Dust	Uhlový prach
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)

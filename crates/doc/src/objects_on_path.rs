@@ -180,6 +180,24 @@ impl ObjectsOnPath {
         });
         Some((spacing, start))
     }
+    /// Move the object `member` to the place on the path of the object `target`: the objects
+    /// between them each move one place toward where `member` was, except the objects for which
+    /// `fixed` is true, which keep their places and are passed over. Only the order changes, not the
+    /// Space or the start. Returns `member`'s new index, or `None` when either one is not an object
+    /// of the group.
+    pub fn move_member(&mut self, member: NodeId, target: NodeId, fixed: impl Fn(NodeId) -> bool) -> Option<usize> {
+        let moves = |id: NodeId| id == member || id == target || !fixed(id);
+        let slots: Vec<usize> = (0..self.members.len()).filter(|&i| moves(self.members[i].id)).collect();
+        let from = slots.iter().position(|&i| self.members[i].id == member)?;
+        let to = slots.iter().position(|&i| self.members[i].id == target)?;
+        let mut moving: Vec<_> = slots.iter().map(|&i| self.members[i]).collect();
+        let m = moving.remove(from);
+        moving.insert(to, m);
+        for (&i, m) in slots.iter().zip(moving) {
+            self.members[i] = m;
+        }
+        Some(slots[to])
+    }
     /// The children given new ids (a copy of the group): the path and the objects by their new ids.
     pub fn rename(&mut self, ids: &HashMap<NodeId, NodeId>) {
         let to = |id: NodeId| ids.get(&id).copied().unwrap_or(id);
@@ -485,6 +503,36 @@ mod tests {
         // At most a quarter of the way round each: no two objects meet at the first anchor.
         assert_eq!(pts(Some(300.0), 0.0), [(0, 0), (100, 0), (100, 100), (0, 100)]);
         assert_eq!(layout(400.0, true, 4, Some(300.0), 400.0), (0.0, 100.0));
+    }
+
+    #[test]
+    fn moving_an_object_shifts_the_ones_between_it_and_its_new_place() {
+        let (a, b, c) =
+            (rect(2, Rect::new(0.0, 0.0, 10.0, 10.0)), rect(3, Rect::new(20.0, 0.0, 30.0, 10.0)), rect(4, Rect::new(40.0, 0.0, 50.0, 10.0)));
+        let rec = ObjectsOnPath { spacing: Some(30.0), start: 5.0, ..ObjectsOnPath::new(NodeId(1), &[&a, &b, &c], CENTER, 15.0) };
+        let order = |r: &ObjectsOnPath| r.members.iter().map(|m| m.id.0).collect::<Vec<_>>();
+        let free = |_: NodeId| false;
+        let mut fwd = rec.clone();
+        assert_eq!(fwd.move_member(NodeId(2), NodeId(4), free), Some(2));
+        assert_eq!(order(&fwd), [3, 4, 2], "the first to the last place");
+        assert_eq!((fwd.spacing, fwd.start, fwd.pivot, fwd.rotate), (rec.spacing, rec.start, rec.pivot, rec.rotate));
+        let mut back = rec.clone();
+        assert_eq!(back.move_member(NodeId(4), NodeId(2), free), Some(0));
+        assert_eq!(order(&back), [4, 2, 3], "the last to the first place");
+        let mut same = rec.clone();
+        assert_eq!(same.move_member(NodeId(3), NodeId(3), free), Some(1));
+        assert_eq!(same, rec, "onto its own place");
+        let mut other = rec.clone();
+        assert_eq!(other.move_member(NodeId(1), NodeId(3), free), None, "the path is not one of the objects");
+        assert_eq!(other.move_member(NodeId(3), NodeId(9), free), None);
+        assert_eq!(other, rec);
+        // A fixed object between them keeps its place; the others pass over it.
+        let mut over = rec.clone();
+        assert_eq!(over.move_member(NodeId(2), NodeId(4), |id| id == NodeId(3)), Some(2));
+        assert_eq!(order(&over), [4, 3, 2], "the first and last trade places round the fixed one");
+        let mut back_over = rec.clone();
+        assert_eq!(back_over.move_member(NodeId(4), NodeId(2), |id| id == NodeId(3)), Some(0));
+        assert_eq!(order(&back_over), [4, 3, 2]);
     }
 
     #[test]
