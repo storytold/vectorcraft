@@ -153,7 +153,10 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             match kind {
                 TextKind::Area { .. } => items.push((tl!("Convert To Point Type"), "type", "type.convertToPointType", none())),
                 TextKind::Point => items.push((tl!("Convert To Area Type"), "dc-type-area", "type.convertToAreaType", none())),
-                TextKind::OnPath { .. } => items.push((tl!("Type on a Path Options"), "dc-type-path", "type.pathOptions", none())),
+                TextKind::OnPath { .. } => {
+                    items.push((tl!("Type on a Path Options"), "dc-type-path", "type.pathOptions", none()));
+                    center_on_path_items(app, &mut items);
+                }
             }
             // Dynamic Text turns on or off for type on a path and area type (Block), as the Type menu's item does;
             // left out for point type and type in a thread, which is VectorCraft's own rule
@@ -347,6 +350,18 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
         Some((c, p)) => crate::menus::invoke(app, c, p),
         None => {}
+    }
+}
+
+/// The Contextual Task Bar's Center on Top and Center on Bottom, as in the Type menu, for type on a
+/// closed path.
+fn center_on_path_items(app: &VectorcraftApp, items: &mut Vec<(&'static str, &'static str, &'static str, serde_json::Value)>) {
+    for (label, icon, id) in
+        [(tl!("Center on Top"), "dc-al-top", "type.pathCenter.top"), (tl!("Center on Bottom"), "dc-al-bottom", "type.pathCenter.bottom")]
+    {
+        if crate::menus::enabled(app, id) {
+            items.push((label, icon, id, json!({})));
+        }
     }
 }
 
