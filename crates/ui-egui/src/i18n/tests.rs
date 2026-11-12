@@ -3168,7 +3168,7 @@ fn hebrew_shape_transform_and_color_panels_are_translated() {
     let he = Lang::from_code("he").expect("Hebrew locale registered");
     let (rows, errors) = parse_entries(he.0.source);
     assert!(errors.is_empty(), "{errors:?}");
-    assert_eq!(rows.len(), 1209, "Hebrew catalog source records");
+    assert_eq!(rows.len(), 1386, "Hebrew catalog source records");
     for source in [
         "Arrange",
         "Blend Tool",
@@ -3206,4 +3206,53 @@ fn hebrew_shape_transform_and_color_panels_are_translated() {
     assert_eq!(tr(he, "Opacity Mask"), "מסכת אטימות");
     assert_eq!(tr(he, "Unite"), "איחוד");
     assert_eq!(tr(he, "User-authored shape name"), "User-authored shape name");
+}
+
+/// Image tracing, perspective, artboard and history operations are visible in
+/// Hebrew without changing file paths, dynamic labels or source English IDs.
+#[test]
+fn hebrew_image_trace_perspective_and_artboard_controls_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(rows.len(), 1386, "current source-linked Hebrew rows");
+    for source in [
+        "Image Trace",
+        "Image Trace Presets",
+        "Pen Tool",
+        "Pencil Tool",
+        "Perspective Grid",
+        "Perspective Grid Tool",
+        "Perspective Grid Presets…",
+        "Zoom to Selection",
+        "Zoom with Mouse Wheel",
+        "Select an image to trace",
+        "Select by Link Status…",
+        "Asset Export Settings",
+        "Close Path",
+        "History Options…",
+        "New Document from State",
+        "Lock Guides",
+        "Show Rulers (⌘R)",
+        "Undo {name}",
+        "Redo {name}",
+        "Artboard {n} of {total}",
+        "Show {kind} Brushes",
+        "Show Perspective Grid",
+        "Document Health Check",
+        "File SHA-256: {hash}",
+        "Unlock Selected",
+        "Hide VectorCraft",
+        "Selection Tools",
+    ] {
+        let translated = tr(he, source);
+        assert_ne!(translated, source, "untranslated native source label: {source:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)));
+        assert_eq!(tr(Lang::EN, source), source, "original English must stay unchanged");
+    }
+    assert_eq!(tr(he, "Image Trace"), "מעקב תמונה");
+    assert_eq!(tr(he, "Pen Tool"), "כלי עט");
+    assert_eq!(tr(he, "Perspective Grid"), "רשת פרספקטיבה");
+    assert_eq!(tr(he, "Locked"), "נעול");
+    assert_eq!(tr(he, "User canvas object name"), "User canvas object name");
 }

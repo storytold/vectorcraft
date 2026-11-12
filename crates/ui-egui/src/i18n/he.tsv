@@ -1226,3 +1226,182 @@
 	Filled Open Paths	נתיבים פתוחים בעלי מילוי
 	Color Effects	אפקטי צבע
 	Color Effects Panel	חלונית אפקטי צבע
+
+# Round 10: image trace, perspective tools, viewport, history, visibility and artwork selection.
+	Image Trace (Make and Expand)	מעקב תמונה (יצירה והרחבה)
+	Image	תמונה
+	Image Info	מידע על התמונה
+	Image Map:	מפת תמונה:
+	Image Size	גודל תמונה
+	Image Trace	מעקב תמונה
+	Image Tracing	מעקב אחר תמונות
+	Image Trace Presets	ערכות הגדרות למעקב תמונה
+	Image:	תמונה:
+	Images:	תמונות:
+	Panel menu	תפריט חלונית
+	Panel Options…	אפשרויות חלונית…
+	Panels	חלוניות
+	Pen Tool	כלי עט
+	Pencil	עיפרון
+	Pencil Tool	כלי עיפרון
+	Perspective	פרספקטיבה
+	Perspective Grid	רשת פרספקטיבה
+	Perspective Grid Options	אפשרויות רשת פרספקטיבה
+	Perspective Grid Preset	ערכת הגדרות רשת פרספקטיבה
+	Perspective Grid Presets	ערכות הגדרות רשת פרספקטיבה
+	Perspective grid presets	ערכות הגדרות רשת פרספקטיבה
+	Perspective Grid Presets…	ערכות הגדרות רשת פרספקטיבה…
+	Perspective Grid Settings	הגדרות רשת פרספקטיבה
+	Perspective Grid Tool	כלי רשת פרספקטיבה
+	Perspective Plane Options…	אפשרויות מישור פרספקטיבה…
+	Perspective Selection Tool	כלי בחירה בפרספקטיבה
+	Images	תמונות
+	Select All Assets	בחירת כל הנכסים
+	Select All Instances	בחירת כל המופעים
+	Select All Pins	בחירת כל הנעצים
+	Select an image to see its Link Info.	בחרו תמונה לצפייה במידע על הקישור שלה.
+	Select an image to trace	בחרו תמונה למעקב
+	Select Same Tint %	בחירת אותו אחוז גוון
+	Selected Swatches Only	דוגמיות צבע שנבחרו בלבד
+	View:	תצוגה:
+	Image Trace View	תצוגת מעקב תמונה
+	Image Trace Preview	תצוגה מקדימה למעקב תמונה
+	Trace	מעקב
+	Trace the image with the Default preset	מעקב אחר התמונה באמצעות ערכת ברירת המחדל
+	View Artboard Only	הצגת משטח היצירה בלבד
+	View Opacity Mask	הצגת מסכת האטימות
+	View {n}	תצוגה {n}
+	Viewing Angle:	זווית צפייה:
+	Viewing Distance:	מרחק צפייה:
+	Zoom In	הגדלת תצוגה
+	Zoom Out	הקטנת תצוגה
+	Zoom to Selection	התאמת התצוגה לבחירה
+	Zoom Tool	כלי שינוי תקריב
+	Zoom with Mouse Wheel	שינוי תקריב באמצעות גלגלת העכבר
+	Zoom	תקריב
+	Select Data Set	בחירת ערכת נתונים
+	Select Bound Object	בחירת אובייקט מקושר לנתונים
+	Select All Bound Objects	בחירת כל האובייקטים המקושרים לנתונים
+	Draw Mode Controls	פקדי מצב ציור
+	Brush Size	גודל מברשת
+	Brush Detail	פירוט מברשת
+	Select artwork to apply effects	בחרו יצירה להחלת אפקטים
+	Select by Color	בחירה לפי צבע
+	Panel	חלונית
+	Select objects to adjust their colors.	בחרו אובייקטים כדי להתאים את הצבעים שלהם.
+	Select by Color Kind	בחירה לפי סוג צבע
+	Select by Artboards	בחירה לפי משטחי יצירה
+	Select by Artboards…	בחירה לפי משטחי יצירה…
+	Selection Tools	כלי בחירה
+	Select Linked	בחירת פריטים מקושרים
+	Select Embedded	בחירת פריטים מוטמעים
+	Select Missing	בחירת פריטים חסרים
+	Select Modified	בחירת פריטים ששונו
+	Select by Link Status	בחירה לפי מצב קישור
+	Select by Link Status…	בחירה לפי מצב קישור…
+	Asset Export	ייצוא נכסים
+	Asset Export Settings	הגדרות ייצוא נכסים
+	Assets	נכסים
+	Show Tool Group Labels	הצגת שמות קבוצות הכלים
+	Show Center Mark	הצגת סימן מרכז
+	Show Cross Hairs	הצגת צלבי סימון
+	Show Video Safe Areas	הצגת אזורים בטוחים לווידאו
+	Canvas Color	צבע משטח העבודה
+	Close Library	סגירת ספרייה
+	Close Path	סגירת נתיב
+	Close paths when ends are within:	סגירת נתיבים כשהמרחק בין הקצוות קטן מ:
+	Close Gaps With Paths	סגירת פערים באמצעות נתיבים
+	History	היסטוריה
+	History Options…	אפשרויות היסטוריה…
+	New Document from State	יצירת מסמך חדש ממצב שמור
+	History States	מצבי היסטוריה
+	Place from Library	הצבה מתוך ספרייה
+	Lock	נעילה
+	Lock (⌘2)	נעילה (⌘2)
+	Lock Grid	נעילת רשת
+	Lock Guides	נעילת קווי עזר
+	Lock Guides by Default	נעילת קווי עזר כברירת מחדל
+	Lock Others	נעילת האחרים
+	Lock Slices	נעילת פרוסות
+	New Art Appearance	מראה גרפי חדש
+	New Art Brush from Selection	מברשת יצירה חדשה מהבחירה
+	New Bristle Brush	מברשת זיפים חדשה
+	New Calligraphic Brush	מברשת קליגרפית חדשה
+	New Pattern Brush from Selection	מברשת דוגמה חדשה מהבחירה
+	New Scatter Brush from Selection	מברשת פיזור חדשה מהבחירה
+	New theme from the current color	ערכת נושא חדשה מהצבע הנוכחי
+	New Toolbar	סרגל כלים חדש
+	Show Toolbar	הצגת סרגל כלים
+	New {kind} Style…	סגנון {kind} חדש…
+	Place	הצבה
+	Place DXF	הצבת DXF
+	Placed File Info	מידע על הקובץ שהוצב
+	Placement Options	אפשרויות הצבה
+	Placement Options…	אפשרויות הצבה…
+	Placement:	הצבה:
+	Preset {}	ערכת הגדרות {}
+	Presets:	ערכות הגדרות:
+	Redo {name}	ביצוע חוזר של {name}
+	Redo {}	ביצוע חוזר של {}
+	Preset {number}	ערכת הגדרות {number}
+	Locked	נעול
+	Show Active Plane Widget	הצגת פקד המישור הפעיל
+	Show All Hidden Attributes	הצגת כל המאפיינים המוסתרים
+	Show All Plates	הצגת כל לוחות הדפוס
+	Show all plates	הצגת כל לוחות הדפוס
+	Show All Swatches	הצגת כל דוגמיות הצבע
+	Show Color Groups	הצגת קבוצות צבעים
+	Show East Asian Options	הצגת אפשרויות לשפות מזרח אסיה
+	Show Embedded	הצגת פריטים מוטמעים
+	Show Link Info	הצגת מידע על הקישור
+	Show List View	הצגת תצוגת רשימה
+	Show Note	הצגת הערה
+	Show Package	הצגת אריזה
+	Show Panel	הצגת חלונית
+	Show Perspective Grid	הצגת רשת פרספקטיבה
+	Show Rulers (⌘R)	הצגת סרגלים (⌘R)
+	Show Tile Edge	הצגת קצה אריח
+	Show Tints/Shades	הצגת גוונים בהירים וכהים
+	Show Vivid/Muted	הצגת צבעים עזים ומעומעמים
+	Show Warm/Cool	הצגת צבעים חמים וקרים
+	Show {kind} Brushes	הצגת מברשות מסוג {kind}
+	Show:	הצגה:
+	Show Library	הצגת ספרייה
+	Show all open documents	הצגת כל המסמכים הפתוחים
+	Undo {name}	ביטול הפעולה {name}
+	Undo {}	ביטול הפעולה {}
+	Unlock	ביטול נעילה
+	Unlock All	ביטול נעילת הכול
+	Unlock All Layers	ביטול נעילת כל השכבות
+	Unlock Grid	ביטול נעילת רשת
+	Unlock Guides	ביטול נעילת קווי עזר
+	Hide VectorCraft	הסתרת VectorCraft
+	Artboard	משטח יצירה
+	New Library Group	קבוצת ספרייה חדשה
+	New Group	קבוצה חדשה
+	Canvas	משטח עבודה
+	New Variable	משתנה חדש
+	Lock Variables	נעילת משתנים
+	Unlock Variables	ביטול נעילת משתנים
+	New Data Set	ערכת נתונים חדשה
+	New Variable…	משתנה חדש…
+	New Data Set…	ערכת נתונים חדשה…
+	Close Panel	סגירת חלונית
+	Show axis	הצגת ציר
+	Presets	ערכות הגדרות
+	Artboard {n} of {total}	משטח יצירה {n} מתוך {total}
+	File {n} of {total}	קובץ {n} מתוך {total}
+	Lock Artboards	נעילת משטחי יצירה
+	Unlock Artboards	ביטול נעילת משטחי יצירה
+	Lock Selected	נעילת הפריטים שנבחרו
+	Lock All Except Selected	נעילת הכול מלבד הפריטים שנבחרו
+	Lock All	נעילת הכול
+	Unlock Selected	ביטול נעילת הפריטים שנבחרו
+	Closed	סגור
+	File SHA-256: {hash}	SHA-256 של הקובץ: {hash}
+	Document Health Check	בדיקת תקינות המסמך
+	Close Path:	סגירת נתיב:
+	Close or Join	סגירה או חיבור
+	Close Path…	סגירת נתיב…
+	Document Tools	כלי מסמך
+	New Symbols from Layers	יצירת סמלים חדשים משכבות
