@@ -3062,6 +3062,9 @@ theme	Appearance	Εμφάνιση
 	Optical	Οπτική
 	Optical Margin Alignment	Οπτική στοίχιση περιθωρίου
 	Dynamic Text	Δυναμικό κείμενο
+	Dynamic Text Presets	Προεπιλογές δυναμικού κειμένου
+	Arch	Αψίδα
+@msg	select point type or type on a path	επιλέξτε κείμενο σημείου ή κείμενο σε διαδρομή
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	το κείμενο σε διαδρομή μέσα σε συνδεδεμένο κείμενο δεν μπορεί να χρησιμοποιήσει δυναμικό κείμενο: {frames}
 	Optimize for fast web view	Βελτιστοποίηση για γρήγορη προβολή στον ιστό
 	Options for Selection…	Επιλογές για την επιλογή…

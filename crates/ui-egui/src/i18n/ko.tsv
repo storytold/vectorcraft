@@ -428,6 +428,9 @@ digits	Malayalam	말라얄람어
 	Create Outlines	윤곽선 만들기
 	Optical Margin Alignment	시각적 여백 정렬
 	Dynamic Text	동적 텍스트
+	Dynamic Text Presets	동적 텍스트 사전 설정
+	Arch	아치
+@msg	select point type or type on a path	포인트 문자 또는 패스 위 문자를 선택하십시오
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	연결된 문자의 패스 위 문자에는 동적 텍스트를 사용할 수 없습니다: {frames}
 	Fill with Placeholder Text	자리 표시 문자로 채우기
 	Insert Inline Symbol	인라인 심볼 삽입

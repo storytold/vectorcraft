@@ -1444,7 +1444,7 @@ These commands refuse a string, a number or another value that is not true or fa
 and `text.createInPath`; `underline`, `strikethrough`, `allCaps`, `proportionalMetrics`, `tateChuYoko`, `standardVerticalRoman` and `noBreak`
 in `text.setRangeStyle` and `text.setFormat`, which also checks `hyphenate`, `hyphenateCapitalized` and
 `romanHangingPunctuation`; `effective` and `story` in `text.getRange`; `story` in `text.setRangeStyle`; `on` in `type.opticalMarginAlignment`, `type.dynamicText`, `type.systemLayout`
-and `type.fractionalWidths`; `remove` and `overhang` in `type.ruby`; `expandInstances` in `symbol.delete`; `alt` in
+and `type.fractionalWidths`; `flip` in `type.dynamicTextPreset`; `remove` and `overhang` in `type.ruby`; `expandInstances` in `symbol.delete`; `alt` in
 `symbol.spray` and `symbol.adjust`; `spot` and `global` in `swatch.new` and `swatch.edit`; `unlink` in
 `swatch.delete`; `fromArtwork`, `toGlobal` and `includeTints` in `swatch.newGroup`; `global` and `selection` in
 `swatch.addUsedColors`; `visible` in `appearance.setItem`; `copy` in `appearance.transfer`; `reverse` and `append` in
@@ -7590,6 +7590,31 @@ so in a warning.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.dynamicText","params":{"on":true}}}
+```
+
+`type.dynamicTextPreset {preset: "circle"|"arch"|"bow", position?: "above"|"center"|"below", flip?: bool, ids?}`
+(Type › Dynamic Text Presets › Circle, Arch and Bow) puts the selected point type and type on a path on a new path
+of the preset's shape and turns Dynamic Text on, so the text is sized to fill it. Circle puts the text on a circular
+path, Arch on an upward-curving path and Bow on a downward-curving one; `position` sets where the text sits against
+the path (above, center or below) and `flip` turns its direction
+([Dynamic Text overview](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/dynamic-text-overview.html)).
+The shapes and the rest of this entry are VectorCraft's own rules. The circle is as wide as the text, and the text
+runs clockwise round all of it from its bottom. Arch and Bow are a 120° arc of a circle whose chord is as wide as the
+text, bulging up or down, and the text runs along it from left to right. The width is, for point type, the length on the
+page of the longer side of the text's bounds, and for type on a path the longer side of its path's bounds on the
+page, so the same preset again leaves it as it is; the new path is centered where they were, and
+the shape is upright on the page when the object is rotated or scaled. Empty point type gets a path four ems of its
+first character wide. `position` (omitted:
+above) sets Type on a Path Options › Align to Path: above is Descender, center is Center and below is Ascender.
+`flip: true` then turns the text to the other side of its path, running the other way, as Type on a Path Options ›
+Flip does. Type on a Path Options › effect and Spacing stay as they are, and Type on a Path Options, the brackets and
+Type › Dynamic Text change the result afterwards. Area type in the selection is left as it is; with no point type
+or type on a path selected the command refuses with `` select point type or type on a path ``, and type on a path in
+a thread is refused as `type.dynamicText` refuses it. A preset that would leave every object as it is records no
+undo step. It replies `{ids, fitScale}` (the first object's factor).
+
+```json
+{"name":"run_command","arguments":{"command":"type.dynamicTextPreset","params":{"preset":"arch","position":"center"}}}
 ```
 
 ## Paragraph attributes per paragraph

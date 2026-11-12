@@ -2275,6 +2275,9 @@ font-technology	Variable	Variabla
 	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
 	Dynamic Text	Dynamisk text
+	Dynamic Text Presets	Förinställningar för dynamisk text
+	Arch	Valv
+@msg	select point type or type on a path	markera punkttext eller text på bana
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text på bana i länkad text kan inte använda dynamisk text: {frames}
 	Optimize for fast web view	Optimera för snabb webbvisning
 	Optimized	Optimerad

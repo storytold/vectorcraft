@@ -2328,6 +2328,9 @@ font-technology	Variable	Variables
 	Optical	Optique
 	Optical Margin Alignment	Alignement optique des marges
 	Dynamic Text	Texte dynamique
+	Dynamic Text Presets	Paramètres prédéfinis du texte dynamique
+	Arch	Voûte
+@msg	select point type or type on a path	sélectionnez du texte de point ou du texte curviligne
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	le texte curviligne d’un texte lié ne peut pas utiliser le texte dynamique : {frames}
 	Optimize for fast web view	Optimiser pour un affichage web rapide
 	Optimized	Optimisé

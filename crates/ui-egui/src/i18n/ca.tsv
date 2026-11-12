@@ -2892,6 +2892,9 @@ digits	Malayalam	Malaiàlam
 	Optical	Òptic
 	Optical Margin Alignment	Alineació òptica de marges
 	Dynamic Text	Text dinàmic
+	Dynamic Text Presets	Valors predefinits de text dinàmic
+	Arch	Volta
+@msg	select point type or type on a path	seleccioneu text de punt o text sobre un traçat
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el text sobre un traçat d’un text enllaçat no pot fer servir el text dinàmic: {frames}
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat

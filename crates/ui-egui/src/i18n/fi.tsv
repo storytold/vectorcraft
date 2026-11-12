@@ -404,6 +404,9 @@
 	Create Outlines	Muunna ääriviivoiksi
 	Optical Margin Alignment	Optinen reunustasaus
 	Dynamic Text	Dynaaminen teksti
+	Dynamic Text Presets	Dynaamisen tekstin esiasetukset
+	Arch	Holvi
+@msg	select point type or type on a path	valitse pisteteksti tai polkuteksti
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	ketjutetun tekstin polkuteksti ei voi käyttää dynaamista tekstiä: {frames}
 	Fill with Placeholder Text	Täytä paikkamerkkitekstillä
 	Insert Inline Symbol	Lisää tekstinsisäinen symboli

@@ -2147,6 +2147,9 @@ shape	Open	Açık
 	Optical	Optik
 	Optical Margin Alignment	Optik Kenar Boşluğu Hizalaması
 	Dynamic Text	Dinamik Metin
+	Dynamic Text Presets	Dinamik Metin Hazır Ayarları
+	Arch	Kemer
+@msg	select point type or type on a path	nokta metni veya yol üzerindeki yazıyı seçin
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	zincirli metindeki yol üzerindeki yazı dinamik metin kullanamaz: {frames}
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
