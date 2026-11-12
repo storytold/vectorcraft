@@ -5904,6 +5904,7 @@ axis	Y Axis	Sumbu Y
 	Version: {version}	Versi: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal “{name}” sebagai pengganti plug-in dengan ID yang sama?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	File ini bukan plug-in yang sebelumnya diinstal dengan ID ini. File ini mendapatkan pengaturan dan cache yang disimpan untuk ID tersebut.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Otomatisasi meminta untuk menginstal plug-in ini. Untuk menginstalnya, pilih Objek › Plug-in › Instal plug-in… sendiri.
 	File SHA-256: {hash}	SHA-256 file: {hash}
 	Read the objects it is given	Membaca objek yang diberikan kepadanya
 	Change, add and delete objects in the document	Mengubah, menambah, dan menghapus objek dalam dokumen

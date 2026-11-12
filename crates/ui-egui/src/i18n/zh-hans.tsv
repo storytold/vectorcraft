@@ -5913,6 +5913,8 @@ axis	Y Axis	Y 轴
 	Version: {version}	版本：{version}
 	Install “{name}” in place of the plug-in with the same ID?	要安装“{name}”来替换具有相同 ID 的插件吗？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此文件不是之前以此 ID 安装的插件。它将获得为该 ID 保存的设置和缓存。
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自动化请求安装此增效工具。要安装它，请自行选择“对象 › 增效工具 › 安装增效工具…”。
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自动化请求安装此增效工具。要安装它，请自行选择“对象 › 增效工具 › 安装增效工具…”。
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”与 ID 为 {_1} 的插件是不同的模块，并会获得为其保存的设置和缓存：请在用户同意后使用 `replace: true` 安装
 	File SHA-256: {hash}	文件 SHA-256：{hash}
 	Read the objects it is given	读取交给它的对象

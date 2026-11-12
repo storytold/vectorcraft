@@ -5955,6 +5955,7 @@ axis	Y Axis	Y-as
 	Version: {version}	Versie: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}” installeren in plaats van de plug-in met dezelfde ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Dit bestand is niet de plug-in die eerder met deze ID was geïnstalleerd. Het krijgt de instellingen en cache die voor die ID bewaard zijn.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Een automatisering heeft gevraagd deze plug-in te installeren. Kies zelf Object › Plug-ins › Plug-in installeren… om hem te installeren.
 	File SHA-256: {hash}	SHA-256 van het bestand: {hash}
 	Read the objects it is given	De objecten lezen die het krijgt
 	Change, add and delete objects in the document	Objecten in het document wijzigen, toevoegen en verwijderen

@@ -6031,6 +6031,8 @@ axis	Y Axis	Y ekseni
 	Version: {version}	Sürüm: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Aynı kimliğe sahip eklentinin yerine “{name}” yüklensin mi?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Bu dosya, daha önce bu kimlikle yüklenen eklenti değil. O kimlik için saklanan ayarları ve önbelleği alır.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Bir otomasyon bu eklentinin yüklenmesini istedi. Yüklemek için Nesne › Eklentiler › Eklentiyi Yükle… komutunu kendiniz seçin.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Bir otomasyon bu eklentinin yüklenmesini istedi. Yüklemek için Nesne › Eklentiler › Eklentiyi Yükle… komutunu kendiniz seçin.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”, {_1} kimlikli eklentiden farklı bir modül ve onun için saklanan ayarları ve önbelleği alacak: kullanıcı onayladıktan sonra `replace: true` ile yükleyin
 	File SHA-256: {hash}	Dosya SHA-256: {hash}
 	Read the objects it is given	Kendisine verilen nesneleri okuma

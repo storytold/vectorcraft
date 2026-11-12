@@ -5653,6 +5653,8 @@ axis	Y Axis	Y축
 	Version: {version}	버전: {version}
 	Install “{name}” in place of the plug-in with the same ID?	같은 ID의 플러그인 대신 “{name}”을(를) 설치하시겠습니까?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	이 파일은 이전에 이 ID로 설치된 플러그인이 아닙니다. 이 ID에 보관된 설정과 캐시를 받습니다.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	자동화가 이 플러그인 설치를 요청했습니다. 설치하려면 직접 개체 › 플러그인 › 플러그인 설치…를 선택하세요.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	자동화가 이 플러그인 설치를 요청했습니다. 설치하려면 직접 개체 › 플러그인 › 플러그인 설치…를 선택하세요.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”은(는) ID {_1}의 플러그인과 다른 모듈이며 그 플러그인에 보관된 설정과 캐시를 받게 됩니다. 사용자가 동의하면 `replace: true`로 설치하세요
 	File SHA-256: {hash}	파일 SHA-256: {hash}
 	Read the objects it is given	전달받은 개체 읽기

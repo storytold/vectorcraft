@@ -6058,6 +6058,8 @@ axis	Y Axis	Y tengely
 	Version: {version}	Verzió: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Telepíted a(z) „{name}” bővítményt az azonos azonosítójú bővítmény helyére?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ez a fájl nem az a bővítmény, amely korábban ezzel az azonosítóval volt telepítve. Megkapja az ehhez az azonosítóhoz tárolt beállításokat és gyorsítótárat.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Egy automatizálás kérte ennek a bővítménynek a telepítését. A telepítéshez válaszd ki te magad az Objektum › Bővítmények › Bővítmény telepítése… parancsot.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Egy automatizálás kérte ennek a bővítménynek a telepítését. A telepítéshez válaszd ki te magad az Objektum › Bővítmények › Bővítmény telepítése… parancsot.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	a(z) „{name}” más modul, mint a(z) {_1} azonosítójú bővítmény, és megkapná az ahhoz tárolt beállításokat és gyorsítótárat: telepítsd a `replace: true` megadásával, miután a felhasználó beleegyezett
 	File SHA-256: {hash}	A fájl SHA-256 értéke: {hash}
 	Read the objects it is given	Olvashatja a kapott objektumokat

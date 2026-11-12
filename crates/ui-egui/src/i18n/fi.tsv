@@ -6105,6 +6105,8 @@ axis	Y Axis	Y-akseli
 	Version: {version}	Versio: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Asennetaanko ”{name}” samaa tunnusta käyttävän laajennuksen tilalle?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tämä tiedosto ei ole laajennus, joka oli aiemmin asennettu tällä tunnuksella. Se saa tälle tunnukselle säilytetyt asetukset ja välimuistin.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automaatio pyysi tämän laajennuksen asentamista. Valitse itse Objekti › Laajennukset › Asenna laajennus…, jos haluat asentaa sen.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automaatio pyysi tämän laajennuksen asentamista. Valitse itse Objekti › Laajennukset › Asenna laajennus…, jos haluat asentaa sen.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	”{name}” on eri moduuli kuin laajennus, jonka tunnus on {_1}, ja se saisi sille säilytetyt asetukset ja välimuistin: asenna se asetuksella `replace: true`, kun käyttäjä hyväksyy
 	File SHA-256: {hash}	Tiedoston SHA-256: {hash}
 	Read the objects it is given	Lukea sille annetut objektit

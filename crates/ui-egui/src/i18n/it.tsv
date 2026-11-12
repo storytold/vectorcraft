@@ -5692,6 +5692,8 @@ axis	Y Axis	Asse Y
 	Version: {version}	Versione: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installare “{name}” al posto del plug-in con lo stesso ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Questo file non è il plug-in installato prima con questo ID. Riceve le impostazioni e la cache conservate per quell’ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Un’automazione ha chiesto di installare questo plug-in. Per installarlo, scegli Oggetto › Plug-in › Installa plug-in… di persona.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Un’automazione ha chiesto di installare questo plug-in. Per installarlo, scegli Oggetto › Plug-in › Installa plug-in… di persona.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” è un modulo diverso dal plug-in con ID {_1} e riceverebbe le impostazioni e la cache conservate per esso: installalo con `replace: true` quando l’utente acconsente
 	File SHA-256: {hash}	SHA-256 del file: {hash}
 	Read the objects it is given	Leggere gli oggetti che riceve

@@ -5889,6 +5889,7 @@ axis	Y Axis	Y ос
 	Version: {version}	Версия: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Да се инсталира ли „{name}“ на мястото на приставката със същия ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Този файл не е приставката, инсталирана преди с този ID. Той получава настройките и кеша, пазени за този ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизация поиска инсталирането на тази приставка. За да я инсталирате, изберете Обект › Приставки › Инсталиране на приставка… сами.
 	File SHA-256: {hash}	SHA-256 на файла: {hash}
 	Read the objects it is given	Четене на обектите, които получава
 	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа

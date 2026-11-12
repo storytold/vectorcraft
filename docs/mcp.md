@@ -8009,7 +8009,10 @@ needs a person's approval too, and `plugin.install` refuses `grant: [permission]
 app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,
 `ui.dialog.confirm` and injected input can't confirm it. Its OK takes input only once the question has been on screen
 in the focused window for half a second, counted again for every new question and after the window gets the focus
-back. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
+back. A question that a request asked, directly or through a file dialog it opened, can't be approved by the person
+either: the reply adds `approval: "personMustStartInstall"`, OK stays disabled, and the person installs the plug-in
+with Object › Plug-ins › Install Plug-in… themselves. A request's `replace: true` doesn't skip the question about
+taking another module's place. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
 accepts `grant` and `allowHeavy` from any request, in that session only (headless; it can't be combined with
 `--connect`, `--automation-read-root` or `--automation-write-root`). A server confined to folders has no plug-in
 store, so it reads no `grants.json`, and a module that lists permissions or asks for a heavy budget does not install

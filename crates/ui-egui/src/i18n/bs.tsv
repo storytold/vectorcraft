@@ -5910,6 +5910,8 @@ axis	Y Axis	Y osa
 	Version: {version}	Verzija: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instalirati „{name}” umjesto dodatka s istim ID-om?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ova datoteka nije dodatak ranije instaliran s ovim ID-om. Dobija postavke i predmemoriju sačuvane za taj ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatizacija je zatražila instalaciju ovog dodatka. Da biste ga instalirali, izaberite Objekat › Dodaci › Instaliraj dodatak… sami.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatizacija je zatražila instalaciju ovog dodatka. Da biste ga instalirali, izaberite Objekat › Dodaci › Instaliraj dodatak… sami.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” je drugi modul od dodatka s ID-om {_1} i dobio bi postavke i predmemoriju sačuvane za njega: instalirajte ga s `replace: true` kada korisnik pristane
 	File SHA-256: {hash}	SHA-256 datoteke: {hash}
 	Read the objects it is given	Čitati objekte koje dobije
