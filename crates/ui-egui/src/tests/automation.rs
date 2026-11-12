@@ -786,7 +786,7 @@ fn a_screenshot_reply_hides_paths_like_any_reply() {
 }
 
 /// A reply whose only trace of a hidden library's path is a `file:` URL with every separator escaped
-/// shows the file name.
+/// shows the file name alone.
 #[test]
 fn a_reply_hides_a_path_with_escaped_separators() {
     let (mut app, tx, base) = confined("escaped-separators");
@@ -794,7 +794,7 @@ fn a_reply_hides_a_path_with_escaped_separators() {
     app.ui.color_guide_limit = format!("loaded/{path}");
     app.ui.status = format!("from file:{}", path.replace('/', "%2F").replace('\\', "%5C"));
     let r = request(&mut app, &tx, "test.status", json!({}));
-    assert_eq!(r["result"], "from file:b.svg", "{r}");
+    assert_eq!(r["result"], "from b.svg", "{r}");
     let _ = std::fs::remove_dir_all(base);
 }
 

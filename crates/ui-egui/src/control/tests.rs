@@ -91,7 +91,8 @@ fn a_reply_keeps_a_hidden_path_only_inside_a_known_library_id() {
 }
 
 /// With matching in any case (as on Windows), a hidden path written in other letter cases is hidden
-/// too; a path in a `file:` URL with `%XX` escapes is hidden on every platform.
+/// too; a path in a `file:` URL with `%XX` escapes is hidden on every platform, the whole URL shown as
+/// the file name.
 #[test]
 fn a_reply_hides_a_path_in_any_case_and_escaped() {
     let hidden = hiding(&[("loaded/C:/Libs/My Swatches/b.svg", "loaded/b.svg")], &[]);
@@ -99,7 +100,7 @@ fn a_reply_hides_a_path_in_any_case_and_escaped() {
     let pairs = super::hidden_text(&hidden);
     let rewrite = super::Rewrite { pairs, hiding: &hidden, fold: true };
     super::replace_in_value(&mut reply, &rewrite);
-    assert_eq!(reply["error"], "from b.svg and file:///b.svg", "{reply}");
+    assert_eq!(reply["error"], "from b.svg and b.svg", "{reply}");
     // Two libraries whose paths differ only in letter case keep their own ids.
     let two = hiding(&[("loaded//libs/b.svg", "loaded/b.svg"), ("loaded//libs/B.svg", "loaded/B.svg")], &[]);
     let mut reply = json!({"error": "x /libs/B.svg y /libs/b.svg z /LIBS/b.svg"});
@@ -112,11 +113,22 @@ fn a_reply_hides_a_path_in_any_case_and_escaped() {
     assert_eq!(reply["error"], "LOADED//LIBS/IN/A.SVG", "{reply}");
     let mut reply = json!({"error": "file:///C:/Libs/My%20Swatches/b.svg"});
     hide_under_a_root("escaped", &mut reply, &hidden);
-    assert_eq!(reply["error"], "file:///b.svg", "{reply}");
+    assert_eq!(reply["error"], "b.svg", "{reply}");
     let hidden = hiding(&[("loaded//libs/caf\u{e9}/b.svg", "loaded/b.svg")], &[]);
     let mut reply = json!({"error": "file:///libs/caf%C3%a9/b.svg and file:///libs%2Fcaf%c3%A9%2Fb.svg?next=%2Fdocs&x=%FF at 100%25"});
     hide_under_a_root("escaped-mixed", &mut reply, &hidden);
-    assert_eq!(reply["error"], "file://b.svg and file://b.svg?next=%2Fdocs&x=%FF at 100%25", "{reply}");
+    assert_eq!(reply["error"], "b.svg and b.svg?next=%2Fdocs&x=%FF at 100%25", "{reply}");
+    // A `file:` URL without escapes is replaced whole too, with `localhost` or another host.
+    let mut reply = json!({"error": "file:///libs/caf\u{e9}/b.svg and FILE://localhost/libs/caf%C3%A9/b.svg"});
+    hide_under_a_root("plain-url", &mut reply, &hidden);
+    assert_eq!(reply["error"], "b.svg and b.svg", "{reply}");
+    let mut reply = json!({"error": "file://remote/libs/caf\u{e9}/b.svg; file:/libs/caf\u{e9}/b.svg; file: x/libs/caf\u{e9}/b.svg"});
+    hide_under_a_root("other-host", &mut reply, &hidden);
+    assert_eq!(reply["error"], "b.svg; b.svg; file: xb.svg", "{reply}");
+    let hidden = hiding(&[("loaded///host/share/c.svg", "loaded/c.svg")], &[]);
+    let mut reply = json!({"error": "file://host/share/c.svg, file:////host/share/c.svg, file://localhost//host/share/c.svg"});
+    hide_under_a_root("host-url", &mut reply, &hidden);
+    assert_eq!(reply["error"], "c.svg, c.svg, c.svg", "{reply}");
 }
 
 /// A path a failed request sent takes the place of a hidden library's id for the same path, written
@@ -263,6 +275,19 @@ fn a_reply_replaces_each_hidden_text_once() {
     let mut reply = json!({"error": "file:///art/in%20work/a.svg"});
     hide_under_a_root("escaped-readable", &mut reply, &hidden);
     assert_eq!(reply["error"], "file:///art/in%20work/a.svg", "{reply}");
+    // A URL whose scheme another hidden path took already is cut at its path.
+    let hidden = hiding(&[("loaded//a", "loaded/a"), ("loaded/file", "loaded/file")], &[]);
+    let mut reply = json!({"error": "file:///a"});
+    hide_under_a_root("scheme-taken", &mut reply, &hidden);
+    assert_eq!(reply["error"], "file://a", "{reply}");
+    // Keys that come to read the same keep every field; a key that is not rewritten keeps its name.
+    let hidden = hiding(&[("loaded//out/a.svg", "loaded/a.svg")], &[]);
+    let mut reply = json!({"result": {"a.svg": 1, "file:///out/a.svg": 2, "/out/a.svg": 3}});
+    hide_under_a_root("same-keys", &mut reply, &hidden);
+    assert_eq!(reply["result"]["a.svg"], 1, "{reply}");
+    let mut values: Vec<_> = reply["result"].as_object().map(|o| o.values().filter_map(Value::as_u64).collect()).unwrap_or_default();
+    values.sort_unstable();
+    assert_eq!(values, [1, 2, 3], "{reply}");
 }
 
 /// A library saved with another platform's absolute path is hidden, also when the working folder is

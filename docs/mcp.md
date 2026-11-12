@@ -175,7 +175,8 @@ the suite) keep the agent to the folders you give it:
   path as the file name in every string and key, the status text (`ui.status`), dialogs, the command palette query
   (`ui.palette_query`), a script's report (`scriptReport`), a screenshot's reply and the error from an internal
   fault included, for the libraries hidden before the request ran and after it. The path is also matched with `%XX` escapes as a `file:`
-  URL writes it, and on Windows in any case of its letters. A hidden id or path stays only where it begins
+  URL writes it, and on Windows in any case of its letters; a `file:` URL of an absolute path is shown as the file
+  name alone, without `file:` or its host. A hidden id or path stays only where it begins
   another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with a hidden one stays. A reply also shows a path outside the
   read roots that the request sent by its file name, whether or not a library was loaded from it and whether the
   request succeeded or failed, so that the reply reads the same either way. The one exception is the `path`

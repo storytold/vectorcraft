@@ -583,7 +583,8 @@ fn is_base64(s: &str) -> bool {
 
 /// Writes each `from` text of the rewrite's pairs as its `to` text in every string and key of `v`, as
 /// [`replace_text`] does. Encoded file data, a base64 string under a key of [`BASE64_FIELDS`], stays
-/// as it is.
+/// as it is. A rewritten key that reads the same as another key of its object takes ` (2)`, ` (3)`
+/// and so on; a key that is not rewritten keeps its name.
 fn replace_in_value(v: &mut Value, r: &Rewrite) {
     match v {
         Value::String(s) => {
@@ -593,13 +594,30 @@ fn replace_in_value(v: &mut Value, r: &Rewrite) {
         }
         Value::Array(items) => items.iter_mut().for_each(|item| replace_in_value(item, r)),
         Value::Object(fields) => {
+            // The keys that stay are written first, so a rewritten key that reads as one of them, or
+            // as another rewritten key, is the one numbered and no field is lost.
+            let mut rewritten = Vec::new();
             for (key, mut item) in std::mem::take(fields) {
                 if BASE64_FIELDS.contains(&key.as_str()) && item.as_str().is_some_and(is_base64) {
                     fields.insert(key, item);
                     continue;
                 }
                 replace_in_value(&mut item, r);
-                fields.insert(replace_text(&key, r).unwrap_or(key), item);
+                match replace_text(&key, r) {
+                    Some(written) => rewritten.push((written, item)),
+                    None => {
+                        fields.insert(key, item);
+                    }
+                }
+            }
+            for (written, item) in rewritten {
+                let mut key = written.clone();
+                let mut n = 2;
+                while fields.contains_key(&key) {
+                    key = format!("{written} ({n})");
+                    n += 1;
+                }
+                fields.insert(key, item);
             }
         }
         _ => {}
@@ -681,12 +699,36 @@ impl<'a> Found<'a> {
             match begins_known_id(text, at, end, r) {
                 Some(len) => self.taken.push(span(at, at + len)),
                 None => {
+                    // A `file:` URL of the path is replaced whole, so no `file://<name>` is left that
+                    // would name a host, unless part of its scheme was taken already.
+                    let url = span(url_start(text, at, from), end).0;
+                    let start = if self.taken.iter().any(|&(a, b)| url < b && a < stop) { start } else { url };
                     self.taken.push((start, stop));
                     self.cuts.push((start, stop, to));
                 }
             }
         }
     }
+}
+
+/// Where a `file:` URL that holds `from`, an absolute path found at `at` in `text`, begins: `at` less
+/// the `file:` before it, with `//` and a host (`localhost`, another host or none) between them, in any
+/// case of its letters; before a drive, the host is followed by a `/` too. `at` when no such URL holds it.
+fn url_start(text: &str, at: usize, from: &str) -> usize {
+    let drive = matches!(from.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    if !from.starts_with('/') && !drive {
+        return at;
+    }
+    let Some(before) = text.get(..at) else { return at };
+    let Some(scheme) = before.to_ascii_lowercase().rfind("file:") else { return at };
+    let rest = &before[scheme + "file:".len()..];
+    let host = |h: &str| h.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']' | '%'));
+    let holds = if drive {
+        rest.strip_prefix("//").and_then(|r| r.strip_suffix('/')).is_some_and(host)
+    } else {
+        rest.is_empty() || rest.strip_prefix("//").is_some_and(host)
+    };
+    if holds { scheme } else { at }
 }
 
 /// `text` with its `%XX` escapes decoded, and for each byte of the decoded text the range of `text`
