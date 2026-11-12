@@ -4144,11 +4144,11 @@ fn scrolls_and_pans_move_the_view_by_whole_device_pixels() {
 fn a_scrolls_leftover_pixel_part_carries_only_to_the_same_view() {
     let view = View { zoom: 1.0, center: Point::new(100.0, 100.0), fitted: true, rotation: 0.0, artboard: 0, outline: false };
     let mut v = view;
-    let rest = scroll_by(&mut v, 1, 1.0, vec2(0.4, -0.3), ScrollRest::default());
+    let rest = scroll_by(&mut v, 1, (1.0, 1.0), vec2(0.4, -0.3), ScrollRest::default());
     assert_eq!(v.center, view.center, "less than half a pixel does not move the view");
     assert!((rest.x - 0.4).abs() < 1e-6 && (rest.y + 0.3).abs() < 1e-6);
     let mut again = v;
-    scroll_by(&mut again, 1, 1.0, vec2(0.4, -0.3), rest);
+    scroll_by(&mut again, 1, (1.0, 1.0), vec2(0.4, -0.3), rest);
     assert_eq!(again.center, Point::new(99.0, 101.0), "the second scroll adds the first's part");
     let changed = [
         ("zoomed", View { zoom: 2.0, ..v }, 1, 1.0),
@@ -4159,7 +4159,7 @@ fn a_scrolls_leftover_pixel_part_carries_only_to_the_same_view() {
     ];
     for (name, before, doc, ppp) in changed {
         let mut after = before;
-        let left = scroll_by(&mut after, doc, ppp, vec2(0.4 / ppp, -0.3 / ppp), rest);
+        let left = scroll_by(&mut after, doc, (ppp, 1.0), vec2(0.4 / ppp, -0.3 / ppp), rest);
         assert_eq!(after.center, before.center, "{name}: the first scroll's part is dropped");
         assert!((left.x - 0.4).abs() < 1e-6 && (left.y + 0.3).abs() < 1e-6, "{name}: {left:?}");
     }
