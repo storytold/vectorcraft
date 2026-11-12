@@ -230,7 +230,7 @@ fn script_file_link_escape_refused() {
 /// not matter, and outside it where case matters, whether or not the file is there.
 #[test]
 fn script_file_case_variant_folder() {
-    let base = folder("case");
+    let base = folder("case").canonicalize().unwrap();
     write(&base.join("main/own.txt"), b"own");
     let upper = base.join("MAIN");
     let source = |name: &str| {
