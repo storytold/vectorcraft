@@ -144,15 +144,27 @@ impl Renderer {
         let paint_bounds = bounds.inflate(st.width / 2.0, st.width / 2.0);
         if let Some(g) = st.path_gradient() {
             self.fill_path_gradient(ctx, f, bp, rule, st, chars, &pieces, width, &g.gradient);
-        } else if paint::set_paint(ctx, &st.paint, paint_bounds, f) {
-            self.fold_alpha(ctx, f.ink, &st.paint);
-            ctx.set_fill_rule(peniko::Fill::NonZero);
-            match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
-                Some(o) => ctx.fill_path(&o),
-                None => ctx.fill_path(&crate::stroke::outline(&pieces.line, st, width, f.px * 0.25)),
-            }
-            for head in &pieces.heads {
-                ctx.fill_path(&head.outline);
+        } else {
+            let line = match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
+                Some(o) => o,
+                None => Arc::new(crate::stroke::outline(&pieces.line, st, width, f.px * 0.25)),
+            };
+            // Miters, caps and heads can reach past the paint box: a paint drawn as pixels covers
+            // them too.
+            let reach = || {
+                std::iter::once(&*line)
+                    .chain(pieces.heads.iter().map(|h| &h.outline))
+                    .filter(|o| !o.elements().is_empty())
+                    .map(|o| o.bounding_box())
+                    .fold(paint_bounds, |r, b| r.union(b))
+            };
+            if paint::set_stroke_paint(ctx, &st.paint, paint_bounds, reach, f) {
+                self.fold_alpha(ctx, f.ink, &st.paint);
+                ctx.set_fill_rule(peniko::Fill::NonZero);
+                ctx.fill_path(&line);
+                for head in &pieces.heads {
+                    ctx.fill_path(&head.outline);
+                }
             }
         }
         if inside {

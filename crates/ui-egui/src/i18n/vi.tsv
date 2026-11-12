@@ -289,6 +289,7 @@ font-technology	Variable	Biến thiên
 	Asset Export Settings	Cài đặt xuất asset
 	Assets	Asset
 	Assign	Gán
+	Assign Profile	Gán hồ sơ màu
 	Assign Profile…	Gán hồ sơ màu…
 	Assign:	Gán:
 	Attach to Active Plane	Gắn vào mặt phẳng đang hoạt động
@@ -963,6 +964,14 @@ font-technology	Variable	Biến thiên
 	Disable Auto Add/Delete	Tắt tự động thêm/xóa
 	Disable Opacity Mask	Tắt mặt nạ độ mờ
 	Discard	Loại bỏ
+	Preserve	Bảo lưu
+	TIFF (Black & White)	TIFF (Đen trắng)
+	TIFF (8-bit Color)	TIFF (Màu 8 bit)
+	High Resolution	Độ phân giải cao
+	Medium Resolution	Độ phân giải vừa
+	Low Resolution	Độ phân giải thấp
+	Language Level 2	Cấp ngôn ngữ 2
+	Language Level 3	Cấp ngôn ngữ 3
 	Discard Empty Type	Loại bỏ chữ trống
 	Discard Recovered Documents	Loại bỏ tài liệu đã phục hồi
 	Discard White Overprint in Output	Loại bỏ in chồng màu trắng khi xuất
@@ -2652,6 +2661,9 @@ digits	Hindi	Hindi
 	Optical	Quang học
 	Optical Margin Alignment	Căn lề quang học
 	Dynamic Text	Văn bản động
+	Dynamic Text Presets	Thiết lập sẵn văn bản động
+	Arch	Vòm
+@msg	select point type or type on a path	chọn chữ điểm hoặc chữ trên đường dẫn
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	chữ trên đường dẫn trong văn bản chuỗi không thể dùng văn bản động: {frames}
 	Optimize for fast web view	Tối ưu để xem web nhanh
 	Optimized	Đã tối ưu
@@ -2876,6 +2888,7 @@ diagnostics	ui	giao diện
 	Press 	Nhấn 
 	Pressure	Áp lực
 	Preview	Xem trước
+	Preview:	Xem trước:
 	Preview All Layers	Xem trước tất cả lớp
 	Preview in Browser	Xem trước trong trình duyệt
 	Preview in Browser needs the desktop app (the web downloads files instead)	Xem trước trong trình duyệt cần ứng dụng máy tính để bàn (web sẽ tải tệp xuống thay thế)
@@ -2950,8 +2963,10 @@ mark-style	Japanese	Kiểu Nhật
 	Radial Blur…	Mờ hướng tâm…
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
+	Organic Fades	Mờ dần tự nhiên
 	Radial Gradient	Chuyển sắc hướng tâm
 	Conic Gradient	Chuyển sắc hình nón
+	Diamond Gradient	Chuyển sắc hình thoi
 	Radius	Bán kính
 	Radius 1	Bán kính 1
 	Radius 2	Bán kính 2
@@ -2966,6 +2981,8 @@ mark-style	Japanese	Kiểu Nhật
 	Range:	Phạm vi:
 	Raster Effects	Hiệu ứng raster
 	Raster File Format:	Định dạng tệp raster:
+	Include Placed Images	Bao gồm ảnh đã đặt
+	Include Fill Hatches	Bao gồm mẫu gạch của vùng tô
 	Raster Sample Size:	Kích thước mẫu raster:
 	Raster/Vector Balance:	Cân bằng raster/vector:
 	Rasterize	Raster hóa
@@ -3123,6 +3140,10 @@ mark-style	Japanese	Kiểu Nhật
 	Replace Font	Thay thế phông chữ
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Thay thế bằng tệp khác hoặc bỏ qua: ảnh của nó vẫn hiển thị bản xem trước đã lưu cùng tài liệu.
 	Replace Spine	Thay thế trục
+	Create Spine	Tạo trục
+	Create Spine:	Tạo trục:
+	Always	Luôn luôn
+	Never	Không bao giờ
 	Replace Symbol	Thay thế ký hiệu
 	Reset Transformation	Đặt lại biến đổi
 	Replace With Font	Thay thế bằng phông chữ
@@ -3544,6 +3565,15 @@ mark-style	Japanese	Kiểu Nhật
 	Stun Pulse	Choáng
 	Stealth Fade	Ẩn thân
 	Shield Buff	Khiên
+	Textures	Kết cấu
+	Fine Grain	Hạt mịn
+	Canvas Weave	Vải canvas
+	Burlap Sack	Bao bố
+	Cracked Glaze	Men rạn
+	Mosaic Floor	Sàn khảm
+	Quilted Squares	Ô chần bông
+	Leaded Glass	Kính chì
+	Damp Paper	Giấy ẩm
 	Shape	Hình dạng
 	Shape Builder	Tạo hình dạng
 	Shape Builder Regions	Vùng Tạo hình dạng
@@ -4281,6 +4311,7 @@ mark-style	Japanese	Kiểu Nhật
 	Windows	Windows
 	Working CMYK	CMYK làm việc
 	Working CMYK (don't tag)	CMYK làm việc (không gắn thẻ)
+	Working RGB (don't tag)	RGB làm việc (không gắn thẻ)
 	Workspace	Không gian làm việc
 	Workspace {i}	Không gian làm việc {i}
 	Wrinkle Tool	Công cụ nhăn
@@ -4404,6 +4435,7 @@ theme	Appearance	Giao diện
 @msg	`{key}` must be a number, not {v}	`{key}` phải là một số, không phải {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} phải là thời gian Unix tính bằng giây (số nguyên) hoặc null
 @msg	`{key}` must be a string	`{key}` phải là một chuỗi
+@msg	`{key}` must be a profile name or null	`{key}` phải là tên hồ sơ màu hoặc null
 @msg	`{key}` must be a whole number	`{key}` phải là số nguyên
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` phải là số nguyên từ {min} đến {max} (nhận được {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` phải nằm trong khoảng {min} đến {max} (nhận được {x})
@@ -5209,7 +5241,7 @@ theme	Appearance	Giao diện
 @msg	unknown format	định dạng không xác định
 @msg	unknown format `{f}` (Save writes {_1})	định dạng không xác định `{f}` (Lưu ghi {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	chế độ tự do không xác định `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	tô sáng không xác định `{h}`
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)
@@ -5412,7 +5444,7 @@ theme	Appearance	Giao diện
 @msg	span must be "object" or "selection", got {v}	span phải là "object" hoặc "selection", không phải {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" đặt một `gradient`, không phải mẫu màu
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" đặt một dải chuyển màu: hãy cung cấp `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính, xuyên tâm hoặc hình nón, không phải dạng tự do
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính, xuyên tâm, hình nón hoặc hình thoi, không phải dạng tự do
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" tự đặt dải chuyển màu: hãy bỏ `start` và `end` (chúng đã đặt nó theo tọa độ tài liệu)
 	Make Image Dynamic	Tạo hình ảnh động
 	Import Data Sets…	Nhập tập dữ liệu…
@@ -5657,6 +5689,8 @@ axis	Y Axis	Trục Y
 	Version: {version}	Phiên bản: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Cài đặt “{name}” thay cho plug-in có cùng ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tệp này không phải là plug-in đã cài đặt trước đây với ID này. Tệp sẽ nhận cài đặt và bộ nhớ đệm được lưu cho ID đó.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Một tác vụ tự động đã yêu cầu cài đặt plug-in này. Để cài đặt, hãy tự mình chọn lệnh Đối tượng › Plug-in › Cài đặt plug-in… trong menu.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Một tác vụ tự động đã yêu cầu cài đặt plug-in này. Để cài đặt, hãy tự mình chọn lệnh Đối tượng › Plug-in › Cài đặt plug-in… trong menu.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” là mô-đun khác với plug-in có ID {_1} và sẽ nhận cài đặt và bộ nhớ đệm được lưu cho plug-in đó: hãy cài đặt với `replace: true` khi người dùng đồng ý
 	File SHA-256: {hash}	SHA-256 của tệp: {hash}
 	Read the objects it is given	Đọc các đối tượng được trao cho nó
@@ -5719,6 +5753,12 @@ axis	Y Axis	Trục Y
 @msg	command {name}: `label` must be 1-64 printable characters	lệnh {name}: `label` phải có 1-64 ký tự in được
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	lệnh {name}: hãy dùng id gồm 1-{MAX_COMMAND_ID} ký tự từ a-z 0-9 _ và bắt đầu bằng một chữ cái
 @msg	command {name}: {e}	lệnh {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (dòng {line}, cột {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` phải là một danh sách lệnh, mỗi lệnh có `id` và `label`
+@msg	command {name} must be an object with an `id` and a `label`	lệnh {name} phải là một đối tượng có `id` và `label`
+@msg	missing field `{key}`	thiếu trường `{key}`
+@msg	duplicate field `{key}`	trường `{key}` bị lặp
 @msg	only a filter or a live effect declares `commands`	chỉ bộ lọc hoặc hiệu ứng trực tiếp mới khai báo `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	mô-đun không có SHA-256 mà `hash` cho biết: không có gì được cài đặt
@@ -6436,6 +6476,11 @@ breakText	Glyphs	Glyph
 @msg	only an exporter or an importer declares `extensions`	chỉ plug-in xuất hoặc nhập mới khai báo `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	plug-in nhập luôn nhận ngân sách của một lần nhập: hãy bỏ `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Sao chép thông tin khắc phục sự cố
+@msg	Copied the troubleshooting info	Đã sao chép thông tin khắc phục sự cố
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Phiên VectorCraft trước đã ngừng phản hồi trước khi đóng. Trợ giúp › Sao chép thông tin khắc phục sự cố sẽ sao chép chi tiết cho báo cáo lỗi
+
 # Safe Mode
 	Safe Mode…	Chế độ an toàn…
 	Safe Mode	Chế độ an toàn
@@ -6456,6 +6501,7 @@ breakText	Glyphs	Glyph
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Căn theo lưới pixel
+	Align New Objects to Pixel Grid	Căn đối tượng mới theo lưới pixel
 	Not Aligned to Pixel Grid	Chưa căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`

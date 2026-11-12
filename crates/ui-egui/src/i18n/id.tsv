@@ -106,6 +106,7 @@
 	PDF Presets…	Preset PDF…
 	Perspective Grid Presets…	Preset kisi perspektif…
 	Color Settings…	Pengaturan warna…
+	Assign Profile	Tetapkan profil
 	Assign Profile…	Tetapkan profil…
 	Keyboard Shortcuts…	Pintasan papan tik…
 	Import Shortcut Set	Impor set pintasan
@@ -247,6 +248,10 @@
 	Blend Options…	Opsi blend…
 	Expand	Perluas
 	Replace Spine	Ganti spine
+	Create Spine	Buat spine
+	Create Spine:	Buat spine:
+	Always	Selalu
+	Never	Tidak pernah
 	Reverse Spine	Balikkan spine
 	Reverse Front to Back	Balikkan depan ke belakang
 	Envelope Distort	Distorsi amplop
@@ -377,6 +382,8 @@
 	Create Outlines	Buat garis luar
 	Optical Margin Alignment	Perataan margin optik
 	Dynamic Text	Teks dinamis
+	Dynamic Text Presets	Preset teks dinamis
+	Arch	Pelengkung
 	Fill with Placeholder Text	Isi dengan teks placeholder
 	Insert Inline Symbol	Sisipkan simbol sebaris
 	Show Hidden Characters	Tampilkan karakter tersembunyi
@@ -517,6 +524,7 @@
 	Gaussian Blur…	Kabur Gaussian…
 	View	Tampilan
 	Preview	Pratinjau
+	Preview:	Pratinjau:
 	Overprint Preview	Pratinjau overprint
 	Pixel Preview	Pratinjau piksel
 	Trim View	Tampilan terpangkas
@@ -739,6 +747,15 @@
 	Stun Pulse	Pingsan
 	Stealth Fade	Menghilang
 	Shield Buff	Perisai
+	Textures	Tekstur
+	Fine Grain	Butiran Halus
+	Canvas Weave	Anyaman Kanvas
+	Burlap Sack	Karung Goni
+	Cracked Glaze	Glasir Retak
+	Mosaic Floor	Lantai Mosaik
+	Quilted Squares	Kotak Quilt
+	Leaded Glass	Kaca Patri
+	Damp Paper	Kertas Basah
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
 	Gradient Finishes	Finishing gradien
@@ -760,6 +777,7 @@
 	Spectrum Gradients	Gradien spektrum
 	Sky Gradients	Gradien langit
 	Neutral Gradients	Gradien netral
+	Organic Fades	Pudar organik
 	Duotone Gradients	Gradien duotone
 	Radial Glows	Pendar radial
 	Save Swatch Library…	Simpan pustaka sampel warna…
@@ -1613,6 +1631,7 @@ digits	Malayalam	Malayalam
 	Points: clicks add free points	Titik: klik menambahkan titik bebas
 	Radial Gradient	Gradien radial
 	Conic Gradient	Gradien kerucut
+	Diamond Gradient	Gradien wajik
 	Reset to White, Black	Setel ulang ke putih, hitam
 	Reverse Gradient	Balikkan gradien
 	Save to Swatches	Simpan ke swatch
@@ -1879,6 +1898,7 @@ digits	Malayalam	Malayalam
 	Simulate Paper	Simulasikan kertas
 	Use Black Point Compensation	Gunakan kompensasi titik hitam
 	Working CMYK (don't tag)	CMYK kerja (tanpa tag)
+	Working RGB (don't tag)	RGB kerja (tanpa tag)
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Tambahkan ke profil…
 	Align Stroke to Center	Ratakan stroke ke tengah
@@ -2178,6 +2198,8 @@ digits	Malayalam	Malayalam
 	Export Selected Art Only	Ekspor hanya karya seni terpilih
 	Number of Colors:	Jumlah warna:
 	Raster File Format:	Format file raster:
+	Include Placed Images	Sertakan gambar yang ditempatkan
+	Include Fill Hatches	Sertakan arsiran isian
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Warna sejati memerlukan versi 2004 atau lebih baru: yang ditulis adalah warna terdekat dari 256 warna.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Teks menjadi garis luar, dan stroke yang tidak dapat digambar oleh garis CAD menjadi bentuk terisi.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Teks tetap berupa teks, dan setiap stroke menjadi garis dengan ketebalan dan pola putus-putusnya.
@@ -4645,7 +4667,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	format tidak dikenal
 @msg	unknown format `{f}` (Save writes {_1})	format `{f}` tidak dikenal (Simpan menulis {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode bentuk bebas `{m}` tidak dikenal (titik, garis)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, kerucut, bentuk bebas)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, kerucut, wajik, bentuk bebas)
 @msg	unknown highlight `{h}`	sorotan `{h}` tidak dikenal
 @msg	unknown option `{path}.{k}`	opsi `{path}.{k}` tidak dikenal
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	overprint `{o}` tidak dikenal (pertahankan, simulasikan, atau buang)
@@ -5409,7 +5431,7 @@ mark-style	Japanese	Jepang
 @msg	span must be "object" or "selection", got {v}	span harus "object" atau "selection", diterima {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" menempatkan `gradient`, bukan swatch
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" menempatkan gradien: berikan `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" menempatkan gradien linear, radial, atau kerucut, bukan gradien bebas
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" menempatkan gradien linear, radial, kerucut, atau wajik, bukan gradien bebas
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" menempatkan gradien itu sendiri: jangan sertakan `start` dan `end` (keduanya sudah menempatkannya dalam koordinat dokumen)
 	Make Image Dynamic	Jadikan gambar dinamis
 	Import Data Sets…	Impor himpunan data…
@@ -5890,6 +5912,7 @@ axis	Y Axis	Sumbu Y
 	Version: {version}	Versi: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal “{name}” sebagai pengganti plug-in dengan ID yang sama?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	File ini bukan plug-in yang sebelumnya diinstal dengan ID ini. File ini mendapatkan pengaturan dan cache yang disimpan untuk ID tersebut.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Otomatisasi meminta untuk menginstal plug-in ini. Untuk menginstalnya, pilih Objek › Plug-in › Instal plug-in… sendiri.
 	File SHA-256: {hash}	SHA-256 file: {hash}
 	Read the objects it is given	Membaca objek yang diberikan kepadanya
 	Change, add and delete objects in the document	Mengubah, menambah, dan menghapus objek dalam dokumen
@@ -6560,6 +6583,11 @@ breakText	Glyphs	Glif
 	No importer plug-ins installed	Tidak ada plug-in impor yang terinstal
 	Read files you open in its format and make documents from them	Membaca file yang Anda buka dalam formatnya dan membuat dokumen darinya
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Salin info pemecahan masalah
+@msg	Copied the troubleshooting info	Berhasil menyalin info pemecahan masalah
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Sesi terakhir VectorCraft berhenti merespons sebelum ditutup. Bantuan › Salin info pemecahan masalah menyalin detailnya untuk laporan bug
+
 # Safe Mode
 	Safe Mode…	Mode aman…
 	Safe Mode	Mode aman
@@ -6580,6 +6608,7 @@ breakText	Glyphs	Glif
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Sejajarkan ke grid piksel
+	Align New Objects to Pixel Grid	Sejajarkan objek baru ke grid piksel
 	Not Aligned to Pixel Grid	Tidak sejajar ke grid piksel
 @msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
 	Edit Custom Dictionary	Edit kamus kustom

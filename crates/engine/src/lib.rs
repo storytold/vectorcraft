@@ -174,10 +174,6 @@ pub struct Session {
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
-    /// The plug-in ids whose grant in the plug-in store should be gone but could not be removed:
-    /// [`Session::plugin_approver`] and a load of the store do not count those grants, and a successful
-    /// [`Session::store_grant`] for the id takes it out.
-    ignored_plugin_grants: std::sync::Mutex<std::collections::BTreeSet<String>>,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
