@@ -549,10 +549,10 @@ antiAlias	Sharp	Nítid
 	Up Arrow	Up Arrow
 	Down Arrow	Down Arrow
 	Bidirectional	Bidirectional
-	Chevron	Chevron
+	Chevron	Xevró
 	Nature Icons	Nature Icons
 	Tree	Tree
-	Leaf	Leaf
+	Leaf	Fulla
 	Mountain	Mountain
 	Cloud	Cloud
 	Sun	Sun
@@ -795,7 +795,6 @@ antiAlias	Sharp	Nítid
 	Check Script…	Comprova l’script…
 	Check Spelling…	Comprova l’ortografia…
 	Checked	Marcat
-	Chevron	Xevró
 	Choose a filter	Tria un filtre
 	Choose a folder	Tria una carpeta
 	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Tria el fitxer amb què tornar a enllaçar cada fitxer enllaçat. Els fitxers amb la mida i el contingut desats amb l’enllaç apareixen primer.
@@ -2394,7 +2393,6 @@ digits	Malayalam	Malaiàlam
 	Layout:	Disposició:
 	Leader:	Guia:
 	Leading	Interlineat
-	Leaf	Fulla
 	Left	Esquerra
 	Left Complement	Complement esquerre
 	Left Diagonal	Diagonal esquerra

@@ -6319,10 +6319,10 @@ axis	Y Axis	Ось Y
 	Up Arrow	Up Arrow
 	Down Arrow	Down Arrow
 	Bidirectional	Bidirectional
-	Chevron	Chevron
+	Chevron	Шеврон
 	Nature Icons	Nature Icons
 	Tree	Tree
-	Leaf	Leaf
+	Leaf	Листок
 	Mountain	Mountain
 	Cloud	Cloud
 	Sun	Sun
@@ -6520,7 +6520,6 @@ axis	Y Axis	Ось Y
 	CMYK Equivalents	Эквиваленты CMYK
 	CMYK profile in effect	Действует профиль CMYK
 	Cap Height	Высота прописных
-	Chevron	Шеврон
 	Circle (open)	Круг (открытый)
 	Click, then press the new shortcut (Esc cancels)	Щелкните, затем нажмите новое сочетание клавиш (Esc отменяет)
 	Clip Group	Обтравочная группа
@@ -6608,7 +6607,6 @@ axis	Y Axis	Ось Y
 	Language Level 2	Уровень языка 2
 	Language Level 3	Уровень языка 3
 	Lasso	Лассо
-	Leaf	Листок
 	Left Complement	Левое дополнение
 	Length	Длина
 	Length:	Длина:
