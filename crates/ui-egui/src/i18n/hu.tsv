@@ -1158,6 +1158,17 @@ font-technology	Variable	Változó
 	The selected character's font is not available.	A kijelölt karakter betűtípusa nem érhető el.
 	No alternates for the selected character.	A kijelölt karakternek nincsenek változatai.
 	Double-click to replace	Csere dupla kattintással
+	Select one character with the Type tool first.	Előbb jelölj ki egy karaktert a Szöveg eszközzel.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	A(z) {glyph} a(z) {font} glifája, nem a kijelölt szöveg betűtípusáé ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	A(z) {glyph} ehhez tartozik: {base} (U+{base_code}) {place}; a te kijelölésed: {sel} (U+{code}).
+	at the start of a word	szó elején
+	in the middle of a word	szó közepén
+	at the end of a word	szó végén
+	standing alone	önállóan állva
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	A(z) {glyph} nem változata a(z) {sel} (U+{code}) karakternek úgy, ahogy a szavában áll.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dupla kattintással ezt szúrod be helyette: {base} (U+{code}); a megjelenítési forma nem kapcsolódik, a betű igen.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	A megjelenítési forma helyett ez lett beszúrva: {base} (U+{code}); a betűtípus pozíció szerint kapcsolja a szomszédokhoz.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Itt egyetlen OpenType-funkció sem rajzolja meg ezt a glifát, ezért a karakter glifáját váltja fel, és előfordulhat, hogy nem kapcsolódik a szomszédos karakterekhez.
 	Double-click to insert	Beszúrás dupla kattintással
 	Double-click to rename	Dupla kattintással átnevezhető
 	Double-click to target the contents	Dupla kattintással a tartalom lesz a cél

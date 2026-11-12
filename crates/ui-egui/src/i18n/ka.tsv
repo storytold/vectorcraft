@@ -1552,6 +1552,17 @@ digits	Malayalam	მალაიალამური
 	The selected character's font is not available.	მონიშნული სიმბოლოს შრიფტი მიუწვდომელია.
 	No alternates for the selected character.	მონიშნულ სიმბოლოს ალტერნატივები არ აქვს.
 	Double-click to replace	ორჯერ დაწკაპეთ ჩასანაცვლებლად
+	Select one character with the Type tool first.	ჯერ ტექსტის ხელსაწყოთი მონიშნეთ ერთი სიმბოლო.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} არის {font}-ის გლიფი და არა იმ შრიფტისა, რომლითაც მონიშნული ტექსტია დაწყობილი ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} ეკუთვნის სიმბოლოს {base} (U+{base_code}) {place}; თქვენი მონიშნულია {sel} (U+{code}).
+	at the start of a word	სიტყვის დასაწყისში
+	in the middle of a word	სიტყვის შუაში
+	at the end of a word	სიტყვის ბოლოს
+	standing alone	როცა ცალკე დგას
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} არ არის {sel} (U+{code})-ის ალტერნატივა იმ სახით, როგორც ის თავის სიტყვაშია.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	ორჯერ დაწკაპეთ ამის ნაცვლად {base} (U+{code}) ჩასასმელად: გამოსახვის ფორმა არ უკავშირდება, ასო უკავშირდება.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	გამოსახვის ფორმის ნაცვლად ჩასმულია {base} (U+{code}): შრიფტი მას მეზობლებს პოზიციის მიხედვით აკავშირებს.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	აქ არც ერთი OpenType ფუნქცია არ ხატავს ამ გლიფს, ამიტომ ის ანაცვლებს სიმბოლოს გლიფს და შეიძლება არ დაუკავშირდეს მეზობელ სიმბოლოებს.
 	Double-click to insert	ორჯერ დაწკაპეთ ჩასასმელად
 	Entire Font	მთელი შრიფტი
 	glyph {id}	გლიფი {id}

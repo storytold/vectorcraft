@@ -852,6 +852,17 @@ font-technology	Variable	Μεταβλητές
 	The selected character's font is not available.	Η γραμματοσειρά του επιλεγμένου χαρακτήρα δεν είναι διαθέσιμη.
 	No alternates for the selected character.	Δεν υπάρχουν εναλλακτικοί για τον επιλεγμένο χαρακτήρα.
 	Double-click to replace	Διπλό κλικ για αντικατάσταση
+	Select one character with the Type tool first.	Επιλέξτε πρώτα έναν χαρακτήρα με το εργαλείο κειμένου.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	Ο γλύφος {glyph} ανήκει στη γραμματοσειρά {font}, όχι σε αυτήν του επιλεγμένου κειμένου ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	Ο γλύφος {glyph} ανήκει στο {base} (U+{base_code}) {place}· η επιλογή σας είναι {sel} (U+{code}).
+	at the start of a word	στην αρχή μιας λέξης
+	in the middle of a word	στη μέση μιας λέξης
+	at the end of a word	στο τέλος μιας λέξης
+	standing alone	όταν στέκεται μόνος
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	Ο γλύφος {glyph} δεν είναι εναλλακτικός του {sel} (U+{code}) όπως βρίσκεται στη λέξη του.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Διπλό κλικ για εισαγωγή του {base} (U+{code}): μια μορφή παρουσίασης δεν συνδέεται, το γράμμα συνδέεται.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Εισήχθη το {base} (U+{code}) αντί για μορφή παρουσίασης: η γραμματοσειρά το συνδέει με τους γείτονες ανάλογα με τη θέση.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Καμία λειτουργία OpenType δεν σχεδιάζει αυτόν τον γλύφο εδώ, οπότε αντικαθιστά τον γλύφο του χαρακτήρα και μπορεί να μην συνδέεται με τους γειτονικούς χαρακτήρες.
 	Double-click to insert	Διπλό κλικ για εισαγωγή
 	Double-click to rename	Διπλό κλικ για μετονομασία
 	Double-click to target the contents	Διπλό κλικ για επιλογή του περιεχομένου ως στόχου

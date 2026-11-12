@@ -892,6 +892,17 @@ font-technology	Variable	Вариативные
 	The selected character's font is not available.	Шрифт выделенного символа недоступен.
 	No alternates for the selected character.	У выделенного символа нет альтернатив.
 	Double-click to replace	Дважды щёлкните для замены
+	Select one character with the Type tool first.	Сначала выделите один символ инструментом «Текст».
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — глиф шрифта {font}, а не шрифта выделенного текста ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} относится к символу {base} (U+{base_code}) {place}; выделен символ {sel} (U+{code}).
+	at the start of a word	в начале слова
+	in the middle of a word	в середине слова
+	at the end of a word	в конце слова
+	standing alone	в отдельном виде
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} не является альтернативой символа {sel} (U+{code}) в том виде, как он стоит в своём слове.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Дважды щёлкните, чтобы вставить вместо него {base} (U+{code}): форма представления не соединяется, буква соединяется.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Вместо формы представления вставлено {base} (U+{code}): шрифт соединяет его с соседними по положению.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ни одна функция OpenType не рисует здесь этот глиф, поэтому он заменяет глиф символа и может не соединяться с соседними символами.
 	Double-click to insert	Дважды щёлкните для вставки
 	Double-click to rename	Дважды щёлкните для переименования
 	Double-click to target the contents	Дважды щёлкните, чтобы выбрать содержимое как объект
