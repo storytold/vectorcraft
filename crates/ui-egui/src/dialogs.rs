@@ -528,10 +528,21 @@ fn hidden_controls(d: &Dialog) -> &'static [&'static str] {
     }
 }
 
+/// The controls of [`hidden_controls`] that a button adds to the dialog, which `ui.dialog.set` can
+/// set only while the dialog holds them: Save PDF's and Print's `__savePresetAs`, whose presence
+/// makes OK save a preset instead of writing the PDF or printing.
+const ADDED_CONTROLS: &[&str] = &["__savePresetAs"];
+
+/// Whether `field` is a control of `d` that `ui.dialog.set` can set: one of the controls of `d`'s
+/// kind ([`hidden_controls`]), and for one that a button adds ([`ADDED_CONTROLS`]), one `d` holds.
+fn settable_control(d: &Dialog, field: &str) -> bool {
+    hidden_controls(d).contains(&field) && (!ADDED_CONTROLS.contains(&field) || d.fields.contains_key(field))
+}
+
 /// Whether `field` is a `__` field of `d` that `ui.dialog.set` refuses: any `__` field, held or
-/// not, except the controls of `d`'s kind ([`hidden_controls`]).
+/// not, except the controls of `d`'s kind ([`settable_control`]).
 pub fn protected_field(d: &Dialog, field: &str) -> bool {
-    field.starts_with("__") && !hidden_controls(d).contains(&field)
+    field.starts_with("__") && !settable_control(d, field)
 }
 
 /// Whether `ui.dialog.set` can set `field` on `d`: a `__` field only when it is one of the controls
@@ -581,7 +592,7 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
 pub fn field_names(d: &Dialog) -> Vec<String> {
     let spec = spec(&d.kind);
     let mut names: Vec<String> = d.fields.keys().filter(|k| !k.starts_with("__")).cloned().collect();
-    names.extend(hidden_controls(d).iter().map(|f| f.to_string()));
+    names.extend(hidden_controls(d).iter().filter(|f| settable_control(d, f)).map(|f| f.to_string()));
     names.extend(spec.discard.map(|_| "discard".to_string()));
     names.extend(spec.preview.then(|| "preview".to_string()));
     names.extend((spec.inputs)(&d.kind).iter().map(|i| i.to_string()));

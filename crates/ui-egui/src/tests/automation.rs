@@ -886,6 +886,37 @@ fn dialog_set_allows_hidden_controls() {
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__search")), Some("grid".to_string()));
 }
 
+/// Save PDF's and Print's OK save a preset while Save Preset… asks for its name: `ui.dialog.set`
+/// can't add `__savePresetAs` to turn OK into saving a preset, alone or with `action: "confirm"`,
+/// and can type the name once Save Preset… has added the field.
+#[test]
+fn dialog_set_cannot_open_save_preset() {
+    let (mut app, tx) = controlled();
+    let saved = |app: &VectorcraftApp| (app.session.prefs.pdf_presets.len(), app.session.prefs.print_presets.len());
+    for (open, kind) in [("ui.savePdfDialog", "savePdf"), ("file.print", "print")] {
+        app.run(open, json!({})).unwrap();
+        let presets = saved(&app);
+        for set in [
+            json!({"field": "__savePresetAs", "value": "Proofs"}),
+            json!({"fields": [{"field": "__savePresetAs", "value": "Proofs"}], "action": "confirm"}),
+        ] {
+            let before = dialog_fields(&app);
+            let r = request(&mut app, &tx, "ui.dialog.set", set.clone());
+            assert_eq!(r["error"], format!("the `{kind}` dialog cannot set protected field `__savePresetAs`"), "{set}: {r}");
+            assert_eq!(dialog_fields(&app), before, "{set}: no field changes and the dialog stays open");
+        }
+        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "nosuch", "value": true}));
+        assert!(!r["error"].as_str().unwrap_or_default().contains("__savePresetAs"), "{kind}: {r}");
+        assert_eq!(saved(&app), presets, "{kind}: no preset saved");
+        // Save Preset… adds the field; the name can then be typed and OK saves the preset.
+        app.ui.dialog.as_mut().unwrap().fields.insert("__savePresetAs".into(), json!(""));
+        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__savePresetAs", "value": "Proofs", "action": "confirm"}));
+        assert_eq!(r["result"]["result"]["name"], "Proofs", "{kind}: {r}");
+        app.ui.dialog = None;
+    }
+    assert_eq!(saved(&app), (1, 1));
+}
+
 /// The refusal of an OK on an install question automation asked.
 const ASKED: &str = "Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.";
 
