@@ -3673,6 +3673,10 @@ theme	Appearance	Tampilan
 	Add to Profiles	Tambahkan ke profil
 	Delete Profile	Hapus profil
 	Reset Profiles	Atur ulang profil
+	Arrowheads	Mata panah
+	Edit Arrowheads	Edit mata panah
+	Edit Arrowheads…	Edit mata panah…
+	Reload Arrowheads	Muat ulang mata panah
 	Stroke Options	Opsi goresan
 	Width Profiles	Profil lebar
 	Apply Graphic Style	Terapkan gaya grafis
@@ -6716,6 +6720,8 @@ breakText	Glyphs	Glif
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorial praktik singkat untuk alat-alat utama, dikelompokkan menurut keterampilan. Pilih keterampilan untuk melihat tutorialnya.
 	List Tutorials	Daftar tutorial
 	Show Tutorial	Tampilkan tutorial
+	Show Tool Location	Tampilkan lokasi alat
+	Show where this tool is	Tampilkan letak alat ini
 @msg	missing `tutorial` (see learn.list)	`tutorial` tidak ada (lihat learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial `{id}` tidak dikenal (lihat learn.list)
 

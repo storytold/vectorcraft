@@ -2788,6 +2788,10 @@ digits	Malayalam	马拉雅拉姆数字
 	Search Preferences	搜索首选项
 	No settings found	未找到设置
 	Reset Profiles	重置配置文件
+	Arrowheads	箭头
+	Edit Arrowheads	编辑箭头
+	Edit Arrowheads…	编辑箭头…
+	Reload Arrowheads	重新载入箭头
 	Reset Rotate View	重置旋转视图
 	Rotate View to Selection	按所选对象旋转视图
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
@@ -6959,6 +6963,8 @@ breakText	Glyphs	字形
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	针对基本工具的简短实操教程，按技能分组。选择一项技能即可查看其教程。
 	List Tutorials	列出教程
 	Show Tutorial	显示教程
+	Show Tool Location	显示工具位置
+	Show where this tool is	显示此工具的位置
 @msg	missing `tutorial` (see learn.list)	缺少 `tutorial` (请参阅 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知教程 `{id}` (请参阅 learn.list)
 

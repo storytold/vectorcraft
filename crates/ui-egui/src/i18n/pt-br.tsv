@@ -2425,6 +2425,10 @@ digits	Malayalam	Malaiala
 	Search Preferences	Pesquisar nas Preferências
 	No settings found	Nenhuma configuração encontrada
 	Reset Profiles	Redefinir Perfis
+	Arrowheads	Pontas de Seta
+	Edit Arrowheads	Editar Pontas de Seta
+	Edit Arrowheads…	Editar Pontas de Seta…
+	Reload Arrowheads	Recarregar Pontas de Seta
 	Rotate View	Girar Visualização
 	Reset Rotate View	Redefinir Visualização Girada
 	Rotate View to Selection	Girar Visualização para a Seleção
@@ -7194,6 +7198,8 @@ swatch	Yellow Green	Verde-amarelado
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriais práticos curtos das ferramentas essenciais, agrupados por habilidade. Escolha uma habilidade para ver os tutoriais dela.
 	List Tutorials	Listar Tutoriais
 	Show Tutorial	Mostrar Tutorial
+	Show Tool Location	Mostrar Local da Ferramenta
+	Show where this tool is	Mostrar onde está esta ferramenta
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
 

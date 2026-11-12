@@ -528,7 +528,7 @@ impl Writer<'_> {
                 continue;
             };
             if !font.subset {
-                self.warn(&format!("the font {name} is embedded whole: its licence doesn't allow subsetting"));
+                self.note_setting(&format!("the font {name} is embedded whole: its licence doesn't allow subsetting"));
             }
             let shared = uses.iter().filter(|o| described(o) == described(u)).count() > 1;
             let range = if shared { format!(";unicode-range:{}", unicode_range(&u.chars)) } else { String::new() };

@@ -2693,6 +2693,10 @@ digits	Malayalam	Malayalam
 	Search Preferences	Tercihlerde Ara
 	No settings found	Ayar bulunamadı
 	Reset Profiles	Profilleri Sıfırla
+	Arrowheads	Ok Uçları
+	Edit Arrowheads	Ok Uçlarını Düzenle
+	Edit Arrowheads…	Ok Uçlarını Düzenle…
+	Reload Arrowheads	Ok Uçlarını Yeniden Yükle
 	Reset Rotate View	Döndürme Görünümünü Sıfırla
 	Rotate View to Selection	Görünümü Seçime Döndür
 	Reset the rows to the artwork's colors	Satırları resmin renklerine göre sıfırlayın
@@ -7077,6 +7081,8 @@ breakText	Glyphs	Glifler
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Temel araçlar için becerilere göre gruplanmış kısa uygulamalı öğreticiler. Öğreticilerini görmek için bir beceri seçin.
 	List Tutorials	Öğreticileri Listele
 	Show Tutorial	Öğreticiyi Göster
+	Show Tool Location	Aracın Konumunu Göster
+	Show where this tool is	Bu aracın nerede olduğunu göster
 @msg	missing `tutorial` (see learn.list)	`tutorial` eksik (bkz. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	bilinmeyen öğretici `{id}` (bkz. learn.list)
 

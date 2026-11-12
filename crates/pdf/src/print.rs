@@ -470,10 +470,10 @@ fn print_inner(doc: &Document, opts: &PrintOptions, left_out: &mut HashSet<Strin
     for ex in exporters {
         w.absorb(ex);
     }
-    let (bytes, more) = w.finish(left_out, false)?;
+    let (bytes, more, settings) = w.finish(left_out, false)?;
     let bytes = crate::forms::finish(bytes, doc, &pdf, false, overprinted, invisible)?;
     let mut warnings = plan.warnings;
-    for m in more {
+    for m in more.into_iter().chain(settings) {
         if !warnings.contains(&m) {
             warnings.push(m);
         }

@@ -7,8 +7,9 @@ pub fn export(doc: &Document, opts: &PdfOptions) -> Result<Vec<u8>, PdfError> {
     export_with_report(doc, opts).map(|r| r.bytes)
 }
 
-/// Like [`export`], also returning warnings: options accepted but not applied yet (see
-/// [`crate::PdfSettings::warnings`]) and features approximated or dropped.
+/// Like [`export`], also returning warnings, features approximated or dropped, and notes on the
+/// options: options accepted but not applied yet (see [`crate::PdfSettings::warnings`]) or applied
+/// another way.
 pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportReport, PdfError> {
     // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
     let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
@@ -63,9 +64,10 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let display_doc_title = opts.display_doc_title || opts.title.as_deref().is_some_and(|title| !title.trim().is_empty());
     let mut w = Writer::new(doc, set, &title, created_at, doc.color_mode == vectorcraft_doc::ColorMode::Cmyk)?;
     // Preserve Editing: the native document as an embedded file (`check` refused PDF/A with it).
-    let mut warnings = set.warnings();
+    let mut warnings = vec![];
+    let mut settings = set.warnings();
     if raised.is_some() {
-        warnings.push(if opts.settings.compatibility == Compatibility::Pdf14 {
+        settings.push(if opts.settings.compatibility == Compatibility::Pdf14 {
             "PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6".into()
         } else {
             "PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6".into()
@@ -75,7 +77,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     if let Some(native) = native {
         w.pdf.document_mut().embed_file(crate::editing::embedded_file(native, set.compression.compress_text, now.map(date_time)));
     } else if set.preserve_editing {
-        warnings.push("Preserve editing needs the native document, which wasn't given: the PDF reopens as plain artwork".into());
+        settings.push("Preserve editing needs the native document, which wasn't given: the PDF reopens as plain artwork".into());
     }
 
     let mut ex = Exporter::new(doc, set);
@@ -85,7 +87,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     // A knockout page group draws the layers' objects one by one, not layer by layer.
     ex.layers = set.writes_layers() && !doc.page_knockout;
     if set.writes_layers() && doc.page_knockout {
-        warnings.push("PDF layers can't be written with a knockout page group: every layer is plain page content".into());
+        settings.push("PDF layers can't be written with a knockout page group: every layer is plain page content".into());
     }
     ex.overprint = set.advanced.overprint == crate::Overprint::Preserve;
     let bleed = set.bleed_of(doc);
@@ -142,7 +144,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
     let (layers, overprinted, invisible) = (ex.layers, ex.overprinted, ex.invisible);
     w.absorb(ex);
-    let (bytes, more) = match w.finish(left_out, display_doc_title) {
+    let (bytes, more, catalog) = match w.finish(left_out, display_doc_title) {
         Ok(done) => done,
         Err(e) => return Err(writer_error(doc, opts, left_out, &long, e)),
     };
@@ -155,11 +157,13 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     // The writer's metadata has no copyright: it is added to the XMP packet.
     let bytes = crate::post::rights(bytes, &doc.metadata)?;
     warnings.extend(more);
+    settings.extend(catalog);
     let bytes = crate::post::user_units(bytes, &units)?;
     // A PDF 1.5 file written as PDF 1.6 keeps the encryption PDF 1.5 has (128-bit RC4).
-    let bytes = crate::post::finish(bytes, opts, native.is_some(), &mut warnings)?;
+    let bytes = crate::post::finish(bytes, opts, native.is_some(), &mut settings)?;
     warnings.dedup();
-    Ok(ExportReport { bytes, warnings })
+    settings.dedup();
+    Ok(ExportReport { bytes, warnings, setting_notes: settings })
 }
 
 /// The artboards `opts` exports, in page order, with the boxes of their pages: Marks and Bleeds

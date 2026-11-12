@@ -2922,6 +2922,10 @@ digits	Malayalam	Малаялам
 	Search Preferences	Пошук у налаштуваннях
 	No settings found	Налаштування не знайдено
 	Reset Profiles	Скинути профілі
+	Arrowheads	Стрілки
+	Edit Arrowheads	Редагувати стрілки
+	Edit Arrowheads…	Редагувати стрілки…
+	Reload Arrowheads	Перезавантажити стрілки
 	Rotate View	Повернути вид
 	Reset Rotate View	Скинути поворот виду
 	Rotate View to Selection	Повернути вид за виділенням
@@ -6730,6 +6734,8 @@ breakText	Glyphs	Гліфи
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Короткі практичні уроки з основних інструментів, згруповані за навичками. Виберіть навичку, щоб побачити її уроки.
 	List Tutorials	Перелічити уроки
 	Show Tutorial	Показати урок
+	Show Tool Location	Показати розташування інструмента
+	Show where this tool is	Показати, де розташований цей інструмент
 @msg	missing `tutorial` (see learn.list)	відсутній `tutorial` (див. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	невідомий урок `{id}` (див. learn.list)
 

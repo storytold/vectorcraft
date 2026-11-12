@@ -461,11 +461,11 @@ fn a_shadow_on_each_fill_a_painted_effect_returns_follows_the_transform_after_it
     let mut s = session();
     let id = rect(&mut s, 10.0, "#ff0000");
     let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00"), solid("#0000ff")]}]}).to_string();
-    install_wat(&mut s, &tpl::returning(&painting("test.engine.twofills", true), &out));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.shadowedfills", true), &out));
     let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
     for (effect, params) in [
         ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 50})),
-        ("plugin.test.engine.twofills", json!({})),
+        ("plugin.test.engine.shadowedfills", json!({})),
         ("distort.transform", json!({"scaleH": 200, "scaleV": 200})),
     ] {
         run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "params": params, "item": fill}));
@@ -719,6 +719,27 @@ fn expanding_a_gradient_fill_keeps_each_piece_s_own_paint() {
         });
         assert_eq!(kept, [Some(own)], "on_fill {on_fill}");
         assert_eq!(plugins, 0, "on_fill {on_fill}: no live effect is left");
+    }
+}
+
+/// `object.expand.info` measures each piece a painted effect returns: a piece whose repeating
+/// gradient needs more runs across it than are written (1,000) reports no gradient to expand, as
+/// Expand leaves it a gradient, and the same gradient in 10 runs reports one.
+#[test]
+fn expand_info_measures_the_gradient_on_each_painted_piece() {
+    for (end, expands) in [(120.0, true), (100.2, false)] {
+        let mut s = session();
+        let id = rect(&mut s, 10.0, "#ff0000");
+        let gradient = json!({"kind": "linear", "spread": "repeat", "repeats": 10, "start": [100, 50], "end": [end, 50]});
+        run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": gradient}));
+        let out = json!({"objects": [{"path": square_at(100.0)}]}).to_string();
+        install_wat(&mut s, &tpl::returning(&painting("test.engine.expandruns", true), &out));
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.expandruns"}));
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        let info = s.execute("object.expand.info", &json!({})).unwrap();
+        assert_eq!((info["gradient"].clone(), info["fill"].clone()), (json!(expands), json!(expands)), "{end}");
+        let only_fill = s.execute("object.expand", &json!({"object": false, "fill": true, "stroke": false}));
+        assert_eq!(only_fill.is_ok(), expands, "{end}: {only_fill:?}");
     }
 }
 

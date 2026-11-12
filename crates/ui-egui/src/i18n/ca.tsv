@@ -3591,6 +3591,10 @@ digits	Malayalam	Malaiàlam
 	No settings found	No s'ha trobat cap paràmetre
 	Reset Printing and Proofing	Restableix impressió i prova
 	Reset Profiles	Restableix els perfils
+	Arrowheads	Puntes de fletxa
+	Edit Arrowheads	Edita les puntes de fletxa
+	Edit Arrowheads…	Edita les puntes de fletxa…
+	Reload Arrowheads	Torna a carregar les puntes de fletxa
 	Reset Rotate View	Restableix la rotació de la vista
 	Reset Ruler Origin	Restableix l’origen de les regles
 	Reset the rows to the artwork's colors	Restableix les files als colors de l’obra
@@ -7102,6 +7106,8 @@ breakText	Glyphs	Glifs
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorials pràctics breus de les eines essencials, agrupats per habilitat. Trieu una habilitat per veure’n els tutorials.
 	List Tutorials	Llista els tutorials
 	Show Tutorial	Mostra el tutorial
+	Show Tool Location	Mostra la ubicació de l'eina
+	Show where this tool is	Mostra on és aquesta eina
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
 

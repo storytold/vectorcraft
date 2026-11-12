@@ -2938,6 +2938,10 @@ mark-style	Japanese	日本式
 	Search Preferences	環境設定を検索
 	No settings found	設定が見つかりません
 	Reset Profiles	プロファイルをリセット
+	Arrowheads	矢印
+	Edit Arrowheads	矢印を編集
+	Edit Arrowheads…	矢印を編集…
+	Reload Arrowheads	矢印を再読み込み
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Reset to Default	初期設定に戻す
 	Reset to White, Black	白、黒にリセット
@@ -6815,6 +6819,8 @@ breakText	Glyphs	字形
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	基本ツールを学ぶ短い実践チュートリアルを、スキルごとにまとめています。スキルを選ぶとチュートリアルが表示されます。
 	List Tutorials	チュートリアルの一覧
 	Show Tutorial	チュートリアルを表示
+	Show Tool Location	ツールの場所を表示
+	Show where this tool is	このツールの場所を表示
 @msg	missing `tutorial` (see learn.list)	`tutorial` が指定されていません (learn.list を参照)
 @msg	unknown tutorial `{id}` (see learn.list)	`{id}` は不明なチュートリアルです (learn.list を参照)
 

@@ -2809,6 +2809,10 @@ digits	Malayalam	Малаялам
 	Search Preferences	Търсене в настройките
 	No settings found	Няма намерени настройки
 	Reset Profiles	Нулиране на профилите
+	Arrowheads	Върхове на стрелки
+	Edit Arrowheads	Редактиране на върхове на стрелки
+	Edit Arrowheads…	Редактиране на върхове на стрелки…
+	Reload Arrowheads	Презареждане на върхове на стрелки
 	Reset Rotate View	Нулиране на изгледа на завъртане
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
@@ -6700,6 +6704,8 @@ breakText	Glyphs	Глифи
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Кратки практически уроци за основните инструменти, групирани по умения. Изберете умение, за да видите уроците му.
 	List Tutorials	Извеждане на уроци
 	Show Tutorial	Показване на урок
+	Show Tool Location	Показване на местоположението на инструмента
+	Show where this tool is	Показване къде е този инструмент
 @msg	missing `tutorial` (see learn.list)	липсва `tutorial` (вижте learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	непознат урок `{id}` (вижте learn.list)
 

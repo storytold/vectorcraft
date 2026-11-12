@@ -2888,6 +2888,10 @@ digits	Malayalam	Malayálam
 	Search Preferences	Buscar en preferencias
 	No settings found	No se encontraron ajustes
 	Reset Profiles	Restablecer perfiles
+	Arrowheads	Puntas de flecha
+	Edit Arrowheads	Editar puntas de flecha
+	Edit Arrowheads…	Editar puntas de flecha…
+	Reload Arrowheads	Volver a cargar puntas de flecha
 	Reset Rotate View	Restablecer rotación de vista
 	Rotate View to Selection	Rotar vista según la selección
 	Reset the rows to the artwork's colors	Restablecer las filas a los colores de la ilustración
@@ -7064,6 +7068,8 @@ breakText	Glyphs	Glifos
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriales prácticos breves sobre las herramientas esenciales, agrupados por habilidad. Elige una habilidad para ver sus tutoriales.
 	List Tutorials	Enumerar tutoriales
 	Show Tutorial	Mostrar tutorial
+	Show Tool Location	Mostrar ubicación de la herramienta
+	Show where this tool is	Mostrar dónde está esta herramienta
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (consulta learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconocido `{id}` (consulta learn.list)
 
