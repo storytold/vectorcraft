@@ -903,6 +903,39 @@ fn an_area_whose_lock_file_cannot_be_made_again_is_left_for_a_new_one() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A copy left behind that can't be removed when its document is saved (its area can't be written
+/// to now) stays the session's own: it isn't offered here, and a later heartbeat removes it.
+#[cfg(unix)]
+#[test]
+fn a_copy_left_behind_that_cannot_be_removed_yet_stays_the_sessions_own() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    use cmd::recovery::Lock;
+    // Permissions don't stop the superuser.
+    if rustix::process::geteuid().is_root() {
+        return;
+    }
+    let base = std::env::temp_dir().join(format!("vc-recovery-leftstuck-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let dir = base.join("recovery");
+    let path = base.join("doc.vectorcraft").to_string_lossy().to_string();
+    let (mut a, area) = saved_in(&dir);
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    let Ok(Lock::Held(other)) = FolderStore::new(&dir).lock(&area) else { panic!("the other app locks the area") };
+    cmd::recovery::heartbeat(&mut a);
+    std::fs::set_permissions(dir.join(&area), std::fs::Permissions::from_mode(0o500)).unwrap();
+    a.execute("document.save", &json!({"path": path})).unwrap();
+    std::fs::set_permissions(dir.join(&area), std::fs::Permissions::from_mode(0o700)).unwrap();
+    let copy = dir.join(&area).join("Untitled-1-1.vectorcraft");
+    assert!(copy.is_file());
+    drop(other);
+    assert!(offered(&mut a).is_empty());
+    cmd::recovery::heartbeat(&mut a);
+    assert!(!copy.exists());
+    drop(a);
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 /// A copy left in an area the session had to leave is still the session's own after the app that
 /// locked that area is gone: the session neither offers nor discards it.
 #[cfg(unix)]

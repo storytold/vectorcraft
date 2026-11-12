@@ -614,12 +614,14 @@ fn drop_left_done(s: &mut Session) {
     }
 }
 
-/// Document `uid`'s copy in an area this session left goes. Best effort: a copy that can't be
-/// removed is offered once nobody holds that area, which loses nothing.
+/// Document `uid`'s copy in an area this session left goes. A copy that can't be removed now stays
+/// this session's, and a later heartbeat removes it.
 fn drop_left(s: &mut Session, uid: u64) {
-    if let Some((store, file)) = s.recovery.left.remove(&uid) {
-        let _ = store.remove(&format!("{file}{DOC_EXT}"));
-        let _ = store.remove(&format!("{file}{META_EXT}"));
+    let Some((store, file)) = s.recovery.left.get(&uid) else { return };
+    let doc = store.remove(&format!("{file}{DOC_EXT}"));
+    let meta = store.remove(&format!("{file}{META_EXT}"));
+    if doc.is_ok() && meta.is_ok() {
+        s.recovery.left.remove(&uid);
     }
 }
 
