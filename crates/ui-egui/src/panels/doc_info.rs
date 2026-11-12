@@ -1,6 +1,6 @@
 //! Document Info panel: the document's setup and what it contains (objects by kind, graphic
-//! styles, brushes, spot colors, patterns, gradients, symbols, fonts and their files, linked and embedded
-//! images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
+//! styles, brushes, spot colors, objects painted with patterns and with gradients, symbols, fonts and their files,
+//! linked and embedded images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
 //! and saves the text report (`docInfo.save`, the report File → Package writes too).
 
 use egui::Ui;
@@ -191,9 +191,20 @@ mod tests {
             menu_text.contains("Font Details")
                 && menu_text.contains("Brushes")
                 && menu_text.contains("Repeat Objects")
+                && menu_text.contains("Gradient Objects")
                 && menu_text.contains("Save…"),
             "{menu_text}"
         );
+        // Gradient Objects lists the objects painted with a gradient by name.
+        let r = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        let ramp = json!({"kind": "radial", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        app.session.execute("paint.setFill", &json!({"ids": [r], "gradient": ramp})).unwrap();
+        app.session.execute("layer.setProps", &json!({"id": r, "name": "Glow"})).unwrap();
+        let gradients = crate::tests_labels::painted_text(&mut app, |app, ui| {
+            set_pstate(ui.ctx(), "docinfo-category", "gradients".to_string());
+            show(app, ui);
+        });
+        assert!(gradients.contains("Gradient Objects (1)") && gradients.contains("Glow") && gradients.contains("Radial gradient"), "{gradients}");
         let filtered = crate::tests_labels::painted_text(&mut app, |app, ui| {
             set_pstate(ui.ctx(), "docinfo-category", "fonts".to_string());
             show(app, ui);
@@ -210,6 +221,7 @@ mod tests {
         assert_eq!(r["path"], "/tmp/info.txt");
         let report = String::from_utf8(written.borrow().clone()).unwrap();
         assert!(report.starts_with("Document Info: ") && report.contains("\nFONT DETAILS\n") && report.contains("\nREPEAT OBJECTS\n"), "{report}");
+        assert!(report.contains("\nGRADIENT OBJECTS\nGlow: Radial gradient\n"), "{report}");
     }
 
     /// The report the panel menu's Save… writes with category `category` shown ("" for All

@@ -420,7 +420,7 @@ fn the_document_info_report_has_every_category() {
         "BRUSHES",
         "SPOT COLORS",
         "PATTERN OBJECTS",
-        "GRADIENT SWATCHES",
+        "GRADIENT OBJECTS",
         "SYMBOLS",
         "FONTS",
         "FONT DETAILS",
