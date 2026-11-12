@@ -6,12 +6,10 @@ use std::process::{Command, Output, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft");
-
 /// Runs the desktop binary without a display and with a control port it cannot parse, so a
 /// regression exits with that error instead of opening a window.
 fn run(args: &[&str], env: &[(&str, &str)]) -> Output {
-    let mut child = Command::new(BIN)
+    let mut child = Command::new(crate::bin())
         .args(args)
         .env_remove("DISPLAY")
         .env_remove("WAYLAND_DISPLAY")

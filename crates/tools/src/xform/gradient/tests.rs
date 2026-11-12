@@ -366,3 +366,34 @@ fn a_radial_shows_its_extent_ellipse_aspect_handle_and_focal_dot() {
     assert_eq!((hit(100.0, 200.0), hit(0.0, 150.0), hit(100.0, 220.0)), (Some(Part::Rotate), Some(Part::Rotate), None));
     assert_eq!(GradientTool::default().cursor(&cx, Point::new(100.0, 200.0), Mods::default()), Cursor::Rotate);
 }
+
+/// A conic shows the extent ellipse, aspect handle and center ring of a radial without a focal
+/// dot; mirrored (a negative aspect), its aspect handle is still across the bar from the stops,
+/// and dragging it keeps the mirror.
+#[test]
+fn a_conic_shows_its_extent_ellipse_and_aspect_handle_without_a_focal_dot() {
+    for aspect in [0.5, -0.5] {
+        let (mut d, s) = graded(two());
+        let n = d.node_mut(s.objects[0]).unwrap();
+        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
+        g.gradient.kind = GradientKind::Conic;
+        g.geom.as_mut().unwrap().aspect = aspect;
+        n.appearance.set_fill(Paint::Gradient(g));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let o = GradientTool::default().overlays(&cx);
+        assert_eq!(o.iter().filter(|o| matches!(o, Overlay::Path { dashed: true, .. })).count(), 1, "the extent ellipse");
+        // The aspect handle 50 pt above the center, the start handle on the center.
+        assert!(o.contains(&Overlay::Handle { p: Point::new(100.0, 100.0), color: BAR }), "{aspect}: {o:?}");
+        assert!(o.contains(&Overlay::Handle { p: Point::new(100.0, 150.0), color: BAR }), "{aspect}: {o:?}");
+        let a = Annotator::of(&cx).unwrap();
+        let hit = |x: f64, y: f64| a.hit(&cx, Point::new(x, y));
+        assert_eq!((hit(100.0, 150.0), hit(100.0, 100.0), hit(0.0, 150.0)), (Some(Part::Start), Some(Part::Aspect), Some(Part::Rotate)));
+        // Dragged 20 pt further out, the aspect grows to 70% and keeps its sign.
+        let mut t = GradientTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, Point::new(100.0, 100.0)));
+        let v = preview(&t.pointer(&cx, &ev(PointerKind::Drag, Point::new(100.0, 80.0)))).clone();
+        let want = 70.0f64.copysign(aspect);
+        assert!((v["aspect"].as_f64().unwrap() - want).abs() < 1e-9, "{aspect}: {v}");
+    }
+}
