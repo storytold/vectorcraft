@@ -237,6 +237,7 @@ font-technology	Variable	Variabel
 	Asset Export Settings	Einstellungen für den Asset-Export
 	Assets	Assets
 	Assign	Zuweisen
+	Assign Profile	Profil zuweisen
 	Assign Profile…	Profil zuweisen…
 	Assign:	Zuweisen:
 	Attach to Active Plane	An aktiver Perspektivebene anbringen
@@ -3780,6 +3781,7 @@ effect	Points	Punkte
 	Windows	Windows
 	Working CMYK	CMYK-Arbeitsfarbraum
 	Working CMYK (don't tag)	CMYK-Arbeitsfarbraum (nicht kennzeichnen)
+	Working RGB (don't tag)	RGB-Arbeitsfarbraum (nicht kennzeichnen)
 	Workspace	Arbeitsbereich
 	Workspace {i}	Arbeitsbereich {i}
 	Wrinkle Tool	Zerknittern-Werkzeug
@@ -4146,6 +4148,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{key}` must be a number, not {v}	`{key}` muss eine Zahl sein, nicht {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} muss eine Unix-Zeit in Sekunden (eine ganze Zahl) oder null sein
 @msg	`{key}` must be a string	`{key}` muss eine Zeichenfolge sein
+@msg	`{key}` must be a profile name or null	`{key}` muss ein Profilname oder null sein
 @msg	`{key}` must be a whole number	`{key}` muss eine ganze Zahl sein
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` muss eine ganze Zahl zwischen {min} und {max} sein (erhalten: {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` muss zwischen {min} und {max} liegen (erhalten: {x})

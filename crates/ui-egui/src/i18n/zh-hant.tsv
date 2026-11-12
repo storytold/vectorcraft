@@ -220,6 +220,7 @@ font-technology	Variable	可變
 	Asset Export Settings	資產匯出設定
 	Assets	資產
 	Assign	指定
+	Assign Profile	指定描述檔
 	Assign Profile…	指定描述檔…
 	Assign:	指定：
 	Attach to Active Plane	附加至作用中平面
@@ -1982,6 +1983,7 @@ file-filter	Templates	範本
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` 必須是 `auto` 或語言代碼，例如 `en` 或 `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` 必須是 #rrggbb 顏色
 @msg	`{key}` must be a string	`{key}` 必須是字串
+@msg	`{key}` must be a profile name or null	`{key}` 必須是描述檔名稱或 null
 @msg	`{key}` must be a whole number	`{key}` 必須是整數
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` 必須是介於 {min} 和 {max} 之間的整數 (收到 {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必須介於 {min} 和 {max} 之間 (收到 {x})
@@ -4877,6 +4879,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Windows	Windows
 	Working CMYK	使用中的 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加標記)
+	Working RGB (don't tag)	工作 RGB (不加標記)
 	Workspace	工作區
 	Workspace {i}	工作區 {i}
 	Wrinkle Tool	皺摺工具

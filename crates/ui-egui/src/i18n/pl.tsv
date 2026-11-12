@@ -121,6 +121,7 @@
 	PDF Presets…	Ustawienia PDF…
 	Perspective Grid Presets…	Ustawienia siatki perspektywy…
 	Color Settings…	Ustawienia kolorów…
+	Assign Profile	Przypisz profil
 	Assign Profile…	Przypisz profil…
 	Keyboard Shortcuts…	Skróty klawiaturowe…
 	Preferences…	Preferencje…
@@ -1979,6 +1980,7 @@ digits	Malayalam	Malajalam
 	Simulate Paper	Symuluj papier
 	Use Black Point Compensation	Użyj kompensacji punktu czerni
 	Working CMYK (don't tag)	Roboczy CMYK (bez znacznika)
+	Working RGB (don't tag)	Roboczy RGB (bez znacznika)
 	{name} (spot)	{name} (dodatkowy)
 	Add to Profiles…	Dodaj do profili…
 	Align Stroke to Center	Wyrównaj obrys do środka
@@ -4362,6 +4364,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a number, not {v}	`{key}` musi być liczbą, nie {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} musi być czasem Unix w sekundach (liczbą całkowitą) lub null
 @msg	`{key}` must be a string	`{key}` musi być ciągiem znaków
+@msg	`{key}` must be a profile name or null	`{key}` musi być nazwą profilu lub null
 @msg	`{key}` must be a whole number	`{key}` musi być liczbą całkowitą
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` musi być liczbą całkowitą od {min} do {max} (podano {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musi mieścić się w zakresie od {min} do {max} (podano {x})

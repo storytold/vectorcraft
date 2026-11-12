@@ -256,6 +256,7 @@ font-technology	Variable	Варіативні
 	Asset Export Settings	Параметри експорту ресурсів
 	Assets	Ресурси
 	Assign	Призначити
+	Assign Profile	Призначити профіль
 	Assign Profile…	Призначити профіль…
 	Assign:	Призначити:
 	Attach to Active Plane	Прикріпити до активної площини
@@ -3900,6 +3901,7 @@ effect	Points	Точки
 	Windows	Windows
 	Working CMYK	Робочий CMYK
 	Working CMYK (don't tag)	Робочий CMYK (без позначки)
+	Working RGB (don't tag)	Робочий RGB (без позначки)
 	Workspace	Робоче середовище
 	Workspace {i}	Робоче середовище {i}
 	Wrinkle Tool	Інструмент «Зморшки»
@@ -4257,6 +4259,7 @@ axis	Both	Обидві
 @msg	`{key}` must be a number, not {v}	`{key}` має бути числом, а не {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} має бути часом Unix у секундах (цілим числом) або null
 @msg	`{key}` must be a string	`{key}` має бути рядком
+@msg	`{key}` must be a profile name or null	`{key}` має бути назвою профілю або null
 @msg	`{key}` must be a whole number	`{key}` має бути цілим числом
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` має бути цілим числом від {min} до {max} (отримано {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` має бути від {min} до {max} (отримано {x})

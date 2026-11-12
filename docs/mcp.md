@@ -5146,6 +5146,9 @@ and small caps proportions, SVG text export) and the background contents (white:
 art). Pass any of these keys to change them in one undo step; `document.setUnits` stays as an alias for `units`.
 A file whose bleed (0 to 72 pt a side), superscript and subscript sizes (1 to 500%) and positions (-500 to 500%) or
 small caps size (1 to 200%) lies outside those ranges opens with the nearer end of each range.
+`document.setup` does not take the color mode or the assigned profiles. The Document Setup dialog's Color tab sets
+them with `edit.assignProfile` and `file.documentColorMode`: its OK runs `document.setup`, then `edit.assignProfile`,
+then `file.documentColorMode` in one `command.batch`, and the document's changes are one undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.setup","params":{"gridColors":"Blue","gridSize":"large","language":"German","bleed":9}}}

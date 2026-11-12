@@ -262,6 +262,7 @@ font-technology	Variable	Variabili
 	Asset Export Settings	Impostazioni esportazione risorse
 	Assets	Risorse
 	Assign	Assegna
+	Assign Profile	Assegna profilo
 	Assign Profile…	Assegna profilo…
 	Assign:	Assegna:
 	Attach to Active Plane	Associa al piano attivo
@@ -3907,6 +3908,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMYK di lavoro
 	Working CMYK (don't tag)	CMYK di lavoro (senza tag)
+	Working RGB (don't tag)	RGB di lavoro (senza tag)
 	Workspace	Area di lavoro
 	Workspace {i}	Area di lavoro {i}
 	Wrinkle Tool	Strumento Grinza
@@ -4273,6 +4275,7 @@ axis	Both	Entrambi
 @msg	`{key}` must be a number, not {v}	`{key}` deve essere un numero, non {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} deve essere un tempo Unix in secondi (un intero) o null
 @msg	`{key}` must be a string	`{key}` deve essere una stringa
+@msg	`{key}` must be a profile name or null	`{key}` deve essere un nome di profilo o null
 @msg	`{key}` must be a whole number	`{key}` deve essere un numero intero
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` deve essere un numero intero tra {min} e {max} (ricevuto {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` deve essere compreso tra {min} e {max} (ricevuto {x})

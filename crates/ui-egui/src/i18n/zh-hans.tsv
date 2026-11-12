@@ -207,6 +207,7 @@ antiAlias	Sharp	锐利
 	Asset Export Settings	资源导出设置
 	Assets	资源
 	Assign	指定
+	Assign Profile	指定配置文件
 	Assign Profile…	指定配置文件…
 	Assign:	指定：
 	Attach to Active Plane	附加到活动平面
@@ -3751,6 +3752,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Windows	Windows
 	Working CMYK	工作 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加标签)
+	Working RGB (don't tag)	工作 RGB (不加标签)
 	Workspace	工作区
 	Workspace {i}	工作区 {i}
 	Wrinkle Tool	褶皱工具
@@ -4172,6 +4174,7 @@ imageTrace	Outline	轮廓
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` 必须是 `auto` 或语言代码，例如 `en` 或 `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` 必须是 #rrggbb 颜色
 @msg	`{key}` must be a string	`{key}` 必须是字符串
+@msg	`{key}` must be a profile name or null	`{key}` 必须是配置文件名称或 null
 @msg	`{key}` must be a whole number	`{key}` 必须是整数
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` 必须是介于 {min} 和 {max} 之间的整数 (实际为 {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必须介于 {min} 和 {max} 之间 (实际为 {x})

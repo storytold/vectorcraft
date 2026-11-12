@@ -289,6 +289,7 @@ font-technology	Variable	Biến thiên
 	Asset Export Settings	Cài đặt xuất asset
 	Assets	Asset
 	Assign	Gán
+	Assign Profile	Gán hồ sơ màu
 	Assign Profile…	Gán hồ sơ màu…
 	Assign:	Gán:
 	Attach to Active Plane	Gắn vào mặt phẳng đang hoạt động
@@ -4270,6 +4271,7 @@ mark-style	Japanese	Kiểu Nhật
 	Windows	Windows
 	Working CMYK	CMYK làm việc
 	Working CMYK (don't tag)	CMYK làm việc (không gắn thẻ)
+	Working RGB (don't tag)	RGB làm việc (không gắn thẻ)
 	Workspace	Không gian làm việc
 	Workspace {i}	Không gian làm việc {i}
 	Wrinkle Tool	Công cụ nhăn
@@ -4393,6 +4395,7 @@ theme	Appearance	Giao diện
 @msg	`{key}` must be a number, not {v}	`{key}` phải là một số, không phải {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} phải là thời gian Unix tính bằng giây (số nguyên) hoặc null
 @msg	`{key}` must be a string	`{key}` phải là một chuỗi
+@msg	`{key}` must be a profile name or null	`{key}` phải là tên hồ sơ màu hoặc null
 @msg	`{key}` must be a whole number	`{key}` phải là số nguyên
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` phải là số nguyên từ {min} đến {max} (nhận được {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` phải nằm trong khoảng {min} đến {max} (nhận được {x})

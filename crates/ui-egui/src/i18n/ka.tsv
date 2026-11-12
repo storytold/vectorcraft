@@ -117,6 +117,7 @@
 	PDF Presets…	PDF-ის პრესეტები…
 	Perspective Grid Presets…	პერსპექტივის ბადის პრესეტები…
 	Color Settings…	ფერის პარამეტრები…
+	Assign Profile	პროფილის მინიჭება
 	Assign Profile…	პროფილის მინიჭება…
 	Keyboard Shortcuts…	კლავიატურის მალსახმობები…
 	Preferences…	პარამეტრები…
@@ -1793,6 +1794,7 @@ digits	Malayalam	მალაიალამური
 	Simulate Paper	ქაღალდის იმიტაცია
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
+	Working RGB (don't tag)	სამუშაო RGB (ტეგის გარეშე)
 	{name} (spot)	{name} (სპოტ)
 	Add to Profiles…	პროფილებში დამატება…
 	Align Stroke to Center	კონტურის ცენტრზე სწორება
@@ -4011,6 +4013,7 @@ font-technology	Variable	ცვლადი
 @msg	`{key}` must be a number, not {v}	`{key}` უნდა იყოს რიცხვი და არა {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} უნდა იყოს Unix-დრო წამებში (მთელი რიცხვი) ან null
 @msg	`{key}` must be a string	`{key}` უნდა იყოს სტრიქონი
+@msg	`{key}` must be a profile name or null	`{key}` უნდა იყოს პროფილის სახელი ან null
 @msg	`{key}` must be a whole number	`{key}` უნდა იყოს მთელი რიცხვი
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` უნდა იყოს მთელი რიცხვი {min}-დან {max}-მდე (მიღებულია {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` უნდა იყოს {min}-სა და {max}-ს შორის (მიღებულია {x})

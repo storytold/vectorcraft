@@ -249,6 +249,7 @@ font-technology	Variable	Променливи
 	Asset Export Settings	Настройки за експортиране на активи
 	Assets	Активи
 	Assign	Задаване
+	Assign Profile	Задаване на профил
 	Assign Profile…	Задаване на профил…
 	Assign:	Задаване:
 	Attach to Active Plane	Прикрепване към активната равнина
@@ -3781,6 +3782,7 @@ digits	Malayalam	Малаялам
 	Windows	Windows
 	Working CMYK	Работен CMYK
 	Working CMYK (don't tag)	Работен CMYK (без етикет)
+	Working RGB (don't tag)	Работен RGB (без етикет)
 	Workspace	Работно пространство
 	Workspace {i}	Работно пространство {i}
 	Wrinkle Tool	Инструмент „Набръчкване“

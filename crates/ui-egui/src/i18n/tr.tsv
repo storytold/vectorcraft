@@ -247,6 +247,7 @@ font-technology	Variable	Değişken
 	Asset Export Settings	Varlık Dışa Aktarma Ayarları
 	Assets	Varlıklar
 	Assign	Ata
+	Assign Profile	Profil Ata
 	Assign Profile…	Profil Ata…
 	Assign:	Ata:
 	Attach to Active Plane	Etkin Düzlem'e Ekle
@@ -3676,6 +3677,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMYK'de çalışıyor
 	Working CMYK (don't tag)	CMYK çalışıyor (etiketlemeyin)
+	Working RGB (don't tag)	Çalışan RGB (etiketlemeyin)
 	Workspace	Çalışma Alanı
 	Workspace {i}	Çalışma Alanı {i}
 	Wrinkle Tool	Kırışıklık Aracı
@@ -4017,6 +4019,7 @@ axis	Both	Her İkisi
 @msg	`{key}` must be a #rrggbb colour	`{key}` bir #rrggbb rengi olmalıdır
 @msg	`{key}` must be a number	`{key}` bir sayı olmalıdır
 @msg	`{key}` must be a string	`{key}` bir dize olmalıdır
+@msg	`{key}` must be a profile name or null	`{key}` bir profil adı ya da null olmalıdır
 @msg	`{key}` must be a whole number	`{key}` bir tam sayı olmalıdır
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında bir tam sayı olmalıdır ({x}'yi aldı)
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında olmalıdır ({x}'yi aldı)

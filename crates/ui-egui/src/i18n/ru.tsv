@@ -260,6 +260,7 @@ font-technology	Variable	Вариативные
 	Asset Export Settings	Параметры экспорта ресурсов
 	Assets	Ресурсы
 	Assign	Назначить
+	Assign Profile	Назначить профиль
 	Assign Profile…	Назначить профиль…
 	Assign:	Назначить:
 	Attach to Active Plane	Прикрепить к активной плоскости
@@ -3901,6 +3902,7 @@ digits	Malayalam	Малаялам
 	Windows	Windows
 	Working CMYK	Рабочий CMYK
 	Working CMYK (don't tag)	Рабочий CMYK (без пометки)
+	Working RGB (don't tag)	Рабочий RGB (без пометки)
 	Workspace	Рабочая среда
 	Workspace {i}	Рабочая среда {i}
 	Wrinkle Tool	Инструмент «Морщины»
@@ -4267,6 +4269,7 @@ axis	Both	Оба
 @msg	`{key}` must be a number, not {v}	`{key}` должно быть числом, а не {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} должно быть временем Unix в секундах (целым числом) или null
 @msg	`{key}` must be a string	`{key}` должно быть строкой
+@msg	`{key}` must be a profile name or null	`{key}` должно быть именем профиля или null
 @msg	`{key}` must be a whole number	`{key}` должно быть целым числом
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` должно быть целым числом от {min} до {max} (получено {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` должно быть от {min} до {max} (получено {x})
