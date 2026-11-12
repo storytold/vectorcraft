@@ -161,6 +161,34 @@ fn objects_without_a_3d_effect_are_left_and_none_at_all_is_an_error() {
     assert_eq!(s.doc().unwrap().doc.node(plain).unwrap(), &kept);
 }
 
+/// A live-effect plug-in after a fill's 3D effect that links its pieces to one of the document's
+/// swatches reshapes the edges, as it reshapes the drawn surface.
+#[test]
+fn a_painted_effect_after_a_fill_s_3d_effect_finds_the_document_s_swatches() {
+    use vectorcraft_geom::{PathData, Point, SubPath};
+    let mut leaf = serde_json::to_value(vectorcraft_color::Paint::solid(vectorcraft_color::Color::from_hex("#00ff00").unwrap())).unwrap();
+    leaf["swatch"] = json!("Leaf");
+    let corners = [Point::new(300.0, 300.0), Point::new(320.0, 300.0), Point::new(320.0, 320.0), Point::new(300.0, 320.0)];
+    let output = json!({"objects": [{"path": PathData::single(SubPath::polyline(&corners, true)), "fills": [leaf]}]}).to_string();
+    let manifest = r#"{"id":"test.engine.wireleaf","name":"Test wireleaf","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{}}"#;
+    let wasm = wat::parse_str(vectorcraft_plugins::wat::returning(manifest, &output)).unwrap();
+    for effect in ["threeD.extrude", "threeD.revolve"] {
+        let (mut s, id) = setup(None);
+        s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "replace": true})).unwrap();
+        s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        s.execute("swatch.new", &json!({"name": "Leaf", "color": "#00ff00", "global": true})).unwrap();
+        let items = &s.doc().unwrap().doc.node(id).unwrap().appearance.items;
+        let fill = items.iter().position(|i| matches!(i, AppearanceItem::Fill(_))).unwrap();
+        for e in [effect, "plugin.test.engine.wireleaf"] {
+            s.execute("effect.apply", &json!({"ids": [id.0], "effect": e, "item": fill, "params": {}})).unwrap();
+        }
+        run(&mut s, json!({"ids": [id.0]})).unwrap_or_else(|e| panic!("{effect}: {e}"));
+        let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        assert_eq!((b.x0, b.y0, b.x1, b.y1), (300.0, 300.0, 320.0, 320.0), "{effect}: the plug-in's square");
+        assert_eq!(segments(&s, id), 4, "{effect}");
+    }
+}
+
 #[test]
 fn bad_ids_are_errors() {
     let (mut s, _) = setup(Some("threeD.extrude"));

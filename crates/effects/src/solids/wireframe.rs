@@ -44,14 +44,14 @@ pub fn three_d_wireframe_in(doc: Option<&Document>, n: &Node) -> Result<Vec<Path
         let n = &*resolve(doc, n, label)?;
         // The builders' own error says why, when there is one.
         if crate::has_revolve(n) {
-            crate::revolve::revolve_face_paths(n)?;
+            crate::revolve::revolve_face_paths(doc, n)?;
         } else {
-            solid_face_paths(n)?;
+            solid_face_paths(doc, n)?;
         }
         return Err(format!("{label} draws the source art for this object instead of its 3D surface"));
     }
     let n = &*resolve(doc, n, label)?;
-    let faces = if revolve { crate::revolve::revolve_face_paths(n)? } else { solid_face_paths(n)? };
+    let faces = if revolve { crate::revolve::revolve_face_paths(doc, n)? } else { solid_face_paths(doc, n)? };
     let faces = after_geometry(doc, n, faces);
     let wire = edges(&faces)?;
     if wire.is_empty() {
@@ -88,8 +88,9 @@ pub(crate) fn reshaped(faces: Vec<PathData>, later: &[Effect], ctx: &GeomContext
 
 /// The outline of every face [`super::solid_art`] draws for `n` (already resolved): with the effect
 /// on the object, its solids; with it on fills and strokes, the solid of each; on a group or layer,
-/// the solids of its members, about one shared axis.
-fn solid_face_paths(n: &Node) -> Result<Vec<PathData>, String> {
+/// the solids of its members, about one shared axis. The swatches and patterns named by a live-effect
+/// plug-in after a fill's or stroke's 3D effect are looked up in `doc`.
+fn solid_face_paths(doc: Option<&Document>, n: &Node) -> Result<Vec<PathData>, String> {
     if is_container(n) {
         let (index, fx) = solid(&n.appearance.effects).ok_or("a 3D effect on a group's fill or stroke draws nothing")?;
         let mut shapes = members(n, label_of(&fx.id))?;
@@ -110,7 +111,7 @@ fn solid_face_paths(n: &Node) -> Result<Vec<PathData>, String> {
         if let Some((index, fx)) = solid(item.effects()) {
             let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
             let faces = facet_paths(fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }])?;
-            out.extend(reshaped(faces, item.effects().get(index + 1..).unwrap_or_default(), &ctx));
+            out.extend(reshaped(faces, item.effects().get(index + 1..).unwrap_or_default(), &GeomContext { doc, ..ctx }));
         }
     }
     Ok(out)
