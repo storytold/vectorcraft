@@ -832,8 +832,11 @@ fn begins_known_id(text: &str, at: usize, end: usize, r: &Rewrite) -> Option<usi
 
 /// The spans of `text` that hold a whole loaded library id ([`Hiding::readable`]), written with or
 /// without its `loaded/` and with no `.` or `..` part: text that does not continue a path follows it
-/// ([`continues_path`]), and no path text comes before it unless a `file:` URL holds it ([`url_start`]).
-/// The URL must name no host or `localhost` ([`in_local_file_url`]).
+/// ([`continues_path`]), and it begins the text or follows a space, a quote, `,`, `;`, an opening
+/// bracket or, written with its `loaded/`, `=`, unless a `file:` URL holds it ([`url_start`]). Any
+/// other character before it, such as `+` or `@`, can be part of a longer path's name, and so can `=`
+/// before a path. The URL must name no host or `localhost`
+/// ([`in_local_file_url`]).
 /// A hidden id or path found inside such a span stays, wherever it begins. `spans` gives the range of
 /// the original text each byte of a decoded `text` was read from.
 fn readable_ids_in(text: &str, spans: Option<&[(usize, usize)]>, r: &Rewrite) -> Vec<(usize, usize)> {
@@ -843,10 +846,14 @@ fn readable_ids_in(text: &str, spans: Option<&[(usize, usize)]>, r: &Rewrite) ->
     for known in r.hiding.readable.iter().filter(|known| !dotted(known)) {
         let bare = known.strip_prefix("loaded/").filter(|bare| !bare.is_empty());
         for id in std::iter::once(known.as_str()).chain(bare) {
+            let prefixed = id.starts_with("loaded/");
             for at in occurrences(text, id, r.fold) {
                 let end = at + id.len();
-                let after_path = text[..at].ends_with(|c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '~' | ':' | '/' | '\\'));
-                if !continues_path(&text[end..]) && (!after_path || in_local_file_url(text, at, id)) {
+                let after_delimiter = text[..at]
+                    .chars()
+                    .next_back()
+                    .is_none_or(|c| c.is_whitespace() || matches!(c, '"' | '\'' | '`' | ',' | ';' | '(' | '[' | '{' | '<') || (prefixed && c == '='));
+                if !continues_path(&text[end..]) && (after_delimiter || in_local_file_url(text, at, id)) {
                     kept.push(span(at, end));
                 }
             }

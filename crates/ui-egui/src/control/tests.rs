@@ -116,6 +116,20 @@ fn a_reply_keeps_a_readable_id_that_holds_a_hidden_path_inside() {
         super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&hidden), hiding: &hidden, fold: false });
         assert!(!reply["error"].as_str().unwrap_or_default().contains("/libs/Kit.gpl"), "{text}: {reply}");
     }
+    // The readable id's path after a character that can continue a path name ends another path.
+    for text in
+        ["/a+/project/libs/Kit.gpl", "/a@/project/libs/Kit.gpl", "a=/project/libs/Kit.gpl", "/a!/project/libs/Kit.gpl", "/a%2B/project/libs/Kit.gpl"]
+    {
+        for fold in [false, true] {
+            let mut reply = json!({"error": text});
+            super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&hidden), hiding: &hidden, fold });
+            assert!(!reply["error"].as_str().unwrap_or_default().contains("/libs/Kit.gpl"), "{text}, fold {fold}: {reply}");
+        }
+    }
+    // Written with its `loaded/`, the readable id stays after `=` too.
+    let mut reply = json!({"error": "key=loaded//project/libs/Kit.gpl"});
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&hidden), hiding: &hidden, fold: false });
+    assert_eq!(reply["error"], "key=loaded//project/libs/Kit.gpl", "{reply}");
 }
 
 /// With matching in any case (as on Windows), a hidden path written in other letter cases is hidden
