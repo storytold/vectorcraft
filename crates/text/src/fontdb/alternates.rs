@@ -74,7 +74,6 @@ impl FontFace {
     pub fn is_unlisted_alternate(&self, c: char, gid: u32) -> bool {
         self.unencoded_glyphs().binary_search(&gid).is_ok()
             && self.feature_reaching(gid).is_none()
-            && self.glyph_origin(gid).is_none()
             && self.name_owner(gid).is_none_or(|owner| owner == c)
     }
 

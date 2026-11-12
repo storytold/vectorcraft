@@ -128,6 +128,41 @@ pub fn variable_font() -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`unlisted_variable_font`].
+pub const UNLISTED_VARIABLE_FAMILY: &str = "Unlisted Varitest Sans";
+
+/// A variable face with no GSUB: `a.a` is an unencoded alternate named for `a`, but the Glyphs
+/// panel has no listed alternates. The weight axis comes from [`variable_font`].
+pub fn unlisted_variable_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    let bytes = variable_font()?;
+    let font = skrifa::FontRef::new(&bytes).ok()?;
+    let mappings = [' ', 'a', 'l']
+        .into_iter()
+        .map(|c| Some((c, write_fonts::types::GlyphId::new(font.charmap().map(c)?.to_u32()))))
+        .collect::<Option<Vec<_>>>()?;
+    let cmap = Cmap::from_mappings(mappings).ok()?;
+    let name = name_table(&[
+        (1, UNLISTED_VARIABLE_FAMILY),
+        (2, "Regular"),
+        (4, "Unlisted Varitest Sans Regular"),
+        (5, "Version 1.000"),
+        (6, "UnlistedVaritestSans-Regular"),
+        (256, "Weight"),
+    ])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    builder.add_table(&cmap).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"GSUB") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`two_axis_font`].
 pub const TWO_AXIS_FAMILY: &str = "Biaxtest Sans";
 
@@ -911,6 +946,41 @@ pub fn joining_alternates_font() -> Option<Vec<u8>> {
         .collect();
     let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"arab"), Script::new(Some(LangSys::new(vec![0, 1, 2, 3, 4, 5])), vec![]))]);
     builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`aliased_joining_font`].
+pub const ALIASED_JOINING_FAMILY: &str = "Alias Jointest Sans";
+
+/// [`joining_alternates_font`] with Latin `B` and the Arabic initial beh presentation form
+/// U+FE91 both mapped to beh's initial glyph. Only the presentation form should insert beh.
+pub fn aliased_joining_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    let bytes = joining_alternates_font()?;
+    let font = skrifa::FontRef::new(&bytes).ok()?;
+    let source = skrifa::FontRef::new(SOURCE_SANS).ok()?;
+    let initial = write_fonts::types::GlyphId::new(source.charmap().map('B')?.to_u32());
+    let mut mappings =
+        font.charmap().mappings().filter_map(|(c, g)| Some((char::from_u32(c)?, write_fonts::types::GlyphId::new(g.to_u32())))).collect::<Vec<_>>();
+    mappings.extend([('B', initial), ('\u{FE91}', initial)]);
+    let cmap = Cmap::from_mappings(mappings).ok()?;
+    let name = name_table(&[
+        (1, ALIASED_JOINING_FAMILY),
+        (2, "Regular"),
+        (4, "Alias Jointest Sans Regular"),
+        (5, "Version 1.000"),
+        (6, "AliasJointestSans-Regular"),
+    ])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    builder.add_table(&cmap).ok()?;
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());
         if !builder.contains(tag) {

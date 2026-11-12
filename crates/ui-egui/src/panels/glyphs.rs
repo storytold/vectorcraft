@@ -241,7 +241,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         font_row(app, ui, &family, &style, w);
         return;
     }
-    let Some(face) = db.face(&family, &style) else {
+    // The same family and style can have a different face id at the selection's version or axes.
+    // Use that instance for both the previews and Fit's applicability check.
+    let face = selected_target(app)
+        .filter(|t| t.style.font_family.eq_ignore_ascii_case(&family) && t.style.font_style.eq_ignore_ascii_case(&style))
+        .and_then(|t| db.style_face(t.style))
+        .or_else(|| db.face(&family, &style));
+    let Some(face) = face else {
         ui.label(egui::RichText::new(tl!("No fonts are available.")).color(t.text_dim));
         return;
     };
@@ -447,7 +453,7 @@ fn alternates(app: &mut VectorcraftApp, ui: &mut Ui, w: f32) {
     let (features, has_choice) = (target.style.features.clone(), target.style.glyph_alternate.is_some());
     let found = alternates_found(app, ui, id, byte, face.id());
     let font = format!("{} {}", face.family, face.style);
-    let Some(found) = found.filter(|f| !f.alternates.is_empty()) else {
+    let Some(found) = found.filter(|f| has_choice || !f.alternates.is_empty()) else {
         note(ui, tl!("No alternates for the selected character."));
         ui.label(egui::RichText::new(font).size(11.0).color(t.text_dim));
         return;
@@ -679,6 +685,9 @@ fn glyph_label(face: &vectorcraft_text::FontFace, gid: u32) -> String {
 /// them; the letter takes the form its place in the word asks for, so the word stays joined.
 /// `None` when `c` is not such a form in this font.
 fn base_letter(face: &vectorcraft_text::FontFace, c: char, gid: u32) -> Option<char> {
+    if !matches!(c, '\u{FB50}'..='\u{FDFF}' | '\u{FE70}'..='\u{FEFF}') {
+        return None;
+    }
     let origin = face.glyph_origin(gid)?;
     origin.position()?;
     (origin.ch != c).then_some(origin.ch)
@@ -1566,5 +1575,83 @@ mod tests {
         assert!(text.plain_text().ends_with("\u{645}\u{628}\u{6CC}"), "the letter is in the text: {}", text.plain_text());
         assert_eq!(glyph_ids(&app, &id), typed, "shaped as the word typed with beh");
         assert!(app.ui.status.starts_with("Inserted ب (U+0628)"), "{}", app.ui.status);
+    }
+
+    #[test]
+    fn an_unlisted_choice_without_gsub_can_be_reset_from_the_default_cell() {
+        use vectorcraft_text::test_fonts::{UNLISTED_VARIABLE_FAMILY, unlisted_variable_font};
+        let db = FontDb::global();
+        db.add_font(unlisted_variable_font().expect("the test font builds"));
+        let face = db.face(UNLISTED_VARIABLE_FAMILY, "Regular").expect("the test face");
+        let glyph = gid_named(&face, "a.a");
+        let (mut app, id) = editing("a");
+        app.run("text.setRangeStyle", json!({"id": id, "font": UNLISTED_VARIABLE_FAMILY})).unwrap();
+        select(&mut app, 0, 1);
+        let plain = glyph_ids(&app, &id);
+        app.run("text.setGlyphAlternate", json!({"id": id, "start": 0, "gid": glyph})).unwrap();
+        assert_eq!(glyph_ids(&app, &id), [glyph]);
+        let ctx = egui::Context::default();
+        choose(&ctx, &mut app, "Alternates for Current Selection");
+        let cells = squares(&shapes(&ctx, &mut app, vec![]));
+        assert_eq!(cells.len(), 1, "the default remains available without any GSUB alternates");
+        let undo = app.session.active().unwrap().history.undo.len();
+        double_click(&ctx, &mut app, cells[0].center());
+        assert_eq!(glyph_ids(&app, &id), plain);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(glyph_ids(&app, &id), [glyph]);
+    }
+
+    #[test]
+    fn entire_font_applies_an_unlisted_glyph_at_the_selections_variable_axes() {
+        use vectorcraft_text::test_fonts::{UNLISTED_VARIABLE_FAMILY, unlisted_variable_font};
+        let db = FontDb::global();
+        db.add_font(unlisted_variable_font().expect("the test font builds"));
+        let base = db.face(UNLISTED_VARIABLE_FAMILY, "Regular").expect("the test face");
+        let glyph = gid_named(&base, "a.a");
+        let (mut app, id) = editing("a");
+        app.run("text.setRangeStyle", json!({"id": id, "font": UNLISTED_VARIABLE_FAMILY, "fontAxes": {"wght": 650}})).unwrap();
+        select(&mut app, 0, 1);
+        let target = selected_target(&app).expect("the selected character");
+        let face = db.style_face(target.style).expect("the variable instance");
+        assert_ne!(face.id(), base.id(), "a non-default setting has its own face id");
+        let ctx = egui::Context::default();
+        let chars = face.chars().into_iter().filter(|(c, _)| !c.is_control() && !c.is_whitespace()).count();
+        let at = chars + face.unencoded_glyphs().iter().position(|g| *g == glyph).expect("the unencoded glyph");
+        let cells = inks(&tall_shapes(&ctx, &mut app));
+        assert_eq!(cells[at].1, Tokens::get(&ctx).text_strong, "the instance's alternate is enabled");
+        double_click_in(&ctx, &mut app, cells[at].0.center(), TALL);
+        assert_eq!(glyph_ids(&app, &id), [glyph]);
+        assert_eq!(selected_target(&app).unwrap().style.font_axes["wght"], 650.0);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_ne!(glyph_ids(&app, &id), [glyph]);
+    }
+
+    #[test]
+    fn encoded_characters_normalize_only_arabic_presentation_forms() {
+        use vectorcraft_text::test_fonts::{ALIASED_JOINING_FAMILY, aliased_joining_font};
+        let db = FontDb::global();
+        db.add_font(aliased_joining_font().expect("the test font builds"));
+        let face = db.face(ALIASED_JOINING_FAMILY, "Regular").expect("the test face");
+        let chars = face.chars().into_iter().filter(|(c, _)| !c.is_control() && !c.is_whitespace()).collect::<Vec<_>>();
+        for (c, expected) in [('B', "B"), ('\u{FE91}', "\u{0628}")] {
+            let (mut app, id) = editing("a");
+            app.run("text.setRangeStyle", json!({"id": id, "font": ALIASED_JOINING_FAMILY})).unwrap();
+            select(&mut app, 0, 1);
+            let at = chars.iter().position(|(ch, _)| *ch == c).expect("an encoded character");
+            let origin = face.glyph_origin(chars[at].1).expect("the shared positional glyph");
+            assert_eq!(origin.ch, '\u{0628}');
+            assert!(origin.position().is_some());
+            let ctx = egui::Context::default();
+            let cells = inks(&tall_shapes(&ctx, &mut app));
+            double_click_in(&ctx, &mut app, cells[at].0.center(), TALL);
+            let state = app.session.active().unwrap();
+            let NodeKind::Text(text) = &state.doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind else { panic!("text") };
+            assert_eq!(text.plain_text(), expected, "the encoded {c} cell inserts the intended character");
+            app.run("edit.undo", json!({})).unwrap();
+            let state = app.session.active().unwrap();
+            let NodeKind::Text(text) = &state.doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind else { panic!("text") };
+            assert_eq!(text.plain_text(), "a");
+        }
     }
 }
