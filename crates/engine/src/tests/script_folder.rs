@@ -311,7 +311,9 @@ fn the_automation_read_root_keeps_an_agent_out_of_the_scripts_folder() {
     s.attach_scripts_dir(root.clone());
     let roots = crate::file_access::AutomationRoots::new(&[&work], &[]).unwrap().unwrap();
     let e = crate::file_access::confine(Some(&roots), || s.execute("script.listInstalled", &json!({}))).unwrap_err();
-    assert!(e.to_string().contains("outside the read root"), "{e}");
+    // The Scripts folder is the app's: the error keeps the root and names the folder by its name.
+    let shown_root = crate::cmd::findfiles::plain(std::fs::canonicalize(&work).unwrap()).display().to_string();
+    assert_eq!(e.to_string(), format!("automation path rejected: outside the read root {shown_root}: Scripts"));
     let e = crate::file_access::confine(Some(&roots), || s.installed_script(&script.to_string_lossy())).unwrap_err();
     assert!(e.to_string().contains("outside the read root"), "{e}");
     // A read root that holds the folder lets both through.

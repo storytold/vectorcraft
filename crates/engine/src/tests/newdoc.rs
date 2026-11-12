@@ -291,6 +291,20 @@ fn file_new_and_artboard_new_take_the_same_largest_side() {
         assert!(err.contains(in_meters), "{p}: {err}");
     }
     assert_eq!(boards(&s).len(), 2);
+
+    // A side below 1 pt is kept as given, as file.new keeps it, and a size taken from such an artboard keeps it too.
+    let mut s = new_doc(json!({"width": 0.5, "height": 0.25}));
+    assert_eq!(boards(&s), [Rect::new(0.0, 0.0, 0.5, 0.25)]);
+    s.execute("artboard.new", &json!({"x": 0, "y": 10, "width": 0.5, "height": 0.75})).unwrap();
+    s.execute("artboard.new", &json!({"x": 0, "y": 20})).unwrap();
+    assert_eq!(boards(&s)[1..], [Rect::new(0.0, 10.0, 0.5, 10.75), Rect::new(0.0, 20.0, 0.5, 20.75)]);
+    // artboard.setProps keeps such sides when it changes something else, on a locked artboard too,
+    // and still raises a supplied side to 1 pt.
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "Small"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 2, "name": "Small locked"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "height": 0.5})).unwrap();
+    assert_eq!(boards(&s), [Rect::new(0.0, 0.0, 0.5, 1.0), Rect::new(0.0, 10.0, 0.5, 10.75), Rect::new(0.0, 20.0, 0.5, 20.75)]);
 }
 
 #[test]
@@ -497,4 +511,174 @@ fn rearrange_that_moves_no_artboard_records_no_undo_step() {
     let before = history(&s);
     assert_eq!(s.execute("artboard.rearrange", &p).unwrap(), json!({"artboards": 0, "rows": 1, "columns": 1}));
     assert_eq!(history(&s), before);
+}
+
+/// A session whose New Document profiles are in a fresh folder for test `name` (not made yet).
+fn with_profiles(name: &str) -> (Session, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!("vc-newdoc-profiles-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut s = Session::new();
+    s.attach_new_doc_profiles(dir.clone());
+    (s, dir)
+}
+
+fn swatch_names(s: &Session) -> Vec<String> {
+    s.doc().unwrap().doc.swatches.iter().map(|w| w.name.clone()).collect()
+}
+
+/// Edit the Print profile: Brand Red, the Brand Box style, the Badge and Logo symbols (Logo's art an
+/// embedded image) and an image left on its layer, saved.
+fn edit_print_profile(s: &mut Session, dir: &std::path::Path) {
+    // Edit writes the shipped profile and opens it.
+    s.execute("file.newProfiles.edit", &json!({"name": "print"})).unwrap();
+    assert!(dir.join("Print.vectorcraft").is_file());
+    assert_eq!(s.doc().unwrap().doc.color_mode, ColorMode::Cmyk);
+    s.execute("swatch.new", &json!({"name": "Brand Red", "color": "#cc2200"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    s.execute("graphicStyle.new", &json!({"name": "Brand Box"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Badge"})).unwrap();
+    // One embedded image becomes a symbol's art, another stays on the profile's layer.
+    let png = |rgb: [u8; 3]| {
+        let mut out = vec![];
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([rgb[0], rgb[1], rgb[2], 255]))
+            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+            .unwrap();
+        vectorcraft_format::base64_encode(&out)
+    };
+    s.execute("file.place", &json!({"name": "red.png", "dataBase64": png([255, 0, 0]), "link": false})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Logo"})).unwrap();
+    s.execute("file.place", &json!({"name": "blue.png", "dataBase64": png([0, 0, 255]), "link": false})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.images.len(), 2);
+    s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(s.execute("file.newProfiles", &json!({})).unwrap()["profiles"][2]["customized"], true);
+}
+
+#[test]
+fn an_edited_profile_starts_the_documents_of_its_category() {
+    let (mut s, dir) = with_profiles("edited");
+    let listed = s.execute("file.newProfiles", &json!({})).unwrap();
+    let names: Vec<&str> = listed["profiles"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Mobile", "Web", "Print", "Film & Video", "Art & Illustration", "Branding", "Social"]);
+    assert!(listed["profiles"].as_array().unwrap().iter().all(|p| p["customized"] == false), "{listed}");
+    edit_print_profile(&mut s, &dir);
+
+    let r = s.execute("file.new", &json!({"preset": "A4"})).unwrap();
+    assert_eq!(r["profile"], "Print", "{r}");
+    assert!(swatch_names(&s).contains(&"Brand Red".to_string()));
+    let d = &s.doc().unwrap().doc;
+    assert!(d.graphic_styles.iter().any(|g| g.name == "Brand Box"));
+    let badge = d.symbols.iter().find(|y| y.name == "Badge").expect("the profile's symbol");
+    assert!(d.symbols.iter().any(|y| y.name == "Logo"));
+    assert_eq!(d.images.len(), 1, "only the symbol's image comes along");
+    // The profile's art stays behind: one empty layer, with an id the symbol's art doesn't use.
+    assert_eq!(d.layers.len(), 1);
+    assert!(d.layers[0].children().is_none_or(Vec::is_empty));
+    let mut symbol_ids = vec![];
+    badge.art.walk(&mut |n| symbol_ids.push(n.id));
+    assert!(!symbol_ids.contains(&d.layers[0].id), "{symbol_ids:?}");
+    assert_eq!(d.artboards[0].rect.width().round(), 595.0);
+    let red = d.swatches.iter().find(|w| w.name == "Brand Red").cloned().unwrap();
+    assert!(matches!(red.paint, vectorcraft_color::Paint::Solid { color: vectorcraft_color::Color::Cmyk { .. }, .. }), "{:?}", red.paint);
+    // In RGB the profile's colors are converted, as Document Color Mode converts them.
+    s.execute("file.new", &json!({"preset": "A4", "colorMode": "rgb"})).unwrap();
+    let red = s.doc().unwrap().doc.swatches.iter().find(|w| w.name == "Brand Red").cloned().expect("converted, not dropped");
+    assert!(matches!(red.paint, vectorcraft_color::Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, .. }), "{:?}", red.paint);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_profile_follows_the_preset_access_and_reset() {
+    let (mut s, dir) = with_profiles("choice");
+    edit_print_profile(&mut s, &dir);
+    // A request that may not read the folder gets the defaults, and the reason; edit is refused
+    // before anything is written.
+    let elsewhere = dir.with_extension("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[elsewhere.as_path()], &[dir.as_path()]).unwrap().unwrap();
+    let r = crate::file_access::confine(Some(&roots), || s.execute("file.new", &json!({"preset": "A4"}))).unwrap();
+    assert!(r.get("profile").is_none() && r["profileError"]["profile"] == "Print", "{r}");
+    assert!(!swatch_names(&s).contains(&"Brand Red".to_string()));
+    // Nothing tells such a request which profiles have files.
+    let r = crate::file_access::confine(Some(&roots), || s.execute("file.new", &json!({"preset": "Web 1920×1080"}))).unwrap();
+    assert_eq!(r["profileError"]["profile"], "Web", "{r}");
+    let listed = crate::file_access::confine(Some(&roots), || s.execute("file.newProfiles", &json!({}))).unwrap();
+    assert!(listed["profiles"].as_array().unwrap().iter().all(|p| p.get("customized").is_none() && p.get("path").is_none()), "{listed}");
+    assert!(crate::file_access::confine(Some(&roots), || s.execute("file.newProfiles.edit", &json!({"name": "Web"}))).is_err());
+    assert!(!dir.join("Web.vectorcraft").exists());
+    let _ = std::fs::remove_dir_all(&elsewhere);
+    // A saved preset made from a Print preset keeps the profile.
+    s.execute("file.newPresets.save", &json!({"name": "Zine", "preset": "A5"})).unwrap();
+    assert_eq!(presets(&mut s, "Saved")[0]["profile"], "Print");
+    assert_eq!(s.execute("file.new", &json!({"preset": "Zine"})).unwrap()["profile"], "Print");
+
+    // Other categories, no preset and `profile: null` start with the defaults.
+    for p in [json!({"preset": "Web 1920×1080"}), json!({}), json!({"preset": "A4", "profile": null})] {
+        let r = s.execute("file.new", &p).unwrap();
+        assert!(r.get("profile").is_none() && !swatch_names(&s).contains(&"Brand Red".to_string()), "{p}: {r}");
+    }
+    // `profile` picks one for any settings.
+    assert_eq!(s.execute("file.new", &json!({"width": 300, "height": 300, "profile": "PRINT"})).unwrap()["profile"], "Print");
+
+    // Reset deletes the file, once; the shipped profile applies again.
+    assert_eq!(s.execute("file.newProfiles.reset", &json!({"name": "Print"})).unwrap(), json!({"name": "Print", "reset": true}));
+    assert_eq!(s.execute("file.newProfiles.reset", &json!({"name": "Print"})).unwrap(), json!({"name": "Print", "reset": false}));
+    let r = s.execute("file.new", &json!({"preset": "A4"})).unwrap();
+    assert!(r.get("profile").is_none() && !swatch_names(&s).contains(&"Brand Red".to_string()), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_damaged_or_oversized_profile_leaves_the_defaults_and_is_reported() {
+    let (mut s, dir) = with_profiles("damaged");
+    s.execute("file.new", &json!({"preset": "Letter", "profile": null})).unwrap();
+    let defaults = swatch_names(&s);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Print.vectorcraft"), b"not a document").unwrap();
+    let r = s.execute("file.new", &json!({"preset": "Letter"})).unwrap();
+    assert_eq!(r["profileError"]["profile"], "Print", "{r}");
+    assert!(!r["profileError"]["reason"].as_str().unwrap_or("").is_empty(), "{r}");
+    assert!(r.get("profile").is_none());
+    assert_eq!(swatch_names(&s), defaults);
+    // Past the limit the file is not read at all (a sparse file of that length).
+    let big = std::fs::File::create(dir.join("Web.vectorcraft")).unwrap();
+    big.set_len(crate::cmd::newdoc::MAX_PROFILE_BYTES + 1).unwrap();
+    drop(big);
+    let r = s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert!(r["profileError"]["reason"].as_str().unwrap_or("").contains("larger than"), "{r}");
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect.width(), 1920.0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn profile_names_are_checked_and_editing_needs_the_folder() {
+    let mut s = Session::new();
+    for p in [json!({"profile": "Posters"}), json!({"profile": 5}), json!({"profile": ""})] {
+        let e = s.execute("file.new", &p).unwrap_err().to_string();
+        assert!(e.contains("no New Document profile called") && e.contains("Film & Video"), "{p}: {e}");
+    }
+    assert!(s.execute("file.newProfiles.edit", &json!({"name": "Posters"})).is_err());
+    for cmd in ["file.newProfiles.edit", "file.newProfiles.reset"] {
+        let e = s.execute(cmd, &json!({"name": "Print"})).unwrap_err().to_string();
+        assert!(e.contains("preferences folder"), "{cmd}: {e}");
+    }
+    // Without a folder every profile is the shipped one and documents start with the defaults.
+    let r = s.execute("file.newProfiles", &json!({})).unwrap();
+    assert!(r["folder"].is_null() && r["profiles"][0].get("path").is_none(), "{r}");
+    let r = s.execute("file.new", &json!({"preset": "A4"})).unwrap();
+    assert!(r.get("profile").is_none() && r.get("profileError").is_none(), "{r}");
+}
+
+#[test]
+fn the_new_layer_takes_an_id_no_profile_art_has() {
+    // A damaged profile whose symbol art has the id the new layer would otherwise take.
+    let settings = crate::cmd::newdoc::DocSettings::default();
+    let mut profile = settings.document();
+    let next = settings.document().peek_next_id().max(profile.peek_next_id());
+    let art = std::sync::Arc::new(vectorcraft_doc::Node::group(vectorcraft_doc::NodeId(next), vec![]));
+    profile.symbols.push(vectorcraft_doc::Symbol { name: "Badge".into(), art, dynamic: false });
+    let d = settings.document_from_profile(profile);
+    assert_eq!(d.layers.len(), 1);
+    assert_ne!(d.layers[0].id, vectorcraft_doc::NodeId(next));
+    // Ids given out later skip the symbol's art too.
+    assert!(d.peek_next_id() > d.layers[0].id.0 && d.peek_next_id() > next);
 }

@@ -420,6 +420,10 @@ pub struct UiState {
     /// The Learn panel's tab, skill and tutorial, kept while the app runs.
     #[serde(skip)]
     pub learn: crate::panels::learn::View,
+    /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
+    /// is on screen. Not saved.
+    #[serde(skip)]
+    pub learn_locate: Option<crate::panels::learn::locate::Locate>,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -1061,6 +1065,7 @@ impl Default for UiState {
             color_settings_scroll: false,
             find_font_in: String::new(),
             learn: Default::default(),
+            learn_locate: None,
             control_bar: false,
             control_bar_bottom: false,
             control_bar_hidden_groups: Default::default(),

@@ -452,6 +452,60 @@ fn a_painted_effect_on_a_fill_and_refused_results() {
     }
 }
 
+/// A fill's Drop Shadow before a painted effect that returns two fills, and a 200% Transform effect
+/// after it: the shadow of each returned fill follows the Transform effect. The square the effect
+/// returns spans 30 to 70 pt once scaled, so both half-opaque shadows, 20 pt to the right, cover
+/// 85 pt as they cover 75 pt.
+#[test]
+fn a_shadow_on_each_fill_a_painted_effect_returns_follows_the_transform_after_it() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00"), solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.shadowedfills", true), &out));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    for (effect, params) in [
+        ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 50})),
+        ("plugin.test.engine.shadowedfills", json!({})),
+        ("distort.transform", json!({"scaleH": 200, "scaleV": 200})),
+    ] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "params": params, "item": fill}));
+    }
+    let img = drawn(&s);
+    let (near, far) = (img.pixel(75, 50), img.pixel(85, 50));
+    assert_ne!(near, WHITE, "the shadows reach past the square");
+    assert_eq!(far, near, "both shadows at 20 pt");
+}
+
+/// A Transform effect with Scale Strokes & Effects on after a painted effect on a fill leaves the
+/// Drop Shadow after it as it is on every paint the piece is drawn with.
+#[test]
+fn a_transform_after_a_painted_fill_effect_leaves_the_later_shadow_on_every_paint() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let two = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00"), solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.twopaints", true), &two));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.twopaints", "item": fill}));
+    let mut n = node(&s, id);
+    let later = [
+        vectorcraft_doc::Effect { id: "distort.transform".into(), params: json!({"scaleH": 200, "scaleV": 200, "strokes": true}), visible: true },
+        vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: json!({"x": 10.0, "y": 0.0, "blur": 0.0}), visible: true },
+    ];
+    n.appearance.items[fill].effects_mut().extend(later);
+    let art = vectorcraft_render::effects::reshape(Some(&s.doc().unwrap().doc), &n, None).unwrap();
+    let mut offsets = vec![];
+    art.walk(&mut |m| {
+        for item in &m.appearance.items {
+            for r in vectorcraft_render::effects::raster_effects(item.effects()) {
+                if let vectorcraft_render::effects::RasterFx::DropShadow { dx, dy, .. } = r {
+                    offsets.push((dx, dy));
+                }
+            }
+        }
+    });
+    assert_eq!(offsets, [(10.0, 0.0), (10.0, 0.0)], "one shadow on each of the piece's two fills");
+}
+
 /// A result refused for a swatch the document doesn't have stays cached: once the document has the
 /// swatch, the next check of that result clears the error.
 #[test]
@@ -665,6 +719,27 @@ fn expanding_a_gradient_fill_keeps_each_piece_s_own_paint() {
         });
         assert_eq!(kept, [Some(own)], "on_fill {on_fill}");
         assert_eq!(plugins, 0, "on_fill {on_fill}: no live effect is left");
+    }
+}
+
+/// `object.expand.info` measures each piece a painted effect returns: a piece whose repeating
+/// gradient needs more runs across it than are written (1,000) reports no gradient to expand, as
+/// Expand leaves it a gradient, and the same gradient in 10 runs reports one.
+#[test]
+fn expand_info_measures_the_gradient_on_each_painted_piece() {
+    for (end, expands) in [(120.0, true), (100.2, false)] {
+        let mut s = session();
+        let id = rect(&mut s, 10.0, "#ff0000");
+        let gradient = json!({"kind": "linear", "spread": "repeat", "repeats": 10, "start": [100, 50], "end": [end, 50]});
+        run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": gradient}));
+        let out = json!({"objects": [{"path": square_at(100.0)}]}).to_string();
+        install_wat(&mut s, &tpl::returning(&painting("test.engine.expandruns", true), &out));
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.expandruns"}));
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        let info = s.execute("object.expand.info", &json!({})).unwrap();
+        assert_eq!((info["gradient"].clone(), info["fill"].clone()), (json!(expands), json!(expands)), "{end}");
+        let only_fill = s.execute("object.expand", &json!({"object": false, "fill": true, "stroke": false}));
+        assert_eq!(only_fill.is_ok(), expands, "{end}: {only_fill:?}");
     }
 }
 

@@ -9,6 +9,7 @@ pub(super) mod adjust;
 mod ai_open_path;
 mod appearance;
 mod areafit;
+mod arrowheads;
 mod assets;
 mod assets_3d;
 mod attributes;
