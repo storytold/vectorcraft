@@ -700,6 +700,15 @@ font-technology	Variable	Variabili
 	Created:	Creato:
 	Crop	Ritaglia
 	Crop Image	Ritaglia immagine
+	Image Tools	Strumenti immagine
+	Remove Background…	Rimuovi sfondo…
+	Remove Background	Rimuovi sfondo
+	Background	Sfondo
+	Edge Color	Colore del bordo
+	Picked Colors	Colori scelti
+	Corner Color	Colore degli angoli
+	Contiguous	Contiguo
+	Each Channel	Ogni canale
 	Edit Path	Modifica tracciato
 	Mask	Maschera
 	Crop Marks	Segni di ritaglio
@@ -3571,6 +3580,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Ridimensiona dal centro
 	Up/Down:	Su/giù:
 	Left/Right:	Sinistra/destra:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko su/giù
+	Tate-chu-yoko Left/Right	Tate-chu-yoko sinistra/destra
 	Temperature	Temperatura
 	Temperature/Tint…	Temperatura/tinta…
 	Template	Modello
@@ -4425,6 +4436,7 @@ axis	Both	Entrambi
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pagina della tavola da disegno {n} misura {size}, più del limite di pagina PDF di 14.400 pt (200 in): viene scritta con una UserUnit di {unit}, quindi le app che ignorano UserUnit la mostrano altrettante volte più piccola
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pagina della tavola da disegno {n} misura {size}, più del limite di pagina PDF di 14.400 pt (200 in): le pagine {label} vengono scritte senza UserUnit, in punti, e le app che rispettano il limite tagliano la pagina a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 non ha UserUnit, che serve a una pagina più lunga di 14.400 pt (200 in) per mantenere le sue dimensioni: il file viene scritto come PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 non ha UserUnit, che serve a una pagina più lunga di 14.400 pt (200 in) per restare entro il limite di pagina di PDF/A-2, di 14.400 unità: il file viene scritto come PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la pagina della tavola da disegno {n} misura {size}, troppo lunga e stretta per i lati di pagina PDF da 3 a 14.400 unità: viene scritta con una UserUnit di {unit}, che tiene il lato corto a 3 unità o più, e le app che rispettano il limite tagliano il lato lungo a 14.400 unità
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	i file {label} accettano numeri reali fino a {max}, e la pagina della tavola da disegno {n}, lunga {side} pt, ne richiede di più grandi: scegli PDF 1.6 o successivo senza standard PDF/X, oppure una tavola da disegno più piccola
 @msg	invalid image data for `{0}`	dati immagine non validi per `{0}`
@@ -4573,6 +4585,7 @@ axis	Both	Entrambi
 @msg	not a stored central record	non è un record centrale archiviato
 @msg	not a valid plug-in module: {0}	non è un modulo plug-in valido: {0}
 @msg	not an EMF or WMF file	non è un file EMF o WMF
+@msg	not an HP-GL file	non è un file HP-GL
 @msg	not found	non trovato
 @msg	not in pattern editing mode	non sei in modalità modifica motivo
 @msg	finish editing the pattern first	termina prima la modifica del motivo
@@ -4652,6 +4665,14 @@ axis	Both	Entrambi
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	questo ricalco creerebbe più di {max} punti di ancoraggio, più di quanti il documento possa mostrare in modo fluido: aumenta Disturbo, riduci Tracciati o Colori, oppure scegli un preset a fedeltà inferiore
 @msg	select an envelope	seleziona un involucro
 @msg	select an image	seleziona un'immagine
+@msg	`background` must be edges, corners or colors	`background` deve essere edges, corners o colors
+@msg	`match` must be distance or channels	`match` deve essere distance o channels
+@msg	`{key}` must be from 0 to 100	`{key}` deve essere compreso tra 0 e 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` deve elencare da 1 a 16 colori, ciascuno in esadecimale (#rrggbb o #rgb) o come black, white, red, green o blue
+@msg	the linked image shows its preview: embed or relink it first	l’immagine collegata mostra la sua anteprima: incorporala o ricollegala prima
+@msg	a CMYK image has no transparency to set	un'immagine CMYK non ha trasparenza da impostare
+@msg	every pixel matches the background: no image would be left	ogni pixel corrisponde allo sfondo: non resterebbe alcuna immagine
+@msg	an image of {w} × {h} pixels is too large to change	un'immagine di {w} × {h} pixel è troppo grande per essere modificata
 @msg	select an object in perspective	seleziona un oggetto in prospettiva
 @msg	select artwork (or a colour group) to recolor	seleziona la grafica (o un gruppo colori) da ricolorare
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Ricolorazione completata; senza modifiche: {locked} e {hidden}
