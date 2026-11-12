@@ -1298,10 +1298,10 @@ pub(crate) fn is_threadable(n: &vectorcraft_doc::Node) -> bool {
     n.extras().perspective.is_none() && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if !matches!(t.kind, vectorcraft_doc::TextKind::Point))
 }
 
-/// Does a double-click or the Control bar's Isolate Selected Object button isolate an object of
-/// this kind? A group, a compound path or a single path, image, mesh or placed file does. Blends,
-/// envelopes, repeats and symbol instances do not; they have editing modes of their own (a
-/// repeat's is isolation of the repeat itself, to edit its source art).
+/// Object kinds isolated by the Control bar's Isolate Selected Object button and the Selection
+/// tool's general double-click handler. Live blends and repeats enter isolation through the
+/// tool's separate live-object handler. Envelopes and symbol instances have their own editing
+/// modes.
 pub fn isolates(kind: &vectorcraft_doc::NodeKind) -> bool {
     use vectorcraft_doc::NodeKind as K;
     matches!(kind, K::Group { .. } | K::Compound { .. } | K::Path { .. } | K::Image(_) | K::Mesh(_) | K::PlacedDocument(_))
@@ -1511,10 +1511,10 @@ impl SelectionTool {
             if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })) {
                 return if cx.doc.symbol_edit.is_some() { vec![] } else { vec![Action::Exec("symbol.edit".into(), json!({ "id": top.0 }))] };
             }
-            // A repeat: its source art is edited in isolation mode, where the repeat follows each
-            // edit (#5054), as the reference app's Repeat does.
+            // A blend's keys (#6618) and a repeat's source art (#5054) are edited in isolation
+            // mode, exposing their existing source objects for selection and editing.
             if cx.double_click_isolate
-                && cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Repeat(_)))
+                && cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Blend { .. } | vectorcraft_doc::NodeKind::Repeat(_)))
                 && cx.isolation != Some(top)
             {
                 return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
