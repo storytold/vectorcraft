@@ -1787,6 +1787,10 @@ impl Session {
         if let Some(e) = job.host.dialogs.take_failure() {
             return Some(self.script_failed(job, &e));
         }
+        // A canceled request ends a sleep or a wait at this pump.
+        if vectorcraft_doc::cancel::check().is_err() {
+            self.script_stop.set();
+        }
         if (job.host.waiting.get() || job.host.asleep().is_some() || job.host.dialogs.is_waiting()) && !self.script_stop.is_set() {
             JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
             self.script_key = Some(key);
@@ -1797,9 +1801,6 @@ impl Session {
             let kind = LimitKind::Interrupted;
             let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
             return Some(self.script_failed(job, &e));
-        }
-        if vectorcraft_doc::cancel::check().is_err() {
-            self.script_stop.set();
         }
         job.host.calls_this_slice.set(0);
         let outcome = run_slice(self, &mut job);

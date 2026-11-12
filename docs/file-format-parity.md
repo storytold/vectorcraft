@@ -488,25 +488,39 @@ Stop opacity on translated artboards remains outside this regression coverage.
 
 Feature evidence updated 2026-10-26; scores and estimates unchanged.
 
-EPS is offered by Save As, and an opened EPS keeps its own path for ordinary Save. Save writes
-one artboard (the first by default, or the named artboard), retaining its page bounds and transparent
-margins rather than cropping to the drawn artwork. The whole editable VectorCraft document remains
-embedded in EPS comments, including other artboards. Save bounds the optional TIFF preview to
+EPS is offered by Save As, and an opened EPS keeps its own path for ordinary Save. The EPS
+Options of Save As show Use Artboards with All or Range under it, for a separate file per artboard
+([saving in EPS](https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/save-artwork-in-eps-format.html)),
+unchecked by default (the scripting reference's EPS save options list `saveMultipleArtboards` with
+a default of false,
+[scripting reference](https://web.archive.org/web/20160803105056/https://wwwimages.adobe.com/content/dam/Adobe/en/devnet/illustrator/sdk/CC2015_3/Illustrator%20JavaScript%20Scripting%20Reference.pdf)).
+Unchecked, Save writes one file whose bounding box fits all the visible art, as Export does,
+without the artboards' background colors; an opened EPS saved back this way loses the margins its
+page had. With no visible art the page is the first artboard, in its color. Naming artboards with
+`artboard`, `artboards` or `range` turns Use Artboards on. Checked with two or more chosen, the
+file at the path is the central file of the visible art and each artboard is also written to
+`<name>_<artboard>.eps` beside it, holding that artboard. Checked with one chosen, VectorCraft
+writes that artboard as the page of the file at the path alone, retaining its bounds and
+transparent margins. The file the document becomes carries the whole editable VectorCraft document
+in EPS comments, including other artboards. Save bounds the optional TIFF preview to
 1024 pixels on its longest side (about 4 MiB of RGBA pixels), avoiding the roughly 16 MiB preview a
 large artboard otherwise produces. Export keeps its existing 2048-pixel preview cap. Preview
 format choices are unchanged; no public preview-resolution option exists. The EPS PostScript appearance still flattens
 transparency; its existing warnings remain. This does not promise native Illustrator editing-data fidelity.
 
-Cropped and selected-only EPS output remains available through Export. Save refuses those options.
+Selected-only EPS output remains available through Export. Save refuses `selectedOnly`.
 An EPS opened from a preview, a partially interpreted program or damaged native editing data keeps
 its source-loss warning: writing over that original requires explicit confirmation. File › Save uses
 the same engine path and write-failure handling as other document formats.
 
-Synthetic regressions: `tests::save::opened_eps_saves_to_its_own_file_with_editable_data_and_page_margins`,
-`eps_save_keeps_all_editing_artboards_while_printing_one_page`,
+Synthetic regressions: `tests::save::opened_eps_saves_to_its_own_file_around_its_art_or_on_its_page`,
+`eps_save_without_use_artboards_fits_the_box_to_art_past_the_artboard`,
+`eps_save_keeps_all_editing_artboards_in_the_file_of_one_page`,
+`eps_save_with_use_artboards_writes_the_central_file_and_one_per_artboard`,
+`cmd::fileio::tests_artboard_fill::eps_save_draws_the_color_on_an_artboard_page`,
 `eps_save_supports_an_empty_artboard_without_cropping_its_page`,
 `partially_read_eps_requires_confirmation_before_save_back`,
 `eps_with_damaged_editing_data_requires_confirmation_before_save_back`,
 `eps_save_bounds_large_page_preview_without_cropping_vector_or_editing_data`, and the UI regressions
 `file_save_writes_opened_eps_back_without_another_save_as_dialog` and
-`eps_save_as_keeps_page_options_and_writes_eps_without_export_only_switches`.
+`eps_save_as_shows_use_artboards_off_and_writes_the_art_or_the_artboard`.

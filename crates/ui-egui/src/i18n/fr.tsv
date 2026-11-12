@@ -263,6 +263,7 @@ font-technology	Variable	Variables
 	Asset Export Settings	Paramètres d’exportation de ressources
 	Assets	Ressources
 	Assign	Attribuer
+	Assign Profile	Attribuer un profil
 	Assign Profile…	Attribuer un profil…
 	Assign:	Attribuer :
 	Attach to Active Plane	Associer au plan actif
@@ -2337,6 +2338,9 @@ font-technology	Variable	Variables
 	Optical	Optique
 	Optical Margin Alignment	Alignement optique des marges
 	Dynamic Text	Texte dynamique
+	Dynamic Text Presets	Paramètres prédéfinis du texte dynamique
+	Arch	Voûte
+@msg	select point type or type on a path	sélectionnez du texte de point ou du texte curviligne
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	le texte curviligne d’un texte lié ne peut pas utiliser le texte dynamique : {frames}
 	Optimize for fast web view	Optimiser pour un affichage web rapide
 	Optimized	Optimisé
@@ -2344,6 +2348,7 @@ font-technology	Variable	Variables
 	Options for Selection…	Options de la sélection…
 	Options:	Options :
 	Options…	Options…
+	Organic Fades	Fondus organiques
 	or more spaces with a tab	espaces ou plus par une tabulation
 	Order:	Ordre :
 	Ordinals	Ordinaux
@@ -2535,6 +2540,7 @@ font-technology	Variable	Variables
 	Presets:	Paramètres prédéfinis :
 	Press 	Appuyez sur 
 	Preview	Aperçu
+	Preview:	Aperçu :
 	Preview All Layers	Aperçu de tous les calques
 	Preview in Browser	Aperçu dans le navigateur
 	Preview in Browser needs the desktop app (the web downloads files instead)	L’aperçu dans le navigateur nécessite l’application de bureau (la version web télécharge les fichiers à la place)
@@ -2614,6 +2620,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Halos radiaux
 	Radial Gradient	Dégradé radial
 	Conic Gradient	Dégradé conique
+	Diamond Gradient	Dégradé en losange
 	Radius 1	Rayon 1
 	Radius 2	Rayon 2
 	Radius1	Rayon1
@@ -3168,6 +3175,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Étourdissement
 	Stealth Fade	Furtivité
 	Shield Buff	Bouclier
+	Textures	Textures
+	Fine Grain	Grain fin
+	Canvas Weave	Toile tissée
+	Burlap Sack	Sac de jute
+	Cracked Glaze	Glaçure craquelée
+	Mosaic Floor	Sol en mosaïque
+	Quilted Squares	Carrés matelassés
+	Leaded Glass	Vitrail au plomb
+	Damp Paper	Papier humide
 	Shape	Forme
 	Shape Builder	Concepteur de forme
 	Shape Builder Regions	Zones du Concepteur de forme
@@ -3871,6 +3887,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMJN de travail
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
+	Working RGB (don't tag)	RVB de travail (sans balise)
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
 	Wrinkle Tool	Outil Fronces
@@ -4230,6 +4247,7 @@ axis	Both	Les deux
 @msg	`{key}` must be a number, not {v}	`{key}` doit être un nombre, pas {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} doit être un temps Unix en secondes (un entier) ou null
 @msg	`{key}` must be a string	`{key}` doit être une chaîne
+@msg	`{key}` must be a profile name or null	`{key}` doit être un nom de profil ou null
 @msg	`{key}` must be a whole number	`{key}` doit être un nombre entier
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` doit être un nombre entier compris entre {min} et {max} (reçu : {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` doit être compris entre {min} et {max} (reçu : {x})
@@ -4726,7 +4744,7 @@ axis	Both	Les deux
 @msg	unknown format	format inconnu
 @msg	unknown format `{f}` (Save writes {_1})	format inconnu `{f}` (Enregistrer écrit {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode de forme libre inconnu `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	type de dégradé inconnu `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	type de dégradé inconnu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	mise en évidence inconnue `{h}`
 @msg	unknown option `{path}.{k}`	option inconnue `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	surimpressions inconnues `{o}` (preserve, simulate ou discard)
@@ -5814,7 +5832,7 @@ theme	Appearance	Apparence
 @msg	span must be "object" or "selection", got {v}	span doit être "object" ou "selection", pas {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" place un `gradient`, pas une nuance
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" place un dégradé : indiquez `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" place un dégradé linéaire, radial ou conique, pas un dégradé de forme libre
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" place un dégradé linéaire, radial, conique ou en losange, pas un dégradé de forme libre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" place le dégradé lui-même : omettez `start` et `end` (ils le placent déjà en coordonnées du document)
 	Make Image Dynamic	Rendre l'image dynamique
 	Import Data Sets…	Importer des jeux de données…
@@ -6830,6 +6848,11 @@ breakText	Glyphs	Glyphes
 @msg	only an exporter or an importer declares `extensions`	seul un module externe d’exportation ou d’importation déclare `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un module externe d’importation reçoit toujours le budget d’une importation : omettez `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copier les informations de dépannage
+@msg	Copied the troubleshooting info	Informations de dépannage copiées
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	La dernière session de VectorCraft a cessé de répondre avant de se fermer. Aide › Copier les informations de dépannage copie les détails pour un rapport de bogue
+
 # Safe Mode
 	Safe Mode…	Mode sans échec…
 	Safe Mode	Mode sans échec
@@ -6850,6 +6873,7 @@ breakText	Glyphs	Glyphes
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Aligner sur la grille de pixels
+	Align New Objects to Pixel Grid	Aligner les nouveaux objets sur la grille de pixels
 	Not Aligned to Pixel Grid	Non aligné sur la grille de pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels
 @msg	side is left or right, not `{s}`	side vaut left ou right, pas `{s}`

@@ -338,10 +338,14 @@ impl Exporter<'_> {
                             .into(),
                         )
                     }
-                    // Painted areas get an image of the field ([`Self::area`]); elsewhere (gradient
-                    // slices) the average colour stands in.
-                    GradientKind::Freeform => {
-                        self.warn("freeform gradients are exported as their average colour");
+                    // Painted areas get an image of the field, or a diamond's four linear gradients
+                    // ([`Self::area`]); elsewhere (gradient slices) the average color stands in.
+                    GradientKind::Freeform | GradientKind::Diamond => {
+                        self.warn(if g.gradient.kind == GradientKind::Diamond {
+                            "diamond gradients in gradient slices are exported as their average color"
+                        } else {
+                            "freeform gradients are exported as their average colour"
+                        });
                         let n = g.gradient.stops.len().max(1) as f32;
                         let mut acc = [0.0f32; 3];
                         for s in &g.gradient.stops {
@@ -476,10 +480,43 @@ impl Exporter<'_> {
         g.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot)))
     }
 
+    /// Draw diamond gradient `g`, placed on `bounds`, over `area` (inside the current clip) as four
+    /// linear gradients, one for each quadrant of its frame, each equal to the diamond there (PDF
+    /// has no diamond shading; [`vectorcraft_color::GradientGeom::diamond_quadrants`]). The
+    /// quadrants overlap so no hairline shows between them, which needs opaque stops. False
+    /// (nothing drawn) for a diamond with translucent stops or without a frame, which
+    /// [`Self::field_image`] draws instead.
+    pub(super) fn diamond(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect) -> bool {
+        if g.gradient.stops.iter().any(|st| st.opacity < 1.0) {
+            return false;
+        }
+        let Some(quadrants) = g.resolve(bounds).diamond_quadrants(area.abs()) else { return false };
+        self.warn("diamond gradients are exported as four linear gradients");
+        let gradient = vectorcraft_color::Gradient { kind: GradientKind::Linear, ..g.gradient.clone() };
+        for (outline, geom) in quadrants {
+            let linear = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { gradient: gradient.clone(), geom: Some(geom), ..g.clone() }));
+            let quadrant = kurbo::BezPath::from_vec(
+                outline
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &p)| if i == 0 { kurbo::PathEl::MoveTo(p) } else { kurbo::PathEl::LineTo(p) })
+                    .chain([kurbo::PathEl::ClosePath])
+                    .collect(),
+            );
+            if let (Some(paint), Some(path)) = (self.paint(s, &linear, bounds), to_path(s, &quadrant)) {
+                s.set_stroke(None);
+                s.set_fill(Some(krilla::paint::Fill { paint, opacity: krilla::num::NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+                s.draw_path(&path);
+                s.set_fill(None);
+            }
+        }
+        true
+    }
+
     /// Draw gradient `g`, placed on `bounds`, as an image over `area`, sampled at the document's
     /// raster effects resolution where it is drawn (`area` as the current transform sizes it, so
     /// scaled type gets its pixels too): a freeform gradient's colour field (at most
-    /// [`MAX_FIELD_PX`] a side), or a linear, radial or conic gradient (at most [`MAX_GRADIENT_PX`] a side),
+    /// [`MAX_FIELD_PX`] a side), or a linear, radial, conic or diamond gradient (at most [`MAX_GRADIENT_PX`] a side),
     /// with dither's noise when it paints a fill (`fill`). A linear or radial gradient whose stops
     /// are all CMYK and not linked to a spot swatch is a CMYK image, unless its Perceptual curve
     /// has too many stops; any other is an RGB image.
@@ -505,6 +542,8 @@ impl Exporter<'_> {
         let cmyk_doc = self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
         if g.gradient.kind == GradientKind::Conic {
             self.warn("conic gradients drawn as pixels (dithered fills, and Perceptual ones other than spot ink shadings), in a PDF/A file or with more than 97 stops are exported as images");
+        } else if g.gradient.kind == GradientKind::Diamond {
+            self.warn("diamond gradients drawn as pixels (dithered fills, and Perceptual ones other than spot ink shadings), with translucent stops or without an extent are exported as images");
         } else if !freeform {
             self.warn("linear and radial gradients drawn as pixels are exported as images");
         }

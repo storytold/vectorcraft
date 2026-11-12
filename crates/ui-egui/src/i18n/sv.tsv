@@ -251,6 +251,7 @@ font-technology	Variable	Variabla
 	Asset Export Settings	Inställningar för resursexport
 	Assets	Resurser
 	Assign	Tilldela
+	Assign Profile	Tilldela profil
 	Assign Profile…	Tilldela profil…
 	Assign:	Tilldela:
 	Attach to Active Plane	Koppla till aktivt plan
@@ -2284,6 +2285,9 @@ font-technology	Variable	Variabla
 	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
 	Dynamic Text	Dynamisk text
+	Dynamic Text Presets	Förinställningar för dynamisk text
+	Arch	Valv
+@msg	select point type or type on a path	markera punkttext eller text på bana
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text på bana i länkad text kan inte använda dynamisk text: {frames}
 	Optimize for fast web view	Optimera för snabb webbvisning
 	Optimized	Optimerad
@@ -2291,6 +2295,7 @@ font-technology	Variable	Variabla
 	Options for Selection…	Alternativ för markering…
 	Options:	Alternativ:
 	Options…	Alternativ…
+	Organic Fades	Organiska toningar
 	or more spaces with a tab	eller fler blanksteg med en tabb
 	Order:	Ordning:
 	Ordinals	Ordningstal
@@ -2480,6 +2485,7 @@ font-technology	Variable	Variabla
 	Presets:	Förinställningar:
 	Press 	Tryck på 
 	Preview	Förhandsgranskning
+	Preview:	Förhandsgranskning:
 	Preview All Layers	Förhandsgranska alla lager
 	Preview in Browser	Förhandsgranska i webbläsare
 	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filerna i stället)
@@ -2559,6 +2565,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Radiellt sken
 	Radial Gradient	Radiell gradient
 	Conic Gradient	Konisk gradient
+	Diamond Gradient	Rombgradient
 	Radius 1	Radie 1
 	Radius 2	Radie 2
 	Radius1	Radie1
@@ -3100,6 +3107,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Bedövning
 	Stealth Fade	Smyga
 	Shield Buff	Sköld
+	Textures	Texturer
+	Fine Grain	Fin kornighet
+	Canvas Weave	Kanvasväv
+	Burlap Sack	Jutesäck
+	Cracked Glaze	Krackelerad glasyr
+	Mosaic Floor	Mosaikgolv
+	Quilted Squares	Quiltade rutor
+	Leaded Glass	Blyinfattat glas
+	Damp Paper	Fuktigt papper
 	Shape	Form
 	Shape Builder	Formbyggare
 	Shape Builder Regions	Formbyggarområden
@@ -3801,6 +3817,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	Arbets-CMYK
 	Working CMYK (don't tag)	Arbets-CMYK (tagga inte)
+	Working RGB (don't tag)	Arbets-RGB (tagga inte)
 	Workspace	Arbetslayout
 	Workspace {i}	Arbetslayout {i}
 	Wrinkle Tool	Skrynkelverktyg
@@ -4635,7 +4652,7 @@ axis	Both	Båda
 @msg	unknown format	okänt format
 @msg	unknown format `{f}` (Save writes {_1})	okänt format `{f}` (Spara skriver {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	okänt fritt läge `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	okänd gradienttyp `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	okänd gradienttyp `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	okänd högdager `{h}`
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
@@ -5788,7 +5805,7 @@ theme	Appearance	Utseende
 @msg	span must be "object" or "selection", got {v}	span måste vara "object" eller "selection", fick {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerar en `gradient`, inte en färgruta
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerar en gradient: ange `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" placerar en linjär, radiell eller konisk gradient, inte en fri
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" placerar en linjär, radiell, konisk eller rombformad gradient, inte en fri
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerar själva gradienten: utelämna `start` och `end` (de placerar den redan i dokumentkoordinater)
 @msg	the Color Picker is not open	färgväljaren är inte öppen
 @msg	the Simplify slider is not open	Förenkla-reglaget är inte öppet
@@ -7448,7 +7465,7 @@ digits	Hindi	Hindi
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	EPS flattener: {e}	EPS-utplattning: {e}
 @msg	EPS options: {e}	EPS-alternativ: {e}
-@msg	EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS	När du sparar som EPS behålls ritytan och allt bildmaterial: använd document.export för beskuren EPS eller EPS med bara det markerade
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	När du sparar som EPS skrivs allt bildmaterial: använd document.export för EPS med bara det markerade
 @msg	every numbered name for the result is taken	alla numrerade namn för resultatet är upptagna
 @msg	expanded SVG styles exceed the import size limit	de expanderade SVG-stilarna överskrider storleksgränsen för import
 @msg	expected {"dataBase64"}	förväntade {"dataBase64"}
@@ -8316,6 +8333,11 @@ digits	Hindi	Hindi
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importfunktion anger 1 till {MAX_EXTENSIONS} `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	en importfunktion får alltid en imports budget: utelämna `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiera felsökningsinformation
+@msg	Copied the troubleshooting info	Kopierade felsökningsinformationen
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Den senaste VectorCraft-sessionen slutade svara innan den stängdes. Hjälp › Kopiera felsökningsinformation kopierar detaljerna till en felrapport
+
 # Safe Mode
 	Safe Mode…	Felsäkert läge…
 	Safe Mode	Felsäkert läge
@@ -8336,6 +8358,7 @@ digits	Hindi	Hindi
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Justera mot pixelrutnät
+	Align New Objects to Pixel Grid	Justera nya objekt mot pixelrutnät
 	Not Aligned to Pixel Grid	Inte justerade mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`

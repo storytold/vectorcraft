@@ -617,11 +617,16 @@ fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
             stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
             g.angle = g.angle.rem_euclid(360.0);
             let conic = g.gradient.kind == vectorcraft_color::GradientKind::Conic;
+            let no_focal = conic || g.gradient.kind == vectorcraft_color::GradientKind::Diamond;
             if let Some(geom) = &mut g.geom {
                 check_point(geom.start, at)?;
                 check_point(geom.end, at)?;
                 if let Some(f) = geom.focal {
                     check_point(f, at)?;
+                }
+                // Conic and diamond gradients have no focal point (the commands refuse one).
+                if no_focal {
+                    geom.focal = None;
                 }
                 let a = geom.aspect;
                 // A conic's negative aspect mirrors its sweep, so its sign stays.

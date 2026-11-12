@@ -674,6 +674,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "help.checkForUpdates" => crate::updates_ui::check(app),
         "help.safeMode" => crate::dialogs::safe_mode::open(app),
+        "help.copyTroubleshootingInfo" => crate::troubleshooting::copy(app),
         "help.commandPalette" => {
             app.ui.palette_open = !app.ui.palette_open;
             app.ui.palette_query.clear();

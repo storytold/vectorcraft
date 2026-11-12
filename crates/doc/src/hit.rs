@@ -795,6 +795,10 @@ thread_local! {
     static LEAVES_TESTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// What a click at `p` hits on leaf object `n`: its outline, strokes and fills, its frame or its
+/// bounds, by kind. Raster effects (drop shadows, glows, blurs) do not take clicks: the area they
+/// paint beyond the object is left out here and in [`cull_reach`], so a click there reaches the
+/// object under it.
 fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
     #[cfg(test)]
     LEAVES_TESTED.with(|c| c.set(c.get() + 1));
