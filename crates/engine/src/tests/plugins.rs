@@ -476,6 +476,36 @@ fn a_shadow_on_each_fill_a_painted_effect_returns_follows_the_transform_after_it
     assert_eq!(far, near, "both shadows at 20 pt");
 }
 
+/// A Transform effect with Scale Strokes & Effects on after a painted effect on a fill leaves the
+/// Drop Shadow after it as it is on every paint the piece is drawn with.
+#[test]
+fn a_transform_after_a_painted_fill_effect_leaves_the_later_shadow_on_every_paint() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let two = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00"), solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.twopaints", true), &two));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.twopaints", "item": fill}));
+    let mut n = node(&s, id);
+    let later = [
+        vectorcraft_doc::Effect { id: "distort.transform".into(), params: json!({"scaleH": 200, "scaleV": 200, "strokes": true}), visible: true },
+        vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: json!({"x": 10.0, "y": 0.0, "blur": 0.0}), visible: true },
+    ];
+    n.appearance.items[fill].effects_mut().extend(later);
+    let art = vectorcraft_render::effects::reshape(Some(&s.doc().unwrap().doc), &n, None).unwrap();
+    let mut offsets = vec![];
+    art.walk(&mut |m| {
+        for item in &m.appearance.items {
+            for r in vectorcraft_render::effects::raster_effects(item.effects()) {
+                if let vectorcraft_render::effects::RasterFx::DropShadow { dx, dy, .. } = r {
+                    offsets.push((dx, dy));
+                }
+            }
+        }
+    });
+    assert_eq!(offsets, [(10.0, 0.0), (10.0, 0.0)], "one shadow on each of the piece's two fills");
+}
+
 /// A result refused for a swatch the document doesn't have stays cached: once the document has the
 /// swatch, the next check of that result clears the error.
 #[test]
