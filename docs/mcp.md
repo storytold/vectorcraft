@@ -168,9 +168,8 @@ the suite) keep the agent to the folders you give it:
   path as the file name in every string and key, the status text (`ui.status`), dialogs, the command palette query
   (`ui.palette_query`), a script's report (`scriptReport`) and the error from an internal fault included, for the
   libraries hidden before the request ran and after it. The path is also matched with `%XX` escapes as a `file:`
-  URL writes it, and on Windows in any case of its letters. A longer text that begins with a hidden id or path
-  keeps it only when the longer text is another loaded library's id with no `.` or `..` part, so a readable
-  library's id that begins with a hidden one stays. The error of a failed request also shows a path outside the
+  URL writes it, and on Windows in any case of its letters. A hidden id or path stays only where it begins
+  another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with a hidden one stays. The error of a failed request also shows a path outside the
   read roots that the request sent by its file name, whether or not a library was loaded from it, so that the
   error reads the same either way. Encoded file data, a base64 string under `dataBase64`,
   `pngBase64` or `thumbnailBase64`, is sent as it is.

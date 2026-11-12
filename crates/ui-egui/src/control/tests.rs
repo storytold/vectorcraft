@@ -82,6 +82,12 @@ fn a_reply_keeps_a_hidden_path_only_inside_a_known_library_id() {
     vectorcraft_engine::file_access::confine(roots.as_ref(), || super::hide_library_ids(&mut reply, &hidden));
     let _ = std::fs::remove_dir_all(base);
     assert_eq!(reply["error"], json!(format!("kept b.svg.bak, b.svg (2){up} and {known}")), "{reply}");
+    // A readable library's id with a space after the hidden part stays whole.
+    // A readable id with a `..` part does not keep the hidden part.
+    let hidden = hiding(&[("loaded//art/in", "loaded/in")], &["loaded//art/in work/a.svg", "loaded//art/in/../ok/c.svg"]);
+    let mut reply = json!({"error": "x loaded//art/in work/a.svg, /art/in work/a.svg and /art/in work; /art/in/../ok/c.svg"});
+    hide_under_a_root("space-continuation", &mut reply, &hidden);
+    assert_eq!(reply["error"], "x loaded//art/in work/a.svg, /art/in work/a.svg and in work; in/../ok/c.svg", "{reply}");
 }
 
 /// With matching in any case (as on Windows), a hidden path written in other letter cases is hidden
