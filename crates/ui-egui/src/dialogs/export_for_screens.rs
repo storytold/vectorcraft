@@ -967,7 +967,7 @@ pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
         d.fields.insert("__itemFolders".into(), json!(if matches!(f, "item" | "itemFormat") { f } else { "" }));
     }
     for key in ["name", "prefix", "counterStart", "counterPer"] {
-        if let Some(value) = st.get(key) {
+        if let Some(value) = st.get(key).filter(|v| !v.is_null()) {
             d.fields.insert(key.into(), value.clone());
         }
     }

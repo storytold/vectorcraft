@@ -971,6 +971,25 @@ fn filename_pattern_edits_are_saved_in_presets_without_losing_other_options() {
     assert_eq!(s.get("counterStart"), Some(&json!(9)));
     assert_eq!((s.get("prefix"), s.get("folders")), (Some(&json!("b-")), Some(&json!("format"))));
     assert_eq!(field(&app, "exportPreset"), "Repeat");
+
+    // Null names are absent to the real preset backend, so retain these valid dialog edits.
+    let retained = (json!("new-####"), json!("b-"), json!("9"), json!("item"));
+    assert_eq!((field(&app, "name"), field(&app, "prefix"), field(&app, "counterStart"), field(&app, "counterPer")), retained);
+    let null_preset = app
+        .run(
+            "document.exportPresets.save",
+            json!({
+                "name": "Unspecified naming",
+                "settings": {"formats": [{"format": "png"}], "name": null, "prefix": null, "counterStart": null, "counterPer": null}
+            }),
+        )
+        .unwrap();
+    for key in ["name", "prefix", "counterStart", "counterPer"] {
+        assert_eq!(null_preset["settings"].get(key), Some(&Value::Null), "the saved preset retains {key}: null");
+    }
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &null_preset);
+    assert_eq!((field(&app, "name"), field(&app, "prefix"), field(&app, "counterStart"), field(&app, "counterPer")), retained);
+    assert_eq!(field(&app, "exportPreset"), "Unspecified naming");
 }
 
 /// Save Preset… on an applied preset saves the dialog's Include Bleed and Include Artboard Fill.
