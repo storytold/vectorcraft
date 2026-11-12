@@ -475,9 +475,18 @@ fn readable(path: &str) -> bool {
     crate::file_access::check_read(path).is_ok()
 }
 
+/// Is `path`, under a read root, written as an absolute path of another platform: outside Windows, one
+/// that starts with a drive (`C:`) or a `\`? The file access check would read it as a name in the
+/// working folder.
+fn written_elsewhere(path: &str) -> bool {
+    let foreign = path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    !cfg!(windows) && foreign && crate::file_access::current().is_some()
+}
+
 /// The loaded library ids (`loaded/<path>`) whose file the request being served may not read, each
 /// with the id a reply shows instead: `loaded/<file name>`, as a library loaded without a path is
-/// named. The ids are those of the session's swatch, brush, symbol and graphic style libraries, then
+/// named. The file name is the last part of the path after either separator, and a path saved as
+/// another platform's absolute path counts as one the request may not read. The ids are those of the session's swatch, brush, symbol and graphic style libraries, then
 /// `others` (ids the UI state refers to). When another id already is or shows that id, the next free
 /// one of `loaded/<file name> (2)`, `(3)` and so on is shown, so that two libraries stay two. The
 /// session's libraries are numbered first, in the sorted order of their full ids, so a library shows
@@ -493,9 +502,13 @@ pub fn concealed_library_ids(s: &Session, others: impl IntoIterator<Item = Strin
     let mut taken = BTreeSet::new();
     for ids in [session, others] {
         for id in ids {
-            let name = id.strip_prefix("loaded/").filter(|path| !path.is_empty()).map(|path| (file_name(path), path));
+            let name = id.strip_prefix("loaded/").filter(|path| !path.is_empty()).map(|path| {
+                // Either separator: a path saved on another platform counts as a path here too.
+                let name = path.rsplit(['/', '\\']).find(|part| !part.is_empty()).unwrap_or(path).to_string();
+                (name, path)
+            });
             match name {
-                Some((name, path)) if name != path && !readable(path) => hidden.push((id, name)),
+                Some((name, path)) if name != path && (written_elsewhere(path) || !readable(path)) => hidden.push((id, name)),
                 _ => {
                     taken.insert(id);
                 }
