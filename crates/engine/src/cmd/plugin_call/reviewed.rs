@@ -484,6 +484,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "select.object.brushStrokes",
     "select.object.clippingMasks",
     "select.object.directionHandles",
+    "select.object.notAlignedToPixelGrid",
     "select.object.pointText",
     "select.object.slices",
     "select.object.strayPoints",
