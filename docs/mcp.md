@@ -4629,7 +4629,12 @@ template, AI or AIT format counts artboard file names when the document has any 
 counts them when the document has several artboards.
 Under Data Set Name, VectorCraft makes Windows device names safe (`CON` becomes `CON-`). This is
 VectorCraft's naming behavior. Caps: 500
-files or data sets, 8 folder levels, 256 steps. An action recorded in the Actions panel leaves the artboard out,
+files or data sets, 8 folder levels, 256 steps. `action.batch` refuses `includeSubdirs`, `overrideOpen`,
+`overrideSave`, `overrideExport` or `stopOnError` given as anything but true or false, such as `"false"`, with
+`` `stopOnError` must be true or false ``, and `source`, `folder`, `destination`, `destinationFolder`,
+`datasetFileNaming` or `label` given as anything but a string with `` `label` must be a string ``, naming the key.
+It checks them, and that `source` is `folder` or `datasets`, before it makes the destination folder or opens a file.
+A null is read as a key left out. An action recorded in the Actions panel leaves the artboard out,
 and its steps of these commands get the artboard that is active when the action plays. A press with the Selection,
 Direct Selection or Group Selection tool inside an artboard makes that artboard the active one; with the Selection
 tool, a Shift-click on an empty spot inside an artboard makes it active and keeps the selection. Choosing the Artboard
