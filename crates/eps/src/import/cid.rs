@@ -18,6 +18,7 @@ use vectorcraft_geom::BezPath;
 
 use super::interp::{Interp, matrix_obj};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
+use super::predefined_cmap::Unicode;
 
 /// Most codespace ranges, character and notdef mappings a CMap may hold.
 const MAX_RANGES: usize = 1 << 16;
@@ -210,16 +211,6 @@ fn number(data: &[u8], at: usize, n: usize) -> Option<u64> {
     (n <= 8).then(|| bytes.iter().fold(0u64, |v, b| v << 8 | u64::from(*b)))
 }
 
-/// How a predefined Unicode CMap's codes encode their characters.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub(super) enum Unicode {
-    /// Two bytes a character (`UCS2`) or a UTF-16 surrogate pair, the high byte first.
-    Utf16,
-    Utf8,
-    /// Four bytes, the high byte first.
-    Utf32,
-}
-
 /// The encoding of predefined Unicode CMap `name` and whether it is vertical: one of Adobe's
 /// public CMap resources whose name says its codes are Unicode: `Uni` and a character
 /// collection, then `-UCS2`, `-UTF8`, `-UTF16` or `-UTF32` (and `-HW` for half-width forms),
@@ -244,18 +235,6 @@ pub(super) fn unicode_cmap(name: &str) -> Option<(Unicode, bool)> {
         _ => return None,
     };
     Some((form, vertical))
-}
-
-/// The characters show string `s` encodes in Unicode form `form` (invalid codes left out).
-pub(super) fn unicode_text(s: &[u8], form: Unicode) -> String {
-    match form {
-        Unicode::Utf16 => {
-            let units = s.as_chunks::<2>().0.iter().map(|b| u16::from_be_bytes(*b));
-            char::decode_utf16(units).filter_map(Result::ok).collect()
-        }
-        Unicode::Utf8 => String::from_utf8_lossy(s).chars().filter(|c| *c != char::REPLACEMENT_CHARACTER).collect(),
-        Unicode::Utf32 => s.as_chunks::<4>().0.iter().filter_map(|b| char::from_u32(u32::from_be_bytes(*b))).collect(),
-    }
 }
 
 /// A predefined Identity CMap: two-byte codes, each the CID of its own value; vertical for
@@ -417,8 +396,13 @@ impl Interp<'_> {
             return Ok(d.clone());
         }
         let text = name.text().map(|t| t.to_string()).unwrap_or_default();
-        match unicode_cmap(&text) {
-            Some((_, vertical)) => {
+        // Another predefined CMap the file doesn't define, without its mappings: its codes are
+        // read by its name when type is set (see `text`).
+        let predefined = unicode_cmap(&text)
+            .map(|(_, vertical)| vertical)
+            .or_else(|| super::predefined_cmap::known(&text).then(|| super::predefined_cmap::vertical(&text)));
+        match predefined {
+            Some(vertical) => {
                 let mut d = Dict::new();
                 d.insert(Key::name("CMapName"), Obj::name(&text));
                 d.insert(Key::name("CMapType"), Obj::Int(1));
