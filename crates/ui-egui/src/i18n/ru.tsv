@@ -2930,6 +2930,9 @@ digits	Malayalam	Малаялам
 	Rise…	Подъём…
 	Roman Baseline	Римская базовая линия
 	Roman Hanging Punctuation	Римская висячая пунктуация
+	Korean Line Break Anywhere	Перенос корейского текста в любом месте
+	East Asian Composition Settings	Параметры восточноазиатского набора
+	Korean Composition Settings	Параметры корейского набора
 	Rotate	Повернуть
 	Rotate 90° CW	Повернуть на 90° по часовой стрелке
 	Rotate Tool	Инструмент «Поворот»

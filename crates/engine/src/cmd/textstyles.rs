@@ -243,6 +243,7 @@ pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
         ("kinsoku_type", json!(v.kinsoku_type)),
         ("roman_hanging", json!(v.roman_hanging)),
         ("kashida", json!(v.kashida)),
+        ("korean_line_break_anywhere", json!(v.korean_line_break_anywhere)),
     ] {
         m.insert(k.into(), x);
     }

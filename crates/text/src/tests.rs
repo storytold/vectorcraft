@@ -2515,6 +2515,41 @@ fn thai_loanwords_stay_whole() {
     assert!(l.lines.iter().all(|ln| ln.end <= word || ln.end >= word + "โปรแกรม".len()), "{lines:?}");
 }
 
+/// Korean Line Break Anywhere (a paragraph attribute): off, a Korean word that does not fit moves
+/// to the next line whole, with either composer and in vertical type; on, the line breaks between
+/// its syllables. Each paragraph follows its own setting.
+#[test]
+fn korean_words_stay_whole_unless_line_break_anywhere_is_on() {
+    let text = "가나다 라마바";
+    let first = "가나다 ".len();
+    let measure = |vertical: bool| {
+        let mut t = point("가나다 라", style(20.0));
+        t.vertical = vertical;
+        layout(db(), &t).glyphs.iter().map(|g| g.advance).sum::<f64>()
+    };
+    let ends = |t: &TextObject| layout(db(), t).lines.iter().map(|l| l.end).collect::<Vec<_>>();
+    for vertical in [false, true] {
+        let fits = measure(vertical);
+        let frame = if vertical { Rect::new(0.0, 0.0, 400.0, fits + 1.0) } else { Rect::new(0.0, 0.0, fits + 1.0, 400.0) };
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let mut t = area(text, style(20.0), frame, Justify::Left);
+            (t.vertical, t.para.composer) = (vertical, composer);
+            assert_eq!(ends(&t), [first, text.len()], "{composer:?} vertical {vertical}: off");
+            t.para.korean_line_break_anywhere = true;
+            let on = ends(&t);
+            assert!(on.iter().any(|&e| e != first && e != text.len()), "{composer:?} vertical {vertical}: on {on:?}");
+        }
+    }
+    // Per paragraph: the first breaks between syllables, the second between words.
+    let fits = measure(false);
+    let mut t = area(&format!("{text}\n{text}"), style(20.0), Rect::new(0.0, 0.0, fits + 1.0, 400.0), Justify::Left);
+    t.para.composer = Composer::SingleLine;
+    let anywhere = vectorcraft_doc::ParaStyle { korean_line_break_anywhere: true, ..t.para.clone() };
+    t.set_paragraph_styles(vec![anywhere, t.para.clone()]);
+    let second = text.len() + 1;
+    assert_eq!(ends(&t), ["가나다 라".len(), text.len(), second + first, second + text.len()]);
+}
+
 /// No Break (Character panel menu) keeps the marked words on one line, where the same text wraps
 /// at the space without the mark.
 #[test]

@@ -7157,6 +7157,25 @@ Panel sets it back to Push Out Only. One undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsokuType":"pushInFirst"}}}
 ```
 
+## Korean Line Break Anywhere
+
+`text.setFormat {koreanLineBreakAnywhere: bool}` (Paragraph panel menu › Korean Line Break Anywhere, shown with the
+East Asian options) turns it on or off for the paragraphs of the selected type (or `ids`, or the paragraphs a `start` /
+`end` range touches). Off, a Korean word (the characters between two spaces, when any of them is Hangul, Han and kana
+included) breaks only at its spaces, after East Asian punctuation in it, and at forced line breaks, so a word that does
+not fit moves to the next line whole; a word wider than the line still breaks where it overflows. On, a line may break
+between any two Hangul syllables. Both composers and vertical type follow it, No Break and the Kinsoku Set still apply,
+and hyphenation never adds a hyphen to Hangul. Text without Hangul keeps its own breaks. New type and imported text have
+it off; paragraphs saved before the option open with it on, the breaks they were laid out with. It is saved with the
+paragraph (`korean_line_break_anywhere` in `para`) only when off, paragraph styles carry it (Paragraph Style Options ›
+East Asian Composition Settings), and Reset Panel turns it off. A value that is not true or false is refused. One undo
+step. `.ai` editing data does not hold it, and a save reports a Korean paragraph with it on as left out. The
+help page: https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/set-line-breaks-korean-text.html
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"koreanLineBreakAnywhere":true}}}
+```
+
 ## Hanging punctuation (burasagari)
 
 `text.setFormat {burasagari: "none"|"standard"|"forced"}` sets the Paragraph panel menu's Burasagari (None / Regular /

@@ -157,7 +157,8 @@ fn invalid_values_keep_the_dialog_open() {
 fn reset_panel_clears_only_its_section() {
     let mut app = app();
     let all = json!({"justify": "Center", "space_after": 6.0, "composer": "singleLine", "roman_hanging": true, "hyphenate": true,
-        "hyphenation": {"words_longer_than": 8}, "justification": {"auto_leading": 150.0}, "tabs": [{"position": 20.0}]});
+        "hyphenation": {"words_longer_than": 8}, "justification": {"auto_leading": 150.0}, "tabs": [{"position": 20.0}],
+        "korean_line_break_anywhere": true});
     app.run("paraStyle.new", json!({"name": "Body", "attrs": all})).unwrap();
     let stored = def(&app, "Body");
     for (section, cleared) in [
@@ -165,6 +166,7 @@ fn reset_panel_clears_only_its_section() {
         ("composition", &["composer", "roman_hanging"]),
         ("hyphenation", &["hyphenate", "hyphenation"]),
         ("justification", &["justification"]),
+        ("eastAsian", &["korean_line_break_anywhere"]),
     ] {
         app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
         assert!(app.run("ui.paraStyleOptions.resetPanel", json!({})).is_err(), "General has no Reset Panel");
@@ -257,6 +259,24 @@ fn new_paragraph_style_offers_the_sections() {
     assert_eq!(paras(&app, id)[0].justify, Justify::Center);
 }
 
+/// East Asian Composition Settings › Korean Line Break Anywhere sets the style's attribute, which
+/// its paragraphs take; unset, the style leaves it out and the paragraphs keep their own.
+#[test]
+fn korean_line_break_anywhere_is_set_by_the_east_asian_section() {
+    let mut app = app();
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "가나 다라"})).unwrap()["id"].as_u64().unwrap();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+    app.run("paraStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+    assert!(!paras(&app, id)[0].korean_line_break_anywhere);
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().fields["korean_line_break_anywhere"].is_null());
+    set(&mut app, "section", json!("eastAsian"));
+    set(&mut app, "korean_line_break_anywhere", json!(true));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body").get("korean_line_break_anywhere"), Some(&json!(true)));
+    assert!(paras(&app, id)[0].korean_line_break_anywhere, "the style's paragraphs take it");
+}
+
 /// The section list, Reset Panel and both buttons are drawn in every section, and the Hyphenation
 /// options are drawn whether or not Hyphenation is on.
 #[test]
@@ -272,6 +292,7 @@ fn every_section_draws_its_fields() {
         ("composition", "Roman Hanging Punctuation"),
         ("hyphenation", "Hyphenation Zone:"),
         ("justification", "Glyph Scaling:"),
+        ("eastAsian", "Korean Line Break Anywhere"),
     ] {
         set(&mut app, "section", json!(section));
         let mut texts = String::new();

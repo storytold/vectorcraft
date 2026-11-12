@@ -1963,6 +1963,9 @@ digits	Malayalam	Malajalam
 	Right Indent	Oikea sisennys
 	Right-to-Left Paragraph Direction	Kappaleen suunta oikealta vasemmalle
 	Roman Hanging Punctuation	Latinalaiset riippuvat välimerkit
+	Korean Line Break Anywhere	Korean rivinvaihto missä tahansa
+	East Asian Composition Settings	Itäaasialaisen ladonnan asetukset
+	Korean Composition Settings	Korean ladonnan asetukset
 	Select a text object to edit its paragraph attributes.	Valitse tekstiobjekti, jonka kappalemääritteitä haluat muokata.
 	Single-line Composer	Yhden rivin asettelu
 	Toggle Line Composer	Vaihda rivien asettelu
