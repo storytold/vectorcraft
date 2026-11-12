@@ -413,22 +413,32 @@ fn a_single_key_shortcut_without_a_dialog_runs_at_once() {
 }
 
 /// A key or a chord of a command whose menu item is dimmed opens no dialog: Remove Background… and
-/// Object Mosaic… with a rectangle selected change nothing and say why they can't run.
+/// Object Mosaic… with a rectangle selected change nothing and say why they can't run, and so does
+/// Find and Replace… with no document open.
 #[test]
 fn a_shortcut_of_a_dimmed_command_opens_no_dialog_and_says_why() {
     let chord = vec![
         egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
         egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
     ];
-    for id in ["addon.image.removeBackground", "object.createObjectMosaic"] {
+    for id in ["addon.image.removeBackground", "object.createObjectMosaic", "edit.findReplace"] {
         assert!(crate::shortcut_editor::menu_target(id).is_some(), "{id} has a dialog");
         for (shortcut, events) in [("F", press_f()), ("Cmd+Alt+Shift+F9", chord.clone())] {
-            let mut app = app_with_shortcut(id, shortcut);
+            let mut app = if id == "edit.findReplace" {
+                let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+                crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.screenMode", "");
+                crate::keymap::set_override(&mut app.ui.shortcut_overrides, id, shortcut);
+                app.ui.status.clear();
+                app
+            } else {
+                app_with_shortcut(id, shortcut)
+            };
             assert!(!crate::menus::enabled(&app, id), "{id}");
-            let before = undo_len(&app);
+            let before = app.session.active().map(|st| st.history.undo.len());
             frame(&mut app, events);
             crate::shortcut_editor::sync(&crate::state::UiState::default());
-            assert_eq!((open_dialog(&app), undo_len(&app)), (None, before), "{id} on {shortcut}: {}", app.ui.status);
+            let after = app.session.active().map(|st| st.history.undo.len());
+            assert_eq!((open_dialog(&app), after), (None, before), "{id} on {shortcut}: {}", app.ui.status);
             assert!(app.ui.status.contains("not available"), "{id} on {shortcut}: {}", app.ui.status);
         }
     }

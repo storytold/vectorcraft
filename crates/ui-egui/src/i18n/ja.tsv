@@ -4580,6 +4580,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	nothing to distort	変形するものがありません
 @msg	unknown option `{path}.{k}`	`{path}.{k}` は不明なオプションです
 @msg	command `{0}` is not available right now: {1}	コマンド `{0}` は現在使用できません: {1}
+@msg	command `{id}` is not available right now	コマンド `{id}` は現在使用できません
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` で内部エラーが発生しました: {msg} (ドキュメントは変更されていません。このバグを報告してください)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` のパラメーターが正しくありません: {msg}
 @msg	no active document	アクティブなドキュメントがありません

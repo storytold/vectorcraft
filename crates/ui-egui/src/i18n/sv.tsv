@@ -4298,6 +4298,7 @@ axis	Both	Båda
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` är inte en färg som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: högst {MAX_TABLE} färger
 @msg	command `{0}` is not available right now: {1}	kommandot `{0}` är inte tillgängligt just nu: {1}
+@msg	command `{id}` is not available right now	kommandot `{id}` är inte tillgängligt just nu
 @msg	compound paths can only contain paths	sammansatta banor kan bara innehålla banor
 @msg	compressed (RLE) bitmaps can't be read yet	komprimerade (RLE) bitmappar kan inte läsas än
 @msg	damaged	skadad

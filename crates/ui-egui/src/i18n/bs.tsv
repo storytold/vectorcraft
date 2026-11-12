@@ -4627,6 +4627,7 @@ imageTrace	Outline	Obris
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nije boja poput "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: najviše {MAX_TABLE} boja
 @msg	command `{0}` is not available right now: {1}	naredba `{0}` trenutno nije dostupna: {1}
+@msg	command `{id}` is not available right now	naredba `{id}` trenutno nije dostupna
 @msg	compound paths can only contain paths	složene putanje mogu sadržavati samo putanje
 @msg	compressed (RLE) bitmaps can't be read yet	komprimirane (RLE) bitmape se još ne mogu čitati
 @msg	damaged	oštećeno

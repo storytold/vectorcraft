@@ -4166,6 +4166,7 @@ font-technology	Variable	ცვლადი
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ფერი არ არის, მაგალითად "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: არაუმეტეს {MAX_TABLE} ფერი
 @msg	command `{0}` is not available right now: {1}	ბრძანება `{0}` ახლა ხელმისაწვდომი არ არის: {1}
+@msg	command `{id}` is not available right now	ბრძანება `{id}` ახლა ხელმისაწვდომი არ არის
 @msg	compound paths can only contain paths	შედგენილი ტრაექტორია მხოლოდ ტრაექტორიებს შეიძლება შეიცავდეს
 @msg	compressed (RLE) bitmaps can't be read yet	შეკუმშული (RLE) ბიტმაპების წაკითხვა ჯერ არ ხერხდება
 @msg	damaged	დაზიანებულია

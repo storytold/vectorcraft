@@ -4432,6 +4432,7 @@ axis	Both	Оба
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не является цветом, например "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не более {MAX_TABLE} цветов
 @msg	command `{0}` is not available right now: {1}	команда `{0}` сейчас недоступна: {1}
+@msg	command `{id}` is not available right now	команда `{id}` сейчас недоступна
 @msg	compound paths can only contain paths	составные контуры могут содержать только контуры
 @msg	compressed (RLE) bitmaps can't be read yet	сжатые (RLE) растровые изображения пока не читаются
 @msg	damaged	повреждено

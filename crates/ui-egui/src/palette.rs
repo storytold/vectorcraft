@@ -325,9 +325,10 @@ mod tests {
             for it in items {
                 match it {
                     menus::Item::Sub(_, children) => walk(children, out),
-                    // Items that list an installed plug-in come and go as tests beside this one
-                    // install plug-ins, and no shortcut or pick reads them.
-                    menus::Item::Cmd(_, id, p) if !menus::lists_plugin(id, p) => out.push(it),
+                    // Items that list an installed plug-in or show a name that is user data come and
+                    // go as tests beside this one install plug-ins or add toolbars, and no shortcut or
+                    // pick reads them.
+                    menus::Item::Cmd(label, id, p) if !menus::lists_plugin(id, p) && !menus::shows_a_name(id, label) => out.push(it),
                     _ => {}
                 }
             }

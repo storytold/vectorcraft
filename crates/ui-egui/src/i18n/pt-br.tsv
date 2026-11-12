@@ -3935,6 +3935,7 @@ axis	Both	Ambos
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` não é uma cor como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: no máximo {MAX_TABLE} cores
 @msg	command `{0}` is not available right now: {1}	o comando `{0}` não está disponível agora: {1}
+@msg	command `{id}` is not available right now	o comando `{id}` não está disponível agora
 @msg	compound paths can only contain paths	traçados compostos só podem conter traçados
 @msg	compressed (RLE) bitmaps can't be read yet	bitmaps compactados (RLE) ainda não podem ser lidos
 @msg	damaged	danificado

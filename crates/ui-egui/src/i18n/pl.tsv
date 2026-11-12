@@ -4527,6 +4527,7 @@ imageTrace	Outline	Kontur
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nie jest kolorem w rodzaju "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksymalnie {MAX_TABLE} kolorów
 @msg	command `{0}` is not available right now: {1}	polecenie `{0}` jest teraz niedostępne: {1}
+@msg	command `{id}` is not available right now	polecenie `{id}` jest teraz niedostępne
 @msg	compound paths can only contain paths	ścieżki złożone mogą zawierać tylko ścieżki
 @msg	compressed (RLE) bitmaps can't be read yet	skompresowanych bitmap (RLE) nie można jeszcze odczytać
 @msg	damaged	uszkodzony

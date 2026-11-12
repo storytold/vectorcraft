@@ -4350,6 +4350,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: το `{h}` δεν είναι έγκυρο χρώμα, όπως το "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: επιτρέπονται το πολύ {MAX_TABLE} χρώματα
 @msg	command `{0}` is not available right now: {1}	η εντολή `{0}` δεν είναι διαθέσιμη αυτήν τη στιγμή: {1}
+@msg	command `{id}` is not available right now	η εντολή `{id}` δεν είναι διαθέσιμη αυτήν τη στιγμή
 @msg	compound paths can only contain paths	οι σύνθετες διαδρομές μπορούν να περιέχουν μόνο διαδρομές
 @msg	compressed (RLE) bitmaps can't be read yet	τα συμπιεσμένα (RLE) bitmap δεν μπορούν ακόμη να διαβαστούν
 @msg	damaged	κατεστραμμένο

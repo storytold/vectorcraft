@@ -4946,6 +4946,7 @@ imageTrace	Outline	Körvonal
 @msg	column must be true or a number from 1	a column értéke true vagy 1-től kezdődő szám lehet
 @msg	Combine Slices: the slices have no bounds	Szeletek egyesítése: a szeleteknek nincsenek határai
 @msg	command `{0}` is not available right now: {1}	a parancs jelenleg nem érhető el: `{0}`: {1}
+@msg	command `{id}` is not available right now	a parancs jelenleg nem érhető el: `{id}`
 @msg	compound paths can only contain paths	összetett útvonal csak útvonalakat tartalmazhat
 @msg	compressed (RLE) bitmaps can't be read yet	a tömörített (RLE) bitképek még nem olvashatók
 @msg	Convert to Artboards: selection has no area	Átalakítás rajztáblákká: a kijelölésnek nincs területe

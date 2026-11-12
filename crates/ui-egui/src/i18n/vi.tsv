@@ -4603,6 +4603,7 @@ theme	Appearance	Giao diện
 @msg	column must be true or a number from 1	column phải là true hoặc số từ 1
 @msg	Combine Slices: the slices have no bounds	Kết hợp lát cắt: các lát cắt không có giới hạn
 @msg	command `{0}` is not available right now: {1}	lệnh `{0}` hiện không khả dụng: {1}
+@msg	command `{id}` is not available right now	lệnh `{id}` hiện không khả dụng
 @msg	compound paths can only contain paths	đường dẫn phức chỉ có thể chứa đường dẫn
 @msg	compressed (RLE) bitmaps can't be read yet	bitmap nén (RLE) chưa thể đọc được
 @msg	Convert to Artboards: selection has no area	Chuyển thành bảng vẽ: vùng chọn không có diện tích

@@ -4704,6 +4704,7 @@ imageTrace	Outline	Obrys
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` není barva jako "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: nejvýše {MAX_TABLE} barev
 @msg	command `{0}` is not available right now: {1}	příkaz `{0}` nyní není k dispozici: {1}
+@msg	command `{id}` is not available right now	příkaz `{id}` nyní není k dispozici
 @msg	compound paths can only contain paths	složené cesty mohou obsahovat jen cesty
 @msg	compressed (RLE) bitmaps can't be read yet	komprimované bitmapy (RLE) zatím nelze načíst
 @msg	damaged	poškozeno

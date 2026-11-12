@@ -4239,6 +4239,7 @@ axis	Both	И двете
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не е цвят като "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: най-много {MAX_TABLE} цвята
 @msg	command `{0}` is not available right now: {1}	команда `{0}` не е налична в момента: {1}
+@msg	command `{id}` is not available right now	команда `{id}` не е налична в момента
 @msg	compound paths can only contain paths	съставните пътища могат да съдържат само пътища
 @msg	compressed (RLE) bitmaps can't be read yet	компресираните (RLE) битови карти все още не могат да бъдат четени
 @msg	damaged	повреден
