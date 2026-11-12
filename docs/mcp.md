@@ -1953,9 +1953,10 @@ way. The listed scripts come first in the menu, above Check Script… and Other 
 
 The rest of this section is VectorCraft's own rules:
 
-- The folder is read when the app starts, each time its window becomes the active one, and, where the menus are in
-  the window (Windows, Linux and BSD), each time the File menu opens. A script added while VectorCraft runs is listed
-  after the next of these. A read takes names only, never a script's text, and runs off the UI thread, one read at a
+- The folder is read when the app starts, each time its window becomes the active one, each time the File menu opens
+  where the menus are in the window (Windows, Linux and BSD), and each time a menu of the macOS menu bar opens. A
+  script added while VectorCraft runs is listed after the next of these; in the macOS menu bar it shows the next time
+  the menu opens. A read takes names only, never a script's text, and runs off the UI thread, one read at a
   time.
 - Each level is sorted by label without regard to case, with scripts and subfolders mixed. A script whose label
   another row of its folder has (`Tidy.js` beside `Tidy.jsx`, or beside a subfolder `Tidy`) shows its whole file name.
