@@ -2074,6 +2074,7 @@ font-technology	Variable	Variables
 	Move Slices	Mover sectores
 	Move Spine Point	Mover punto del eje
 	Reshape Spine Segment	Remodelar segmento del eje
+	Blend Easing	Suavizado de fusión
 	Move Brush	Mover pincel
 	Move Swatch	Mover muestra
 	Move Up	Subir
@@ -2943,6 +2944,7 @@ digits	Malayalam	Malayálam
 	Rotate View Tool	Herramienta Rotar vista
 	Trackpad Gesture to Rotate View	Rotar vista con un gesto del trackpad
 	Hold a Tool Shortcut to Use the Tool Temporarily	Mantener pulsado el atajo de una herramienta para usarla temporalmente
+	Show Bounding Box While Moving and Drawing	Mostrar cuadro delimitador al mover y dibujar
 	Rotate…	Rotar…
 	Rotation	Rotación
 	Roughen…	Hacer áspero…
@@ -6278,6 +6280,11 @@ axis	Y Axis	Eje Y
 	User Brush Library 9	Biblioteca de pinceles del usuario 9
 	User Brush Library 10	Biblioteca de pinceles del usuario 10
 	Art Ribbons	Cintas de ilustración
+	Ink and Wash	Tinta y aguada
+	Tapered Ink	Tinta afilada
+	Brush Pen	Rotulador de pincel
+	Soft Wash	Aguada suave
+	Pooling Wash	Aguada con borde
 	Zigzag	Zigzag
 	Burst Ray	Rayo de impacto
 	Dash Trail	Estela discontinua

@@ -1400,6 +1400,7 @@ lighting	Light	Svjetlo
 	Rotate View Tool	Alat za rotaciju prikaza
 	Trackpad Gesture to Rotate View	Pokret dodirne ploče za rotaciju prikaza
 	Hold a Tool Shortcut to Use the Tool Temporarily	Držite prečicu alata za privremenu upotrebu alata
+	Show Bounding Box While Moving and Drawing	Prikaži granični okvir pri pomjeranju i crtanju
 	Rotate View	Rotiraj prikaz
 	Rounded Rectangle Tool	Alat zaobljeni pravougaonik
 	Scale Tool	Alat za skaliranje
@@ -3555,6 +3556,7 @@ theme	Appearance	Izgled
 	Move Mesh Points	Pomjeri tačke mreže
 	Move Spine Point	Pomjeri tačku kičme
 	Reshape Spine Segment	Preoblikuj segment kičme
+	Blend Easing	Ublažavanje stapanja
 	Reset with Mesh	Vrati mrežom
 	Reset with Warp	Vrati iskrivljenjem
 	Set Mesh Point Color	Postavi boju tačke mreže
@@ -6121,6 +6123,11 @@ axis	Y Axis	Y osa
 	User Brush Library 9	Korisnička biblioteka četkica 9
 	User Brush Library 10	Korisnička biblioteka četkica 10
 	Art Ribbons	Umjetničke trake
+	Ink and Wash	Tuš i lavir
+	Tapered Ink	Suženi tuš
+	Brush Pen	Kistasti flomaster
+	Soft Wash	Meki lavir
+	Pooling Wash	Lavir s rubom
 	Zigzag	Cik-cak
 	Burst Ray	Zraka udara
 	Dash Trail	Isprekidani trag

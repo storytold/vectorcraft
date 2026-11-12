@@ -605,6 +605,16 @@ pub struct UiState {
     /// adds a new action, as after Begin Recording.
     #[serde(skip)]
     pub recording_into: Option<u64>,
+    /// The length of the action set file that Stop Playing/Recording would leave without the steps
+    /// recorded so far, once measured; None until then, and again after an app command, which may
+    /// change the sets.
+    #[serde(skip)]
+    pub recording_base: Option<usize>,
+    /// The bytes that the steps recorded so far add to that file, at most, as last counted: (the
+    /// journal's rewrites, the recording's first entry, the journal's length, the bytes)
+    /// ([`vectorcraft_engine::Journal::rewrites`]).
+    #[serde(skip)]
+    pub recording_tail: Option<(u64, usize, usize, usize)>,
     /// How actions play (Actions panel menu › Playback Options…), kept with the UI preferences.
     #[serde(default, deserialize_with = "crate::panels::actions::deserialize_playback")]
     pub action_playback: crate::panels::actions::PlaybackOptions,
@@ -1109,6 +1119,8 @@ impl Default for UiState {
             action_sets_selected: vec![],
             recording: None,
             recording_into: None,
+            recording_base: None,
+            recording_tail: None,
             action_playback: Default::default(),
             action_playing: None,
             shortcut_overrides: Default::default(),

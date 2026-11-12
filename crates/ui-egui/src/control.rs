@@ -251,7 +251,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         fields.remove("floating_panels");
         leave_out_unreadable_paths(fields);
     }
-    let mut inspected = json!({
+    json!({
         "scriptRunning": app.session.script_running(),
         "scriptReport": app.session.shown_script_report(),
         "tool": app.session.tool_id(),
@@ -307,10 +307,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // A native file dialog open off the UI thread (`open`, `place`, `save`, `folder`), waiting
         // for the person at the computer: what asked for it runs again when it answers.
         "fileDialog": app.picks.waiting_kind(),
-    });
-    let ids = unreadable_library_ids(app);
-    hide_library_ids(&mut inspected, &ids);
-    inspected
+    })
 }
 
 /// The fields of the UI state, by their keys in `ui.inspect`'s `ui`, that hold panel ids: the panel
@@ -322,33 +319,150 @@ const PANEL_FIELDS: [&str; 7] =
 /// The ids of the loaded libraries (`loaded/<path>`) that the UI state refers to and whose file the
 /// request may not read, each with the id a reply shows instead: `loaded/<file name>`, as a library
 /// loaded without a path is named. The UI state refers to a library by its bare id in a library panel
-/// and the Color Guide's limit, and by a panel id (`library:<kind>:loaded/<path>`) in the fields of
-/// [`PANEL_FIELDS`] and the workspaces' layouts. Text the person types (a command palette query, a
-/// workspace's name) is not read. The ids are numbered with the session's loaded libraries as the
-/// library commands number them ([`vectorcraft_engine::cmd::swatchlib::concealed_library_ids`]), so
-/// that two libraries stay two and `ui.inspect`, `ui.docking` and the library commands show a library
-/// under the same id.
-fn unreadable_library_ids(app: &VectorcraftApp) -> Vec<(String, String)> {
-    let mut ids = std::collections::BTreeSet::new();
+/// and the Color Guide's limit, by a panel id (`library:<kind>:loaded/<path>`) in the fields of
+/// [`PANEL_FIELDS`], the workspaces' layouts and the keys of shortcut overrides (`panel:<panel id>`,
+/// saved and in an open Keyboard Shortcuts dialog), and by either in the `library` and `panel` params of
+/// recorded actions' steps. Text the person types (a command palette query, a workspace's or an
+/// action's name) is not read. The session's loaded libraries whose file the request may not read are
+/// hidden too. The ids are numbered as the library commands number them
+/// ([`vectorcraft_engine::cmd::swatchlib::concealed_library_ids`]), so that two libraries stay two and
+/// `ui.inspect`, `ui.docking` and the library commands show a library under the same id.
+fn unreadable_library_ids(app: &VectorcraftApp) -> Hiding {
+    let mut rest = std::collections::BTreeSet::new();
     let ui = serde_json::to_value(&app.ui).unwrap_or_default();
     for field in PANEL_FIELDS {
-        collect_library_panel_ids(&ui[field], &mut ids);
+        collect_library_panel_ids(&ui[field], &mut rest);
     }
-    for workspace in ["custom_workspaces", "workspace_changes"].iter().filter_map(|k| ui[k].as_array()).flatten() {
-        for (_, layout) in workspace.as_object().into_iter().flatten().filter(|(k, _)| k.as_str() != "name") {
-            collect_library_panel_ids(layout, &mut ids);
+    // A shortcut for showing a panel is keyed `panel:<id>`, saved and in an open Keyboard Shortcuts dialog.
+    for overrides in [&ui["shortcut_overrides"], &ui["dialog"]["fields"]["overrides"]] {
+        for panel in overrides.as_object().into_iter().flat_map(|o| o.keys()).filter_map(|key| key.strip_prefix("panel:")) {
+            collect_library_panel_ids(&json!(panel), &mut rest);
         }
     }
-    collect_library_panel_ids(&json!(app.ui.transient_panel), &mut ids);
+    collect_library_params(&ui["action_sets"], &mut rest);
+    for workspace in ["custom_workspaces", "workspace_changes"].iter().filter_map(|k| ui[k].as_array()).flatten() {
+        for (_, layout) in workspace.as_object().into_iter().flatten().filter(|(k, _)| k.as_str() != "name") {
+            collect_library_panel_ids(layout, &mut rest);
+        }
+    }
+    collect_library_panel_ids(&json!(app.ui.transient_panel), &mut rest);
+    let mut ids = rest;
     for id in app.ui.library_panels.iter().map(|p| p.id.as_str()).chain([app.ui.color_guide_limit.as_str()]) {
         add_library_id(id, &mut ids);
     }
     let mut hidden = vectorcraft_engine::cmd::swatchlib::concealed_library_ids(&app.session, ids.iter().cloned());
-    // Only the ids the UI state refers to are replaced in the reply.
-    hidden.retain(|(id, _)| ids.contains(id));
+    // The other loaded library ids the session and the UI state hold.
+    let s = &app.session;
+    let loaded = s.swatch_libraries.infos().chain(s.style_libraries.infos()).chain(s.symbol_libraries.infos()).chain(s.brush_libraries.infos());
+    let readable_ids = loaded
+        .map(|info| info.id.clone())
+        .chain(ids)
+        .filter(|id| id.len() > "loaded/".len() && id.starts_with("loaded/") && !hidden.iter().any(|(h, _)| h == id))
+        .collect();
     // The longest first, so that an id that begins another one does not replace part of it.
     hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
-    hidden
+    Hiding { hidden, readable: readable_ids, sent: Vec::new() }
+}
+
+/// What a reply hides ([`hide_library_ids`]).
+#[derive(Debug, Default)]
+struct Hiding {
+    /// The ids of the loaded libraries the request may not read, longest first, each with the id
+    /// shown instead ([`unreadable_library_ids`]).
+    hidden: Vec<(String, String)>,
+    /// The other loaded library ids the UI state and the session hold: an occurrence of a hidden id or
+    /// path that begins one of them stays ([`begins_known_id`]).
+    readable: std::collections::BTreeSet<String>,
+    /// The paths outside the read roots that the request sent ([`sent_paths`]), each as a hidden
+    /// library id with the id shown. They are matched after the hidden libraries.
+    sent: Vec<(String, String)>,
+}
+
+impl Hiding {
+    /// Adds the hidden and readable ids of `other` that this one does not hold.
+    fn merge(&mut self, other: Hiding) {
+        self.add_hidden(other.hidden);
+        self.readable.extend(other.readable);
+    }
+
+    /// Adds the hidden ids of `pairs` that this one does not hold, each with the id shown.
+    fn add_hidden(&mut self, pairs: Vec<(String, String)>) {
+        for pair in pairs {
+            if !self.hidden.iter().any(|(id, _)| *id == pair.0) {
+                self.hidden.push(pair);
+            }
+        }
+        self.hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
+    }
+
+    /// Adds the sent paths of `pairs`, each as a hidden id with the id shown. A hidden id this one holds
+    /// for the same path (written with either separator when it is a Windows path
+    /// ([`splits_at_backslash`]), relative or as the absolute path it reads as ([`absolute_form`]), and
+    /// in any case of ASCII letters with `fold`) is shown as the sent path is.
+    fn set_hidden(&mut self, pairs: Vec<(String, String)>, fold: bool) {
+        let key = |id: &str| {
+            let path = id.strip_prefix("loaded/").unwrap_or(id);
+            let id = absolute_form(path).unwrap_or_else(|| path.to_string());
+            let windows = splits_at_backslash(&id);
+            let id = if windows { id.replace('\\', "/") } else { id };
+            (windows, if fold { id.to_ascii_lowercase() } else { id })
+        };
+        let sent: Vec<(bool, String)> = pairs.iter().map(|(id, _)| key(id)).collect();
+        for (id, shown) in &mut self.hidden {
+            if let Some(at) = sent.iter().position(|k| *k == key(id)) {
+                shown.clone_from(&pairs[at].1);
+            }
+        }
+        for pair in pairs {
+            if !self.sent.iter().any(|(id, _)| *id == pair.0) {
+                self.sent.push(pair);
+            }
+        }
+    }
+}
+
+/// The paths outside the read roots that `v`'s strings and keys name at any depth, written as paths
+/// ([`unreadable_path_like`]) or held by a path param
+/// ([`vectorcraft_engine::file_access::is_path_key`]), a relative one too, each as a hidden library id
+/// (`loaded/<path>`) with `loaded/<file name>` shown. A reply hides them as it hides a hidden library's
+/// path, with that file name also for a hidden library shown as `loaded/<file name> (2)`, so that it
+/// reads the same whether or not a library was loaded from one of them.
+fn sent_paths(v: &Value, out: &mut Vec<(String, String)>) {
+    collect_sent_paths(v, false, out);
+}
+
+/// [`sent_paths`] on `v`, which a path param holds when `path_param` is set.
+fn collect_sent_paths(v: &Value, path_param: bool, out: &mut Vec<(String, String)>) {
+    fn add(s: &str, path_param: bool, out: &mut Vec<(String, String)>) {
+        if !unreadable_path_like(s) && !(path_param && !readable_value(s)) {
+            return;
+        }
+        // A URL that names another host as the path after its scheme (`//host/share/…`).
+        let path = match file_url_path(s) {
+            Some(Some(path)) => path,
+            Some(None) => percent_decoded(&s[5..]),
+            None => s.to_string(),
+        };
+        let name = vectorcraft_engine::cmd::swatchlib::concealed_file_name(&path);
+        if name == path {
+            return;
+        }
+        let pair = (format!("loaded/{path}"), format!("loaded/{name}"));
+        if !out.contains(&pair) {
+            out.push(pair);
+        }
+    }
+    match v {
+        Value::String(s) => add(s, path_param, out),
+        Value::Array(items) => items.iter().for_each(|item| collect_sent_paths(item, path_param, out)),
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                add(key, false, out);
+                collect_sent_paths(item, vectorcraft_engine::file_access::is_path_key(key), out);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Adds `id` to `ids` when it is a loaded library's id (`loaded/<path>`).
@@ -379,30 +493,404 @@ fn collect_library_panel_ids(v: &Value, ids: &mut std::collections::BTreeSet<Str
     }
 }
 
-/// Writes each id of `ids` as the id the reply shows instead, wherever `v` holds it: in a library's
-/// id, in its panel's id (`library:swatches:loaded/<path>`) and in keys.
-fn hide_library_ids(v: &mut Value, ids: &[(String, String)]) {
-    if ids.is_empty() {
+/// Writes each id of `ids` as the id the reply shows instead, and the path in it as the file name
+/// shown, wherever `v` holds them, in every string and key: a library's id, its panel's id
+/// (`library:swatches:loaded/<path>`), status text, a dialog, the command palette query, a script's
+/// report and a recorded step. An occurrence that begins another loaded library's id stays
+/// ([`begins_known_id`]): a readable library's id that begins with a hidden one keeps its path. On
+/// Windows the ids and paths are matched in any case of ASCII letters.
+fn hide_library_ids(v: &mut Value, hiding: &Hiding) {
+    let pairs = hidden_text(hiding);
+    if pairs.iter().all(Vec::is_empty) {
         return;
     }
-    let hide = |s: &mut String| {
-        for (id, shown) in ids {
-            if s.contains(id.as_str()) {
-                *s = s.replace(id.as_str(), shown);
+    replace_in_value(v, &Rewrite { pairs, hiding, fold: cfg!(windows) });
+}
+
+/// The text [`hide_library_ids`] replaces, in two groups: the hidden libraries' text, then the text of
+/// the paths the request sent ([`Hiding::sent`]), each longest first. For each id, that is the id with
+/// the id shown, and the path in it with the file name shown, a Windows path ([`splits_at_backslash`])
+/// written with either separator too, and as `{:?}` quotes it (each `\`, quote and control character
+/// escaped). A relative path is also replaced as the absolute path the file access check reads it as,
+/// against the working folder.
+fn hidden_text(hiding: &Hiding) -> Vec<Vec<(String, String)>> {
+    vec![text_pairs(&hiding.hidden), text_pairs(&hiding.sent)]
+}
+
+/// Is `path` a Windows path, whose parts a `\` separates as well as a `/`: any path on Windows, and
+/// elsewhere one that starts with a drive (`C:`) or a `\`? Outside Windows, a `\` in any other path is
+/// part of a name.
+fn splits_at_backslash(path: &str) -> bool {
+    cfg!(windows) || path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic())
+}
+
+/// The absolute path that `path`, a relative path (one that does not start with a separator, a drive
+/// or `~`), reads as from the working folder, as the file access check reads it; `None` for any other
+/// path.
+fn absolute_form(path: &str) -> Option<String> {
+    let relative = !path.starts_with(['/', '\\', '~']) && !matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    relative.then(|| std::path::absolute(path).ok()).flatten().map(|p| p.to_string_lossy().into_owned())
+}
+
+/// The text [`hidden_text`] replaces for the ids of `ids`, longest first.
+fn text_pairs(ids: &[(String, String)]) -> Vec<(String, String)> {
+    let quoted = |s: &str| {
+        let q = format!("{s:?}");
+        q[1..q.len() - 1].to_string()
+    };
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for (id, shown) in ids {
+        let path = &id["loaded/".len()..];
+        let name = shown.strip_prefix("loaded/").unwrap_or(shown);
+        for path in std::iter::once(path.to_string()).chain(absolute_form(path)) {
+            // A Windows path is also written with the other separator; outside Windows, a native
+            // path's `\` is part of a name, so that path is written only as it is.
+            let mut spellings = vec![path.clone()];
+            if splits_at_backslash(&path) {
+                spellings.extend([path.replace('\\', "/"), path.replace('/', "\\")].into_iter().filter(|p| splits_at_backslash(p)));
+            }
+            let debug: Vec<_> = spellings.iter().map(|p| (quoted(p), quoted(name))).collect();
+            let plain = spellings.into_iter().map(|p| (p, name.to_string()));
+            for (path, name) in plain.chain(debug) {
+                for (from, to) in [(format!("loaded/{path}"), format!("loaded/{name}")), (path, name)] {
+                    if !pairs.iter().any(|(f, _)| *f == from) {
+                        pairs.push((from, to));
+                    }
+                }
             }
         }
-    };
+    }
+    pairs.sort_by_key(|(from, _)| std::cmp::Reverse(from.len()));
+    pairs
+}
+
+/// What [`replace_in_value`] writes: the groups of text to replace ([`hidden_text`]), what the reply
+/// hides, and whether to match in any case of ASCII letters.
+struct Rewrite<'a> {
+    pairs: Vec<Vec<(String, String)>>,
+    hiding: &'a Hiding,
+    fold: bool,
+}
+
+/// The keys of encoded file data in a reply. `thumbnail` holds the PNG of a library item in
+/// `library.get` and of a page in `document.pdfInfo`.
+const BASE64_FIELDS: [&str; 4] = ["dataBase64", "pngBase64", "thumbnailBase64", "thumbnail"];
+
+/// Is `s` written in the base64 alphabet, padded to a multiple of 4?
+fn is_base64(s: &str) -> bool {
+    let body = s.trim_end_matches('=');
+    s.len().is_multiple_of(4) && s.len() - body.len() <= 2 && body.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/')
+}
+
+/// Writes each `from` text of the rewrite's pairs as its `to` text in every string and key of `v`, as
+/// [`replace_text`] does. Encoded file data, a base64 string under a key of [`BASE64_FIELDS`], stays
+/// as it is. A rewritten key that reads the same as another key of its object takes ` (2)`, ` (3)`
+/// and so on; a key that is not rewritten keeps its name.
+fn replace_in_value(v: &mut Value, r: &Rewrite) {
     match v {
-        Value::String(s) => hide(s),
-        Value::Array(items) => items.iter_mut().for_each(|item| hide_library_ids(item, ids)),
+        Value::String(s) => {
+            if let Some(replaced) = replace_text(s, r) {
+                *s = replaced;
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(|item| replace_in_value(item, r)),
         Value::Object(fields) => {
-            for (mut key, mut item) in std::mem::take(fields) {
-                hide(&mut key);
-                hide_library_ids(&mut item, ids);
+            // The keys that stay are written first, so a rewritten key that reads as one of them, or
+            // as another rewritten key, is the one numbered and no field is lost.
+            let mut rewritten = Vec::new();
+            for (key, mut item) in std::mem::take(fields) {
+                if BASE64_FIELDS.contains(&key.as_str()) && item.as_str().is_some_and(is_base64) {
+                    fields.insert(key, item);
+                    continue;
+                }
+                replace_in_value(&mut item, r);
+                match replace_text(&key, r) {
+                    Some(written) => rewritten.push((written, item)),
+                    None => {
+                        fields.insert(key, item);
+                    }
+                }
+            }
+            for (written, item) in rewritten {
+                let mut key = written.clone();
+                let mut n = 2;
+                while fields.contains_key(&key) {
+                    key = format!("{written} ({n})");
+                    n += 1;
+                }
                 fields.insert(key, item);
             }
         }
         _ => {}
+    }
+}
+
+/// The byte offsets in `text` at which `needle` starts, not overlapping, in any case of ASCII letters
+/// with `fold`.
+fn occurrences(text: &str, needle: &str, fold: bool) -> Vec<usize> {
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    if fold {
+        let (text, needle) = (text.to_ascii_lowercase(), needle.to_ascii_lowercase());
+        text.match_indices(needle.as_str()).map(|(at, _)| at).collect()
+    } else {
+        text.match_indices(needle).map(|(at, _)| at).collect()
+    }
+}
+
+/// `s` with the `from` texts of the rewrite's pairs written as their `to` texts, at each occurrence
+/// that does not begin another loaded library's id ([`begins_known_id`]). A hidden id or path written
+/// with `%XX` escapes (in a `file:` URL) is replaced too; the escapes around it stay. Every occurrence
+/// is found in `s` as it was given, the hidden libraries' text before the sent paths' text, each group
+/// longest `from` first, and one that overlaps an occurrence already found, or a loaded library's id
+/// that one began, stays: a replacement's text is not searched again. With the rewrite's `fold`, the
+/// ids and paths of a group as written are found first, so that two libraries whose paths differ only
+/// in letter case keep their own ids, and then the ones written in another case. `None` when nothing
+/// changed.
+fn replace_text(s: &str, r: &Rewrite) -> Option<String> {
+    let decoded = if has_percent_escape(s) { decoded_with_spans(s).filter(|(decoded, _)| decoded != s) } else { None };
+    let mut found = Found::default();
+    for group in &r.pairs {
+        for fold in [false, true].into_iter().take(if r.fold { 2 } else { 1 }) {
+            for (from, to) in group {
+                if let Some((text, spans)) = &decoded {
+                    found.claim(text, Some(spans.as_slice()), from, to, fold, r);
+                }
+                found.claim(s, None, from, to, fold, r);
+            }
+        }
+    }
+    if found.cuts.is_empty() {
+        return None;
+    }
+    let mut cuts = found.cuts;
+    cuts.sort_unstable_by_key(|&(start, _, _)| start);
+    let mut out = String::with_capacity(s.len());
+    let mut copied = 0;
+    for (start, stop, to) in cuts {
+        out.push_str(&s[copied..start]);
+        out.push_str(to);
+        copied = stop;
+    }
+    out.push_str(&s[copied..]);
+    Some(out)
+}
+
+/// The spans of a text that [`replace_text`] replaces, each with its replacement, and every span it has
+/// taken: the ones it replaces and the loaded library ids it keeps.
+#[derive(Default)]
+struct Found<'a> {
+    cuts: Vec<(usize, usize, &'a str)>,
+    taken: Vec<(usize, usize)>,
+}
+
+impl<'a> Found<'a> {
+    /// Takes each occurrence of `from` in `text` that overlaps no span taken: as a span to write as `to`,
+    /// or, where it begins a loaded library's id ([`begins_known_id`]), that id's span, kept. `spans`
+    /// gives the range of the original text each byte of a decoded `text` was read from.
+    fn claim(&mut self, text: &str, spans: Option<&[(usize, usize)]>, from: &str, to: &'a str, fold: bool, r: &Rewrite) {
+        let span = |at: usize, end: usize| spans.map_or((at, end), |s| (s[at].0, s[end - 1].1));
+        for at in occurrences(text, from, fold) {
+            let end = at + from.len();
+            let (start, stop) = span(at, end);
+            if self.taken.iter().any(|&(a, b)| start < b && a < stop) || ends_a_longer_path(text, at, from) {
+                continue;
+            }
+            match begins_known_id(text, at, end, r) {
+                Some(len) => self.taken.push(span(at, at + len)),
+                None => {
+                    // A `file:` URL of the path is replaced whole, so no `file://<name>` is left that
+                    // would name a host, unless part of its scheme was taken already.
+                    let url = span(url_start(text, at, from), end).0;
+                    let start = if self.taken.iter().any(|&(a, b)| url < b && a < stop) { start } else { url };
+                    self.taken.push((start, stop));
+                    self.cuts.push((start, stop, to));
+                }
+            }
+        }
+    }
+}
+
+/// Where a `file:` URL that holds `from`, an absolute path found at `at` in `text`, begins: `at` less
+/// the `file:` before it, with `//` and a host (`localhost`, another host or none) between them, in any
+/// case of its letters; before a drive, the host is followed by a `/` too. `at` when no such URL holds it.
+fn url_start(text: &str, at: usize, from: &str) -> usize {
+    let drive = matches!(from.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    if !from.starts_with('/') && !drive {
+        return at;
+    }
+    let Some(before) = text.get(..at) else { return at };
+    let Some(scheme) = before.to_ascii_lowercase().rfind("file:") else { return at };
+    let rest = &before[scheme + "file:".len()..];
+    let host = |h: &str| h.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']' | '%'));
+    let holds = if drive {
+        rest.strip_prefix("//").and_then(|r| r.strip_suffix('/')).is_some_and(host)
+    } else {
+        rest.is_empty() || rest.strip_prefix("//").is_some_and(host)
+    };
+    if holds { scheme } else { at }
+}
+
+/// `text` with its `%XX` escapes decoded, and for each byte of the decoded text the range of `text`
+/// it was read from. A decoded byte that is not part of UTF-8 text is read as U+FFFD.
+fn decoded_with_spans(text: &str) -> Option<(String, Vec<(usize, usize)>)> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut spans = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = bytes
+            .get(i + 1..i + 3)
+            .filter(|h| bytes[i] == b'%' && h.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match hex {
+            Some(v) => {
+                out.push(v);
+                spans.push((i, i + 3));
+                i += 3;
+            }
+            None => {
+                out.push(bytes[i]);
+                spans.push((i, i + 1));
+                i += 1;
+            }
+        }
+    }
+    let mut decoded = String::with_capacity(out.len());
+    let mut decoded_spans = Vec::with_capacity(spans.len());
+    let mut at = 0;
+    for chunk in out.utf8_chunks() {
+        decoded.push_str(chunk.valid());
+        decoded_spans.extend_from_slice(spans.get(at..at + chunk.valid().len())?);
+        at += chunk.valid().len();
+        for _ in chunk.invalid() {
+            decoded.push(char::REPLACEMENT_CHARACTER);
+            let span = *spans.get(at)?;
+            decoded_spans.extend([span; 3]);
+            at += 1;
+        }
+    }
+    Some((decoded, decoded_spans))
+}
+
+/// Does `text` hold a `%XX` escape, one that [`decoded_with_spans`] decodes? Only such an escape
+/// changes the decoded text.
+fn has_percent_escape(text: &str) -> bool {
+    text.as_bytes().windows(3).any(|w| w[0] == b'%' && w[1].is_ascii_hexdigit() && w[2].is_ascii_hexdigit())
+}
+
+/// Is `from`, a relative path (one that does not start with a separator, a drive or `loaded/`), at
+/// `text[at..]` the end of a longer path: after any `.` and `..` parts just before it, is it preceded by
+/// a letter, a digit, `_`, `-`, `.`, `~` or a separator? `/work/data/icon.svg` and
+/// `/work/./data/icon.svg` do not hold the path `data/icon.svg`; `./data/icon.svg` and
+/// `../data/icon.svg` do.
+fn ends_a_longer_path(text: &str, at: usize, from: &str) -> bool {
+    let absolute =
+        from.starts_with(['/', '\\']) || from.starts_with("loaded/") || matches!(from.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    let mut before = &text[..at];
+    while let Some(head) = before.strip_suffix(['/', '\\']) {
+        let Some(rest) = head.strip_suffix("..").or_else(|| head.strip_suffix('.')) else { break };
+        before = rest;
+        if !before.ends_with(['/', '\\']) {
+            break;
+        }
+    }
+    !absolute && before.ends_with(|c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '~' | '/' | '\\'))
+}
+
+/// Does text that follows a path continue it: a letter, a digit, `_` or a separator, after any `.`,
+/// `-` or `~`? A space, punctuation, a quote, a sentence's final period and the end of the text end it.
+fn continues_path(rest: &str) -> bool {
+    rest.trim_start_matches(['.', '-', '~']).starts_with(|c: char| c.is_alphanumeric() || matches!(c, '_' | '/' | '\\'))
+}
+
+/// Does the occurrence `text[at..end]` begin a longer loaded library id ([`Hiding::readable`]), written
+/// with or without its `loaded/` and with no `.` or `..` part, that ends where the text stops
+/// continuing a path ([`continues_path`])? The length of that id as written, when it does.
+/// A readable library's id that begins with a hidden one stays, also with a space after the hidden
+/// part; a hidden path followed by other path text (`<path>.bak`, `<path>/../x`) is still hidden.
+fn begins_known_id(text: &str, at: usize, end: usize, r: &Rewrite) -> Option<usize> {
+    let rest = &text[at..];
+    let same = |a: &str, b: &str| if r.fold { a.eq_ignore_ascii_case(b) } else { a == b };
+    let dotted = |id: &str| id.split(['/', '\\']).any(|part| part == "." || part == "..");
+    let prefixed = rest.get(.."loaded/".len()).is_some_and(|head| same(head, "loaded/"));
+    r.hiding.readable.iter().filter(|known| !dotted(known)).find_map(|known| {
+        let id = if prefixed { known.as_str() } else { known.strip_prefix("loaded/").unwrap_or(known) };
+        let begins = id.len() > end - at && rest.get(..id.len()).is_some_and(|head| same(head, id)) && !continues_path(&rest[id.len()..]);
+        begins.then_some(id.len())
+    })
+}
+
+/// Text that a person or a script wrote, by its key: a command palette query, a script's report and a
+/// workspace's name. [`swap_library_ids`] leaves it as written.
+const TEXT_FIELDS: [&str; 3] = ["palette_query", "scriptReport", "name"];
+
+/// Writes each `from` id of `pairs` as its `to` id wherever `v` holds it as a whole id ([`swap_whole_ids`]),
+/// in strings and keys, except in the [`TEXT_FIELDS`].
+fn swap_library_ids(v: &mut Value, pairs: &[(&str, &str)]) {
+    if pairs.is_empty() {
+        return;
+    }
+    match v {
+        Value::String(s) => {
+            if let Some(swapped) = swap_whole_ids(s, pairs) {
+                *s = swapped;
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(|item| swap_library_ids(item, pairs)),
+        Value::Object(fields) => {
+            for (key, mut item) in std::mem::take(fields) {
+                if TEXT_FIELDS.contains(&key.as_str()) {
+                    fields.insert(key, item);
+                    continue;
+                }
+                swap_library_ids(&mut item, pairs);
+                fields.insert(swap_whole_ids(&key, pairs).unwrap_or(key), item);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// `s` with each `from` id of `pairs` written as its `to` id where it is a whole id: the whole string,
+/// or a part that starts the string or follows a `:`, `"` or `` ` `` (a panel id, a quoted id) and ends
+/// the string or a quote. An id that only begins or ends a longer one stays. `None` when nothing changed.
+fn swap_whole_ids(s: &str, pairs: &[(&str, &str)]) -> Option<String> {
+    let mut out: Option<String> = None;
+    for (from, to) in pairs {
+        let text = out.as_deref().unwrap_or(s);
+        if !text.contains(from) {
+            continue;
+        }
+        let mut next = String::with_capacity(text.len());
+        let mut copied = 0;
+        for (at, _) in text.match_indices(from) {
+            let end = at + from.len();
+            let starts = at == 0 || text[..at].ends_with([':', '"', '`']);
+            let ends = end == text.len() || text[end..].starts_with(['"', '`']);
+            if at >= copied && starts && ends {
+                next.push_str(&text[copied..at]);
+                next.push_str(to);
+                copied = end;
+            }
+        }
+        if copied > 0 {
+            next.push_str(&text[copied..]);
+            out = Some(next);
+        }
+    }
+    out
+}
+
+/// Does `v` hold a string or a key that names a loaded library (`loaded/…`)?
+fn names_a_loaded_library(v: &Value) -> bool {
+    match v {
+        Value::String(s) => s.contains("loaded/"),
+        Value::Array(items) => items.iter().any(names_a_loaded_library),
+        Value::Object(fields) => fields.iter().any(|(key, item)| key.contains("loaded/") || names_a_loaded_library(item)),
+        _ => false,
     }
 }
 
@@ -414,14 +902,146 @@ const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
 
 /// May the request being served read `path`? Under an automation read root (a control client's
 /// request), `ui.inspect` leaves out a path outside the root, as `ui.menu.list` leaves out a recent
-/// file or a listed script outside it.
+/// file or a listed script outside it. Another platform's absolute path
+/// ([`vectorcraft_engine::file_access::written_elsewhere`]) is never readable under a read root.
 fn readable(path: &str) -> bool {
-    vectorcraft_engine::file_access::check_read(path).is_ok()
+    !vectorcraft_engine::file_access::written_elsewhere(path) && vectorcraft_engine::file_access::check_read(path).is_ok()
+}
+
+/// Is `s` a path the request may not read, written as an absolute path (either separator, with or
+/// without a drive) or a `file:` URL ([`file_url_path`])? Under a read root, a `file:` URL that names
+/// another host is never readable.
+fn unreadable_absolute(s: &str) -> bool {
+    match file_url_path(s) {
+        Some(path) => !readable_url_path(path),
+        None => {
+            let absolute = s.starts_with(['/', '\\']) || matches!(s.as_bytes(), [drive, b':', b'/' | b'\\', ..] if drive.is_ascii_alphabetic());
+            absolute && !readable(s)
+        }
+    }
+}
+
+/// Is `s` written as a path that the request may not read: an absolute path or a `file:` URL
+/// ([`unreadable_absolute`]), `~` or a path under it, or a path that starts with `.` or `..` and a
+/// separator? It is checked as the file access check reads it, relative to the working folder. Other
+/// text with a separator (`a/b`) stays.
+fn unreadable_path_like(s: &str) -> bool {
+    if unreadable_absolute(s) {
+        return true;
+    }
+    let t = s.trim_start();
+    let relative = t.trim_end() == "~" || ["~/", "~\\", "./", ".\\", "../", "..\\"].iter().any(|p| t.starts_with(p));
+    relative && !readable_value(s)
+}
+
+/// May the request read the path `s` names, a path or a `file:` URL ([`file_url_path`])?
+fn readable_value(s: &str) -> bool {
+    match file_url_path(s) {
+        Some(path) => readable_url_path(path),
+        None => readable(s),
+    }
+}
+
+/// May the request read the local path a `file:` URL names ([`file_url_path`])? A URL that names
+/// another host may be read only without a read root in force.
+fn readable_url_path(path: Option<String>) -> bool {
+    match path {
+        Some(path) => readable(&path),
+        None => vectorcraft_engine::file_access::current().is_none(),
+    }
+}
+
+/// The local path that `s` names when it is a `file:` URL, with the scheme in any case and its `%XX`
+/// escapes decoded: `Some(None)` for a URL that names another host (`file://host/share`).
+/// `file:///C:/x` names `C:/x`.
+fn file_url_path(s: &str) -> Option<Option<String>> {
+    let rest = s.get(..5).filter(|scheme| scheme.eq_ignore_ascii_case("file:")).map(|_| &s[5..])?;
+    let Some(rest) = rest.strip_prefix("//") else { return Some(Some(percent_decoded(rest))) };
+    let rest = if rest.get(..9).is_some_and(|host| host.eq_ignore_ascii_case("localhost")) { &rest[9..] } else { rest };
+    if !rest.starts_with('/') {
+        return Some(None);
+    }
+    let path = match rest.as_bytes() {
+        [b'/', drive, b':', ..] if drive.is_ascii_alphabetic() => &rest[1..],
+        _ => rest,
+    };
+    Some(Some(percent_decoded(path)))
+}
+
+/// `s` with `%XX` escapes decoded, as the SVG importer decodes an href.
+fn percent_decoded(s: &str) -> String {
+    if !s.contains('%') {
+        return s.to_string();
+    }
+    let mut out = Vec::with_capacity(s.len());
+    let mut rest = s.as_bytes();
+    while let Some((&b, tail)) = rest.split_first() {
+        let hex = tail
+            .get(..2)
+            .filter(|h| h.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match hex {
+            Some(v) if b == b'%' => {
+                out.push(v);
+                rest = tail.get(2..).unwrap_or_default();
+            }
+            _ => {
+                out.push(b);
+                rest = tail;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The params of each step of each action of action set `set` (`ui.action_sets`).
+fn steps_mut(set: &mut Value) -> impl Iterator<Item = &mut serde_json::Map<String, Value>> {
+    let actions = set.get_mut("actions").and_then(Value::as_array_mut).into_iter().flatten();
+    let steps = actions.filter_map(|action| action.get_mut("steps").and_then(Value::as_array_mut)).flatten();
+    steps.filter_map(|step| step.get_mut(1).and_then(Value::as_object_mut))
+}
+
+/// Takes out of a recorded step's params, at any depth (the commands of a `command.batch` step), the
+/// paths the request may not read: the value of a path param
+/// ([`vectorcraft_engine::file_access::is_path_key`]: `path`, `file`, `diffPath`, `destinationFolder`
+/// and the like), each path of a list under such a param, and under any other param, as a key too, a
+/// string written as a path ([`unreadable_path_like`]).
+fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>) {
+    use vectorcraft_engine::file_access::is_path_key;
+    params.retain(|key, v| {
+        !unreadable_path_like(key)
+            && match v.as_str() {
+                Some(p) => !unreadable_path_like(p) && !(is_path_key(key) && !readable_value(p)),
+                None => true,
+            }
+    });
+    for (key, v) in params.iter_mut() {
+        if let Value::Array(paths) = v
+            && is_path_key(key)
+        {
+            paths.retain(|p| p.as_str().is_none_or(readable_value));
+        }
+        leave_out_unreadable_values(v);
+    }
+}
+
+/// [`leave_out_unreadable_params`] on each object `v` holds, and a string written as a path that the
+/// request may not read ([`unreadable_path_like`]) taken out of each list.
+fn leave_out_unreadable_values(v: &mut Value) {
+    match v {
+        Value::Object(fields) => leave_out_unreadable_params(fields),
+        Value::Array(items) => {
+            items.retain(|item| !item.as_str().is_some_and(unreadable_path_like));
+            items.iter_mut().for_each(leave_out_unreadable_values);
+        }
+        _ => {}
+    }
 }
 
 /// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
-/// a library panel's file and folder preferences (saved, and in an open Preferences dialog) outside
-/// the read root. The UI state itself is not changed.
+/// a library panel's file, folder preferences (saved, and in an open Preferences dialog) and the paths
+/// in recorded actions' steps outside the read root. The UI state itself is not changed.
 fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
     if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
         files.retain(|f| f.as_str().is_some_and(readable));
@@ -432,6 +1052,9 @@ fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
                 panel.remove("path");
             }
         }
+    }
+    for step in ui.get_mut("action_sets").and_then(Value::as_array_mut).into_iter().flatten().flat_map(steps_mut) {
+        leave_out_unreadable_params(step);
     }
     if let Some(Value::Object(prefs)) = ui.get_mut("engine_prefs") {
         leave_out_unreadable_folders(prefs);
@@ -444,12 +1067,14 @@ fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
     }
 }
 
-/// Takes out of `prefs` the folder preferences ([`PREF_FOLDERS`]) the request may not read. An
-/// empty value (no folder) and a scratch disk choice ([`SCRATCH_CHOICES`]) stay.
+/// Takes out of `prefs` the folder preferences ([`PREF_FOLDERS`]) the request may not read, as written
+/// or trimmed as the app uses it. An empty value (no folder) and a scratch disk choice
+/// ([`SCRATCH_CHOICES`]) stay.
 fn leave_out_unreadable_folders(prefs: &mut serde_json::Map<String, Value>) {
     for key in PREF_FOLDERS {
-        let Some(path) = prefs.get(key).and_then(Value::as_str).map(str::trim) else { continue };
-        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || readable(path) {
+        let Some(written) = prefs.get(key).and_then(Value::as_str) else { continue };
+        let path = written.trim();
+        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || (readable(written) && readable(path)) {
             continue;
         }
         prefs.remove(key);
@@ -494,7 +1119,214 @@ fn packet_mods(value: Option<&Value>) -> Result<Option<Mods>, String> {
     }
 }
 
+/// The params that name a library or a library panel, at any depth of a request (`ui.set {panel}`,
+/// `engine.execute {params: {panel}}`, `ui.libraryPanel {panel, library}`), with the docking
+/// commands' destinations (`window.panel.move {anchor, before}`, `ui.dock {target}`,
+/// `window.panel.float {onto, above, below}`) and a list of panels. Only a whole id is translated
+/// ([`swap_whole_ids`]), so other text in these params stays.
+const LIBRARY_PARAMS: [&str; 9] = ["panel", "library", "anchor", "target", "before", "onto", "above", "below", "panels"];
+
+/// The param of `window.panel.layout` that holds a serialized docking action: each panel id in it is
+/// translated.
+const DOCKING_ACTION: &str = "action";
+
+/// Runs a control request. A library loaded from outside the read root keeps the id `ui.inspect`
+/// shows for it ([`unreadable_library_ids`]) both ways: a request may name it or its panel by that id
+/// in a [`LIBRARY_PARAMS`] param, and the reply shows that id. Under a read root, the reply shows each
+/// such library's id and path as `ui.inspect` does ([`hide_library_ids`]) in every string and key,
+/// errors included, an error from a panic too: the libraries hidden before it ran and after it. The
+/// reply also shows each path outside the read root that the request sent by its file name, whether it
+/// succeeded or failed ([`sent_paths`]), except where a `path` or `files` entry of its result names the
+/// file the request wrote inside the write roots, as the request gave it. A reply with no `/`, `\` or `%` in it is not searched, since every hidden path
+/// holds a separator, written or escaped. A screenshot's reply is hidden when it is sent
+/// ([`hide_in_deferred_reply`]); a `ui.pointer` reply sent after the tool's edit holds no library id
+/// or path.
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    if vectorcraft_engine::file_access::current().is_none() {
+        return dispatch(app, ctx, req);
+    }
+    // Pointer, key and text input does not load, close or rename a library: the libraries hidden after
+    // it ran are the ones hidden before, so frequent input does not read the UI state twice.
+    let before = if INPUT_METHODS.contains(&req.method.as_str()) { Hiding::default() } else { unreadable_library_ids(app) };
+    let shown: Vec<_> = before.hidden.iter().map(|(id, shown)| (shown.as_str(), id.as_str())).collect();
+    let mut params = req.params.clone();
+    let swapped = !shown.is_empty() && names_a_loaded_library(&req.params) && swap_library_params(&mut params, &shown);
+    let ran = vectorcraft_engine::guard::catch_panic(|| {
+        if swapped {
+            let request = ControlRequest { method: req.method.clone(), params, reply: req.reply.clone(), state: req.state.clone(), seq: req.seq };
+            dispatch(app, ctx, &request)
+        } else {
+            dispatch(app, ctx, req)
+        }
+    });
+    let outcome = match ran {
+        Ok(outcome) => outcome,
+        Err(msg) => {
+            app.picks.recover();
+            app.session.set_replaying(false);
+            err(format!("internal error: {msg} (please report this bug)"))
+        }
+    };
+    let Outcome::Done(mut reply) = outcome else { return outcome };
+    hide_in_reply(app, &mut reply, &req.params, before);
+    Outcome::Done(reply)
+}
+
+/// Hides in `reply` the libraries hidden now and in `before`, and the paths outside the read root that
+/// `sent`, the request's params, holds ([`handle`]). The `path` and `files` entries of the reply's
+/// `result`, at any depth, that name a file the request gave inside the write roots, the file it
+/// wrote, stay as given ([`written_paths`]).
+fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: Hiding) {
+    if !holds_a_separator(reply) {
+        return;
+    }
+    let mut given = Vec::new();
+    written_paths(sent, false, &mut given);
+    let kept = kept_written_paths(reply, &given);
+    let mut hiding = unreadable_library_ids(app);
+    hiding.merge(before);
+    let mut paths = Vec::new();
+    sent_paths(sent, &mut paths);
+    hiding.set_hidden(paths, cfg!(windows));
+    hide_library_ids(reply, &hiding);
+    restore_written_paths(reply, kept);
+}
+
+/// The strings that `v`'s path params hold at any depth ([`vectorcraft_engine::file_access::is_path_key`])
+/// that name a file inside the write roots; `v` is a path param's value when `path_param` is set.
+fn written_paths(v: &Value, path_param: bool, out: &mut Vec<String>) {
+    use vectorcraft_engine::file_access::{Access, current, is_path_key};
+    match v {
+        Value::String(s) if path_param && !s.is_empty() && current().is_some_and(|r| r.check(s, Access::Write).is_ok()) => out.push(s.clone()),
+        Value::Array(items) => items.iter().for_each(|item| written_paths(item, path_param, out)),
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                written_paths(item, is_path_key(key), out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The entries under `reply`'s `result`, at any depth (a `command.batch` step's result too), that a
+/// `path` key or a `files` list holds and that are one of `given`: each entry's JSON pointer and text.
+fn kept_written_paths(reply: &Value, given: &[String]) -> Vec<(String, String)> {
+    let mut kept = Vec::new();
+    if !given.is_empty() {
+        kept_under(&reply["result"], "/result", given, &mut kept);
+    }
+    kept
+}
+
+/// [`kept_written_paths`] for `v`, found at the JSON pointer `at`.
+fn kept_under(v: &Value, at: &str, given: &[String], out: &mut Vec<(String, String)>) {
+    let is_given = |v: &Value| v.as_str().filter(|s| given.iter().any(|g| g == s)).map(str::to_string);
+    match v {
+        Value::Array(items) => {
+            for (i, item) in items.iter().enumerate() {
+                kept_under(item, &format!("{at}/{i}"), given, out);
+            }
+        }
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                let here = format!("{at}/{}", key.replace('~', "~0").replace('/', "~1"));
+                match (key.as_str(), is_given(item), item.as_array()) {
+                    ("path", Some(path), _) => out.push((here, path)),
+                    ("files", _, Some(rows)) => {
+                        for (i, row) in rows.iter().enumerate() {
+                            match is_given(row) {
+                                Some(path) => out.push((format!("{here}/{i}"), path)),
+                                None => kept_under(row, &format!("{here}/{i}"), given, out),
+                            }
+                        }
+                    }
+                    _ => kept_under(item, &here, given, out),
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Writes back in `reply` the entries [`kept_written_paths`] took from it.
+fn restore_written_paths(reply: &mut Value, kept: Vec<(String, String)>) {
+    for (at, path) in kept {
+        if let Some(slot) = reply.pointer_mut(&at) {
+            *slot = json!(path);
+        }
+    }
+}
+
+/// Hides in a reply sent after its request was handled (a screenshot's) what [`handle`] hides in a
+/// reply, with `sent` as the request's params. Without a read root in force it leaves the reply as
+/// it is.
+pub(crate) fn hide_in_deferred_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value) {
+    if vectorcraft_engine::file_access::current().is_some() {
+        hide_in_reply(app, reply, sent, Hiding::default());
+    }
+}
+
+/// The control methods that send synthetic input.
+const INPUT_METHODS: [&str; 7] = ["ui.pointer", "ui.click", "ui.drag", "ui.move", "ui.wheel", "ui.key", "ui.text"];
+
+/// Does a string or a key of `v`, at any depth, hold a `/`, a `\` or a `%`?
+fn holds_a_separator(v: &Value) -> bool {
+    let has = |s: &str| s.contains(['/', '\\', '%']);
+    match v {
+        Value::String(s) => has(s),
+        Value::Array(items) => items.iter().any(holds_a_separator),
+        Value::Object(fields) => fields.iter().any(|(key, item)| has(key) || holds_a_separator(item)),
+        _ => false,
+    }
+}
+
+/// Writes each `from` id of `pairs` in the [`LIBRARY_PARAMS`] params of `params`, at any depth, as its
+/// `to` id → whether one was.
+fn swap_library_params(params: &mut Value, pairs: &[(&str, &str)]) -> bool {
+    match params {
+        Value::Array(items) => items.iter_mut().fold(false, |swapped, item| swap_library_params(item, pairs) | swapped),
+        Value::Object(fields) => fields.iter_mut().fold(false, |swapped, (key, item)| {
+            let this = match item {
+                Value::String(s) if LIBRARY_PARAMS.contains(&key.as_str()) => swap_whole_ids(s, pairs).map(|to| *s = to).is_some(),
+                Value::Array(items) if LIBRARY_PARAMS.contains(&key.as_str()) => items.iter_mut().fold(false, |swapped, item| {
+                    let this = item.as_str().and_then(|s| swap_whole_ids(s, pairs)).map(|to| *item = Value::String(to)).is_some();
+                    this | swapped
+                }),
+                Value::Object(_) if key == DOCKING_ACTION => {
+                    let before = item.clone();
+                    swap_library_ids(item, pairs);
+                    *item != before
+                }
+                _ => swap_library_params(item, pairs),
+            };
+            this | swapped
+        }),
+        _ => false,
+    }
+}
+
+/// Adds to `ids` the loaded library ids that the [`LIBRARY_PARAMS`] params of `v` name, at any depth:
+/// a library's id or its panel's id.
+fn collect_library_params(v: &Value, ids: &mut std::collections::BTreeSet<String>) {
+    match v {
+        Value::Array(items) => items.iter().for_each(|item| collect_library_params(item, ids)),
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                if !LIBRARY_PARAMS.contains(&key.as_str()) {
+                    collect_library_params(item, ids);
+                    continue;
+                }
+                for s in item.as_str().into_iter().chain(item.as_array().into_iter().flatten().filter_map(Value::as_str)) {
+                    add_library_id(s, ids);
+                    collect_library_panel_ids(&json!(s), ids);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let s = |k: &str| p.get(k).and_then(Value::as_str);
     match req.method.as_str() {
@@ -511,12 +1343,19 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "engine.commands" => ok(all_commands(app)),
         "document.inspect" => wrap(app.run("document.inspect", p.clone())),
         "ui.inspect" => ok(inspect(app, ctx)),
-        "ui.docking" => {
-            let mut docking = crate::panel_docking::inspect(app, ctx);
-            let ids = unreadable_library_ids(app);
-            hide_library_ids(&mut docking, &ids);
-            ok(docking)
+        "ui.docking" => ok(crate::panel_docking::inspect(app, ctx)),
+        // A request that stops with a panic quoting the status text, after clearing the Color Guide's
+        // limit with `forget`.
+        #[cfg(test)]
+        "test.panic" => {
+            if p.get("forget").and_then(Value::as_bool) == Some(true) {
+                app.ui.color_guide_limit.clear();
+            }
+            panic!("failed on {}", app.ui.status)
         }
+        // A request that succeeds with the status text.
+        #[cfg(test)]
+        "test.status" => ok(json!(app.ui.status)),
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),
         "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),

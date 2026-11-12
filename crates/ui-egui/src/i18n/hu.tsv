@@ -3458,6 +3458,7 @@ mark-style	Japanese	Japán
 	Reshape	Átformálás
 	Reshape Segment	Szakasz átformálása
 	Reshape Spine Segment	Gerincszakasz átformálása
+	Blend Easing	Összemosás gyorsítása
 	Reshape Tool	Átformálás
 	Reshape Type Area	Szövegterület átformálása
 	Resize	Átméretezés
@@ -3519,6 +3520,7 @@ mark-style	Japanese	Japán
 	Rotate View Tool	Nézet elforgatása
 	Trackpad Gesture to Rotate View	Nézet elforgatása kézmozdulattal az érintőpadon
 	Hold a Tool Shortcut to Use the Tool Temporarily	Eszköz ideiglenes használata a billentyűparancsa nyomva tartásával
+	Show Bounding Box While Moving and Drawing	Befoglaló keret megjelenítése mozgatás és rajzolás közben
 	Rotate…	Elforgatás…
 	Rotation	Elforgatás
 	Rotation relative to:	Elforgatás viszonyítási alapja:
@@ -6319,6 +6321,11 @@ axis	Y Axis	Y tengely
 	User Brush Library 9	Felhasználói ecsetkönyvtár 9
 	User Brush Library 10	Felhasználói ecsetkönyvtár 10
 	Art Ribbons	Grafikus szalagok
+	Ink and Wash	Tus és lavírozás
+	Tapered Ink	Elvékonyodó tus
+	Brush Pen	Ecsetfilc
+	Soft Wash	Lágy lavírozás
+	Pooling Wash	Szegélyes lavírozás
 	Zigzag	Cikkcakk
 	Burst Ray	Ütéssugár
 	Dash Trail	Szaggatott nyom

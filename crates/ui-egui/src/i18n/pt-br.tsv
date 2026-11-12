@@ -1758,6 +1758,7 @@ antiAlias	Sharp	Nítido
 	Move Slices	Mover Fatias
 	Move Spine Point	Mover Ponto de Coluna
 	Reshape Spine Segment	Remodelar Segmento da Coluna
+	Blend Easing	Suavização da Mesclagem
 	Move Brush	Mover Pincel
 	Move Swatch	Mover Amostra
 	Move Up	Mover para Cima
@@ -2472,6 +2473,7 @@ digits	Malayalam	Malaiala
 	Rotate View Tool	Ferramenta Girar Visualização
 	Trackpad Gesture to Rotate View	Girar Visualização com Gesto do Trackpad
 	Hold a Tool Shortcut to Use the Tool Temporarily	Manter o Atalho de uma Ferramenta Pressionado para Usá-la Temporariamente
+	Show Bounding Box While Moving and Drawing	Mostrar Caixa Delimitadora ao Mover e Desenhar
 	Rotate…	Girar…
 	Rotation	Rotação
 	Roughen…	Enrugar…
@@ -6251,6 +6253,11 @@ axis	Y Axis	Eixo Y
 	User Brush Library 9	Biblioteca de Pincéis do Usuário 9
 	User Brush Library 10	Biblioteca de Pincéis do Usuário 10
 	Art Ribbons	Fitas de Arte
+	Ink and Wash	Nanquim e Aguada
+	Tapered Ink	Nanquim Afilado
+	Brush Pen	Caneta Pincel
+	Soft Wash	Aguada Suave
+	Pooling Wash	Aguada com Borda
 	Zigzag	Zigue-zague
 	Burst Ray	Raio de impacto
 	Dash Trail	Rastro tracejado

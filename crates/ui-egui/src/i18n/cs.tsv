@@ -1426,6 +1426,7 @@ lighting	Light	Světlo
 	Rotate View Tool	Nástroj Otočení zobrazení
 	Trackpad Gesture to Rotate View	Otáčet zobrazení gestem na trackpadu
 	Hold a Tool Shortcut to Use the Tool Temporarily	Podržením klávesové zkratky nástroj dočasně použít
+	Show Bounding Box While Moving and Drawing	Zobrazit ohraničovací rámeček při přesouvání a kreslení
 	Rotate View	Otočení zobrazení
 	Rounded Rectangle Tool	Nástroj Zaoblený obdélník
 	Scale Tool	Nástroj Změna velikosti
@@ -3609,6 +3610,7 @@ theme	Appearance	Motiv
 	Move Mesh Points	Přesunout body sítě
 	Move Spine Point	Přesunout bod páteře
 	Reshape Spine Segment	Přetvarovat segment páteře
+	Blend Easing	Náběh prolnutí
 	Reset with Mesh	Obnovit sítí
 	Reset with Warp	Obnovit pokřivením
 	Set Mesh Point Color	Nastavit barvu bodu sítě
@@ -6336,6 +6338,11 @@ axis	Y Axis	osa Y
 	User Brush Library 9	Uživatelská knihovna štětců 9
 	User Brush Library 10	Uživatelská knihovna štětců 10
 	Art Ribbons	Obrazové stuhy
+	Ink and Wash	Tuš a lavírování
+	Tapered Ink	Zužující se tuš
+	Brush Pen	Štětcový fix
+	Soft Wash	Jemná lavírka
+	Pooling Wash	Lavírka s okrajem
 	Zigzag	Cikcak
 	Burst Ray	Paprsek nárazu
 	Dash Trail	Čárkovaná stopa

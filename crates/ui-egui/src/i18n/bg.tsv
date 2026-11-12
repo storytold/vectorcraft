@@ -2004,6 +2004,7 @@ font-technology	Variable	Променливи
 	Move Slices	Преместване на резени
 	Move Spine Point	Преместване на точка от оста
 	Reshape Spine Segment	Промяна на формата на сегмент от оста
+	Blend Easing	Плавност на преливането
 	Move Brush	Преместване на четка
 	Move Swatch	Преместване на образец
 	Move Up	Преместване нагоре
@@ -2864,6 +2865,7 @@ digits	Malayalam	Малаялам
 	Rotate View Tool	Инструмент „Завъртане на изглед“
 	Trackpad Gesture to Rotate View	Завъртане на изгледа с жест на тракпада
 	Hold a Tool Shortcut to Use the Tool Temporarily	Задържане на клавиша на инструмент за временното му използване
+	Show Bounding Box While Moving and Drawing	Показване на ограничителна рамка при преместване и рисуване
 	Rotate…	Завъртане…
 	Rotation	Завъртане
 	Roughen…	Грапавост…
@@ -6068,6 +6070,11 @@ axis	Y Axis	Y ос
 	User Brush Library 9	Потребителска библиотека с четки 9
 	User Brush Library 10	Потребителска библиотека с четки 10
 	Art Ribbons	Арт ленти
+	Ink and Wash	Туш и лавиране
+	Tapered Ink	Изтъняващ туш
+	Brush Pen	Писалка-четка
+	Soft Wash	Меко лавиране
+	Pooling Wash	Лавиране с ръб
 	Zigzag	Зигзаг
 	Burst Ray	Лъч на удар
 	Dash Trail	Пунктирна следа
