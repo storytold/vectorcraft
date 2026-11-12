@@ -269,6 +269,10 @@
 	Blend Options…	Sulautuksen asetukset…
 	Expand	Laajenna
 	Replace Spine	Korvaa selkäranka
+	Create Spine	Luo selkäranka
+	Create Spine:	Luo selkäranka:
+	Always	Aina
+	Never	Ei koskaan
 	Reverse Spine	Käännä selkäranka
 	Reverse Front to Back	Käännä edestä taakse
 	Envelope Distort	Vääristyskuori
@@ -489,6 +493,8 @@
 	Extrude & Bevel…	Pursota ja viistä…
 	3D (Classic)	3D (perinteinen)
 	Extrude & Bevel (Classic)…	Pursota ja viistä (perinteinen)…
+	Revolve (Classic)…	Pyöräytä (perinteinen)…
+	Rotate (Classic)…	Kierrä (perinteinen)…
 	Surface	Pinta
 	Wireframe	Rautalanka
 	No Shading	Ei varjostusta
@@ -559,6 +565,7 @@
 	Gaussian Blur…	Gaussin sumennus…
 	View	Näytä
 	Preview	Esikatselu
+	Preview:	Esikatselu:
 	Overprint Preview	Päällepainatuksen esikatselu
 	Pixel Preview	Pikseliesikatselu
 	Trim View	Rajattu näkymä
@@ -807,6 +814,14 @@
 	Damp Paper	Kostea paperi
 	Outlines and Rules	Ääriviivat ja viivat
 	Hand-Drawn	Käsin piirretyt
+	Painted and Sketched	Maalatut ja luonnostellut
+	Washed Blue	Haalea sininen
+	Bristle Ochre	Harjasokra
+	Pastel Heather	Pastellikanerva
+	Charcoal Shade	Hiilivarjo
+	Ink Contour	Mustekontuuri
+	Wet Ink	Märkä muste
+	Fine Pen	Hieno kynä
 	Gradient Finishes	Liukuväriviimeistelyt
 	Shape Effects	Muototehosteet
 	Blends and Transparency	Sulautukset ja läpinäkyvyys
@@ -826,6 +841,8 @@
 	Spectrum Gradients	Spektriliukuvärit
 	Sky Gradients	Taivasliukuvärit
 	Neutral Gradients	Neutraalit liukuvärit
+	Organic Fades	Orgaaniset häivytykset
+	Holographic	Holografiset
 	Duotone Gradients	Kaksisävyliukuvärit
 	Radial Glows	Säteittäiset hehkut
 	Save Swatch Library…	Tallenna värimallikirjasto…
@@ -1961,6 +1978,9 @@ digits	Malayalam	Malajalam
 	Right Indent	Oikea sisennys
 	Right-to-Left Paragraph Direction	Kappaleen suunta oikealta vasemmalle
 	Roman Hanging Punctuation	Latinalaiset riippuvat välimerkit
+	Korean Line Break Anywhere	Korean rivinvaihto missä tahansa
+	East Asian Composition Settings	Itäaasialaisen ladonnan asetukset
+	Korean Composition Settings	Korean ladonnan asetukset
 	Select a text object to edit its paragraph attributes.	Valitse tekstiobjekti, jonka kappalemääritteitä haluat muokata.
 	Single-line Composer	Yhden rivin asettelu
 	Toggle Line Composer	Vaihda rivien asettelu
@@ -2348,6 +2368,8 @@ digits	Malayalam	Malajalam
 	Export Selected Art Only	Vie vain valittu kuvitus
 	Number of Colors:	Värien määrä:
 	Raster File Format:	Rasteritiedoston muoto:
+	Include Placed Images	Sisällytä sijoitetut kuvat
+	Include Fill Hatches	Sisällytä täyttöjen viivoitukset
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Täysväri vaatii version 2004 tai uudemman: käytetään lähintä 256 väristä.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Teksti muunnetaan ääriviivoiksi, ja viivat, joita CAD-viiva ei pysty piirtämään, muuttuvat täytetyiksi muodoiksi.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Teksti säilyy tekstinä, ja jokainen viiva on viiva, jolla on oma viivanpaksuutensa ja katkoviivansa.
@@ -4470,6 +4492,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`globalAdjust` must be an object	`globalAdjust` on oltava objekti
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` on oltava 1, 3 tai 5
 @msg	`stops` must be an array	`stops` on oltava taulukko
+@msg	`{key}` must be an array	`{key}` on oltava taulukko
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` on oltava SVG-asetusten objekti (ks. document.formats)
 @msg	`{_1}` is no save command	`{_1}` ei ole tallennuskomento
 @msg	`{area}` is no recovery area name	`{area}` ei ole palautusalueen nimi
@@ -4779,6 +4802,7 @@ imageTrace	Outline	Ääriviiva
 @msg	not a valid plug-in module: {0}	ei kelvollinen laajennusmoduuli: {0}
 @msg	not an EMF or WMF file	ei EMF- tai WMF-tiedosto
 @msg	not an HP-GL file	ei HP-GL-tiedosto
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` on oltava 1–255 #rrggbb-värin taulukko
 @msg	not found	ei löytynyt
 @msg	not in pattern editing mode	ei kuvion muokkaustilassa
 @msg	finish editing the pattern first	lopeta ensin kuvion muokkaus
@@ -6051,6 +6075,7 @@ swatch	Bright Violet	Kirkas violetti
 	Ruby	Ruby
 	Geometric Guides	Geometriset apuviivat
 	Geometric Patterns	Geometriset kuviot
+	Grit Textures	Rakeiset tekstuurit
 	Ease In	Hidas alku
 	Ease Out	Hidas loppu
 	Ease In Out	Hidas alku ja loppu
@@ -6109,6 +6134,8 @@ axis	Y Axis	Y-akseli
 	Version: {version}	Versio: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Asennetaanko ”{name}” samaa tunnusta käyttävän laajennuksen tilalle?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tämä tiedosto ei ole laajennus, joka oli aiemmin asennettu tällä tunnuksella. Se saa tälle tunnukselle säilytetyt asetukset ja välimuistin.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automaatio pyysi tämän laajennuksen asentamista. Valitse itse Objekti › Laajennukset › Asenna laajennus…, jos haluat asentaa sen.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automaatio pyysi tämän laajennuksen asentamista. Valitse itse Objekti › Laajennukset › Asenna laajennus…, jos haluat asentaa sen.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	”{name}” on eri moduuli kuin laajennus, jonka tunnus on {_1}, ja se saisi sille säilytetyt asetukset ja välimuistin: asenna se asetuksella `replace: true`, kun käyttäjä hyväksyy
 	File SHA-256: {hash}	Tiedoston SHA-256: {hash}
 	Read the objects it is given	Lukea sille annetut objektit
@@ -6171,6 +6198,12 @@ axis	Y Axis	Y-akseli
 @msg	command {name}: `label` must be 1-64 printable characters	komento {name}: `label`-kentässä on oltava 1-64 tulostettavaa merkkiä
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	komento {name}: käytä 1-{MAX_COMMAND_ID} merkin tunnusta merkeistä a-z 0-9 _, joka alkaa kirjaimella
 @msg	command {name}: {e}	komento {name}: {e}
+@msg	manifest: {e}	manifesti: {e}
+@msg	manifest: {e} at line {line} column {column}	manifesti: {e} (rivi {line}, sarake {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands`-kohdan on oltava luettelo komennoista, joilla kullakin on `id` ja `label`
+@msg	command {name} must be an object with an `id` and a `label`	komennon {name} on oltava objekti, jossa on `id` ja `label`
+@msg	missing field `{key}`	kenttä `{key}` puuttuu
+@msg	duplicate field `{key}`	kenttä `{key}` on kahdesti
 @msg	only a filter or a live effect declares `commands`	vain suodin tai live-tehoste määrittelee `commands`-kohdan
 @msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduulilla ei ole `hash`-kentän SHA-256-arvoa: mitään ei asennettu
@@ -6319,6 +6352,17 @@ axis	Y Axis	Y-akseli
 	Charge Wave	Latausaalto
 	Spark Trail	Kipinävanne
 	Calligraphic Nibs	Kalligrafiakärjet
+	Bristle Brushes	Harjassiveltimet
+	Fine Liner	Ohut viiva
+	Pointed Flat	Suippo litteä
+	Stubby Round	Lyhyt pyöreä
+	Dry Scrub	Kuiva hankaus
+	Soft Dome	Pehmeä kupu
+	Filbert	Kissankieli
+	Angled Round	Vino pyöreä
+	Angled Flat	Vino litteä
+	Fan Blender	Sekoitusviuhka
+	Grass Fan	Ruohoviuhka
 	Pattern Borders	Kuvioreunukset
 	Scatter Shapes	Sirontamuodot
 	Save Brush Library…	Tallenna sivellinkirjasto…
@@ -6528,6 +6572,10 @@ anchor	Points:	Pisteet:
 @msg	features lists at most {max} tags	features sisältää enintään {max} tunnistetta
 @msg	unknown OpenType feature `{t}`	tuntematon OpenType-ominaisuus `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}
+@msg	{label} must be at most {max} characters	{label} saa olla enintään {max} merkkiä
+@msg	{label} must be one character	{label} on oltava yksi merkki
+@msg	at most {max} tab stops	enintään {max} sarkainkohtaa
+@msg	unknown align `{other}`	tuntematon tasaus `{other}`
 @msg	no character style `{name}`	Merkkityyliä `{name}` ei löytynyt
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6689,6 +6737,12 @@ breakText	Glyphs	Merkit
 	Delete the selected brushes?	Poistetaanko valitut siveltimet?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Viivat käyttävät yhtä tai useampaa näistä siveltimistä. Irrotetaanko siveltimet näistä viivoista ja poistetaanko siveltimet?
 	Remove Strokes	Poista viivat
+	Place Brush Art	Sijoita siveltimen kuvitus
+	Replace Brush Art	Korvaa siveltimen kuvitus
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Viivat käyttävät tätä sivellintä. Käytetäänkö uutta kuvitusta näissä viivoissa, vai jätetäänkö ne ennalleen ja lisätään siveltimestä kopio, jossa on uusi kuvitus?
+	Apply to Strokes	Käytä viivoihin
+	Leave Strokes	Jätä viivat ennalleen
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` ei sisällä kuvitusta (kuvitus on vain sirote-, taide- ja kuviosiveltimissä)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Järjestelytyökalut
 	Arrange in Grid…	Järjestä ruudukkoon…
@@ -6889,6 +6943,11 @@ breakText	Glyphs	Merkit
 @msg	only an exporter or an importer declares `extensions`	vain vienti- tai tuontilaajennus ilmoittaa `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	tuontilaajennus saa aina tuonnin budjetin: jätä `budget` pois
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopioi vianmääritystiedot
+@msg	Copied the troubleshooting info	Vianmääritystiedot kopioitiin
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraftin edellinen istunto lakkasi vastaamasta ennen kuin se suljettiin. Ohje › Kopioi vianmääritystiedot kopioi tiedot virheraporttia varten
+
 # Safe Mode
 	Safe Mode…	Vikasietotila…
 	Safe Mode	Vikasietotila
@@ -6941,8 +7000,33 @@ breakText	Glyphs	Merkit
 @plural	{n} line cut|{n} lines cut	{n} rivi katkaistu|{n} riviä katkaistu
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ja `last` on oltava konsolin säilyttämien rivien numeroita, `first` ennen arvoa `last`
 
+# Learn panel
+	Learn	Opi
+	Explore tutorials	Tutustu opetusohjelmiin
+	For you	Sinulle
+	Skills	Taidot
+	Get started	Aloitus
+	Quick skill guide	Pikaopas taitoihin
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Lyhyitä käytännön opetusohjelmia tärkeimmistä työkaluista taidoittain ryhmiteltyinä. Valitse taito nähdäksesi sen opetusohjelmat.
+	List Tutorials	Luettele opetusohjelmat
+	Show Tutorial	Näytä opetusohjelma
+@msg	missing `tutorial` (see learn.list)	`tutorial` puuttuu (ks. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tuntematon opetusohjelma `{id}` (ks. learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Päivitä lykätyt tehosteet
 	Deferred Effects	Lykätyt tehosteet
 @msg	no plug-in effect is deferred	yhtään laajennustehostetta ei ole lykätty
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Avattiin, ja {n} laajennustehoste lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa sen.|Avattiin, ja {n} laajennustehostetta lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa ne.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Leikkaustyökalut
+	Stencil Bridges…	Sapluunan sillat…
+	Stencil Bridges	Sapluunan sillat
+	Shortest Crossing	Lyhin ylitys
+	Direction	Suunta
+@msg	The selected art has no islands to bridge	Valitussa grafiikassa ei ole yhdistettäviä saarekkeita
+@msg	No bridge of this width fits across the selected art	Näin leveä silta ei mahdu valitun grafiikan poikki
+@msg	Some islands could not be joined to the area around the art	Joitakin saarekkeita ei voitu yhdistää grafiikkaa ympäröivään alueeseen
+@msg	`width` must be from {lo} to {hi} pt	`width`-arvon on oltava {lo}–{hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` on oltava kokonaisluku 1–{MAX_BRIDGES_PER_ISLAND}

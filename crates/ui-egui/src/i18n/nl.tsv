@@ -262,6 +262,10 @@
 	Blend Options…	Vermengopties…
 	Expand	Uitbreiden
 	Replace Spine	Rug vervangen
+	Create Spine	Rug maken
+	Create Spine:	Rug maken:
+	Always	Altijd
+	Never	Nooit
 	Reverse Spine	Rug omkeren
 	Reverse Front to Back	Van voor naar achter omkeren
 	Envelope Distort	Envelopvervorming
@@ -464,6 +468,8 @@
 	Extrude & Bevel…	Extruderen en afschuinen…
 	3D (Classic)	3D (klassiek)
 	Extrude & Bevel (Classic)…	Extruderen en afschuinen (klassiek)…
+	Revolve (Classic)…	Draaien (klassiek)…
+	Rotate (Classic)…	Roteren (klassiek)…
 	Surface	Oppervlak
 	Wireframe	Draadmodel
 	No Shading	Geen arcering
@@ -534,6 +540,7 @@
 	Gaussian Blur…	Gaussiaanse vervaging…
 	View	Beeld
 	Preview	Voorbeeld
+	Preview:	Voorbeeld:
 	Overprint Preview	Overprintvoorbeeld
 	Pixel Preview	Pixelvoorbeeld
 	Trim View	Bijsnijweergave
@@ -767,6 +774,14 @@
 	Damp Paper	Vochtig papier
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
+	Painted and Sketched	Geschilderd en geschetst
+	Washed Blue	Verwassen blauw
+	Bristle Ochre	Borsteloker
+	Pastel Heather	Pastelheide
+	Charcoal Shade	Houtskoolschaduw
+	Ink Contour	Inktcontour
+	Wet Ink	Natte inkt
+	Fine Pen	Fijne pen
 	Gradient Finishes	Verloopafwerkingen
 	Shape Effects	Vormeffecten
 	Blends and Transparency	Vermengingen en transparantie
@@ -786,6 +801,8 @@
 	Spectrum Gradients	Spectrumverlopen
 	Sky Gradients	Luchtverlopen
 	Neutral Gradients	Neutrale verlopen
+	Organic Fades	Organische vervagingen
+	Holographic	Holografisch
 	Duotone Gradients	Duotoonverlopen
 	Radial Glows	Radiale gloed
 	Save Swatch Library…	Staalenbibliotheek opslaan…
@@ -1820,6 +1837,9 @@ digits	Malayalam	Malayalam
 	Right Indent	Rechts inspringen
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
 	Roman Hanging Punctuation	Romeinse hangende leestekens
+	Korean Line Break Anywhere	Koreaans regeleinde overal
+	East Asian Composition Settings	Instellingen voor Oost-Aziatische zetting
+	Korean Composition Settings	Instellingen voor Koreaanse zetting
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
 	Single-line Composer	Compositie per regel
 	Toggle Line Composer	Compositiemethode wisselen
@@ -2206,6 +2226,8 @@ digits	Malayalam	Malayalam
 	Export Selected Art Only	Alleen geselecteerde artwork exporteren
 	Number of Colors:	Aantal kleuren:
 	Raster File Format:	Rasterbestandsindeling:
+	Include Placed Images	Geplaatste afbeeldingen opnemen
+	Include Fill Hatches	Arceringen van vullingen opnemen
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Echte kleur vereist versie 2004 of later: de dichtstbijzijnde van 256 kleuren wordt weggeschreven.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst wordt omlijningen, en lijnen die een CAD-lijn niet kan tekenen, worden gevulde vormen.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst blijft tekst en elke lijn wordt een lijn met zijn eigen lijndikte en streepjes.
@@ -4508,6 +4530,7 @@ imageTrace	Outline	Contour
 @msg	not a valid plug-in module: {0}	geen geldige plug-inmodule: {0}
 @msg	not an EMF or WMF file	geen EMF- of WMF-bestand
 @msg	not an HP-GL file	geen HP-GL-bestand
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` moet een array van 1 tot 255 #rrggbb-kleuren zijn
 @msg	not found	niet gevonden
 @msg	not in pattern editing mode	niet in patroonbewerkingsmodus
 @msg	finish editing the pattern first	rond eerst het bewerken van het patroon af
@@ -5906,6 +5929,7 @@ swatch	Bright Violet	Felviolet
 	Ruby	Ruby
 	Geometric Guides	Geometrische hulplijnen
 	Geometric Patterns	Geometrische patronen
+	Grit Textures	Korrelige texturen
 	Ease In	Langzaam beginnen
 	Ease Out	Langzaam eindigen
 	Ease In Out	Langzaam beginnen en eindigen
@@ -5959,6 +5983,7 @@ axis	Y Axis	Y-as
 	Version: {version}	Versie: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}” installeren in plaats van de plug-in met dezelfde ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Dit bestand is niet de plug-in die eerder met deze ID was geïnstalleerd. Het krijgt de instellingen en cache die voor die ID bewaard zijn.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Een automatisering heeft gevraagd deze plug-in te installeren. Kies zelf Object › Plug-ins › Plug-in installeren… om hem te installeren.
 	File SHA-256: {hash}	SHA-256 van het bestand: {hash}
 	Read the objects it is given	De objecten lezen die het krijgt
 	Change, add and delete objects in the document	Objecten in het document wijzigen, toevoegen en verwijderen
@@ -6104,6 +6129,17 @@ axis	Y Axis	Y-as
 	Charge Wave	Laadgolf
 	Spark Trail	Vonkenspoor
 	Calligraphic Nibs	Kalligrafische penpunten
+	Bristle Brushes	Borstelpenselen
+	Fine Liner	Fijne liner
+	Pointed Flat	Spitse platte
+	Stubby Round	Korte ronde
+	Dry Scrub	Droog schrobben
+	Soft Dome	Zachte koepel
+	Filbert	Kattentong
+	Angled Round	Schuine ronde
+	Angled Flat	Schuine platte
+	Fan Blender	Vervloeiwaaier
+	Grass Fan	Graswaaier
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen
 	Save Brush Library…	Penseelbibliotheek opslaan…
@@ -6447,6 +6483,12 @@ breakText	Glyphs	Glyphs
 	Delete the selected brushes?	Geselecteerde kwasten verwijderen?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Contouren gebruiken een of meer van deze kwasten. De kwasten van deze contouren halen en de kwasten verwijderen?
 	Remove Strokes	Contouren verwijderen
+	Place Brush Art	Penseelillustratie plaatsen
+	Replace Brush Art	Penseelillustratie vervangen
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Contouren gebruiken dit penseel. De nieuwe illustratie op deze contouren toepassen, of ze laten zoals ze zijn en een kopie van het penseel met de nieuwe illustratie toevoegen?
+	Apply to Strokes	Op contouren toepassen
+	Leave Strokes	Contouren behouden
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` heeft geen illustratie (alleen verspreidings-, art- en patroonpenselen hebben er een)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Schikgereedschappen
 	Arrange in Grid…	In raster schikken…
@@ -6629,6 +6671,11 @@ breakText	Glyphs	Glyphs
 	No importer plug-ins installed	Geen importplug-ins geïnstalleerd
 	Read files you open in its format and make documents from them	Bestanden lezen die u in zijn indeling opent en er documenten van maken
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Probleemoplossingsgegevens kopiëren
+@msg	Copied the troubleshooting info	Probleemoplossingsgegevens gekopieerd
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	De laatste sessie van VectorCraft reageerde niet meer voordat deze werd gesloten. Help › Probleemoplossingsgegevens kopiëren kopieert de details voor een foutrapport
+
 # Safe Mode
 	Safe Mode…	Veilige modus…
 	Safe Mode	Veilige modus
@@ -6676,6 +6723,26 @@ breakText	Glyphs	Glyphs
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eerdere regel verwijderd|{n} eerdere regels verwijderd
 @plural	{n} line cut|{n} lines cut	{n} regel ingekort|{n} regels ingekort
 
+# Learn panel
+	Learn	Leren
+	Explore tutorials	Tutorials verkennen
+	For you	Voor jou
+	Skills	Vaardigheden
+	Get started	Aan de slag
+	Quick skill guide	Snelgids voor vaardigheden
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korte praktische tutorials voor de belangrijkste gereedschappen, gegroepeerd per vaardigheid. Kies een vaardigheid om de tutorials ervan te zien.
+	List Tutorials	Tutorials weergeven
+	Show Tutorial	Tutorial tonen
+@msg	missing `tutorial` (see learn.list)	`tutorial` ontbreekt (zie learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	onbekende tutorial `{id}` (zie learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
 	Deferred Effects	Uitgestelde effecten
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Snijgereedschap
+	Stencil Bridges…	Sjabloonbruggen…
+	Stencil Bridges	Sjabloonbruggen
+	Shortest Crossing	Kortste oversteek
+	Direction	Richting

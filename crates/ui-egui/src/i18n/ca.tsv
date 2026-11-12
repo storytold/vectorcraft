@@ -608,6 +608,17 @@ antiAlias	Sharp	Nítid
 	Calligraphic Brush	Pinzell cal·ligràfic
 	Calligraphic Brush Options	Opcions del pinzell cal·ligràfic
 	Calligraphic Nibs	Plomes cal·ligràfiques
+	Bristle Brushes	Pinzells de cerres
+	Fine Liner	Traç fi
+	Pointed Flat	Pla punxegut
+	Stubby Round	Rodó curt
+	Dry Scrub	Fregat sec
+	Soft Dome	Cúpula suau
+	Filbert	Llengua de gat
+	Angled Round	Rodó bisellat
+	Angled Flat	Pla bisellat
+	Fan Blender	Ventall difuminador
+	Grass Fan	Ventall d'herba
 	Can't export “{name}”.	No es pot exportar “{name}”.
 	Can't open “{name}”.	No es pot obrir “{name}”.
 	Can't print these settings: see the Summary	No es poden imprimir aquests paràmetres: consulta el resum
@@ -1573,6 +1584,8 @@ antiAlias	Sharp	Nítid
 	Extrude & Bevel…	Extrudeix i bisella…
 	3D (Classic)	3D (clàssic)
 	Extrude & Bevel (Classic)…	Extrudeix i bisella (clàssic)…
+	Revolve (Classic)…	Revoluciona (clàssic)…
+	Rotate (Classic)…	Gira (clàssic)…
 	Surface	Superfície
 	Wireframe	Filferro
 	No Shading	Sense ombra
@@ -1882,6 +1895,7 @@ digits	Malayalam	Malaiàlam
 	Gridline every	Línia de quadrícula cada
 	Gridline every:	Línia de quadrícula cada:
 	Grids In Back	Quadrícules al darrere
+	Grit Textures	Textures granulades
 	Group	Agrupa
 	Group Selection	Selecció de grup
 	Group Selection Tool	Eina de selecció de grup
@@ -1906,6 +1920,14 @@ digits	Malayalam	Malaiàlam
 	Hand	Mà
 	Hand Tool	Eina de mà
 	Hand-Drawn	Dibuixat a mà
+	Painted and Sketched	Pintat i esbossat
+	Washed Blue	Blau rentat
+	Bristle Ochre	Ocre de cerres
+	Pastel Heather	Bruc pastel
+	Charcoal Shade	Ombra de carbó
+	Ink Contour	Contorn de tinta
+	Wet Ink	Tinta humida
+	Fine Pen	Ploma fina
 	Handles	Nanses
 	Hard	Dur
 	Hard Light	Llum dura
@@ -2917,6 +2939,8 @@ digits	Malayalam	Malaiàlam
 	Options for Selection…	Opcions per a la selecció…
 	Options:	Opcions:
 	Options…	Opcions…
+	Organic Fades	Esvaïments orgànics
+	Holographic	Hologràfics
 	or more spaces with a tab	o més espais amb un tabulador
 	Orange	Taronja
 	Order:	Ordre:
@@ -3207,6 +3231,7 @@ digits	Malayalam	Malaiàlam
 	Press Quality	Qualitat d’impressió
 	Pressure	Pressió
 	Preview	Previsualització
+	Preview:	Previsualització:
 	Preview (1 inch on the page)	Previsualització (1 polzada a la pàgina)
 	Preview All Layers	Previsualitza totes les capes
 	Preview in Browser	Previsualitza al navegador
@@ -3308,6 +3333,8 @@ digits	Malayalam	Malaiàlam
 	Range:	Interval:
 	Raster Effects	Efectes de ràster
 	Raster File Format:	Format de fitxer de ràster:
+	Include Placed Images	Inclou les imatges col·locades
+	Include Fill Hatches	Inclou les trames dels emplenaments
 	Raster Sample Size:	Mida de mostra de ràster:
 	Raster/Vector Balance:	Equilibri ràster/vector:
 	Rasterize	Rasteritza
@@ -3494,6 +3521,10 @@ digits	Malayalam	Malaiàlam
 	Replace Font	Reemplaça el tipus de lletra
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplaça’l per un altre fitxer o ignora’l: les seves imatges continuaran mostrant la previsualització desada amb el document.
 	Replace Spine	Reemplaça l’espina
+	Create Spine	Crea l’espina
+	Create Spine:	Crea l’espina:
+	Always	Sempre
+	Never	Mai
 	Replace Symbol	Reemplaça el símbol
 	Reset Transformation	Restableix la transformació
 	Replace With Font	Reemplaça per un tipus de lletra
@@ -3617,6 +3648,9 @@ digits	Malayalam	Malaiàlam
 	Roman	Romà
 	Roman Baseline	Línia de base romana
 	Roman Hanging Punctuation	Puntuació penjant romana
+	Korean Line Break Anywhere	Salt de línia coreà a qualsevol lloc
+	East Asian Composition Settings	Configuració de composició de l’Àsia oriental
+	Korean Composition Settings	Configuració de composició coreana
 	Rotate	Gira
 	Rotate 90° CW	Gira 90° en sentit horari
 	Rotate Tool	Eina de gir
@@ -5077,6 +5111,7 @@ digits	Malayalam	Malaiàlam
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` ha de ser 1, 3 o 5
 @msg	`select` must be true or false	`select` ha de ser true o false
 @msg	`stops` must be an array	`stops` ha de ser una matriu
+@msg	`{key}` must be an array	`{key}` ha de ser una matriu
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` ha de ser un objecte d’opcions SVG (vegeu document.formats)
 @msg	`to` must be "corner" or "smooth"	`to` ha de ser "corner" o "smooth"
 @msg	`{_1}` has no brushes to apply	`{_1}` no té pinzells per aplicar
@@ -5637,6 +5672,7 @@ digits	Malayalam	Malaiàlam
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no és un conjunt de dreceres de VectorCraft (falta `overrides`)
 @msg	not an EMF or WMF file	no és un fitxer EMF o WMF
 @msg	not an HP-GL file	no és un fitxer HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` ha de ser una matriu d’1 a 255 colors #rrggbb
 @msg	not an RTF file: it doesn't start with {\\rtf	no és un fitxer RTF: no comença amb {\\rtf
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
@@ -6126,6 +6162,8 @@ digits	Malayalam	Malaiàlam
 	Version: {version}	Versió: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal·la «{name}» en lloc del complement amb el mateix ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Aquest fitxer no és el complement instal·lat abans amb aquest ID. Rep la configuració i la memòria cau desades per a aquest ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» és un mòdul diferent del complement amb l’ID {_1} i rebria la configuració i la memòria cau desades per a aquest: instal·la’l amb `replace: true` quan l’usuari hi estigui d’acord
 	File SHA-256: {hash}	SHA-256 del fitxer: {hash}
 	Read the objects it is given	Llegir els objectes que rep
@@ -6188,6 +6226,12 @@ digits	Malayalam	Malaiàlam
 @msg	command {name}: `label` must be 1-64 printable characters	ordre {name}: `label` ha de tenir 1-64 caràcters imprimibles
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ordre {name}: fes servir un id d’1-{MAX_COMMAND_ID} caràcters d’a-z 0-9 _ que comenci per una lletra
 @msg	command {name}: {e}	ordre {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (línia {line}, columna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` ha de ser una llista d’ordres, cadascuna amb `id` i `label`
+@msg	command {name} must be an object with an `id` and a `label`	l’ordre {name} ha de ser un objecte amb `id` i `label`
+@msg	missing field `{key}`	falta el camp `{key}`
+@msg	duplicate field `{key}`	el camp `{key}` està repetit
 @msg	only a filter or a live effect declares `commands`	només un filtre o un efecte dinàmic declara `commands`
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res
@@ -6470,6 +6514,10 @@ anchor	Points:	Punts:
 @msg	features lists at most {max} tags	features admet com a màxim {max} etiquetes
 @msg	unknown OpenType feature `{t}`	funció OpenType desconeguda `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} ha de ser un nombre superior a 0 i com a màxim {max}
+@msg	{label} must be at most {max} characters	{label} ha de tenir com a màxim {max} caràcters
+@msg	{label} must be one character	{label} ha de ser un sol caràcter
+@msg	at most {max} tab stops	com a màxim {max} tabulacions
+@msg	unknown align `{other}`	alineació desconeguda `{other}`
 @msg	no character style `{name}`	No s'ha trobat l'estil de caràcter `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6640,6 +6688,12 @@ breakText	Glyphs	Glifs
 	Delete the selected brushes?	Voleu suprimir els pinzells seleccionats?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Hi ha traços que fan servir un o més d’aquests pinzells. Voleu treure els pinzells d’aquests traços i suprimir els pinzells?
 	Remove Strokes	Elimina els traços
+	Place Brush Art	Col·loca l’art del pinzell
+	Replace Brush Art	Substitueix l’art del pinzell
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
+	Apply to Strokes	Aplica als traços
+	Leave Strokes	Deixa els traços
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` no té art (només en tenen els pinzells de dispersió, artístics i de motiu)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Eines d’organització
 	Arrange in Grid…	Organitza en quadrícula…
@@ -6835,6 +6889,11 @@ breakText	Glyphs	Glifs
 @msg	only an exporter or an importer declares `extensions`	només un exportador o un importador declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un importador sempre rep el pressupost d’una importació: ometeu `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copia la informació de resolució de problemes
+@msg	Copied the troubleshooting info	S’ha copiat la informació de resolució de problemes
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	La darrera sessió del VectorCraft va deixar de respondre abans de tancar-se. Ajuda › Copia la informació de resolució de problemes copia els detalls per a un informe d’error
+
 # Safe Mode
 	Safe Mode…	Mode segur…
 	Safe Mode	Mode segur
@@ -6887,8 +6946,33 @@ breakText	Glyphs	Glifs
 @plural	{n} line cut|{n} lines cut	{n} línia tallada|{n} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
 
+# Learn panel
+	Learn	Aprèn
+	Explore tutorials	Explora els tutorials
+	For you	Per a vós
+	Skills	Habilitats
+	Get started	Primers passos
+	Quick skill guide	Guia ràpida d’habilitats
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorials pràctics breus de les eines essencials, agrupats per habilitat. Trieu una habilitat per veure’n els tutorials.
+	List Tutorials	Llista els tutorials
+	Show Tutorial	Mostra el tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats
 	Deferred Effects	Efectes ajornats
 @msg	no plug-in effect is deferred	no hi ha cap efecte de complement ajornat
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	S’ha obert amb {n} efecte de complement ajornat. Efecte › Actualitza els efectes ajornats l’executa.|S’ha obert amb {n} efectes de complement ajornats. Efecte › Actualitza els efectes ajornats els executa.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Eines de tall
+	Stencil Bridges…	Ponts de plantilla…
+	Stencil Bridges	Ponts de plantilla
+	Shortest Crossing	Travessia més curta
+	Direction	Direcció
+@msg	The selected art has no islands to bridge	La il·lustració seleccionada no té illes per unir
+@msg	No bridge of this width fits across the selected art	Cap pont d’aquesta amplada no cap a la il·lustració seleccionada
+@msg	Some islands could not be joined to the area around the art	Algunes illes no s’han pogut unir a l’àrea que envolta la il·lustració
+@msg	`width` must be from {lo} to {hi} pt	`width` ha d’estar entre {lo} i {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` ha de ser un nombre enter d’1 a {MAX_BRIDGES_PER_ISLAND}
