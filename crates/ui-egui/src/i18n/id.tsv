@@ -4511,6 +4511,7 @@ imageTrace	Outline	Kontur
 @msg	not a valid plug-in module: {0}	bukan modul plug-in yang valid: {0}
 @msg	not an EMF or WMF file	bukan berkas EMF atau WMF
 @msg	not an HP-GL file	bukan berkas HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` harus berupa array berisi 1 sampai 255 warna #rrggbb
 @msg	not found	tidak ditemukan
 @msg	not in pattern editing mode	tidak dalam mode pengeditan pola
 @msg	finish editing the pattern first	selesaikan pengeditan pola terlebih dahulu

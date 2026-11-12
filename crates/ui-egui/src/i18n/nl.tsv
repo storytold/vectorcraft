@@ -4523,6 +4523,7 @@ imageTrace	Outline	Contour
 @msg	not a valid plug-in module: {0}	geen geldige plug-inmodule: {0}
 @msg	not an EMF or WMF file	geen EMF- of WMF-bestand
 @msg	not an HP-GL file	geen HP-GL-bestand
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` moet een array van 1 tot 255 #rrggbb-kleuren zijn
 @msg	not found	niet gevonden
 @msg	not in pattern editing mode	niet in patroonbewerkingsmodus
 @msg	finish editing the pattern first	rond eerst het bewerken van het patroon af
