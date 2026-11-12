@@ -2123,6 +2123,35 @@ fn a_grants_file_that_cannot_be_deleted_keeps_the_stored_module() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// When the last grant can't be removed because `grants.json` can't be deleted, a replacing module
+/// that asks for no permissions doesn't stay in the store: the store gets back the module the grant
+/// still covers, and the grant is left as it was.
+#[test]
+fn a_grants_file_whose_deletion_fails_keeps_the_stored_module() {
+    let folder = crate::tests_links::Folder::new("plugin-store-undeletable-grants");
+    let id = "test.engine.permissions.undeletablegrants";
+    let empty = json!({"objects": []});
+    let approved = asking(id, r#"["doc.read"]"#, &empty);
+    let approved_data = vectorcraft_format::base64_encode(&approved);
+    let plain = asking(id, "null", &empty);
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": approved_data, "grant": ["doc.read"]}));
+    let file = s.stored_plugin_file(id).unwrap();
+    let recorded = std::fs::read(&grants).unwrap();
+
+    crate::store::GRANTS_DELETE_FAILS.set(true);
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&plain), "replace": true}));
+    crate::store::GRANTS_DELETE_FAILS.set(false);
+    assert_eq!(std::fs::read(&file).unwrap(), approved, "the store gets the module the grant covers back");
+    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "the grant stays as it was");
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": approved_data}))["needsApproval"], false, "the grant still covers the module");
+
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(!grants.exists(), "a removal that can delete the file forgets the grant");
+}
+
 /// A plug-in folder that leaves a module listing no permissions under an id forgets the process's
 /// grant for it, unless a later file in the folder leaves a granted module there. A grant kept in
 /// the plug-in store stays, with the stored module it covers.
