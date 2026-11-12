@@ -198,16 +198,16 @@ fn a_fills_shadow_follows_the_fills_own_transform() {
 }
 
 /// A Transform effect after a fill's own Transform effect with Scale Strokes & Effects on turns the
-/// shadow between them, which the first one scaled; a Transform effect that moves at random holds
-/// the shadow before it back from the Transform effects after it.
+/// shadow between them, which the first one leaves as it is; a Transform effect that moves at random
+/// holds the shadow before it back from the Transform effects after it.
 #[test]
-fn a_fills_later_transform_turns_the_shadow_its_options_scaled() {
+fn a_fills_later_transform_turns_the_shadow_after_its_first() {
     let n = fill_square(
         12,
         vec![transform(json!({"scaleH": 200, "scaleV": 200, "strokes": true})), shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90}))],
     );
     let art = crate::reshape(None, &n, None).unwrap();
-    assert!(near(&shadows_in(&art), &[(0.0, -20.0)]), "{:?}", shadows_in(&art));
+    assert!(near(&shadows_in(&art), &[(0.0, -10.0)]), "{:?}", shadows_in(&art));
     let held = fill_square(
         13,
         vec![
@@ -219,6 +219,90 @@ fn a_fills_later_transform_turns_the_shadow_its_options_scaled() {
     let art = crate::reshape(None, &held, None).unwrap();
     let drawn = shadows_in(&art);
     assert!(drawn.len() == 1 && drawn[0].0 > 0.0 && drawn[0].1.abs() < 1e-9, "{drawn:?}");
+}
+
+/// A fill's own Transform effect with Transform Patterns or Scale Strokes & Effects on leaves the
+/// fill's raster effects after it as they are: they paint around the transformed art, its copies
+/// included. With Transform Objects off it leaves the raster effects before it as they are too.
+/// Drawn, expanded and baked alike.
+#[test]
+fn a_fills_own_transform_leaves_the_shadow_after_it() {
+    let cases = [
+        vec![transform(json!({"scaleH": 200, "scaleV": 200, "strokes": true})), shadow(10.0, 0.0, 0.0)],
+        vec![transform(json!({"scaleH": 200, "scaleV": 200, "patterns": true, "strokes": true})), shadow(10.0, 0.0, 0.0)],
+        vec![transform(json!({"scaleH": 200, "scaleV": 200, "moveH": 120, "copies": 1, "strokes": true})), shadow(10.0, 0.0, 0.0)],
+        vec![transform(json!({"scaleH": 200, "scaleV": 200, "objects": false, "strokes": true})), shadow(10.0, 0.0, 0.0)],
+        vec![shadow(10.0, 0.0, 0.0), transform(json!({"scaleH": 200, "scaleV": 200, "objects": false, "strokes": true}))],
+        // A later Transform effect with an option leaves the shadow after it as well.
+        vec![
+            transform(json!({"scaleH": 200, "scaleV": 200, "patterns": true})),
+            transform(json!({"scaleH": 150, "scaleV": 150, "strokes": true})),
+            shadow(10.0, 0.0, 0.0),
+        ],
+    ];
+    for effects in cases {
+        let n = fill_square(18, effects.clone());
+        let art = crate::reshape(None, &n, None).unwrap();
+        let drawn = shadows_in(&art);
+        assert!(!drawn.is_empty() && near(&drawn, &vec![(10.0, 0.0); drawn.len()]), "{effects:?}: drawn {drawn:?}");
+        let expanded = shadows_in(&expand_outlined(None, &n, None).unwrap());
+        assert!(!expanded.is_empty() && near(&expanded, &vec![(10.0, 0.0); expanded.len()]), "{effects:?}: expanded {expanded:?}");
+        let mut d = Document::new(800.0, 800.0);
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, n).unwrap();
+        let baked = bake_document(&d).unwrap();
+        let b = shadows_in(baked.node(NodeId(18)).unwrap());
+        assert!(!b.is_empty() && near(&b, &vec![(10.0, 0.0); b.len()]), "{effects:?}: baked {b:?}");
+    }
+}
+
+/// A geometry effect after a fill's own Transform effect with Scale Strokes & Effects on reshapes
+/// the transformed art by its own distance, as it does after an object's Transform effect.
+#[test]
+fn a_fills_own_transform_leaves_the_offset_after_it() {
+    let offset = fx("path.offsetPath", json!({"offset": 5}));
+    let scaled = transform(json!({"scaleH": 200, "scaleV": 200, "strokes": true}));
+    let n = fill_square(19, vec![scaled.clone(), offset.clone()]);
+    let on_fill = crate::reshape(None, &n, None).unwrap();
+    let on_object = crate::reshape(None, &square(20, vec![scaled, offset]), None).unwrap();
+    let (fill, object) = (on_fill.geometric_bounds().unwrap(), on_object.geometric_bounds().unwrap());
+    // The 50 pt square scaled to 100 pt about its center, then offset by 5 pt on each side.
+    assert!((fill.width() - 110.0).abs() < 1e-6 && (fill.height() - 110.0).abs() < 1e-6, "{fill:?}");
+    assert!((fill.width() - object.width()).abs() < 1e-6 && (fill.x0 - object.x0).abs() < 1e-6, "{fill:?} {object:?}");
+    let expanded = expand_outlined(None, &n, None).unwrap().geometric_bounds().unwrap();
+    assert!((expanded.width() - 110.0).abs() < 1e-6 && (expanded.x0 - fill.x0).abs() < 1e-6, "expanded {expanded:?}");
+}
+
+/// The SVG filters on `n` and the nodes under it, from the object's effects and from each fill's
+/// and stroke's.
+fn filters_in(n: &Node) -> Vec<Effect> {
+    let mut out = vec![];
+    n.walk(&mut |m| {
+        let lists = std::iter::once(&m.appearance.effects).chain(m.appearance.items.iter().map(|i| i.effects()));
+        out.extend(lists.flatten().filter(|e| e.id == crate::SVG_FILTER).cloned());
+    });
+    out
+}
+
+/// An SVG filter after a fill's own Transform effect with Scale Strokes & Effects on keeps its
+/// scale and the origin of its user space, as it does after the same Transform effect without
+/// options and after an object's own Transform effect.
+#[test]
+fn a_fills_own_transform_leaves_the_svg_filter_after_it() {
+    let filter = fx(crate::SVG_FILTER, json!({"scale": 1.0, "origin": [10.0, 10.0]}));
+    for params in [
+        json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "strokes": true}),
+        json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "patterns": true}),
+        json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1, "strokes": true}),
+        json!({"scaleH": 200, "scaleV": 200, "objects": false, "strokes": true}),
+    ] {
+        let art = crate::reshape(None, &fill_square(21, vec![transform(params.clone()), filter.clone()]), None).unwrap();
+        let drawn = filters_in(&art);
+        assert!(!drawn.is_empty() && drawn.iter().all(|e| *e == filter), "{params}: {drawn:?}");
+    }
+    let object = square(22, vec![transform(json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "strokes": true})), filter.clone()]);
+    let art = crate::reshape(None, &object, None).unwrap();
+    assert!(!filters_in(&art).is_empty() && filters_in(&art).iter().all(|e| *e == filter), "{:?}", filters_in(&art));
 }
 
 /// The 3D effects keep the shadow before a Transform effect that shapes the art they project, the
@@ -540,6 +624,29 @@ fn a_groups_transform_moves_the_shadow_in_a_members_mask() {
             let member = node_in(&art, id);
             let mask = member.extras().mask.as_deref().unwrap();
             assert!(near(&shadows_in(&mask.art), &[(5.0, -5.0)]), "Scale Strokes & Effects {strokes}: {id} {:?}", shadows_in(&mask.art));
+        }
+    }
+}
+
+/// A group's Transform effect transforms the shadows of its members' fills that carry a Transform
+/// effect of their own with Scale Strokes & Effects on, with the group's Scale Strokes & Effects off
+/// or on: a shadow listed after the fill's Transform effect keeps its value through that effect and
+/// transforms with the group's, and one listed before it follows the fill's Transform effect and
+/// then the group's. Drawn through each member's art.
+#[test]
+fn a_groups_transform_moves_its_members_fills_shadows_beside_their_own_transform() {
+    let scaled = || transform(json!({"scaleH": 200, "scaleV": 200, "strokes": true}));
+    // Halved and turned 90° counterclockwise on screen, (10, 10) goes to (5, -5); doubled first by
+    // the fill's own Transform effect, it goes to (10, -10).
+    let cases = [(91, vec![scaled(), shadow(10.0, 10.0, 0.0)], (5.0, -5.0)), (92, vec![shadow(10.0, 10.0, 0.0), scaled()], (10.0, -10.0))];
+    for strokes in [false, true] {
+        let members = cases.iter().map(|(id, effects, _)| fill_square(*id, effects.clone())).collect();
+        let g = group(90, members, vec![transform(json!({"scaleH": 50, "scaleV": 50, "rotate": 90, "strokes": strokes}))]);
+        let art = crate::evaluate_container(None, &g).unwrap();
+        for (id, _, want) in &cases {
+            let member = node_in(&art, *id);
+            let drawn = shadows_in(&crate::reshape(None, &member, None).unwrap());
+            assert!(!drawn.is_empty() && near(&drawn, &vec![*want; drawn.len()]), "Scale Strokes & Effects {strokes}: {id} {drawn:?}");
         }
     }
 }

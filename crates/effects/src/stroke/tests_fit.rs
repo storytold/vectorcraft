@@ -37,6 +37,20 @@ fn near(a: f64, b: f64, tol: f64) -> bool {
 
 // ---------------------------------------------------------------- dashes fitted to corners
 
+/// A subpath with no segments (a lone moveto, as an HP-GL wedge of almost no radius gives) is
+/// dashed fitted to corners without a panic, and the other subpaths keep their dashes.
+#[test]
+fn fitted_dashes_take_a_subpath_with_no_segments() {
+    let mut b = BezPath::new();
+    b.move_to((5.0, 5.0));
+    b.extend(line(100.0));
+    let d = dash(&b, &fitted(&[10.0, 5.0], 0.0)).expect("dashed");
+    assert!(moves(&d.path) > 1 && length(&d.path) > 0.0, "{:?}", d.path);
+    let mut lone = BezPath::new();
+    lone.move_to((0.0, 0.0));
+    assert!(dash(&lone, &fitted(&[10.0, 5.0], 0.0)).is_some_and(|d| d.path.elements().is_empty()));
+}
+
 #[test]
 fn every_corner_of_a_rectangle_falls_mid_dash() {
     // 100 × 50 with 12/6: the long sides hold 6 periods (scaled by 100/108), the short ones 3

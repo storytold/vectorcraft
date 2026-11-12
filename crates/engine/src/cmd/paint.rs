@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, GradientPaint, Paint};
-use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, CharStyle, Document, GraySource, Node, NodeId, NodeKind};
 
 use super::appearance::{ItemTarget, appearance_targets, edit_items, edit_items_then, item_target};
 use super::gradient::{item_paint_bounds, place_paint, place_run_paint, run_paint_mut, run_stroke_weight, unplaced};
@@ -718,7 +718,8 @@ fn colorized_images(d: &Document, ids: &[NodeId], paint: &Paint) -> std::result:
 }
 
 /// The message for a process color on a grayscale image with an alpha channel.
-const PROCESS_ON_TRANSPARENCY: &str = "a process color can't colorize a grayscale image with transparency: use a spot color, black or white";
+pub(super) const PROCESS_ON_TRANSPARENCY: &str =
+    "a process color can't colorize a grayscale image with transparency: use a spot color, black or white";
 
 /// Can `paint` colorize a grayscale image with an alpha channel: a color linked to a spot swatch
 /// of `d`, black or white?
@@ -737,11 +738,7 @@ pub(super) fn check_colorized(d: &Document) -> std::result::Result<(), String> {
     let mut refused = false;
     let mut visit = |n: &Node| {
         vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
-            if let (NodeKind::Image(im), Some(paint)) = (&m.kind, m.extras().colorize.as_deref())
-                && !refused
-                && !colorizes_transparency(d, paint)
-                && d.image_blob(im).and_then(|b| b.gray_source()).is_some_and(|g| g.alpha)
-            {
+            if !refused && gray_colorized_with_process(d, m).is_some_and(|g| g.alpha) {
                 refused = true;
             }
         })
@@ -759,6 +756,13 @@ pub(super) fn check_colorized(d: &Document) -> std::result::Result<(), String> {
 /// an edit doesn't fail over an image it didn't change.
 pub(super) fn check_colorized_kept(was_ok: bool, d: &Document) -> std::result::Result<(), String> {
     if was_ok { check_colorized(d) } else { Ok(()) }
+}
+
+/// How the pixels of `n` are gray, when `n` is a grayscale or 1-bit image colorized with a color
+/// that [`colorizes_transparency`] refuses. Such an image can't have an alpha channel.
+pub(super) fn gray_colorized_with_process(d: &Document, n: &Node) -> Option<GraySource> {
+    let (NodeKind::Image(im), Some(paint)) = (&n.kind, n.extras().colorize.as_deref()) else { return None };
+    if colorizes_transparency(d, paint) { None } else { d.image_blob(im).and_then(|b| b.gray_source()) }
 }
 
 /// Is `e` the refusal of [`check_colorized`]?

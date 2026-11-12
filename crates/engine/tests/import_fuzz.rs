@@ -2958,6 +2958,13 @@ fn the_hpgl_sample_opens() {
     assert!(paths > 15, "{paths} paths, warnings {:?}", l.warnings);
 }
 
+/// A wedge drawn with the adaptive line type `LT-1` and a near-zero radius (a case the fuzz test
+/// found) opens and places without a panic.
+#[test]
+fn an_adaptive_line_type_wedge_of_almost_no_radius_opens() {
+    survive_metafile("HP-GL tiny adaptive wedge", "x.plt", b"IN;SP1;LT-1;EW0.000001,0,0;").unwrap();
+}
+
 /// A random instruction: a mnemonic the reader plays (or one it doesn't) with hostile numbers.
 fn arb_hpgl_instruction() -> impl Strategy<Value = String> {
     let op = prop::sample::select(vec![

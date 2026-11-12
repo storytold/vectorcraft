@@ -57,11 +57,8 @@ pub(super) fn changed_pixels(
         return None;
     }
     // The placed documents' files whose bitmaps were made since the frame shown.
-    let placed = if shown_key.placed == key.placed {
-        vectorcraft_render::Changed::Nothing
-    } else {
-        vectorcraft_render::placed_area(doc, &vectorcraft_render::placed_document::made_between(shown_key.placed, key.placed)?)
-    };
+    let entry = app.session.documents().iter().find(|d| d.uid as usize == key.doc).and_then(|d| app.canvas.placed_keys.get(&d.uid));
+    let placed = super::placed_changes(entry, shown_key.placed, key.placed, doc, vectorcraft_render::placed_document::made_between)?;
     match app.canvas.renderer.changed(shown, doc, opts).and(placed) {
         vectorcraft_render::Changed::Nothing => Some(None),
         vectorcraft_render::Changed::Area(area) => match vectorcraft_render::view_pixels(area, view, w, h) {

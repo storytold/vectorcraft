@@ -943,6 +943,29 @@ fn pattern_xf(space: Affine, matrix: Option<Affine>, tile: Rect) -> Option<Affin
     (xf.determinant().abs() >= 1e-12 && xf.as_coeffs().iter().all(|v| v.is_finite())).then_some(xf)
 }
 
+/// A style's pattern (`StyleItem::Pattern`): the file's pattern `name` placed by `matrix` (its
+/// space → art space; `controls` apply first for a pattern defined in the version 7 form, `v7`
+/// those patterns' names) and carried into the document by `space`, with the name `names` give
+/// it there. `None` when the pattern wasn't read (`tiles`: the tiles of those that were, by their
+/// names in the file) or doesn't place.
+pub(super) fn style_pattern(
+    name: &str,
+    matrix: Option<[f64; 6]>,
+    controls: &[f64],
+    tiles: &HashMap<String, Rect>,
+    v7: &HashSet<String>,
+    names: &ShownNames,
+    space: Affine,
+) -> Option<Paint> {
+    let tile = tiles.get(name).copied()?;
+    let mut matrix = matrix.and_then(|m| paint::affine(&m));
+    if v7.contains(name) {
+        matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * pattern_controls(controls)?);
+    }
+    let xf = pattern_xf(space, matrix, tile)?;
+    Some(Paint::Pattern { pattern: names.get(Global::Pattern, name).to_string(), xf })
+}
+
 /// A pattern fill's `x y scaleX scaleY angle reflect axis shear shearAxis` as one transform of the
 /// pattern's space, applied before its initial matrix: the shear (by `shear` degrees along the line
 /// at `shearAxis` degrees), the reflection about the line at `axis` degrees when `reflect` isn't
@@ -1147,15 +1170,15 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
             }
             StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{}", paints.names.get(Global::Pattern, name))) {
                 Some(p) => AppearanceItem::Fill(FillLayer::new(p.clone())),
-                None => {
-                    let tile = paints.patterns.get(name).copied()?;
-                    let mut matrix = matrix.and_then(|m| paint::affine(&m));
-                    if paints.v7_patterns.contains(name) {
-                        matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * pattern_controls(controls)?);
-                    }
-                    let xf = pattern_xf(paints.space, matrix, tile)?;
-                    AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: paints.names.get(Global::Pattern, name).to_string(), xf }))
-                }
+                None => AppearanceItem::Fill(FillLayer::new(style_pattern(
+                    name,
+                    *matrix,
+                    controls,
+                    paints.patterns,
+                    paints.v7_patterns,
+                    paints.names,
+                    paints.space,
+                )?)),
             },
             StyleItem::Stroke { brush, .. } => {
                 // A brushed stroke draws as its look only with the brush the Brushes panel keeps

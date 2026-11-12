@@ -166,6 +166,48 @@ fn korean_line_break_anywhere_toggles_the_selected_paragraphs_in_one_undo_step()
     assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
 }
 
+/// Bunri-Kinshi: new type has it off; the menu item turns it on for the paragraphs the Type tool's
+/// selection touches in one undo step, is unchecked while the selected paragraphs differ, and is
+/// unavailable while any of them has kinsoku None, which keeps the setting. Reset Panel turns it off.
+#[test]
+fn bunri_kinshi_toggle_follows_kinsoku_and_the_selected_paragraphs() {
+    let (mut app, id) = editing_text("あ——い\nう……え\n");
+    app.session.prefs.show_east_asian_options = true;
+    let flags = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).bunri_kinshi, text.para_at(1).bunri_kinshi)
+    };
+    assert_eq!(flags(&app), (false, false), "new type has it off");
+    select_range(&mut app, 0, 3);
+    assert_eq!(bunri_kinshi_item(&app), (true, false));
+    let history = app.session.active().unwrap().history.undo.len();
+    toggle_bunri_kinshi(&mut app);
+    assert_eq!(flags(&app), (true, false));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    assert_eq!(bunri_kinshi_item(&app), (true, true));
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(bunri_kinshi_item(&app), (true, false), "mixed: unchecked");
+    toggle_bunri_kinshi(&mut app);
+    assert_eq!(flags(&app), (true, true));
+    // Kinsoku None on one paragraph: the item is unavailable and the setting stays.
+    let second = "あ——い\n".len();
+    app.run("text.setFormat", json!({"id": id, "start": second, "end": second, "kinsoku": "none"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(bunri_kinshi_item(&app), (false, true));
+    assert_eq!(flags(&app), (true, true));
+    app.run("text.setFormat", json!({"id": id, "kinsoku": "soft"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(bunri_kinshi_item(&app), (true, true));
+    toggle_bunri_kinshi(&mut app);
+    assert_eq!(flags(&app), (false, false));
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_bunri_kinshi(&mut app);
+    app.session.set_tool_option("selectAll", &json!(true));
+    reset_panel(&mut app);
+    assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
+}
+
 #[test]
 fn paragraph_mixed_indent_fields_show_blank() {
     let (mut app, id) = editing_text("A\nB\n");

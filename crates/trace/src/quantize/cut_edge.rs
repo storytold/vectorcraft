@@ -70,12 +70,27 @@ pub(super) fn settled(mut q: Quantized, img: &Raster, own: &[bool]) -> Quantized
 /// colours and what noise and lighting make of them, and eight colours come within a few levels
 /// of every pixel; a photo's tones spread all through its range, and eight colours stay far from
 /// most of them (more than 6 levels, and more than a tenth of how far a single colour stays).
+/// A gray picture's tones lie along one line instead of through the whole color cube, and eight
+/// colors come nearer to them. A neutral picture (19 in 20 of its opaque pixels with their
+/// channels within 8 levels of each other) is therefore also continuous tone when eight colors
+/// stay more than 0.065 as far as a single color does. So is a sepia, single-hue or duotone
+/// picture whose tones follow one curve through the color cube (19 in 20 of its opaque pixels on
+/// it, see [`on_one_curve`]). Neither is when sixteen colors stay at most a fifth as far as eight
+/// do. That exception holds for flat art of up to sixteen clean levels, gray or tinted, where
+/// sixteen colors come within about a level of every pixel. On gray and tinted photos sixteen
+/// colors stay 0.18 to 0.57 as far as eight do, and on most anti-aliased or noisy gray flat art
+/// 0.24 to 0.5 as far, so the exception holds for neither.
 pub(crate) fn continuous_tone(img: &Raster) -> bool {
     let hk = HistKey::new(img);
     let mut bins = vec![Bin::default(); 1 << 15];
+    let (mut opaque, mut neutral) = (0u64, 0u64);
     for p in img.rgba.as_chunks::<4>().0 {
         if p[3] >= 128 {
             bins[hk.key(p[0], p[1], p[2])].add(p);
+            opaque += 1;
+            if p[0].max(p[1]).max(p[2]) - p[0].min(p[1]).min(p[2]) <= 8 {
+                neutral += 1;
+            }
         }
     }
     let used: Vec<Used> = bins.iter().enumerate().filter(|(_, b)| b.n > 0).map(|(i, b)| (i, b.mean(), b.n as f64)).collect();
@@ -91,7 +106,122 @@ pub(crate) fn continuous_tone(img: &Raster) -> bool {
         if n > 0.0 { (sum / n).sqrt() } else { 0.0 }
     };
     let eight = unsaid(8);
-    eight > 6.0 && eight > 0.1 * unsaid(1)
+    if eight <= 6.0 {
+        return false;
+    }
+    let one = unsaid(1);
+    if eight > 0.1 * one {
+        return true;
+    }
+    eight > 0.065 * one && unsaid(16) > 0.2 * eight && (20 * neutral >= 19 * opaque || 20 * on_one_curve(img) >= 19 * opaque)
+}
+
+/// How far (levels) a pixel may lie from the tone curve of its picture and still count as on it,
+/// for [`on_one_curve`].
+const CURVE_OFF: f64 = 6.0;
+
+/// How long (levels) each stretch along a picture's main color direction is whose median color is a
+/// point of its tone curve, for [`on_one_curve`].
+const CURVE_STEP: f64 = 8.0;
+
+/// How far (levels) the colors of a picture can lie from their mean along any direction: more than
+/// the length of the color cube's diagonal (255 × √3).
+const CURVE_REACH: f64 = 448.0;
+
+/// How many of the opaque pixels (an alpha of 128 or more) of `img` lie on its tone curve: within
+/// [`CURVE_OFF`] of it, measured across its main color direction, and within [`CURVE_OFF`] of the
+/// plane its colors spread along most. The main color direction is the direction through the color
+/// cube along which the opaque pixels' colors spread the most. The tone curve goes through the
+/// median color (the median of each channel) of the opaque pixels in each stretch of [`CURVE_STEP`]
+/// levels along that direction, which a few pixels of another color in the stretch do not move. The
+/// colors of a sepia, single-hue or duotone photo follow one such curve, as a gray photo's lie along
+/// the line of grays, while a color photo's spread across it. A curve with a bend, as a duotone's,
+/// stays within the plane, while art in several unrelated colors has colors off it. None are on
+/// the curve when there is no main color direction (no opaque pixels, or all of them one color).
+fn on_one_curve(img: &Raster) -> u64 {
+    let opaque = || img.rgba.as_chunks::<4>().0.iter().filter(|p| p[3] >= 128).map(|p| [p[0], p[1], p[2]].map(f64::from));
+    let (mut n, mut sum, mut products) = (0.0, [0.0; 3], [[0.0; 3]; 3]);
+    for c in opaque() {
+        n += 1.0;
+        for i in 0..3 {
+            sum[i] += c[i];
+            for j in 0..3 {
+                products[i][j] += c[i] * c[j];
+            }
+        }
+    }
+    if n == 0.0 {
+        return 0;
+    }
+    let mean = sum.map(|s| s / n);
+    let covariance: [[f64; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| products[i][j] / n - mean[i] * mean[j]));
+    let Some(axis) = main_direction(&covariance) else { return 0 };
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    // The direction across the main one along which the colors spread the most, and the direction
+    // across both: off the plane the colors spread along most. None when they lie on one line.
+    let first = dot(covariance.map(|row| dot(row, axis)), axis);
+    let rest: [[f64; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| covariance[i][j] - first * axis[i] * axis[j]));
+    let off_plane = main_direction(&rest).and_then(|b| {
+        let n = [axis[1] * b[2] - axis[2] * b[1], axis[2] * b[0] - axis[0] * b[2], axis[0] * b[1] - axis[1] * b[0]];
+        let len = dot(n, n).sqrt();
+        (len > 1e-9).then(|| n.map(|v| v / len))
+    });
+    let stretches = (2.0 * CURVE_REACH / CURVE_STEP) as usize;
+    let stretch = |c: [f64; 3]| {
+        let along = dot([0, 1, 2].map(|k| c[k] - mean[k]), axis);
+        (((along + CURVE_REACH) / CURVE_STEP).floor().max(0.0) as usize).min(stretches - 1)
+    };
+    // How many pixels of each stretch have each level in each channel.
+    let mut levels = vec![[[0u32; 256]; 3]; stretches];
+    for p in img.rgba.as_chunks::<4>().0.iter().filter(|p| p[3] >= 128) {
+        if let Some(l) = levels.get_mut(stretch([p[0], p[1], p[2]].map(f64::from))) {
+            for (counts, &v) in l.iter_mut().zip(p) {
+                counts[usize::from(v)] += 1;
+            }
+        }
+    }
+    let middles: Vec<[f64; 3]> = levels
+        .iter()
+        .map(|l| {
+            l.map(|counts| {
+                let half = counts.iter().map(|&c| u64::from(c)).sum::<u64>().div_ceil(2);
+                let mut seen = 0u64;
+                counts
+                    .iter()
+                    .position(|&c| {
+                        seen += u64::from(c);
+                        seen >= half && seen > 0
+                    })
+                    .map_or(0.0, |v| v as f64)
+            })
+        })
+        .collect();
+    opaque()
+        .filter(|&c| {
+            let Some(mid) = middles.get(stretch(c)) else { return false };
+            let d = [0, 1, 2].map(|k| c[k] - mid[k]);
+            let along = dot(d, axis);
+            let off = off_plane.map_or(0.0, |o| dot([0, 1, 2].map(|k| c[k] - mean[k]), o));
+            dot(d, d) - along * along <= CURVE_OFF * CURVE_OFF && off.abs() <= CURVE_OFF
+        })
+        .count() as u64
+}
+
+/// The unit direction of the largest spread of a covariance matrix `m` (its main eigenvector),
+/// found in a fixed 64 steps of power iteration from its longest row. None when it has no spread.
+fn main_direction(m: &[[f64; 3]; 3]) -> Option<[f64; 3]> {
+    let norm = |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    let mut v = *m.iter().max_by(|a, b| norm(**a).total_cmp(&norm(**b)))?;
+    for _ in 0..64 {
+        let len = norm(v);
+        if len <= 1e-9 {
+            return None;
+        }
+        let unit = v.map(|x| x / len);
+        v = [0, 1, 2].map(|i| (0..3).map(|j| m[i][j] * unit[j]).sum());
+    }
+    let len = norm(v);
+    (len > 1e-9).then(|| v.map(|x| x / len))
 }
 
 /// Drop unused palette entries and merge duplicates.

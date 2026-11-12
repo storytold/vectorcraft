@@ -1349,6 +1349,7 @@ lighting	Light	Licht
 	Rotate View Tool	Weergave draaien-gereedschap
 	Trackpad Gesture to Rotate View	Weergave draaien met trackpadgebaar
 	Hold a Tool Shortcut to Use the Tool Temporarily	Sneltoets van een gereedschap ingedrukt houden om het tijdelijk te gebruiken
+	Show Bounding Box While Moving and Drawing	Begrenzingskader tonen tijdens verplaatsen en tekenen
 	Rotate View	Weergave draaien
 	Rounded Rectangle Tool	Afgeronde rechthoek-gereedschap
 	Scale Tool	Schalen-gereedschap
@@ -1853,6 +1854,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
 	Roman Hanging Punctuation	Romeinse hangende leestekens
 	Korean Line Break Anywhere	Koreaans regeleinde overal
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Instellingen voor Oost-Aziatische zetting
 	Korean Composition Settings	Instellingen voor Koreaanse zetting
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
@@ -2923,6 +2925,7 @@ antiAlias	Sharp	Scherp
 	Hide Code	Code verbergen
 	Images:	Afbeeldingen:
 	Include Metadata	Metadata opnemen
+	Include Variable Data	Variabelegegevens opnemen
 	Internal CSS	Interne CSS
 	Layer Names	Laagnamen
 	Minify	Minify
@@ -3356,6 +3359,7 @@ theme	Appearance	Vormgeving
 	Move Mesh Points	Maaspunten verplaatsen
 	Move Spine Point	Aspunt verplaatsen
 	Reshape Spine Segment	Segment van de as opnieuw vormgeven
+	Blend Easing	Blend-easing
 	Reset with Mesh	Opnieuw instellen met maas
 	Reset with Warp	Opnieuw instellen met vervorming
 	Set Mesh Point Color	Kleur van maaspunt instellen
@@ -3681,6 +3685,10 @@ theme	Appearance	Vormgeving
 	Add to Profiles	Aan profielen toevoegen
 	Delete Profile	Profiel verwijderen
 	Reset Profiles	Profielen opnieuw instellen
+	Arrowheads	Pijlpunten
+	Edit Arrowheads	Pijlpunten bewerken
+	Edit Arrowheads…	Pijlpunten bewerken…
+	Reload Arrowheads	Pijlpunten opnieuw laden
 	Stroke Options	Lijnopties
 	Width Profiles	Breedteprofielen
 	Apply Graphic Style	Grafische stijl toepassen
@@ -6136,6 +6144,11 @@ axis	Y Axis	Y-as
 	User Brush Library 9	Penseelbibliotheek van gebruiker 9
 	User Brush Library 10	Penseelbibliotheek van gebruiker 10
 	Art Ribbons	Illustratielinten
+	Ink and Wash	Inkt en wassing
+	Tapered Ink	Taps toelopende inkt
+	Brush Pen	Penseelstift
+	Soft Wash	Zachte wassing
+	Pooling Wash	Wassing met rand
 	Zigzag	Zigzag
 	Burst Ray	Inslagstraal
 	Dash Trail	Streepspoor
@@ -6756,6 +6769,8 @@ breakText	Glyphs	Glyphs
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korte praktische tutorials voor de belangrijkste gereedschappen, gegroepeerd per vaardigheid. Kies een vaardigheid om de tutorials ervan te zien.
 	List Tutorials	Tutorials weergeven
 	Show Tutorial	Tutorial tonen
+	Show Tool Location	Locatie van gereedschap tonen
+	Show where this tool is	Tonen waar dit gereedschap zich bevindt
 @msg	missing `tutorial` (see learn.list)	`tutorial` ontbreekt (zie learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	onbekende tutorial `{id}` (zie learn.list)
 

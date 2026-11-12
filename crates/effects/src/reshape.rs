@@ -953,7 +953,7 @@ impl Step<'_> {
                 // The copies of a path replace it by a group of them, the path included.
                 let copied = |leaf: &Node| leaf.children().map_or(0, Vec::len);
                 if options.reach_appearance() {
-                    let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, raster_map.is_some());
+                    let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, raster_map.is_some(), None);
                     *used = used.minus(before).plus(made);
                     if moved {
                         // With Transform Objects off the path stays, and its mask takes the
@@ -969,7 +969,7 @@ impl Step<'_> {
                 }
                 if separate {
                     let scaling = vectorcraft_doc::Scaling { keep_fit_when_flat: true, ..Default::default() };
-                    let made = copy_leaf(leaf, &path, m, copies, scaling, room);
+                    let made = copy_leaf(leaf, &path, m, copies, scaling, room, None);
                     *used = used.minus(before).plus(made);
                     moved_ids.insert(leaf.id);
                     short |= counts(leaf.id) && copied(leaf) <= copies;
@@ -1341,8 +1341,11 @@ fn contents_raster(effects: &[Effect]) -> bool {
 /// `k` times, each copy an object of its own ([`copy_leaf`], within `budget`). With Transform
 /// Objects off the geometry stays and the options apply once. With `follows`, Scale Strokes &
 /// Effects leaves the raster effects that follow the Transform effect ([`follow_art`]) to the
-/// caller. Returns what the leaf costs after, and `false` when the path kept its shape because the
-/// moved path would pass `budget`.
+/// caller. The effects `kept` names keep their values on the leaf and on each copy
+/// ([`keep_listed`]), whether Scale Strokes & Effects scaled them or left them to the caller.
+/// Returns what the leaf costs after, and `false` when the path kept its shape because the moved
+/// path would pass `budget`.
+#[allow(clippy::too_many_arguments)]
 fn transform_leaf(
     leaf: &mut Node,
     path: &PathData,
@@ -1351,6 +1354,7 @@ fn transform_leaf(
     options: crate::distort::TransformOptions,
     budget: Budget,
     follows: bool,
+    kept: Kept,
 ) -> (Budget, bool) {
     let mut scaling = copy_scaling(options);
     if follows && copies == 0 {
@@ -1366,6 +1370,7 @@ fn transform_leaf(
         if options.patterns {
             vectorcraft_doc::pattern::transform_pattern_paints(leaf, m);
         }
+        keep_listed(leaf, kept);
         return (Budget::of(path), true);
     }
     if copies == 0 {
@@ -1375,9 +1380,10 @@ fn transform_leaf(
             return (Budget::of(path), false);
         }
         leaf.transform(m, scaling);
+        keep_listed(leaf, kept);
         return (Budget::of(&moved), true);
     }
-    (copy_leaf(leaf, path, m, copies, scaling, budget), true)
+    (copy_leaf(leaf, path, m, copies, scaling, budget, kept), true)
 }
 
 /// Does a Transform effect's copies of `art` copy it whole ([`copy_art`])? They do when `art` is a
@@ -1523,9 +1529,10 @@ fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::
 /// moves with it) rather than spanning every copy, and its strokes and patterns can differ from the
 /// others'. The copies stop where [`crate::distort::transform_within`]'s would, before they pass
 /// `budget` with what each copy's own geometry effects make ([`effects_cost`]), and before one's
-/// strokes would scale past [`MAX_STROKE_SCALE`]. Returns what the copies cost, the original
-/// included.
-fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, budget: Budget) -> Budget {
+/// strokes would scale past [`MAX_STROKE_SCALE`]. The effects `kept` names keep their values on
+/// each copy, before its cost is counted ([`keep_listed`]). Returns what the copies cost, the
+/// original included.
+fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, budget: Budget, kept: Kept) -> Budget {
     let mut made = Budget::of(path).plus(effects_cost(leaf, path));
     let mut placements: Vec<Arc<Node>> = vec![Arc::new(leaf.clone())];
     let mut xf = Affine::IDENTITY;
@@ -1538,6 +1545,7 @@ fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling
         }
         let mut copy = leaf.clone();
         copy.transform(xf, scaling);
+        keep_listed(&mut copy, kept);
         // Each copy's own geometry effects make a different amount, as the copy and its effects scale.
         let mut cost = Budget::of(&moved).plus(effects_cost(&copy, &moved));
         // Each copy carries the art of its linked masks, moved with it.
@@ -1684,9 +1692,12 @@ fn item_makes_piece(item: &AppearanceItem) -> bool {
 /// effects. In paint order, each such fill or stroke is a path of its own: the leaf's geometry after
 /// the geometry effects of that fill or stroke before its first such Transform effect, transformed
 /// as [`transform_leaf`] transforms an object with that effect's map, copies and options, so the
-/// stroke's weight and dashes, the distances of its remaining effects and its pattern follow the
-/// map. The reference box is that geometry's bounds and the seed is the leaf's id, as the renderer
-/// draws a fill's or stroke's own effects. The geometry effects after the Transform effect then
+/// stroke's weight and dashes, the distances of the effects before the Transform effect and its
+/// pattern follow the map, and the raster effects before it that follow it take their followed
+/// values ([`follow_piece`]). The effects after it keep their values and apply to what it made
+/// ([`keep_listed`]), and with Transform Objects off so do the effects before it. The reference box
+/// is that geometry's bounds and the seed is the leaf's id, as the renderer draws a fill's or
+/// stroke's own effects. The geometry effects after the Transform effect then
 /// apply to the transformed path and its copies as one piece ([`transform_piece`]), and its other
 /// effects stay on each of them. The other fills and strokes stay together on paths of the leaf's
 /// geometry between them, with their own effects. `max` is the budget of the whole art and `used`
@@ -1799,13 +1810,15 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         let map = crate::distort::transform_affine(tb, &params, ctx.seed);
         let mut it = item.clone();
         let rest: Vec<Effect> = kept_before.iter().chain(&fx[at + 1..]).cloned().collect();
-        *it.effects_mut() = rest;
+        *it.effects_mut() = rest.clone();
         let mut p = piece(vec![it]);
         if carry.moves(&p.appearance) {
             carry.apply(&mut p.appearance);
         }
         set_geometry(&mut p, g.clone(), rule);
-        let (made, moved) = transform_leaf(&mut p, &g, map, copies, options, room, false);
+        let after = kept_before.len();
+        let keep = |k: usize| k >= after || !options.objects;
+        let (made, moved) = transform_leaf(&mut p, &g, map, copies, options, room, false, Some((&rest, &keep)));
         *used = used.plus(made);
         let from = crate::raster::held_back(before);
         if moved && !held_later {
@@ -1828,8 +1841,10 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
 /// transformed piece of [`transform_item_leaf`] and its copies) to all of `p`'s paths as one piece:
 /// each effect takes the bounds of all the paths as its reference box and `seed`, as an object's
 /// own effects reshape all its paths ([`reshape_leaves_carrying`]). Each path applies its own copy of
-/// the effect, whose distances its Scale Strokes & Effects scaled. A Transform effect with
-/// Transform Patterns or Scale Strokes & Effects on transforms each path as [`transform_leaf`] does.
+/// the effect, at the effect's own distances. A Transform effect with Transform Patterns or Scale
+/// Strokes & Effects on transforms each path as [`transform_leaf`] does, and leaves the values of
+/// the effects after it, and with Transform Objects off those before it, as they are
+/// ([`keep_listed`]).
 /// A live-effect plug-in that paints what it returns ([`painted_plugin`]) makes each path one path
 /// for each piece it returns ([`paint_piece`]). The raster effects before a Transform effect
 /// follow it ([`follow_piece`]), except the first `held` effects, which a Transform effect before
@@ -1881,7 +1896,8 @@ fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), h
                 let (_, copies) = crate::distort::transform_map(bounds, &params, seed);
                 let options = crate::distort::TransformOptions::of(&params);
                 let map = crate::distort::transform_affine(bounds, &params, seed);
-                let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, false);
+                let keep = |k: usize| k > j || (k < j && !options.objects);
+                let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, false, Some((item.effects(), &keep)));
                 *used = used.minus(before).plus(made);
                 if moved {
                     follow_piece(leaf, was, from, &e);
@@ -1911,6 +1927,30 @@ fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), h
     for_each_leaf(p, &mut |leaf| {
         for item in &mut leaf.appearance.items {
             item.effects_mut().retain(|e| !(e.visible && is_geometry(&e.id)));
+        }
+    });
+}
+
+/// The effects a Transform effect in a fill's or stroke's own list leaves as they were
+/// ([`keep_listed`]): the list as it was before the Transform effect was applied, and which of its
+/// indices keep their values. `None` for an object's own Transform effect.
+type Kept<'a> = Option<(&'a [Effect], &'a dyn Fn(usize) -> bool)>;
+
+/// Put back on the fills and strokes of each path under `p` the effect `kept`'s list holds at each
+/// index it takes, in place of what a Transform effect in their own list scaled or moved with its
+/// options ([`transform_leaf`]). The effects after the Transform effect apply to the art it made,
+/// and with Transform Objects off the effects before it keep their values too. A piece's fills and
+/// strokes share one list: a live-effect plug-in that paints what it returns gives each paint a copy
+/// of the fill or stroke ([`vectorcraft_plugins::painted::items`]).
+fn keep_listed(p: &mut Node, kept: Kept) {
+    let Some((was, keep)) = kept else { return };
+    for_each_leaf(p, &mut |leaf| {
+        for item in &mut leaf.appearance.items {
+            for (k, (e, old)) in item.effects_mut().iter_mut().zip(was).enumerate() {
+                if keep(k) {
+                    e.clone_from(old);
+                }
+            }
         }
     });
 }
