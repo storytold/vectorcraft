@@ -594,7 +594,7 @@ fn as_art_opts(
     out.knockout = vectorcraft_doc::Knockout::Off;
     out.knockout_shape = n.knockout_shape;
     out.extras_mut().mask = n.extras().mask.clone();
-    out.appearance.effects = n.appearance.effects.iter().filter(|e| !is_geometry(&e.id)).cloned().collect();
+    out.appearance.effects = crate::raster::without_geometry(&n.appearance.effects);
     Some(out)
 }
 
