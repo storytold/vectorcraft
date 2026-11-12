@@ -4519,7 +4519,8 @@ Save for Office Documents included) that writes a file and that the batch does n
 warning. For a Data Sets source,
 `datasetFileNaming?: fileNumber | fileDataSetName | dataSetName` chooses File + Number (`source001`),
 File + Data Set Name (`source_Alpha`), or Data Set Name (`Alpha`). An omitted parameter keeps File + Data Set Name
-for existing callers; the dialog starts with File + Number. A folder source ignores this parameter. The folder
+for existing callers; the dialog starts with File + Number, and shows and sends the choice only when Destination is
+Folder. A folder source ignores this parameter. The folder
 destination and overridden Save/Export paths use the chosen stem with the output format's extension. An empty data
 set name under Data Set Name falls back to the document stem plus its three-digit ordinal. Batch writes `/`, `\`,
 `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters in the data set's name as `-`, and adds the next free `-2`,
