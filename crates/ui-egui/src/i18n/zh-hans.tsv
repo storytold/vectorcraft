@@ -207,6 +207,7 @@ antiAlias	Sharp	锐利
 	Asset Export Settings	资源导出设置
 	Assets	资源
 	Assign	指定
+	Assign Profile	指定配置文件
 	Assign Profile…	指定配置文件…
 	Assign:	指定：
 	Attach to Active Plane	附加到活动平面
@@ -645,6 +646,15 @@ antiAlias	Sharp	锐利
 	Created:	创建时间：
 	Crop	裁剪
 	Crop Image	裁剪图像
+	Image Tools	图像工具
+	Remove Background…	移除背景…
+	Remove Background	移除背景
+	Background	背景
+	Edge Color	边缘颜色
+	Picked Colors	选取的颜色
+	Corner Color	转角颜色
+	Contiguous	连续
+	Each Channel	每个通道
 	Edit Path	编辑路径
 	Mask	蒙版
 	Crop Marks	裁切标记
@@ -2234,6 +2244,9 @@ file-filter	Templates	模板
 	Optical	视觉
 	Optical Margin Alignment	视觉边界对齐
 	Dynamic Text	动态文本
+	Dynamic Text Presets	动态文本预设
+	Arch	拱形
+@msg	select point type or type on a path	请选择点文字或路径文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
 @msg	type on an open or compound path cannot be centered on its top or bottom: {open}	开放路径或复合路径上的路径文字无法在顶部或底部居中：{open}
 @msg	type on a path with no length or no height cannot be centered: {flat}	路径没有长度或没有高度时，其路径文字无法居中：{flat}
@@ -2519,6 +2532,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Radial Glows	径向光晕
 	Radial Gradient	径向渐变
 	Conic Gradient	圆锥渐变
+	Diamond Gradient	菱形渐变
 	Radius 1	半径 1
 	Radius 2	半径 2
 	Radius1	半径1
@@ -3038,6 +3052,15 @@ digits	Malayalam	马拉雅拉姆数字
 	Stun Pulse	眩晕
 	Stealth Fade	隐身
 	Shield Buff	护盾
+	Textures	纹理
+	Fine Grain	细颗粒
+	Canvas Weave	帆布纹
+	Burlap Sack	麻布袋
+	Cracked Glaze	裂纹釉
+	Mosaic Floor	马赛克地面
+	Quilted Squares	绗缝方格
+	Leaded Glass	铅条玻璃
+	Damp Paper	湿纸
 	Shape	形状
 	Shape Builder	形状生成器
 	Shape Builder Regions	形状生成器区域
@@ -3098,6 +3121,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Modified	显示已修改
 	Show Note	显示注解
 	Show Options	显示选项
+	Show Recent Colors	显示最近使用的颜色
 	Show Original Path	显示原始路径
 	Open this dialog with these settings next time	下次以这些设置打开此对话框
 	Auto-Simplify	自动简化
@@ -3402,6 +3426,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Scale at Center	从中心缩放
 	Up/Down:	上/下：
 	Left/Right:	左/右：
+	Tate-chu-yoko Up/Down	纵中横上/下
+	Tate-chu-yoko Left/Right	纵中横左/右
 	Temperature	色温
 	Temperature/Tint…	色温/色调…
 	Template	模板
@@ -3756,6 +3782,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Windows	Windows
 	Working CMYK	工作 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加标签)
+	Working RGB (don't tag)	工作 RGB (不加标签)
 	Workspace	工作区
 	Workspace {i}	工作区 {i}
 	Wrinkle Tool	褶皱工具
@@ -4085,7 +4112,7 @@ imageTrace	Outline	轮廓
 @msg	stop {i} needs `offset`	色标 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色标 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色标 {i}：`{k}` 必须是数字
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的渐变类型 `{k}` (linear、radial、conic、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	未知的渐变类型 `{k}` (linear、radial、conic、diamond、freeform)
 @msg	the art could not be sampled	无法对图稿取样
 @msg	the art is too light for any dots	图稿太浅，无法生成任何网点
 @msg	the document has no symbols	文档中没有符号
@@ -4177,6 +4204,7 @@ imageTrace	Outline	轮廓
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` 必须是 `auto` 或语言代码，例如 `en` 或 `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` 必须是 #rrggbb 颜色
 @msg	`{key}` must be a string	`{key}` 必须是字符串
+@msg	`{key}` must be a profile name or null	`{key}` 必须是配置文件名称或 null
 @msg	`{key}` must be a whole number	`{key}` 必须是整数
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` 必须是介于 {min} 和 {max} 之间的整数 (实际为 {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必须介于 {min} 和 {max} 之间 (实际为 {x})
@@ -4355,6 +4383,7 @@ imageTrace	Outline	轮廓
 @msg	the image's pixels don't match its size	图像的像素与其尺寸不符
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
+@msg	not an HP-GL file	不是 HP-GL 文件
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
 @msg	damaged	已损坏
@@ -4371,6 +4400,7 @@ imageTrace	Outline	轮廓
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：{label} 页面不带 UserUnit，以点为单位写入，遵守上限的应用会将页面裁切为 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持尺寸：文件将以 PDF 1.6 写入
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持在 PDF/A-2 的 14,400 单位页面上限之内：文件将以 PDF 1.6 写入
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	画板 {n} 的页面为 {size}，对 PDF 3 至 14,400 单位的页面边长而言过长过窄：以 UserUnit {unit} 写入，使短边保持 3 单位以上，遵守上限的应用会把长边裁到 14,400 单位
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 文件的实数最大为 {max}，而画板 {n} 的页面长 {side} pt，需要更大的数：请选择不带 PDF/X 标准的 PDF 1.6 或更高版本，或使用更小的画板
 @msg	page {0} does not exist (the PDF has {1})	页面 {0} 不存在 (该 PDF 有 {1} 页)
@@ -4559,6 +4589,14 @@ imageTrace	Outline	轮廓
 @msg	no such view	没有此视图
 @msg	printing isn't available here	此处无法打印
 @msg	select an image	请选择一个图像
+@msg	`background` must be edges, corners or colors	`background` 必须为 edges、corners 或 colors
+@msg	`match` must be distance or channels	`match` 必须为 distance 或 channels
+@msg	`{key}` must be from 0 to 100	`{key}` 必须介于 0 到 100 之间
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` 必须列出 1 到 16 种颜色，每种写为十六进制（#rrggbb 或 #rgb）或 black、white、red、green、blue
+@msg	the linked image shows its preview: embed or relink it first	链接图像显示的是预览：请先嵌入或重新链接
+@msg	a CMYK image has no transparency to set	CMYK 图像没有可设置的透明度
+@msg	every pixel matches the background: no image would be left	每个像素都与背景匹配：不会留下任何图像
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的图像过大，无法更改
 @msg	the document has no artboards	文档没有画板
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知工具 `{t}`
@@ -4829,7 +4867,7 @@ imageTrace	Outline	轮廓
 @msg	span must be "object" or "selection", got {v}	span 必须是 "object" 或 "selection"，实际为 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而不是色板
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 放置渐变：请给出 `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置线性、径向或圆锥渐变，而不是任意形状渐变
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" 放置线性、径向、圆锥或菱形渐变，而不是任意形状渐变
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 自行放置渐变：请省略 `start` 和 `end` (它们已按文档坐标放置渐变)
 @msg	Batch: {count} processed	批处理：已处理 {count} 个
 @msg	Batch: {count} processed, {failed} failed	批处理：已处理 {count} 个，失败 {failed} 个
@@ -6679,6 +6717,7 @@ breakText	Glyphs	字形
 
 # Align to Pixel Grid
 	Align to Pixel Grid	对齐像素网格
+	Align New Objects to Pixel Grid	将新对象对齐像素网格
 	Not Aligned to Pixel Grid	未对齐像素网格
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`

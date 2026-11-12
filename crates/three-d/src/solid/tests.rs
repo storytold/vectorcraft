@@ -98,6 +98,33 @@ fn hidden_faces_draw_every_face_of_the_solid_behind_the_visible_ones() {
     }
 }
 
+/// Each facet says whether it is a piece of the solid's sides and whether it is turned away from
+/// the viewer: a box's walls and bevels are sides and its two caps are not; Inflate's sides are
+/// sides and its front is not.
+#[test]
+fn facets_tell_the_sides_from_the_ends_and_the_faces_turned_away() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: 20.0, rotation_y: 30.0, ..front() };
+    let bevel = Bevel { width: 10.0, height: 10.0, ..Bevel::default() };
+    for o in [Extrude { hidden: true, ..Extrude::default() }, Extrude { hidden: true, bevel: Some(bevel), ..Extrude::default() }] {
+        let all = extrude(&p, FillRule::EvenOdd, b, o, v).unwrap();
+        let ends: Vec<&Facet> = all.iter().filter(|f| !f.side).collect();
+        let [a, c] = ends[..] else { panic!("two caps among {} facets", all.len()) };
+        let along = a.normal[0] * c.normal[0] + a.normal[1] * c.normal[1] + a.normal[2] * c.normal[2];
+        assert!(close(along, -1.0, 1e-9), "the caps face opposite ways: {along}");
+        assert!(all.len() > 6 || o.bevel.is_none(), "the bevel adds sides");
+        // The faces turned away are drawn first, the others after them.
+        let away = all.iter().take_while(|f| f.away).count();
+        assert!(away > 0 && all[away..].iter().all(|f| !f.away), "{away} of {}", all.len());
+    }
+    let shown = extrude(&p, FillRule::EvenOdd, b, Extrude::default(), v).unwrap();
+    assert!(shown.iter().all(|f| !f.away));
+    let puff = inflate(&p, FillRule::EvenOdd, b, Inflate { depth: 20.0, ..Inflate::default() }, v).unwrap();
+    assert!(puff.iter().any(|f| f.side) && puff.iter().any(|f| !f.side));
+    let flat = inflate(&p, FillRule::EvenOdd, b, Inflate::default(), v).unwrap();
+    assert!(!flat.is_empty() && flat.iter().all(|f| !f.side));
+}
+
 #[test]
 fn taper_shrinks_the_back_and_twist_turns_it() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));

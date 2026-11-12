@@ -124,8 +124,8 @@ fn dragged_stops(origin: &[GradientStop], i: usize, offset: f32, copy: bool, ove
 
 // ---------- shared edits ----------
 
-/// The Type row: Linear, Radial, Conic and Freeform for the paint behind the active proxy (one of
-/// them lit when it is a gradient). The Gradient panel's and the Properties panel's.
+/// The Type row: Linear, Radial, Conic, Diamond and Freeform for the paint behind the active
+/// proxy (one of them lit when it is a gradient). The Gradient panel's and the Properties panel's.
 pub(crate) fn type_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let kind = current(app).map(|g| g.gradient.kind);
     ui.horizontal(|ui| {
@@ -134,6 +134,7 @@ pub(crate) fn type_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             (GradientKind::Linear, "dc-grad-linear", tl!("Linear Gradient")),
             (GradientKind::Radial, "dc-grad-radial", tl!("Radial Gradient")),
             (GradientKind::Conic, "dc-grad-conic", tl!("Conic Gradient")),
+            (GradientKind::Diamond, "dc-grad-diamond", tl!("Diamond Gradient")),
             (GradientKind::Freeform, "dc-grad-freeform", tl!("Freeform Gradient")),
         ] {
             if widgets::icon_button(ui, icon, tip, kind == Some(k), 24.0).clicked() {

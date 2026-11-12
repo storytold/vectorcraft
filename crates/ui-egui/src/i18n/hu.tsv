@@ -360,6 +360,7 @@ font-technology	Variable	Változó
 	Asset Export Settings	Elemexportálási beállítások
 	Assets	Elemek
 	Assign	Hozzárendelés
+	Assign Profile	Profil hozzárendelése
 	Assign Profile…	Profil hozzárendelése…
 	Assign:	Hozzárendelés:
 	Attach to Active Plane	Csatolás az aktív síkhoz
@@ -901,6 +902,15 @@ font-technology	Variable	Változó
 	CRLF (Windows)	CRLF (Windows)
 	Crop	Körülvágás
 	Crop Image	Kép körülvágása
+	Image Tools	Képeszközök
+	Remove Background…	Háttér eltávolítása…
+	Remove Background	Háttér eltávolítása
+	Background	Háttér
+	Edge Color	Szélszín
+	Picked Colors	Kiválasztott színek
+	Corner Color	Sarokszín
+	Contiguous	Összefüggő
+	Each Channel	Minden csatorna
 	Edit Path	Útvonal szerkesztése
 	Crop Marks	Vágójelek
 	Crop To	Körülvágás
@@ -2830,6 +2840,9 @@ file-filter	Templates	Sablonok
 	Optical	Optikai
 	Optical Margin Alignment	Optikai margóigazítás
 	Dynamic Text	Dinamikus szöveg
+	Dynamic Text Presets	Dinamikus szöveg előbeállításai
+	Arch	Boltív
+@msg	select point type or type on a path	jelöljön ki pontszöveget vagy útvonalszöveget
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	a láncolt szövegben lévő útvonalszöveg nem használhat dinamikus szöveget: {frames}
 @msg	type on an open or compound path cannot be centered on its top or bottom: {open}	nyitott vagy összetett útvonalon lévő útvonalszöveg nem igazítható középre felül vagy alul: {open}
 @msg	type on a path with no length or no height cannot be centered: {flat}	a hossz vagy magasság nélküli útvonalon lévő útvonalszöveg nem igazítható középre: {flat}
@@ -3166,6 +3179,7 @@ mark-style	Japanese	Japán
 	Radial Glows	Körkörös ragyogások
 	Radial Gradient	Körkörös színátmenet
 	Conic Gradient	Kúpos színátmenet
+	Diamond Gradient	Rombusz színátmenet
 	Radial Repeat	Körkörös ismétlés
 	Radius	Sugár
 	Radius 1	Sugár 1
@@ -3793,6 +3807,15 @@ mark-style	Japanese	Japán
 	Stun Pulse	Kábítás
 	Stealth Fade	Lopakodás
 	Shield Buff	Pajzs
+	Textures	Textúrák
+	Fine Grain	Finom szemcse
+	Canvas Weave	Vászonszövés
+	Burlap Sack	Jutazsák
+	Cracked Glaze	Repedezett máz
+	Mosaic Floor	Mozaikpadló
+	Quilted Squares	Steppelt négyzetek
+	Leaded Glass	Ólomüveg
+	Damp Paper	Nedves papír
 	Shape	Alakzat
 	Shape Builder	Alakzatépítő
 	Shape Builder Regions	Alakzatépítő területei
@@ -3867,6 +3890,7 @@ mark-style	Japanese	Japán
 	Show Modified	Módosultak megjelenítése
 	Show Note	Megjegyzés megjelenítése
 	Show Options	Beállítások megjelenítése
+	Show Recent Colors	Legutóbbi színek megjelenítése
 	Show Original Path	Eredeti útvonal megjelenítése
 	Open this dialog with these settings next time	Legközelebb ez a párbeszédablak nyíljon meg ezekkel a beállításokkal
 	Auto-Simplify	Automatikus egyszerűsítés
@@ -4198,6 +4222,8 @@ mark-style	Japanese	Japán
 	Scale at Center	Méretezés középről
 	Up/Down:	Fel/le:
 	Left/Right:	Balra/jobbra:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko fel/le
+	Tate-chu-yoko Left/Right	Tate-chu-yoko balra/jobbra
 	Technical Drawing	Műszaki rajz
 	Temperature	Színhőmérséklet
 	Temperature/Tint…	Színhőmérséklet/tónus…
@@ -4608,6 +4634,7 @@ mark-style	Japanese	Japán
 	Windows	Windows
 	Working CMYK	Munka-CMYK
 	Working CMYK (don't tag)	Munka-CMYK (címke nélkül)
+	Working RGB (don't tag)	Munka-RGB (címke nélkül)
 	Working RGB	Munka-RGB
 	Workspace	Munkaterület
 	Workspace {i}	Munkaterület {i}
@@ -4745,6 +4772,7 @@ imageTrace	Outline	Körvonal
 @msg	`{key}` must be a number, not {v}	`{key}`: szám kell, ez nem az: {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key}: Unix-idő kell másodpercben (egész szám) vagy null
 @msg	`{key}` must be a string	`{key}`: szöveg kell
+@msg	`{key}` must be a profile name or null	`{key}`: profilnév vagy null kell
 @msg	`{key}` must be a whole number	`{key}`: egész szám kell
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`: {min} és {max} közötti egész szám kell (kapott érték: {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`: {min} és {max} közötti érték kell (kapott érték: {x})
@@ -5026,6 +5054,7 @@ imageTrace	Outline	Körvonal
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: {unit} UserUnit értékkel íródik, így a UserUnit-ot figyelmen kívül hagyó alkalmazások ennyiszer kisebbnek mutatják
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: a(z) {label} oldalak UserUnit nélkül, pontokban íródnak, és a korlátot betartó alkalmazások 200 in-re vágják az oldalt
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	a PDF 1.5-ben nincs UserUnit, amelyre egy 14 400 pt-nál (200 in) hosszabb oldalnak szüksége van a mérete megtartásához: a fájl PDF 1.6-ként íródik
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	a PDF 1.4-ben nincs UserUnit, amelyre egy 14 400 pt-nál (200 in) hosszabb oldalnak szüksége van, hogy a PDF/A-2 14 400 egységes oldalkorlátján belül maradjon: a fájl PDF 1.6-ként íródik
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	a(z) {n}. rajztábla oldala {size}, túl hosszú és keskeny a PDF 3 és 14 400 egység közötti oldalaihoz: {unit} UserUnit értékkel íródik, amely a rövid oldalt legalább 3 egységen tartja, és a korlátot betartó alkalmazások a hosszú oldalt 14 400 egységre vágják
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	a(z) {label} fájlok legfeljebb {max} értékű valós számokat tárolnak, a(z) {n}. rajztábla {side} pt hosszú oldalához pedig nagyobbak kellenek: válassza a PDF 1.6-os vagy újabb verziót PDF/X szabvány nélkül, vagy egy kisebb rajztáblát
 @msg	invalid restored panel group	érvénytelen visszaállított panelcsoport
@@ -5220,6 +5249,7 @@ imageTrace	Outline	Körvonal
 @msg	not a VectorCraft shortcut set (missing `overrides`)	nem VectorCraft-billentyűparancskészlet (hiányzik: `overrides`)
 @msg	not a blend	nem összemosás
 @msg	not an EMF or WMF file	nem EMF- vagy WMF-fájl
+@msg	not an HP-GL file	nem HP-GL-fájl
 @msg	not found	nem található
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
 @msg	finish editing the pattern first	előbb fejezd be a mintázat szerkesztését
@@ -5365,6 +5395,14 @@ imageTrace	Outline	Körvonal
 @msg	a symbol can't hold an instance of itself	egy szimbólum nem tartalmazhatja a saját példányát
 @msg	select an envelope	jelölj ki egy burkolót
 @msg	select an image	jelölj ki egy képet
+@msg	`background` must be edges, corners or colors	a `background` értéke edges, corners vagy colors lehet
+@msg	`match` must be distance or channels	a `match` értéke distance vagy channels lehet
+@msg	`{key}` must be from 0 to 100	a `{key}` értéke 0 és 100 között lehet
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	a `colors` 1–16 színt sorolhat fel, mindegyiket hexadecimálisan (#rrggbb vagy #rgb) vagy black, white, red, green vagy blue alakban
+@msg	the linked image shows its preview: embed or relink it first	a csatolt kép az előnézetét mutatja: előbb ágyazd be vagy csatold újra
+@msg	a CMYK image has no transparency to set	a CMYK képnek nincs beállítható átlátszósága
+@msg	every pixel matches the background: no image would be left	minden képpont egyezik a háttérrel: nem maradna kép
+@msg	an image of {w} × {h} pixels is too large to change	egy {w} × {h} pixeles kép túl nagy a módosításhoz
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
 @msg	select an object in perspective	jelölj ki egy perspektivikus objektumot
 @msg	select artwork (or a colour group) to recolor	jelölj ki átszínezendő grafikát (vagy színcsoportot)
@@ -5533,7 +5571,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown format	ismeretlen formátum
 @msg	unknown format `{f}` (Save writes {_1})	ismeretlen formátum: `{f}` (a Mentés ezeket írja: {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	ismeretlen szabad formájú mód: `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	ismeretlen színátmenet-fajta: `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ismeretlen színátmenet-fajta: `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	ismeretlen kiemelés: `{h}`
 @msg	unknown option `{path}.{k}`	ismeretlen beállítás: `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
@@ -5785,7 +5823,7 @@ imageTrace	Outline	Körvonal
 @msg	span must be "object" or "selection", got {v}	a span értéke "object" vagy "selection" lehet, nem {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" egy `gradient` értéket helyez el, nem színmintát
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" színátmenetet helyez el: adja meg a `gradient` értéket
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" lineáris, sugaras vagy kúpos színátmenetet helyez el, nem szabad formájút
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" lineáris, sugaras, kúpos vagy rombusz színátmenetet helyez el, nem szabad formájút
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" magát a színátmenetet helyezi el: hagyja el a `start` és `end` értéket (ezek már a dokumentum koordinátáiban helyezik el)
 	Make Image Dynamic	Kép dinamikussá tétele
 	Import Data Sets…	Adatkészletek importálása…
@@ -6822,6 +6860,7 @@ breakText	Glyphs	Glifák
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Igazítás a pixelrácshoz
+	Align New Objects to Pixel Grid	Új objektumok igazítása a pixelrácshoz
 	Not Aligned to Pixel Grid	Pixelrácshoz nem igazított
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
 @msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`

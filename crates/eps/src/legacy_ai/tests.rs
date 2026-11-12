@@ -110,6 +110,35 @@ fn conic_gradients_are_written_as_wedges_clipped_to_the_shape() {
     }
 }
 
+/// The format has no diamond gradient: a diamond fill, and a diamond stroke (written as its filled
+/// outline), are four path objects clipped to the shape, each a linear gradient over a quadrant
+/// of the diamond's frame, with a warning; the definition is not named after the swatch.
+#[test]
+fn diamond_gradients_are_written_as_four_linear_gradients_clipped_to_the_shape() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, stops));
+    g.geom = Some(vectorcraft_color::GradientGeom {
+        start: vectorcraft_geom::Point::new(100.0, 50.0),
+        end: vectorcraft_geom::Point::new(140.0, 30.0),
+        aspect: 0.7,
+        focal: None,
+    });
+    g.swatch = Some("Gem".into());
+    let diamond = Paint::Gradient(Box::new(g));
+    for (fill, stroke) in [(diamond.clone(), Paint::None), (Paint::None, diamond)] {
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 10.0, 180.0, 90.0)), fill.clone(), stroke.clone());
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == DIAMOND), "{:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes);
+        assert_eq!(text.matches("%AI5_BeginGradient: (Gradient)").count(), 1, "one linear definition: {text}");
+        assert!(!text.contains("(Gem)"), "not named after the swatch");
+        assert_eq!(text.matches(" Bg\n").count(), 4, "a gradient a quadrant");
+    }
+}
+
 /// `doc` written with options `o`. Every file the tests write is also run as a PostScript program
 /// ([`prints_as`]) and must draw what `doc` draws.
 fn write_with(doc: &Document, o: LegacyAiOptions) -> LegacyAiOutput {
