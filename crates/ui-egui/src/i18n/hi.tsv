@@ -8116,7 +8116,7 @@ antiAlias	Sharp	शार्प
 @msg	width must be positive	width: चौड़ाई सकारात्मक होना चाहिए
 @msg	width out of range	सीमा से बाहर चौड़ाई
 @msg	width/height must be > 0	चौड़ाई / ऊंचाई होना चाहिए > 0
-@msg	width/height must be positive and within the canvas	चौड़ाई / ऊंचाई सकारात्मक होना चाहिए और कैनवास के भीतर होना चाहिए
+@msg	width and height must be more than 0 and at most {limit}	चौड़ाई और ऊंचाई 0 से अधिक और अधिकतम {limit} होनी चाहिए
 @msg	workspace name can't be empty	कार्यक्षेत्र का नाम खाली नहीं हो सकता है
 @msg	x and y must be finite	x और y को परिमित होना चाहिए
 @msg	x and y must be finite numbers	x और y होना चाहिए परिमित संख्या
