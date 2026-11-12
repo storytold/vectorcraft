@@ -3527,6 +3527,9 @@ theme	Appearance	იერსახე
 	Select All Unused	ყველა გამოუყენებლის მონიშვნა
 	Sort by Kind	ტიპის მიხედვით დალაგება
 	Sort by Name	სახელის მიხედვით დალაგება
+	Spot Color Objects	ობიექტები სპოტ-ფერებით
+	Pattern Objects	ობიექტები პატერნებით
+	Gradient Objects	ობიექტები გრადიენტებით
 	Spot Colors	სპოტ-ფერები
 	Swatch Options	ფერის ნიმუშის პარამეტრები
 	Ungroup Color Group	ფერების ჯგუფის დაშლა
