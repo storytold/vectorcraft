@@ -430,9 +430,10 @@ pub fn object(v: V, kind: u32, args: &[(u32, Vec<u8>)], matrix: Option<[f64; 6]>
 /// with the object type that layers of such flags have in sample files (R19).
 pub fn layer(v: V, flags: [u8; 4], name: &str, objects: Vec<Node>) -> Node {
     let kind = match flags {
-        [b0, ..] if b0 & 0x10 != 0 => 11,
+        [b0, ..] if (b0 & 0x0f == 0x0a || b0 & 0x0f == 0x02) && b0 & 0x10 != 0 => 11,
         [b0, ..] if b0 & 0x0f == 0x0a || b0 & 0x0f == 0x02 => 12,
-        [0x08, ..] | [0, 1, 1, _] => 17,
+        [b0, _, b2, _] if b0 & 0x0f == 0x08 && b2 != 0 => 17,
+        [0, 1, 1, _] => 17,
         _ => 0,
     };
     // Version 3 counts its types from 0, one less (R32).

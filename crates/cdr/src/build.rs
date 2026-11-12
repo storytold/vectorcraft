@@ -225,19 +225,22 @@ fn layer_kind_of_type(kind: u32, types_from_zero: bool) -> LayerKind {
     }
 }
 
-/// What a layer's flags make it, for a layer without an object type of its own (R19). Byte 0 holds
-/// the kind; versions 7 to 13 may flag the master page's desktop layer 0 with bytes 1 and 2 set,
-/// and its guides layer 2.
+/// What a layer's flags make it, for a layer without an object type of its own (R19). The low
+/// four bits of byte 0 hold the kind: 0x0a guides, or a grid with bit 0x10 set (versions 7 to 13
+/// also flag them 0x02); 0x08 the desktop when byte 2 is set, a drawing layer when it is clear.
+/// Versions 7 to 13 may flag the master page's desktop layer 0 with bytes 1 and 2 set. Bit 0x10
+/// alone does not make a grid.
 fn layer_kind(f: [u8; 4], version_below_14: bool) -> LayerKind {
     let [b0, b1, b2, _] = f;
-    if b0 & 0x10 != 0 {
-        LayerKind::Grid
-    } else if b0 & 0x1f == 0x0a || (version_below_14 && b0 & 0x1f == 0x02) {
-        LayerKind::Guides
-    } else if b0 == 0x08 || (version_below_14 && b0 == 0 && b1 == 1 && b2 == 1) {
-        LayerKind::Desktop
-    } else {
-        LayerKind::Drawing
+    let grid_bit = b0 & 0x10 != 0;
+    match b0 & 0x0f {
+        0x0a if grid_bit => LayerKind::Grid,
+        0x0a => LayerKind::Guides,
+        0x02 if version_below_14 && grid_bit => LayerKind::Grid,
+        0x02 if version_below_14 => LayerKind::Guides,
+        0x08 if b2 != 0 => LayerKind::Desktop,
+        0 if version_below_14 && b1 == 1 && b2 == 1 => LayerKind::Desktop,
+        _ => LayerKind::Drawing,
     }
 }
 
@@ -592,5 +595,14 @@ mod tests {
         assert_eq!(layer_kind([0x5a, 1, 1, 0x98], false), LayerKind::Grid);
         assert_eq!(layer_kind([0x02, 1, 1, 0x98], false), LayerKind::Drawing);
         assert_eq!(layer_kind([0, 1, 1, 0x98], false), LayerKind::Drawing);
+        // Drawing layers flagged 0x10, 0x08, 0x18, 0x40 and 0x58 with byte 2 clear, as sample
+        // files flag them, and desktop and guides layers with bit 0x40 or 0x10 set.
+        for f in [[0x10, 0, 0, 0x98], [0x08, 1, 0, 0x98], [0x18, 1, 0, 0x98], [0x40, 0, 0, 0x98], [0x58, 1, 0, 0x98]] {
+            assert_eq!(layer_kind(f, true), LayerKind::Drawing, "{f:?}");
+            assert_eq!(layer_kind(f, false), LayerKind::Drawing, "{f:?}");
+        }
+        assert_eq!(layer_kind([0x18, 0, 1, 0x98], true), LayerKind::Desktop);
+        assert_eq!(layer_kind([0x48, 0, 1, 0x98], false), LayerKind::Desktop);
+        assert_eq!(layer_kind([0x4a, 1, 1, 0x98], true), LayerKind::Guides);
     }
 }
