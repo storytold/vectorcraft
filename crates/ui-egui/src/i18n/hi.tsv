@@ -8013,7 +8013,13 @@ antiAlias	Sharp	शार्प
 @msg	x and y must both be numbers	x और y दोनों संख्या होना चाहिए
 @msg	You must choose a side pattern.	आपको एक साइड पैटर्न चुनना होगा।
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	इस ब्राउज़र में आपके बिना सेव किए गए बदलाव को रखा गया है: उन्हें वापस पाने के लिए पेज को फिर से लोड करें।
-@msg	zipped 32-bit PSD image data with prediction can't be read	भविष्यवाणी के साथ 32-bit PSD इमेज डेटा zipped नहीं किया जा सकता
+@msg	zipped 1-bit PSD image data with prediction can't be read	भविष्यवाणी के साथ zipped 1-bit PSD इमेज डेटा पढ़ा नहीं जा सकता
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD फ़ाइल का लेयर डेटा एक अज्ञात संपीड़न ({m}) का उपयोग करता है
+@msg	the PSD file's layer records are damaged	PSD फ़ाइल के लेयर रिकॉर्ड क्षतिग्रस्त हैं
+@msg	the PSD file's layer groups are nested too deeply	PSD फ़ाइल के लेयर समूह बहुत गहराई तक नेस्ट किए गए हैं
+@msg	a layer of the PSD file is too large to read	PSD फ़ाइल की एक लेयर पढ़ने के लिए बहुत बड़ी है
+@msg	the PSD file's layers take more memory to read than allowed	PSD फ़ाइल की लेयर पढ़ने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	the layers can't be read ({e}): the file opened as its merged image	लेयर पढ़ी नहीं जा सकतीं ({e}): फ़ाइल अपनी मर्ज की गई इमेज के रूप में खुली
 @msg	zone must be a string	zone: क्षेत्र एक स्ट्रिंग होना चाहिए
 @msg	zone must be tab, center, left, right, top or bottom	zone को tab, center, left, right, top या bottom होना चाहिए
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone: जोन को एक एंकर की आवश्यकता होती है: एंकर के साथ एक पैनल के बगल में, या साइड (स्टार्ट या एंड) के साथ एक नए डॉक कॉलम में

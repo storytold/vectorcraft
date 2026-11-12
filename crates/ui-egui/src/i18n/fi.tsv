@@ -5153,7 +5153,13 @@ imageTrace	Outline	Ääriviiva
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	tässä HEIC- tai HEIF-tiedostossa on kuvatyyppi, jota ei voi lukea
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- ja HEIF-kuvia ei voi avata tässä versiossa
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	tämä PSD-kuva on liian suuri luettavaksi ({_1} × {_2} pikseliä)
-@msg	zipped 32-bit PSD image data with prediction can't be read	ennustusta käyttävää zip-pakattua 32-bittistä PSD-kuvadataa ei voi lukea
+@msg	zipped 1-bit PSD image data with prediction can't be read	ennustusta käyttävää zip-pakattua 1-bittistä PSD-kuvadataa ei voi lukea
+@msg	the PSD file's layer data uses an unknown compression ({m})	tämän PSD-tiedoston tasodata käyttää tuntematonta pakkausta ({m})
+@msg	the PSD file's layer records are damaged	tämän PSD-tiedoston tasotietueet ovat vahingoittuneet
+@msg	the PSD file's layer groups are nested too deeply	tämän PSD-tiedoston tasoryhmät ovat sisäkkäin liian syvällä
+@msg	a layer of the PSD file is too large to read	tämän PSD-tiedoston taso on liian suuri luettavaksi
+@msg	the PSD file's layers take more memory to read than allowed	tämän PSD-tiedoston tasojen lukeminen vaatii enemmän muistia kuin sallitaan
+@msg	the layers can't be read ({e}): the file opened as its merged image	tasoja ei voi lukea ({e}): tiedosto avattiin yhdistettynä kuvanaan
 @msg	{depth}-bit PSD files in this colour mode can't be read	tässä väritilassa olevia {depth}-bittisiä PSD-tiedostoja ei voi lukea
 @msg	the PSD file is cut short	tämä PSD-tiedosto on katkennut
 @msg	the PSD file's header is damaged	tämän PSD-tiedoston otsake on vaurioitunut

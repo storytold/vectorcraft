@@ -4996,7 +4996,13 @@ axis	Both	Обидві
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC або HEIF містить зображення такого типу, яке не вдається прочитати
 @msg	HEIC and HEIF images can't be opened in this build	зображення HEIC і HEIF не можна відкрити в цій збірці
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
-@msg	zipped 32-bit PSD image data with prediction can't be read	32-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
+@msg	zipped 1-bit PSD image data with prediction can't be read	1-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
+@msg	the PSD file's layer data uses an unknown compression ({m})	дані шарів файлу PSD використовують невідоме стиснення ({m})
+@msg	the PSD file's layer records are damaged	записи шарів файлу PSD пошкоджено
+@msg	the PSD file's layer groups are nested too deeply	групи шарів файлу PSD вкладено надто глибоко
+@msg	a layer of the PSD file is too large to read	шар файлу PSD завеликий для читання
+@msg	the PSD file's layers take more memory to read than allowed	для читання шарів файлу PSD потрібно більше пам’яті, ніж дозволено
+@msg	the layers can't be read ({e}): the file opened as its merged image	не вдається прочитати шари ({e}): файл відкрито як зведене зображення
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються
 @msg	the PSD file is cut short	файл PSD обрізаний
 @msg	the PSD file's header is damaged	заголовок файлу PSD пошкоджено

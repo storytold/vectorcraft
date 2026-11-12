@@ -5244,7 +5244,13 @@ theme	Appearance	Giao diện
 @msg	x and y must be provided together	x và y phải được cung cấp cùng nhau
 @msg	x and y must both be numbers	x và y đều phải là số
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Các thay đổi chưa lưu được giữ trong trình duyệt này: tải lại trang để lấy lại.
-@msg	zipped 32-bit PSD image data with prediction can't be read	dữ liệu ảnh PSD 32-bit nén với dự đoán không thể đọc được
+@msg	zipped 1-bit PSD image data with prediction can't be read	dữ liệu ảnh PSD 1-bit nén với dự đoán không thể đọc được
+@msg	the PSD file's layer data uses an unknown compression ({m})	dữ liệu lớp của tệp PSD dùng nén không xác định ({m})
+@msg	the PSD file's layer records are damaged	bản ghi lớp của tệp PSD bị hỏng
+@msg	the PSD file's layer groups are nested too deeply	các nhóm lớp của tệp PSD lồng nhau quá sâu
+@msg	a layer of the PSD file is too large to read	một lớp của tệp PSD quá lớn để đọc
+@msg	the PSD file's layers take more memory to read than allowed	các lớp của tệp PSD cần nhiều bộ nhớ để đọc hơn mức cho phép
+@msg	the layers can't be read ({e}): the file opened as its merged image	không thể đọc các lớp ({e}): tệp được mở dưới dạng ảnh đã gộp
 @msg	zone must be a string	zone phải là chuỗi
 @msg	zone must be tab, center, left, right, top or bottom	zone phải là tab, center, left, right, top hoặc bottom
 @msg	{_1} failed: {e}	{_1} thất bại: {e}

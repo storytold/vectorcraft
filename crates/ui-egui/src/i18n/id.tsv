@@ -4832,7 +4832,13 @@ imageTrace	Outline	Kontur
 @msg	the PSD file has an unknown colour mode ({m})	berkas PSD memiliki mode warna yang tidak dikenal ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	data gambar berkas PSD menggunakan kompresi yang tidak dikenal ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	gambar PSD terlalu besar untuk dibaca ({_1} × {_2} piksel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	data gambar PSD 32-bit terkompresi zip dengan prediksi tidak dapat dibaca
+@msg	zipped 1-bit PSD image data with prediction can't be read	data gambar PSD 1-bit terkompresi zip dengan prediksi tidak dapat dibaca
+@msg	the PSD file's layer data uses an unknown compression ({m})	data lapisan berkas PSD menggunakan kompresi yang tidak dikenal ({m})
+@msg	the PSD file's layer records are damaged	catatan lapisan berkas PSD rusak
+@msg	the PSD file's layer groups are nested too deeply	grup lapisan berkas PSD bersarang terlalu dalam
+@msg	a layer of the PSD file is too large to read	sebuah lapisan berkas PSD terlalu besar untuk dibaca
+@msg	the PSD file's layers take more memory to read than allowed	lapisan berkas PSD memerlukan lebih banyak memori untuk dibaca daripada yang diizinkan
+@msg	the layers can't be read ({e}): the file opened as its merged image	lapisan tidak dapat dibaca ({e}): berkas dibuka sebagai gambar gabungannya
 @msg	{depth}-bit PSD files in this colour mode can't be read	berkas PSD {depth}-bit dalam mode warna ini tidak dapat dibaca
 @msg	the PSD file is cut short	berkas PSD terpotong
 @msg	the PSD file's header is damaged	header berkas PSD rusak

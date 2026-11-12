@@ -5053,7 +5053,13 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC または HEIF ファイルには読み込めない種類の画像が含まれています
 @msg	HEIC and HEIF images can't be opened in this build	このビルドでは HEIC と HEIF の画像を開けません
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 画像が大きすぎて読み込めません（{_1} × {_2} ピクセル）
-@msg	zipped 32-bit PSD image data with prediction can't be read	予測付き ZIP 圧縮の 32 bit PSD 画像データは読み込めません
+@msg	zipped 1-bit PSD image data with prediction can't be read	予測付き ZIP 圧縮の 1 bit PSD 画像データは読み込めません
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD ファイルのレイヤーデータの圧縮方式が不明です（{m}）
+@msg	the PSD file's layer records are damaged	PSD ファイルのレイヤーレコードが破損しています
+@msg	the PSD file's layer groups are nested too deeply	PSD ファイルのレイヤーグループの入れ子が深すぎます
+@msg	a layer of the PSD file is too large to read	PSD ファイルのレイヤーが大きすぎて読み込めません
+@msg	the PSD file's layers take more memory to read than allowed	PSD ファイルのレイヤーの読み込みに許容量を超えるメモリーが必要です
+@msg	the layers can't be read ({e}): the file opened as its merged image	レイヤーを読み込めません（{e}）：ファイルは統合画像として開かれました
 @msg	{depth}-bit PSD files in this colour mode can't be read	このカラーモードの {depth} bit PSD ファイルは読み込めません
 @msg	the PSD file is cut short	PSD ファイルが途中で切れています
 @msg	the PSD file's header is damaged	PSD ファイルのヘッダーが破損しています

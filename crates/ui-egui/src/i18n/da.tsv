@@ -4832,7 +4832,13 @@ imageTrace	Outline	Kontur
 @msg	the PSD file has an unknown colour mode ({m})	PSD-filen har en ukendt farvetilstand ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	PSD-filens billeddata bruger en ukendt komprimering ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-billedet er for stort til at læse ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zippet 32-bit PSD-billeddata med prædiktion kan ikke læses
+@msg	zipped 1-bit PSD image data with prediction can't be read	zippet 1-bit PSD-billeddata med prædiktion kan ikke læses
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD-filens lagdata bruger en ukendt komprimering ({m})
+@msg	the PSD file's layer records are damaged	PSD-filens lagposter er beskadigede
+@msg	the PSD file's layer groups are nested too deeply	PSD-filens laggrupper er indlejret for dybt
+@msg	a layer of the PSD file is too large to read	et lag i PSD-filen er for stort til at læse
+@msg	the PSD file's layers take more memory to read than allowed	PSD-filens lag kræver mere hukommelse at læse end tilladt
+@msg	the layers can't be read ({e}): the file opened as its merged image	lagene kan ikke læses ({e}): filen blev åbnet som sit samlede billede
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bit PSD-filer i denne farvetilstand kan ikke læses
 @msg	the PSD file is cut short	PSD-filen er afkortet
 @msg	the PSD file's header is damaged	PSD-filens header er beskadiget

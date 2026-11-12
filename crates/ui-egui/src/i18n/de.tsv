@@ -4974,7 +4974,7 @@ theme	Appearance	Erscheinungsbild
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Die Hauptfarbe wird zur Konturfarbe. Die anderen Farben wandern ebenso weit um den Farbkreis wie die Hauptfarbe und behalten ihre Sättigung und Helligkeit.
 	RGB:	RGB:
 	CMYK:	CMYK:
-# PSD files (opened and placed as their merged image).
+# PSD files.
 @msg	not a PSD file	keine PSD-Datei
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus
 @msg	the PSD file has an unknown colour mode ({m})	die PSD-Datei hat einen unbekannten Farbmodus ({m})
@@ -4994,7 +4994,13 @@ theme	Appearance	Erscheinungsbild
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	die HEIC- oder HEIF-Datei enthält eine Bildart, die nicht gelesen werden kann
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- und HEIF-Bilder können in diesem Build nicht geöffnet werden
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
+@msg	zipped 1-bit PSD image data with prediction can't be read	ZIP-komprimierte 1-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
+@msg	the PSD file's layer data uses an unknown compression ({m})	die Ebenendaten der PSD-Datei verwenden eine unbekannte Komprimierung ({m})
+@msg	the PSD file's layer records are damaged	die Ebenendatensätze der PSD-Datei sind beschädigt
+@msg	the PSD file's layer groups are nested too deeply	die Ebenengruppen der PSD-Datei sind zu tief verschachtelt
+@msg	a layer of the PSD file is too large to read	eine Ebene der PSD-Datei ist zu groß zum Lesen
+@msg	the PSD file's layers take more memory to read than allowed	die Ebenen der PSD-Datei brauchen zum Lesen mehr Speicher als erlaubt
+@msg	the layers can't be read ({e}): the file opened as its merged image	die Ebenen können nicht gelesen werden ({e}): die Datei wurde als ihr zusammengefügtes Bild geöffnet
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
 @msg	the JPEG XL file is cut short	die JPEG-XL-Datei ist unvollständig
 @msg	the JPEG XL container is too large to read	der JPEG-XL-Container ist zu groß zum Lesen

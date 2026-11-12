@@ -5153,7 +5153,13 @@ imageTrace	Outline	Obris
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	datoteka HEIC ili HEIF sadrži vrstu slike koju nije moguće pročitati
 @msg	HEIC and HEIF images can't be opened in this build	HEIC i HEIF slike nije moguće otvoriti u ovoj verziji programa
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zipovani 32-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
+@msg	zipped 1-bit PSD image data with prediction can't be read	zipovani 1-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
+@msg	the PSD file's layer data uses an unknown compression ({m})	podaci slojeva PSD datoteke koriste nepoznatu kompresiju ({m})
+@msg	the PSD file's layer records are damaged	zapisi slojeva PSD datoteke su oštećeni
+@msg	the PSD file's layer groups are nested too deeply	grupe slojeva PSD datoteke su previše duboko ugniježđene
+@msg	a layer of the PSD file is too large to read	sloj PSD datoteke je prevelik za čitanje
+@msg	the PSD file's layers take more memory to read than allowed	slojevi PSD datoteke zahtijevaju više memorije za čitanje nego što je dozvoljeno
+@msg	the layers can't be read ({e}): the file opened as its merged image	slojevi se ne mogu pročitati ({e}): datoteka je otvorena kao spojena slika
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitne PSD datoteke u ovom načinu boja ne mogu se pročitati
 @msg	the PSD file is cut short	PSD datoteka je skraćena
 @msg	the PSD file's header is damaged	zaglavlje PSD datoteke je oštećeno

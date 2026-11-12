@@ -4976,7 +4976,13 @@ axis	Both	Les deux
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	le fichier HEIC ou HEIF contient un type d'image qui ne peut pas être lu
 @msg	HEIC and HEIF images can't be opened in this build	les images HEIC et HEIF ne peuvent pas être ouvertes dans cette version
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'image PSD est trop grande pour être lue ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	les données d'image PSD 32 bits compressées en ZIP avec prédiction ne peuvent pas être lues
+@msg	zipped 1-bit PSD image data with prediction can't be read	les données d'image PSD 1 bit compressées en ZIP avec prédiction ne peuvent pas être lues
+@msg	the PSD file's layer data uses an unknown compression ({m})	les données de calque du fichier PSD utilisent une compression inconnue ({m})
+@msg	the PSD file's layer records are damaged	les enregistrements de calques du fichier PSD sont endommagés
+@msg	the PSD file's layer groups are nested too deeply	les groupes de calques du fichier PSD sont imbriqués trop profondément
+@msg	a layer of the PSD file is too large to read	un calque du fichier PSD est trop grand pour être lu
+@msg	the PSD file's layers take more memory to read than allowed	les calques du fichier PSD demandent plus de mémoire que permis pour être lus
+@msg	the layers can't be read ({e}): the file opened as its merged image	les calques ne peuvent pas être lus ({e}) : le fichier a été ouvert comme son image fusionnée
 @msg	{depth}-bit PSD files in this colour mode can't be read	les fichiers PSD {depth} bits dans ce mode colorimétrique ne peuvent pas être lus
 @msg	the PSD file is cut short	le fichier PSD est tronqué
 @msg	the PSD file's header is damaged	l'en-tête du fichier PSD est endommagé

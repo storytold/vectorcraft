@@ -4980,7 +4980,13 @@ theme	Appearance	외관
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 또는 HEIF 파일에 읽을 수 없는 종류의 이미지가 있습니다
 @msg	HEIC and HEIF images can't be opened in this build	이 빌드에서는 HEIC 및 HEIF 이미지를 열 수 없습니다
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 이미지가 너무 커서 읽을 수 없습니다({_1} × {_2}픽셀)
-@msg	zipped 32-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 32비트 PSD 이미지 데이터는 읽을 수 없습니다
+@msg	zipped 1-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 1비트 PSD 이미지 데이터는 읽을 수 없습니다
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD 파일의 레이어 데이터가 알 수 없는 압축({m})을 사용합니다
+@msg	the PSD file's layer records are damaged	PSD 파일의 레이어 레코드가 손상되었습니다
+@msg	the PSD file's layer groups are nested too deeply	PSD 파일의 레이어 그룹이 너무 깊이 중첩되어 있습니다
+@msg	a layer of the PSD file is too large to read	PSD 파일의 레이어가 너무 커서 읽을 수 없습니다
+@msg	the PSD file's layers take more memory to read than allowed	PSD 파일의 레이어를 읽는 데 허용된 것보다 많은 메모리가 필요합니다
+@msg	the layers can't be read ({e}): the file opened as its merged image	레이어를 읽을 수 없습니다({e}): 파일이 병합된 이미지로 열렸습니다
 @msg	{depth}-bit PSD files in this colour mode can't be read	이 색상 모드의 {depth}비트 PSD 파일은 읽을 수 없습니다
 @msg	the PSD file is cut short	PSD 파일이 잘려 있습니다
 @msg	the PSD file's header is damaged	PSD 파일의 헤더가 손상되었습니다

@@ -5576,7 +5576,13 @@ imageTrace	Outline	Körvonal
 @msg	x and y must be provided together	az x és az y csak együtt adható meg
 @msg	x and y must both be numbers	az x és az y is szám kell legyen
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	A nem mentett módosításaidat ez a böngésző megőrizte: töltsd újra az oldalt a visszakapásukhoz.
-@msg	zipped 32-bit PSD image data with prediction can't be read	a predikcióval tömörített 32 bites PSD-képadatok nem olvashatók
+@msg	zipped 1-bit PSD image data with prediction can't be read	a predikcióval tömörített 1 bites PSD-képadatok nem olvashatók
+@msg	the PSD file's layer data uses an unknown compression ({m})	a PSD-fájl rétegadatai ismeretlen tömörítést használnak ({m})
+@msg	the PSD file's layer records are damaged	a PSD-fájl rétegrekordjai sérültek
+@msg	the PSD file's layer groups are nested too deeply	a PSD-fájl rétegcsoportjai túl mélyen vannak egymásba ágyazva
+@msg	a layer of the PSD file is too large to read	a PSD-fájl egyik rétege túl nagy a beolvasáshoz
+@msg	the PSD file's layers take more memory to read than allowed	a PSD-fájl rétegeinek beolvasása több memóriát igényel a megengedettnél
+@msg	the layers can't be read ({e}): the file opened as its merged image	a rétegek nem olvashatók ({e}): a fájl az egyesített képeként nyílt meg
 @msg	zone must be a string	a zone értéke szöveg lehet
 @msg	zone must be tab, center, left, right, top or bottom	a zone értéke tab, center, left, right, top vagy bottom lehet
 @msg	{_1} failed: {e}	sikertelen: {_1}: {e}
