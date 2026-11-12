@@ -118,6 +118,7 @@
 	PDF Presets…	Přednastavení PDF…
 	Perspective Grid Presets…	Přednastavení perspektivní mřížky…
 	Color Settings…	Nastavení barev…
+	Assign Profile	Přiřadit profil
 	Assign Profile…	Přiřadit profil…
 	Keyboard Shortcuts…	Klávesové zkratky…
 # Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
@@ -202,6 +203,15 @@
 	Expand…	Rozložit…
 	Expand Appearance	Rozložit vzhled
 	Crop Image	Oříznout obraz
+	Image Tools	Nástroje obrazu
+	Remove Background…	Odstranit pozadí…
+	Remove Background	Odstranit pozadí
+	Background	Pozadí
+	Edge Color	Barva okraje
+	Picked Colors	Vybrané barvy
+	Corner Color	Barva rohů
+	Contiguous	Souvislé
+	Each Channel	Každý kanál
 	Edit Path	Upravit cestu
 	Mask	Maska
 	Rasterize…	Rastrovat…
@@ -252,6 +262,10 @@
 	Blend Options…	Možnosti prolnutí…
 	Expand	Rozložit
 	Replace Spine	Nahradit páteř
+	Create Spine	Vytvořit páteř
+	Create Spine:	Vytvořit páteř:
+	Always	Vždy
+	Never	Nikdy
 	Reverse Spine	Obrátit páteř
 	Reverse Front to Back	Obrátit pořadí zepředu dozadu
 	Envelope Distort	Deformace obálkou
@@ -406,6 +420,11 @@
 	Smart Punctuation…	Inteligentní interpunkce…
 	Create Outlines	Převést na křivky
 	Optical Margin Alignment	Optické zarovnání okrajů
+	Dynamic Text	Dynamický text
+	Dynamic Text Presets	Předvolby dynamického textu
+	Arch	Klenba
+@msg	select point type or type on a path	vyberte bodový text nebo text na cestě
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	text na cestě ve zřetězeném textu nemůže používat dynamický text: {frames}
 	Fill with Placeholder Text	Vyplnit zástupným textem
 	Insert Inline Symbol	Vložit symbol do textu
 	Show Hidden Characters	Zobrazit skryté znaky
@@ -550,6 +569,7 @@
 	Gaussian Blur…	Gaussovské rozostření…
 	View	Zobrazení
 	Preview	Náhled
+	Preview:	Náhled:
 	Overprint Preview	Náhled přetisků
 	Pixel Preview	Náhled obrazových bodů
 	Trim View	Oříznuté zobrazení
@@ -790,8 +810,25 @@
 	Stun Pulse	Omráčení
 	Stealth Fade	Plížení
 	Shield Buff	Štít
+	Textures	Textury
+	Fine Grain	Jemné zrno
+	Canvas Weave	Tkané plátno
+	Burlap Sack	Pytlovina
+	Cracked Glaze	Popraskaná glazura
+	Mosaic Floor	Mozaiková podlaha
+	Quilted Squares	Prošívané čtverce
+	Leaded Glass	Olovnaté sklo
+	Damp Paper	Vlhký papír
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
+	Painted and Sketched	Malované a skicované
+	Washed Blue	Rozmytá modrá
+	Bristle Ochre	Okr štětcem
+	Pastel Heather	Pastelový vřes
+	Charcoal Shade	Stín uhlem
+	Ink Contour	Obrys tuší
+	Wet Ink	Mokrá tuš
+	Fine Pen	Jemné pero
 	Gradient Finishes	Přechodové povrchy
 	Shape Effects	Efekty tvarů
 	Blends and Transparency	Prolnutí a průhlednost
@@ -811,6 +848,7 @@
 	Spectrum Gradients	Spektrální přechody
 	Sky Gradients	Přechody oblohy
 	Neutral Gradients	Neutrální přechody
+	Organic Fades	Organické přechody
 	Duotone Gradients	Dvoutónové přechody
 	Radial Glows	Kruhové záře
 	Save Swatch Library…	Uložit knihovnu vzorníku…
@@ -872,6 +910,13 @@
 	Dock Panel	Ukotvit panel
 	Dock to Top	Ukotvit nahoru
 	Dock to Bottom	Ukotvit dolů
+	Control Bar Options	Možnosti ovládacího panelu
+	Tool Options	Možnosti nástroje
+	Object Options	Možnosti objektu
+	Image Options	Možnosti obrazu
+	Vertical Alignment	Svislé zarovnání
+	Align and Distribute	Zarovnat a rozmístit
+	Document Options	Možnosti dokumentu
 	Dock Control Bar	Ukotvit ovládací panel
 	Float Tool Group	Plovoucí skupina nástrojů
 
@@ -1165,6 +1210,8 @@ lighting	Light	Světlo
 	Toolbar: Single/Double Column	Panel nástrojů: jeden / dva sloupce
 	Toolbar: Add Tool	Panel nástrojů: přidat nástroj
 	Toolbar: Remove Tool	Panel nástrojů: odebrat nástroj
+	Add Tool…	Přidat nástroj…
+	Remove Tool	Odebrat nástroj
 	Toolbar: Reset	Panel nástrojů: obnovit
 	Two Point Perspective Preset 1	Přednastavení dvoubodové perspektivy 1
 	Two Point Perspective Preset 2	Přednastavení dvoubodové perspektivy 2
@@ -1548,6 +1595,7 @@ digits	Malayalam	Malajálamské
 	Roman Baseline	Latinková účaří
 	Select a text object to edit its character attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho znaků.
 	Show Options	Zobrazit možnosti
+	Show Recent Colors	Zobrazit nedávné barvy
 	Color Panel Options	Možnosti panelu Barva
 	Small Caps	Kapitálky
 	Small Caps (on the roadmap)	Kapitálky (v plánu)
@@ -1576,6 +1624,8 @@ digits	Malayalam	Malajálamské
 	Scale at Center	Měřítko od středu
 	Up/Down:	Nahoru/dolů:
 	Left/Right:	Vlevo/vpravo:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko nahoru/dolů
+	Tate-chu-yoko Left/Right	Tate-chu-yoko vlevo/vpravo
 	Underline	Podtržení
 	Vertical Scale %	Svislá změna velikosti %
 	Axis	Osa
@@ -1678,6 +1728,8 @@ digits	Malayalam	Malajálamské
 	No gradient swatches	Ve vzorníku nejsou žádné přechody
 	Points: clicks add free points	Body: kliknutím přidáte volné body
 	Radial Gradient	Kruhový přechod
+	Conic Gradient	Kuželový přechod
+	Diamond Gradient	Kosočtverečný přechod
 	Reset to White, Black	Obnovit na bílou a černou
 	Reverse Gradient	Obrátit přechod
 	Save to Swatches	Uložit do vzorníku
@@ -2048,6 +2100,7 @@ digits	Malayalam	Malajálamské
 	Simulate Paper	Simulovat papír
 	Use Black Point Compensation	Použít kompenzaci černého bodu
 	Working CMYK (don't tag)	Pracovní CMYK (neoznačovat)
+	Working RGB (don't tag)	Pracovní RGB (neoznačovat)
 	{name} (spot)	{name} (přímá)
 	Add to Profiles…	Přidat do profilů…
 	Align Stroke to Center	Zarovnat tah na střed
@@ -2350,6 +2403,8 @@ digits	Malayalam	Malajálamské
 	Export Selected Art Only	Exportovat jen vybranou kresbu
 	Number of Colors:	Počet barev:
 	Raster File Format:	Formát rastrového souboru:
+	Include Placed Images	Zahrnout umístěné obrazy
+	Include Fill Hatches	Zahrnout šrafy výplní
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Plné barvy vyžadují verzi 2004 nebo novější: zapíše se nejbližší z 256 barev.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Text se převede na křivky a tahy, které čára CAD nedokáže vykreslit, se stanou vyplněnými tvary.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text zůstane textem a každý tah bude čárou s vlastní tloušťkou a čárkováním.
@@ -2908,6 +2963,7 @@ antiAlias	Sharp	Ostré
 	General › Thumbnails	Obecné › Miniatury
 	Grayscale images	Obrazy ve stupních šedi
 	Include non-printing layers	Zahrnout netisknutelné vrstvy
+	Write pages longer than 200 in at full size in points	Zapsat stránky delší než 200 in v plné velikosti v bodech
 	Left:	Vlevo:
 	Mark as trapped	Označit jako s přesahy barev
 	Marks and Bleeds	Značky a spadávky
@@ -4506,10 +4562,13 @@ imageTrace	Outline	Obrys
 @msg	`groupColors` must be an array	`groupColors` musí být pole
 @msg	`library` is a library id or name (see {list})	`library` je ID nebo název knihovny (viz {list})
 @msg	`mode` applies to freeform gradients	`mode` platí pro volné přechody
+@msg	a negative `aspect` applies to conic gradients	záporný `aspect` platí pro kuželové přechody
+@msg	`focal` applies to radial gradients	`focal` platí pro radiální přechody
 @msg	`preserve` must be an object	`preserve` musí být objekt
 @msg	`globalAdjust` must be an object	`globalAdjust` musí být objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musí být 1, 3 nebo 5
 @msg	`stops` must be an array	`stops` musí být pole
+@msg	`{key}` must be an array	`{key}` musí být pole
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musí být objekt s možnostmi SVG (viz document.formats)
 @msg	`{_1}` is no save command	`{_1}` není příkaz pro uložení
 @msg	`{area}` is no recovery area name	`{area}` není název oblasti obnovení
@@ -4523,6 +4582,7 @@ imageTrace	Outline	Obrys
 @msg	`{key}` must be a number, not {v}	`{key}` musí být číslo, ne {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} musí být unixový čas v sekundách (celé číslo) nebo null
 @msg	`{key}` must be a string	`{key}` musí být řetězec
+@msg	`{key}` must be a profile name or null	`{key}` musí být název profilu nebo null
 @msg	`{key}` must be a whole number	`{key}` musí být celé číslo
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` musí být celé číslo mezi {min} a {max} (zadáno {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musí být mezi {min} a {max} (zadáno {x})
@@ -4675,6 +4735,7 @@ imageTrace	Outline	Obrys
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): zapisuje se s UserUnit {unit}, takže aplikace, které UserUnit ignorují, ji zobrazí tolikrát menší
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): stránky {label} se zapisují bez UserUnit, v bodech, a aplikace, které limit dodržují, stránku oříznou na 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 nemá UserUnit, který stránka delší než 14 400 pt (200 in) potřebuje, aby si zachovala velikost: soubor se zapíše jako PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 nemá UserUnit, který stránka delší než 14 400 pt (200 in) potřebuje, aby zůstala v limitu stránky PDF/A-2, 14 400 jednotek: soubor se zapíše jako PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	stránka pracovní plochy {n} má rozměr {size} a je příliš dlouhá a úzká pro strany stránky PDF od 3 do 14 400 jednotek: zapisuje se s UserUnit {unit}, která drží kratší stranu na 3 jednotkách nebo více, a aplikace, které limit dodržují, ořežou delší stranu na 14 400 jednotek
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	soubory {label} pojmou reálná čísla nejvýše {max} a stránka pracovní plochy {n}, dlouhá {side} pt, potřebuje větší: zvolte PDF 1.6 nebo novější bez standardu PDF/X, nebo menší pracovní plochu
 @msg	invalid image data for `{0}`	neplatná obrazová data pro `{0}`
@@ -4822,6 +4883,7 @@ imageTrace	Outline	Obrys
 @msg	not a stored central record	nejde o uložený centrální záznam
 @msg	not a valid plug-in module: {0}	neplatný modul zásuvného modulu: {0}
 @msg	not an EMF or WMF file	nejde o soubor EMF ani WMF
+@msg	not an HP-GL file	nejde o soubor HP-GL
 @msg	not found	nenalezeno
 @msg	not in pattern editing mode	není aktivní režim úprav vzorku
 @msg	finish editing the pattern first	nejprve dokončete úpravy vzorku
@@ -4901,6 +4963,14 @@ imageTrace	Outline	Obrys
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	tato vektorizace by vytvořila více než {max} kotevních bodů, víc, než dokument plynule zobrazí: zvyšte Šum, snižte Cesty nebo Barvy, nebo zvolte přednastavení s nižší věrností
 @msg	select an envelope	vyberte obálku
 @msg	select an image	vyberte obraz
+@msg	`background` must be edges, corners or colors	`background` musí být edges, corners nebo colors
+@msg	`match` must be distance or channels	`match` musí být distance nebo channels
+@msg	`{key}` must be from 0 to 100	`{key}` musí být od 0 do 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` musí obsahovat 1 až 16 barev, každou šestnáctkově (#rrggbb nebo #rgb) nebo jako black, white, red, green či blue
+@msg	the linked image shows its preview: embed or relink it first	propojený obraz zobrazuje náhled: nejprve jej vložte nebo znovu propojte
+@msg	a CMYK image has no transparency to set	obraz CMYK nemá průhlednost, kterou by bylo možné nastavit
+@msg	every pixel matches the background: no image would be left	každý obrazový bod odpovídá pozadí: nezbyl by žádný obraz
+@msg	an image of {w} × {h} pixels is too large to change	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na změnu
 @msg	select an object in perspective	vyberte objekt v perspektivě
 @msg	select artwork (or a colour group) to recolor	vyberte kresbu (nebo skupinu barev) k přebarvení
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Přebarvení dokončeno; beze změny: {locked} a {hidden}
@@ -5007,7 +5077,7 @@ imageTrace	Outline	Obrys
 @msg	unknown format	neznámý formát
 @msg	unknown format `{f}` (Save writes {_1})	neznámý formát `{f}` (Uložit zapisuje {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	neznámý režim volného přechodu `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	neznámý druh přechodu `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	neznámý druh přechodu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	neznámé zvýraznění `{h}`
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
@@ -5207,6 +5277,8 @@ imageTrace	Outline	Obrys
 @msg	invalid object id {value}: expected a non-negative integer	neplatné ID objektu {value}: očekává se nezáporné celé číslo
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	položka {index} v `{key}` je {value}, nikoli ID objektu (nezáporné celé číslo)
 @msg	no such object id {value}	objekt s ID {value} neexistuje
+@msg	id {value} is a ruler guide, not an object	ID {value} patří vodítku, ne objektu
+@msg	a ruler guide goes only directly in a layer or sublayer	vodítko může být jen přímo ve vrstvě nebo podvrstvě
 @msg	id {value} is a layer, not an object	ID {value} je vrstva, nikoli objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	ID {value} je vrstva, nikoli objekt; vrstvy přesunete pomocí layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	přístup automatizace k systému souborů není udělen: chybí oprávnění ke čtení: {path}
@@ -5236,7 +5308,13 @@ imageTrace	Outline	Obrys
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	soubor HEIC nebo HEIF obsahuje druh obrázku, který nelze přečíst
 @msg	HEIC and HEIF images can't be opened in this build	obrázky HEIC a HEIF nelze v tomto sestavení otevřít
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD je příliš velký na přečtení ({_1} × {_2} obrazových bodů)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zazipovaná 32bitová obrazová data PSD s predikcí nelze přečíst
+@msg	zipped 1-bit PSD image data with prediction can't be read	zazipovaná 1bitová obrazová data PSD s predikcí nelze přečíst
+@msg	the PSD file's layer data uses an unknown compression ({m})	data vrstev souboru PSD používají neznámou kompresi ({m})
+@msg	the PSD file's layer records are damaged	záznamy vrstev souboru PSD jsou poškozené
+@msg	the PSD file's layer groups are nested too deeply	skupiny vrstev souboru PSD jsou vnořené příliš hluboko
+@msg	a layer of the PSD file is too large to read	vrstva souboru PSD je příliš velká na přečtení
+@msg	the PSD file's layers take more memory to read than allowed	vrstvy souboru PSD potřebují ke čtení víc paměti, než je povoleno
+@msg	the layers can't be read ({e}): the file opened as its merged image	vrstvy nelze přečíst ({e}): soubor se otevřel jako sloučený obraz
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}bitové soubory PSD v tomto barevném režimu nelze přečíst
 @msg	the PSD file is cut short	soubor PSD je useknutý
 @msg	the PSD file's header is damaged	hlavička souboru PSD je poškozená
@@ -5704,6 +5782,11 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+	Shadows	Stíny
+	Distance from Object	Vzdálenost od objektu
+	Shadow Bounds	Hranice stínu
+	Behind Object	Za objektem
+	Below Object	Pod objektem
 	3D Lighting Preset	Předvolba 3D osvětlení
 	Standard	Standardní
 	Diffuse	Rozptýlené
@@ -5768,7 +5851,7 @@ mark-style	Japanese	Japonské
 @msg	span must be "object" or "selection", got {v}	span musí být "object" nebo "selection", ne {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umísťuje `gradient`, ne vzorník
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umísťuje přechod: zadejte `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" umísťuje lineární nebo radiální přechod, ne volný přechod
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" umísťuje lineární, radiální, kuželový nebo kosočtverečný přechod, ne volný přechod
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umísťuje samotný přechod: vynechte `start` a `end` (ty ho už umísťují v souřadnicích dokumentu)
 	Make Image Dynamic	Nastavit obraz jako dynamický
 	Import Data Sets…	Importovat sady dat…
@@ -5951,6 +6034,7 @@ mark-style	Japanese	Japonské
 	Ruby	Ruby
 	Geometric Guides	Geometrická vodítka
 	Geometric Patterns	Geometrické vzorky
+	Grit Textures	Zrnité textury
 	Ease In	Pozvolný začátek
 	Ease Out	Pozvolný konec
 	Ease In Out	Pozvolný začátek a konec
@@ -6009,6 +6093,8 @@ axis	Y Axis	osa Y
 	Version: {version}	Verze: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Nainstalovat „{name}“ místo zásuvného modulu se stejným ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tento soubor není zásuvný modul dříve nainstalovaný s tímto ID. Získá nastavení a mezipaměť uchovávané pro toto ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ je jiný modul než zásuvný modul s ID {_1} a získal by nastavení a mezipaměť uchovávané pro něj: nainstalujte ho s `replace: true`, jakmile uživatel souhlasí
 	File SHA-256: {hash}	SHA-256 souboru: {hash}
 	Read the objects it is given	Číst objekty, které dostane
@@ -6054,6 +6140,11 @@ axis	Y Axis	osa Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` vyžaduje oprávnění `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	rozpočet paměti (objekt {_1} potřebuje {size} bajtů vstupu, zbývá {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	rozpočet objektů (více než {MAX_OBJECTS} objektů jen pro čtení)
+@msg	instruction budget	rozpočet instrukcí
+@msg	time budget	časový rozpočet
+@msg	memory budget (the selection is too large to hand over)	rozpočet paměti (výběr je příliš velký na předání)
+@msg	output size ({what} is {len} bytes, limit {max})	velikost výstupu ({what} má {len} bajtů, limit {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	oprávnění zásuvného modulu nelze odebrat z úložiště zásuvných modulů
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	oprávnění `{shown}` je vyhrazeno pro pozdější API zásuvných modulů; tento hostitel ho neuděluje
 @msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ žádá o oprávnění {asked}: musí je schválit člověk v desktopové aplikaci, nebo předejte `grant` v relaci spuštěné s --allow-plugin-grants
@@ -6066,6 +6157,12 @@ axis	Y Axis	osa Y
 @msg	command {name}: `label` must be 1-64 printable characters	příkaz {name}: `label` musí mít 1-64 tisknutelných znaků
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	příkaz {name}: použijte id o 1-{MAX_COMMAND_ID} znacích z a-z 0-9 _, které začíná písmenem
 @msg	command {name}: {e}	příkaz {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (řádek {line}, sloupec {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` musí být seznam příkazů, každý s `id` a `label`
+@msg	command {name} must be an object with an `id` and a `label`	příkaz {name} musí být objekt s `id` a `label`
+@msg	missing field `{key}`	chybí pole `{key}`
+@msg	duplicate field `{key}`	pole `{key}` je uvedeno dvakrát
 @msg	only a filter or a live effect declares `commands`	`commands` deklaruje jen filtr nebo živý efekt
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nemá SHA-256 uvedený v `hash`: nic nebylo nainstalováno
@@ -6090,6 +6187,16 @@ axis	Y Axis	osa Y
 @msg	message must be text	message musí být text
 @msg	allowContinue must be true or false	allowContinue musí být true nebo false
 @msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
+	Insert Menu Item…	Vložit položku nabídky…
+	Insert Menu Item	Vložit položku nabídky
+	Menu Item:	Položka nabídky:
+	No menu item matches.	Žádná položka nabídky neodpovídá.
+	Several menu items match. Choose one from the list.	Odpovídá několik položek nabídky. Vyberte jednu ze seznamu.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Položky, které otevírají dialogové okno, a položky nabídek Soubor, Okno a Nápověda nejsou uvedeny.
+@msg	command must be text	command musí být text
+@msg	no menu item that can be inserted runs this command	tento příkaz nespouští žádná položka nabídky, kterou lze vložit
+@msg	the action already has 10,000 steps	akce už má 10 000 kroků
+@msg	the action set would be larger than 8 MiB	sada akcí by byla větší než 8 MiB
 	Playback Options	Možnosti přehrávání
 	Accelerated	Zrychleně
 	Step by Step	Krok za krokem
@@ -6128,6 +6235,12 @@ axis	Y Axis	osa Y
 	Crosshair	Zaměřovač
 	Checkpoint	Kontrolní bod
 	Inventory Icons	Ikony inventáře
+	Skill Icons	Ikony dovedností
+	Attack	Útok
+	Defend	Obrana
+	Heal	Léčení
+	Buff	Posílení
+	Ult	Ult
 	Sword	Meč
 	Shield	Štít
 	Potion	Lektvar
@@ -6192,6 +6305,11 @@ axis	Y Axis	osa Y
 	Dash Trail	Čárkovaná stopa
 	Speed Line	Rychlostní čára
 	Game Trails	Herní stopy
+	Energy Beams	Energetické paprsky
+	Laser Bolt	Laserový výstřel
+	Plasma Arc	Plazmový oblouk
+	Charge Wave	Nabíjecí vlna
+	Spark Trail	Jiskrová stopa
 	Calligraphic Nibs	Kaligrafická pera
 	Pattern Borders	Vzorkové okraje
 	Scatter Shapes	Rozptýlené tvary
@@ -6389,9 +6507,12 @@ anchor	Points:	Body:
 @msg	{label} must be a number	{label} musí být číslo
 @msg	{label} must be a number of at least 0.1	{label} musí být číslo alespoň 0,1
 	Advanced Character Formats	Rozšířené formáty znaků
+	Basic Paragraph Formats	Základní formáty odstavce
+	Composition	Sazba
 	Horizontal Scale	Vodorovná změna velikosti
 	Vertical Scale	Svislá změna velikosti
 @msg	{label} must be a number from {min} to {max}	{label} musí být číslo od {min} do {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} musí být celé číslo od {min} do {max}
 	Character Color	Barva znaků
 	OpenType Features	Funkce OpenType
 	Stylistic Sets	Stylistické sady
@@ -6399,6 +6520,10 @@ anchor	Points:	Body:
 @msg	features lists at most {max} tags	features obsahuje nejvýše {max} značek
 @msg	unknown OpenType feature `{t}`	neznámá funkce OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musí být číslo větší než 0 a nejvýše {max}
+@msg	{label} must be at most {max} characters	{label} smí mít nejvýše {max} znaků
+@msg	{label} must be one character	{label} musí být jeden znak
+@msg	at most {max} tab stops	nejvýše {max} zarážek tabulátoru
+@msg	unknown align `{other}`	neznámé zarovnání `{other}`
 @msg	no character style `{name}`	styl znaků `{name}` neexistuje
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6560,6 +6685,8 @@ breakText	Glyphs	Glyfy
 	Delete the selected brushes?	Odstranit vybrané štětce?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Tahy používají jeden nebo více z těchto štětců. Odebrat štětce z těchto tahů a odstranit štětce?
 	Remove Strokes	Odebrat tahy
+	Place Brush Art	Umístit kresbu štětce
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nemá kresbu (mají ji jen rozptylové, obrazové a vzorkové štětce)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Nástroje uspořádání
 	Arrange in Grid…	Uspořádat do mřížky…
@@ -6755,6 +6882,11 @@ breakText	Glyphs	Glyfy
 @msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje jen exportní nebo importní zásuvný modul
 @msg	an importer always gets an import's budget: leave `budget` out	importní zásuvný modul dostává vždy rozpočet importu: vynechte `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopírovat informace pro řešení potíží
+@msg	Copied the troubleshooting info	Informace pro řešení potíží zkopírovány
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Poslední relace VectorCraftu přestala odpovídat, než se zavřela. Nápověda › Kopírovat informace pro řešení potíží zkopíruje podrobnosti pro hlášení chyby
+
 # Safe Mode
 	Safe Mode…	Nouzový režim…
 	Safe Mode	Nouzový režim
@@ -6775,6 +6907,8 @@ breakText	Glyphs	Glyfy
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Zarovnat na mřížku obrazových bodů
+	Align New Objects to Pixel Grid	Zarovnat nové objekty na mřížku obrazových bodů
+	Not Aligned to Pixel Grid	Nezarovnané na mřížku obrazových bodů
 @msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty
 @msg	side is left or right, not `{s}`	side je left nebo right, ne `{s}`
 	Ignore All	Ignorovat vše

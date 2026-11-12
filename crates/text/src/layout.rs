@@ -37,9 +37,9 @@ pub(crate) use bidi::{is_rtl, para_bidi};
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};
+pub use driver::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 #[cfg(test)]
-pub(crate) use driver::layout_faces_per_call;
-pub use driver::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
+pub(crate) use driver::{fit_passes, layout_faces_per_call};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
 
 #[cfg(test)]
@@ -659,6 +659,7 @@ mod emit_kashida_mark_last {
             len: 2,
             run: 0,
             adv: 10.0,
+            tracking: 0.0,
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
@@ -719,6 +720,7 @@ mod emit_kashida_mark_last {
             len: 4,
             run: 1,
             adv: 0.0,
+            tracking: 0.0,
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,

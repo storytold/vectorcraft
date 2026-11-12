@@ -237,6 +237,7 @@ font-technology	Variable	Variabel
 	Asset Export Settings	Einstellungen für den Asset-Export
 	Assets	Assets
 	Assign	Zuweisen
+	Assign Profile	Profil zuweisen
 	Assign Profile…	Profil zuweisen…
 	Assign:	Zuweisen:
 	Attach to Active Plane	An aktiver Perspektivebene anbringen
@@ -679,6 +680,15 @@ font-technology	Variable	Variabel
 	Created:	Erstellt:
 	Crop	Schnittmengenfläche
 	Crop Image	Bild beschneiden
+	Image Tools	Bildwerkzeuge
+	Remove Background…	Hintergrund entfernen…
+	Remove Background	Hintergrund entfernen
+	Background	Hintergrund
+	Edge Color	Randfarbe
+	Picked Colors	Ausgewählte Farben
+	Corner Color	Eckfarbe
+	Contiguous	Zusammenhängend
+	Each Channel	Jeder Kanal
 	Edit Path	Pfad bearbeiten
 	Mask	Maske
 	Crop Marks	Schnittmarken
@@ -798,6 +808,14 @@ font-technology	Variable	Variabel
 	Disable Auto Add/Delete	Automatisches Hinzufügen/Löschen deaktivieren
 	Disable Opacity Mask	Deckkraftmaske deaktivieren
 	Discard	Verwerfen
+	Preserve	Beibehalten
+	TIFF (Black & White)	TIFF (Schwarzweiß)
+	TIFF (8-bit Color)	TIFF (8-Bit-Farbe)
+	High Resolution	Hohe Auflösung
+	Medium Resolution	Mittlere Auflösung
+	Low Resolution	Niedrige Auflösung
+	Language Level 2	Sprachebene 2
+	Language Level 3	Sprachebene 3
 	Discard Empty Type	Leeren Text verwerfen
 	Discard Recovered Documents	Wiederhergestellte Dokumente verwerfen
 	Discard White Overprint in Output	Weißes Überdrucken in der Ausgabe verwerfen
@@ -1426,6 +1444,14 @@ file-filter	Templates	Vorlagen
 	Hair Space	Haarspatium
 	Hand Tool	Hand-Werkzeug
 	Hand-Drawn	Handgezeichnet
+	Painted and Sketched	Gemalt und skizziert
+	Washed Blue	Verwaschenes Blau
+	Bristle Ochre	Borstenocker
+	Pastel Heather	Pastellheide
+	Charcoal Shade	Kohleschatten
+	Ink Contour	Tuschekontur
+	Wet Ink	Nasse Tusche
+	Fine Pen	Feine Feder
 	Handles	Griffe
 	Hard Light	Hartes Licht
 	Hard Mix	Hart mischen
@@ -1655,6 +1681,7 @@ file-filter	Templates	Vorlagen
 	Include Linked Files	Verknüpfte Dateien einschließen
 	Include Metadata	Metadaten einschließen
 	Include non-printing layers	Nicht druckende Ebenen einschließen
+	Write pages longer than 200 in at full size in points	Seiten über 200 in in voller Größe in Punkt schreiben
 	Include SVG Code	SVG-Code einschließen
 	Include Swatches for Tints	Farbfelder für Tonwerte einschließen
 	Inflate…	Aufblasen…
@@ -2288,12 +2315,18 @@ file-filter	Templates	Vorlagen
 	Open…	Öffnen…
 	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
+	Dynamic Text	Dynamischer Text
+	Dynamic Text Presets	Vorgaben für dynamischen Text
+	Arch	Rundbogen
+@msg	select point type or type on a path	wählen Sie Punkttext oder Pfadtext aus
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	Pfadtext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
 	Options	Optionen
 	Options for Selection…	Optionen für Auswahl…
 	Options:	Optionen:
 	Options…	Optionen…
+	Organic Fades	Organische Verläufe
 	or more spaces with a tab	oder mehr Leerzeichen durch einen Tabulator
 	Order:	Reihenfolge:
 	Ordinals	Ordinalzahlen
@@ -2487,6 +2520,7 @@ diagnostics	ui	Oberfläche
 	Presets:	Vorgaben:
 	Press 	Mit 
 	Preview	Vorschau
+	Preview:	Vorschau:
 	Preview All Layers	Vorschau aller Ebenen
 	Preview in Browser	Vorschau im Browser
 	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
@@ -2567,6 +2601,8 @@ digits	Malayalam	Malayalam
 	Radial	Radial
 	Radial Glows	Radiale Leuchteffekte
 	Radial Gradient	Radialer Verlauf
+	Conic Gradient	Konischer Verlauf
+	Diamond Gradient	Rautenverlauf
 	Radius 1	Radius 1
 	Radius 2	Radius 2
 	Radius1	Radius1
@@ -2579,6 +2615,8 @@ digits	Malayalam	Malayalam
 	Range:	Bereich:
 	Raster Effects	Rastereffekte
 	Raster File Format:	Pixelbild-Dateiformat:
+	Include Placed Images	Platzierte Bilder einschließen
+	Include Fill Hatches	Füllschraffuren einschließen
 	Raster Sample Size:	Aufnahmebereich in Pixelbildern:
 	Raster/Vector Balance:	Pixelbild-Vektor-Abgleich:
 	Rasterize	In Pixelbild umwandeln
@@ -2760,6 +2798,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Schrift ersetzen
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersetzen Sie sie durch eine andere Datei oder ignorieren Sie sie: Ihre Bilder zeigen weiterhin die mit dem Dokument gespeicherte Vorschau.
 	Replace Spine	Achse ersetzen
+	Create Spine	Achse erstellen
+	Create Spine:	Achse erstellen:
+	Always	Immer
+	Never	Nie
 	Replace Symbol	Symbol ersetzen
 	Reset Transformation	Transformation zurücksetzen
 	Replace With Font	Durch Schrift ersetzen
@@ -3124,6 +3166,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Betäubung
 	Stealth Fade	Schleichen
 	Shield Buff	Schild
+	Textures	Texturen
+	Fine Grain	Feine Körnung
+	Canvas Weave	Leinwandgewebe
+	Burlap Sack	Jutesack
+	Cracked Glaze	Craquelé-Glasur
+	Mosaic Floor	Mosaikboden
+	Quilted Squares	Gesteppte Quadrate
+	Leaded Glass	Bleiglas
+	Damp Paper	Feuchtes Papier
 	Shape	Form
 	Shape Builder	Formerstellung
 	Shape Builder Regions	Formerstellungsbereiche
@@ -3186,6 +3237,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Geänderte einblenden
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
+	Show Recent Colors	Zuletzt verwendete Farben einblenden
 	Show Original Path	Originalpfad einblenden
 	Open this dialog with these settings next time	Dieses Dialogfeld nächstes Mal mit diesen Einstellungen öffnen
 	Auto-Simplify	Automatisch vereinfachen
@@ -3474,6 +3526,8 @@ effect	Points	Punkte
 	Scale at Center	Von der Mitte aus skalieren
 	Up/Down:	Oben/Unten:
 	Left/Right:	Links/Rechts:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko oben/unten
+	Tate-chu-yoko Left/Right	Tate-chu-yoko links/rechts
 	Temperature	Temperatur
 	Temperature/Tint…	Temperatur/Farbstich…
 	Template	Vorlage
@@ -3544,6 +3598,8 @@ effect	Points	Punkte
 	Toolbar: Single/Double Column	Werkzeugleiste: ein-/zweispaltig
 	Toolbar: Add Tool	Werkzeugleiste: Werkzeug hinzufügen
 	Toolbar: Remove Tool	Werkzeugleiste: Werkzeug entfernen
+	Add Tool…	Werkzeug hinzufügen…
+	Remove Tool	Werkzeug entfernen
 	Toolbar: Reset	Werkzeugleiste: Zurücksetzen
 	Toolbars	Werkzeugleisten
 	Tools	Werkzeuge
@@ -3773,6 +3829,7 @@ effect	Points	Punkte
 	Windows	Windows
 	Working CMYK	CMYK-Arbeitsfarbraum
 	Working CMYK (don't tag)	CMYK-Arbeitsfarbraum (nicht kennzeichnen)
+	Working RGB (don't tag)	RGB-Arbeitsfarbraum (nicht kennzeichnen)
 	Workspace	Arbeitsbereich
 	Workspace {i}	Arbeitsbereich {i}
 	Wrinkle Tool	Zerknittern-Werkzeug
@@ -3961,6 +4018,13 @@ theme	Appearance	Erscheinungsbild
 	Dock Panel	Bedienfeld andocken
 	Dock to Top	Oben andocken
 	Dock to Bottom	Unten andocken
+	Control Bar Options	Optionen der Steuerungsleiste
+	Tool Options	Werkzeugoptionen
+	Object Options	Objektoptionen
+	Image Options	Bildoptionen
+	Vertical Alignment	Vertikale Ausrichtung
+	Align and Distribute	Ausrichten und verteilen
+	Document Options	Dokumentoptionen
 	Dock Control Bar	Steuerungsleiste andocken
 	Drag to float the toolbar	Ziehen, um die Werkzeugleiste abzulösen
 	Drag to the window's left or right edge to dock	Zum Andocken an den linken oder rechten Fensterrand ziehen
@@ -4113,10 +4177,13 @@ theme	Appearance	Erscheinungsbild
 @msg	`groupColors` must be an array	`groupColors` muss ein Array sein
 @msg	`library` is a library id or name (see {list})	`library` ist die ID oder der Name einer Bibliothek (siehe {list})
 @msg	`mode` applies to freeform gradients	`mode` gilt für Freiformverläufe
+@msg	a negative `aspect` applies to conic gradients	ein negatives `aspect` gilt für konische Verläufe
+@msg	`focal` applies to radial gradients	`focal` gilt für radiale Verläufe
 @msg	`preserve` must be an object	`preserve` muss ein Objekt sein
 @msg	`globalAdjust` must be an object	`globalAdjust` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
 @msg	`stops` must be an array	`stops` muss ein Array sein
+@msg	`{key}` must be an array	`{key}` muss ein Array sein
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` muss ein Objekt mit SVG-Optionen sein (siehe document.formats)
 @msg	`{_1}` is no save command	`{_1}` ist kein Speicherbefehl
 @msg	`{area}` is no recovery area name	`{area}` ist kein Name eines Wiederherstellungsbereichs
@@ -4130,6 +4197,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{key}` must be a number, not {v}	`{key}` muss eine Zahl sein, nicht {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} muss eine Unix-Zeit in Sekunden (eine ganze Zahl) oder null sein
 @msg	`{key}` must be a string	`{key}` muss eine Zeichenfolge sein
+@msg	`{key}` must be a profile name or null	`{key}` muss ein Profilname oder null sein
 @msg	`{key}` must be a whole number	`{key}` muss eine ganze Zahl sein
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` muss eine ganze Zahl zwischen {min} und {max} sein (erhalten: {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` muss zwischen {min} und {max} liegen (erhalten: {x})
@@ -4282,6 +4350,7 @@ theme	Appearance	Erscheinungsbild
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	die Seite der Zeichenfläche {n} ist {size} groß und damit länger als die PDF-Seitengrenze von 14.400 pt (200 in): sie wird mit einer UserUnit von {unit} geschrieben, daher zeigen Apps, die UserUnit ignorieren, sie entsprechend oft kleiner an
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	die Seite der Zeichenfläche {n} ist {size} groß und damit länger als die PDF-Seitengrenze von 14.400 pt (200 in): {label}-Seiten werden ohne UserUnit in Punkt geschrieben, und Apps, die die Grenze einhalten, schneiden die Seite auf 200 in ab
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 hat keine UserUnit, die eine Seite länger als 14.400 pt (200 in) braucht, um ihre Größe zu behalten: die Datei wird als PDF 1.6 geschrieben
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 hat keine UserUnit, die eine Seite länger als 14.400 pt (200 in) braucht, um innerhalb der PDF/A-2-Seitengrenze von 14.400 Einheiten zu bleiben: die Datei wird als PDF 1.6 geschrieben
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	die Seite der Zeichenfläche {n} ist {size} groß und damit zu lang und schmal für PDF-Seitenlängen von 3 bis 14.400 Einheiten: sie wird mit einer UserUnit von {unit} geschrieben, die die kurze Seite bei mindestens 3 Einheiten hält, und Apps, die die Grenze einhalten, schneiden die lange Seite auf 14.400 Einheiten ab
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-Dateien fassen reelle Zahlen bis {max}, und die Seite der Zeichenfläche {n} mit {side} pt Länge braucht größere: wählen Sie PDF 1.6 oder höher ohne PDF/X-Standard oder eine kleinere Zeichenfläche
 @msg	invalid image data for `{0}`	ungültige Bilddaten für `{0}`
@@ -4431,6 +4500,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not a stored central record	kein gespeicherter zentraler Eintrag
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
+@msg	not an HP-GL file	keine HP-GL-Datei
 @msg	not found	nicht gefunden
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus
 @msg	finish editing the pattern first	beenden Sie zuerst die Bearbeitung des Musters
@@ -4510,6 +4580,14 @@ theme	Appearance	Erscheinungsbild
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	diese Nachzeichnung würde mehr als {max} Ankerpunkte erzeugen, mehr als das Dokument flüssig darstellen kann: Erhöhen Sie „Rauschen“, verringern Sie „Pfade“ oder „Farben“ oder wählen Sie eine Vorgabe mit geringerer Genauigkeit
 @msg	select an envelope	wählen Sie eine Hülle aus
 @msg	select an image	wählen Sie ein Bild aus
+@msg	`background` must be edges, corners or colors	`background` muss edges, corners oder colors sein
+@msg	`match` must be distance or channels	`match` muss distance oder channels sein
+@msg	`{key}` must be from 0 to 100	`{key}` muss von 0 bis 100 sein
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` muss 1 bis 16 Farben enthalten, jede hexadezimal (#rrggbb oder #rgb) oder als black, white, red, green oder blue
+@msg	the linked image shows its preview: embed or relink it first	das verknüpfte Bild zeigt seine Vorschau: Betten Sie es zuerst ein oder verknüpfen Sie es neu
+@msg	a CMYK image has no transparency to set	ein CMYK-Bild hat keine Transparenz, die festgelegt werden kann
+@msg	every pixel matches the background: no image would be left	jedes Pixel entspricht dem Hintergrund: Es würde kein Bild übrig bleiben
+@msg	an image of {w} × {h} pixels is too large to change	ein Bild mit {w} × {h} Pixeln ist zu groß, um geändert zu werden
 @msg	select an object in perspective	wählen Sie ein Objekt in der Perspektive aus
 @msg	select artwork (or a colour group) to recolor	wählen Sie eine Grafik (oder eine Farbgruppe) zum Neufärben aus
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Neufärben abgeschlossen; unverändert: {locked} und {hidden}
@@ -4616,7 +4694,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown format	unbekanntes Format
 @msg	unknown format `{f}` (Save writes {_1})	unbekanntes Format `{f}` („Speichern“ schreibt {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	unbekannter Freiformmodus `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	unbekannte Hervorhebung `{h}`
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
@@ -4863,6 +4941,8 @@ theme	Appearance	Erscheinungsbild
 @msg	invalid object id {value}: expected a non-negative integer	ungültige Objekt-ID {value}: erwartet wird eine nicht negative ganze Zahl
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	Eintrag {index} von `{key}` ist {value}, keine Objekt-ID (nicht negative ganze Zahl)
 @msg	no such object id {value}	kein Objekt mit der ID {value}
+@msg	id {value} is a ruler guide, not an object	die ID {value} gehört zu einer Hilfslinie, nicht zu einem Objekt
+@msg	a ruler guide goes only directly in a layer or sublayer	eine Hilfslinie kann nur direkt in einer Ebene oder Unterebene liegen
 @msg	id {value} is a layer, not an object	die ID {value} ist eine Ebene, kein Objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	die ID {value} ist eine Ebene, kein Objekt; verschieben Sie Ebenen mit layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	Dateisystemzugriff für die Automatisierung ist nicht gewährt: Die Leseberechtigung fehlt: {path}
@@ -4959,7 +5039,7 @@ theme	Appearance	Erscheinungsbild
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Die Hauptfarbe wird zur Konturfarbe. Die anderen Farben wandern ebenso weit um den Farbkreis wie die Hauptfarbe und behalten ihre Sättigung und Helligkeit.
 	RGB:	RGB:
 	CMYK:	CMYK:
-# PSD files (opened and placed as their merged image).
+# PSD files.
 @msg	not a PSD file	keine PSD-Datei
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus
 @msg	the PSD file has an unknown colour mode ({m})	die PSD-Datei hat einen unbekannten Farbmodus ({m})
@@ -4979,7 +5059,13 @@ theme	Appearance	Erscheinungsbild
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	die HEIC- oder HEIF-Datei enthält eine Bildart, die nicht gelesen werden kann
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- und HEIF-Bilder können in diesem Build nicht geöffnet werden
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
+@msg	zipped 1-bit PSD image data with prediction can't be read	ZIP-komprimierte 1-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
+@msg	the PSD file's layer data uses an unknown compression ({m})	die Ebenendaten der PSD-Datei verwenden eine unbekannte Komprimierung ({m})
+@msg	the PSD file's layer records are damaged	die Ebenendatensätze der PSD-Datei sind beschädigt
+@msg	the PSD file's layer groups are nested too deeply	die Ebenengruppen der PSD-Datei sind zu tief verschachtelt
+@msg	a layer of the PSD file is too large to read	eine Ebene der PSD-Datei ist zu groß zum Lesen
+@msg	the PSD file's layers take more memory to read than allowed	die Ebenen der PSD-Datei brauchen zum Lesen mehr Speicher als erlaubt
+@msg	the layers can't be read ({e}): the file opened as its merged image	die Ebenen können nicht gelesen werden ({e}): die Datei wurde als ihr zusammengefügtes Bild geöffnet
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
 @msg	the JPEG XL file is cut short	die JPEG-XL-Datei ist unvollständig
 @msg	the JPEG XL container is too large to read	der JPEG-XL-Container ist zu groß zum Lesen
@@ -5279,6 +5365,11 @@ effect	Soft	Weich
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+	Shadows	Schatten
+	Distance from Object	Abstand vom Objekt
+	Shadow Bounds	Schattenbegrenzung
+	Behind Object	Hinter dem Objekt
+	Below Object	Unter dem Objekt
 	3D Lighting Preset	3D-Beleuchtungsvorgabe
 	Standard	Standard
 	Diffuse	Diffus
@@ -5346,7 +5437,7 @@ effect	Soft	Weich
 @msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" platziert einen Verlauf: geben Sie `gradient` an
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" platziert einen linearen oder radialen Verlauf, keinen Freiform-Verlauf
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" platziert einen linearen, radialen, konischen oder Rautenverlauf, keinen Freiform-Verlauf
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" platziert den Verlauf selbst: lassen Sie `start` und `end` weg (sie platzieren ihn bereits in Dokumentkoordinaten)
 	Make Image Dynamic	Bild dynamisch machen
 	Import Data Sets…	Datensätze importieren…
@@ -5532,6 +5623,7 @@ effect	Soft	Weich
 	Ruby	Ruby
 	Geometric Guides	Geometrische Hilfslinien
 	Geometric Patterns	Geometrische Muster
+	Grit Textures	Körnige Texturen
 	Ease In	Langsam starten
 	Ease Out	Langsam enden
 	Ease In Out	Langsam starten und enden
@@ -5592,6 +5684,8 @@ axis	Y Axis	Y-Achse
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}“ anstelle des Plug-ins mit derselben ID installieren?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Diese Datei ist nicht das Plug-in, das vorher mit dieser ID installiert war. Sie erhält die Einstellungen und den Cache, die für diese ID gespeichert sind.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Eine Automatisierung hat angefordert, dieses Plug-in zu installieren. Um es zu installieren, wählen Sie selbst „Objekt › Plug-ins › Plug-in installieren…“.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Eine Automatisierung hat angefordert, dieses Plug-in zu installieren. Um es zu installieren, wählen Sie selbst „Objekt › Plug-ins › Plug-in installieren…“.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ ist ein anderes Modul als das Plug-in mit der ID {_1} und würde die dafür gespeicherten Einstellungen und den Cache erhalten: Installieren Sie es mit `replace: true`, sobald der Benutzer zustimmt
 	File SHA-256: {hash}	Datei-SHA-256: {hash}
 	Read the objects it is given	Die Objekte lesen, die es erhält
@@ -5637,6 +5731,11 @@ axis	Y Axis	Y-Achse
 @msg	`inputs` needs the permission `doc.read`	`inputs` erfordert die Berechtigung `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	Speicherbudget (Objekt {_1} benötigt {size} Byte Eingabe, {left} verbleiben)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	Objektbudget (mehr als {MAX_OBJECTS} schreibgeschützte Objekte)
+@msg	instruction budget	Anweisungsbudget
+@msg	time budget	Zeitbudget
+@msg	memory budget (the selection is too large to hand over)	Speicherbudget (die Auswahl ist zu groß zum Übergeben)
+@msg	output size ({what} is {len} bytes, limit {max})	Ausgabegröße ({what} ist {len} Byte groß, Grenze {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	die Berechtigung des Plug-ins kann nicht aus dem Plug-in-Speicher entfernt werden
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	die Berechtigung `{shown}` ist für eine spätere Plug-in-API reserviert; dieser Host gewährt sie nicht
 @msg	unknown permission `{shown}`	unbekannte Berechtigung `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ verlangt die Berechtigungen {asked}: Eine Person muss sie in der Desktop-App genehmigen, oder übergeben Sie `grant` in einer mit --allow-plugin-grants gestarteten Sitzung
@@ -5649,6 +5748,12 @@ axis	Y Axis	Y-Achse
 @msg	command {name}: `label` must be 1-64 printable characters	Befehl {name}: `label` muss 1-64 druckbare Zeichen haben
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	Befehl {name}: Verwenden Sie eine ID aus 1-{MAX_COMMAND_ID} Zeichen aus a-z 0-9 _, die mit einem Buchstaben beginnt
 @msg	command {name}: {e}	Befehl {name}: {e}
+@msg	manifest: {e}	Manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	Manifest: {e} (Zeile {line}, Spalte {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` muss eine Liste von Befehlen sein, jeder mit `id` und `label`
+@msg	command {name} must be an object with an `id` and a `label`	der Befehl {name} muss ein Objekt mit `id` und `label` sein
+@msg	missing field `{key}`	fehlendes Feld `{key}`
+@msg	duplicate field `{key}`	doppeltes Feld `{key}`
 @msg	only a filter or a live effect declares `commands`	nur ein Filter oder ein Live-Effekt deklariert `commands`
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	das Modul hat nicht den SHA-256-Wert aus `hash`: Es wurde nichts installiert
@@ -5673,6 +5778,16 @@ axis	Y Axis	Y-Achse
 @msg	message must be text	message muss Text sein
 @msg	allowContinue must be true or false	allowContinue muss true oder false sein
 @msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
+	Insert Menu Item…	Menübefehl einfügen…
+	Insert Menu Item	Menübefehl einfügen
+	Menu Item:	Menübefehl:
+	No menu item matches.	Kein Menübefehl passt.
+	Several menu items match. Choose one from the list.	Mehrere Menübefehle passen. Wählen Sie einen aus der Liste.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Befehle, die ein Dialogfeld öffnen, sowie Befehle der Menüs „Datei“, „Fenster“ und „Hilfe“ werden nicht aufgeführt.
+@msg	command must be text	command muss Text sein
+@msg	no menu item that can be inserted runs this command	kein einfügbarer Menübefehl führt diesen Befehl aus
+@msg	the action already has 10,000 steps	die Aktion hat bereits 10.000 Schritte
+@msg	the action set would be larger than 8 MiB	der Aktionssatz wäre größer als 8 MiB
 	Playback Options	Wiedergabeoptionen
 	Accelerated	Beschleunigt
 	Step by Step	Schrittweise
@@ -5711,6 +5826,12 @@ axis	Y Axis	Y-Achse
 	Crosshair	Fadenkreuz
 	Checkpoint	Kontrollpunkt
 	Inventory Icons	Inventar-Symbole
+	Skill Icons	Fähigkeitssymbole
+	Attack	Angriff
+	Defend	Verteidigung
+	Heal	Heilung
+	Buff	Buff
+	Ult	Ult
 	Sword	Schwert
 	Shield	Schild
 	Potion	Trank
@@ -5775,6 +5896,11 @@ axis	Y Axis	Y-Achse
 	Dash Trail	Strichelspur
 	Speed Line	Geschwindigkeitslinie
 	Game Trails	Spielspuren
+	Energy Beams	Energiestrahlen
+	Laser Bolt	Laserbolzen
+	Plasma Arc	Plasmabogen
+	Charge Wave	Ladewelle
+	Spark Trail	Funkenspur
 	Calligraphic Nibs	Kalligrafie-Federn
 	Pattern Borders	Musterbordüren
 	Scatter Shapes	Streuformen
@@ -5975,9 +6101,12 @@ anchor	Points:	Punkte:
 @msg	{label} must be a number	{label} muss eine Zahl sein
 @msg	{label} must be a number of at least 0.1	{label} muss eine Zahl von mindestens 0,1 sein
 	Advanced Character Formats	Erweiterte Zeichenformate
+	Basic Paragraph Formats	Grundlegende Absatzformate
+	Composition	Satz
 	Horizontal Scale	Horizontale Skalierung
 	Vertical Scale	Vertikale Skalierung
 @msg	{label} must be a number from {min} to {max}	{label} muss eine Zahl von {min} bis {max} sein
+@msg	{label} must be a whole number from {min} to {max}	{label} muss eine ganze Zahl von {min} bis {max} sein
 	Character Color	Zeichenfarbe
 	OpenType Features	OpenType-Funktionen
 	Stylistic Sets	Stilsätze
@@ -5985,6 +6114,10 @@ anchor	Points:	Punkte:
 @msg	features lists at most {max} tags	features enthält höchstens {max} Tags
 @msg	unknown OpenType feature `{t}`	unbekannte OpenType-Funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} muss eine Zahl über 0 und höchstens {max} sein
+@msg	{label} must be at most {max} characters	{label} darf höchstens {max} Zeichen lang sein
+@msg	{label} must be one character	{label} muss genau ein Zeichen sein
+@msg	at most {max} tab stops	höchstens {max} Tabstopps
+@msg	unknown align `{other}`	unbekannte Ausrichtung `{other}`
 @msg	no character style `{name}`	Zeichenformat `{name}` nicht gefunden
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6147,6 +6280,8 @@ breakText	Glyphs	Glyphen
 	Delete the selected brushes?	Ausgewählte Pinsel löschen?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturen verwenden einen oder mehrere dieser Pinsel. Pinsel von diesen Konturen entfernen und die Pinsel löschen?
 	Remove Strokes	Konturen entfernen
+	Place Brush Art	Pinselgrafik platzieren
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` hat keine Grafik (nur Spezial-, Bild- und Musterpinsel haben eine)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Anordnungswerkzeuge
 	Arrange in Grid…	In Raster anordnen…
@@ -6342,6 +6477,11 @@ breakText	Glyphs	Glyphen
 @msg	only an exporter or an importer declares `extensions`	nur ein Export- oder Import-Plug-in gibt `extensions` an
 @msg	an importer always gets an import's budget: leave `budget` out	ein Import-Plug-in erhält immer das Budget eines Imports: Lassen Sie `budget` weg
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Informationen zur Fehlerbehebung kopieren
+@msg	Copied the troubleshooting info	Informationen zur Fehlerbehebung kopiert
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Die letzte VectorCraft-Sitzung reagierte nicht mehr, bevor sie geschlossen wurde. Hilfe › Informationen zur Fehlerbehebung kopieren kopiert die Details für einen Fehlerbericht
+
 # Safe Mode
 	Safe Mode…	Abgesicherter Modus…
 	Safe Mode	Abgesicherter Modus
@@ -6362,6 +6502,8 @@ breakText	Glyphs	Glyphen
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Am Pixelraster ausrichten
+	Align New Objects to Pixel Grid	Neue Objekte am Pixelraster ausrichten
+	Not Aligned to Pixel Grid	Nicht am Pixelraster ausgerichtet
 @msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden
 @msg	side is left or right, not `{s}`	side ist left oder right, nicht `{s}`
 	Ignore All	Alle ignorieren

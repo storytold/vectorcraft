@@ -28,6 +28,10 @@ pub(in crate::ai_editing) const STYLE_LINKS: &str = "links to graphic styles are
 /// How many objects of `doc`'s layers, opacity masks and symbols are linked to a graphic style.
 pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
     fn count(n: &Node) -> usize {
+        // Ruler guides are not written as objects.
+        if n.is_ruler_guide() {
+            return 0;
+        }
         let own = usize::from(n.extras().graphic_style.is_some());
         let mask = n.extras().mask.as_ref().map_or(0, |m| count(&m.art));
         own + mask + n.children().map_or(0, |c| c.iter().map(|m| count(m)).sum())

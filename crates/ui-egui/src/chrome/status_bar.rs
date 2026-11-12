@@ -80,11 +80,46 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         if crate::i18n::current() == crate::i18n::Lang::EN { shown.trim_end_matches(" Tool") } else { shown }
                     })
                     .unwrap_or("");
-                ui.label(egui::RichText::new(tool).size(11.5).color(t.text_dim));
+                // The tool name leaves the status message its least width and ends in an ellipsis first.
+                let room = (ui.available_width() - MESSAGE_MIN - ui.spacing().item_spacing.x).max(0.0);
+                ui.scope(|ui| {
+                    ui.set_max_width(room);
+                    clipped_label(ui, egui::RichText::new(tool).size(11.5).color(t.text_dim));
+                });
                 status_readouts(app, ui, &t);
             });
         });
     widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());
+}
+
+/// The least width the status message keeps when the window is narrow.
+const MESSAGE_MIN: f32 = 180.0;
+
+/// A label that ends in an ellipsis when it is wider than the room left in `ui`. Only a cut label
+/// shows its full text in a tooltip; screen readers always receive the full text.
+pub(super) fn clipped_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> egui::Response {
+    let galley = text.into().into_galley(ui, Some(egui::TextWrapMode::Truncate), ui.available_width(), egui::FontSelection::Default);
+    let full = galley.elided.then(|| egui::text::LayoutJob {
+        sections: galley.job.sections.clone(),
+        text: galley.job.text.clone(),
+        language: galley.job.language.clone(),
+        ..Default::default()
+    });
+    let response = ui.add(egui::Label::new(galley).show_tooltip_when_elided(false));
+    match full {
+        Some(job) => full_text_tooltip(response, job),
+        None => response,
+    }
+}
+
+/// Show `text` on hover in a tooltip that wraps to fit inside the window.
+fn full_text_tooltip(response: egui::Response, text: impl Into<egui::WidgetText>) -> egui::Response {
+    let text = text.into();
+    response.on_hover_ui(|ui| {
+        let margins = ui.spacing().menu_margin.sum().x + 2.0 * ui.spacing().item_spacing.x;
+        ui.set_max_width(ui.spacing().tooltip_width.min(ui.ctx().content_rect().width() - margins).max(0.0));
+        ui.add(egui::Label::new(text).wrap());
+    })
 }
 
 /// The most recently measured status widths, scoped to this UI and display settings.
@@ -125,7 +160,6 @@ fn status_readout_widths(ui: &Ui, lang: crate::i18n::Lang, unit: vectorcraft_doc
 /// Allocate the remaining row once, then paint each field inside its own bounded rectangle.
 /// Child UIs requested with a desired width can shrink to their contents; these rectangles cannot.
 pub(super) fn status_readouts(app: &VectorcraftApp, ui: &mut Ui, t: &Tokens) {
-    const MESSAGE_MIN: f32 = 180.0;
     let mono = theme::mono(10.5);
     let proportional = egui::FontId::proportional(10.5);
     let unit = app.session.general_unit();
@@ -196,24 +230,74 @@ pub(super) fn status_readouts(app: &VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         .collect();
     // Reserve the spinner's space while idle too: starting a background job changes the text,
     // not its origin. Messages take priority over optional readouts in a narrow window.
-    let message = if let Some(job) = busy.first() {
+    let (message, notes) = if let Some(job) = busy.first() {
         let spinner = egui::Rect::from_center_size(egui::pos2(area.left() + 6.0, area.center().y), vec2(12.0, 12.0));
         ui.put(spinner, egui::Spinner::new().size(12.0).color(t.accent));
         let label = crate::i18n::msg(job);
         let more = busy.len() - 1;
-        if more > 0 { format!("{label}… (+{more})") } else { format!("{label}…") }
+        (if more > 0 { format!("{label}… (+{more})") } else { format!("{label}…") }, &[][..])
     } else {
-        crate::i18n::msg(&app.ui.status)
+        (crate::i18n::msg(&app.ui.status), status_notes(&app.ui))
     };
     if !message.is_empty() {
         let rect = egui::Rect::from_min_max(egui::pos2((area.left() + 18.0).min(right), area.top()), egui::pos2(right, area.bottom()));
-        status_field(ui, "message", rect, message, egui::FontId::proportional(11.0), t.text);
+        status_field_with_notes(ui, "message", rect, message, egui::FontId::proportional(11.0), t.text, notes);
     }
+}
+
+/// Most notes the status message's hover and access information list.
+const MAX_LISTED_NOTES: usize = 30;
+
+/// The notes behind the status message (an open's, a save's or an export's,
+/// [`crate::state::UiState::status_notes`]) when there are several and the status bar still shows
+/// the message they came with, else none.
+fn status_notes(ui: &crate::state::UiState) -> &[String] {
+    let notes = ui.status_notes.as_ref().filter(|(status, notes)| *status == ui.status && notes.len() > 1);
+    notes.map(|(_, notes)| notes.as_slice()).unwrap_or_default()
+}
+
+/// `notes` in the interface language, one to a line, the first `most` of them (at most
+/// [`MAX_LISTED_NOTES`]) and how many more.
+pub(super) fn listed_notes(notes: &[String], most: usize) -> String {
+    let lang = crate::i18n::current();
+    let most = most.min(MAX_LISTED_NOTES);
+    let mut lines: Vec<String> = notes.iter().take(most).map(|n| format!("• {}", crate::i18n::message(lang, n))).collect();
+    if notes.len() > most {
+        lines.push(format!("… (+{})", notes.len() - most));
+    }
+    lines.join("\n")
+}
+
+/// The hover of the status message `text` with `notes`: the message, then as many of the notes
+/// ([`listed_notes`]) as fit in the window above or below the field `field`, wrapped within the
+/// window's width.
+fn notes_tooltip(response: egui::Response, field: egui::Rect, text: &str, notes: &[String]) -> egui::Response {
+    response.on_hover_ui(|ui| {
+        let screen = ui.ctx().content_rect();
+        let margins = ui.spacing().menu_margin.sum() + 2.0 * ui.spacing().item_spacing;
+        let width = ui.spacing().tooltip_width.min(screen.width() - margins.x).max(0.0);
+        ui.set_max_width(width);
+        let room = (field.top() - screen.top()).max(screen.bottom() - field.bottom()) - 2.0 * margins.y;
+        let tip = |most: usize| format!("{text}\n{}", listed_notes(notes, most));
+        let height =
+            |s: &str| egui::WidgetText::from(s).into_galley(ui, Some(egui::TextWrapMode::Wrap), width, egui::FontSelection::Default).size().y;
+        let mut most = notes.len().min(MAX_LISTED_NOTES);
+        while most > 0 && height(&tip(most)) > room {
+            most -= 1;
+        }
+        ui.add(egui::Label::new(tip(most)).wrap());
+    })
 }
 
 /// A field never grows with its text. Clipping also bounds over-wide glyphs; hover and access
 /// information retain the complete value when its on-screen label is truncated.
 fn status_field(ui: &mut Ui, id: &str, rect: egui::Rect, text: String, font: egui::FontId, color: egui::Color32) {
+    status_field_with_notes(ui, id, rect, text, font, color, &[]);
+}
+
+/// [`status_field`], whose hover, when there are `notes`, lists them ([`notes_tooltip`]) and whose
+/// access information has them after the text.
+fn status_field_with_notes(ui: &mut Ui, id: &str, rect: egui::Rect, text: String, font: egui::FontId, color: egui::Color32, notes: &[String]) {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return;
     }
@@ -227,9 +311,17 @@ fn status_field(ui: &mut Ui, id: &str, rect: egui::Rect, text: String, font: egu
     let elided = galley.elided;
     ui.painter().with_clip_rect(ui.clip_rect().intersect(rect)).galley(at, galley, color);
     let response = ui.interact(rect, ui.scope_id().with(("status-field", id)), Sense::hover());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &text));
-    if elided {
-        response.on_hover_text(text);
+    if notes.is_empty() {
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &text));
+        if elided {
+            full_text_tooltip(response, text);
+        }
+        return;
+    }
+    // The list is made only for a hover or a screen reader.
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, format!("{text}\n{}", listed_notes(notes, MAX_LISTED_NOTES))));
+    if response.hovered() {
+        notes_tooltip(response, rect, &text, notes);
     }
 }
 

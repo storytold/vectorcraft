@@ -30,6 +30,10 @@ pub(crate) struct SGlyph {
     pub run: usize,
     /// Advance in points (tracking, manual kerning and horizontal scale applied).
     pub adv: f64,
+    /// The tracking `adv` holds after the glyph's character, in points: on the last glyph of its
+    /// cluster, 0 on the others. An aligned line leaves its last character's out of its width
+    /// ([`crate::layout`]).
+    pub tracking: f64,
     /// Offset from the pen position, y down.
     pub dx: f64,
     pub dy: f64,
@@ -177,6 +181,7 @@ pub(crate) fn hyphen_glyph(g: &SGlyph) -> SGlyph {
     let mut h = g.clone();
     h.gid = gid;
     h.adv = g.face.advance(gid) * g.sx;
+    h.tracking = 0.0;
     h.dx = 0.0;
     h.dy = 0.0;
     h.kern_shift = 0.0;
@@ -976,9 +981,9 @@ fn inline_glyph(
         _ => (kurbo::Affine::IDENTITY, h, None),
     };
     let spacing_em = size * spacing_scale(st, vertical);
-    let tracking = st.tracking / 1000.0 * spacing_em;
+    let tracking = Some(st.tracking / 1000.0 * spacing_em).filter(|t| t.is_finite()).unwrap_or(0.0);
     let manual_kern = st.kerning.map(|v| v / 1000.0 * spacing_em).filter(|k| k.is_finite()).unwrap_or(0.0);
-    let adv = width + if tracking.is_finite() { tracking } else { 0.0 } + manual_kern;
+    let adv = width + tracking + manual_kern;
     SGlyph {
         face: face.clone(),
         gid: 0,
@@ -986,6 +991,7 @@ fn inline_glyph(
         len: range.len().max(1),
         run,
         adv: if adv.is_finite() { adv } else { 0.0 },
+        tracking: if adv.is_finite() { tracking } else { 0.0 },
         dx: 0.0,
         dy: 0.0,
         kern_shift: if level.is_rtl() && !vertical { manual_kern } else { 0.0 },
@@ -1396,6 +1402,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             None => gid,
         };
         let mut kern_shift = 0.0;
+        let mut tracked = 0.0;
         if ch == SOFT_HYPHEN || ch == '\u{2028}' {
             adv = 0.0;
         } else {
@@ -1407,8 +1414,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 kern_shift = manual_kern;
             }
             if last_in_cluster {
-                let tracking = gst.tracking / 1000.0 * spacing_em;
-                adv += tracking + manual_kern;
+                tracked = gst.tracking / 1000.0 * spacing_em;
+                adv += tracked + manual_kern;
             }
         }
         out.push(SGlyph {
@@ -1418,6 +1425,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             len: end.saturating_sub(cl).max(1),
             run,
             adv,
+            tracking: tracked,
             dx: xo as f64 * k * hs,
             dy: -(yo as f64) * k * vs,
             kern_shift,

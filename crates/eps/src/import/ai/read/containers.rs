@@ -913,7 +913,18 @@ impl<'a> Reader<'a> {
         let mut plain = drawn.clone();
         (plain.visible, plain.opacity) = (true, 1.0);
         let page = self.page_in_doc();
-        if !crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent) {
+        let mut alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+        // In Edit Contents, a grid that draws the contents elsewhere than the drawn art is checked
+        // again moved onto that art.
+        if !alike
+            && self.envelope_checks > 0
+            && let Some(kind) = crate::import::ai::envelope::moved_onto(&shown, &plain)
+        {
+            self.envelope_checks -= 1;
+            (envelope.kind, shown.kind) = (kind.clone(), kind);
+            alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+        }
+        if !alike {
             self.warn(crate::import::ai::envelope::DRAWN);
             return;
         }

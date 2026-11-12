@@ -13,8 +13,8 @@ use vectorcraft_doc::{Appearance, CellAlign, CellVAlign, Document, Node, NodeKin
 use vectorcraft_geom::{Rect, shapes};
 
 use super::{
-    CommandSpec, EngineError, NodeId, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ids_param, index,
-    switch_or, targets,
+    CommandSpec, EngineError, NodeId, Result, Session, bad, cmd, f64_req, has_doc, has_selection, id_param, ids_param, index, number_or, switch_or,
+    targets,
 };
 
 /// The most slices one Divide Slices makes.
@@ -340,8 +340,9 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
 fn from_guides(s: &mut Session, _: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let region = d.slice_clip().ok_or_else(|| EngineError::Other("Create from Guides: the document has no artboard".into()))?;
+    let guides = d.ruler_guides();
     let cuts = |vertical: bool, lo: f64, hi: f64| -> Vec<f64> {
-        let mut v: Vec<f64> = d.guides.iter().filter(|g| g.vertical == vertical && g.pos > lo && g.pos < hi).map(|g| g.pos).collect();
+        let mut v: Vec<f64> = guides.iter().filter(|g| g.vertical == vertical && g.pos > lo && g.pos < hi).map(|g| g.pos).collect();
         v.extend([lo, hi]);
         v.sort_by(f64::total_cmp);
         v.dedup();
@@ -379,7 +380,8 @@ fn from_selection(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let targets = selected(s)?;
-    let (dx, dy) = (f64_or(p, "dx", 10.0), f64_or(p, "dy", 10.0));
+    let dx = number_or(p, "dx", 10.0, "object.slice.duplicate")?;
+    let dy = number_or(p, "dy", 10.0, "object.slice.duplicate")?;
     let ids = s.edit("Duplicate Slice", |d, sel| {
         let mut out = vec![];
         for id in &targets {
@@ -736,7 +738,7 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
 fn select(s: &mut Session, p: &Value) -> Result<Value> {
     let slices = p.get("slices").filter(|v| !v.is_null()).cloned().unwrap_or(json!([]));
     let ids = slice_targets(s, &json!({ "slices": slices }), "object.slice.select")?;
-    let toggle = bool_or(p, "toggle", false);
+    let toggle = switch_or(p, "toggle", false, "object.slice.select")?;
     s.select(|_, sel| {
         let mut now = if toggle { sel.slices.clone() } else { vec![] };
         for id in ids {

@@ -19,10 +19,12 @@
 //! (`AIDeformArtWidthKey`, `AIDeformArtHeightKey`), the contents (`X=` … `X+`, then
 //! `(AIDeformArtKey)`) and the kind (`AIDeformStyle`: 1 a warp, 2 a mesh, 3 a top object). Then the
 //! distorted art on plain lines, and the plugin's `XP`. While the contents are edited, the group
-//! holds the contents and the dictionary the mesh. A top object's outline is the edge of its
-//! one-patch mesh. A warp's mesh is a grid of its shape: a warp of type whose own warp doesn't come
-//! out as drawn opens as a mesh envelope on that grid where that does. An envelope whose parts don't
-//! read, or that doesn't come out as drawn, keeps its drawn art.
+//! holds the contents and the dictionary the mesh, which in some files lies away from the drawn art
+//! by a move, as if it hadn't followed the envelope: such a mesh or top object whose grid draws its
+//! contents as large as the drawn art but elsewhere is tried again moved onto that art. A top
+//! object's outline is the edge of its one-patch mesh. A warp's mesh is a grid of its shape: a warp
+//! of type whose own warp doesn't come out as drawn opens as a mesh envelope on that grid where that
+//! does. An envelope whose parts don't read, or that doesn't come out as drawn, keeps its drawn art.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
@@ -62,6 +64,10 @@ const MAX_GRID: u32 = 50;
 /// How far, in points over width and height together, a saved size may lie from the contents'
 /// bounds with their strokes and still count as that box.
 const SAVED_SIZE_SLACK: f64 = 0.5;
+/// How far, in points over width and height together, what an envelope draws may differ in size
+/// from its drawn art and still count as that art moved, and how far it must lie from it to count
+/// as moved at all ([`moved_onto`]).
+const MOVED_SLACK: f64 = 0.5;
 /// The bits of the options word that are read: Distort Appearance, Distort Pattern Fills, Distort
 /// Linear Gradients, Anti-Alias (set: off) and Preserve Shape Using (set: Clipping Mask).
 const KNOWN_BITS: i64 = 0b111 | 1 << 16 | 1 << 17;
@@ -181,6 +187,40 @@ fn with_strokes(kind: &NodeKind) -> Option<NodeKind> {
         options.bounds_margin = margin;
     }
     Some(kind)
+}
+
+/// The kind of `envelope`, a mesh or a top object in Edit Contents, with its grid moved onto
+/// `drawn`, the drawn art the file saves for it, where what it draws is as large as that art (within
+/// [`MOVED_SLACK`]) but lies elsewhere (further than that): moved by as far as the drawn art's box
+/// lies from the box of what it draws. While the contents are edited, the grid is kept in the
+/// envelope's dictionary, and in some files it lies away from the drawn art by a move, the contents
+/// with the drawn art, as if the grid hadn't followed the envelope when it moved. `None` outside
+/// Edit Contents, for a warp (it maps from its contents' box, which lies with them), and where
+/// nothing is drawn. Symbol instances and pattern fills in the contents are measured as they are,
+/// not drawn out: where that makes the sizes differ, no move is tried.
+pub(super) fn moved_onto(envelope: &Node, drawn: &Node) -> Option<NodeKind> {
+    let NodeKind::Envelope { kind, editing: true, .. } = &envelope.kind else { return None };
+    if matches!(**kind, EnvelopeKind::Warp { .. }) {
+        return None;
+    }
+    // What it draws, measured as its drawn art is: the pieces in a group with its own appearance.
+    let mut drew = envelope.clone();
+    drew.kind = NodeKind::Group { children: vectorcraft_render::expand_live(envelope).into_iter().map(Arc::new).collect(), clip: false };
+    let (from, to) = (drew.visual_bounds()?, drawn.visual_bounds()?);
+    let by = to.center() - from.center();
+    let resized = (from.width() - to.width()).abs() + (from.height() - to.height()).abs();
+    if !(resized <= MOVED_SLACK && by.x.abs() + by.y.abs() > MOVED_SLACK && by.x.is_finite() && by.y.is_finite()) {
+        return None;
+    }
+    let mut moved = envelope.kind.clone();
+    if let NodeKind::Envelope { kind, .. } = &mut moved {
+        match &mut **kind {
+            EnvelopeKind::Mesh { points, .. } => points.iter_mut().for_each(|p| *p += by),
+            EnvelopeKind::TopObject { path, .. } => path.transform(Affine::translate(by)),
+            EnvelopeKind::Warp { .. } => return None,
+        }
+    }
+    Some(moved)
 }
 
 /// A warp: its style, bend, distortions and orientation.
@@ -552,7 +592,8 @@ impl WarpedType {
     /// for it ([`live_on_saved_grid`]), which opens in its place where it does: its type stays
     /// editable in that shape, and the warp's style and bend are lost. With Distort Appearance, each
     /// is also checked mapping from its type's glyphs grown by half their strokes' weight
-    /// ([`with_strokes`]). Each
+    /// ([`with_strokes`]). In Edit Contents, a mesh or top object whose grid draws the type
+    /// elsewhere than its drawn art is checked last moved onto that art ([`moved_onto`]). Each
     /// check uses one of the import's checks and, for an envelope that shows, adds to what the page
     /// check allows ([`drawn_alike`]). Elsewhere, and where the type is set in a font that isn't
     /// available, the drawn art and the hidden type stay.
@@ -634,7 +675,17 @@ impl WarpedType {
         (plain.visible, plain.opacity) = (true, 1.0);
         let page = self.page.filter(|_| shown.contains(&drawn));
         let mut alike = None;
-        for (i, kind) in kinds.into_iter().enumerate() {
+        // In Edit Contents, a grid that draws the type elsewhere than its drawn art is tried again
+        // moved onto that art ([`moved_onto`]), after every other way.
+        let (mut tries, mut moved, mut again, mut i) = (kinds.into_iter(), vec![], false, 0);
+        loop {
+            let Some(kind) = tries.next() else {
+                if again || moved.is_empty() {
+                    break;
+                }
+                (tries, again) = (std::mem::take(&mut moved).into_iter(), true);
+                continue;
+            };
             // A second try is only made while more checks are left than there are envelopes of
             // type and warped text objects still to come (some of which may need none): one
             // envelope's tries don't use up the checks of the others.
@@ -642,6 +693,7 @@ impl WarpedType {
                 return Err(TypeKept::Budget);
             }
             self.checks -= 1;
+            i += 1;
             let mut envelope = art.clone();
             (envelope.id, envelope.kind) = (id, kind);
             let shared = Shared { patterns: &doc.patterns, images: &doc.images };
@@ -650,6 +702,9 @@ impl WarpedType {
             if drawn_alike(&live_one, &plain, layer, &shared, page, &mut self.spent) {
                 alike = Some(envelope);
                 break;
+            }
+            if !again && let Some(kind) = moved_onto(&live_one, &plain) {
+                moved.push(kind);
             }
         }
         let envelope = alike.ok_or(TypeKept::Differs)?;
