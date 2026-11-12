@@ -1425,3 +1425,13 @@
 	Break Text into Words	פיצול טקסט למילים
 	Character Color	צבע תו
 	Left-to-Right Paragraph Direction	כיוון פסקה משמאל לימין
+	Export All Open Documents as PDF	ייצוא כל המסמכים הפתוחים ל־PDF
+	Export All Open Documents as SVG	ייצוא כל המסמכים הפתוחים ל־SVG
+	Go to Artboard	מעבר למשטח עבודה
+	Couldn't save recovery data: {e}	לא ניתן לשמור נתוני שחזור: ⁨{e}⁩
+	Cancel Export	ביטול הייצוא
+	No artboards match.	לא נמצאו משטחי עבודה תואמים.
+	No importer plug-ins installed	לא מותקנים תוספים לייבוא
+	Next Document	המסמך הבא
+	Next Artboard	משטח העבודה הבא
+	Find Linked Files	איתור קבצים מקושרים

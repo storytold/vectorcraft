@@ -3294,3 +3294,22 @@ fn hebrew_parallel_round3_typography_values() {
         assert_eq!(tr(he, source), expected, "Hebrew UI regression for {source}");
     }
 }
+
+#[test]
+fn hebrew_parallel_round3_files_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Export All Open Documents as PDF", "ייצוא כל המסמכים הפתוחים ל־PDF"),
+        ("Export All Open Documents as SVG", "ייצוא כל המסמכים הפתוחים ל־SVG"),
+        ("Go to Artboard", "מעבר למשטח עבודה"),
+        ("Couldn't save recovery data: {e}", "לא ניתן לשמור נתוני שחזור: ⁨{e}⁩"),
+        ("Cancel Export", "ביטול הייצוא"),
+        ("No artboards match.", "לא נמצאו משטחי עבודה תואמים."),
+        ("No importer plug-ins installed", "לא מותקנים תוספים לייבוא"),
+        ("Next Document", "המסמך הבא"),
+        ("Next Artboard", "משטח העבודה הבא"),
+        ("Find Linked Files", "איתור קבצים מקושרים"),
+    ] {
+        assert_eq!(tr(he, source), expected, "Hebrew UI regression for {source}");
+    }
+}
