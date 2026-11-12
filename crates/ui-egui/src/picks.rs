@@ -125,6 +125,13 @@ pub(crate) struct Picks {
     replacing: Option<Replacing>,
     /// The file that question's OK allows to be replaced while what asked runs again.
     replace_ok: Option<String>,
+    /// The files that the OK of the question whether to replace the files a save or export writes
+    /// beside the one picked allows to be replaced while it runs that again
+    /// ([`crate::dialogs::confirm::ask_replace_files`]).
+    pub(crate) replace_files_ok: Vec<String>,
+    /// The files each document's last save wrote beside its own file, by document uid: its next
+    /// save replaces them without asking.
+    pub(crate) written_beside: std::collections::HashMap<u64, Vec<String>>,
     /// What runs now handles the answer of a file dialog automation opened ([`as_automated`]).
     automated: bool,
     /// The web's file pickers opened ([`open_async`]) that have not answered yet
@@ -162,6 +169,7 @@ impl Picks {
         self.entry = None;
         self.answer = None;
         self.replace_ok = None;
+        self.replace_files_ok.clear();
         self.automated = false;
     }
 
@@ -438,7 +446,7 @@ pub(crate) fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// Make the document an entry asked for (`doc`, by its uid) active again before it runs again:
 /// another may be active by now (opened from the Finder, by an agent), or it may be gone → false
 /// when it can't run (the status bar says why).
-fn on_document(app: &mut VectorcraftApp, doc: Option<u64>) -> bool {
+pub(crate) fn on_document(app: &mut VectorcraftApp, doc: Option<u64>) -> bool {
     let Some(uid) = doc else { return true };
     let Some(i) = app.session.documents().iter().position(|d| d.uid == uid) else {
         app.status(tl!("The document was closed while its file dialog was open"));

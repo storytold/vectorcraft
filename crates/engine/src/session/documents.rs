@@ -123,6 +123,7 @@ impl Session {
             press_type_selection: None,
             press_point: None,
             ruler_guide: None,
+            ruler_origin: None,
             port_marks: Default::default(),
             font_search: None,
             link_search: None,

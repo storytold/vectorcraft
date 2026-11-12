@@ -1,6 +1,7 @@
 use super::super::unique_name;
 use super::{
-    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, json, metafile, native, pdf, screens, svg, text, unsupported,
+    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, hpgl, json, metafile, native, pdf, screens, svg, text,
+    unsupported,
 };
 
 /// One option a format's encoder reads from the export params.
@@ -479,8 +480,17 @@ pub const FORMATS: &[Format] = &[
     },
     Format { id: "emf", label: "EMF", extensions: &["emf"], mime: "image/emf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
-    // HP-GL/2 plot files, read by `vectorcraft_cad::hpgl` into paths; exports don't write them.
-    reader("hpgl", "HP-GL", &["plt", "hpgl", "hgl", "hpg"], "application/vnd.hp-hpgl", false),
+    // HP-GL/2 plot files, read by `vectorcraft_cad::hpgl` into paths and written as pen moves.
+    Format {
+        id: "hpgl",
+        label: "HP-GL",
+        extensions: &["plt", "hpgl", "hgl", "hpg"],
+        mime: "application/vnd.hp-hpgl",
+        read: true,
+        write: true,
+        raster: false,
+        options: hpgl::OPTIONS,
+    },
     Format {
         id: "tga",
         label: "Targa",

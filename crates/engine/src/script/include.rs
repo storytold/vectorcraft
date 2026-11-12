@@ -88,6 +88,13 @@ impl SourceMap {
         let name = self.files.get(seg.file).cloned().unwrap_or_else(|| Arc::from(""));
         (seg.file, name, seg.line.saturating_add(line - seg.out_line), column)
     }
+
+    /// The memory the map holds, in bytes: its lists and its file names, each name counted in full
+    /// even when another map shares it.
+    pub(crate) fn bytes(&self) -> usize {
+        let names: usize = self.files.iter().map(|f| f.len() + 2 * size_of::<usize>()).sum();
+        self.files.capacity() * size_of::<Arc<str>>() + self.segments.capacity() * size_of::<Segment>() + names
+    }
 }
 
 /// How a preprocessor failure ends the run.
