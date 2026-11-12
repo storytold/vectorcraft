@@ -137,14 +137,7 @@ impl Layers<'_> {
             let tone = |l: u16| [if l == 1 { black } else { white }; 3];
             (tone(la), tone(lb))
         } else {
-            // A side's own colour: its palette entry's, or its gradient's colour here.
-            let own = |l: u16, k: i32| {
-                let flat = self.q.palette.get(l as usize)?.map(f64::from);
-                let Some(g) = self.gradients.get(l as usize).and_then(Option::as_ref) else { return Some(flat) };
-                let i = c.at(k)?;
-                Some(g.color_at(vectorcraft_geom::Point::new((i % self.w) as f64 + 0.5, (i / self.w) as f64 + 0.5)))
-            };
-            let (Some(ca), Some(cb)) = (own(la, 0), own(lb, 1)) else { return 0.0 };
+            let (Some(ca), Some(cb)) = (self.own_color(la, c, 0), self.own_color(lb, c, 1)) else { return 0.0 };
             (ca, cb)
         };
         let d = [0, 1, 2].map(|k| cb[k] - ca[k]);
@@ -152,10 +145,12 @@ impl Layers<'_> {
         if len2 <= 0.0 {
             return 0.0;
         }
+        let gray = self.params.mode == Mode::Grayscale;
         // How much of the inside tone (0 to 1) the pixel `k` steps out has; none off the image.
+        // Grayscale reads each pixel as the gray it traces it as.
         let inside = |k: i32| {
-            let Some(p) = c.at(k).and_then(|i| self.img.rgba.get(i * 4..i * 4 + 3)) else { return 0.0 };
-            let p = [f64::from(p[0]), f64::from(p[1]), f64::from(p[2])];
+            let Some(&[r, g, b, a]) = c.at(k).and_then(|i| self.img.rgba.get(i * 4..i * 4 + 4)) else { return 0.0 };
+            let p = if gray { [f64::from(super::quantize::luma([r, g, b, a])); 3] } else { [f64::from(r), f64::from(g), f64::from(b)] };
             let p = if bw { [(p[0] * 299.0 + p[1] * 587.0 + p[2] * 114.0) / 1000.0; 3] } else { p };
             1.0 - ((0..3).map(|k| (p[k] - ca[k]) * d[k]).sum::<f64>() / len2).clamp(0.0, 1.0)
         };
@@ -203,6 +198,85 @@ impl Layers<'_> {
             shift += if la == 1 { 1.0 } else { -1.0 } * (0.5 - turn) / steep;
         }
         shift
+    }
+
+    /// The color of label `l` at the pixel `k` steps out from the inside pixel of crack `c`: its
+    /// palette entry's, or its gradient's color there.
+    fn own_color(&self, l: u16, c: Crack, k: i32) -> Option<[f64; 3]> {
+        let flat = self.q.palette.get(l as usize)?.map(f64::from);
+        let Some(g) = self.gradients.get(l as usize).and_then(Option::as_ref) else { return Some(flat) };
+        let i = c.at(k)?;
+        Some(g.color_at(vectorcraft_geom::Point::new((i % self.w) as f64 + 0.5, (i / self.w) as f64 + 0.5)))
+    }
+
+    /// What the image does across a crack, for `subpixel::low_contrast`. Distances between colors
+    /// are RGB distances (0 to 255 a channel), and Grayscale reads each pixel as the gray it traces
+    /// it as. In order:
+    ///
+    /// - the share of the step from the inside color to the outside one that the image makes near
+    ///   the crack, measured along the line between the two colors: from the mean of the two pixels
+    ///   behind the inside pixel to the mean of the two beyond the outside one, each side only as
+    ///   far as its own label goes;
+    /// - the share further out, from the next two pixels on one side to the next two on the other,
+    ///   whatever their labels (not a number where a side has none);
+    /// - the near change along that line, as a distance;
+    /// - the whole near change, in any direction, as a distance;
+    /// - how much the image changes within each side: the distance between the two pixels behind
+    ///   the inside pixel and between the two beyond the outside one, where both have the side's
+    ///   label, averaged (not a number where neither side has two such pixels).
+    ///
+    /// Where a side has no pixel near the crack, and in Black and White, whose two tones are not the
+    /// colors of its areas, it is [`subpixel::EDGE_STEP`]. Exactly the same read from either side.
+    fn step(&self, c: Crack) -> [f64; 5] {
+        use super::subpixel::EDGE_STEP;
+        let label = |k: i32| c.at(k).and_then(|i| self.q.labels.get(i).copied()).filter(|&l| l != TRANSPARENT);
+        let (Some(la), Some(lb)) = (label(0), label(1)) else { return EDGE_STEP };
+        if la == lb || self.params.mode == Mode::BlackAndWhite {
+            return EDGE_STEP;
+        }
+        let (Some(ca), Some(cb)) = (self.own_color(la, c, 0), self.own_color(lb, c, 1)) else { return EDGE_STEP };
+        let d = [0, 1, 2].map(|k| cb[k] - ca[k]);
+        let len2: f64 = d.iter().map(|v| v * v).sum();
+        if len2 <= 0.0 {
+            return EDGE_STEP;
+        }
+        let gray = self.params.mode == Mode::Grayscale;
+        // The pixel `k`, while it is in the image and not transparent (and has label `l`, if one is
+        // given).
+        let pixel = |k: i32, l: Option<u16>| {
+            label(k).filter(|&x| l.is_none_or(|l| x == l))?;
+            let &[r, g, b, a] = c.at(k).and_then(|i| self.img.rgba.get(i * 4..i * 4 + 4))? else { return None };
+            Some(if gray { [f64::from(super::quantize::luma([r, g, b, a])); 3] } else { [f64::from(r), f64::from(g), f64::from(b)] })
+        };
+        // The mean color of the pixels `ks` up to the first one `pixel` refuses.
+        let mean = |ks: [i32; 2], l: Option<u16>| {
+            let (mut sum, mut n) = ([0.0; 3], 0.0);
+            for p in ks.iter().map_while(|&k| pixel(k, l)) {
+                for (s, v) in sum.iter_mut().zip(p) {
+                    *s += v;
+                }
+                n += 1.0;
+            }
+            (n > 0.0).then(|| sum.map(|s| s / n))
+        };
+        let distance = |a: [f64; 3], b: [f64; 3]| (0..3).map(|k| (b[k] - a[k]).powi(2)).sum::<f64>().sqrt();
+        // From `a` to `b` along the line from the inside color to the outside one, in its lengths.
+        let along = |a: [f64; 3], b: [f64; 3]| (0..3).map(|k| (b[k] - a[k]) * d[k]).sum::<f64>() / len2;
+        let (Some(a), Some(b)) = (mean([-1, -2], Some(la)), mean([2, 3], Some(lb))) else { return EDGE_STEP };
+        let far = match (mean([-3, -4], None), mean([4, 5], None)) {
+            (Some(a), Some(b)) => along(a, b),
+            _ => f64::NAN,
+        };
+        let (mut within, mut sides) = (0.0, 0.0);
+        for ([j, k], l) in [([-1, -2], la), ([2, 3], lb)] {
+            if let (Some(p), Some(q)) = (pixel(j, Some(l)), pixel(k, Some(l))) {
+                within += distance(p, q);
+                sides += 1.0;
+            }
+        }
+        let within = if sides > 0.0 { within / sides } else { f64::NAN };
+        let near = along(a, b);
+        [near, far, near * len2.sqrt(), distance(a, b), within]
     }
 
     /// Whether the pixels inside `l` (a loop along pixel edges) all have one label.
@@ -343,7 +417,8 @@ impl Layers<'_> {
             let hard = std::cell::Cell::new(false);
             // (Each loop fitted, and whether its own outline is hard.)
             let fit = |l: &Loop| {
-                let (sp, is_hard) = fit::fit_loop(l, w, h, &|c| (self.shift(c), self.neighbour(c)), &|x, y| self.junction(x, y), &self.style)?;
+                let (sp, is_hard) =
+                    fit::fit_loop(l, w, h, &|c| (self.shift(c), self.neighbour(c), self.step(c)), &|x, y| self.junction(x, y), &self.style)?;
                 // Every trace straightens the pieces of an outline that lie close to a line (Snap
                 // Curves To Lines straightens more of them), so the outline of a single pixel or
                 // of a region one pixel thick can have all its pieces on one chord, and the loop
@@ -529,6 +604,185 @@ pub(crate) fn parallel_map_at_most<T: Sync, R: Send>(_: usize, items: &[T], f: i
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `f` of the layers of a `w × 8` image whose pixels in column `x` are the color `color(x)` and
+    /// have the label `label(x)`, with the palette `palette`, and of the cracks between columns
+    /// `split - 1` and `split`.
+    fn across<R>(
+        w: u32,
+        split: u32,
+        color: impl Fn(u32) -> [u8; 3],
+        label: impl Fn(u32) -> u16,
+        palette: &[[u8; 3]],
+        mode: Mode,
+        f: impl FnOnce(&Layers, Vec<Crack>) -> R,
+    ) -> R {
+        let img = Raster::from_fn(w, 8, |x, _| {
+            let [r, g, b] = color(x);
+            [r, g, b, 255]
+        });
+        let (w, h) = (w as usize, 8);
+        let q = Quantized { labels: (0..w * h).map(|i| label((i % w) as u32)).collect(), palette: palette.to_vec() };
+        let params = TraceParams { mode, ..TraceParams::default() };
+        let n = palette.len();
+        let (rank, gradients): (Vec<usize>, Vec<Option<TracedGradient>>) = ((0..n).collect(), vec![None; n]);
+        let job = Layers {
+            q: &q,
+            traced: &q.labels,
+            rank: &rank,
+            params: &params,
+            img: &img,
+            left_out: vec![false; n],
+            boxes: vec![None; n],
+            gradients: &gradients,
+            bw_tones: [255.0, 0.0],
+            style: params.outline_style(),
+            w,
+            h,
+            anchors: AtomicUsize::new(0),
+            max_anchors: usize::MAX,
+        };
+        let cracks = (0..h as i32).map(|y| Crack::new((split as i32 - 1, y), (1, 0), w, h)).collect();
+        f(&job, cracks)
+    }
+
+    /// [`steps_labeled`] with the label 0 left of column `split` and 1 from it.
+    fn steps(w: u32, split: u32, color: impl Fn(u32) -> [u8; 3], palette: &[[u8; 3]], mode: Mode) -> (Vec<[f64; 5]>, bool) {
+        steps_labeled(w, split, color, |x| u16::from(x >= split), palette, mode)
+    }
+
+    /// [`Layers::step`] of every crack between columns `split - 1` and `split` of [`across`]'s image,
+    /// and whether `subpixel::low_contrast` calls them a contour. Each is read from both sides, which
+    /// must agree exactly.
+    fn steps_labeled(
+        w: u32,
+        split: u32,
+        color: impl Fn(u32) -> [u8; 3],
+        label: impl Fn(u32) -> u16,
+        palette: &[[u8; 3]],
+        mode: Mode,
+    ) -> (Vec<[f64; 5]>, bool) {
+        across(w, split, color, label, palette, mode, |job, cracks| {
+            let shares: Vec<[f64; 5]> = cracks
+                .into_iter()
+                .map(|c| {
+                    assert_eq!(job.step(c).map(f64::to_bits), job.step(c.flipped()).map(f64::to_bits));
+                    job.step(c)
+                })
+                .collect();
+            let contour = crate::subpixel::low_contrast(&shares);
+            (shares, contour)
+        })
+    }
+
+    #[test]
+    fn a_crack_in_a_smooth_area_shows_a_share_of_the_step_that_grows_further_out() {
+        // Two levels a pixel between colors 40 apart: 135 and 143 two pixels either side (8 levels
+        // in each channel), 131 and 147 four pixels either side.
+        let ramp = |x: u32| [(100 + 2 * x) as u8; 3];
+        for mode in [Mode::Color, Mode::Grayscale] {
+            let (shares, contour) = steps(40, 20, ramp, &[[120; 3], [160; 3]], mode);
+            // (The image changes along the line between the two colors, so its whole change is
+            // the change along that line; it changes by 2 levels a channel from pixel to pixel.)
+            let fits = |s: &[f64; 5]| {
+                (s[0] - 0.2).abs() < 1e-9
+                    && (s[1] - 0.4).abs() < 1e-9
+                    && [s[2], s[3]].iter().all(|v| (v - 8.0 * 3f64.sqrt()).abs() < 1e-9)
+                    && (s[4] - 2.0 * 3f64.sqrt()).abs() < 1e-9
+            };
+            assert!(shares.iter().all(fits), "{mode:?}: {shares:?}");
+            assert!(contour);
+        }
+        // Black and White's tones are no area's colors.
+        let (shares, contour) = steps(40, 20, ramp, &[[120; 3], [160; 3]], Mode::BlackAndWhite);
+        assert!(shares.iter().all(|s| s[0] == 1.0 && s[1] == 1.0 && s[2..].iter().all(|v| v.is_nan())) && !contour, "{shares:?}");
+        // By the image's border there is nothing further out.
+        let (shares, contour) = steps(6, 3, ramp, &[[90; 3], [130; 3]], Mode::Color);
+        assert!(shares.iter().all(|s| s[1].is_nan()) && contour, "{shares:?}");
+    }
+
+    #[test]
+    fn an_edge_between_flat_colors_is_an_edge_however_far_their_palette_entries_are() {
+        // A flat gray beside white, the gray in an entry with black: 115 of 245 levels, less than
+        // half the step between the two entries, but the same further out.
+        let flat = |x: u32| if x < 10 { [140; 3] } else { [255; 3] };
+        let (shares, contour) = steps(20, 10, flat, &[[10; 3], [255; 3]], Mode::Color);
+        assert!(shares.iter().all(|s| s[0] < 0.5 && s[0] == s[1] && s[4] == 0.0), "{shares:?}");
+        assert!(!contour);
+        // Two flat grays 6 levels apart, in entries 25 apart: under a half of the step and a
+        // change of under `FLAT`, but nothing changes within either side.
+        let close = |split: u32| move |x: u32| if x < split { [100; 3] } else { [106; 3] };
+        let (shares, contour) = steps(20, 10, close(10), &[[90; 3], [115; 3]], Mode::Color);
+        assert!(shares.iter().all(|s| (s[0] - 0.24).abs() < 1e-9 && s[0] == s[1] && s[4] == 0.0), "{shares:?}");
+        assert!(!contour);
+        // The same by the image's border, where there is nothing further out.
+        let (shares, contour) = steps(6, 3, close(3), &[[90; 3], [115; 3]], Mode::Color);
+        assert!(shares.iter().all(|s| s[1].is_nan() && s[4] == 0.0), "{shares:?}");
+        assert!(!contour);
+        // Two flat colors whose difference is square to the line between their entries: none of
+        // the step near the crack or further out.
+        let square = |x: u32| if x < 10 { [100, 100, 100] } else { [100, 106, 94] };
+        let (shares, contour) = steps(20, 10, square, &[[90; 3], [115; 3]], Mode::Color);
+        assert!(shares.iter().all(|s| s[0] == 0.0 && s[1] == 0.0 && s[4] == 0.0), "{shares:?}");
+        assert!(!contour);
+    }
+
+    #[test]
+    fn an_edge_beside_a_thin_flat_stroke_is_an_edge() {
+        // White, then a gray stroke two pixels wide in an entry far darker than it (under a half
+        // of the step from white), then black: four pixels out from the crack the image reaches
+        // black, more than the whole step.
+        let color = |x: u32| match x {
+            0..10 => [255; 3],
+            10..12 => [200; 3],
+            _ => [0; 3],
+        };
+        let label = |x: u32| match x {
+            0..10 => 0,
+            10..12 => 1,
+            _ => 2,
+        };
+        let (shares, contour) = steps_labeled(20, 10, color, label, &[[255; 3], [140; 3], [0; 3]], Mode::Color);
+        assert!(shares.iter().all(|s| s[0] < 0.5 && s[1] > 1.25 * s[0] && s[4] == 0.0), "{shares:?}");
+        assert!(!contour);
+    }
+
+    #[test]
+    fn grayscale_reads_an_edge_between_two_colors_by_their_grays() {
+        // Red beside green: grays 60 and 117 (the palette's entries), whose channels add up to the
+        // same 200, so read as colors the image would make none of the step between them.
+        let flat = |x: u32| if x < 10 { [200, 0, 0] } else { [0, 200, 0] };
+        let (shares, contour) = steps(20, 10, flat, &[[60; 3], [117; 3]], Mode::Grayscale);
+        assert!(shares.iter().all(|s| s[0] == 1.0 && s[1] == 1.0), "{shares:?}");
+        assert!(!contour);
+    }
+
+    #[test]
+    fn grayscale_places_an_edge_between_two_colors_by_their_grays() {
+        // The same red and green: by their grays, each is all of its own entry, so the edge lies on
+        // the crack. Read as colors, each would be mostly the other's.
+        let flat = |x: u32| if x < 10 { [200, 0, 0] } else { [0, 200, 0] };
+        let shifts: Vec<f64> = across(
+            20,
+            10,
+            flat,
+            |x| u16::from(x >= 10),
+            &[[60; 3], [117; 3]],
+            Mode::Grayscale,
+            |job, cracks| cracks.into_iter().map(|c| job.shift(c)).collect(),
+        );
+        assert!(shifts.iter().all(|&s| s == 0.0), "{shifts:?}");
+    }
+
+    #[test]
+    fn an_edge_between_colors_off_the_line_between_the_palettes_two_is_an_edge() {
+        // Red beside green traced with black and white entries: a change of 226 levels, none of it
+        // from black towards white.
+        let flat = |x: u32| if x < 10 { [160, 0, 0] } else { [0, 160, 0] };
+        let (shares, contour) = steps(20, 10, flat, &[[0; 3], [255; 3]], Mode::Color);
+        assert!(shares.iter().all(|s| s[0] == 0.0 && s[1] == 0.0 && (s[3] - 160.0 * 2f64.sqrt()).abs() < 1e-9), "{shares:?}");
+        assert!(!contour);
+    }
 
     #[test]
     fn fit_in_chunks_keeps_the_order_and_stops_at_the_first_refusal() {

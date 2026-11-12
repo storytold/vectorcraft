@@ -268,7 +268,7 @@ pub struct Document {
     /// they were copied from instead of the current layer.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paste_remembers_layers: bool,
-    /// File → File Info (the title is [`Document::title`]).
+    /// File → File Info (its title is [`Document::info_title`]).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub metadata: DocMetadata,
     /// Effect → Document Raster Effects Settings besides the resolution

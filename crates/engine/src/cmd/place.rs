@@ -90,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Image Info",
             [],
             None,
-            "{id?} an image object (default: the one selected) → {id, name, linked, link, colorMode: RGB|Grayscale|CMYK, pixelWidth, pixelHeight, ppi: [x, y] at its placed size, width, height}",
+            "{id?} an image object (default: the one selected) → {id, name, linked, link (the linked file's path; null when embedded, or when automation read roots are in force and the file is outside them), colorMode: RGB|Grayscale|CMYK, pixelWidth, pixelHeight, ppi: [x, y] at its placed size, width, height}",
             has_doc,
             image_info
         ),
@@ -939,11 +939,13 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
     let [a, b, c, d, ..] = im.xf.as_coeffs();
     let ppi = |x: f64, y: f64| Some(x.hypot(y)).filter(|l| *l > 1e-12).map_or(0.0, |l| 72.0 / l);
     let size = n.geometric_bounds().unwrap_or_default();
+    // A linked file outside the read roots of the caller asking now is left unnamed, as in Link Info.
+    let doc_path = super::links::LinkBase::of(st).doc;
     Ok(json!({
         "id": id.0,
         "name": n.display_name(),
         "linked": im.link.is_some(),
-        "link": im.link.as_ref().map(|l| &l.path),
+        "link": im.link.as_ref().map(|l| &l.path).filter(|path| super::links::path_shown(path, doc_path)),
         "colorMode": st.doc.images.get(&im.key).map_or("RGB", |b| color_mode(&b.bytes)),
         "pixelWidth": im.width,
         "pixelHeight": im.height,

@@ -253,7 +253,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     }
     json!({
         "scriptRunning": app.session.script_running(),
-        "scriptReport": app.session.script_report(),
+        "scriptReport": app.session.shown_script_report(),
         "tool": app.session.tool_id(),
         "toolOptions": app.session.tool_options(),
         "ui": ui,
@@ -572,8 +572,9 @@ struct Rewrite<'a> {
     fold: bool,
 }
 
-/// The keys of encoded file data in a reply.
-const BASE64_FIELDS: [&str; 3] = ["dataBase64", "pngBase64", "thumbnailBase64"];
+/// The keys of encoded file data in a reply. `thumbnail` holds the PNG of a library item in
+/// `library.get` and of a page in `document.pdfInfo`.
+const BASE64_FIELDS: [&str; 4] = ["dataBase64", "pngBase64", "thumbnailBase64", "thumbnail"];
 
 /// Is `s` written in the base64 alphabet, padded to a multiple of 4?
 fn is_base64(s: &str) -> bool {
@@ -583,7 +584,8 @@ fn is_base64(s: &str) -> bool {
 
 /// Writes each `from` text of the rewrite's pairs as its `to` text in every string and key of `v`, as
 /// [`replace_text`] does. Encoded file data, a base64 string under a key of [`BASE64_FIELDS`], stays
-/// as it is.
+/// as it is. A rewritten key that reads the same as another key of its object takes ` (2)`, ` (3)`
+/// and so on; a key that is not rewritten keeps its name.
 fn replace_in_value(v: &mut Value, r: &Rewrite) {
     match v {
         Value::String(s) => {
@@ -593,13 +595,30 @@ fn replace_in_value(v: &mut Value, r: &Rewrite) {
         }
         Value::Array(items) => items.iter_mut().for_each(|item| replace_in_value(item, r)),
         Value::Object(fields) => {
+            // The keys that stay are written first, so a rewritten key that reads as one of them, or
+            // as another rewritten key, is the one numbered and no field is lost.
+            let mut rewritten = Vec::new();
             for (key, mut item) in std::mem::take(fields) {
                 if BASE64_FIELDS.contains(&key.as_str()) && item.as_str().is_some_and(is_base64) {
                     fields.insert(key, item);
                     continue;
                 }
                 replace_in_value(&mut item, r);
-                fields.insert(replace_text(&key, r).unwrap_or(key), item);
+                match replace_text(&key, r) {
+                    Some(written) => rewritten.push((written, item)),
+                    None => {
+                        fields.insert(key, item);
+                    }
+                }
+            }
+            for (written, item) in rewritten {
+                let mut key = written.clone();
+                let mut n = 2;
+                while fields.contains_key(&key) {
+                    key = format!("{written} ({n})");
+                    n += 1;
+                }
+                fields.insert(key, item);
             }
         }
         _ => {}
@@ -630,7 +649,7 @@ fn occurrences(text: &str, needle: &str, fold: bool) -> Vec<usize> {
 /// in letter case keep their own ids, and then the ones written in another case. `None` when nothing
 /// changed.
 fn replace_text(s: &str, r: &Rewrite) -> Option<String> {
-    let decoded = if s.contains('%') { decoded_with_spans(s).filter(|(decoded, _)| decoded != s) } else { None };
+    let decoded = if has_percent_escape(s) { decoded_with_spans(s).filter(|(decoded, _)| decoded != s) } else { None };
     let mut found = Found::default();
     for group in &r.pairs {
         for fold in [false, true].into_iter().take(if r.fold { 2 } else { 1 }) {
@@ -681,12 +700,36 @@ impl<'a> Found<'a> {
             match begins_known_id(text, at, end, r) {
                 Some(len) => self.taken.push(span(at, at + len)),
                 None => {
+                    // A `file:` URL of the path is replaced whole, so no `file://<name>` is left that
+                    // would name a host, unless part of its scheme was taken already.
+                    let url = span(url_start(text, at, from), end).0;
+                    let start = if self.taken.iter().any(|&(a, b)| url < b && a < stop) { start } else { url };
                     self.taken.push((start, stop));
                     self.cuts.push((start, stop, to));
                 }
             }
         }
     }
+}
+
+/// Where a `file:` URL that holds `from`, an absolute path found at `at` in `text`, begins: `at` less
+/// the `file:` before it, with `//` and a host (`localhost`, another host or none) between them, in any
+/// case of its letters; before a drive, the host is followed by a `/` too. `at` when no such URL holds it.
+fn url_start(text: &str, at: usize, from: &str) -> usize {
+    let drive = matches!(from.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    if !from.starts_with('/') && !drive {
+        return at;
+    }
+    let Some(before) = text.get(..at) else { return at };
+    let Some(scheme) = before.to_ascii_lowercase().rfind("file:") else { return at };
+    let rest = &before[scheme + "file:".len()..];
+    let host = |h: &str| h.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']' | '%'));
+    let holds = if drive {
+        rest.strip_prefix("//").and_then(|r| r.strip_suffix('/')).is_some_and(host)
+    } else {
+        rest.is_empty() || rest.strip_prefix("//").is_some_and(host)
+    };
+    if holds { scheme } else { at }
 }
 
 /// `text` with its `%XX` escapes decoded, and for each byte of the decoded text the range of `text`
@@ -730,6 +773,12 @@ fn decoded_with_spans(text: &str) -> Option<(String, Vec<(usize, usize)>)> {
         }
     }
     Some((decoded, decoded_spans))
+}
+
+/// Does `text` hold a `%XX` escape, one that [`decoded_with_spans`] decodes? Only such an escape
+/// changes the decoded text.
+fn has_percent_escape(text: &str) -> bool {
+    text.as_bytes().windows(3).any(|w| w[0] == b'%' && w[1].is_ascii_hexdigit() && w[2].is_ascii_hexdigit())
 }
 
 /// Is `from`, a relative path (one that does not start with a separator, a drive or `loaded/`), at
@@ -1018,13 +1067,14 @@ fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
     }
 }
 
-/// Takes out of `prefs` the folder preferences ([`PREF_FOLDERS`]) the request may not read. An
-/// empty value (no folder) and a scratch disk choice ([`SCRATCH_CHOICES`]) stay.
+/// Takes out of `prefs` the folder preferences ([`PREF_FOLDERS`]) the request may not read, as written
+/// or trimmed as the app uses it. An empty value (no folder) and a scratch disk choice
+/// ([`SCRATCH_CHOICES`]) stay.
 fn leave_out_unreadable_folders(prefs: &mut serde_json::Map<String, Value>) {
     for key in PREF_FOLDERS {
         let Some(written) = prefs.get(key).and_then(Value::as_str) else { continue };
         let path = written.trim();
-        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || readable(written) {
+        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || (readable(written) && readable(path)) {
             continue;
         }
         prefs.remove(key);
@@ -1086,7 +1136,8 @@ const DOCKING_ACTION: &str = "action";
 /// such library's id and path as `ui.inspect` does ([`hide_library_ids`]) in every string and key,
 /// errors included, an error from a panic too: the libraries hidden before it ran and after it. The
 /// reply also shows each path outside the read root that the request sent by its file name, whether it
-/// succeeded or failed ([`sent_paths`]). A reply with no `/`, `\` or `%` in it is not searched, since every hidden path
+/// succeeded or failed ([`sent_paths`]), except where a `path` or `files` entry of its result names the
+/// file the request wrote inside the write roots, as the request gave it. A reply with no `/`, `\` or `%` in it is not searched, since every hidden path
 /// holds a separator, written or escaped. A screenshot's reply is hidden when it is sent
 /// ([`hide_in_deferred_reply`]); a `ui.pointer` reply sent after the tool's edit holds no library id
 /// or path.
@@ -1122,17 +1173,88 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
 }
 
 /// Hides in `reply` the libraries hidden now and in `before`, and the paths outside the read root that
-/// `sent`, the request's params, holds ([`handle`]).
+/// `sent`, the request's params, holds ([`handle`]). The `path` and `files` entries of the reply's
+/// `result`, at any depth, that name a file the request gave inside the write roots, the file it
+/// wrote, stay as given ([`written_paths`]).
 fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: Hiding) {
     if !holds_a_separator(reply) {
         return;
     }
+    let mut given = Vec::new();
+    written_paths(sent, false, &mut given);
+    let kept = kept_written_paths(reply, &given);
     let mut hiding = unreadable_library_ids(app);
     hiding.merge(before);
     let mut paths = Vec::new();
     sent_paths(sent, &mut paths);
     hiding.set_hidden(paths, cfg!(windows));
     hide_library_ids(reply, &hiding);
+    restore_written_paths(reply, kept);
+}
+
+/// The strings that `v`'s path params hold at any depth ([`vectorcraft_engine::file_access::is_path_key`])
+/// that name a file inside the write roots; `v` is a path param's value when `path_param` is set.
+fn written_paths(v: &Value, path_param: bool, out: &mut Vec<String>) {
+    use vectorcraft_engine::file_access::{Access, current, is_path_key};
+    match v {
+        Value::String(s) if path_param && !s.is_empty() && current().is_some_and(|r| r.check(s, Access::Write).is_ok()) => out.push(s.clone()),
+        Value::Array(items) => items.iter().for_each(|item| written_paths(item, path_param, out)),
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                written_paths(item, is_path_key(key), out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The entries under `reply`'s `result`, at any depth (a `command.batch` step's result too), that a
+/// `path` key or a `files` list holds and that are one of `given`: each entry's JSON pointer and text.
+fn kept_written_paths(reply: &Value, given: &[String]) -> Vec<(String, String)> {
+    let mut kept = Vec::new();
+    if !given.is_empty() {
+        kept_under(&reply["result"], "/result", given, &mut kept);
+    }
+    kept
+}
+
+/// [`kept_written_paths`] for `v`, found at the JSON pointer `at`.
+fn kept_under(v: &Value, at: &str, given: &[String], out: &mut Vec<(String, String)>) {
+    let is_given = |v: &Value| v.as_str().filter(|s| given.iter().any(|g| g == s)).map(str::to_string);
+    match v {
+        Value::Array(items) => {
+            for (i, item) in items.iter().enumerate() {
+                kept_under(item, &format!("{at}/{i}"), given, out);
+            }
+        }
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                let here = format!("{at}/{}", key.replace('~', "~0").replace('/', "~1"));
+                match (key.as_str(), is_given(item), item.as_array()) {
+                    ("path", Some(path), _) => out.push((here, path)),
+                    ("files", _, Some(rows)) => {
+                        for (i, row) in rows.iter().enumerate() {
+                            match is_given(row) {
+                                Some(path) => out.push((format!("{here}/{i}"), path)),
+                                None => kept_under(row, &format!("{here}/{i}"), given, out),
+                            }
+                        }
+                    }
+                    _ => kept_under(item, &here, given, out),
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Writes back in `reply` the entries [`kept_written_paths`] took from it.
+fn restore_written_paths(reply: &mut Value, kept: Vec<(String, String)>) {
+    for (at, path) in kept {
+        if let Some(slot) = reply.pointer_mut(&at) {
+            *slot = json!(path);
+        }
+    }
 }
 
 /// Hides in a reply sent after its request was handled (a screenshot's) what [`handle`] hides in a
@@ -1587,7 +1709,7 @@ fn rotate_view_pointer(
         None => {
             let rect = app.canvas_rect.ok_or("no canvas yet")?;
             let view = app.view().ok_or("no document")?;
-            RotateViewPress { window, document_resets, xf: Xf::new(rect, view), start_angle: 0.0, start_rotation: view.rotation }
+            RotateViewPress { window, document_resets, xf: Xf::at(rect, view, app.canvas_ui_zoom), start_angle: 0.0, start_rotation: view.rotation }
         }
     };
     // A gesture cannot turn a different document/view or resume after its document was reset.
@@ -1692,7 +1814,7 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
         Err(e) => return err(e),
     };
     let view = app.view_info();
-    let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
+    let xf = app.canvas_xf();
     let screen = |e: &Value| e.get("space").and_then(Value::as_str) == Some("screen");
     if !rotating && xf.is_none() && events.iter().any(screen) {
         return err("no canvas yet");

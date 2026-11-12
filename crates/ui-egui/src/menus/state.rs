@@ -41,9 +41,9 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             crate::panels::character::shared_text_flag(app, |t| t.vertical) == Some(id == "type.orientation.vertical")
         }
         "type.opticalMarginAlignment" => crate::panels::character::shared_text_flag(app, |t| t.optical_margin) == Some(true),
-        // Dynamic Text of the first selected type on a path or area type, which the item turns the
-        // other way.
-        "type.dynamicText" => selected_text(|k| !matches!(k, vectorcraft_engine::doc::TextKind::Point)).is_some_and(|t| t.dynamic_text),
+        // Dynamic Text of the first selected type, which the item turns the other way (point type
+        // counts as off: the item turns it into area type with Block on).
+        "type.dynamicText" => selected_text(|_| true).is_some_and(|t| t.dynamic_text && !matches!(t.kind, vectorcraft_engine::doc::TextKind::Point)),
         "view.outline" => app.outline_view(),
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
@@ -96,7 +96,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.learn" => crate::panels::learn::visible(&app.ui),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
-            normalize_panel(panel).is_some_and(|id| crate::panel_docking::showing(&app.ui, id))
+            normalize_panel(panel).is_some_and(|id| crate::panel_docking::visible(&app.ui, id))
         }
         "window.collapseDock" => crate::panel_docking::dock_collapsed(&app.ui),
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),

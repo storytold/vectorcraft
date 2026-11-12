@@ -393,11 +393,12 @@ fn float_key(v: f32) -> Option<u32> {
 /// keys.
 type StopKey<'a> = (u32, ColorKey, u32, u32, Option<&'a str>, u32, Option<[u32; 4]>);
 
-/// A gradient's kind, method, dither and stops, as keys.
-type GradientKey<'a> = (u8, u8, bool, Vec<StopKey<'a>>);
+/// A gradient's kind, method, dither, spread and count as it paints them, and stops, as keys.
+type GradientKey<'a> = (u8, u8, bool, (vectorcraft_color::GradientSpread, u32), Vec<StopKey<'a>>);
 
-/// A key that is equal for two gradients exactly when the gradients are equal (`==`); `None` when
-/// any of its numbers is NaN, so the gradient equals no gradient.
+/// A key that is equal for two gradients exactly when the gradients are equal (`==`), apart from
+/// a count that a gradient which pads does not use ([`Gradient::painted_spread`]); `None` when any
+/// of its numbers is NaN, so the gradient equals no gradient.
 fn gradient_key(g: &Gradient) -> Option<GradientKey<'_>> {
     let kind = match g.kind {
         GradientKind::Linear => 0,
@@ -410,7 +411,7 @@ fn gradient_key(g: &Gradient) -> Option<GradientKey<'_>> {
         GradientMethod::Classic => 0,
         GradientMethod::Perceptual => 1,
     };
-    Some((kind, method, g.dither, g.stops.iter().map(stop_key).collect::<Option<_>>()?))
+    Some((kind, method, g.dither, g.painted_spread(), g.stops.iter().map(stop_key).collect::<Option<_>>()?))
 }
 
 /// A stop's key for [`gradient_key`]; `None` when any of its numbers is NaN.

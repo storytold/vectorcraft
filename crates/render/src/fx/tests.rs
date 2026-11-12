@@ -307,6 +307,36 @@ fn drop_shadow_darkens_outside_the_shape() {
     assert_eq!(lum(img.pixel(15, 15)), WHITE);
 }
 
+/// A Transform effect listed after a Drop Shadow transforms the shadow with the art: halving a
+/// 40 pt square about its center halves the shadow's 10 pt offset, with Scale Strokes & Effects
+/// off or on, and for a group as for a path.
+#[test]
+fn a_transform_after_a_drop_shadow_scales_the_shadow_with_the_art() {
+    let r = Rect::new(20.0, 20.0, 60.0, 60.0);
+    let shadow = ("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}));
+    for strokes in [false, true] {
+        let transform = ("distort.transform", json!({"scaleH": 50, "scaleV": 50, "strokes": strokes}));
+        let path = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![shadow.clone(), transform.clone()]);
+        let mut group = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![]);
+        let l = group.layers[0].id;
+        let square = group.layers[0].children().and_then(|c| c.first()).cloned().unwrap();
+        group.remove(square.id).unwrap();
+        let mut g = Node::group(group.alloc_id(), vec![square]);
+        g.appearance.effects = [shadow.clone(), transform].into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        group.insert(Some(l), 0, g).unwrap();
+        for (what, d) in [("path", path), ("group", group)] {
+            let img = render(&d);
+            // The square now covers 30..50 and its shadow 35..55.
+            assert_eq!(img.pixel(40, 40), [255, 0, 0, 255], "{what}, Scale Strokes & Effects {strokes}");
+            assert!(lum(img.pixel(53, 37)) < 100, "{what}, {strokes}: the shadow reaches up to 35: {:?}", img.pixel(53, 37));
+            assert_eq!(lum(img.pixel(57, 57)), WHITE, "{what}, {strokes}: the shadow ends at 55");
+            // The area redrawn for it takes in the 5 pt shadow around the 30..50 square.
+            let b = super::cull_bounds(&d.symbol_boxes(), &d.layers[0].children().unwrap()[0]).unwrap();
+            assert!((b.x0 - 25.0).abs() < 1e-9 && (b.x1 - 55.0).abs() < 1e-9, "{what}, {strokes}: {b:?}");
+        }
+    }
+}
+
 /// A red square's drop shadow at Darkness `darkness` (%), opaque and sharp, 10 pt down and
 /// right; `shade` "color" or "darkness".
 fn shaded_doc(mode: vectorcraft_doc::ColorMode, fill: Color, shade: &str, darkness: f64) -> Document {

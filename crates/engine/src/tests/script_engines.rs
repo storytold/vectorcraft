@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 
-use crate::script::{PANIC_IN_SLICE, TEST_ENGINE_HEAP, engines_on_this_thread, releases_kept_for};
+use crate::script::{PANIC_IN_SLICE, TEST_ENGINE_HEAP, TEST_KEPT_MAP_BYTES, engines_on_this_thread, releases_kept_for};
 use crate::*;
 
 fn run(s: &mut Session, source: &str) -> Result<Value> {
@@ -119,11 +119,151 @@ fn only_the_script_itself_names_its_engine() {
     assert_eq!(report["line"], 2, "{report}");
     assert_eq!(names(&mut s), ["e"]);
     let _ = std::fs::remove_dir_all(base);
-    // An error in a function an earlier run defined has no place in the run that calls it.
+    // An error in a function an earlier run defined is at that run's line; a script given as text
+    // is named by its run's name.
     run(&mut s, "#targetengine e\n\n\n\nfunction bad() { throw new Error('kept'); }").unwrap();
-    assert!(run(&mut s, "#targetengine e\nbad();").is_err());
+    let e = run(&mut s, "#targetengine e\nbad();").unwrap_err().to_string();
     let report = s.script_report().unwrap().clone();
-    assert!(report["line"].as_u64().is_none_or(|l| l == 0), "{report}");
+    assert_eq!((report["name"].as_str(), report["file"].as_str(), report["line"].as_u64()), (Some("t.js"), Some("t.js"), Some(5)), "{report}");
+    let column = report["column"].as_u64().unwrap();
+    assert_eq!(error_lines(&report), [format!("t.js: t.js:5:{column}: Error: kept")]);
+    assert!(e.contains(&format!("line 5, column {column} of t.js")), "{e}");
+}
+
+/// The console error lines of a run's report.
+fn error_lines(report: &Value) -> Vec<String> {
+    let lines = report["console"]["lines"].as_array().unwrap();
+    lines.iter().filter_map(Value::as_str).filter(|l| l.contains("Error: ")).map(str::to_string).collect()
+}
+
+/// The file, line and column of the last run's error.
+fn place(s: &Session) -> (Option<String>, u64, u64) {
+    let r = s.script_report().unwrap();
+    (r["file"].as_str().map(str::to_string), r["line"].as_u64().unwrap(), r["column"].as_u64().unwrap())
+}
+
+/// An error in code an earlier run of a named engine compiled is at the place of that code: in that
+/// run's script, a file it included or a file `$.evalFile` gave, while the report and the console
+/// line keep the calling run's name.
+#[test]
+fn an_error_in_code_an_earlier_run_kept_is_at_that_runs_file_and_line() {
+    let base: PathBuf = std::env::temp_dir().join(format!("vc-script-engines-places-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::write(base.join("inc.jsxinc"), "\nfunction fromInclude() { throw new Error('inc'); }").unwrap();
+    std::fs::write(base.join("ev.jsxinc"), "\n\n\nfunction fromEval() { throw new Error('ev'); }").unwrap();
+    let def = base.join("def.jsx");
+    let text = "#targetengine e\n#include \"inc.jsxinc\"\n$.evalFile('ev.jsxinc');\nfunction fromMain() {\n  throw new Error('main');\n}\n\
+                function spin() {\n  while (true) {}\n}\nfunction badEval() {\n  eval('var = 1');\n}";
+    std::fs::write(&def, text).unwrap();
+    let mut s = Session::new();
+    s.execute("script.run", &json!({"path": def.to_string_lossy()})).unwrap();
+    let call = |s: &mut Session, code: &str| {
+        let e = s.execute("script.run", &json!({"source": format!("#targetengine e\n\n{code}"), "name": "caller.js"}));
+        assert!(e.is_err(), "{code}");
+    };
+    let shown = def.to_string_lossy().to_string();
+    let ends = |p: &(Option<String>, u64, u64), file: &str, line: u64| p.0.as_deref().is_some_and(|f| f.ends_with(file)) && p.1 == line && p.2 > 0;
+    call(&mut s, "fromMain();");
+    let p = place(&s);
+    assert!(ends(&p, "def.jsx", 5), "{p:?}");
+    let report = s.script_report().unwrap().clone();
+    assert_eq!(report["name"], "caller.js");
+    assert_eq!(error_lines(&report), [format!("caller.js: {}:5:{}: Error: main", p.0.as_deref().unwrap(), p.2)]);
+    call(&mut s, "fromInclude();");
+    assert!(ends(&place(&s), "inc.jsxinc", 2), "{:?}", place(&s));
+    call(&mut s, "fromEval();");
+    assert!(ends(&place(&s), "ev.jsxinc", 4), "{:?}", place(&s));
+    call(&mut s, "badEval();");
+    assert!(ends(&place(&s), "def.jsx", 11), "a syntax error eval raises is at its call: {:?}", place(&s));
+    let e = s.execute("script.run", &json!({"source": "#targetengine e\nspin();", "name": "caller.js", "maxFuel": 100_000}));
+    assert!(e.is_err());
+    assert_eq!(s.script_report().unwrap()["kind"], "limit");
+    assert!(ends(&place(&s), "def.jsx", 8), "the fuel ran out in spin: {:?}", place(&s));
+    // A caught error thrown again is where that throw is, in the calling run.
+    call(&mut s, "try { fromMain(); } catch (x) {\n  throw x;\n}");
+    assert_eq!(place(&s), (None, 4, 3));
+    // A run that fails before it starts compiles nothing, and the kept places stay.
+    assert!(run(&mut s, "#targetengine e\n#include \"missing.jsxinc\"").is_err());
+    call(&mut s, "fromMain();");
+    assert!(ends(&place(&s), "def.jsx", 5), "{:?}", place(&s));
+    assert!(place(&s).0.is_some_and(|f| f == shown));
+    // A dropped engine takes its places with it: the new one has its own.
+    s.execute("script.engine.drop", &json!({"name": "e"})).unwrap();
+    run(&mut s, "#targetengine e\nfunction fromMain() { throw new Error('new'); }").unwrap();
+    call(&mut s, "fromMain();");
+    assert_eq!(place(&s).0.as_deref(), Some("t.js"));
+    assert_eq!(place(&s).1, 2);
+    // The name stands for the earlier script as that run's report gave it, not as console lines
+    // show it.
+    s.execute("script.run", &json!({"source": "#targetengine e\nfunction named() { throw 1; }", "name": "a\u{1}b.js"})).unwrap();
+    call(&mut s, "named();");
+    assert_eq!(place(&s).0.as_deref(), Some("a\u{1}b.js"));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A named engine keeps the places of its earlier runs' code within its budget, the oldest going
+/// first, and the code still runs once its place is gone.
+#[test]
+fn an_engine_keeps_the_newest_places_within_its_budget() {
+    let mut s = Session::new();
+    run(&mut s, "#targetengine e\nfunction a() { throw new Error('a'); }").unwrap();
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(Some(300)));
+    run(&mut s, "#targetengine e\n\nfunction b() { throw new Error('b'); }").unwrap();
+    for _ in 0..20 {
+        run(&mut s, "#targetengine e\nvar x = 1;").unwrap();
+    }
+    run(&mut s, "#targetengine e\n\n\nfunction c() { throw new Error('c'); }").unwrap();
+    // Each run's own map takes the room of the one before, so c is called first.
+    assert!(run(&mut s, "#targetengine e\nc();").is_err());
+    let c_place = place(&s);
+    let a = run(&mut s, "#targetengine e\na();").map(drop);
+    let a_place = place(&s);
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(Some(1)));
+    run(&mut s, "#targetengine e\n\n\n\nfunction d() { throw new Error('d'); }").unwrap();
+    assert!(run(&mut s, "#targetengine e\nd();").is_err());
+    let d_place = place(&s);
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(None));
+    assert!(a.is_err());
+    assert_eq!((a_place.0, a_place.1, a_place.2), (None, 0, 0), "a's place went to make room");
+    assert_eq!((c_place.0.as_deref(), c_place.1), (Some("t.js"), 4));
+    assert_eq!((d_place.0, d_place.1, d_place.2), (None, 0, 0), "a map larger than the budget is not kept");
+}
+
+/// A run of a named engine whose script does not compile defines no code, so it keeps no place
+/// and pushes out none of the places kept before. An included file without a preprocessor line is
+/// first parsed with the script it joins, so its syntax error ends the run as it starts.
+#[test]
+fn a_run_that_does_not_compile_keeps_no_place() {
+    let base: PathBuf = std::env::temp_dir().join(format!("vc-script-engines-uncompiled-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    // A kept place counts the names of the files the run read: four places of the failed run's size
+    // would not fit in the budget.
+    let mut text = String::from("#targetengine e\n");
+    for k in 0..10 {
+        std::fs::write(base.join(format!("ok{k}.jsxinc")), "var ok = 1;").unwrap();
+        text.push_str(&format!("#include \"ok{k}.jsxinc\"\n"));
+    }
+    std::fs::write(base.join("bad.jsxinc"), "var = ;").unwrap();
+    text.push_str("#include \"bad.jsxinc\"");
+    let bad = base.join("bad.jsx");
+    std::fs::write(&bad, text).unwrap();
+    let mut s = Session::new();
+    run(&mut s, "#targetengine e\nvar x = 1;").unwrap();
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(Some(3000)));
+    run(&mut s, "#targetengine e\n\n\nfunction c() { throw new Error('c'); }").unwrap();
+    let mut kinds = vec![];
+    for _ in 0..5 {
+        assert!(s.execute("script.run", &json!({"path": bad.to_string_lossy()})).is_err());
+        kinds.push(s.script_report().unwrap()["kind"].clone());
+    }
+    assert!(run(&mut s, "#targetengine e\nc();").is_err());
+    let c_place = place(&s);
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(None));
+    let _ = std::fs::remove_dir_all(base);
+    assert!(kinds.iter().all(|k| k == "syntax"), "{kinds:?}");
+    assert_eq!((c_place.0.as_deref(), c_place.1), (Some("t.js"), 4));
 }
 
 /// A `$.evalFile` an earlier run kept reads files the way the run that calls it does: relative to

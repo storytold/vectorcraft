@@ -2682,7 +2682,10 @@ fn arb_ps_token() -> impl Strategy<Value = String> {
             // Local VM restored: dictionary changes undone, saves restored twice.
             "/a 1 def save /a 2 def", "restore", "save dup restore", "1 dict save exch /k 1 put", "cachestatus", "/n 0 def save /n n 1 add store",
             // Executable strings and keys other than names (PLRM 3rd ed., `cvx`, `load`).
-            "(>>) cvx", "(1 2 add) cvx exec", "(x) cvx dup exec", "0 load", "1 { } def", "(mark) cvx cvlit"
+            "(>>) cvx", "(1 2 add) cvx exec", "(x) cvx dup exec", "0 load", "1 { } def", "(mark) cvx cvlit",
+            // CID-keyed fonts found by name over predefined CMaps, horizontal and vertical.
+            "/Ryumin-Light-90ms-RKSJ-H", "/Ryumin-Light-EUC-V", "/Ryumin-Light-H", "/GBT-EUC-H", "/KSCms-UHC-V", "/UniJIS-UTF16-V",
+            "[/Ryumin-Light]", "composefont", "<93fa967b8540fd0d41>", "<c7d1a4a4467c>"
         ])
         .prop_map(str::to_string),
     ]
@@ -2953,6 +2956,13 @@ fn the_hpgl_sample_opens() {
     let mut paths = 0;
     l.doc.walk(|n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
     assert!(paths > 15, "{paths} paths, warnings {:?}", l.warnings);
+}
+
+/// A wedge drawn with the adaptive line type `LT-1` and a near-zero radius (a case the fuzz test
+/// found) opens and places without a panic.
+#[test]
+fn an_adaptive_line_type_wedge_of_almost_no_radius_opens() {
+    survive_metafile("HP-GL tiny adaptive wedge", "x.plt", b"IN;SP1;LT-1;EW0.000001,0,0;").unwrap();
 }
 
 /// A random instruction: a mnemonic the reader plays (or one it doesn't) with hostile numbers.
@@ -4327,6 +4337,17 @@ proptest! {
         survive("mutated .ai art styles", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         survive("mutated .ai art styles, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
     }
+
+    /// A `.ai` whose brushes, as the writer writes them, are damaged: the brush art with its frame,
+    /// the brush manager's order, the brushes' parameters, a brushed path's style and its object, cut
+    /// short or edited.
+    #[test]
+    fn ai_written_brushes_never_panic(cut in 0usize..BRUSHES_FUZZ_CHARS, edits in prop::collection::vec((0usize..BRUSHES_FUZZ_CHARS, prop::sample::select(vec!['0', '1', '9', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'u', 'U', 'n', 'X', 'W'])), 0..12)) {
+        let text = mutate_text(brushes_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai brushes", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        survive("mutated .ai brushes, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
 }
 
 /// The range of [`ai_written_styles_never_panic`]'s cuts and edits: past the end of [`styles_text`].
@@ -4437,6 +4458,72 @@ fn the_symbol_library_fuzz_data_opens_with_its_symbols() {
     assert!(!layered, "{warnings:?}");
     let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, ["S2", "S1"], "{warnings:?}");
+}
+
+/// The range of [`ai_written_brushes_never_panic`]'s cuts and edits: past the end of [`brushes_text`].
+const BRUSHES_FUZZ_CHARS: usize = 48_000;
+
+/// The editing data VectorCraft writes for a document whose brushes are a Calligraphic brush, a
+/// Scatter brush in Tints and an Art brush in Tints (each art a wide block over a narrow one), with a
+/// path drawn with the Calligraphic brush and one with the Art brush.
+fn brushes_text() -> &'static str {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        use std::sync::Arc;
+        use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
+        use vectorcraft_color::{Color, Paint};
+        use vectorcraft_doc::{Appearance, Node, NodeId};
+        use vectorcraft_geom::{Rect, shapes};
+        let block = |id: u64, r: Rect| {
+            Arc::new(Node::path(NodeId(id), shapes::rectangle(r), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0)))
+        };
+        let art = || Node::group(NodeId(1), vec![block(2, Rect::new(0.0, 0.0, 40.0, 4.0)), block(3, Rect::new(0.0, 4.0, 10.0, 8.0))]);
+        let nib = Calligraphic {
+            angle: 30.0,
+            roundness: 40.0,
+            size: 6.0,
+            variation: [20.0, 10.0, 2.0],
+            modes: Some([Variation::Rotation, Variation::Fixed, Variation::Pressure]),
+        };
+        let lib = [
+            Brush { name: "Nib".into(), kind: BrushKind::Calligraphic(nib) },
+            Brush { name: "Spray".into(), kind: BrushKind::Scatter(Scatter { art: art(), colorization: Colorization::Tints, ..Scatter::default() }) },
+            Brush { name: "Ribbon".into(), kind: BrushKind::Art(ArtBrush { art: art(), colorization: Colorization::Tints, ..ArtBrush::default() }) },
+        ];
+        let mut doc = Document::new(200.0, 100.0);
+        vectorcraft_brush::store(&mut doc, &lib);
+        let layer = doc.layers[0].id;
+        for (brush, y) in [("Nib", 30.0), ("Ribbon", 70.0)] {
+            let mut line = Node::path(
+                doc.alloc_id(),
+                shapes::line((10.0, y).into(), (190.0, y).into()),
+                Appearance::basic(Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 1.0),
+            );
+            line.appearance.stroke_mut().unwrap().brush = Some(brush.into());
+            doc.insert(Some(layer), usize::MAX, line).unwrap();
+        }
+        let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
+        String::from_utf8(out.program).unwrap()
+    })
+}
+
+/// The data [`ai_written_brushes_never_panic`] damages, as it is, opens with its brushes and its
+/// brushed paths live, and the property's cuts and edits reach all of it.
+#[test]
+fn the_written_brushes_fuzz_data_opens_live() {
+    let text = brushes_text();
+    assert!(text.chars().count() < BRUSHES_FUZZ_CHARS, "{}", text.chars().count());
+    for mark in ["%AI8_BeginBrushPattern", "%AI8_BeginPluginObject", "%AI9_BeginArtStyles", "/GObjRef :", "%AI5_BeginLayer", "\n1 (Anon"] {
+        assert!(text.replace("\r\n", "\n").contains(mark), "{mark}");
+    }
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+    let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
+    assert!(layered, "{warnings:?}");
+    let names: Vec<String> = vectorcraft_brush::library(&d).into_iter().map(|b| b.name).collect();
+    assert_eq!(names, ["Nib", "Spray", "Ribbon"]);
+    let art = d.layers[0].children().unwrap();
+    let brushes: Vec<Option<&str>> = art.iter().map(|n| n.appearance.stroke().and_then(|s| s.brush.as_deref())).collect();
+    assert_eq!(brushes, [Some("Nib"), Some("Ribbon")]);
 }
 
 /// Editing data with symbols (S2's art holds an instance of S1, F's holds non-native art), the

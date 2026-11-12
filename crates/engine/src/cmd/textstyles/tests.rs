@@ -309,12 +309,12 @@ fn character_style_color_and_features_reach_text_and_follow_swatch_edits() {
     // The command takes the color of the link at the tint, whatever color is sent.
     tinted["tint"] = json!(0.4);
     let attrs = json!({"fill": brand, "stroke": tinted, "stroke_width": 2.0, "overprint_fill": true, "overprint_stroke": false,
-        "features": ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]});
+        "features": ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01", "salt=2"]});
     s.execute("charStyle.new", &json!({"name": "Ink", "attrs": attrs})).unwrap();
     s.execute("charStyle.apply", &json!({"name": "Ink", "id": id})).unwrap();
     let want_stroke = s.doc().unwrap().doc.tint_paint("Brand", 0.4).unwrap();
     assert_eq!(run_paints(&s, id), (brand, want_stroke.clone(), 2.0, true, false));
-    assert_eq!(runs(&s, id)[0].style.features, ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]);
+    assert_eq!(runs(&s, id)[0].style.features, ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01", "salt=2"]);
     let def = |s: &Session| s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Ink").unwrap().attrs.clone();
     assert_eq!(def(&s)["stroke"], serde_json::to_value(&want_stroke).unwrap());
     let saved = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
@@ -355,6 +355,8 @@ fn character_style_color_and_features_are_checked() {
         (json!({"stroke_width": 5.0e6}), "`stroke_width` must be from 0 to 4000000"),
         (json!({"features": ["dlig", "zzzz"]}), "unknown OpenType feature `zzzz`"),
         (json!({"features": ["--liga"]}), "unknown OpenType feature `--liga`"),
+        (json!({"features": ["salt=x"]}), "unknown OpenType feature `salt=x`"),
+        (json!({"features": ["-salt=2"]}), "unknown OpenType feature `-salt=2`"),
         (json!({"features": many}), "features lists at most 256 tags"),
         (json!({"fill": {"type": "solid"}}), "missing field"),
     ] {
@@ -1336,7 +1338,8 @@ fn para_style_redefined_to_the_defaults_updates_its_paragraphs() {
 
 /// The same for character styles: Auto kerning and the Roman baseline alignment, which the
 /// run's JSON leaves out, are captured and reach the style's users. A glyph choice belongs to
-/// one character, so it is not a reusable style attribute.
+/// one character, and the space before a line's first character to where it stands (#5111), so
+/// neither is a reusable style attribute.
 #[test]
 fn char_style_redefined_to_the_defaults_updates_its_text() {
     use vectorcraft_doc::CharAlign;
@@ -1356,6 +1359,7 @@ fn char_style_redefined_to_the_defaults_updates_its_text() {
     assert_eq!((kerning(&s), aligns(&s)), ([None, None, Some(60.0)], [CharAlign::RomanBaseline; 3]));
     let mut reusable = settable::<CharStyle>();
     reusable.remove("glyphAlternate");
+    reusable.remove("kerningBefore");
     assert_eq!(defined(&s, 0), reusable, "Redefine captures every reusable attribute");
     s.execute("charStyle.new", &json!({"name": "Copy", "id": local})).unwrap();
     assert_eq!(defined(&s, 1), reusable, "New captures every reusable attribute");

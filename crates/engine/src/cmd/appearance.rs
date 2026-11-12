@@ -32,8 +32,8 @@ use super::opacitymask::percent;
 use super::paint::paint_from;
 use super::{AppearanceAttrs, EyedropperAttrs, FillAttrs, StrokeAttrs};
 use super::{
-    CommandSpec, NodeId, Result, Session, bad, check_numbers, check_switches, cmd, has_doc, has_selection, id_param, ids_param, index, leaf_targets,
-    ok, paint_targets, str_param, switch_or, targets,
+    CommandSpec, NodeId, Result, Session, bad, check_numbers, check_switches, cmd, has_doc, has_selection, ids_param, index, leaf_targets,
+    object_param, ok, paint_targets, str_param, switch_or, targets,
 };
 use crate::EngineError;
 
@@ -726,8 +726,8 @@ fn clear(n: &mut Node) {
 
 fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "appearance.transfer";
-    let source = id_param(p, "source").ok_or_else(|| bad(C, "missing `source` id"))?;
-    let target = id_param(p, "target").ok_or_else(|| bad(C, "missing `target` id"))?;
+    let source = object_param(p, "source", C)?.ok_or_else(|| bad(C, "missing `source` id"))?;
+    let target = object_param(p, "target", C)?.ok_or_else(|| bad(C, "missing `target` id"))?;
     if source == target {
         return Err(bad(C, "`source` and `target` are the same object"));
     }
@@ -1201,7 +1201,7 @@ fn target_contents(s: &mut Session, p: &Value) -> Result<Value> {
 /// Sample enabled attributes with transform-aware character dimensions and atomic validation.
 fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "appearance.copyFrom";
-    let clicked = id_param(p, "source").ok_or_else(|| bad(C, "missing `source` id"))?;
+    let clicked = object_param(p, "source", C)?.ok_or_else(|| bad(C, "missing `source` id"))?;
     let (reverse, append) = (switch_or(p, "reverse", false, C)?, switch_or(p, "append", false, C)?);
     let defaults_only = switch_or(p, "defaultsOnly", false, C)?;
     if defaults_only && (reverse || append || p.get("ids").is_some()) {
@@ -1512,6 +1512,9 @@ impl Picked {
                 stroke_width: st.stroke_width,
                 overprint_fill: st.overprint_fill,
                 overprint_stroke: st.overprint_stroke,
+                // The space before a line's first character belongs to where the character is,
+                // not to how it looks: a sample from one doesn't move the target's (#5111).
+                kerning_before: st.kerning_before,
                 ..cs.clone()
             };
         }

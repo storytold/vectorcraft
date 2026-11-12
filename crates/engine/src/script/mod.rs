@@ -221,12 +221,69 @@ fn current(link: &Link) -> std::result::Result<Rc<Host>, HostError> {
 }
 
 /// A named engine: its interpreter, with the globals its runs left (`None` while a run has it),
-/// the link its host functions use, and its heap after its last run.
+/// the link its host functions use, its heap after its last run, and the source maps of the code
+/// its earlier runs compiled.
 struct Engine {
     name: String,
     realm: Option<Realm>,
     link: Link,
     heap: usize,
+    maps: Rc<RefCell<KeptMaps>>,
+}
+
+/// A named engine taken for a run: its realm (`None` for an engine made now), its link and its
+/// kept source maps.
+type TakenEngine = (Option<Realm>, Link, Rc<RefCell<KeptMaps>>);
+
+/// The most bytes of source maps ([`include::SourceMap::bytes`]) a named engine keeps from its
+/// earlier runs.
+pub const KEPT_MAP_BYTES: usize = 8 << 20;
+
+/// A source map an engine kept from an earlier run: the realm's tag for the source
+/// ([`Realm::error_tag`]), the map, and for the run's own script, that run's name, which stands for
+/// a script given as text.
+struct KeptMap {
+    tag: u32,
+    map: include::SourceMap,
+    script: Option<Arc<str>>,
+    bytes: usize,
+}
+
+/// The source maps a named engine kept from its earlier runs, by tag, oldest first, in at most
+/// [`KEPT_MAP_BYTES`]: the oldest go first to make room, and a map larger than that is not kept.
+#[derive(Default)]
+struct KeptMaps {
+    maps: std::collections::VecDeque<KeptMap>,
+    bytes: usize,
+}
+
+impl KeptMaps {
+    fn keep(&mut self, tag: u32, map: include::SourceMap, script: Option<Arc<str>>) {
+        let bytes = map.bytes() + script.as_ref().map_or(0, |s| s.len());
+        let limit = kept_map_bytes();
+        if bytes > limit || self.maps.back().is_some_and(|m| m.tag >= tag) {
+            return;
+        }
+        while self.bytes + bytes > limit {
+            let Some(old) = self.maps.pop_front() else { break };
+            self.bytes -= old.bytes;
+        }
+        self.bytes += bytes;
+        self.maps.push_back(KeptMap { tag, map, script, bytes });
+    }
+
+    fn get(&self, tag: u32) -> Option<&KeptMap> {
+        self.maps.binary_search_by_key(&tag, |m| m.tag).ok().and_then(|i| self.maps.get(i))
+    }
+}
+
+/// The bytes of source maps a named engine keeps.
+fn kept_map_bytes() -> usize {
+    #[cfg(test)]
+    if let Some(n) = TEST_KEPT_MAP_BYTES.with(Cell::get) {
+        return n;
+    }
+    KEPT_MAP_BYTES
 }
 
 /// The named engines of one thread's sessions, by their key, each in the order they were made.
@@ -665,6 +722,14 @@ struct Host {
     /// The file, line and column of each error `$.evalFile` raised for a file it could not run, in
     /// order: the error's mark ([`HostError::Marked`]) is its index.
     eval_failures: RefCell<Vec<(Arc<str>, u32, u32)>>,
+    /// The realm's tag for the script ([`Realm::script_tag`]) once the run has started it, and
+    /// [`vectorcraft_js::UNKNOWN_SOURCE`] before or when the script did not compile.
+    script_tag: Cell<u32>,
+    /// The run's name as its report gives it, which [`Host::name`] shortens for console lines.
+    report_name: Arc<str>,
+    /// The source maps the named engine of the run kept from its earlier runs; `None` for a run
+    /// without one.
+    kept_maps: Option<Rc<RefCell<KeptMaps>>>,
     /// When the run started, where the platform has a clock.
     started: Option<std::time::Instant>,
     /// The time since [`Host::started`] at which a `$.sleep` ends.
@@ -740,6 +805,23 @@ pub(crate) fn slowest(times: &HashMap<&'static str, (u64, u128, u128)>) -> Vec<c
 }
 
 impl Host {
+    /// Gives the named engine of the run the source maps of the code the run compiled: its script
+    /// and each file `$.evalFile` gave. A run that never started its script compiled nothing.
+    fn keep_maps(&self) {
+        let (Some(kept), tag) = (&self.kept_maps, self.script_tag.get()) else { return };
+        if tag == vectorcraft_js::UNKNOWN_SOURCE {
+            return;
+        }
+        let mut kept = kept.borrow_mut();
+        kept.keep(tag, std::mem::take(&mut *self.script_map.borrow_mut()), Some(self.report_name.clone()));
+        for (n, map) in std::mem::take(&mut *self.eval_maps.borrow_mut()).into_iter().enumerate() {
+            match u32::try_from(n + 1).ok().and_then(|n| tag.checked_add(n)).filter(|t| *t != vectorcraft_js::UNKNOWN_SOURCE) {
+                Some(t) => kept.keep(t, map, None),
+                None => break,
+            }
+        }
+    }
+
     /// Adds a line to the run's console and, during a slice, to the session's.
     fn line(&self, entry: console::Entry, cut: bool) {
         let line = console::ConsoleLine { run: self.run, name: self.name.clone(), entry };
@@ -1358,34 +1440,55 @@ fn preprocessor_error(f: include::Failure) -> (RunError, Option<Arc<str>>) {
     (RunError { kind, message, line: f.line, column: f.column }, file)
 }
 
-/// `e`, which the realm raised in source `tag` ([`Realm::error_source`]) with host error mark `mark`
-/// ([`Realm::error_mark`]), at the line and column of the file it is in, with that file's name
-/// unless it is the script's own.
-fn located(host: &Host, tag: u32, mark: Option<u32>, e: &RunError) -> (RunError, Option<Arc<str>>) {
-    let map = |m: &include::SourceMap, own: bool| {
+/// `e`, the error `realm` raised in the run of `host`, at the line and column of the file it is in,
+/// with that file's name unless it is the run's own script.
+fn located(host: &Host, realm: &Realm, e: &RunError) -> (RunError, Option<Arc<str>>) {
+    let map = |m: &include::SourceMap| {
         let (index, file, line, column) = m.locate(e.line, e.column);
         let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
-        (RunError { kind: e.kind.clone(), message, line, column }, (!own || index > 0).then_some(file))
+        (RunError { kind: e.kind.clone(), message, line, column }, index, file)
     };
     // An error `$.evalFile` raised for a file it could not run, and no script caught, is at that
     // file's place.
-    if let Some((file, line, column)) = mark.and_then(|m| host.eval_failures.borrow().get(m as usize).cloned()) {
+    if let Some((file, line, column)) = realm.error_mark().and_then(|m| host.eval_failures.borrow().get(m as usize).cloned()) {
         let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
         return (RunError { kind: e.kind.clone(), message, line, column }, Some(file));
     }
     if e.line == 0 {
         return (e.clone(), None);
     }
-    // An error in code from another source, such as a function an earlier run of a named engine
-    // defined, has no place in this run's files, so it is given without one.
+    // An error in code from a source whose map is not at hand, such as code that `eval` compiled,
+    // is given without a place.
     let unplaced = || (RunError { kind: e.kind.clone(), message: e.message.clone(), line: 0, column: 0 }, None);
-    match tag {
-        0 => map(&host.script_map.borrow(), true),
+    match realm.error_source() {
+        0 => {
+            let (e, index, file) = map(&host.script_map.borrow());
+            (e, (index > 0).then_some(file))
+        }
         n if n != vectorcraft_js::UNKNOWN_SOURCE => match host.eval_maps.borrow().get(n as usize - 1) {
-            Some(m) => map(m, false),
+            Some(m) => {
+                let (e, _, file) = map(m);
+                (e, Some(file))
+            }
             None => unplaced(),
         },
-        _ => unplaced(),
+        // Code an earlier run of the named engine compiled, such as a function it defined, is at
+        // its place in that run's files: the run's script, a file it included, or a file
+        // `$.evalFile` gave. A script given as text is named by that run's name.
+        _ => {
+            let kept = host.kept_maps.as_ref().map(|k| k.borrow());
+            match kept.as_ref().and_then(|k| k.get(realm.error_tag())) {
+                Some(kept) => {
+                    let (e, index, file) = map(&kept.map);
+                    let file = match &kept.script {
+                        Some(name) if index == 0 && file.is_empty() => name.clone(),
+                        _ => file,
+                    };
+                    (e, Some(file))
+                }
+                None => unplaced(),
+            }
+        }
     }
 }
 
@@ -1438,17 +1541,17 @@ impl Session {
         }
     }
 
-    /// The realm of the named engine `name` for a run, with the link its host functions use: the
-    /// realm its last run left, or `None` for an engine made now. → the kind and text of the
-    /// failure when the engine cannot be had.
-    fn take_engine(&mut self, name: &str) -> std::result::Result<(Option<Realm>, Link), (include::FailKind, String)> {
+    /// The realm of the named engine `name` for a run, with the link its host functions use and the
+    /// source maps it kept: the realm its last run left, or `None` for an engine made now. → the
+    /// kind and text of the failure when the engine cannot be had.
+    fn take_engine(&mut self, name: &str) -> std::result::Result<TakenEngine, (include::FailKind, String)> {
         if cfg!(target_arch = "wasm32") {
             return Err((include::FailKind::Error, NO_ENGINES_ON_WEB.to_string()));
         }
         with_engines(&self.script_engines, |engines| {
             if let Some(e) = engines.iter_mut().find(|e| e.name == name) {
                 let realm = e.realm.take().ok_or((include::FailKind::Error, ENGINE_BUSY.to_string()))?;
-                return Ok((Some(realm), e.link.clone()));
+                return Ok((Some(realm), e.link.clone(), e.maps.clone()));
             }
             if engines.len() >= MAX_ENGINES {
                 return Err((
@@ -1457,15 +1560,20 @@ impl Session {
                 ));
             }
             let link: Link = Rc::new(RefCell::new(None));
-            engines.push(Engine { name: name.to_string(), realm: None, link: link.clone(), heap: 0 });
-            Ok((None, link))
+            let maps = Rc::new(RefCell::new(KeptMaps::default()));
+            engines.push(Engine { name: name.to_string(), realm: None, link: link.clone(), heap: 0, maps: maps.clone() });
+            Ok((None, link, maps))
         })
     }
 
     /// The end of a run in engine `engine` (`None` for a realm that is not kept): the link no longer
-    /// holds the run, and the engine keeps `realm`, or is dropped without one.
+    /// holds the run, and the engine keeps `realm`, with the source maps of the code the run
+    /// compiled, or is dropped without one.
     fn return_engine(&self, engine: Option<&str>, link: &Link, realm: Option<Realm>) {
         let host = link.borrow_mut().take();
+        if let (Some(h), Some(_)) = (&host, &realm) {
+            h.keep_maps();
+        }
         drop(host);
         let Some(name) = engine else { return };
         let mut realm = realm;
@@ -1668,9 +1776,9 @@ impl Session {
         };
         let heap_bytes = if kept.is_some() { engine_heap() } else { HEAP_BYTES };
         let limits = Limits { fuel: request.fuel, heap_bytes, ..Limits::default() };
-        let (engine, realm, link) = match kept {
-            None => (None, None, Rc::new(RefCell::new(None))),
-            Some((engine, (realm, link))) => (Some(engine), realm, link),
+        let (engine, realm, link, kept_maps) = match kept {
+            None => (None, None, Rc::new(RefCell::new(None)), None),
+            Some((engine, (realm, link, maps))) => (Some(engine), realm, link, Some(maps)),
         };
         // A realm made here gets the script extensions, `$` and the dialogs; a kept one has them
         // from its first run, and they act for the run that calls them.
@@ -1716,6 +1824,9 @@ impl Session {
             script_map: RefCell::default(),
             eval_maps: RefCell::default(),
             eval_failures: RefCell::default(),
+            script_tag: Cell::new(vectorcraft_js::UNKNOWN_SOURCE),
+            report_name: Arc::from(name.as_str()),
+            kept_maps,
             started: clock(),
             wake_at: Cell::new(None),
             can_wait: realm.wait_flag(),
@@ -1752,8 +1863,15 @@ impl Session {
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
-                    .and_then(|()| realm.start(&expanded.source))
-                    .map_err(|e| located(&host, realm.error_source(), realm.error_mark(), &e))
+                    .and_then(|()| {
+                        let r = realm.start(&expanded.source);
+                        // Source that does not compile defines no code, so its map is not kept.
+                        if !matches!(&r, Err(e) if e.kind == RunErrorKind::Syntax) {
+                            host.script_tag.set(realm.script_tag());
+                        }
+                        r
+                    })
+                    .map_err(|e| located(&host, &realm, &e))
             }
         };
         if let Err((e, file)) = started {
@@ -1832,7 +1950,7 @@ impl Session {
     fn script_failed(&mut self, job: Job, e: &RunError) -> Result<Value> {
         job.host.dialogs.stopped();
         let fuel_left = job.realm.fuel_left();
-        let (e, file) = located(&job.host, job.realm.error_source(), job.realm.error_mark(), e);
+        let (e, file) = located(&job.host, &job.realm, e);
         let mut report = failure_report(&job.name, &e, file.as_deref(), &job.host, fuel_left, job.realm.limits().fuel.saturating_sub(fuel_left));
         close_run(self, &job.host, &mut report, ending(&e.kind));
         self.end_job(job, e.kind == RunErrorKind::Internal);
@@ -2001,6 +2119,27 @@ fn line_to(s: &mut Session, host: &Host, entry: console::Entry, cut: bool) {
     host.console.borrow_mut().push(line, cut);
 }
 
+/// The error of the failed run `report` describes, as its console lines give it; `name` is the
+/// run's name in those lines ([`console::line_name`]).
+fn error_text(name: &str, report: &Value) -> String {
+    let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
+    let message = report["message"].as_str().unwrap_or_default();
+    match report["file"].as_str() {
+        Some(file) if line > 0 => format!("{name}: {file}:{line}:{column}: {message}"),
+        _ if line > 0 => format!("{name}:{line}:{column}: {message}"),
+        _ => format!("{name}: location unavailable: {message}"),
+    }
+}
+
+/// The console lines of the error of the failed run `report` describes, each as the console keeps
+/// it, cut to its limit.
+pub(crate) fn error_lines(report: &Value) -> Vec<String> {
+    let name = console::line_name(report["name"].as_str().unwrap_or_default());
+    let mut lines = vec![];
+    each_line(&error_text(&name, report), |line, _| lines.push(line));
+    lines
+}
+
 /// Ends the console lines of `host`'s run: the line `$.write` left unended, then for a failed run
 /// (`report["ok"]` false) its error as `name:line:column: message`, then an end line and a report
 /// line in the session's console. Adds the run's time, host calls by kind, slowest commands,
@@ -2015,14 +2154,7 @@ fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::
         }
     }
     if report["ok"] == false {
-        let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
-        let message = report["message"].as_str().unwrap_or_default();
-        let text = match report["file"].as_str() {
-            Some(file) if line > 0 => format!("{}: {file}:{line}:{column}: {message}", host.name),
-            _ if line > 0 => format!("{}:{line}:{column}: {message}", host.name),
-            _ => format!("{}: location unavailable: {message}", host.name),
-        };
-        each_line(&text, |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+        each_line(&error_text(&host.name, report), |line, cut| line_to(s, host, console::Entry::Error(line), cut));
     }
     let timing = clock().is_some();
     let ms = millis(host.run_nanos.get());
@@ -2127,6 +2259,8 @@ thread_local! {
     pub(crate) static TEST_GROWTH: Cell<Option<u64>> = const { Cell::new(None) };
     /// Tests: the heap of a named engine in place of [`ENGINE_HEAP_BYTES`].
     pub(crate) static TEST_ENGINE_HEAP: Cell<Option<usize>> = const { Cell::new(None) };
+    /// Tests: the bytes of source maps a named engine keeps, in place of [`KEPT_MAP_BYTES`].
+    pub(crate) static TEST_KEPT_MAP_BYTES: Cell<Option<usize>> = const { Cell::new(None) };
     /// Tests: the `JSINCLUDE` folders in place of the environment's.
     pub(crate) static TEST_JSINCLUDE: RefCell<Option<Vec<std::path::PathBuf>>> = const { RefCell::new(None) };
     /// Tests: the time since a run started, in place of its clock's.

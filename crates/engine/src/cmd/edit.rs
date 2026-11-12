@@ -10,8 +10,8 @@ use vectorcraft_geom::{Affine, Point, Vec2};
 use super::clipboard::SwatchChoices;
 use super::{
     CommandSpec, Result, Session, always, bad, can_clear_history, can_redo, can_undo, check_numbers, checked_ids_param, clock_date, cmd, date_param,
-    f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param, index,
-    number_or, ok, point_param, str_param, switch_or,
+    f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, index, number_or,
+    object_param, ok, point_param, str_param, switch_or,
 };
 use crate::{Clipboard, EngineError, inspect};
 
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New…",
             ["File"],
             None,
-            "{preset?: a name from file.newPresets (start from it; the other params change it), name?|title?: document name (default Untitled-N), width?: pt=612|\"210 mm\", height?: pt=792, units?: \"Pixels\"|\"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Feet\"|\"Yards\"|\"Meters\"|\"Feet & Inches\" (default: prefs unitsGeneral, as print presets; screen presets: Pixels), orientation?: \"portrait\"|\"landscape\" (swaps width and height to match), artboards?: n (1–1000), artboardLayout?: {layout?: \"gridByRow\"|\"gridByColumn\"|\"row\"|\"column\", columns?: n (default: all in one row), spacing?: pt=20, rightToLeft?: bool}, bleed?: pt|[top, bottom, left, right]|{top?, …} (0–72 pt), backgroundContents?: \"transparent\"|\"white\" (a white artboard background, not an object), colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK), rasterEffectsPpi?: 72|150|300 (1–2400), previewMode?: \"default\"|\"pixel\"|\"overprint\" (overprint turns Overprint Preview on, pixel Pixel Preview in the app; default leaves both), alignNewObjectsToPixelGrid?: bool (Advanced Options › Align New Objects to Pixel Grid: paths drawn in the document are pixel-aligned; default on for the Mobile and Web presets, else off; document.setup changes it later), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches), size?: a preset's size label (a preset file.newPresets lists can be passed back; ignored)} → {index, previewMode}; the size is remembered in file.newPresets' Recent",
+            "{preset?: a name from file.newPresets (start from it; the other params change it), name?|title?: document name (default Untitled-N), width?: pt=612|\"210 mm\", height?: pt=792 (each more than 0 and at most 3,999,856 pt, as artboard.new takes them), units?: \"Pixels\"|\"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Feet\"|\"Yards\"|\"Meters\"|\"Feet & Inches\" (default: prefs unitsGeneral, as print presets; screen presets: Pixels), orientation?: \"portrait\"|\"landscape\" (swaps width and height to match), artboards?: n (1–1000), artboardLayout?: {layout?: \"gridByRow\"|\"gridByColumn\"|\"row\"|\"column\", columns?: n (default: all in one row), spacing?: pt=20, rightToLeft?: bool}, bleed?: pt|[top, bottom, left, right]|{top?, …} (0–72 pt), backgroundContents?: \"transparent\"|\"white\" (a white artboard background, not an object), colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK), rasterEffectsPpi?: 72|150|300 (1–2400), previewMode?: \"default\"|\"pixel\"|\"overprint\" (overprint turns Overprint Preview on, pixel Pixel Preview in the app; default leaves both), alignNewObjectsToPixelGrid?: bool (Advanced Options › Align New Objects to Pixel Grid: paths drawn in the document are pixel-aligned; default on for the Mobile and Web presets, else off; document.setup changes it later), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches), size?: a preset's size label (a preset file.newPresets lists can be passed back; ignored)} → {index, previewMode}; the size is remembered in file.newPresets' Recent",
             always,
             super::newdoc::file_new
         ),
@@ -38,7 +38,7 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             doc_move
         ),
-        cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?, ids?: [id…] (list just these nodes, of any level, in this order, under `nodes` in place of `layers`; an unknown id is an error; at most 10000), kind?: panel label such as Layer; Group; Path; Type or Image (exact, ignoring case; list every such node under `nodes`, each with `path`, its ancestor ids with the layer first, searching the subtrees of `ids` when given), limit?: at most this many entries of the list, offset?: entries skipped first (default 0; with `ids`, `kind`, `limit` or `offset` the reply adds `total`, the entries before paging)} → layer tree (each node: id, name, kind, visible, locked, bounds, opacity (0–1) and opacityPct (0–100 %, the scale object.setProps takes) when below 1, blend when not Normal, fill, stroke and strokeWidth of objects and compound paths; a compound path's members have compoundMember: true instead of paint, which is the compound's), artboards, selection, history (a sliced tree reports childCount); without the scope options the reply is the whole layer tree", has_doc, doc_inspect),
+        cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?, ids?: [id…] (list just these nodes, of any level, in this order, under `nodes` in place of `layers`; an unknown id is an error; at most 10000), kind?: panel label such as Layer; Group; Path; Type or Image (exact, ignoring case; list every such node under `nodes`, each with `path`, its ancestor ids with the layer first, searching the subtrees of `ids` when given), limit?: at most this many entries of the list, offset?: entries skipped first (default 0; with `ids`, `kind`, `limit` or `offset` the reply adds `total`, the entries before paging)} → path (the document's file; null when automation read roots are in force and the file is outside them), layer tree (each node: id, name, kind, visible, locked, bounds, opacity (0–1) and opacityPct (0–100 %, the scale object.setProps takes) when below 1, blend when not Normal, fill, stroke and strokeWidth of objects and compound paths; a compound path's members have compoundMember: true instead of paint, which is the compound's), artboards, selection, history (a sliced tree reports childCount); without the scope options the reply is the whole layer tree", has_doc, doc_inspect),
         cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: compact summary, depth?: child levels in the summary (default all), childLimit?: children shown per node (default all; a level that shows fewer reports childCount)} → one object", has_doc, doc_node),
         cmd!(query "document.find", "Find Objects", [], None, "{name?: substring of the Layers panel name, kind?: panel label such as Group; Path; Type or Image (exact), text?: substring of type content, within?: [x, y, width, height] (an object's geometric bounds inside this rectangle, edges included; document points as document.inspect's bounds; layers never match this or the size filters), intersects?: [x, y, width, height] (bounds touching or overlapping it), minWidth?, maxWidth?, minHeight?, maxHeight?: pt (the bounds' size), minThickness?, maxThickness?: pt (the smaller of the bounds' width and height), minArea?, maxArea?: pt² (the bounds' width × height), minAnchors?, maxAnchors?: anchor points of a path (a compound path's members together; other objects never match), select?: bool (also select the matches, leaving out hidden and locked ones, those inside another match, and a compound path's members unless the compound path is isolated; Select > Reselect repeats it), limit?: max matches listed (default 100, 0 counts only)} → {matches: [{id, name, kind, path}], total, selected (with select: the count selected)}; at least one filter, all of them matching", has_doc, doc_find),
         cmd!(
@@ -50,7 +50,11 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             doc_compare
         ),
-        cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model", has_doc, |s, _| Ok(serde_json::to_value(&*s.doc()?.doc).unwrap_or(Value::Null))),
+        cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model (with automation read roots, a linked or placed file outside them is named by its file name alone, without its relative path, size or date, in brush art too, and so is a data set's image value outside them; a relative path that leads outside them is left out; a stored brush entry that does not read as a brush is left out; a folder outside them is left out of export_settings)", has_doc, |s, _| {
+            let st = s.doc()?;
+            let d = super::links::with_hidden_paths_named(&st.doc, super::links::LinkBase::of(st));
+            Ok(serde_json::to_value(&*d).unwrap_or(Value::Null))
+        }),
         cmd!(
             "document.setUnits",
             "Units",
@@ -267,7 +271,7 @@ fn doc_move(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = id_param(p, "id").ok_or_else(|| bad("document.node", "missing id"))?;
+    let id = object_param(p, "id", "document.node")?.ok_or_else(|| bad("document.node", "missing id"))?;
     let mut opts = slice_opts(p, "document.node")?;
     let summary = switch_or(p, "summary", false, "document.node")?;
     if !summary && (opts.depth.is_some() || opts.child_limit.is_some()) {

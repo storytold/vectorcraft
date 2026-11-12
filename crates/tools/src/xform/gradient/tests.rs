@@ -453,3 +453,36 @@ fn a_radial_with_a_negative_aspect_drags_to_a_positive_one() {
     let v = preview(&t.pointer(&cx, &ev(PointerKind::Drag, Point::new(100.0, 80.0)))).clone();
     assert!((v["aspect"].as_f64().unwrap() - 70.0).abs() < 1e-9, "{v}");
 }
+
+/// A gradient that repeats `n` times shows a tick across the bar where each run meets the next
+/// (`n` - 1 of them), and a conic one across its extent at each such turn; one that pads shows
+/// none.
+#[test]
+fn the_annotator_marks_where_the_runs_meet() {
+    use vectorcraft_color::GradientSpread;
+    let ticks = |kind: GradientKind, spread: GradientSpread| {
+        let (mut d, s) = graded(two());
+        let n = d.node_mut(s.objects[0]).unwrap();
+        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
+        (g.gradient.kind, g.gradient.spread, g.gradient.repeats) = (kind, spread, 4);
+        let geom = g.geom.unwrap();
+        n.appearance.set_fill(Paint::Gradient(g));
+        let p = paint();
+        let o = GradientTool::default().overlays(&cx(&d, &s, &p));
+        let lines: Vec<(Point, Point)> =
+            o.iter().filter_map(|o| if let Overlay::Line { a, b, dashed: true, .. } = o { Some((*a, *b)) } else { None }).collect();
+        (lines, geom)
+    };
+    let (lines, geom) = ticks(GradientKind::Linear, GradientSpread::Repeat);
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    for (k, (a, b)) in lines.iter().enumerate() {
+        let at = geom.start + (geom.end - geom.start) * ((k + 1) as f64 / 4.0);
+        assert!(a.midpoint(*b).distance(at) < 1e-9, "tick {k} at {at:?}: {a:?} {b:?}");
+    }
+    let (lines, geom) = ticks(GradientKind::Conic, GradientSpread::Reflect);
+    assert_eq!(lines.len(), 3);
+    let frame = geom.conic_frame();
+    let quarter = frame * Point::new(0.0, 1.0);
+    assert!(lines[0].0.midpoint(lines[0].1).distance(quarter) < 1e-9, "{lines:?} {quarter:?}");
+    assert!(ticks(GradientKind::Radial, GradientSpread::Pad).0.is_empty());
+}

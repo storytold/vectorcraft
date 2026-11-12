@@ -28,6 +28,12 @@ pub struct CharStyle {
     /// Manual pair spacing in 1/1000 em, as [`Self::tracking`]; None uses the automatic mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kerning: Option<f64>,
+    /// Space before the character in 1/1000 em, as [`Self::kerning`], when it starts a line by
+    /// itself: the first character of the text, of a paragraph, or after a forced line break. The
+    /// Type tool's caret before such a character kerns with it (#5111), since there is no character
+    /// before it whose [`Self::kerning`] could space it. Elsewhere it has no effect.
+    #[serde(default, rename = "kerningBefore", skip_serializing_if = "crate::skip::is_default")]
+    pub kerning_before: f64,
     /// Use glyph shapes for automatic pair spacing; false uses font metrics.
     #[serde(default, rename = "opticalKerning", skip_serializing_if = "crate::skip::is_default")]
     pub optical_kerning: bool,
@@ -51,7 +57,9 @@ pub struct CharStyle {
     #[serde(default)]
     pub all_caps: bool,
     /// OpenType features that differ from the defaults (OpenType panel), as tags: `"dlig"` turns
-    /// a feature on, `"-liga"` off.
+    /// a feature on, `"-liga"` off, and `"salt=2"` turns a feature with alternates on at the font's
+    /// alternate number 2 (the value the shaper gets; a plain `"salt"` is value 1). Runs that
+    /// differ only in this list are shaped together, each with its own features.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub features: Vec<String>,
     /// Character style (Character Styles panel) these attributes come from; None = Normal.
@@ -411,6 +419,7 @@ impl Default for CharStyle {
             leading: None,
             tracking: 0.0,
             kerning: None,
+            kerning_before: 0.0,
             optical_kerning: false,
             baseline_shift: 0.0,
             h_scale: 100.0,

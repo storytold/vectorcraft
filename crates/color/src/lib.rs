@@ -16,7 +16,7 @@ pub mod swatch;
 
 pub use blend::BlendMode;
 pub use freeform::{Freeform, FreeformMode, FreeformPoint};
-pub use gradient::{Gradient, GradientGeom, GradientKind, GradientMethod, GradientPaint, GradientStop};
+pub use gradient::{Gradient, GradientGeom, GradientKind, GradientMethod, GradientPaint, GradientSpread, GradientStop};
 pub use libraries::SwatchLibrary;
 pub use swatch::{Swatch, SwatchGroup, default_swatches};
 

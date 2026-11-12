@@ -1179,6 +1179,31 @@ fn a_keeps_entry_in_a_running_apps_area_keeps_the_copies() {
     assert_eq!(offered(&mut b).len(), 2);
 }
 
+/// An entry `<area>/keeps-<left area>` in a crashed app's area keeps nothing while restore or
+/// discard holds that area: both crashed apps' copies are restored, and discarded.
+#[test]
+fn a_keeps_entry_in_a_crashed_apps_area_held_by_the_same_command_keeps_nothing() {
+    let crashed = |store: &Arc<MemoryStore>| {
+        let mut s = session_in(store);
+        s.execute("file.recovery.save", &json!({})).unwrap();
+        s.recovery.own_area().unwrap().to_string()
+    };
+    for cmd in ["file.recovery.restore", "file.recovery.discard"] {
+        let store = Arc::new(MemoryStore::default());
+        let a = crashed(&store);
+        let c = crashed(&store);
+        assert_ne!(a, c);
+        // The area that sorts first, which the command holds first, keeps the other one's copies.
+        let (first, second) = if a < c { (a, c) } else { (c, a) };
+        store.write(&format!("{first}/keeps-{second}"), b"").unwrap();
+        let mut b = relaunch(&store);
+        assert_eq!(offered(&mut b).len(), 2);
+        let r = b.execute(cmd, &json!({})).unwrap();
+        let done = if cmd == "file.recovery.restore" { restored(r) } else { r["discarded"].as_array().unwrap().len() };
+        assert_eq!(done, 2, "{cmd}");
+    }
+}
+
 /// An entry `<area>/keeps-<left area>` in a folder whose lock file can't be opened keeps nothing.
 #[cfg(unix)]
 #[test]
@@ -1543,6 +1568,71 @@ impl RecoveryStore for DiesAfterDocument {
     fn now(&self) -> Option<i64> {
         self.inner.now()
     }
+}
+
+/// Under automation read roots, `file.recovery.save`, `file.recovery.list` and
+/// `file.recovery.restore` name a document's file and the recovery folder only inside them.
+#[test]
+fn recovery_replies_leave_out_paths_outside_the_read_root() {
+    use crate::file_access::{AutomationRoots, confine};
+    use serde_json::Value;
+    let base = crate::tests_links::Folder::new("recovery-read-root");
+    let (inside, outside) = (base.0.join("in"), base.0.join("out"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let store: Arc<dyn RecoveryStore> = Arc::new(FolderStore::new(outside.join("recovery")));
+    let location = outside.join("recovery").to_string_lossy().to_string();
+    let kept = inside.join("kept.vectorcraft").to_string_lossy().to_string();
+    let hidden = outside.join("hidden.vectorcraft").to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.recovery.set_store(store.clone());
+    for path in [&kept, &hidden] {
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        s.execute("file.saveAs", &json!({"path": path})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    }
+    let roots = AutomationRoots::new(&[&inside], &[]).unwrap();
+    let saved = confine(roots.as_ref(), || s.execute("file.recovery.save", &json!({}))).unwrap();
+    assert_eq!(saved["location"], Value::Null, "{saved}");
+    s.execute("shape.ellipse", &json!({"x": 80, "y": 20, "width": 20, "height": 20})).unwrap();
+    assert_eq!(s.execute("file.recovery.save", &json!({})).unwrap()["location"], json!(location), "the person sees the folder");
+
+    let sorted = |v: &Value, key: &str| -> Vec<String> {
+        let mut out: Vec<String> = v[key].as_array().unwrap().iter().map(|c| c["path"].to_string()).collect();
+        out.sort();
+        out
+    };
+    let both = |first: Value| {
+        let mut out = vec![first.to_string(), json!(kept).to_string()];
+        out.sort();
+        out
+    };
+    assert_eq!(sorted(&s.execute("file.recovery.list", &json!({})).unwrap(), "copies"), both(json!(hidden)));
+    let listed = confine(roots.as_ref(), || s.execute("file.recovery.list", &json!({}))).unwrap();
+    assert_eq!((sorted(&listed, "copies"), &listed["location"]), (both(Value::Null), &Value::Null), "{listed}");
+    let outside_text = json!(outside.to_string_lossy()).to_string();
+    assert!(!listed.to_string().contains(outside_text.trim_matches('"')), "no path outside the root: {listed}");
+    // A relative recovery folder is checked as the file system reads it; a store that is no folder
+    // keeps its name.
+    let mut relative = Session::new();
+    relative.recovery.set_store(Arc::new(FolderStore::new("vc-recovery-relative-folder")));
+    let l = confine(roots.as_ref(), || relative.execute("file.recovery.list", &json!({}))).unwrap();
+    assert_eq!(l["location"], Value::Null, "{l}");
+    let (mut memory, _) = session();
+    let l = confine(roots.as_ref(), || memory.execute("file.recovery.list", &json!({}))).unwrap();
+    assert_eq!(l["location"], "memory", "{l}");
+
+    // After a crash, the copies restored.
+    drop(s);
+    let mut s = Session::new();
+    s.recovery.set_store(store.clone());
+    let r = confine(roots.as_ref(), || s.execute("file.recovery.restore", &json!({}))).unwrap();
+    assert_eq!(sorted(&r, "restored"), both(Value::Null), "{r}");
+    let mut opened: Vec<Option<String>> = s.documents().iter().map(|d| d.path.clone()).collect();
+    opened.sort();
+    let mut files = vec![Some(hidden), Some(kept)];
+    files.sort();
+    assert_eq!(opened, files, "the documents keep their files");
 }
 
 /// A crash between writing a copy's document and its details restores the new document with

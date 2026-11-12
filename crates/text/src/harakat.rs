@@ -37,9 +37,11 @@ pub(crate) fn is_harakat(c: char) -> bool {
 }
 
 /// Do character styles `a` and `b` differ, if at all, only in paint: fill, stroke and how the
-/// stroke is drawn, overprint, and the character style name? Those are not read by the shaper
-/// and change no glyph, advance or position. Stricter than [`crate::shape`]'s `shapes_alike`
-/// (which also ignores baseline shift, tracking, underline, …).
+/// stroke is drawn, overprint, and the character style name? OpenType feature differences are
+/// ignored here: they already apply to their own character ranges during shaping. Nor is the
+/// space before a line's first character read inside a cluster, which takes it from its first
+/// character (#5111). Stricter than [`crate::shape`]'s `shapes_alike` (which also ignores baseline
+/// shift, tracking, underline, …).
 pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
     // Exhaustive: a new attribute must explicitly keep or relax this boundary rule.
     let CharStyle {
@@ -51,6 +53,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         leading,
         tracking,
         kerning,
+        kerning_before: _,
         optical_kerning,
         baseline_shift,
         h_scale,
@@ -59,7 +62,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         underline,
         strikethrough,
         all_caps,
-        features,
+        features: _,
         position,
         small_caps,
         char_align,
@@ -108,7 +111,6 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         && underline == &b.underline
         && strikethrough == &b.strikethrough
         && all_caps == &b.all_caps
-        && features == &b.features
         && position == &b.position
         && small_caps == &b.small_caps
         && char_align == &b.char_align
@@ -127,7 +129,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
 }
 
 /// Is the run boundary at byte `at` of `text`, between styles `before` and `after`, one that
-/// stays inside a shaping cluster: they differ only in paint and a harakat is on either side?
+/// stays inside a shaping cluster: only paint or features differ and a harakat is on either side?
 pub(crate) fn paint_only_mark_boundary(text: &str, at: usize, before: &CharStyle, after: &CharStyle) -> bool {
     let next = text.get(at..).and_then(|s| s.chars().next());
     let previous = text.get(..at).and_then(|s| s.chars().next_back());

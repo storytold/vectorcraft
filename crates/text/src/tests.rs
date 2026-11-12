@@ -13,12 +13,14 @@ mod composite;
 mod devanagari;
 mod embed;
 mod fit;
+mod glyph_alternates;
 mod hang;
 mod harakat;
 mod inline;
 mod joiners;
 mod justify;
 mod kept_layouts;
+mod kerning_before;
 mod ligature_carets;
 mod path_joins;
 mod ruby;
@@ -2513,6 +2515,142 @@ fn thai_loanwords_stay_whole() {
     // No line ends inside the word, whatever the Thai font's widths put beside it.
     let word = text.find("โปรแกรม").unwrap();
     assert!(l.lines.iter().all(|ln| ln.end <= word || ln.end >= word + "โปรแกรม".len()), "{lines:?}");
+}
+
+/// Korean Line Break Anywhere (a paragraph attribute): off, a Korean word that does not fit moves
+/// to the next line whole, with either composer and in vertical type; on, the line breaks between
+/// its syllables. Each paragraph follows its own setting.
+#[test]
+fn korean_words_stay_whole_unless_line_break_anywhere_is_on() {
+    let text = "가나다 라마바";
+    let first = "가나다 ".len();
+    let measure = |vertical: bool| {
+        let mut t = point("가나다 라", style(20.0));
+        t.vertical = vertical;
+        layout(db(), &t).glyphs.iter().map(|g| g.advance).sum::<f64>()
+    };
+    let ends = |t: &TextObject| layout(db(), t).lines.iter().map(|l| l.end).collect::<Vec<_>>();
+    for vertical in [false, true] {
+        let fits = measure(vertical);
+        let frame = if vertical { Rect::new(0.0, 0.0, 400.0, fits + 1.0) } else { Rect::new(0.0, 0.0, fits + 1.0, 400.0) };
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let mut t = area(text, style(20.0), frame, Justify::Left);
+            (t.vertical, t.para.composer) = (vertical, composer);
+            assert_eq!(ends(&t), [first, text.len()], "{composer:?} vertical {vertical}: off");
+            t.para.korean_line_break_anywhere = true;
+            let on = ends(&t);
+            assert!(on.iter().any(|&e| e != first && e != text.len()), "{composer:?} vertical {vertical}: on {on:?}");
+        }
+    }
+    // Per paragraph: the first breaks between syllables, the second between words.
+    let fits = measure(false);
+    let mut t = area(&format!("{text}\n{text}"), style(20.0), Rect::new(0.0, 0.0, fits + 1.0, 400.0), Justify::Left);
+    t.para.composer = Composer::SingleLine;
+    let anywhere = vectorcraft_doc::ParaStyle { korean_line_break_anywhere: true, ..t.para.clone() };
+    t.set_paragraph_styles(vec![anywhere, t.para.clone()]);
+    let second = text.len() + 1;
+    assert_eq!(ends(&t), ["가나다 라".len(), text.len(), second + first, second + text.len()]);
+}
+
+/// Bunri-Kinshi (a paragraph attribute): on, two em dashes that do not both fit move to the next
+/// line together, with either composer and in vertical type; off, or with kinsoku None, the line
+/// breaks between them. Each paragraph follows its own setting.
+#[test]
+fn bunri_kinshi_keeps_two_em_dashes_on_one_line() {
+    let text = "あいう——え";
+    let (split, kept) = ("あいう—".len(), "あいう".len());
+    let measure = |vertical: bool| {
+        let mut t = point("あいう—", style(20.0));
+        t.vertical = vertical;
+        layout(db(), &t).glyphs.iter().map(|g| g.advance).sum::<f64>()
+    };
+    let ends = |t: &TextObject| layout(db(), t).lines.iter().map(|l| l.end).collect::<Vec<_>>();
+    for vertical in [false, true] {
+        let fits = measure(vertical);
+        let frame = if vertical { Rect::new(0.0, 0.0, 400.0, fits + 1.0) } else { Rect::new(0.0, 0.0, fits + 1.0, 400.0) };
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let mut t = area(text, style(20.0), frame, Justify::Left);
+            (t.vertical, t.para.composer) = (vertical, composer);
+            assert_eq!(ends(&t), [split, text.len()], "{composer:?} vertical {vertical}: off");
+            t.para.bunri_kinshi = true;
+            assert_eq!(ends(&t), [kept, text.len()], "{composer:?} vertical {vertical}: on");
+            t.para.kinsoku = vectorcraft_doc::Kinsoku::None;
+            assert_eq!(ends(&t), [split, text.len()], "{composer:?} vertical {vertical}: kinsoku None");
+        }
+    }
+    let fits = measure(false);
+    let mut t = area(&format!("{text}\n{text}"), style(20.0), Rect::new(0.0, 0.0, fits + 1.0, 400.0), Justify::Left);
+    t.para.composer = Composer::SingleLine;
+    let on = vectorcraft_doc::ParaStyle { bunri_kinshi: true, ..t.para.clone() };
+    t.set_paragraph_styles(vec![on, t.para.clone()]);
+    let second = text.len() + 1;
+    assert_eq!(ends(&t), [kept, text.len(), second + split, second + text.len()]);
+}
+
+/// Bunri-Kinshi: a justified line spreads its room over the gaps between its CJK characters but not
+/// over the gap inside a vertical kana repeat mark, and still fills its width.
+#[test]
+fn bunri_kinshi_adds_no_justification_space_inside_a_pair() {
+    let text = "あ〳〵いう";
+    let upper = "あ".len();
+    let natural = layout(db(), &point(text, style(20.0))).glyphs.iter().find(|g| g.byte == upper).map(|g| g.advance).unwrap();
+    let frame = Rect::new(0.0, 0.0, 300.0, 400.0);
+    let set = |bunri: bool| {
+        let mut t = area(text, style(20.0), frame, Justify::JustifyAll);
+        t.para.bunri_kinshi = bunri;
+        let l = layout(db(), &t);
+        assert!((l.lines[0].x1 - frame.x1).abs() < 1e-6, "{bunri}: {:?}", l.lines[0]);
+        l.glyphs.iter().find(|g| g.byte == upper).map(|g| g.advance).unwrap()
+    };
+    assert!(set(false) > natural + 1.0, "off: the gap after 〳 widens");
+    assert!((set(true) - natural).abs() < 1e-6, "on: the pair keeps its spacing");
+    // Nor does a Maximum Letter Spacing widen the gap between two em dashes on a line with spaces.
+    let text = "ab——cd ef";
+    let dash = "ab".len();
+    let natural = layout(db(), &point(text, style(20.0))).glyphs.iter().find(|g| g.byte == dash).map(|g| g.advance).unwrap();
+    let set = |bunri: bool| {
+        let mut t = area(text, style(20.0), frame, Justify::JustifyAll);
+        t.para.justification.letter_spacing = [0.0, 0.0, 100.0];
+        t.para.bunri_kinshi = bunri;
+        let l = layout(db(), &t);
+        l.glyphs.iter().find(|g| g.byte == dash).map(|g| g.advance).unwrap()
+    };
+    assert!(set(false) > natural + 1.0, "off: letter spacing widens the gap after the first dash");
+    assert!((set(true) - natural).abs() < 1e-6, "on: the dashes keep their spacing");
+    // A Desired Letter Spacing adds no space inside the pair on a ragged line either.
+    let desired = |bunri: bool| {
+        let mut t = area(text, style(20.0), frame, Justify::Left);
+        t.para.justification.letter_spacing = [0.0, 50.0, 100.0];
+        t.para.bunri_kinshi = bunri;
+        let l = layout(db(), &t);
+        let adv = |b: usize| l.glyphs.iter().find(|g| g.byte == b).map(|g| g.advance).unwrap();
+        (adv(dash), adv(0))
+    };
+    let (off, _) = desired(false);
+    assert!(off > natural + 1.0, "off: Desired spacing widens the gap after the first dash");
+    let (on, a) = desired(true);
+    assert!((on - natural).abs() < 1e-6, "on: the dashes keep their spacing");
+    assert!(a > layout(db(), &point(text, style(20.0))).glyphs[0].advance + 1.0, "on: other letters still take Desired spacing");
+    // Single Word Justification's Full Justify, right to left: the second dash's cluster (the dash
+    // and a combining mark) is drawn before the first dash, and the mark's gap, which opens next
+    // to the first dash, takes no space. The other gaps of the word still do.
+    let text = "אב——\u{301}גד";
+    let (first, second) = ("אב".len(), "אב—".len());
+    let width = |l: &TextLayout, b: usize| l.glyphs.iter().filter(|g| g.byte == b).map(|g| g.advance).sum::<f64>();
+    let natural = layout(db(), &point(text, style(20.0)));
+    assert!(natural.glyphs.iter().filter(|g| g.byte == second).count() > 1, "the dash and its mark are one cluster");
+    let set = |bunri: bool| {
+        let mut t = area(text, style(20.0), frame, Justify::JustifyAll);
+        t.para.bunri_kinshi = bunri;
+        let l = layout(db(), &t);
+        assert!((l.lines[0].x1 - frame.x1).abs() < 1e-6, "{bunri}: {:?}", l.lines[0]);
+        (width(&l, first), width(&l, second))
+    };
+    let (_, off) = set(false);
+    assert!(off > width(&natural, second) + 1.0, "off: Full Justify widens the gap between the dashes");
+    let (dash, on) = set(true);
+    assert!((on - width(&natural, second)).abs() < 1e-6, "on: the pair keeps its spacing right to left");
+    assert!(dash > width(&natural, first) + 1.0, "on: the gap on the pair's other side still widens");
 }
 
 /// No Break (Character panel menu) keeps the marked words on one line, where the same text wraps

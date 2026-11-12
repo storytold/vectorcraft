@@ -40,14 +40,16 @@ fn hide_under_a_root(tag: &str, reply: &mut Value, hidden: &super::Hiding) {
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// Encoded file data in a reply, a base64 string under `dataBase64`, `pngBase64` or
-/// `thumbnailBase64`, stays as it is when it holds a hidden library's path. Text that is not base64
-/// under such a key, an object or a list under it, and any other key ending in `Base64` are searched.
+/// Encoded file data in a reply, a base64 string under `dataBase64`, `pngBase64`, `thumbnailBase64`
+/// or `thumbnail` (a library item's or a PDF page's PNG), stays as it is when it holds a hidden
+/// library's path. Text that is not base64 under such a key, an object or a list under it, and any
+/// other key ending in `Base64` are searched.
 #[test]
 fn a_reply_keeps_encoded_data_that_holds_a_hidden_path() {
     let hidden = hiding(&[("loaded/assets/icon", "loaded/icon")], &[]);
     let data = "QUJ+assets/iconREVGxQQ==";
     let mut reply = json!({"ok": true, "result": {
+        "graphics": [{"name": "a", "thumbnail": data}, {"name": "b", "thumbnail": "assets/icon.png"}],
         "files": [{"name": "a.png", "dataBase64": data, "pngBase64": "assets/icon.png", "thumbnailBase64": data}],
         "status": "from assets/icon",
         "dataBase64": {"note": "from assets/icon"},
@@ -58,6 +60,8 @@ fn a_reply_keeps_encoded_data_that_holds_a_hidden_path() {
     let files = &reply["result"]["files"][0];
     assert_eq!((&files["dataBase64"], &files["thumbnailBase64"]), (&json!(data), &json!(data)), "{reply}");
     assert_eq!(files["pngBase64"], "icon.png", "{reply}");
+    let graphics = &reply["result"]["graphics"];
+    assert_eq!((&graphics[0]["thumbnail"], &graphics[1]["thumbnail"]), (&json!(data), &json!("icon.png")), "{reply}");
     assert_eq!(reply["result"]["status"], "from icon", "{reply}");
     assert_eq!(reply["result"]["dataBase64"]["note"], "from icon", "{reply}");
     assert_eq!(reply["result"]["pngBase64"][0], "from icon", "{reply}");
@@ -91,7 +95,8 @@ fn a_reply_keeps_a_hidden_path_only_inside_a_known_library_id() {
 }
 
 /// With matching in any case (as on Windows), a hidden path written in other letter cases is hidden
-/// too; a path in a `file:` URL with `%XX` escapes is hidden on every platform.
+/// too; a path in a `file:` URL with `%XX` escapes is hidden on every platform, the whole URL shown as
+/// the file name.
 #[test]
 fn a_reply_hides_a_path_in_any_case_and_escaped() {
     let hidden = hiding(&[("loaded/C:/Libs/My Swatches/b.svg", "loaded/b.svg")], &[]);
@@ -99,7 +104,7 @@ fn a_reply_hides_a_path_in_any_case_and_escaped() {
     let pairs = super::hidden_text(&hidden);
     let rewrite = super::Rewrite { pairs, hiding: &hidden, fold: true };
     super::replace_in_value(&mut reply, &rewrite);
-    assert_eq!(reply["error"], "from b.svg and file:///b.svg", "{reply}");
+    assert_eq!(reply["error"], "from b.svg and b.svg", "{reply}");
     // Two libraries whose paths differ only in letter case keep their own ids.
     let two = hiding(&[("loaded//libs/b.svg", "loaded/b.svg"), ("loaded//libs/B.svg", "loaded/B.svg")], &[]);
     let mut reply = json!({"error": "x /libs/B.svg y /libs/b.svg z /LIBS/b.svg"});
@@ -112,11 +117,37 @@ fn a_reply_hides_a_path_in_any_case_and_escaped() {
     assert_eq!(reply["error"], "LOADED//LIBS/IN/A.SVG", "{reply}");
     let mut reply = json!({"error": "file:///C:/Libs/My%20Swatches/b.svg"});
     hide_under_a_root("escaped", &mut reply, &hidden);
-    assert_eq!(reply["error"], "file:///b.svg", "{reply}");
+    assert_eq!(reply["error"], "b.svg", "{reply}");
     let hidden = hiding(&[("loaded//libs/caf\u{e9}/b.svg", "loaded/b.svg")], &[]);
     let mut reply = json!({"error": "file:///libs/caf%C3%a9/b.svg and file:///libs%2Fcaf%c3%A9%2Fb.svg?next=%2Fdocs&x=%FF at 100%25"});
     hide_under_a_root("escaped-mixed", &mut reply, &hidden);
-    assert_eq!(reply["error"], "file://b.svg and file://b.svg?next=%2Fdocs&x=%FF at 100%25", "{reply}");
+    assert_eq!(reply["error"], "b.svg and b.svg?next=%2Fdocs&x=%FF at 100%25", "{reply}");
+    // A `file:` URL without escapes is replaced whole too, with `localhost` or another host.
+    let mut reply = json!({"error": "file:///libs/caf\u{e9}/b.svg and FILE://localhost/libs/caf%C3%A9/b.svg"});
+    hide_under_a_root("plain-url", &mut reply, &hidden);
+    assert_eq!(reply["error"], "b.svg and b.svg", "{reply}");
+    let mut reply = json!({"error": "file://remote/libs/caf\u{e9}/b.svg; file:/libs/caf\u{e9}/b.svg; file: x/libs/caf\u{e9}/b.svg"});
+    hide_under_a_root("other-host", &mut reply, &hidden);
+    assert_eq!(reply["error"], "b.svg; b.svg; file: xb.svg", "{reply}");
+    let hidden = hiding(&[("loaded///host/share/c.svg", "loaded/c.svg")], &[]);
+    let mut reply = json!({"error": "file://host/share/c.svg, file:////host/share/c.svg, file://localhost//host/share/c.svg"});
+    hide_under_a_root("host-url", &mut reply, &hidden);
+    assert_eq!(reply["error"], "c.svg, c.svg, c.svg", "{reply}");
+}
+
+/// Only a string with a `%XX` escape is decoded before it is searched: a `%` that begins no escape
+/// leaves the text as it is, and the reply is the same either way.
+#[test]
+fn only_a_percent_escape_is_decoded() {
+    for (text, escaped) in [("width=\"100%\"", false), ("50% off", false), ("%zz%4", false), ("%", false), ("a%2Fb", true), ("%fF", true)] {
+        assert_eq!(super::has_percent_escape(text), escaped, "{text}");
+        let decoded = super::decoded_with_spans(text).map(|(decoded, _)| decoded);
+        assert_eq!(decoded.as_deref() != Some(text), escaped, "{text}: an escape alone changes the decoded text");
+    }
+    let hidden = hiding(&[("loaded//libs/b.svg", "loaded/b.svg")], &[]);
+    let mut reply = json!({"error": "100% of /libs/b.svg and file:///libs%2Fb.svg"});
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&hidden), hiding: &hidden, fold: false });
+    assert_eq!(reply["error"], "100% of b.svg and b.svg", "{reply}");
 }
 
 /// A path a failed request sent takes the place of a hidden library's id for the same path, written
@@ -263,6 +294,19 @@ fn a_reply_replaces_each_hidden_text_once() {
     let mut reply = json!({"error": "file:///art/in%20work/a.svg"});
     hide_under_a_root("escaped-readable", &mut reply, &hidden);
     assert_eq!(reply["error"], "file:///art/in%20work/a.svg", "{reply}");
+    // A URL whose scheme another hidden path took already is cut at its path.
+    let hidden = hiding(&[("loaded//a", "loaded/a"), ("loaded/file", "loaded/file")], &[]);
+    let mut reply = json!({"error": "file:///a"});
+    hide_under_a_root("scheme-taken", &mut reply, &hidden);
+    assert_eq!(reply["error"], "file://a", "{reply}");
+    // Keys that come to read the same keep every field; a key that is not rewritten keeps its name.
+    let hidden = hiding(&[("loaded//out/a.svg", "loaded/a.svg")], &[]);
+    let mut reply = json!({"result": {"a.svg": 1, "file:///out/a.svg": 2, "/out/a.svg": 3}});
+    hide_under_a_root("same-keys", &mut reply, &hidden);
+    assert_eq!(reply["result"]["a.svg"], 1, "{reply}");
+    let mut values: Vec<_> = reply["result"].as_object().map(|o| o.values().filter_map(Value::as_u64).collect()).unwrap_or_default();
+    values.sort_unstable();
+    assert_eq!(values, [1, 2, 3], "{reply}");
 }
 
 /// A library saved with another platform's absolute path is hidden, also when the working folder is
@@ -1029,8 +1073,8 @@ fn menu_dialogs_open_after_a_merge_on_another_thread() {
 }
 
 /// The Separations panel's checkboxes and a preference set while a Shape Builder merge is
-/// computed on another thread give the documents new revisions: the merge is applied first,
-/// and the document keeps it.
+/// computed on another thread apply the merge first, and the document keeps it. The checkboxes
+/// leave the view off, so they apply it by command id without giving the documents new revisions.
 #[test]
 fn panels_that_redraw_apply_a_merge_on_another_thread_first() {
     let cases = [

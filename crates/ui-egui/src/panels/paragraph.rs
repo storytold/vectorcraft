@@ -877,6 +877,16 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        // Inseparable pairs stay on one line; only with a kinsoku set.
+        let (kinsoku_on, bunri) = bunri_kinshi_item(app);
+        if menu_item(ui, tl!("Bunri-Kinshi"), has && kinsoku_on, bunri) {
+            toggle_bunri_kinshi(app);
+        }
+        // Korean lines break between any two syllables, not only between words.
+        let anywhere = shared_para(app, |p| p.korean_line_break_anywhere) == Some(true);
+        if menu_item(ui, tl!("Korean Line Break Anywhere"), has, anywhere) {
+            toggle_korean_line_break_anywhere(app);
+        }
     }
     ui.separator();
     let composer = shared_composer(app);
@@ -899,12 +909,33 @@ fn set_kinsoku_type(app: &mut VectorcraftApp, key: &str) {
     format(app, json!({"kinsokuType": key}));
 }
 
+/// Bunri-Kinshi's menu item for the paragraphs the panel acts on ([`format`]): (available, checked).
+/// It is available when none of them has kinsoku None, and checked when every one of them has it.
+fn bunri_kinshi_item(app: &VectorcraftApp) -> (bool, bool) {
+    (shared_para(app, |p| p.kinsoku == Kinsoku::None) == Some(false), shared_para(app, |p| p.bunri_kinshi) == Some(true))
+}
+
+/// Bunri-Kinshi (Paragraph panel menu): a click turns it off for all the paragraphs the panel acts
+/// on ([`format`]) when every one of them has it, and on for all of them otherwise, in one undo step.
+fn toggle_bunri_kinshi(app: &mut VectorcraftApp) {
+    let on = shared_para(app, |p| p.bunri_kinshi) == Some(true);
+    format(app, json!({"bunriKinshi": !on}));
+}
+
+/// Korean Line Break Anywhere (Paragraph panel menu): the menu item is checked when every paragraph
+/// the panel acts on ([`format`]) has it, and a click turns it off for all of them then, and on for
+/// all of them otherwise, in one undo step.
+fn toggle_korean_line_break_anywhere(app: &mut VectorcraftApp) {
+    let on = shared_para(app, |p| p.korean_line_break_anywhere) == Some(true);
+    format(app, json!({"koreanLineBreakAnywhere": !on}));
+}
+
 /// Reset Panel: the paragraphs the panel acts on ([`format`]) take Auto alignment, no list, no
 /// indents or paragraph spacing, Hyphenate off with the default Hyphenation and Justification
 /// options, Auto direction, Bottom-to-Bottom Leading, the Line-end Punctuation Half Width Mojikumi
-/// Set, Regular burasagari, the Hard kinsoku set, Push Out Only, the Every-line Composer, Roman
-/// Hanging Punctuation off, no kashidas and no tab stops, as one undo step named Reset Panel (inside
-/// an undo group that is already open, as part of its step).
+/// Set, Regular burasagari, the Hard kinsoku set, Push Out Only, the Every-line Composer, Bunri-Kinshi,
+/// Roman Hanging Punctuation and Korean Line Break Anywhere off, no kashidas and no tab stops, as one undo
+/// step named Reset Panel (inside an undo group that is already open, as part of its step).
 fn reset_panel(app: &mut VectorcraftApp) {
     let h = HyphenationOptions::default();
     let j = vectorcraft_doc::JustificationOptions::default();
@@ -924,7 +955,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "wordSpacing": j.word_spacing, "letterSpacing": j.letter_spacing, "glyphScaling": j.glyph_scaling,
             "autoLeading": j.auto_leading, "singleWordJustification": "fullJustify",
             "direction": "auto", "leadingModel": "romanBaseline", "mojikumi": "lineEndHalf", "burasagari": "standard", "kinsoku": "hard",
-            "kinsokuType": "pushOutOnly", "composer": "everyLine", "romanHangingPunctuation": false
+            "kinsokuType": "pushOutOnly", "composer": "everyLine", "romanHangingPunctuation": false, "koreanLineBreakAnywhere": false,
+            "bunriKinshi": false
         }),
     );
     para_cmd(app, "text.tabs.clear", json!({}));

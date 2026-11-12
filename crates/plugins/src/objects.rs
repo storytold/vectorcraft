@@ -616,6 +616,7 @@ fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
             }
             stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
             g.angle = g.angle.rem_euclid(360.0);
+            g.gradient.repeats = g.gradient.repeat_count();
             let conic = g.gradient.kind == vectorcraft_color::GradientKind::Conic;
             let no_focal = conic || g.gradient.kind == vectorcraft_color::GradientKind::Diamond;
             if let Some(geom) = &mut g.geom {
@@ -1243,8 +1244,11 @@ pub fn apply_output(doc: &mut Document, inputs: &[NodeId], out: Vec<OutObject>, 
         match o.id {
             Some(id) => {
                 let mut n = originals.remove(&id).ok_or_else(|| {
-                    let why = if wanted.contains(&id) { "is listed twice" } else { "is not the id of an input object" };
-                    out_err(&at, format!("{} {why}", id.0))
+                    if wanted.contains(&id) {
+                        out_err(&at, format!("{} is listed twice", id.0))
+                    } else {
+                        out_err(&at, format!("{} is not the id of an input object", id.0))
+                    }
                 })?;
                 // Type, images and symbol instances are only read: writing one would make it a path.
                 if input_kind(&n).is_some() && !o.kept {
