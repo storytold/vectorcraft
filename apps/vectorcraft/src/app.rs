@@ -35,7 +35,7 @@ impl eframe::App for App {
     // control channel asks for, and the frames carrying input it injected, to the automation roots
     // (`VectorcraftApp::with_automation_roots`), which are in force elsewhere in the process.
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        BEACON.enter(Stage::Logic);
+        let _timed = BEACON.enter_timed(Stage::Logic);
         file_access::unconfined(|| self.logic_frame(ctx, frame));
         self.app.finish_ime_logic(ctx);
         BEACON.enter(Stage::Idle);
@@ -43,7 +43,7 @@ impl eframe::App for App {
     /// Restore the borderless caption, apply platform menu and pen input, and hand the frame to the
     /// app's raw-input hook while the keyboard user is unconfined.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
-        BEACON.enter(Stage::Input);
+        let _timed = BEACON.enter_timed(Stage::Input);
         self.frame_start = Some(std::time::Instant::now());
         // winit gives the window its caption back when it changes the window's flags (maximize,
         // restore, …): take it off again before the frame is laid out (#1758).
@@ -68,7 +68,7 @@ impl eframe::App for App {
         BEACON.enter(Stage::Idle);
     }
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-        BEACON.enter(Stage::Interface);
+        let _timed = BEACON.enter_timed(Stage::Interface);
         #[cfg(target_os = "macos")]
         {
             let bar = vectorcraft_ui_egui::chrome::APP_BAR_HEIGHT;

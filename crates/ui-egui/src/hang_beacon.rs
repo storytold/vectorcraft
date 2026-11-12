@@ -196,6 +196,14 @@ impl Beacon {
         self.bump();
     }
 
+    /// The interface thread enters `stage` of a frame, timed whatever the activity around it, so a
+    /// frame the system runs while a file dialog waits for the user is timed too. The activity
+    /// before it applies again when the guard is dropped.
+    pub fn enter_timed(&self, stage: Stage) -> ActivityGuard<'_> {
+        self.enter(stage);
+        self.activity(Activity::None)
+    }
+
     /// The interface thread starts `activity`; it ends when the guard is dropped, and the activity
     /// before it applies again.
     pub fn activity(&self, activity: Activity) -> ActivityGuard<'_> {
@@ -536,6 +544,20 @@ mod tests {
         assert!(!B.take_input(), "taken");
         frame(vec![egui::Event::PointerGone]);
         assert!(B.take_input(), "the main window's input");
+    }
+
+    #[test]
+    fn a_frame_run_while_a_dialog_waits_is_timed() {
+        let b = Beacon::new();
+        let _dialog = b.activity(Activity::Dialog);
+        assert!(!b.sample().busy(), "the dialog waits for the user");
+        {
+            let _timed = b.enter_timed(Stage::Interface);
+            assert!(b.sample().busy(), "a frame inside the dialog's wait");
+            b.enter(Stage::Drawing);
+        }
+        assert_eq!(b.sample().activity, Activity::Dialog, "the dialog again");
+        assert!(!b.sample().busy());
     }
 
     #[test]
