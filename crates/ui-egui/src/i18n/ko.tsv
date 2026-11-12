@@ -5849,6 +5849,11 @@ axis	Y Axis	Y축
 	Calligraphic Nibs	서예 펜촉
 	Pattern Borders	패턴 테두리
 	Scatter Shapes	흩뿌리기 모양
+	Dry Media	건식 재료
+	Chalk Grain	분필 입자
+	Graphite Pencil	흑연 연필
+	Wax Crayon	왁스 크레용
+	Charcoal Dust	목탄 가루
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)

@@ -135,9 +135,12 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("pattern-borders"),
             json!("scatter-shapes"),
             json!("game-trails"),
-            json!("energy-beams")
+            json!("energy-beams"),
+            json!("dry-media")
         ]
     );
+    let dry = entries.iter().find(|e| under(e) && e.params["library"] == "dry-media").map(|e| e.label.as_str());
+    assert_eq!(dry, Some("Dry Media"));
     let enabled = |cmd: &str| entries.iter().find(|e| under(e) && e.command.as_deref() == Some(cmd)).map(|e| e.enabled);
     assert_eq!(enabled("window.brushLibrary.other"), Some(true));
     assert_eq!(enabled("ui.saveBrushLibrary"), Some(true), "a new document has the default brushes");
@@ -151,6 +154,13 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     for t in ["Open Brush Library", "Save Brush Library…"] {
         assert!(texts.iter().any(|x| x.ends_with(t)), "{t}: {texts:?}");
     }
+    // Dry Media opens in a library panel, and a click on Chalk Grain adds it in one step.
+    let r = app.run("window.brushLibrary", json!({"library": "Dry Media"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("dry-media"), Some(4)));
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Chalk Grain", Modifiers::NONE, 1.0);
+    assert!(has(&app, "Chalk Grain") && !has(&app, "Wax Crayon"));
+    assert_eq!(undo_len(&app), undo + 1);
     // Without brushes there is nothing to save.
     let all: Vec<String> = vectorcraft_brush::library(&app.session.doc().unwrap().doc).into_iter().map(|b| b.name).collect();
     app.run("brush.delete", json!({ "names": all })).unwrap();

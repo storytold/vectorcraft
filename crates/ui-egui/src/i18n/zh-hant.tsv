@@ -5906,6 +5906,11 @@ axis	Y Axis	Y 軸
 	Calligraphic Nibs	書法筆尖
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
+	Dry Media	乾性畫材
+	Chalk Grain	粉筆顆粒
+	Graphite Pencil	石墨鉛筆
+	Wax Crayon	蠟筆
+	Charcoal Dust	炭粉
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）

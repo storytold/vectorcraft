@@ -5868,6 +5868,11 @@ axis	Y Axis	Вісь Y
 	Calligraphic Nibs	Каліграфічні пера
 	Pattern Borders	Візерункові облямівки
 	Scatter Shapes	Розсіяні фігури
+	Dry Media	Сухі матеріали
+	Chalk Grain	Крейдяне зерно
+	Graphite Pencil	Графітний олівець
+	Wax Crayon	Восковий олівець
+	Charcoal Dust	Вугільний пил
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)

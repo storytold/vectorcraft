@@ -6222,6 +6222,11 @@ axis	Y Axis	Άξονας Y
 	Calligraphic Nibs	Καλλιγραφικές πένες
 	Pattern Borders	Περιθώρια μοτίβου
 	Scatter Shapes	Σχήματα διασποράς
+	Dry Media	Ξηρά μέσα
+	Chalk Grain	Κόκκος κιμωλίας
+	Graphite Pencil	Μολύβι γραφίτη
+	Wax Crayon	Κηρομπογιά
+	Charcoal Dust	Σκόνη κάρβουνου
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
