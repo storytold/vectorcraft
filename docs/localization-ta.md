@@ -1,6 +1,6 @@
 # Tamil interface terminology and verification
 
-The `ta` catalog (`crates/ui-egui/src/i18n/ta.tsv`, interface name **தமிழ்**) has 8,458 rows:
+The `ta` catalog (`crates/ui-egui/src/i18n/ta.tsv`, interface name **தமிழ்**) has 8,461 rows:
 2,760 `@msg`, 47 `@msgplural` and 41 `@plural`. It covers every row of the Hindi catalog, the
 newest complete one, plus the strings the untranslated report listed beyond it, so the report lists no
 Tamil gaps.
@@ -11,7 +11,7 @@ Tamil gaps.
   `locales/ta/vectorcraft.tsv` (4,125 rows) and `locales/ta/common.tsv` (924), written by
   @newsbaba24x7 with AI assistance and partly reviewed by a native speaker, plus 145 rows whose
   English the other Tamil Craft catalogs already translate.
-- The other 3,264 rows (mostly status and error messages) are AI-assisted translations from
+- The other 3,267 rows (mostly status and error messages) are AI-assisted translations from
   the plain meaning of the English, clean room, using VectorCraft's source to tell what each
   string means on screen. No other product's localisation or string table was consulted.
 - Native-speaker review of those rows is pending; coverage tests alone do not establish

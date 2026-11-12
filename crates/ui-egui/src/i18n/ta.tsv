@@ -8466,3 +8466,6 @@ theme	Appearance	தோற்றப்பாணி
 @msg	the JPEG XL file is cut short	JPEG XL கோப்பு இடையில் துண்டிக்கப்பட்டுள்ளது
 @msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	படம் {iw} × {ih} பிக்சல்கள், அந்த அகலத்தில் ஆர்ட்போர்டு {rw} × {rh} பிக்சல்கள்: அவற்றின் விகிதங்கள் வேறுபடுகின்றன
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF அல்லது BMP படம் அல்ல
+	East Asian Composition Settings	கிழக்கு ஆசிய வரியமைப்பு அமைப்புகள்
+	Korean Composition Settings	கொரிய வரியமைப்பு அமைப்புகள்
+	Korean Line Break Anywhere	கொரிய உரையில் எங்கும் வரி முறிவு
