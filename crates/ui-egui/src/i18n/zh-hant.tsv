@@ -864,6 +864,17 @@ font-technology	Variable	可變
 	The selected character's font is not available.	選取字元的字體無法使用。
 	No alternates for the selected character.	選取的字元沒有替代字。
 	Double-click to replace	按兩下以取代
+	Select one character with the Type tool first.	請先用文字工具選取一個字元。
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} 是 {font} 的字形，不是所選文字所用字體（{text_font}）的字形。
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} 屬於 {base}（U+{base_code}）{place}；您選取的是 {sel}（U+{code}）。
+	at the start of a word	位於詞首
+	in the middle of a word	位於詞中
+	at the end of a word	位於詞尾
+	standing alone	單獨出現時
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} 不是 {sel}（U+{code}）在其單字中所處位置的替代字。
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	按兩下以改為插入 {base}（U+{code}）：表現形式不會連接，字母會連接。
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	已插入 {base}（U+{code}）以取代表現形式：字體會依位置將其與相鄰字元連接。
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	沒有任何 OpenType 功能會在此處繪製該字形，因此它會取代該字元的字形，且可能無法與相鄰字元連接。
 	Double-click to insert	按兩下以插入
 	Double-click to rename	按兩下以重新命名
 	Double-click to target the contents	按兩下以指定內容
@@ -2080,6 +2091,7 @@ file-filter	Templates	範本
 @msg	nothing to distort	沒有可扭曲的內容
 @msg	unknown option `{path}.{k}`	未知的選項 `{path}.{k}`
 @msg	command `{0}` is not available right now: {1}	指令 `{0}` 目前無法使用：{1}
+@msg	command `{id}` is not available right now	指令 `{id}` 目前無法使用
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` 發生內部錯誤：{msg} (文件維持原狀；請回報此錯誤)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` 的參數無效：{msg}
 @msg	no active document	沒有作用中的文件
@@ -2268,6 +2280,8 @@ file-filter	Templates	範本
 @msg	the Smooth slider is not open	「平滑」滑桿未開啟
 @msg	the screen color sampler is already open	螢幕取色器已開啟
 @msg	this system has no screen color sampler	此系統沒有螢幕取色器
+@msg	the screen color sampler did not answer	螢幕取色器沒有回應
+@msg	the screen color sampler failed	螢幕取色器發生錯誤
 @msg	Corners edits the corners of a path	「轉角」用於編輯路徑的轉角
 @msg	give corners of the path: anchors where its sides meet at an angle	請提供路徑的轉角：其各邊以角度相交處的錨點
 @msg	select one path, or give its `id`	請選取一條路徑，或提供其 `id`
@@ -2978,6 +2992,8 @@ file-filter	Templates	範本
 	Metallic Gradients	金屬漸層
 	Meters	公尺
 	Method:	方法：
+	Pad	延伸
+	Repeats	重複次數
 	Millimeters	公釐
 	Minify	縮減檔案大小
 	Minimal	最少
@@ -4426,6 +4442,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Split Path	分割路徑
 	spot	特別色
 	Spot Color	特別色
+	Spot Color Objects	使用特別色的物件
+	Pattern Objects	使用圖樣的物件
+	Gradient Objects	使用漸層的物件
 	Spot Colors	特別色
 	Spot Colors…	特別色…
 	Spread:	擴散：
@@ -5732,6 +5751,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` must be true or false	`dither` 必須是 true 或 false
 	Perceptual	感知
 @msg	`method` must be classic or perceptual	`method` 必須是 classic 或 perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` 必須是 pad、repeat 或 reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必須是 1 到 {MAX_REPEATS} 之間的整數
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 適用於線性、放射狀、圓錐和菱形漸層
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	要安裝需要大量運算預算的「{name}」嗎？
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	每次執行最多可能需要 {minutes} 分鐘，並可完成其他增效模組所允許工作量的 {times} 倍。它會在背景執行，您可以隨時取消。
@@ -6647,3 +6669,8 @@ breakText	Glyphs	字符
 @msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數
+	Weed Box and Lines…	除廢框與除廢線…
+	Weed Box and Lines	除廢框與除廢線
+	Margin	邊距
+	Box	框
+	Swatch	色票

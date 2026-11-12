@@ -177,6 +177,19 @@ fn proportional_metrics_write_palt() {
     assert!(tags[2].contains("dlig") && tags[2].contains("palt"), "{}", tags[2]);
 }
 
+/// A feature with a value (`salt=2`) is written as that value, `-tag` as 0, a plain tag as 1; a
+/// tag whose value is not a number is left out.
+#[test]
+fn feature_values_write_their_number() {
+    let valued = CharStyle { features: vec!["salt=2".into(), "-liga".into(), "ss01".into(), "swsh=12".into(), "salt=x".into()], ..style(12.0) };
+    let d = area_doc(vec![run("ab ", style(12.0)), run("cd", valued)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    let tags = tspans(&svg);
+    assert_eq!(tags.len(), 2, "{svg}");
+    assert!(tags[1].contains("font-feature-settings:&quot;salt&quot; 2, &quot;liga&quot; 0, &quot;ss01&quot; 1, &quot;swsh&quot; 12"), "{}", tags[1]);
+    assert!(!tags[1].contains("salt=x") && !tags[0].contains("salt"), "{svg}");
+}
+
 /// Character Direction: live text writes each run set Left to Right as a bidi embedding
 /// (`direction` and `unicode-bidi`). Type with a run set Right to Left is written as outlines.
 #[test]

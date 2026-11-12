@@ -267,6 +267,28 @@ fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The titles of Document Info's Spot Color Objects, Pattern Objects and Gradient Objects
+/// categories, which the panel, its menu and the Objects category's counts show.
+#[test]
+fn document_info_object_category_titles_are_in_complete_catalogs() {
+    let mut session = vectorcraft_engine::Session::new();
+    session.execute("file.new", &serde_json::json!({"width": 100, "height": 100})).unwrap();
+    let info = session.execute("document.info", &serde_json::json!({})).unwrap();
+    let titles: Vec<&str> = info["sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| matches!(s["id"].as_str(), Some("spotColors" | "patterns" | "gradients")))
+        .filter_map(|s| s["title"].as_str())
+        .collect();
+    assert_eq!(titles, ["Spot Color Objects", "Pattern Objects", "Gradient Objects"]);
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for title in &titles {
+            assert!(lang.catalog().plain(title).is_some(), "{} is missing {title}", lang.code);
+        }
+    }
+}
+
 /// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
 /// own `antiAlias` row apart from the plain "Sharp" corner row.
 #[test]
