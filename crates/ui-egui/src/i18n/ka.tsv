@@ -3191,6 +3191,7 @@ theme	Appearance	იერსახე
 	Move Mesh Points	ბადის წერტილების გადაადგილება
 	Move Spine Point	ხერხემლის წერტილის გადაადგილება
 	Reshape Spine Segment	ხერხემლის სეგმენტის ფორმის შეცვლა
+	Blend Easing	გადასვლის შერბილება
 	Reset with Mesh	ბადით ჩამოყრა
 	Reset with Warp	გაღუნვით ხელახლა დაყენება
 	Set Mesh Point Color	ბადის წერტილის ფერის დაყენება
@@ -6290,6 +6291,11 @@ axis	Y Axis	Y ღერძი
 	User Brush Library 9	მომხმარებლის ფუნჯების ბიბლიოთეკა 9
 	User Brush Library 10	მომხმარებლის ფუნჯების ბიბლიოთეკა 10
 	Art Ribbons	ნახატის ლენტები
+	Ink and Wash	მელანი და ლავირება
+	Tapered Ink	წვეტიანი მელანი
+	Brush Pen	ფუნჯ-კალამი
+	Soft Wash	რბილი ლავირება
+	Pooling Wash	კიდიანი ლავირება
 	Zigzag	ზიგზაგი
 	Burst Ray	დარტყმის სხივი
 	Dash Trail	წყვეტილი კვალი

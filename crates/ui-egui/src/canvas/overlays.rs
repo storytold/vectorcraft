@@ -250,6 +250,26 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     rotate_all_widget(p, xf, tool, &st.doc, &st.selection);
 }
 
+/// The Appearance and Easing widgets of one selected blend (Selection and Blend tools), each joined
+/// by a line to the spine's halfway point: the Appearance widget hollow above it, the Easing widget
+/// filled below it. Drawn with the edges hidden too, as they are controls.
+pub(super) fn blend_widgets_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    use vectorcraft_tools::blendwidget::{BlendControl, BlendWidget, RADIUS_PX};
+    if !matches!(app.session.tool_id(), "selection" | "blend") {
+        return;
+    }
+    let Some(st) = app.session.active() else { return };
+    // The screen's up in the document, with the view turned by `xf.rot`.
+    let up = vectorcraft_geom::Vec2::new(-xf.rot.sin(), -xf.rot.cos());
+    for w in BlendWidget::of(&st.doc, &st.selection, xf.zoom, up) {
+        let (on, c, color) = (xf.to_screen(w.on), xf.to_screen(w.at), c32(st.doc.layer_color(w.id)));
+        p.line_segment([on, c], Stroke::new(1.0, color));
+        let fill = if w.control == BlendControl::Easing { color } else { Color32::WHITE };
+        p.circle_filled(c, RADIUS_PX, fill);
+        p.circle_stroke(c, RADIUS_PX, Stroke::new(1.0, color));
+    }
+}
+
 /// The Select/Move, Rotate All, Space and Move All widgets (Selection and Objects on Path tools, one
 /// Objects on Path group selected). The Rotate All widget is joined by a line to the first object's
 /// attachment point. It stays while dragged.

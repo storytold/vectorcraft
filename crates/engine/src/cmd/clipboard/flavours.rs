@@ -491,7 +491,7 @@ fn import_text(s: &mut Session, p: &Value) -> Result<Value> {
     if text.trim().is_empty() {
         return Err(bad(C, "the text is empty"));
     }
-    let style = super::super::create::new_type_style(s, &Value::Null);
+    let style = super::super::create::new_type_style(s, &Value::Null, C)?;
     let system_layout = s.doc()?.doc.setup.system_layout;
     let layout = |t: &mut TextObject| {
         t.system_layout = system_layout;

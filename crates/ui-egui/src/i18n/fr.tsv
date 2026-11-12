@@ -2068,6 +2068,7 @@ font-technology	Variable	Variables
 	Move Slices	Déplacer les tranches
 	Move Spine Point	Déplacer le point de la dorsale
 	Reshape Spine Segment	Modeler le segment de la dorsale
+	Blend Easing	Lissage du dégradé de formes
 	Move Brush	Déplacer la forme
 	Move Swatch	Déplacer la nuance
 	Move Up	Monter
@@ -6334,6 +6335,11 @@ axis	Y Axis	Axe Y
 	User Brush Library 9	Bibliothèque de formes utilisateur 9
 	User Brush Library 10	Bibliothèque de formes utilisateur 10
 	Art Ribbons	Rubans d'illustration
+	Ink and Wash	Encre et lavis
+	Tapered Ink	Encre effilée
+	Brush Pen	Feutre pinceau
+	Soft Wash	Lavis doux
+	Pooling Wash	Lavis à auréole
 	Zigzag	Zigzag
 	Burst Ray	Rayon d’impact
 	Dash Trail	Traînée tiretée

@@ -3060,6 +3060,7 @@ file-filter	Templates	範本
 	Move Slices	移動切片
 	Move Spine Point	移動脊線點
 	Reshape Spine Segment	改變脊線線段外框
+	Blend Easing	漸變緩動
 @msg	select a blend or give `id`	請選取漸變物件，或提供 `id`
 @msg	not a blend	不是漸變物件
 @msg	the blend has no spine	漸變物件沒有脊線
@@ -5982,6 +5983,11 @@ axis	Y Axis	Y 軸
 	User Brush Library 9	使用者筆刷資料庫 9
 	User Brush Library 10	使用者筆刷資料庫 10
 	Art Ribbons	藝術緞帶
+	Ink and Wash	水墨淡彩
+	Tapered Ink	漸細墨線
+	Brush Pen	軟頭筆
+	Soft Wash	柔和淡彩
+	Pooling Wash	積色淡彩
 	Zigzag	鋸齒
 	Burst Ray	衝擊射線
 	Dash Trail	虛線軌跡

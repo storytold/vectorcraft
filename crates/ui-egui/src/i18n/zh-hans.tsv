@@ -1968,6 +1968,7 @@ file-filter	Templates	模板
 	Move Slices	移动切片
 	Move Spine Point	移动脊线点
 	Reshape Spine Segment	整形脊线线段
+	Blend Easing	渐变缓动
 @msg	select a blend or give `id`	请选择一个混合对象，或给出 `id`
 @msg	not a blend	不是混合对象
 @msg	the blend has no spine	混合对象没有脊线
@@ -6177,6 +6178,11 @@ axis	Y Axis	Y 轴
 	User Brush Library 9	用户画笔库 9
 	User Brush Library 10	用户画笔库 10
 	Art Ribbons	艺术丝带
+	Ink and Wash	水墨淡彩
+	Tapered Ink	渐细墨线
+	Brush Pen	软头笔
+	Soft Wash	柔和淡彩
+	Pooling Wash	积色淡彩
 	Zigzag	锯齿
 	Burst Ray	冲击射线
 	Dash Trail	虚线轨迹
