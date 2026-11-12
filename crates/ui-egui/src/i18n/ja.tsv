@@ -2973,6 +2973,7 @@ mark-style	Japanese	日本式
 	Rotate View Tool	回転ビューツール
 	Trackpad Gesture to Rotate View	トラックパッドのジェスチャーでビューを回転
 	Hold a Tool Shortcut to Use the Tool Temporarily	ツールのショートカットを押している間だけツールを使用
+	Show Bounding Box While Moving and Drawing	移動中と描画中にバウンディングボックスを表示
 	Rotation	回転
 	Round Cap	丸型線端
 	Round Join	ラウンド結合

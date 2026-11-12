@@ -5733,6 +5733,7 @@ theme	Appearance	Görünüm
 	Thread Text	Metni Bağla
 	Trackpad Gesture to Rotate View	Görünümü Döndürmek İçin İzleme Dörtgeni Hareketi
 	Hold a Tool Shortcut to Use the Tool Temporarily	Aracı Geçici Olarak Kullanmak İçin Kısayolunu Basılı Tutma
+	Show Bounding Box While Moving and Drawing	Taşırken ve Çizerken Sınırlayıcı Kutuyu Göster
 	Typing	Yazma
 	Uniformly Scaled	Tekdüze Ölçeklenmiş
 	Unlock Variables	Değişkenlerin Kilidini Aç

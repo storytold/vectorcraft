@@ -1402,6 +1402,7 @@ lighting	Light	Valo
 	Rotate View Tool	Näkymän kiertotyökalu
 	Trackpad Gesture to Rotate View	Kierrä näkymää ohjauslevyn eleellä
 	Hold a Tool Shortcut to Use the Tool Temporarily	Käytä työkalua tilapäisesti pitämällä sen pikanäppäintä painettuna
+	Show Bounding Box While Moving and Drawing	Näytä rajausruutu siirrettäessä ja piirrettäessä
 	Rotate View	Kierrä näkymää
 	Rounded Rectangle Tool	Pyöristetyn suorakulmion työkalu
 	Scale Tool	Skaalaustyökalu
