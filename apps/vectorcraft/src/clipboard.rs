@@ -651,6 +651,7 @@ mod portable {
 
     impl Answer {
         /// The answer to `request` when it couldn't be read: `why`, or no files.
+        #[cfg(any(test, target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
         fn failed(request: Request, why: String) -> Self {
             match request {
                 Request::Text => Self::Text(Err(why)),
