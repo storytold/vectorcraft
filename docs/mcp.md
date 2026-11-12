@@ -7607,6 +7607,27 @@ Panel sets it back to Push Out Only. One undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsokuType":"pushInFirst"}}}
 ```
 
+## Bunri-Kinshi
+
+`text.setFormat {bunriKinshi: bool}` (Paragraph panel menu › Bunri-Kinshi, shown with the East Asian options) turns it
+on or off for the paragraphs of the selected type (or `ids`, or the paragraphs a `start` / `end` range touches). On, a
+line never breaks inside an inseparable pair: two em dashes (U+2014), two horizontal ellipses (U+2026), two two-dot
+leaders (U+2025), or the upper half of a vertical kana repeat mark (U+3033 or U+3034) followed by its lower half
+(U+3035), the pairs W3C JLREQ lists for its class cl-08 (https://www.w3.org/TR/jlreq/#cl-08), which are VectorCraft's
+set. A chain of em dashes stays together as well. A pair is two neighboring characters, whatever their fonts and
+styles; a forced line break between them ends the line as before. Both composers, vertical type, Kinsoku Shori Type,
+hyphenation and No Break follow it, and a pair wider than the line stays whole on it. Justification adds no space inside
+a pair. The setting works only with a Kinsoku Set: with Kinsoku Set None the paragraph keeps the value without effect,
+and the menu item is unavailable. Off by default, for new type and for paragraphs saved before the option. It is saved
+with the paragraph (`bunri_kinshi` in `para`) only when on, paragraph styles carry it (Paragraph Style Options › East
+Asian Composition Settings), and Reset Panel turns it off. A value that is not true or false is refused. One undo
+step. `.ai` editing data does not hold it, and a save reports a paragraph with it on and a pair in it as left out. The help page:
+https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"bunriKinshi":true}}}
+```
+
 ## Korean Line Break Anywhere
 
 `text.setFormat {koreanLineBreakAnywhere: bool}` (Paragraph panel menu › Korean Line Break Anywhere, shown with the
