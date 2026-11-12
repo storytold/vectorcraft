@@ -3382,12 +3382,27 @@ fn hebrew_parallel_round5_files_values() {
     for (source, expected) in [
         ("Default Printer", "מדפסת ברירת המחדל"),
         ("Include Artboard Fill", "הכללת מילוי משטח העבודה"),
-        ("Include Document Thumbnails", "הכללת תמונות ממוזערות של המסמך"),
+        (
+            "Include Document Thumbnails",
+            "הכללת תמונות ממוזערות של המסמך",
+        ),
         ("Import Shortcut Set", "ייבוא ערכת קיצורי מקשים"),
-        ("Open a document to preview its pages", "פתחו מסמך כדי להציג תצוגה מקדימה של עמודיו"),
-        ("Open a document to see its history.", "פתחו מסמך כדי להציג את ההיסטוריה שלו."),
-        ("Open a document to see its swatches.", "פתחו מסמך כדי להציג את דוגמיות הצבע שלו."),
-        ("Open a document to see its graphic styles.", "פתחו מסמך כדי להציג את הסגנונות הגרפיים שלו."),
+        (
+            "Open a document to preview its pages",
+            "פתחו מסמך כדי להציג תצוגה מקדימה של עמודיו",
+        ),
+        (
+            "Open a document to see its history.",
+            "פתחו מסמך כדי להציג את ההיסטוריה שלו.",
+        ),
+        (
+            "Open a document to see its swatches.",
+            "פתחו מסמך כדי להציג את דוגמיות הצבע שלו.",
+        ),
+        (
+            "Open a document to see its graphic styles.",
+            "פתחו מסמך כדי להציג את הסגנונות הגרפיים שלו.",
+        ),
         ("Export Type:", "סוג ייצוא:"),
         ("All printer's marks", "כל סימני הדפוס"),
     ] {
