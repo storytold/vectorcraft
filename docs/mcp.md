@@ -1826,7 +1826,7 @@ VectorCraft sets these limits itself:
 | Included and evaluated files | 64 in all, 16 levels deep, 1,024 paths looked up |
 | Heap | 256 MiB (128 MiB on the web) |
 | Host calls | 2,000,000 |
-| `maxFuel`, instructions in all | 1 to 100,000,000,000; 1,000,000,000 by default |
+| `maxFuel`, instructions in all, plus one for each UTF-16 code unit of source that `eval`, `Function` or an evaluated file compiles during the run | 1 to 100,000,000,000; 1,000,000,000 by default |
 | Instructions without a pause | 200,000,000 |
 | Nesting depth | 64 levels |
 | A value crossing to or from a command | 16 MiB and 1,048,576 entries |

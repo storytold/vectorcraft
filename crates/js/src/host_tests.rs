@@ -540,6 +540,27 @@ fn error_sources_count_from_the_last_script_and_code_from_an_earlier_one_is_unkn
     assert_eq!(r.error_source(), 0, "a syntax error is in the script");
 }
 
+#[test]
+fn an_evaluators_source_takes_fuel_before_it_is_parsed() {
+    // The evaluator gives 131,072 spaces and a number: far more code units than the fuel left.
+    let ends = Rc::new(Cell::new(0));
+    let ended = ends.clone();
+    let source: HostFunction = Rc::new(|_| Ok(Data::String(format!("{}7", " ".repeat(1 << 17)))));
+    let item = HostItem::Evaluator { source, end: Rc::new(move || ended.set(ended.get() + 1)), strict_writes: Rc::new(|| None) };
+    let mut r = realm(10_000);
+    r.define_host_object("host", vec![("evaluate".into(), item)]).unwrap();
+    let e = r.run("host.evaluate()").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel));
+    assert_eq!(ends.get(), 1, "the evaluator's end runs once");
+    // This fuel covers a third of the source's bytes but not all of its code units.
+    r.set_limits(Limits { fuel: 60_000, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Limit(LimitKind::Fuel));
+    assert_eq!(ends.get(), 2);
+    r.set_limits(Limits { fuel: 1_000_000, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()"), Ok(JsValue::Number(7.0)));
+    assert_eq!(ends.get(), 3);
+}
+
 proptest::proptest! {
     /// A slice size does not change what a script computes.
     #[test]
