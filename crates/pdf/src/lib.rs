@@ -213,7 +213,10 @@ pub struct ImportReport {
 #[derive(Clone, Debug)]
 pub struct ExportReport {
     pub bytes: Vec<u8>,
+    /// What the file leaves out of the document or writes differently.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the export didn't apply or applied another way.
+    pub setting_notes: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]

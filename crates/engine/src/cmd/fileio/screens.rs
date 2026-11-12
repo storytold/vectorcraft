@@ -17,12 +17,12 @@ use vectorcraft_doc::Document;
 use vectorcraft_geom::Rect;
 
 use super::super::{EngineError, NodeId, Result, Session, bad, bool_or, str_param};
-use super::encode::single_artboard;
+use super::encode::{add_note, single_artboard};
 use super::export::{export_crop, isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
 use super::{
-    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names_keeping_dots, create_dir, distinct_names_by, encode_with_warnings, merge,
-    unique_file_names_keeping_dots, with_black_output, writable, write_file,
+    ARTBOARD_PARAMS, ArtboardPick, Format, Note, artboard_file_names_keeping_dots, create_dir, distinct_names_by, encode_with_notes, merge,
+    note_texts, unique_file_names_keeping_dots, with_black_output, writable, write_file,
 };
 
 const C: &str = "document.exportForScreens";
@@ -1046,7 +1046,8 @@ pub(crate) fn with_export_preset(s: &Session, cmd: &str, settings: &mut Map<Stri
 /// holds its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard,
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
 /// so do different files that would share a name, with or without the `name` pattern. The reply's
-/// `warnings` lists every warning the encoders give for the files, each once.
+/// `warnings` lists every warning the encoders give for the files, each once, what the files lose
+/// first ([`super::note_texts`]).
 pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     check_passwords(p)?;
     let o = ScreenParams::of(p)?;
@@ -1138,18 +1139,16 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
         create_dir(dir)?;
     }
     let mut out = Output::default();
-    // The encoders' warnings for every file, each once.
-    let mut warnings: Vec<String> = Vec::new();
+    // The encoders' notes for every file, each once.
+    let mut notes: Vec<Note> = Vec::new();
     // Include Bleed: a grown artboard already holds the bleed. Assets, layers and a selection are
     // written on a page of their own bounds, which it doesn't grow.
     let bleed_on_page = o.include_bleed && o.assets.is_none() && o.layers.is_none() && o.selection.is_none();
     let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
         // The steps are the files: an encoder's own steps (artboards, pages) are not reported.
-        let (bytes, notes) = vectorcraft_doc::cancel::quiet(|| encode_with_warnings(doc, format, options))?;
-        for w in notes {
-            if !(bleed_on_page && w == super::pdf::BLEED_LEFT_OUT) && !warnings.contains(&w) {
-                warnings.push(w);
-            }
+        let (bytes, given) = vectorcraft_doc::cancel::quiet(|| encode_with_notes(doc, format, options))?;
+        for n in given.into_iter().filter(|n| !(bleed_on_page && n.text == super::pdf::BLEED_LEFT_OUT)) {
+            add_note(&mut notes, n);
         }
         Ok(bytes)
     };
@@ -1224,6 +1223,8 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
     if o.zip || folder.is_none() {
         vectorcraft_doc::cancel::check()?;
     }
+    // What the files lose first, across every file.
+    let warnings = note_texts(&notes);
     let names: Vec<&str> = out.kept.iter().map(|(n, _)| n.as_str()).collect();
     if o.zip {
         let zip = super::zip::deflate(&out.kept, super::zip::FIXED_TIME, vectorcraft_doc::cancel::is_cancelled);

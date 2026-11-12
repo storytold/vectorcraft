@@ -294,6 +294,9 @@ pub struct Output {
     pub linked: Vec<LinkedImage>,
     /// Features the export approximates.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the export didn't apply or applied another way (an encoding, a
+    /// font embedded whole).
+    pub setting_notes: Vec<String>,
     /// The encoding [`Self::bytes`] writes.
     pub encoding: Encoding,
 }
@@ -361,10 +364,11 @@ pub fn export(doc: &Document, opts: &ExportOptions) -> String {
     export_full(doc, opts, None).svg
 }
 
-/// Export a document as an SVG string, also returning warnings about approximated features.
+/// Export a document as an SVG string, also returning warnings about approximated features,
+/// then the notes on the options ([`Output::setting_notes`]).
 pub fn export_with_report(doc: &Document, opts: &ExportOptions) -> (String, Vec<String>) {
     let o = export_full(doc, opts, None);
-    (o.svg, o.warnings)
+    (o.svg, o.warnings.into_iter().chain(o.setting_notes).collect())
 }
 
 /// Export a document as SVG plus the image files it links to. `native`: the document in the
