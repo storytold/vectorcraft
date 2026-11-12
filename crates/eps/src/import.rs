@@ -42,6 +42,7 @@ mod interp;
 mod lex;
 mod native;
 mod obj;
+mod predefined_cmap;
 mod preview;
 mod shading;
 mod text;

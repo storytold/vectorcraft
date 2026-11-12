@@ -191,6 +191,89 @@ fn hidden_text_is_skipped_and_use_instances_are_kept() {
     assert!(t[1].xf.translation().to_point().distance(Point::new(50.0, 30.0)) < 1e-9);
 }
 
+/// SVG 2 §5.6 (https://www.w3.org/TR/SVG2/struct.html#UseElement): the element a `<use>` shows
+/// inherits from the `<use>`, not from where it is defined.
+#[test]
+fn a_use_of_a_text_passes_its_properties_on_to_the_text() {
+    let d = open(
+        r##"<defs font-size="30"><text id="t" y="50">HI</text></defs>
+        <use href="#t" font-size="100" fill="red"/><g font-weight="bold"><use href="#t" x="200"/></g>
+        <use href="#t" y="200" opacity="0.5" style="font-size:20px"/>"##,
+    );
+    let t = texts(&d);
+    assert_eq!(t.len(), 3, "{t:?}");
+    let s: Vec<CharStyle> = t.iter().map(|t| t.first_style()).collect();
+    assert!(close(s[0].size, 100.0, 1e-9), "{}", s[0].size);
+    assert_eq!(s[0].fill, Paint::solid(vectorcraft_color::Color::rgb8(255, 0, 0)));
+    assert!(close(s[1].size, 12.0, 1e-9), "the defaults, not the <defs>'s 30: {}", s[1].size);
+    assert_eq!(s[1].font_style, "Bold");
+    assert_eq!(s[1].fill, Paint::solid(vectorcraft_color::Color::BLACK));
+    assert!(close(s[2].size, 20.0, 1e-9), "{}", s[2].size);
+    assert!(t[0].xf.translation().to_point().distance(Point::new(0.0, 50.0)) < 1e-9, "{:?}", t[0].xf);
+    assert!(t[1].xf.translation().to_point().distance(Point::new(200.0, 50.0)) < 1e-9, "{:?}", t[1].xf);
+    assert!(t[2].xf.translation().to_point().distance(Point::new(0.0, 250.0)) < 1e-9, "{:?}", t[2].xf);
+    // The `<use>`'s opacity stays on the object it becomes.
+    let faded: Vec<&Node> = art(&d).into_iter().filter(|n| (n.opacity - 0.5).abs() < 1e-6).collect();
+    assert_eq!(faded.len(), 1, "{faded:?}");
+    // The text's own properties win over the `<use>`'s.
+    let d = open(r##"<defs><text id="t" y="50" font-size="20" fill="blue">HI</text></defs><use href="#t" font-size="100" fill="red"/>"##);
+    let s = only_text(&d).first_style();
+    assert!(close(s.size, 20.0, 1e-9), "{}", s.size);
+    assert_eq!(s.fill, Paint::solid(vectorcraft_color::Color::rgb8(0, 0, 255)));
+}
+
+/// A `<use>` inside the text it shows does not make the text inherit from itself.
+#[test]
+fn a_use_inside_the_text_it_shows_opens() {
+    let d = open(r##"<text id="t" y="50" font-size="20">HI<use href="#t" font-size="100"/><tspan><use href="#t"/></tspan></text>"##);
+    assert!(texts(&d).iter().all(|t| close(t.first_style().size, 20.0, 1e-9)), "{:?}", texts(&d));
+}
+
+/// Past 1 MiB of text built for `<use>` elements, the rest show their text with its own properties.
+#[test]
+fn uses_of_a_long_text_stop_taking_their_properties_past_the_limit() {
+    let long = "a".repeat(350_000);
+    let uses: String = (1..=4).map(|i| format!(r##"<use href="#t" font-size="{}"/>"##, i * 10)).collect();
+    let (d, w) = import_with_report(&svg(&format!(r##"<defs><text id="t" y="50">{long}</text></defs>{uses}"##))).unwrap();
+    let sizes: Vec<f64> = texts(&d).iter().map(|t| t.first_style().size).collect();
+    assert_eq!(sizes.len(), 4, "{sizes:?}");
+    assert!(close(sizes[0], 10.0, 1e-9) && close(sizes[1], 20.0, 1e-9), "{sizes:?}");
+    assert!(close(sizes[2], 12.0, 1e-9) && close(sizes[3], 12.0, 1e-9), "{sizes:?}");
+    assert_eq!(w.iter().filter(|w| w.contains("KiB of text and text paths shown through <use> elements")).count(), 1, "{w:?}");
+}
+
+/// The path a text follows counts toward that limit: each `<use>` of the text lays it out along
+/// the whole path again.
+#[test]
+fn uses_of_a_text_on_a_long_path_stop_taking_their_properties_past_the_limit() {
+    let d = format!("M0 0{}", "h1".repeat(350_000));
+    let uses: String = (1..=4).map(|i| format!(r##"<use href="#t" font-size="{}"/>"##, i * 10)).collect();
+    let body = format!(r##"<defs><path id="p" d="{d}"/><text id="t"><textPath href="#p">HI</textPath></text></defs>{uses}"##);
+    let (d, w) = import_with_report(&svg(&body)).unwrap();
+    let sizes: Vec<f64> = texts(&d).iter().map(|t| t.first_style().size).collect();
+    assert_eq!(sizes.len(), 4, "{sizes:?}");
+    assert!(close(sizes[0], 10.0, 1e-9) && close(sizes[1], 20.0, 1e-9), "{sizes:?}");
+    assert!(close(sizes[2], 12.0, 1e-9) && close(sizes[3], 12.0, 1e-9), "{sizes:?}");
+    assert_eq!(w.iter().filter(|w| w.contains("KiB of text and text paths shown through <use> elements")).count(), 1, "{w:?}");
+    // The same text on a short path is within the limit however many `<use>` elements show it.
+    let uses: String = (1..=300).map(|i| format!(r##"<use href="#t" font-size="{i}"/>"##)).collect();
+    let body = format!(r##"<defs><path id="p" d="M0 20L150 20"/><text id="t"><textPath href="#p">HI</textPath></text></defs>{uses}"##);
+    let (d, w) = import_with_report(&svg(&body)).unwrap();
+    assert!(texts(&d).iter().enumerate().all(|(i, t)| close(t.first_style().size, (i + 1) as f64, 1e-9)), "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("shown through <use> elements")), "{w:?}");
+}
+
+/// Many `<use>` elements of one text that inherit the same properties each get it.
+#[test]
+fn many_uses_of_a_text_in_one_group_all_take_its_properties() {
+    let uses: String = (0..200).map(|i| format!(r##"<use href="#t" x="{i}"/>"##)).collect();
+    let d = open(&format!(r##"<defs><text id="t" y="50">HI</text></defs><g font-size="40">{uses}</g>"##));
+    let t = texts(&d);
+    assert_eq!(t.len(), 200);
+    assert!(t.iter().all(|t| close(t.first_style().size, 40.0, 1e-9)));
+    assert!(t[199].xf.translation().to_point().distance(Point::new(199.0, 50.0)) < 1e-9, "{:?}", t[199].xf);
+}
+
 #[test]
 fn text_path_becomes_type_on_a_path() {
     let d = open(

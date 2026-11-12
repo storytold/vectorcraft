@@ -317,6 +317,14 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     if effect == vectorcraft_render::effects::SVG_FILTER && given.contains_key("name") && !given.contains_key("xml") {
         return Err(bad(id, "an SVG filter is named by its id: give `xml` with `name`"));
     }
+    // A Warp's map is one this build draws: 0, the earlier map, or its style's Bézier net.
+    let newest = vectorcraft_render::effects::WARP_NET;
+    if effect.starts_with("warp.")
+        && let Some(v) = given.get("version")
+        && vectorcraft_render::effects::warp_version(v).is_none()
+    {
+        return Err(bad(id, format!("`version` must be 0 or {newest}")));
+    }
     check_effect_color(id, effect, params)?;
     check_effect_channel(id, effect, params)
 }
