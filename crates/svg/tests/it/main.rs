@@ -32,6 +32,7 @@ mod options;
 mod prop_svg;
 mod raster_paints;
 mod roundtrip;
+mod spread;
 mod stroke_export;
 mod svg_glyphs;
 mod symbols_layers;

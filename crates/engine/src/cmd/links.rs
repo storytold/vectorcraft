@@ -436,7 +436,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a
             continue;
         };
         let preview = d.images.get(&key).map(|b| b.bytes.clone());
-        // A file read as it is keeps its own type; one turned upright (EXIF orientation) is the PNG it became.
+        // A file read as it is keeps its own type; one turned upright by its orientation is the PNG, or CMYK TIFF, it became.
         let mime = match fileio::format_for_name(g.link.name()) {
             Some(f) if img.blob.bytes.as_slice() == bytes.as_slice() => f.mime.to_string(),
             _ => img.blob.mime.clone(),

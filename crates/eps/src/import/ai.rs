@@ -34,6 +34,7 @@ use std::io::Read as _;
 use super::lex::find;
 use crate::ps;
 
+pub(crate) use brush::{BrushesRead, MANAGER_NAME as BRUSH_MANAGER, brushes_kept, plugin_name as brush_plugin_name, read_brush_object};
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 #[cfg(test)]
 pub(crate) use envelope::MAX_CHECKED;
