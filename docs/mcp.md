@@ -6299,48 +6299,6 @@ or in `options` (`file.formatOptions {format}` lists them with their values):
   artboard of the app's view when the app saves or exports the file, otherwise the artboard the document opened on (the
   active artboard of the `.ai` file it was opened from), else the first. A `.ai` file read from its editing copy
   opens on that artboard, and so does a `.ai` file restored from the native document it carries.
-## HP-GL export
-
-`document.export` (and `export`, and Export As) with format `hpgl` writes a plot file (`.plt`) of the first artboard
-(or `artboard`) for pen plotters and cutters; `useArtboards: true` writes one file per chosen artboard
-(`{stem}-{artboard}.plt`), `false` the bounds of the visible art. Each visible path is drawn once along its own line:
-a filled shape is its closed outline, also when a stroke gives its color, and a stroked path is its center line, so
-fills, stroke widths, dashes, brushes and arrowheads are not painted. Type is drawn as its glyph outlines, and a
-gradient mesh as its outline, also inside a blend (a mesh whose every point is at 0% opacity draws nothing). A
-symbol instance is drawn as its symbol's art with the art's effects, in the colors of the instance's stain.
-Clipping masks cut the art they clip, and the art is cut at the artboard's edges. Hidden and non-printing layers,
-hidden objects, objects at 0% opacity, template layers and guides are left out, and so are placed images, with a
-warning. Coordinates are plotter units (1016 to the inch, y up) from the artboard's bottom-left corner, or its
-center with `origin: "center"`, rounded to whole units, as the HP-GL/2 and HP RTL Reference Guide defines them
-([book listing](https://informit.com/store/hp-gl-2-and-hp-rtl-reference-guide-a-handbook-for-program-9780201310146);
-the [vendor's support page](https://support.hp.com/sg-en/document/c01121263) names it as the language reference).
-The guide also gives the instruction syntax and the encoding of `PE` numbers that the writer follows. Art more than
-8,388,607 units (about 210 m) from the origin is cut off, with a warning.
-
-Each color is a pen. Pen 1 is the first color the plot draws in, pen 2 the next new one, and so on, up to 255 pens;
-colors past those draw with the pen of the nearest color. The files of one export share the numbering, so a color is
-the same pen in each file. `pens: ["#000000", "#ff0000"]` gives the pen table instead (pen 1 first): each path draws
-with the pen of the nearest color, the lower pen when two are as near. A path's color is its topmost visible stroke's,
-else its topmost visible fill's, where a fill or stroke at 0% opacity does not count. A gradient's color is the average
-of its stops, a gradient mesh's the average of its points' colors (points at 0% opacity left out), and a pattern's its first visible solid fill (gray
-when it has none). The pens draw in turn, each pen's paths in paint order, or with `sortPaths: true` each next path
-the one that starts nearest where the pen stopped (an open path may be drawn from its other end, and a closed one
-starts at its point nearest the pen). Curves become straight moves no further than `curveTolerance` points from the
-curve (default 0.1, from 0.01 to 10). These defaults, the 255-pen limit and the rules for pen numbers and colors above
-are VectorCraft's own.
-
-`hpglVersion: "hpgl"` (the default) writes `IN;`, then for each pen `PU;SP<n>;` and each path `PUx,y;PDx,y,…;`, and
-ends with `PU;SP0;`. `"hpgl2"` also writes the palette (`NP` and a `PC` color for each pen) and draws each pen's
-paths as one encoded polyline (`PE`, base 64), which takes fewer bytes than the same moves as text. `warnings` names
-type drawn as outlines, inline graphics in type (left out), placed images, opacity masks, raster effects, stroke
-looks that are not drawn, art past the plotter's range, colors past 255 pens, and the limits on points, clipping
-work, symbols, live art, nesting depth and sorting.
-
-```json
-{"name":"export","arguments":{"path":"/tmp/decal.plt","format":"hpgl"}}
-{"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/sheet.plt","useArtboards":true,"hpglVersion":"hpgl2","pens":["#000000","#ff0000"],"sortPaths":true}}}
-```
-
 
 File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel, and Save a Copy
 does too for a `.ai` file; Save, Save a Copy to a native file and Save as Template reuse the options as last saved (or Use Compression).
@@ -6402,6 +6360,48 @@ instructions is refused with "not an HP-GL file".
 ```json
 {"name":"open_file","arguments":{"path":"/tmp/part.plt"}}
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/part.plt","at":[300,200]}}}
+```
+
+## HP-GL export
+
+`document.export` (and `export`, and Export As) with format `hpgl` writes a plot file (`.plt`) of the first artboard
+(or `artboard`) for pen plotters and cutters; `useArtboards: true` writes one file per chosen artboard
+(`{stem}-{artboard}.plt`), `false` the bounds of the visible art. Each visible path is drawn once along its own line:
+a filled shape is its closed outline, also when a stroke gives its color, and a stroked path is its center line, so
+fills, stroke widths, dashes, brushes and arrowheads are not painted. Type is drawn as its glyph outlines, and a
+gradient mesh as its outline, also inside a blend (a mesh whose every point is at 0% opacity draws nothing). A
+symbol instance is drawn as its symbol's art with the art's effects, in the colors of the instance's stain.
+Clipping masks cut the art they clip, and the art is cut at the artboard's edges. Hidden and non-printing layers,
+hidden objects, objects at 0% opacity, template layers and guides are left out, and so are placed images, with a
+warning. Coordinates are plotter units (1016 to the inch, y up) from the artboard's bottom-left corner, or its
+center with `origin: "center"`, rounded to whole units, as the HP-GL/2 and HP RTL Reference Guide defines them
+([book listing](https://informit.com/store/hp-gl-2-and-hp-rtl-reference-guide-a-handbook-for-program-9780201310146);
+the [vendor's support page](https://support.hp.com/sg-en/document/c01121263) names it as the language reference).
+The guide also gives the instruction syntax and the encoding of `PE` numbers that the writer follows. Art more than
+8,388,607 units (about 210 m) from the origin is cut off, with a warning.
+
+Each color is a pen. Pen 1 is the first color the plot draws in, pen 2 the next new one, and so on, up to 255 pens;
+colors past those draw with the pen of the nearest color. The files of one export share the numbering, so a color is
+the same pen in each file. `pens: ["#000000", "#ff0000"]` gives the pen table instead (pen 1 first): each path draws
+with the pen of the nearest color, the lower pen when two are as near. A path's color is its topmost visible stroke's,
+else its topmost visible fill's, where a fill or stroke at 0% opacity does not count. A gradient's color is the average
+of its stops, a gradient mesh's the average of its points' colors (points at 0% opacity left out), and a pattern's its first visible solid fill (gray
+when it has none). The pens draw in turn, each pen's paths in paint order, or with `sortPaths: true` each next path
+the one that starts nearest where the pen stopped (an open path may be drawn from its other end, and a closed one
+starts at its point nearest the pen). Curves become straight moves no further than `curveTolerance` points from the
+curve (default 0.1, from 0.01 to 10). These defaults, the 255-pen limit and the rules for pen numbers and colors above
+are VectorCraft's own.
+
+`hpglVersion: "hpgl"` (the default) writes `IN;`, then for each pen `PU;SP<n>;` and each path `PUx,y;PDx,y,…;`, and
+ends with `PU;SP0;`. `"hpgl2"` also writes the palette (`NP` and a `PC` color for each pen) and draws each pen's
+paths as one encoded polyline (`PE`, base 64), which takes fewer bytes than the same moves as text. `warnings` names
+type drawn as outlines, inline graphics in type (left out), placed images, opacity masks, raster effects, stroke
+looks that are not drawn, art past the plotter's range, colors past 255 pens, and the limits on points, clipping
+work, symbols, live art, nesting depth and sorting.
+
+```json
+{"name":"export","arguments":{"path":"/tmp/decal.plt","format":"hpgl"}}
+{"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/sheet.plt","useArtboards":true,"hpglVersion":"hpgl2","pens":["#000000","#ff0000"],"sortPaths":true}}}
 ```
 
 ## TIFF, BMP and Targa export
