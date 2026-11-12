@@ -729,7 +729,8 @@ fn a_panic_reply_hides_a_library_hidden_before_the_request() {
 
 /// An error shows a path outside the read root that the request sent by its file name, whether or not
 /// a hidden library was loaded from that path, so that it reads the same either way. A path the
-/// request sends does not show the app's own text that holds it, in an error or a result.
+/// request sends does not show the app's own text that holds it, in an error or a result, and a result
+/// shows that path by its file name as an error does.
 #[test]
 fn an_error_hides_a_sent_path_whether_or_not_a_library_was_loaded_from_it() {
     let (mut app, tx, base) = confined("client-echo");
@@ -746,7 +747,7 @@ fn an_error_hides_a_sent_path_whether_or_not_a_library_was_loaded_from_it() {
         assert!(r["error"].as_str().is_some_and(|e| e.ends_with(&format!(": {name}"))), "{r}");
     }
     let r = request(&mut app, &tx, "test.status", json!({"guess": path}));
-    assert_eq!(r["result"], "Loaded b.svg (2)", "{r}");
+    assert_eq!(r["result"], "Loaded b.svg", "{r}");
     let r = request(&mut app, &tx, "test.panic", json!({"guess": path}));
     assert_eq!(r["error"], "internal error: failed on Loaded b.svg (please report this bug)", "{r}");
     let _ = std::fs::remove_dir_all(base);

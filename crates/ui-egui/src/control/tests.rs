@@ -46,7 +46,7 @@ fn hide_under_a_root(tag: &str, reply: &mut Value, hidden: &super::Hiding) {
 #[test]
 fn a_reply_keeps_encoded_data_that_holds_a_hidden_path() {
     let hidden = hiding(&[("loaded/assets/icon", "loaded/icon")], &[]);
-    let data = "QUJDassets/iconREVGxQQ==";
+    let data = "QUJ+assets/iconREVGxQQ==";
     let mut reply = json!({"ok": true, "result": {
         "files": [{"name": "a.png", "dataBase64": data, "pngBase64": "assets/icon.png", "thumbnailBase64": data}],
         "status": "from assets/icon",
@@ -61,7 +61,7 @@ fn a_reply_keeps_encoded_data_that_holds_a_hidden_path() {
     assert_eq!(reply["result"]["status"], "from icon", "{reply}");
     assert_eq!(reply["result"]["dataBase64"]["note"], "from icon", "{reply}");
     assert_eq!(reply["result"]["pngBase64"][0], "from icon", "{reply}");
-    assert_eq!(reply["result"]["otherBase64"], "QUJDiconREVGxQQ==", "{reply}");
+    assert_eq!(reply["result"]["otherBase64"], "QUJ+iconREVGxQQ==", "{reply}");
 }
 
 /// A hidden path followed by more text stays only when the longer text is another loaded library's
@@ -96,19 +96,19 @@ fn a_reply_keeps_a_hidden_path_only_inside_a_known_library_id() {
 fn a_reply_hides_a_path_in_any_case_and_escaped() {
     let hidden = hiding(&[("loaded/C:/Libs/My Swatches/b.svg", "loaded/b.svg")], &[]);
     let mut reply = json!({"error": "from c:/LIBS/my swatches/B.SVG and file:///C:/Libs/My%20Swatches/b.svg"});
-    let pairs = super::hidden_text(&hidden.hidden);
+    let pairs = super::hidden_text(&hidden);
     let rewrite = super::Rewrite { pairs, hiding: &hidden, fold: true };
     super::replace_in_value(&mut reply, &rewrite);
     assert_eq!(reply["error"], "from b.svg and file:///b.svg", "{reply}");
     // Two libraries whose paths differ only in letter case keep their own ids.
     let two = hiding(&[("loaded//libs/b.svg", "loaded/b.svg"), ("loaded//libs/B.svg", "loaded/B.svg")], &[]);
     let mut reply = json!({"error": "x /libs/B.svg y /libs/b.svg z /LIBS/b.svg"});
-    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&two.hidden), hiding: &two, fold: true });
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&two), hiding: &two, fold: true });
     assert_eq!(reply["error"], "x B.svg y b.svg z b.svg", "{reply}");
     // A readable id that begins with a hidden one stays whole in any case, `loaded/` included.
     let nested = hiding(&[("loaded//libs/in", "loaded/in")], &["loaded//libs/in/a.svg"]);
     let mut reply = json!({"error": "LOADED//LIBS/IN/A.SVG"});
-    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&nested.hidden), hiding: &nested, fold: true });
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&nested), hiding: &nested, fold: true });
     assert_eq!(reply["error"], "LOADED//LIBS/IN/A.SVG", "{reply}");
     let mut reply = json!({"error": "file:///C:/Libs/My%20Swatches/b.svg"});
     hide_under_a_root("escaped", &mut reply, &hidden);
@@ -132,8 +132,8 @@ fn a_sent_path_replaces_a_hidden_id_for_the_same_path() {
 }
 
 /// The paths outside the read root that a request sends, as a path, a `file:` URL (also one that names
-/// another host), under `~` or starting with `../`, are hidden by their file names; plain text and a
-/// path inside the root are not.
+/// another host), under `~` or starting with `../`, or as a relative path in a path param, are hidden
+/// by their file names; plain text and a path inside the root are not.
 #[test]
 fn a_request_sends_paths_that_an_error_hides() {
     let base = std::env::temp_dir().join(format!("vc-sent-paths-{}", std::process::id()));
@@ -141,13 +141,14 @@ fn a_request_sends_paths_that_an_error_hides() {
     std::fs::create_dir_all(&root).unwrap();
     let inside = root.join("a.svg").to_string_lossy().into_owned();
     let keep = json!(["a/b", inside, "file://host/g.svg"]);
-    let params = json!({"path": "/x/my lib/b.svg", "list": ["file:///y/c%20d.svg", "~/e.svg", "../f.svg"], "other": keep});
+    let params = json!({"path": "/x/my lib/b.svg", "file": "outside/h.svg", "list": ["file:///y/c%20d.svg", "~/e.svg", "../f.svg"], "other": keep});
     let mut sent = Vec::new();
     let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
     vectorcraft_engine::file_access::confine(roots.as_ref(), || super::sent_paths(&params, &mut sent));
     let _ = std::fs::remove_dir_all(base);
     let pair = |path: &str, name: &str| (format!("loaded/{path}"), format!("loaded/{name}"));
     let want = [
+        pair("outside/h.svg", "h.svg"),
         pair("/y/c d.svg", "c d.svg"),
         pair("~/e.svg", "e.svg"),
         pair("../f.svg", "f.svg"),
@@ -181,6 +182,72 @@ fn an_absolute_path_outside_the_read_root_is_unreadable() {
         assert!(!super::unreadable_absolute(&inside));
     });
     let _ = std::fs::remove_dir_all(base);
+}
+
+/// Without a read root, a `file:` URL that names another host may be read, and a recorded step keeps
+/// it.
+#[test]
+fn a_url_naming_another_host_stays_without_a_read_root() {
+    assert!(!super::unreadable_absolute("file://host/share/a.svg"));
+    assert!(super::readable_value("file://host/share/a.svg"));
+    let mut params = json!({"path": "file://host/share/a.svg", "list": ["file://host/share/b.svg"]});
+    let fields = params.as_object_mut().unwrap();
+    super::leave_out_unreadable_params(fields);
+    assert_eq!(params, json!({"path": "file://host/share/a.svg", "list": ["file://host/share/b.svg"]}));
+}
+
+/// A hidden path quoted with `{:?}` is hidden with its quotes and control characters escaped.
+#[test]
+fn a_reply_hides_a_quoted_path_with_escaped_quotes() {
+    let hidden = hiding(&[("loaded//outside/a\"b\t.svg", "loaded/a\"b\t.svg")], &[]);
+    let mut reply = json!({"error": format!("can't read {:?}", "/outside/a\"b\t.svg")});
+    hide_under_a_root("quoted", &mut reply, &hidden);
+    assert_eq!(reply["error"], "can't read \"a\\\"b\\t.svg\"", "{reply}");
+}
+
+/// Each replacement is chosen from the text as given: a hidden path inside the id shown for another
+/// hidden library is not replaced again, and a readable id written with `%XX` escapes keeps the hidden
+/// path it begins with.
+#[test]
+fn a_reply_replaces_each_hidden_text_once() {
+    let hidden = hiding(&[("loaded//b.svg", "loaded/b.svg")], &[]);
+    let mut reply = json!({"error": "no loaded//b.svg"});
+    hide_under_a_root("root-file", &mut reply, &hidden);
+    assert_eq!(reply["error"], "no loaded/b.svg", "{reply}");
+    let hidden = hiding(&[("loaded//art/in", "loaded/in")], &["loaded//art/in work/a.svg"]);
+    let mut reply = json!({"error": "file:///art/in%20work/a.svg"});
+    hide_under_a_root("escaped-readable", &mut reply, &hidden);
+    assert_eq!(reply["error"], "file:///art/in%20work/a.svg", "{reply}");
+}
+
+/// A hidden relative path is hidden where it stands alone or after `./`, and stays where it ends a
+/// longer path.
+#[test]
+fn a_reply_keeps_a_longer_path_that_ends_with_a_hidden_relative_path() {
+    let hidden = hiding(&[("loaded/data/icon.svg", "loaded/icon.svg")], &[]);
+    let mut reply = json!({"result": "kept /work/data/icon.svg and xdata/icon.svg, hid ./data/icon.svg, \"data/icon.svg\" and loaded/data/icon.svg"});
+    hide_under_a_root("relative", &mut reply, &hidden);
+    assert_eq!(reply["result"], "kept /work/data/icon.svg and xdata/icon.svg, hid ./icon.svg, \"icon.svg\" and loaded/icon.svg", "{reply}");
+}
+
+/// A path outside the read root that a request sent is shown by its file name in a reply that succeeded
+/// as in one that failed.
+#[test]
+fn a_sent_path_reads_the_same_whatever_the_outcome() {
+    let app = VectorcraftApp::new(Session::new(), Services::default());
+    let root = std::env::temp_dir().join(format!("vc-sent-outcome-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let sent = json!({"path": "/outside/b.svg"});
+    let mut done = json!({"ok": true, "result": {"path": "/outside/b.svg"}});
+    let mut failed = json!({"ok": false, "error": "can't read /outside/b.svg"});
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        super::hide_in_reply(&app, &mut done, &sent, super::Hiding::default());
+        super::hide_in_reply(&app, &mut failed, &sent, super::Hiding::default());
+    });
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(done["result"]["path"], "b.svg", "{done}");
+    assert_eq!(failed["error"], "can't read b.svg", "{failed}");
 }
 
 #[test]
