@@ -6073,6 +6073,11 @@ axis	Y Axis	Axe Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget mémoire (l’objet {_1} nécessite {size} octets d’entrée, il en reste {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget d’objets (plus de {MAX_OBJECTS} objets en lecture seule)
+@msg	instruction budget	budget d’instructions
+@msg	time budget	budget de temps
+@msg	memory budget (the selection is too large to hand over)	budget mémoire (la sélection est trop grande pour être transmise)
+@msg	output size ({what} is {len} bytes, limit {max})	taille de sortie ({what} fait {len} octets, limite {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	l’autorisation du plug-in ne peut pas être retirée du magasin de plug-ins
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	« {name} » demande les autorisations {asked} : une personne doit les approuver dans l’application de bureau, ou passez `grant` dans une session démarrée avec --allow-plugin-grants
 @msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` et `allowHeavy` ne prennent effet que dans une session démarrée avec --allow-plugin-grants : approuvez le module externe dans l’application de bureau

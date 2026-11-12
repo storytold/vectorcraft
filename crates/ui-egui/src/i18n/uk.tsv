@@ -5674,6 +5674,11 @@ axis	Y Axis	Вісь Y
 @msg	`inputs` needs the permission `doc.read`	для `inputs` потрібен дозвіл `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет пам’яті (об’єкту {_1} потрібно {size} байтів вхідних даних, залишилося {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет об’єктів (понад {MAX_OBJECTS} об’єктів лише для читання)
+@msg	instruction budget	бюджет інструкцій
+@msg	time budget	бюджет часу
+@msg	memory budget (the selection is too large to hand over)	бюджет пам’яті (виділення завелике для передавання)
+@msg	output size ({what} is {len} bytes, limit {max})	розмір виводу ({what}: {len} байтів, межа {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	дозвіл модуля не вдається вилучити зі сховища модулів
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	дозвіл `{shown}` зарезервовано для пізнішого API модулів; цей хост його не надає
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» запитує дозволи {asked}: їх має схвалити людина в настільному застосунку, або передайте `grant` у сеансі, запущеному з --allow-plugin-grants

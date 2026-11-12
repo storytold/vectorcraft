@@ -6028,6 +6028,11 @@ axis	Y Axis	Y ღერძი
 @msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	მეხსიერების ბიუჯეტი (ობიექტს {_1} სჭირდება შეყვანის {size} ბაიტი, დარჩენილია {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ობიექტების ბიუჯეტი ({MAX_OBJECTS}-ზე მეტი მხოლოდ წასაკითხი ობიექტი)
+@msg	instruction budget	ინსტრუქციების ბიუჯეტი
+@msg	time budget	დროის ბიუჯეტი
+@msg	memory budget (the selection is too large to hand over)	მეხსიერების ბიუჯეტი (მონიშნული ზედმეტად დიდია გადასაცემად)
+@msg	output size ({what} is {len} bytes, limit {max})	გამოტანის ზომა ({what}: {len} ბაიტი, ლიმიტი {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	პლაგინის ნებართვის წაშლა პლაგინების საცავიდან შეუძლებელია
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	ნებართვა `{shown}` დაჯავშნილია პლაგინების მომავალი API-სთვის; ეს ჰოსტი მას არ გასცემს
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ ითხოვს ნებართვებს {asked}: ისინი დესკტოპის აპში ადამიანმა უნდა დაამტკიცოს, ან გადაეცით `grant` --allow-plugin-grants-ით გაშვებულ სესიაში
