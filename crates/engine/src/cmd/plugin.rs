@@ -760,14 +760,16 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         // When the write failed, the old stored module stays in the folder and needs its grant at
         // the next launch. A grant that can't be removed still approves the old bytes, so the store
         // gets the module it held back. When that module can't be read or written back, or there
-        // was none, no module goes with the grant, and the grant stops counting for this session. A
-        // grants file that is too large or doesn't hold a list approves nothing, and the new module
-        // stays; one that can't be opened or read may approve the old bytes once it reads again.
+        // was none, no module goes with the grant, and the grant stops counting for every session in
+        // the process attached to the folder. A grants file that is too large or doesn't hold a list
+        // approves nothing, and the new module stays; one that can't be opened or read may approve
+        // the old bytes once it reads again.
+        let writes = s.grant_writes();
         if stored && !s.store_grant(&m.id, None) && s.holds_plugin_grant(&m.id) {
             let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(plugin.id(), held.as_deref()));
             stored = !back && holds_new(s);
             if !back || matches!(previous, Ok(None)) {
-                s.ignore_stored_grant(&m.id);
+                s.ignore_stored_grant(&m.id, writes);
             }
         }
     }

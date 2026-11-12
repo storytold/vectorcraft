@@ -1329,6 +1329,8 @@ font-technology	Variable	Biến thiên
 	Extrude & Bevel…	Kéo dài & vát…
 	3D (Classic)	3D (cổ điển)
 	Extrude & Bevel (Classic)…	Kéo dài & vát (cổ điển)…
+	Revolve (Classic)…	Xoay tròn (cổ điển)…
+	Rotate (Classic)…	Xoay (cổ điển)…
 	Surface	Bề mặt
 	Wireframe	Khung dây
 	No Shading	Không tô bóng
@@ -1695,6 +1697,14 @@ file-filter	Templates	Mẫu
 	Halo	Vầng hào quang
 	Hand Tool	Công cụ Bàn tay
 	Hand-Drawn	Vẽ tay
+	Painted and Sketched	Vẽ màu và phác thảo
+	Washed Blue	Xanh nhạt nhòa
+	Bristle Ochre	Vàng đất cọ khô
+	Pastel Heather	Tím phấn màu
+	Charcoal Shade	Bóng than
+	Ink Contour	Đường viền mực
+	Wet Ink	Mực ướt
+	Fine Pen	Bút mảnh
 	Handles	Tay nắm
 	Hard	Cứng
 	Hard Light	Ánh sáng mạnh
@@ -2981,6 +2991,8 @@ mark-style	Japanese	Kiểu Nhật
 	Range:	Phạm vi:
 	Raster Effects	Hiệu ứng raster
 	Raster File Format:	Định dạng tệp raster:
+	Include Placed Images	Bao gồm ảnh đã đặt
+	Include Fill Hatches	Bao gồm mẫu gạch của vùng tô
 	Raster Sample Size:	Kích thước mẫu raster:
 	Raster/Vector Balance:	Cân bằng raster/vector:
 	Rasterize	Raster hóa
@@ -3138,6 +3150,10 @@ mark-style	Japanese	Kiểu Nhật
 	Replace Font	Thay thế phông chữ
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Thay thế bằng tệp khác hoặc bỏ qua: ảnh của nó vẫn hiển thị bản xem trước đã lưu cùng tài liệu.
 	Replace Spine	Thay thế trục
+	Create Spine	Tạo trục
+	Create Spine:	Tạo trục:
+	Always	Luôn luôn
+	Never	Không bao giờ
 	Replace Symbol	Thay thế ký hiệu
 	Reset Transformation	Đặt lại biến đổi
 	Replace With Font	Thay thế bằng phông chữ
@@ -4414,6 +4430,7 @@ theme	Appearance	Giao diện
 @msg	`globalAdjust` must be an object	`globalAdjust` phải là một đối tượng
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` phải là 1, 3 hoặc 5
 @msg	`stops` must be an array	`stops` phải là một mảng
+@msg	`{key}` must be an array	`{key}` phải là một mảng
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` phải là đối tượng tùy chọn SVG (xem document.formats)
 @msg	`to` must be "corner" or "smooth"	`to` phải là "corner" hoặc "smooth"
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` phải là "emBox", "capHeight", "xHeight" hoặc "icfBox"
@@ -5623,6 +5640,7 @@ theme	Appearance	Giao diện
 	Ruby	Ruby
 	Geometric Guides	Đường dẫn hình học
 	Geometric Patterns	Họa tiết hình học
+	Grit Textures	Kết cấu hạt
 	Ease In	Chậm lúc đầu
 	Ease Out	Chậm lúc cuối
 	Ease In Out	Chậm lúc đầu và cuối
@@ -5683,6 +5701,8 @@ axis	Y Axis	Trục Y
 	Version: {version}	Phiên bản: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Cài đặt “{name}” thay cho plug-in có cùng ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tệp này không phải là plug-in đã cài đặt trước đây với ID này. Tệp sẽ nhận cài đặt và bộ nhớ đệm được lưu cho ID đó.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Một tác vụ tự động đã yêu cầu cài đặt plug-in này. Để cài đặt, hãy tự mình chọn lệnh Đối tượng › Plug-in › Cài đặt plug-in… trong menu.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Một tác vụ tự động đã yêu cầu cài đặt plug-in này. Để cài đặt, hãy tự mình chọn lệnh Đối tượng › Plug-in › Cài đặt plug-in… trong menu.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” là mô-đun khác với plug-in có ID {_1} và sẽ nhận cài đặt và bộ nhớ đệm được lưu cho plug-in đó: hãy cài đặt với `replace: true` khi người dùng đồng ý
 	File SHA-256: {hash}	SHA-256 của tệp: {hash}
 	Read the objects it is given	Đọc các đối tượng được trao cho nó
@@ -5745,6 +5765,12 @@ axis	Y Axis	Trục Y
 @msg	command {name}: `label` must be 1-64 printable characters	lệnh {name}: `label` phải có 1-64 ký tự in được
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	lệnh {name}: hãy dùng id gồm 1-{MAX_COMMAND_ID} ký tự từ a-z 0-9 _ và bắt đầu bằng một chữ cái
 @msg	command {name}: {e}	lệnh {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (dòng {line}, cột {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` phải là một danh sách lệnh, mỗi lệnh có `id` và `label`
+@msg	command {name} must be an object with an `id` and a `label`	lệnh {name} phải là một đối tượng có `id` và `label`
+@msg	missing field `{key}`	thiếu trường `{key}`
+@msg	duplicate field `{key}`	trường `{key}` bị lặp
 @msg	only a filter or a live effect declares `commands`	chỉ bộ lọc hoặc hiệu ứng trực tiếp mới khai báo `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	mô-đun không có SHA-256 mà `hash` cho biết: không có gì được cài đặt
@@ -6105,6 +6131,10 @@ anchor	Points:	Điểm:
 @msg	features lists at most {max} tags	features chứa tối đa {max} thẻ
 @msg	unknown OpenType feature `{t}`	tính năng OpenType không xác định `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} phải là một số lớn hơn 0 và tối đa {max}
+@msg	{label} must be at most {max} characters	{label} chỉ được có tối đa {max} ký tự
+@msg	{label} must be one character	{label} phải là một ký tự
+@msg	at most {max} tab stops	tối đa {max} điểm dừng tab
+@msg	unknown align `{other}`	căn chỉnh không xác định `{other}`
 @msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6267,6 +6297,12 @@ breakText	Glyphs	Glyph
 	Delete the selected brushes?	Xóa các cọ đã chọn?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Có nét đang dùng một hoặc nhiều cọ này. Gỡ cọ khỏi các nét đó và xóa cọ?
 	Remove Strokes	Gỡ nét
+	Place Brush Art	Đặt đối tượng của cọ
+	Replace Brush Art	Thay đối tượng của cọ
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Có nét đang dùng cọ này. Áp dụng đối tượng mới cho các nét đó, hay giữ nguyên chúng và thêm một bản sao của cọ với đối tượng mới?
+	Apply to Strokes	Áp dụng cho nét
+	Leave Strokes	Giữ nguyên nét
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` không có đối tượng (chỉ cọ phân tán, cọ bản vẽ và cọ họa tiết mới có)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Công cụ sắp xếp
 	Arrange in Grid…	Sắp xếp theo lưới…
@@ -6518,6 +6554,19 @@ breakText	Glyphs	Glyph
 @plural	{n} earlier line dropped|{n} earlier lines dropped	đã bỏ {n} dòng cũ
 @plural	{n} line cut|{n} lines cut	đã cắt {n} dòng
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` và `last` phải là số thứ tự của các dòng mà bảng điều khiển đang giữ, `first` đứng trước `last`
+
+# Learn panel
+	Learn	Học
+	Explore tutorials	Khám phá hướng dẫn
+	For you	Dành cho bạn
+	Skills	Kỹ năng
+	Get started	Bắt đầu
+	Quick skill guide	Hướng dẫn nhanh về kỹ năng
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Các hướng dẫn thực hành ngắn cho những công cụ thiết yếu, xếp theo kỹ năng. Chọn một kỹ năng để xem các hướng dẫn của nó.
+	List Tutorials	Liệt kê hướng dẫn
+	Show Tutorial	Hiện hướng dẫn
+@msg	missing `tutorial` (see learn.list)	thiếu `tutorial` (xem learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	hướng dẫn không xác định `{id}` (xem learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn

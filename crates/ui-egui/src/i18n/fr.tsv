@@ -1148,6 +1148,8 @@ font-technology	Variable	Variables
 	Extrude & Bevel…	Extrusion et biseautage…
 	3D (Classic)	3D (classique)
 	Extrude & Bevel (Classic)…	Extrusion et biseautage (classique)…
+	Revolve (Classic)…	Révolution (classique)…
+	Rotate (Classic)…	Rotation (classique)…
 	Surface	Surface
 	Wireframe	Fil de fer
 	No Shading	Sans ombrage
@@ -1447,6 +1449,14 @@ font-technology	Variable	Variables
 	Hair Space	Espace ultrafine
 	Hand Tool	Outil Main
 	Hand-Drawn	Dessiné à la main
+	Painted and Sketched	Peint et esquissé
+	Washed Blue	Bleu lavé
+	Bristle Ochre	Ocre à la brosse
+	Pastel Heather	Bruyère pastel
+	Charcoal Shade	Ombre au fusain
+	Ink Contour	Contour encré
+	Wet Ink	Encre humide
+	Fine Pen	Plume fine
 	Handles	Poignées
 	Hard Light	Lumière crue
 	Hard Mix	Mélange maximal
@@ -2633,6 +2643,8 @@ digits	Malayalam	Malayalam
 	Range:	Plage :
 	Raster Effects	Effets de pixellisation
 	Raster File Format:	Format du fichier pixellisé :
+	Include Placed Images	Inclure les images importées
+	Include Fill Hatches	Inclure les hachures des fonds
 	Raster Sample Size:	Taille de l’échantillon pixellisé :
 	Raster/Vector Balance:	Équilibre pixellisé/vectoriel :
 	Rasterize	Pixelliser
@@ -2814,6 +2826,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Remplacer la police
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Remplacez-le par un autre fichier ou ignorez-le : ses images continueront d’afficher l’aperçu enregistré avec le document.
 	Replace Spine	Remplacer la dorsale
+	Create Spine	Créer une dorsale
+	Create Spine:	Créer une dorsale :
+	Always	Toujours
+	Never	Jamais
 	Replace Symbol	Remplacer le symbole
 	Reset Transformation	Réinitialiser la transformation
 	Replace With Font	Remplacer par la police
@@ -4234,6 +4250,7 @@ axis	Both	Les deux
 @msg	`globalAdjust` must be an object	`globalAdjust` doit être un objet
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` doit valoir 1, 3 ou 5
 @msg	`stops` must be an array	`stops` doit être un tableau
+@msg	`{key}` must be an array	`{key}` doit être un tableau
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` doit être un objet d’options SVG (voir document.formats)
 @msg	`{_1}` is no save command	`{_1}` n’est pas une commande d’enregistrement
 @msg	`{area}` is no recovery area name	`{area}` n’est pas un nom de zone de récupération
@@ -6014,6 +6031,7 @@ theme	Appearance	Apparence
 	Ruby	Ruby
 	Geometric Guides	Repères géométriques
 	Geometric Patterns	Motifs géométriques
+	Grit Textures	Textures granuleuses
 	Ease In	Accélération progressive
 	Ease Out	Décélération progressive
 	Ease In Out	Accélération et décélération
@@ -6072,6 +6090,8 @@ axis	Y Axis	Axe Y
 	Version: {version}	Version : {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installer « {name} » à la place du module externe qui a le même ID ?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ce fichier n’est pas le module externe installé auparavant avec cet ID. Il reçoit les réglages et le cache conservés pour cet ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Une automatisation a demandé l’installation de ce module externe. Pour l’installer, choisissez Objet › Modules externes › Installer un module externe… vous-même.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Une automatisation a demandé l’installation de ce module externe. Pour l’installer, choisissez Objet › Modules externes › Installer un module externe… vous-même.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	« {name} » est un autre module que le module externe d’ID {_1} et recevrait les réglages et le cache conservés pour celui-ci : installez-le avec `replace: true` une fois que l’utilisateur l’accepte
 	File SHA-256: {hash}	SHA-256 du fichier : {hash}
 	Read the objects it is given	Lire les objets qui lui sont transmis
@@ -6134,6 +6154,12 @@ axis	Y Axis	Axe Y
 @msg	command {name}: `label` must be 1-64 printable characters	commande {name} : `label` doit compter 1-64 caractères imprimables
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	commande {name} : utilisez un id de 1-{MAX_COMMAND_ID} caractères parmi a-z 0-9 _ commençant par une lettre
 @msg	command {name}: {e}	commande {name} : {e}
+@msg	manifest: {e}	manifeste : {e}
+@msg	manifest: {e} at line {line} column {column}	manifeste : {e} (ligne {line}, colonne {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` doit être une liste de commandes, chacune avec `id` et `label`
+@msg	command {name} must be an object with an `id` and a `label`	la commande {name} doit être un objet avec `id` et `label`
+@msg	missing field `{key}`	champ `{key}` manquant
+@msg	duplicate field `{key}`	champ `{key}` en double
 @msg	only a filter or a live effect declares `commands`	seul un filtre ou un effet dynamique déclare `commands`
 @msg	“{name}” › {label}: {e}	« {name} » › {label} : {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	le module n’a pas le SHA-256 indiqué par `hash` : rien n’a été installé
@@ -6491,6 +6517,10 @@ anchor	Points:	Points :
 @msg	features lists at most {max} tags	features contient au plus {max} balises
 @msg	unknown OpenType feature `{t}`	fonction OpenType inconnue `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} doit être un nombre supérieur à 0 et au plus égal à {max}
+@msg	{label} must be at most {max} characters	{label} doit compter au plus {max} caractères
+@msg	{label} must be one character	{label} doit être un seul caractère
+@msg	at most {max} tab stops	au plus {max} taquets de tabulation
+@msg	unknown align `{other}`	alignement inconnu `{other}`
 @msg	no character style `{name}`	Style de caractère `{name}` introuvable
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6652,6 +6682,12 @@ breakText	Glyphs	Glyphes
 	Delete the selected brushes?	Supprimer les formes sélectionnées ?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Des contours utilisent une ou plusieurs de ces formes. Retirer les formes de ces contours et supprimer les formes ?
 	Remove Strokes	Supprimer les contours
+	Place Brush Art	Placer l’illustration de la forme
+	Replace Brush Art	Remplacer l’illustration de la forme
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Des contours utilisent cette forme. Appliquer la nouvelle illustration à ces contours, ou les laisser tels quels et ajouter une copie de la forme avec la nouvelle illustration ?
+	Apply to Strokes	Appliquer aux contours
+	Leave Strokes	Conserver les contours
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` n’a pas d’illustration (seules les formes diffuses, artistiques et de motif en ont)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Outils de disposition
 	Arrange in Grid…	Disposer en grille…
@@ -6903,6 +6939,19 @@ breakText	Glyphs	Glyphes
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ligne antérieure supprimée|{n} lignes antérieures supprimées
 @plural	{n} line cut|{n} lines cut	{n} ligne coupée|{n} lignes coupées
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` et `last` doivent être des numéros de lignes que la console contient, `first` avant `last`
+
+# Learn panel
+	Learn	Apprendre
+	Explore tutorials	Découvrir les tutoriels
+	For you	Pour vous
+	Skills	Compétences
+	Get started	Prise en main
+	Quick skill guide	Guide rapide des compétences
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Courts tutoriels pratiques sur les outils essentiels, regroupés par compétence. Choisissez une compétence pour voir ses tutoriels.
+	List Tutorials	Lister les tutoriels
+	Show Tutorial	Afficher le tutoriel
+@msg	missing `tutorial` (see learn.list)	`tutorial` manquant (voir learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutoriel inconnu `{id}` (voir learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualiser les effets différés

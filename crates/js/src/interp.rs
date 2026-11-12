@@ -27,6 +27,7 @@ use crate::heap::{
     ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, NativeKind, OBJECT_BYTES, OPEN, ObjId,
     Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, code_bytes, key, string_bytes,
 };
+use crate::string_builtins::flat_charged;
 use crate::value::{Str, Value, array_index, index_key, number_to_str, string_to_number, to_int32, to_uint32};
 use crate::{LimitKind, Limits, Options};
 
@@ -205,6 +206,12 @@ pub(crate) struct Interp {
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
     pub(crate) held: Rc<HeldCount>,
+    /// Bytes of the copies [`Self::get_own_property`] made flattening the rope of a String
+    /// object, which the heap's total adds before the next limit check.
+    flattened: std::cell::Cell<usize>,
+    /// Fuel for the units those copies took and the rope nodes it read in place, which the next
+    /// step takes.
+    pub(crate) flattened_fuel: std::cell::Cell<u64>,
     /// The global code's default XML namespace URI (ECMA-357 section 12.1).
     pub(crate) xml_default_uri: Key,
     /// Set by the host to end the current slice of a resumable run at the next safe point.
@@ -450,6 +457,8 @@ impl Interp {
             files: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
+            flattened: std::cell::Cell::new(0),
+            flattened_fuel: std::cell::Cell::new(0),
             xml_default_uri: Rc::from(Vec::new()),
             pause: Rc::default(),
             in_slice: false,
@@ -569,6 +578,7 @@ impl Interp {
 
     fn tick(&mut self) -> JsResult<()> {
         self.use_fuel()?;
+        crate::regexp_vm::use_fuel_n(self, self.flattened_fuel.replace(0))?;
         self.settle_held();
         if self.heap.bytes > self.gc_threshold {
             self.collect_garbage();
@@ -595,10 +605,12 @@ impl Interp {
         Ok(())
     }
 
-    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total.
+    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total, and adds the
+    /// bytes of the ropes [`Self::get_own_property`] flattened.
     fn settle_held(&mut self) {
         let released = self.held.released.replace(0);
-        self.heap.bytes = self.heap.bytes.saturating_sub(released);
+        let flattened = self.flattened.replace(0);
+        self.heap.bytes = self.heap.bytes.saturating_sub(released).saturating_add(flattened);
     }
 
     /// Collects garbage now and sets when the next collection runs.
@@ -680,6 +692,7 @@ impl Interp {
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
+        self.flattened.set(0);
         self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get());
     }
 
@@ -943,11 +956,12 @@ impl Interp {
             Op::XmlEscape(kind) => self.op_xml_escape(kind),
             Op::XmlLiteral { parts, list } => self.op_xml_literal(parts, list),
             Op::XmlScopeGet => self.op_xml_scope_get(),
+            Op::XmlScopeRef => self.op_xml_scope_ref(),
             Op::XmlFilterStart => self.op_xml_filter_start(),
             Op::XmlFilterNext(t) => self.op_xml_filter_next(t),
             Op::XmlFilterTest => self.op_xml_filter_test(),
             Op::XmlFilterEnd => self.op_xml_filter_end(),
-            Op::ForEachValue => self.op_for_each_value(),
+            Op::ForEachValue(n) => self.op_for_each_value(n as usize),
             Op::SetDefaultNamespace => self.op_set_default_namespace(),
             Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
         }
@@ -1234,7 +1248,33 @@ impl Interp {
                 if let Some(i) = array_index(k)
                     && (i as usize) < s.len()
                 {
-                    let unit = s.flat().get(i as usize).copied().unwrap_or(0);
+                    let unit = if s.is_rope() {
+                        let owed = self.flattened_fuel.get();
+                        let flattened = self.flattened.get().saturating_add(string_bytes(s.len()));
+                        if self.heap.bytes.saturating_add(flattened) > self.limits.heap_bytes {
+                            // The copy does not fit without a collection, which needs `&mut self`:
+                            // the unit is read along the rope instead, a unit of fuel per node.
+                            let Some((unit, visited)) = s.unit_at(i as usize, self.fuel.saturating_sub(owed)) else {
+                                return Err(Abrupt::Limit(LimitKind::Fuel));
+                            };
+                            self.flattened_fuel.set(owed.saturating_add(visited));
+                            unit
+                        } else {
+                            // Flattening copies the units. The run ends here when the fuel for
+                            // the copy is not left; otherwise the next step takes it, and the
+                            // next limit check adds the copy's bytes.
+                            let fuel = owed.saturating_add((s.len() / crate::string_builtins::UNITS_PER_FUEL) as u64 + 1);
+                            if fuel > self.fuel {
+                                return Err(Abrupt::Limit(LimitKind::Fuel));
+                            }
+                            self.flattened_fuel.set(fuel);
+                            self.flattened.set(flattened);
+                            s.flat().get(i as usize).copied()
+                        }
+                    } else {
+                        s.flat().get(i as usize).copied()
+                    }
+                    .unwrap_or(0);
                     return Ok(Some(Prop::Data { value: Value::String(Str::from_units(vec![unit])), flags: ENUMERABLE }));
                 }
             }
@@ -1311,7 +1351,7 @@ impl Interp {
             if let Some(i) = array_index(k)
                 && (i as usize) < s.len()
             {
-                let unit = s.flat().get(i as usize).copied().unwrap_or(0);
+                let unit = flat_charged(self, s)?.get(i as usize).copied().unwrap_or(0);
                 return Ok(Value::String(Str::from_units(vec![unit])));
             }
         }
@@ -2419,7 +2459,7 @@ impl Interp {
         let strict = self.strict();
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.prepare_source(s.len())?;
-        let units = s.flat();
+        let units = self.flat_reserved(s)?;
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let frame = self.frame()?;
@@ -2584,7 +2624,7 @@ impl Interp {
             Value::Null => 0.0,
             Value::Bool(b) => f64::from(u8::from(*b)),
             Value::Number(n) => *n,
-            Value::String(s) => string_to_number(&s.flat()),
+            Value::String(s) => string_to_number(&flat_charged(self, s)?),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::Number)?;
                 return self.to_number(&p);
@@ -2618,17 +2658,26 @@ impl Interp {
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_key(&mut self, v: &Value) -> JsResult<Key> {
         match v {
-            Value::String(s) => {
-                let rope = s.is_rope();
-                let flat = s.flat();
-                if rope {
-                    self.heap.bytes += string_bytes(flat.len());
-                }
-                Ok(flat)
-            }
+            Value::String(s) => self.flat_reserved(s),
             Value::Number(n) if *n >= 0.0 && *n < 4_294_967_295.0 && n.fract() == 0.0 => Ok(index_key(*n as u32)),
-            _ => Ok(self.to_str(v)?.flat()),
+            _ => {
+                let s = self.to_str(v)?;
+                self.flat_reserved(&s)
+            }
         }
+    }
+
+    /// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that
+    /// copy's bytes are reserved and added to the heap first, without taking fuel. The rope stays
+    /// rooted while the copy is reserved; everything else the caller still needs must be
+    /// reachable from the roots.
+    fn flat_reserved(&mut self, s: &Str) -> JsResult<Key> {
+        if s.is_rope() {
+            let bytes = string_bytes(s.len());
+            self.rooted(&[Value::String(s.clone())], |i| i.reserve_heap(bytes))?;
+            self.heap.bytes = self.heap.bytes.saturating_add(bytes);
+        }
+        Ok(s.flat())
     }
 
     /// ToObject (section 9.9).
@@ -2753,7 +2802,11 @@ impl Interp {
             (self.to_primitive(x, Hint::Number)?, py)
         };
         if let (Value::String(a), Value::String(b)) = (&px, &py) {
-            return Ok(Some(*a.flat() < *b.flat()));
+            // Both stay rooted, so the first copy is still counted while the second is made.
+            return self.rooted(&[px.clone(), py.clone()], |i| {
+                let (a, b) = (flat_charged(i, a)?, flat_charged(i, b)?);
+                Ok(Some(*a < *b))
+            });
         }
         let nx = self.to_number(&px)?;
         let ny = self.to_number(&py)?;
@@ -2778,7 +2831,9 @@ impl Interp {
                 | (Value::String(_), Value::String(_))
                 | (Value::Bool(_), Value::Bool(_))
                 | (Value::Object(_), Value::Object(_)) => return Ok(strict_eq(&x, &y)),
-                (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => return Ok(*n == string_to_number(&s.flat())),
+                (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => {
+                    return Ok(*n == string_to_number(&flat_charged(self, s)?));
+                }
                 (Value::Bool(v), _) => x = Value::Number(f64::from(u8::from(*v))),
                 (_, Value::Bool(v)) => y = Value::Number(f64::from(u8::from(*v))),
                 (Value::Number(_) | Value::String(_), Value::Object(_)) => y = self.to_primitive(&y, Hint::Default)?,

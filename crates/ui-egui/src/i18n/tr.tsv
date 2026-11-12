@@ -1124,6 +1124,8 @@ font-technology	Variable	Değişken
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
 	3D (Classic)	3D (Klasik)
 	Extrude & Bevel (Classic)…	Ekstrüzyon ve Eğim (Klasik)…
+	Revolve (Classic)…	Döndür (Klasik)…
+	Rotate (Classic)…	Çevir (Klasik)…
 	Surface	Yüzey
 	Wireframe	Tel Kafes
 	No Shading	Gölgeleme Yok
@@ -1376,6 +1378,14 @@ font-technology	Variable	Değişken
 	Hair Space	Saç Alanı
 	Hand Tool	El Aracı
 	Hand-Drawn	elle çizilmiş
+	Painted and Sketched	Boyanmış ve Eskiz
+	Washed Blue	Soluk Mavi
+	Bristle Ochre	Fırça Darbeli Toprak Sarısı
+	Pastel Heather	Pastel Funda
+	Charcoal Shade	Kömür Gölge
+	Ink Contour	Mürekkep Kontur
+	Wet Ink	Islak Mürekkep
+	Fine Pen	İnce Kalem
 	Handles	Kollar
 	Hard Light	Sert Işık
 	Harmony Rules:	Uyum Kuralları:
@@ -2450,6 +2460,8 @@ digits	Malayalam	Malayalam
 	Range:	Aralık:
 	Raster Effects	Raster Efektleri
 	Raster File Format:	Raster Dosya Formatı:
+	Include Placed Images	Yerleştirilen Görüntüleri Dahil Et
+	Include Fill Hatches	Dolgu Taramalarını Dahil Et
 	Raster Sample Size:	Raster Örnek Boyutu:
 	Raster/Vector Balance:	Raster/Vektör Dengesi:
 	Rasterize	Rasterleştir
@@ -2627,6 +2639,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Yazı Tipini Değiştir
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Onu başka bir dosyayla değiştirin veya yok sayın: resimleri, belgeyle birlikte kaydedilen önizlemeyi göstermeye devam eder.
 	Replace Spine	Omurgayı Değiştir
+	Create Spine	Omurga Oluştur
+	Create Spine:	Omurga Oluştur:
+	Always	Her Zaman
+	Never	Asla
 	Replace Symbol	Sembolü Değiştir
 	Reset Transformation	Dönüşümü Sıfırla
 	Replace With Font	Yazı Tipiyle Değiştir
@@ -4035,6 +4051,7 @@ axis	Both	Her İkisi
 @msg	`globalAdjust` must be an object	`globalAdjust` bir nesne olmalıdır
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` 1, 3 veya 5 olmalıdır
 @msg	`stops` must be an array	`stops` bir dizi olmalıdır
+@msg	`{key}` must be an array	`{key}` bir dizi olmalıdır
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`, SVG seçeneklerinin bir nesnesi olmalıdır (bkz. document.formats)
 @msg	`{_1}` is no save command	`{_1}` kaydetme komutu değil
 @msg	`{area}` is no recovery area name	`{area}`, kurtarma alanı adı değildir
@@ -6014,6 +6031,7 @@ axis	Y Axis	Y ekseni
 	Snap to Perpendicular	Dikeye Yasla
 	Geometric Guides	Geometrik Kılavuzlar
 	Geometric Patterns	Geometrik Desenler
+	Grit Textures	Grenli Dokular
 @msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Büyük bir hesaplama bütçesi isteyen “{name}” yüklensin mi?
@@ -6033,6 +6051,8 @@ axis	Y Axis	Y ekseni
 	Version: {version}	Sürüm: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Aynı kimliğe sahip eklentinin yerine “{name}” yüklensin mi?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Bu dosya, daha önce bu kimlikle yüklenen eklenti değil. O kimlik için saklanan ayarları ve önbelleği alır.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Bir otomasyon bu eklentinin yüklenmesini istedi. Yüklemek için Nesne › Eklentiler › Eklentiyi Yükle… komutunu kendiniz seçin.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Bir otomasyon bu eklentinin yüklenmesini istedi. Yüklemek için Nesne › Eklentiler › Eklentiyi Yükle… komutunu kendiniz seçin.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”, {_1} kimlikli eklentiden farklı bir modül ve onun için saklanan ayarları ve önbelleği alacak: kullanıcı onayladıktan sonra `replace: true` ile yükleyin
 	File SHA-256: {hash}	Dosya SHA-256: {hash}
 	Read the objects it is given	Kendisine verilen nesneleri okuma
@@ -6095,6 +6115,12 @@ axis	Y Axis	Y ekseni
 @msg	command {name}: `label` must be 1-64 printable characters	{name} komutu: `label` 1-64 yazdırılabilir karakter olmalıdır
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} komutu: a-z 0-9 _ karakterlerinden oluşan ve harfle başlayan 1-{MAX_COMMAND_ID} karakterlik bir kimlik kullanın
 @msg	command {name}: {e}	{name} komutu: {e}
+@msg	manifest: {e}	bildirim: {e}
+@msg	manifest: {e} at line {line} column {column}	bildirim: {e} (satır {line}, sütun {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands`, her biri `id` ve `label` içeren bir komut listesi olmalıdır
+@msg	command {name} must be an object with an `id` and a `label`	{name} komutu `id` ve `label` içeren bir nesne olmalıdır
+@msg	missing field `{key}`	`{key}` alanı eksik
+@msg	duplicate field `{key}`	`{key}` alanı yinelenmiş
 @msg	only a filter or a live effect declares `commands`	`commands` yalnızca bir filtre veya canlı efekt tarafından bildirilir
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modül `hash` içinde verilen SHA-256 değerine sahip değil: hiçbir şey yüklenmedi
@@ -6452,6 +6478,10 @@ anchor	Points:	Noktalar:
 @msg	features lists at most {max} tags	features en fazla {max} etiket içerebilir
 @msg	unknown OpenType feature `{t}`	bilinmeyen OpenType özelliği `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0'ın üzerinde ve en fazla {max} olan bir sayı olmalıdır
+@msg	{label} must be at most {max} characters	{label} en fazla {max} karakter olmalıdır
+@msg	{label} must be one character	{label} tek bir karakter olmalıdır
+@msg	at most {max} tab stops	en fazla {max} sekme durağı
+@msg	unknown align `{other}`	bilinmeyen hizalama `{other}`
 @msg	no character style `{name}`	`{name}` karakter stili bulunamadı
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6613,6 +6643,12 @@ breakText	Glyphs	Glifler
 	Delete the selected brushes?	Seçili fırçalar silinsin mi?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturlar bu fırçalardan birini veya daha fazlasını kullanıyor. Fırçalar bu konturlardan kaldırılsın ve fırçalar silinsin mi?
 	Remove Strokes	Konturları Kaldır
+	Place Brush Art	Fırça Çizimini Yerleştir
+	Replace Brush Art	Fırça Çizimini Değiştir
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturlar bu fırçayı kullanıyor. Yeni çizim bu konturlara uygulansın mı, yoksa konturlar olduğu gibi bırakılıp fırçanın yeni çizimli bir kopyası mı eklensin?
+	Apply to Strokes	Konturlara Uygula
+	Leave Strokes	Konturları Bırak
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` fırçasının çizimi yok (yalnızca serpme, resim ve desen fırçalarının çizimi vardır)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Düzenleme Araçları
 	Arrange in Grid…	Izgarada Düzenle…
@@ -6864,6 +6900,19 @@ breakText	Glyphs	Glifler
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eski satır atıldı
 @plural	{n} line cut|{n} lines cut	{n} satır kesildi
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli
+
+# Learn panel
+	Learn	Öğren
+	Explore tutorials	Öğreticileri Keşfet
+	For you	Sizin için
+	Skills	Beceriler
+	Get started	Başlarken
+	Quick skill guide	Hızlı beceri rehberi
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Temel araçlar için becerilere göre gruplanmış kısa uygulamalı öğreticiler. Öğreticilerini görmek için bir beceri seçin.
+	List Tutorials	Öğreticileri Listele
+	Show Tutorial	Öğreticiyi Göster
+@msg	missing `tutorial` (see learn.list)	`tutorial` eksik (bkz. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	bilinmeyen öğretici `{id}` (bkz. learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ertelenen Efektleri Yenile

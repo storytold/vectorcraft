@@ -26,6 +26,7 @@ pub mod history;
 pub mod image_trace;
 pub mod info;
 pub mod layers;
+pub mod learn;
 pub mod libraries;
 pub mod library_panel;
 pub mod links;
@@ -185,6 +186,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         css_properties::ID => css_properties::show(app, ui),
         three_d::ID => three_d::show(app, ui),
         script_console::ID => script_console::show(app, ui),
+        learn::ID => learn::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),

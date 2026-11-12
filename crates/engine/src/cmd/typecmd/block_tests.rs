@@ -141,6 +141,35 @@ fn block_turns_off_keeping_its_sizes_and_records_nothing_when_nothing_changes() 
 }
 
 #[test]
+fn convert_to_point_type_turns_block_off_keeping_its_sizes() {
+    let mut s = session();
+    let id = area(&mut s, 300.0, 400.0, "BIG\na much longer second line");
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let sizes = |t: &TextObject| t.runs.iter().map(|r| (r.text.clone(), r.style.size, r.style.leading)).collect::<Vec<_>>();
+    let fitted = sizes(&text(&s, id));
+    let n = undo_len(&s);
+    s.execute("type.convertToPointType", &json!({})).unwrap();
+    assert_eq!(undo_len(&s), n + 1, "one undo step");
+    let t = text(&s, id);
+    assert!(matches!(t.kind, TextKind::Point));
+    assert!(!t.dynamic_text, "point type has Dynamic Text off");
+    assert_eq!(sizes(&t), fitted, "point type keeps the sizes Block set");
+    assert!(serde_json::to_value(&t).unwrap().get("dynamicText").is_none(), "saved without dynamicText");
+    // Back to area type, the frame is not refitted: Block stays off.
+    s.execute("type.convertToAreaType", &json!({})).unwrap();
+    let t = text(&s, id);
+    assert!(matches!(t.kind, TextKind::Area { .. }));
+    assert!(!t.dynamic_text, "Block does not come on again");
+    assert_eq!(sizes(&t), fitted);
+    // Undo gives the Block frame back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let t = text(&s, id);
+    assert!(t.dynamic_text && matches!(t.kind, TextKind::Area { .. }));
+    assert_eq!(sizes(&t), fitted);
+}
+
+#[test]
 fn bad_params_and_other_type_are_refused() {
     let mut s = session();
     let id = area(&mut s, 300.0, 400.0, "Fit me");
