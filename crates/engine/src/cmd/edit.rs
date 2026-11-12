@@ -673,10 +673,14 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
 /// the step before. As any new edit it ends the steps to redo, so Redo never swaps the document
 /// under an interaction that would then preview on, or cancel to, the document from before (#1719).
 /// A typing session also ends in the Type tool, whose caret and marked text (IME) must follow the
-/// document.
+/// document. A preview that Real-time Drawing off left unapplied is applied first, as the tool's own
+/// commit applies it; when it fails, the interaction is canceled.
 pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
     let typing = typing_in_progress(s);
-    s.commit_interaction()?;
+    match s.unapplied_interaction_preview().filter(|_| !s.previewing) {
+        Some((cmd, p)) if s.preview(&cmd, &p).is_err() => s.cancel_interaction()?,
+        _ => s.commit_interaction()?,
+    }
     if typing {
         s.set_tool_option("endTyping", &Value::Bool(true));
     }
