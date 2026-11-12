@@ -87,13 +87,18 @@ fn call(d: &Dialog) -> (String, Value) {
     {
         o.remove("rowGutter");
     }
-    // Weed Box and Lines: a Spacing above 0 divides the box instead of the Count, and only the one
-    // in use is sent.
+    // Weed Box and Lines: a Spacing of 0, or none, leaves the Count in use; any other Spacing is
+    // sent instead of the Count, so the command refuses one below 0.
     if d.str("__command") == crate::addons::cutting::WEED
         && let Some(o) = params.as_object_mut()
     {
-        let by_spacing = o.get("spacing").and_then(Value::as_f64).is_some_and(|s| s > 0.0);
-        o.remove(if by_spacing { "count" } else { "spacing" });
+        let zero = |s: &Value| match s {
+            Value::Null => true,
+            Value::String(t) => vectorcraft_doc::Unit::Points.parse(t).or_else(|| t.trim().parse().ok()) == Some(0.0),
+            v => v.as_f64() == Some(0.0),
+        };
+        let by_count = o.get("spacing").is_none_or(zero);
+        o.remove(if by_count { "spacing" } else { "count" });
     }
     (d.str("__command"), params)
 }

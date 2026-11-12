@@ -118,4 +118,28 @@ fn weed_box_and_lines_previews_cancels_and_runs_on_ok() {
     crate::dialogs::set_field(d, "spacing".into(), json!(20));
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(count(&app), nodes + 8, "a group, the box and six pieces of line");
+
+    // A Spacing below 0 is refused, not swapped for the Count.
+    app.run("edit.undo", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    open(&mut app);
+    let n = steps(&app);
+    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "spacing".into(), json!(-5));
+    let e = crate::dialogs::confirm(&mut app).unwrap_err().to_string();
+    assert!(e.contains("`spacing` must be more than 0"), "{e}");
+    assert_eq!(steps(&app), n, "no undo step");
+
+    // A Spacing with no value, or of 0 written with its unit, leaves the Count in use: a Count of 0
+    // draws the box alone.
+    crate::dialogs::cancel(&mut app);
+    for spacing in [serde_json::Value::Null, json!("0 pt")] {
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        open(&mut app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        crate::dialogs::set_field(d, "spacing".into(), spacing.clone());
+        crate::dialogs::set_field(d, "count".into(), json!(0));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(count(&app), nodes + 2, "{spacing}: a group and the box");
+        app.run("edit.undo", json!({})).unwrap();
+    }
 }
