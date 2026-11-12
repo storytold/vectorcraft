@@ -1403,6 +1403,14 @@ file-filter	Templates	模板
 	Hair Space	极细空格
 	Hand Tool	抓手工具
 	Hand-Drawn	手绘
+	Painted and Sketched	绘画与素描
+	Washed Blue	水洗蓝
+	Bristle Ochre	干刷土黄
+	Pastel Heather	粉彩淡紫
+	Charcoal Shade	炭笔阴影
+	Ink Contour	墨线轮廓
+	Wet Ink	湿墨
+	Fine Pen	细笔
 	Handles	手柄
 	Hard Light	强光
 	Hard Mix	实色混合
@@ -2543,6 +2551,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Range:	范围：
 	Raster Effects	栅格效果
 	Raster File Format:	栅格文件格式：
+	Include Placed Images	包含置入的图像
+	Include Fill Hatches	包含填色的图案填充
 	Raster Sample Size:	栅格取样大小：
 	Raster/Vector Balance:	栅格/矢量平衡：
 	Rasterize	栅格化
@@ -2722,6 +2732,10 @@ digits	Malayalam	马拉雅拉姆数字
 	Replace Font	替换字体
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	将其替换为其他文件，或忽略：其图像继续显示随文档保存的预览。
 	Replace Spine	替换脊线
+	Create Spine	创建脊线
+	Create Spine:	创建脊线：
+	Always	始终
+	Never	从不
 	Replace Symbol	替换符号
 	Reset Transformation	重置变换
 	Replace With Font	替换为字体
@@ -4105,6 +4119,7 @@ imageTrace	Outline	轮廓
 @msg	`preserve` must be an object	`preserve` 必须是对象
 @msg	`globalAdjust` must be an object	`globalAdjust` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
+@msg	`{key}` must be an array	`{key}` 必须是数组
 @msg	`{k}` must be [x, y]	`{k}` 必须是 [x, y]
 @msg	a gradient needs at least two stops	渐变至少需要两个色标
 @msg	give both `start` and `end` [x, y] (or neither)	请同时给出 `start` 和 `end` [x, y] (或都不给出)
@@ -5859,6 +5874,7 @@ lighting	Light	光源
 	Ruby	注音
 	Geometric Guides	几何参考线
 	Geometric Patterns	几何图案
+	Grit Textures	颗粒纹理
 	Ease In	缓入
 	Ease Out	缓出
 	Ease In Out	缓入缓出
@@ -5918,6 +5934,8 @@ axis	Y Axis	Y 轴
 	Version: {version}	版本：{version}
 	Install “{name}” in place of the plug-in with the same ID?	要安装“{name}”来替换具有相同 ID 的插件吗？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此文件不是之前以此 ID 安装的插件。它将获得为该 ID 保存的设置和缓存。
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自动化请求安装此增效工具。要安装它，请自行选择“对象 › 增效工具 › 安装增效工具…”。
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自动化请求安装此增效工具。要安装它，请自行选择“对象 › 增效工具 › 安装增效工具…”。
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”与 ID 为 {_1} 的插件是不同的模块，并会获得为其保存的设置和缓存：请在用户同意后使用 `replace: true` 安装
 	File SHA-256: {hash}	文件 SHA-256：{hash}
 	Read the objects it is given	读取交给它的对象
@@ -5980,6 +5998,12 @@ axis	Y Axis	Y 轴
 @msg	command {name}: `label` must be 1-64 printable characters	命令 {name}：`label` 必须是 1-64 个可打印字符
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	命令 {name}：请使用由 a-z 0-9 _ 组成、以字母开头的 1-{MAX_COMMAND_ID} 个字符的 ID
 @msg	command {name}: {e}	命令 {name}：{e}
+@msg	manifest: {e}	清单：{e}
+@msg	manifest: {e} at line {line} column {column}	清单：{e}（第 {line} 行，第 {column} 列）
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` 必须是命令列表，每个命令都有 `id` 和 `label`
+@msg	command {name} must be an object with an `id` and a `label`	命令 {name} 必须是包含 `id` 和 `label` 的对象
+@msg	missing field `{key}`	缺少字段 `{key}`
+@msg	duplicate field `{key}`	字段 `{key}` 重复
 @msg	only a filter or a live effect declares `commands`	只有滤镜或实时效果才能声明 `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}：{e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模块的 SHA-256 与 `hash` 给出的不符：未安装任何内容
@@ -6340,6 +6364,10 @@ anchor	Points:	点：
 @msg	features lists at most {max} tags	features 最多包含 {max} 个标签
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 特性 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必须是大于 0 且不超过 {max} 的数字
+@msg	{label} must be at most {max} characters	{label} 最多 {max} 个字符
+@msg	{label} must be one character	{label} 必须是一个字符
+@msg	at most {max} tab stops	最多 {max} 个制表位
+@msg	unknown align `{other}`	未知的对齐方式 `{other}`
 @msg	no character style `{name}`	找不到字符样式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6501,6 +6529,8 @@ breakText	Glyphs	字形
 	Delete the selected brushes?	删除选中的画笔吗？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有描边使用了其中一个或多个画笔。要从这些描边移除画笔并删除画笔吗？
 	Remove Strokes	移除描边
+	Place Brush Art	置入画笔图稿
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 没有图稿 (只有散布画笔、艺术画笔和图案画笔有图稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
 	Arrange in Grid…	按网格排列…

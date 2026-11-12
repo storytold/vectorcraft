@@ -1847,6 +1847,14 @@ file-filter	Templates	Sablonok
 	Hand	Kéz
 	Hand Tool	Kéz
 	Hand-Drawn	Kézzel rajzolt
+	Painted and Sketched	Festett és vázlatos
+	Washed Blue	Kimosott kék
+	Bristle Ochre	Sörteokker
+	Pastel Heather	Pasztell hanga
+	Charcoal Shade	Szénárnyék
+	Ink Contour	Tuskontúr
+	Wet Ink	Nedves tus
+	Fine Pen	Finom toll
 	Handles	Fogantyúk
 	Hard	Szigorú
 	Hard Light	Kemény fény
@@ -3193,6 +3201,8 @@ mark-style	Japanese	Japán
 	Range:	Tartomány:
 	Raster Effects	Raszteres effektusok
 	Raster File Format:	Raszteres fájlformátum:
+	Include Placed Images	Elhelyezett képek hozzáadása
+	Include Fill Hatches	Kitöltések sraffozásainak hozzáadása
 	Raster Sample Size:	Raszteres mintaméret:
 	Raster/Vector Balance:	Raszter–vektor arány:
 	Rasterize	Raszterizálás
@@ -3362,6 +3372,10 @@ mark-style	Japanese	Japán
 	Replace Font	Betűtípus cseréje
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Cseréld le egy másik fájlra, vagy hagyd ki: a képei a dokumentummal mentett előnézetet mutatják tovább.
 	Replace Spine	Gerinc cseréje
+	Create Spine	Gerinc létrehozása
+	Create Spine:	Gerinc létrehozása:
+	Always	Mindig
+	Never	Soha
 	Replace Symbol	Szimbólum cseréje
 	Reset Transformation	Átalakítás visszaállítása
 	Replace With Font	Helyettesítő betűtípus
@@ -4756,6 +4770,7 @@ imageTrace	Outline	Körvonal
 @msg	`globalAdjust` must be an object	`globalAdjust`: objektum kell
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize`: 1, 3 vagy 5 kell
 @msg	`stops` must be an array	`stops`: tömb kell
+@msg	`{key}` must be an array	`{key}`: tömb kell
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`: SVG-beállításokat tartalmazó objektum kell (lásd: document.formats)
 @msg	`to` must be "corner" or "smooth"	`to`: "corner" vagy "smooth" kell
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference`: "emBox", "capHeight", "xHeight" vagy "icfBox" kell
@@ -6005,6 +6020,7 @@ imageTrace	Outline	Körvonal
 	Ruby	Ruby
 	Geometric Guides	Geometriai segédvonalak
 	Geometric Patterns	Geometriai mintázatok
+	Grit Textures	Szemcsés textúrák
 	Ease In	Lassú kezdés
 	Ease Out	Lassú befejezés
 	Ease In Out	Lassú kezdés és befejezés
@@ -6063,6 +6079,8 @@ axis	Y Axis	Y tengely
 	Version: {version}	Verzió: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Telepíted a(z) „{name}” bővítményt az azonos azonosítójú bővítmény helyére?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ez a fájl nem az a bővítmény, amely korábban ezzel az azonosítóval volt telepítve. Megkapja az ehhez az azonosítóhoz tárolt beállításokat és gyorsítótárat.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Egy automatizálás kérte ennek a bővítménynek a telepítését. A telepítéshez válaszd ki te magad az Objektum › Bővítmények › Bővítmény telepítése… parancsot.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Egy automatizálás kérte ennek a bővítménynek a telepítését. A telepítéshez válaszd ki te magad az Objektum › Bővítmények › Bővítmény telepítése… parancsot.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	a(z) „{name}” más modul, mint a(z) {_1} azonosítójú bővítmény, és megkapná az ahhoz tárolt beállításokat és gyorsítótárat: telepítsd a `replace: true` megadásával, miután a felhasználó beleegyezett
 	File SHA-256: {hash}	A fájl SHA-256 értéke: {hash}
 	Read the objects it is given	Olvashatja a kapott objektumokat
@@ -6125,6 +6143,12 @@ axis	Y Axis	Y tengely
 @msg	command {name}: `label` must be 1-64 printable characters	{name} parancs: a `label` 1-64 nyomtatható karakter legyen
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} parancs: használj 1-{MAX_COMMAND_ID} karakteres, a-z 0-9 _ karakterekből álló, betűvel kezdődő azonosítót
 @msg	command {name}: {e}	{name} parancs: {e}
+@msg	manifest: {e}	leíró: {e}
+@msg	manifest: {e} at line {line} column {column}	leíró: {e} ({line}. sor, {column}. oszlop)
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands`: parancsok listája kell, mindegyikben `id` és `label` értékkel
+@msg	command {name} must be an object with an `id` and a `label`	a(z) {name} parancs csak `id` és `label` mezőt tartalmazó objektum lehet
+@msg	missing field `{key}`	hiányzó mező: `{key}`
+@msg	duplicate field `{key}`	ismétlődő mező: `{key}`
 @msg	only a filter or a live effect declares `commands`	`commands` értéket csak szűrő vagy élő effektus deklarálhat
 @msg	“{name}” › {label}: {e}	„{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	a modul SHA-256 értéke nem az, amit a `hash` megad: semmi sem lett telepítve
@@ -6483,6 +6507,10 @@ anchor	Points:	Pontok:
 @msg	features lists at most {max} tags	a features legfeljebb {max} címkét tartalmazhat
 @msg	unknown OpenType feature `{t}`	ismeretlen OpenType-funkció: `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0-nál nagyobb és legfeljebb {max} értékű szám kell legyen
+@msg	{label} must be at most {max} characters	{label} legfeljebb {max} karakter lehet
+@msg	{label} must be one character	{label} pontosan egy karakter kell legyen
+@msg	at most {max} tab stops	legfeljebb {max} tabulátor
+@msg	unknown align `{other}`	ismeretlen igazítás: `{other}`
 @msg	no character style `{name}`	A(z) `{name}` karakterstílus nem található
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6644,6 +6672,8 @@ breakText	Glyphs	Glifák
 	Delete the selected brushes?	Törlöd a kijelölt ecseteket?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Körvonalak használnak egyet vagy többet ezek közül az ecsetek közül. Leveszed az ecseteket ezekről a körvonalakról, és törlöd az ecseteket?
 	Remove Strokes	Körvonalak eltávolítása
+	Place Brush Art	Ecsetgrafika elhelyezése
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` ecsetnek nincs grafikája (csak a szóró-, a grafikus és a mintázatecseteknek van)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Elrendezőeszközök
 	Arrange in Grid…	Elrendezés rácsba…

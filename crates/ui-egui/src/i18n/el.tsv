@@ -1374,6 +1374,14 @@ font-technology	Variable	Μεταβλητές
 	Hair Space	Πολύ λεπτό διάστημα
 	Hand Tool	Χέρι (Hand Tool)
 	Hand-Drawn	Σχεδιασμένο στο χέρι
+	Painted and Sketched	Ζωγραφισμένο και σκιτσαρισμένο
+	Washed Blue	Ξεπλυμένο μπλε
+	Bristle Ochre	Ώχρα με πινέλο
+	Pastel Heather	Παστέλ ρείκι
+	Charcoal Shade	Σκιά με κάρβουνο
+	Ink Contour	Περίγραμμα με μελάνι
+	Wet Ink	Υγρό μελάνι
+	Fine Pen	Λεπτή πένα
 	Handles	Λαβές
 	Hard Light	Έντονο φως
 	Hard Mix	Έντονη ανάμειξη
@@ -2377,6 +2385,7 @@ axis	Both	Και τα δύο
 @msg	`globalAdjust` must be an object	Το `globalAdjust` πρέπει να είναι αντικείμενο
 @msg	`sampleSize` must be 1, 3 or 5	Το `sampleSize` πρέπει να είναι 1, 3 ή 5
 @msg	`stops` must be an array	Το `stops` πρέπει να είναι πίνακας
+@msg	`{key}` must be an array	Το `{key}` πρέπει να είναι πίνακας
 @msg	`svg` must be an object of SVG options (see document.formats)	Το `svg` πρέπει να είναι αντικείμενο επιλογών SVG (δείτε document.formats)
 @msg	`{_1}` is no save command	Το `{_1}` δεν είναι εντολή αποθήκευσης
 @msg	`{area}` is no recovery area name	Το `{area}` δεν είναι όνομα περιοχής ανάκτησης
@@ -3290,6 +3299,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Randomly change saturation and brightness	Τυχαία αλλαγή κορεσμού και φωτεινότητας
 	Raster Effects	Εφέ ράστερ
 	Raster File Format:	Μορφή αρχείου ράστερ:
+	Include Placed Images	Συμπερίληψη τοποθετημένων εικόνων
+	Include Fill Hatches	Συμπερίληψη διαγραμμίσεων γεμισμάτων
 	Raster Sample Size:	Μέγεθος δείγματος ράστερ:
 	Raster/Vector Balance:	Ισορροπία ράστερ/διανυσμάτων:
 	Rasterize Unsupported Art	Μετατροπή μη υποστηριζόμενου σχεδίου σε ράστερ
@@ -3437,6 +3448,10 @@ digits	Malayalam	Μαλαγιάλαμ
 	Replace Font	Αντικατάσταση γραμματοσειράς
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Αντικαταστήστε το με άλλο αρχείο ή αγνοήστε το: οι εικόνες του θα συνεχίσουν να εμφανίζουν την προεπισκόπηση που αποθηκεύτηκε στο έγγραφο.
 	Replace Spine	Αντικατάσταση κεντρικής καμπύλης
+	Create Spine	Δημιουργία κεντρικής καμπύλης
+	Create Spine:	Δημιουργία κεντρικής καμπύλης:
+	Always	Πάντα
+	Never	Ποτέ
 	Replace Symbol	Αντικατάσταση συμβόλου
 	Reset Transformation	Επαναφορά μετασχηματισμού
 	Replace With Font	Αντικατάσταση με γραμματοσειρά
@@ -5973,6 +5988,7 @@ effect	Points	Σημεία
 	Ruby	Ruby
 	Geometric Guides	Γεωμετρικοί οδηγοί
 	Geometric Patterns	Γεωμετρικά μοτίβα
+	Grit Textures	Κοκκώδεις υφές
 	Ease In	Ομαλή αρχή
 	Ease Out	Ομαλό τέλος
 	Ease In Out	Ομαλή αρχή και τέλος
@@ -6031,6 +6047,8 @@ axis	Y Axis	Άξονας Y
 	Version: {version}	Έκδοση: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Να εγκατασταθεί το «{name}» στη θέση του πρόσθετου με το ίδιο αναγνωριστικό;
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Αυτό το αρχείο δεν είναι το πρόσθετο που ήταν εγκατεστημένο πριν με αυτό το αναγνωριστικό. Παίρνει τις ρυθμίσεις και την κρυφή μνήμη που διατηρούνται για αυτό το αναγνωριστικό.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Μια αυτοματοποίηση ζήτησε να εγκατασταθεί αυτό το πρόσθετο. Για να το εγκαταστήσετε, επιλέξτε Αντικείμενο › Πρόσθετα › Εγκατάσταση προσθέτου… μόνοι σας.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Μια αυτοματοποίηση ζήτησε να εγκατασταθεί αυτό το πρόσθετο. Για να το εγκαταστήσετε, επιλέξτε Αντικείμενο › Πρόσθετα › Εγκατάσταση προσθέτου… μόνοι σας.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	το «{name}» είναι άλλη λειτουργική μονάδα από το πρόσθετο με αναγνωριστικό {_1} και θα έπαιρνε τις ρυθμίσεις και την κρυφή μνήμη που διατηρούνται για αυτό: εγκαταστήστε το με `replace: true` μόλις συμφωνήσει ο χρήστης
 	File SHA-256: {hash}	SHA-256 αρχείου: {hash}
 	Read the objects it is given	Ανάγνωση των αντικειμένων που του δίνονται
@@ -6093,6 +6111,12 @@ axis	Y Axis	Άξονας Y
 @msg	command {name}: `label` must be 1-64 printable characters	εντολή {name}: το `label` πρέπει να έχει 1-64 εκτυπώσιμους χαρακτήρες
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	εντολή {name}: χρησιμοποιήστε αναγνωριστικό 1-{MAX_COMMAND_ID} χαρακτήρων από a-z 0-9 _ που αρχίζει με γράμμα
 @msg	command {name}: {e}	εντολή {name}: {e}
+@msg	manifest: {e}	αρχείο δηλώσεων: {e}
+@msg	manifest: {e} at line {line} column {column}	αρχείο δηλώσεων: {e} (γραμμή {line}, στήλη {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	το `commands` πρέπει να είναι λίστα εντολών, καθεμία με `id` και `label`
+@msg	command {name} must be an object with an `id` and a `label`	η εντολή {name} πρέπει να είναι αντικείμενο με `id` και `label`
+@msg	missing field `{key}`	λείπει το πεδίο `{key}`
+@msg	duplicate field `{key}`	το πεδίο `{key}` εμφανίζεται δύο φορές
 @msg	only a filter or a live effect declares `commands`	μόνο ένα φίλτρο ή ένα δυναμικό εφέ δηλώνει `commands`
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	η λειτουργική μονάδα δεν έχει το SHA-256 που δίνει το `hash`: δεν εγκαταστάθηκε τίποτα
@@ -6450,6 +6474,10 @@ anchor	Points:	Σημεία:
 @msg	features lists at most {max} tags	Το features περιέχει έως {max} ετικέτες
 @msg	unknown OpenType feature `{t}`	άγνωστο χαρακτηριστικό OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	Το {label} πρέπει να είναι αριθμός μεγαλύτερος από 0 και έως {max}
+@msg	{label} must be at most {max} characters	Το {label} πρέπει να έχει έως {max} χαρακτήρες
+@msg	{label} must be one character	Το {label} πρέπει να είναι ένας χαρακτήρας
+@msg	at most {max} tab stops	έως {max} στάσεις στηλοθέτη
+@msg	unknown align `{other}`	άγνωστη στοίχιση `{other}`
 @msg	no character style `{name}`	Δεν βρέθηκε το στυλ χαρακτήρων `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6612,6 +6640,8 @@ breakText	Glyphs	Γλύφοι
 	Delete the selected brushes?	Να διαγραφούν τα επιλεγμένα πινέλα;
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Περιγράμματα χρησιμοποιούν ένα ή περισσότερα από αυτά τα πινέλα. Να αφαιρεθούν τα πινέλα από αυτά τα περιγράμματα και να διαγραφούν τα πινέλα;
 	Remove Strokes	Αφαίρεση περιγραμμάτων
+	Place Brush Art	Τοποθέτηση σχεδίου πινέλου
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` δεν έχει σχέδιο (έχουν μόνο τα πινέλα διασποράς, σχεδίου και μοτίβου)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Εργαλεία διάταξης
 	Arrange in Grid…	Διάταξη σε πλέγμα…

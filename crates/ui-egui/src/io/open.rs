@@ -1,7 +1,7 @@
 use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::permissions;
 
-use super::save::suggested;
+use super::save::{notes_of, show_with_notes, suggested};
 use super::{Dialog, FilePick, Format, Value, VectorcraftApp, dialogs, fileio, json};
 
 /// Template extensions New from Template's open dialog lists first.
@@ -144,8 +144,8 @@ pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
     let notes = open_notes(app, r);
     if let Some(first) = notes.first() {
-        app.status(opened_with_notes(notes.len(), first));
-        app.ui.status_notes = Some((app.ui.status.clone(), notes));
+        let status = opened_with_notes(notes.len(), first);
+        show_with_notes(app, status, notes);
     }
     crate::dialogs::missing_links::after_open(app, r);
 }
@@ -153,7 +153,7 @@ pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
 /// The notes of the open `r`, those of what reading the file left out (its document's
 /// `import_losses`) first, each group in the order the import gave them.
 fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
-    let notes: Vec<String> = r["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
+    let notes = notes_of(r);
     let index = r["index"].as_u64().and_then(|i| usize::try_from(i).ok());
     let losses = index.and_then(|i| app.session.documents().get(i)).map(|st| st.import_losses.as_slice()).unwrap_or_default();
     let (mut first, rest): (Vec<String>, Vec<String>) = notes.into_iter().partition(|n| losses.contains(n));
@@ -215,16 +215,24 @@ fn permission_words(name: &str, commands: &[String]) -> String {
 /// place of another one with its id and get its settings and cache (`replace`); OK installs it if
 /// the module still has the hash the prompt showed, Cancel installs nothing → `{pending}` while it
 /// asks. The `grant` and `allowHeavy` of a request are ignored: only the dialog's OK approves.
+/// Every question opens the approval dialog ([`dialogs::plugin::ask_install`]). When automation
+/// asked ([`VectorcraftApp::automation_asked`]), the question has no OK that installs, its
+/// `replace: true` doesn't skip asking about replacing, and the answer while it asks adds
+/// `approval: "personMustStartInstall"`: the person starts Install Plug-in… to install it.
 /// Every text from the manifest is shown with its hidden characters escaped and its length capped
 /// ([`permissions::display_text`]).
 pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, String> {
+    let origin = if app.automation_asked() { dialogs::plugin::InstallOrigin::Automation } else { dialogs::plugin::InstallOrigin::Person };
+    let automated = origin == dialogs::plugin::InstallOrigin::Automation;
     let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
     let source = Value::Object(["path", "dataBase64", "name"].into_iter().filter_map(given).collect());
     let mut install = Value::Object(["path", "dataBase64", "name", "replace", "hash"].into_iter().filter_map(given).collect());
     let info = app.run("plugin.inspect", source)?;
     let (needs_grant, heavy) = (info["needsApproval"] == true, info["budget"] == "heavy");
-    // `replace: false` asks for no replacing, so only a module without `replace` asks.
-    let asks_replace = module.get("replace").is_none_or(Value::is_null) && info["needsReplace"] == true;
+    // `replace: false` asks for no replacing, so only a module without `replace` asks, or one whose
+    // `replace: true` automation gave.
+    let replace = module.get("replace").filter(|v| !v.is_null());
+    let asks_replace = info["needsReplace"] == true && replace.is_none_or(|r| automated && *r == true);
     if !needs_grant && !heavy && !asks_replace {
         let r = app.run("plugin.install", install)?;
         report_installed(app, &r);
@@ -245,13 +253,8 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
     if asks_replace {
         install["replace"] = json!(true);
     }
-    // A client may pass `replace` itself, so taking another module's place alone needs no approval
-    // that only a person can give.
-    if !needs_grant && !heavy {
-        let message = crate::i18n::fmt(tl!("Install “{name}” in place of the plug-in with the same ID?"), &[("name", &name)]);
-        dialogs::confirm::ask(app, &message, &format!("{identity}\n\n{takes_place}"), "ui.installPlugin", install);
-        return Ok(json!({ "pending": dialogs::confirm::KIND }));
-    }
+    // Taking another module's place alone asks in the approval dialog too, whose params no request
+    // can rewrite.
     let asked = info["permissions"].as_array().cloned().unwrap_or_default();
     let mut paragraphs = vec![];
     if needs_grant {
@@ -285,8 +288,10 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
     }
     let message = if needs_grant {
         crate::i18n::fmt(tl!("Install “{name}”, which asks for these permissions?"), &[("name", &name)])
-    } else {
+    } else if heavy {
         crate::i18n::fmt(tl!("Install “{name}”, which asks for a heavy budget?"), &[("name", &name)])
+    } else {
+        crate::i18n::fmt(tl!("Install “{name}” in place of the plug-in with the same ID?"), &[("name", &name)])
     };
     let approval = InstallApproval {
         id: info["id"].as_str().unwrap_or_default().to_string(),
@@ -294,7 +299,8 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
         permissions: asked.iter().filter_map(Value::as_str).map(str::to_string).collect(),
         heavy,
     };
-    let pending = dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval, shown: Default::default() };
+    let pending =
+        dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval, origin, shown: Default::default() };
     Ok(dialogs::plugin::ask_install(app, pending))
 }
 
@@ -311,8 +317,7 @@ fn open_dialog_folder(app: &VectorcraftApp) -> Option<String> {
 
 /// File → Open…
 pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
-    if let Some(f) = app.services.open_async.as_mut() {
-        f();
+    if crate::picks::open_async(app) {
         return Ok(());
     }
     let path =
