@@ -404,7 +404,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "view.actualSize",
         "Actual Size",
         "Cmd+1",
-        "{} 100%: with Display Print Size at 100% Zoom off, one document point per screen point; on, one document inch fills 96 screen points (an inch at the system's reference density, whatever the display scaling)",
+        "{} 100%: with Display Print Size at 100% Zoom off, one document point per screen point; on, one document inch fills 96 screen points (an inch at the system's reference density, whatever the display scaling); the same at every UI Scaling",
     ),
     ("view.setZoom", "Set Zoom", "", "{zoom: percent, center?: [x,y]}"),
     (
@@ -801,7 +801,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.sampleScreenColor",
         "Sample Color from Screen",
         "",
-        "{} or {stroke?: bool (default: the active proxy), picker?: bool (the open Color Picker instead)} show the system's color sampler (macOS; browsers with an EyeDropper) and answer at once; the color the person picks anywhere on the screen then runs paint.setFill / paint.setStroke (one undo step) or becomes the Color Picker's color (field `color`), converted from display sRGB into the working RGB space; Escape cancels it and the colors stay as they were. ui.inspect reports `screenSampler: true` until it answers. An error without a sampler, while one is open, or with `picker` and no Color Picker open",
+        "{} or {stroke?: bool (default: the active proxy), picker?: bool (the open Color Picker instead)} show the system's color sampler (macOS; Linux through the XDG desktop portal's PickColor; browsers with an EyeDropper) and answer at once; the color the person picks anywhere on the screen then runs paint.setFill / paint.setStroke (one undo step) or becomes the Color Picker's color (field `color`), converted from display sRGB into the working RGB space; a cancel (Escape on macOS and in browsers) leaves the colors as they were. ui.inspect reports `screenSampler: true` until it answers; on Linux, a session without a portal that has PickColor, a portal that does not return from the call within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers, and a portal that ends the request another way end the wait with a status message. An error without a sampler, while one is open, or with `picker` and no Color Picker open",
     ),
     (
         "ui.newBrush",

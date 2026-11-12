@@ -15,6 +15,7 @@ use vectorcraft_pathops::BoolOp;
 use crate::ai_ops::{self, unit};
 use crate::ps;
 
+mod brushes;
 mod images;
 mod paints;
 mod styles;
@@ -22,6 +23,8 @@ mod symbols;
 mod texts;
 mod variables;
 
+#[cfg(test)]
+pub(super) use brushes::BRUSHES;
 pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_objects};
 #[cfg(test)]
 pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, same_appearance};
@@ -255,6 +258,10 @@ pub(super) struct Writer<'a> {
     /// An object's drawn look is being written: no object in it is written with a style, and its
     /// effects are the style's.
     in_look: bool,
+    /// The brushes written ([`brushes`]).
+    brush_set: brushes::Brushes,
+    /// Brushes may be written; false on a large canvas, where they are left out.
+    pub(super) brushes_live: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -310,6 +317,8 @@ impl<'a> Writer<'a> {
             styled: HashMap::new(),
             styles: styles::Styles::default(),
             in_look: false,
+            brush_set: brushes::Brushes::default(),
+            brushes_live: true,
             objects: 0,
             left_out: 0,
             definition_objects: 0,
@@ -896,7 +905,7 @@ impl<'a> Writer<'a> {
             self.warn_cut(Some(first));
             return self.clip_contents(children);
         };
-        let items = self.items(first, path.to_bezpath().bounding_box());
+        let items = self.items(first, &path.to_bezpath());
         let painted = self.plain_paint(&items);
         // The clipping path goes after the others, so its objects are counted first.
         let subpaths: Vec<&SubPath> = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).collect();
@@ -1004,7 +1013,7 @@ impl<'a> Writer<'a> {
         if path.is_empty() {
             return;
         }
-        let items = self.items(n, path.to_bezpath().bounding_box());
+        let items = self.items(n, &path.to_bezpath());
         if items.iter().any(|i| i.opacity() < 1.0 || i.blend() != BlendMode::Normal) {
             self.warn(ITEM_TRANSPARENCY);
         }
@@ -1028,10 +1037,10 @@ impl<'a> Writer<'a> {
             AppearanceItem::Fill(f) => self.fill_object(path, rule, f, xy),
             AppearanceItem::Stroke(s) if self.direct_stroke(s) => self.path_object(path, rule, None, Some(s), xy),
             AppearanceItem::Stroke(s) => {
-                // In a styled path's or compound path's drawn look the stroke is kept by the object's
-                // art style, which is written only when the reader reads the object's appearance back
-                // from it. A styled group's style holds no fills or strokes: its members are written
-                // again after the look, and warn there.
+                // In a styled path's or compound path's drawn look the stroke, brushed or not, is kept
+                // by the object's art style, which is written only when the reader reads the object's
+                // appearance (and its brush) back from it. A styled group's style holds no fills or
+                // strokes: its members are written again after the look, and warn there.
                 if !self.in_look {
                     self.warn(STROKES);
                 }

@@ -1,6 +1,6 @@
 # Control protocol
 
-> **Last updated:** 2026-10-31 · **Change:** Confining file access refuses a `:` in a name after the drive on Windows, an NTFS alternate data stream such as `x.svg:evil` (#3604); previously: Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
+> **Last updated:** 2026-11-07 · **Change:** text style commands take a feature with a value (`"features": ["salt=2"]`), the font's alternate number, and shape runs that differ only in features as one piece of text; previously: Confining file access refuses a `:` in a name after the drive on Windows, an NTFS alternate data stream such as `x.svg:evil` (#3604); previously: Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
 
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
 from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
@@ -148,7 +148,7 @@ fill or stroke (fields as in `swatchOptions` plus `group`; a gradient or pattern
 
 The Color Picker is a dialog too: `engine.execute {command: "ui.colorPicker", params: {stroke?, color?}}` opens it for the fill (or stroke) proxy; `ui.dialog.set {field: "hex", value: "00FF00"}` (or `color`, `channel`, `webOnly`, `swatches`) then `ui.dialog.confirm` applies the colour through `paint.setFill` / `paint.setStroke`.
 
-Sample Color from Screen: `ui.sampleScreenColor {stroke?, picker?}` shows the system's color sampler (macOS, and browsers with an EyeDropper) and returns `null` at once. When the person at the computer clicks a color anywhere on the screen, it runs `paint.setFill` (or `paint.setStroke`) with that color as one undo step, or with `picker: true` sets the open Color Picker's `color`; Escape cancels it and the colors stay as they were. The sampled display sRGB color is converted into the working RGB space. `ui.inspect` reports `screenSampler: true` until the sampler answers. Without a sampler (Windows, Linux, other browsers) the call returns an error. To read a color from VectorCraft's own window without a person, call `ui.screenshot`.
+Sample Color from Screen: `ui.sampleScreenColor {stroke?, picker?}` shows the system's color sampler (macOS; Linux through the XDG desktop portal's [PickColor](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Screenshot.html); browsers with an EyeDropper) and returns `null` at once. When the person at the computer clicks a color anywhere on the screen, it runs `paint.setFill` (or `paint.setStroke`) with that color as one undo step, or with `picker: true` sets the open Color Picker's `color`; a cancel (Escape on macOS and in browsers) leaves the colors as they were. The sampled display sRGB color is converted into the working RGB space. `ui.inspect` reports `screenSampler: true` until the sampler answers. On Linux, a session without a portal that has PickColor, a portal that does not return from the call within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers, and a portal that ends the request in another way each put a message in the status bar and end the wait, so the sampler can be shown again. A portal that returns from the call and then neither answers nor leaves the bus keeps the sampler open. Without a sampler (Windows, FreeBSD, DragonFly BSD, NetBSD, OpenBSD, other browsers) the call returns an error. To read a color from VectorCraft's own window without a person, call `ui.screenshot`.
 
 Graphic styles: `ui.graphicStyleOptions {name}` opens the `graphicStyleOptions` dialog (field `name`) for a style and
 `ui.dialog.confirm` renames it with `graphicStyle.rename` (a name another style has returns an error and keeps the
@@ -987,6 +987,23 @@ handle); a Mesh tool click inside a mesh envelope adds a row and a column. While
 selected the Control bar shows its controls (Edit Envelope / Edit Contents, warp style, orientation, bend and
 distortions or mesh rows and columns, Reset, Envelope Options); each runs an `object.envelope.*` command.
 
+## OpenType feature values in text commands
+
+`text.setRangeStyle`, `text.setStyle` and the character style commands take OpenType features as a list of tags in
+`features` (the whole list) or `featureChanges` (changes on top of each character's own): `"dlig"` on, `"-liga"` off.
+A feature with alternates (`swsh`, `ss01`–`ss20`, `salt`, `titl`, `pnum`, `lnum`, `sups`, `subs`, `numr`, `dnom`,
+`aalt`) also takes `tag=N`, `N` from 0 to 65535, the font's alternate number: `"salt=2"` draws the second alternate of
+each glyph in the range that has one. It is the value the shaper gets (an OpenType alternate substitution picks the
+glyph at that position of its set), so `"salt"` is `"salt=1"`, and `"-salt"`, `"salt=0"` and a missing tag are off. A
+later value replaces an earlier one; `salt=x`, `salt=65536`, `-salt=2` and `liga=2` are refused. The style's
+`features` list and the saved file keep the string as typed (`["salt=2"]`), and SVG export writes CSS
+`font-feature-settings: "salt" 2`. Runs that differ only in `features` are shaped as one piece of text with each run's
+features over its own characters, so one letter of an Arabic word with `salt=2` keeps its neighbours' joining forms.
+
+```json
+{"id":1,"method":"engine.execute","params":{"command":"text.setRangeStyle","params":{"id":7,"start":4,"end":6,"features":["salt=2"]}}}
+```
+
 ## Shared panel docking
 
 The canvas and the panels form one craft-ui docking layout: the protected `canvas` panel beside a dock at the
@@ -1082,6 +1099,7 @@ hidden tab (whose frames the browser pauses) answers when it is shown again.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | Documented OpenType feature values in text commands (`"salt=2"`, the font's alternate number) and that runs differing only in features shape as one piece of text. |
 | 2026-10-31 | minor | Confining file access: on Windows a `:` in a name after the drive (an NTFS alternate data stream) is refused with the device names (#3604). |
 | 2026-10-25 | minor | Panel docking on craft-ui's layout: `ui.docking`, the floating and dock parameters, native floating windows. |
 | 2026-10-25 | minor | Documented that Object → Expand… is dimmed, and `ui.expandDialog` refuses, while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089). |

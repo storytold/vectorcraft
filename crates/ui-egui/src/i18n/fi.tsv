@@ -1680,6 +1680,17 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Valitun merkin fontti ei ole saatavilla.
 	No alternates for the selected character.	Valitulla merkillä ei ole vaihtoehtoja.
 	Double-click to replace	Korvaa kaksoisnapsauttamalla
+	Select one character with the Type tool first.	Valitse ensin yksi merkki tekstityökalulla.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} on fontin {font} glyfi, ei valitun tekstin fontin ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} kuuluu merkille {base} (U+{base_code}) {place}; valintasi on {sel} (U+{code}).
+	at the start of a word	sanan alussa
+	in the middle of a word	sanan keskellä
+	at the end of a word	sanan lopussa
+	standing alone	yksinään
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} ei ole merkin {sel} (U+{code}) vaihtoehto sellaisena kuin se on sanassaan.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Lisää kaksoisnapsauttamalla sen sijaan {base} (U+{code}): esitysmuoto ei liity, kirjain liittyy.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Lisättiin {base} (U+{code}) esitysmuodon sijaan: fontti liittää sen naapureihin sijainnin mukaan.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Mikään OpenType-ominaisuus ei piirrä tätä glyfiä tässä, joten se korvaa merkin glyfin eikä välttämättä liity viereisiin merkkeihin.
 	Double-click to insert	Lisää kaksoisnapsauttamalla
 	Entire Font	Koko fontti
 	glyph {id}	merkki {id}
@@ -1840,6 +1851,8 @@ digits	Malayalam	Malajalam
 	Save Image Trace Preset	Tallenna kuvan jäljityksen esiasetus
 	Delete Image Trace Preset	Poista kuvan jäljityksen esiasetus
 	Method:	Menetelmä:
+	Pad	Jatka
+	Repeats	Toistokerrat
 	Mode:	Tila:
 	Noise	Kohina
 	Create:	Luo:
@@ -3890,6 +3903,9 @@ theme	Appearance	Ulkoasu
 	Select All Unused	Valitse kaikki käyttämättömät
 	Sort by Kind	Lajittele lajin mukaan
 	Sort by Name	Lajittele nimen mukaan
+	Spot Color Objects	Objektit, joissa on spottivärejä
+	Pattern Objects	Objektit, joissa on kuvioita
+	Gradient Objects	Objektit, joissa on liukuvärejä
 	Spot Colors	Spottivärit
 	Spot Colors (0)	Spottivärit (0)
 	Swatch Options	Värimallin asetukset
@@ -4624,6 +4640,7 @@ imageTrace	Outline	Ääriviiva
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ei ole väri, kuten "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: enintään {MAX_TABLE} väriä
 @msg	command `{0}` is not available right now: {1}	komento `{0}` ei ole nyt käytettävissä: {1}
+@msg	command `{id}` is not available right now	komento `{id}` ei ole nyt käytettävissä
 @msg	compound paths can only contain paths	yhdistelmäpolut voivat sisältää vain polkuja
 @msg	compressed (RLE) bitmaps can't be read yet	pakattuja (RLE) bittikarttoja ei voi vielä lukea
 @msg	damaged	vaurioitunut
@@ -5856,6 +5873,8 @@ mark-style	Japanese	Japanilainen
 @msg	the screen color sampler is already open	värin poiminta näytöltä on jo auki
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	tämä on PostScript-tiedosto (vanhemmassa muodossa tai ilman PDF-yhteensopivuutta tallennettu .ai tai EPS-tiedosto), ei PDF: Tiedosto › Avaa ja Tiedosto › Sijoita lukevat sen EPS-muodossa
 @msg	this system has no screen color sampler	tässä järjestelmässä ei ole värin poimintaa näytöltä
+@msg	the screen color sampler did not answer	värin poiminta näytöltä ei vastannut
+@msg	the screen color sampler failed	värin poiminta näytöltä epäonnistui
 @msg	the image can't be read as a texture	kuvaa ei voi lukea tekstuurina
 
 # User Interface › Accent Color
@@ -6119,6 +6138,9 @@ axis	Y Axis	Y-akseli
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` koskee liukuväritäyttöjä (paint.setFill)
 @msg	`dither` must be true or false	`dither` on oltava true tai false
 @msg	`method` must be classic or perceptual	`method` on oltava classic tai perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` on oltava pad, repeat tai reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` on oltava kokonaisluku väliltä 1–{MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` koskee lineaarisia, säteittäisiä ja kartiomaisia liukuvärejä sekä vinoneliöliukuvärejä
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Asennetaanko ”{name}”, joka pyytää suurta laskentabudjettia?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Jokainen ajo voi kestää enintään {minutes} minuuttia ja tehdä {times} kertaa niin paljon työtä kuin muut laajennukset saavat. Se toimii taustalla, ja voit peruuttaa sen.
@@ -7038,3 +7060,8 @@ breakText	Glyphs	Merkit
 @msg	Some islands could not be joined to the area around the art	Joitakin saarekkeita ei voitu yhdistää grafiikkaa ympäröivään alueeseen
 @msg	`width` must be from {lo} to {hi} pt	`width`-arvon on oltava {lo}–{hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` on oltava kokonaisluku 1–{MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Karsintakehys ja -viivat…
+	Weed Box and Lines	Karsintakehys ja -viivat
+	Margin	Marginaali
+	Box	Kehys
+	Swatch	Värimalli
