@@ -18,11 +18,11 @@ use std::collections::VecDeque;
 use kurbo::{BezPath, Point, Shape, Vec2};
 use vectorcraft_doc::color::{Gradient, GradientGeom, GradientPaint, Paint};
 use vectorcraft_doc::live::{H_DOWN, H_LEFT, H_RIGHT, H_UP};
-use vectorcraft_doc::{GradientMesh, LineJoin, MeshPoint, StrokeAlign, StrokeGradientMode, StrokeLayer};
+use vectorcraft_doc::{GradientMesh, LineCap, LineJoin, MeshPoint, StrokeAlign, StrokeGradientMode, StrokeLayer};
 use vectorcraft_geom::FillRule;
 
 use super::width::{flatten, left, length, split_at};
-use super::{aligned_width, cap_extent, is_closed, segments, subpaths, unit};
+use super::{aligned_width, arrow, cap_extent, is_closed, segments, subpaths, unit};
 
 /// Largest stretch of a rib on a turn's bisector (1 / cos of half the turn, about 74°) before the
 /// corner gets a fan of ribs round its outside.
@@ -97,7 +97,10 @@ impl Lay<'_> {
 
     /// How far a rib at fraction `t` reaches either side of the path to cover the stroke there.
     fn cover(&self, t: f64) -> f64 {
-        self.half(t) + self.margin
+        // A square cap's corners stand √2 of the half-width out from where the dash ends, and a
+        // dash can end just past a corner: reach that far, or they paint outside every slice.
+        let diag = if self.st.dash.is_some() && self.st.cap == LineCap::Square { std::f64::consts::SQRT_2 } else { 1.0 };
+        self.half(t) * diag + self.margin
     }
 
     /// The across band at fraction `t` of a subpath whose visible side is `side` (`Some(true)`:
@@ -162,6 +165,9 @@ fn strips(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64, margin: f64,
         return vec![];
     }
     let heads = (st.head_reach(false), st.head_reach(true));
+    // With a tip-aligned arrowhead the stroke's line, and with it the width profile, stops at the
+    // head's inset from the tip (`stroke_pieces`).
+    let trims = arrow::trims(st);
     let mut lay = Lay { st, hw, margin, ext: (0.0, 0.0) };
     // Caps reach as far past the ends as the stroke is wide there.
     let cap = |t: f64| cap_extent(st.cap, 2.0 * lay.half(t));
@@ -170,27 +176,34 @@ fn strips(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64, margin: f64,
     let count = subs.len();
     let mut out = vec![];
     for (k, (range, closed)) in subs.into_iter().enumerate() {
-        let (pts, corner) = flatten(&segments(&bp.elements()[range]), closed, tol.max(1e-4));
-        let side =
-            (st.align != StrokeAlign::Center && closed_path && closed).then(|| band_on_left(bp, rule, &pts, st.align, (4.0 * tol).min(hw / 2.0)));
+        let segs = segments(&bp.elements()[range]);
+        let flat = flatten(&segs, closed, tol.max(1e-4));
+        let side = (st.align != StrokeAlign::Center && closed_path && closed)
+            .then(|| band_on_left(bp, rule, &flat.pts, st.align, (4.0 * tol).min(hw / 2.0)));
         // Arrowheads sit on the start of the first subpath and the end of the last one.
         let heads = (if k == 0 { heads.0 } else { 0.0 }, if k + 1 == count { heads.1 } else { 0.0 });
-        let ribs = match pts.len() {
+        let trims = (if k == 0 { trims.0 } else { 0.0 }, if k + 1 == count { trims.1 } else { 0.0 });
+        let ribs = match flat.pts.len() {
             0 => continue,
             // A subpath of no length: a dot (round and projecting caps paint it).
             1 => {
                 let (d, b, e) = (Vec2::new(1.0, 0.0), lay.band(0.0, side), lay.ext.0.max(lay.ext.1));
                 let r = lay.cover(0.0);
-                vec![Rib::square(pts[0] - d * e, d, r, 0.0, b), Rib::square(pts[0] + d * e, d, r, 0.0, b)]
+                vec![Rib::square(flat.pts[0] - d * e, d, r, 0.0, b), Rib::square(flat.pts[0] + d * e, d, r, 0.0, b)]
             }
             _ => {
-                let total = length(&pts, closed);
+                let total = length(&flat.pts, closed);
                 if total <= 1e-12 {
                     continue;
                 }
                 let steps = if max_dt < 1.0 { (1.0 / max_dt).ceil() as usize } else { 1 };
                 let profile = st.profile.iter().flat_map(|p| p.points.iter().map(|q| q.0));
                 let heads = if closed { (0.0, 0.0) } else { heads };
+                // A tip-aligned arrowhead shortens the line it sits on, and the stroke's outline
+                // reads the width profile along the shortened line (`stroke_pieces`); the ribs
+                // must read it there too, or on a profile that changes fast they cover a narrower
+                // band than the stroke paints.
+                let span = if closed { (0.0, total) } else { (trims.0.min(total), (total - trims.1).max(trims.0)) };
                 // Where an arrowhead's reach ends gets a rib of its own, so the ribs that reach
                 // across a head run all the way there instead of narrowing towards the next corner
                 // from the head's tip, which leaves the corners of its base outside (#5964).
@@ -200,11 +213,11 @@ fn strips(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64, margin: f64,
                     .copied()
                     .chain(profile)
                     .chain((1..steps).map(|i| i as f64 / steps as f64))
-                    .map(|t| t * total)
+                    .map(|t| span.0 + (span.1 - span.0) * t)
                     .chain(head_ends)
                     .collect();
-                let (pts, _) = split_at(&pts, &corner, closed, &at);
-                strip(&lay, &pts, closed, total, side, heads)
+                let (pts, _, _) = split_at(&flat, closed, &at, &segs);
+                strip(&lay, &pts, closed, total, side, heads, span)
             }
         };
         out.push(ribs);
@@ -226,8 +239,9 @@ fn band_on_left(bp: &BezPath, rule: FillRule, pts: &[Point], align: StrokeAlign,
 }
 
 /// The ribs along one flattened subpath `pts` of length `total` (`heads`: how far arrowheads
-/// reach from its start and end).
-fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>, heads: (f64, f64)) -> Vec<Rib> {
+/// reach from its start and end). `span` is the stretch of the subpath the width profile is laid
+/// along: the whole of it, or what is left between tip-aligned arrowheads.
+fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>, heads: (f64, f64), span: (f64, f64)) -> Vec<Rib> {
     let n = pts.len();
     let seg_count = if closed { n } else { n - 1 };
     let dir: Vec<Vec2> = (0..seg_count).map(|i| unit(pts[(i + 1) % n] - pts[i])).collect();
@@ -249,7 +263,9 @@ fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>,
     // stroke is wide anywhere: where a stroke crosses or runs close by itself, a narrow part
     // reaching that far would paint over a wide part beside it (#5960). The start of a closed
     // subpath is also its end. Ribs near an arrowhead reach across it.
-    let cover: Vec<f64> = (0..n).map(|i| if closed && i == 0 { lay.cover(0.0).max(lay.cover(1.0)) } else { lay.cover(along[i] / total) }).collect();
+    // The fraction of the profile at how far `s` is along the subpath: the profile spans `span`.
+    let t_at = |s: f64| if span.1 > span.0 { ((s - span.0) / (span.1 - span.0)).clamp(0.0, 1.0) } else { 0.0 };
+    let cover: Vec<f64> = (0..n).map(|i| if closed && i == 0 { lay.cover(0.0).max(lay.cover(1.0)) } else { lay.cover(t_at(along[i])) }).collect();
     let window = match lay.st.dash {
         Some(_) if lay.st.profile.is_some() => cap_extent(lay.st.cap, 2.0 * lay.hw * lay.st.profile_max()),
         _ => 0.0,
@@ -279,7 +295,7 @@ fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>,
     let (first, last) = if closed { (0, n) } else { (1, n - 1) };
     for i in first..last {
         let v = i % n;
-        let t = along[v] / total;
+        let t = t_at(along[v]);
         let ribs = lay.turn(pts[v], dir[(v + seg_count - 1) % seg_count], dir[v % seg_count], reach(v), t, lay.band(t, side));
         // A closed subpath starts after the fan of its first corner and ends with it.
         let skip = if closed && i == 0 { ribs.len() - 1 } else { 0 };
