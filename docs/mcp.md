@@ -3401,8 +3401,13 @@ where the layout puts it.
 ## Flatten Transparency
 
 `object.flattenTransparency {ids?, preset?, …options}` turns transparent art into opaque art that looks the same, in
-one undo step. The targets split into groups of overlapping objects; groups without transparency stay as they are.
-Each other group becomes one group of atomic regions: paths filled with the flat colour the art showed there (over
+one undo step. The targets split into groups. A group holds each object with transparency and every object it
+overlaps, counting 1 pt around each object for antialiasing. It also holds each object without transparency that
+overlaps a member in the same way and lies above that member but below the group's topmost object, whose place the
+group takes.
+Objects without transparency that overlap only others without transparency stay as they are. Overlapping objects of
+which one is inside a clip group or clipping layer form one group, with transparency or without; groups without
+transparency stay as they are. Each other group becomes one group of atomic regions: paths filled with the flat colour the art showed there (over
 white, which blend modes do not read; over nothing, keeping alpha, with `preserveAlpha: true`), plus one image where gradients, patterns, images,
 opacity masks or raster effects reach (clipped to those regions with `clipComplexRegions`, a rectangle without).
 The image leaves out the part of such art that the clipping path of a clip group or clipping layer hides, so art under
