@@ -274,7 +274,60 @@ impl FolderStore {
         builder.recursive(true);
         #[cfg(unix)]
         std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
-        builder.create(dir).map_err(|e| format!("{}: {e}", dir.display()))
+        builder.create(dir).map_err(|e| Self::folder_error(dir, &e, true))
+    }
+
+    /// The first folder on the way to `dir` (`dir` included), from the top down, that is not a
+    /// folder (`true`) or is missing (`false`). None when every one of them is a folder or one of
+    /// them can't be checked.
+    fn in_the_way(dir: &std::path::Path) -> Option<(&std::path::Path, bool)> {
+        let mut way: Vec<&std::path::Path> = dir.ancestors().filter(|p| !p.as_os_str().is_empty()).collect();
+        way.reverse();
+        for p in way {
+            match std::fs::metadata(p) {
+                Ok(m) if m.is_dir() => {}
+                Ok(_) => return Some((p, true)),
+                Err(m) if m.kind() == std::io::ErrorKind::NotFound => return Some((p, false)),
+                Err(_) => return None,
+            }
+        }
+        None
+    }
+
+    /// The message for error `e` on folder `dir`, which was being made (`making`) or read. It
+    /// names the first folder on the way to `dir` that is not a folder, or is missing (when
+    /// `making`, the one that couldn't be made), and otherwise `dir`.
+    fn folder_error(dir: &std::path::Path, e: &std::io::Error, making: bool) -> String {
+        match Self::in_the_way(dir) {
+            Some((p, true)) => format!("{} is not a folder: {e}", p.display()),
+            Some((p, false)) if making => format!("couldn't make {}: {e}", p.display()),
+            Some((p, false)) if p != dir => format!("{} is missing", p.display()),
+            _ => format!("{}: {e}", dir.display()),
+        }
+    }
+
+    /// The message for error `e` on file `f`. It names the first folder on the way to `f` that is
+    /// not a folder or is missing, and otherwise `f`.
+    fn file_error(f: &std::path::Path, e: &std::io::Error) -> String {
+        match f.parent().and_then(Self::in_the_way) {
+            Some((p, true)) => format!("{} is not a folder: {e}", p.display()),
+            Some((p, false)) => format!("{} is missing", p.display()),
+            None => format!("{}: {e}", f.display()),
+        }
+    }
+
+    /// The outcome `r` of removing file `f`. A file that is not there counts as removed, unless a
+    /// file is on the way to it: Windows reports that as a missing file, and it is named as for a
+    /// listing.
+    pub(crate) fn removed(f: &std::path::Path, r: std::io::Result<()>) -> std::result::Result<(), String> {
+        match r {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => match f.parent().and_then(Self::in_the_way) {
+                Some((p, true)) => Err(format!("{} is not a folder: {e}", p.display())),
+                _ => Ok(()),
+            },
+            Err(e) => Err(Self::file_error(f, &e)),
+            Ok(()) => Ok(()),
+        }
     }
 
     /// Refuse area folder `dir` unless it is a folder itself, not a link to one, and (on Unix)
@@ -282,7 +335,7 @@ impl FolderStore {
     /// linked to a folder of its own in a shared recovery folder looked free, and claiming it
     /// wrote the copies through the link.
     fn own_area(dir: &std::path::Path) -> std::result::Result<(), String> {
-        let m = std::fs::symlink_metadata(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        let m = std::fs::symlink_metadata(dir).map_err(|e| Self::folder_error(dir, &e, false))?;
         if !m.file_type().is_dir() {
             return Err(format!("{}: not a folder of its own", dir.display()));
         }
@@ -294,11 +347,17 @@ impl FolderStore {
     }
 
     /// The plain names of the files (or, `dirs`, folders) in `dir`; none when it doesn't exist.
+    /// A file on the way to `dir` is an error: Windows reports such a folder as missing.
     fn names(dir: &std::path::Path, dirs: bool) -> std::result::Result<Vec<String>, String> {
         let entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
-            Err(e) => return Err(format!("{}: {e}", dir.display())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return match Self::in_the_way(dir) {
+                    Some((p, true)) => Err(format!("{} is not a folder: {e}", p.display())),
+                    _ => Ok(vec![]),
+                };
+            }
+            Err(e) => return Err(Self::folder_error(dir, &e, false)),
         };
         Ok(entries
             .filter_map(|e| e.ok())
@@ -333,7 +392,7 @@ impl FolderStore {
         match e.kind() {
             std::io::ErrorKind::NotFound => Ok(Lock::Busy),
             std::io::ErrorKind::PermissionDenied if std::fs::symlink_metadata(path).is_ok() => Ok(Lock::Busy),
-            _ => Err(format!("{}: {e}", path.display())),
+            _ => Err(Self::file_error(path, &e)),
         }
     }
 
@@ -345,7 +404,7 @@ impl FolderStore {
             Ok(()) | Err(std::fs::TryLockError::WouldBlock) => Ok(Lock::Busy),
             // The lock file was removed meanwhile, and locking it failed instead.
             Err(std::fs::TryLockError::Error(_)) if !Self::still_named(&file, path) => Ok(Lock::Busy),
-            Err(std::fs::TryLockError::Error(e)) => Err(format!("{}: {e}", path.display())),
+            Err(std::fs::TryLockError::Error(e)) => Err(Self::file_error(path, &e)),
         }
     }
 
@@ -393,10 +452,10 @@ impl RecoveryStore for FolderStore {
         if let Some(dir) = f.parent() {
             Self::own_area(dir)?;
         }
-        if !std::fs::symlink_metadata(&f).map_err(|e| format!("{}: {e}", f.display()))?.file_type().is_file() {
+        if !std::fs::symlink_metadata(&f).map_err(|e| Self::file_error(&f, &e))?.file_type().is_file() {
             return Err(format!("{}: not a plain file", f.display()));
         }
-        std::fs::read(&f).map_err(|e| format!("{}: {e}", f.display()))
+        std::fs::read(&f).map_err(|e| Self::file_error(&f, &e))
     }
     fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
         let f = self.file(name)?;
@@ -404,14 +463,11 @@ impl RecoveryStore for FolderStore {
             Self::create_area(dir)?;
             Self::own_area(dir)?;
         }
-        vectorcraft_format::write_atomic(&f, bytes).map_err(|e| format!("{}: {e}", f.display()))
+        vectorcraft_format::write_atomic(&f, bytes).map_err(|e| Self::file_error(&f, &e))
     }
     fn remove(&self, name: &str) -> std::result::Result<(), String> {
         let f = self.file(name)?;
-        match std::fs::remove_file(&f) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", f.display())),
-            _ => Ok(()),
-        }
+        Self::removed(&f, std::fs::remove_file(&f))
     }
     fn location(&self) -> String {
         self.0.to_string_lossy().into_owned()

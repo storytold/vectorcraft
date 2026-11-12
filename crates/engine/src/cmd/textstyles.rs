@@ -8,7 +8,7 @@
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{CharStyle, Document, Node, NodeId, NodeKind, ParaStyle, TextStyleDef};
+use vectorcraft_doc::{CharStyle, Document, Node, NodeId, NodeKind, ParaStyle, TabStop, TextStyleDef};
 
 use super::clipboard::resources::import_text_styles;
 use super::typecmd::{refresh_bounds, text_targets};
@@ -125,7 +125,7 @@ macro_rules! style_cmds {
 }
 
 /// The params of `charStyle.load`, `paraStyle.load` and `textStyle.loadAll`.
-const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with, the symbols and brushes those patterns use, and the styles of either kind that type in those patterns and symbols is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read or are out of the range charStyle.new takes, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names in the file]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}}); charStyle.load and paraStyle.load list only the styles of their own kind";
+const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with, the symbols and brushes those patterns use, and the styles of either kind that type in those patterns and symbols is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read or are out of the range charStyle.new or paraStyle.new takes, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names in the file]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}}); charStyle.load and paraStyle.load list only the styles of their own kind";
 
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = style_cmds!(
@@ -148,13 +148,13 @@ pub fn specs() -> Vec<CommandSpec> {
         "paraStyle",
         "Paragraph Styles",
         "Paragraph",
-        "; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; tab positions 0..=100000 pt"
+        "; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; changed tabs: at most 256 stops, each changed stop's position 0..=100000 pt and leader at most 8 characters, sorted by position keeping the first of stops at one position"
     ));
     v.push(spec(
         "paraStyle.edit",
         "Edit Paragraph Style",
         &[],
-        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; tab positions 0..=100000 pt",
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; changed tabs: at most 256 stops, each changed stop's position 0..=100000 pt and leader at most 8 characters, sorted by position keeping the first of stops at one position",
         |s, p| edit_style(s, p, Kind::Para),
         true,
     ));
@@ -569,8 +569,9 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     char_attrs(&st)
                 }
                 Kind::Para => {
-                    let st = with_attrs(&ParaStyle::default(), m, &c)?;
+                    let mut st = with_attrs(&ParaStyle::default(), m, &c)?;
                     para_ranges(&st, m, kept, &c)?;
+                    sort_tabs(&mut st, m, kept);
                     para_attrs(&st)
                 }
             };
@@ -587,7 +588,8 @@ const PARA_DISTANCE: f64 = 1296.0;
 /// Check the paragraph attributes of `st` (read from `attrs`) that differ from `kept` against the
 /// ranges `text.setFormat` keeps them to: the indents and the space before and after, each
 /// Hyphenation option, each Justification option (Minimum, Desired and Maximum in order, as
-/// `attrs` gives them) and the position of each tab stop. A value `kept` has is not checked.
+/// `attrs` gives them), and the number of tab stops with the position and leader of each stop
+/// `kept` does not hold. A value `kept` has is not checked.
 fn para_ranges(st: &ParaStyle, attrs: &Map<String, Value>, kept: Option<&Map<String, Value>>, c: &str) -> Result<()> {
     let within = |key: &str, value: f64, lo: f64, hi: f64| {
         if (lo..=hi).contains(&value) { Ok(()) } else { Err(bad(c, format!("`{key}` must be from {lo} to {hi}"))) }
@@ -644,16 +646,35 @@ fn para_ranges(st: &ParaStyle, attrs: &Map<String, Value>, kept: Option<&Map<Str
         }
     }
     if changed("tabs") {
-        let kept_tabs: Vec<f64> = kept
-            .and_then(|k| k.get("tabs"))
-            .and_then(Value::as_array)
-            .map(|stops| stops.iter().filter_map(|s| s.get("position").and_then(Value::as_f64)).collect())
-            .unwrap_or_default();
-        for stop in st.tabs.iter().filter(|stop| !kept_tabs.contains(&stop.position)) {
-            within("tabs.position", stop.position, 0.0, 100_000.0)?;
+        let kept_tabs = kept_tab_stops(kept);
+        let max = TabStop::MAX_STOPS;
+        if st.tabs.len() > max.max(kept_tabs.len()) {
+            return Err(bad(c, format!("at most {max} tab stops")));
+        }
+        for stop in st.tabs.iter().filter(|stop| !kept_tabs.contains(stop)) {
+            within("tabs.position", stop.position, 0.0, TabStop::MAX_POSITION)?;
+            let (label, max) = ("`tabs.leader`", TabStop::MAX_LEADER);
+            if stop.leader.chars().count() > max {
+                return Err(bad(c, format!("{label} must be at most {max} characters")));
+            }
         }
     }
     Ok(())
+}
+
+/// The tab stops `kept` holds, each as it reads (a stop that does not read is left out).
+fn kept_tab_stops(kept: Option<&Map<String, Value>>) -> Vec<TabStop> {
+    let stops = kept.and_then(|k| k.get("tabs")).and_then(Value::as_array);
+    stops.into_iter().flatten().filter_map(|s| serde_json::from_value(s.clone()).ok()).collect()
+}
+
+/// `st`'s tab stops sorted by position, keeping the first of stops within 1e-6 pt of each other,
+/// as `text.tabs.set` keeps them, when `attrs` changes them from `kept`.
+fn sort_tabs(st: &mut ParaStyle, attrs: &Map<String, Value>, kept: Option<&Map<String, Value>>) {
+    if attrs.contains_key("tabs") && kept.and_then(|k| k.get("tabs")) != attrs.get("tabs") {
+        st.tabs.sort_by(|a, b| a.position.total_cmp(&b.position));
+        st.tabs.dedup_by(|a, b| (a.position - b.position).abs() < 1e-6);
+    }
 }
 
 /// Check a character style's `fill` or `stroke` (`key`): each solid color and gradient stop has a
@@ -1011,10 +1032,29 @@ fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
 
 /// The styles of `kind` in `src` that load, with their source names so that art in the file keeps
 /// referring to them: not the Normal style, and not one whose attributes don't read, whose sizes,
-/// scales, leading, shifts or stroke width are out of the range `charStyle.new` takes, or whose name
-/// is empty, which are skipped. → (the styles, the names in `src` of those skipped)
+/// scales, leading, shifts or stroke width are out of the range `charStyle.new` takes, whose
+/// indents, spacing, Hyphenation or Justification options or tab stops are out of the range
+/// `paraStyle.new` takes, or whose name is empty, which are skipped. → (the styles, the names in
+/// `src` of those skipped)
 fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
-    const RANGED: [&str; 8] = ["size", "h_scale", "v_scale", "leading", "baseline_shift", "tcyUpDown", "tcyLeftRight", "stroke_width"];
+    const RANGED: [&str; 16] = [
+        "size",
+        "h_scale",
+        "v_scale",
+        "leading",
+        "baseline_shift",
+        "tcyUpDown",
+        "tcyLeftRight",
+        "stroke_width",
+        "left_indent",
+        "right_indent",
+        "first_line_indent",
+        "space_before",
+        "space_after",
+        "hyphenation",
+        "justification",
+        "tabs",
+    ];
     let (mut defs, mut skipped) = (vec![], vec![]);
     for def in kind.defs(src) {
         let name = def.name.as_str();

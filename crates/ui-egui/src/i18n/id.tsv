@@ -758,6 +758,14 @@
 	Damp Paper	Kertas Basah
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
+	Painted and Sketched	Lukisan dan sketsa
+	Washed Blue	Biru luntur
+	Bristle Ochre	Oker kuas kering
+	Pastel Heather	Ungu pastel
+	Charcoal Shade	Bayangan arang
+	Ink Contour	Kontur tinta
+	Wet Ink	Tinta basah
+	Fine Pen	Pena halus
 	Gradient Finishes	Finishing gradien
 	Shape Effects	Efek bentuk
 	Blends and Transparency	Blend dan transparansi
@@ -5859,6 +5867,7 @@ swatch	Bright Violet	Violet cerah
 	Ruby	Ruby
 	Geometric Guides	Panduan Geometris
 	Geometric Patterns	Pola Geometris
+	Grit Textures	Tekstur Butiran
 	Ease In	Awal Lambat
 	Ease Out	Akhir Lambat
 	Ease In Out	Awal dan Akhir Lambat
@@ -6401,6 +6410,8 @@ breakText	Glyphs	Glif
 	Delete the selected brushes?	Hapus kuas yang dipilih?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Stroke menggunakan satu atau beberapa kuas ini. Lepaskan kuas dari stroke tersebut dan hapus kuasnya?
 	Remove Strokes	Hapus Stroke
+	Place Brush Art	Tempatkan karya seni kuas
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` tidak memiliki karya seni (hanya kuas sebar, kuas seni, dan kuas pola yang memilikinya)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Alat penyusunan
 	Arrange in Grid…	Susun dalam grid…

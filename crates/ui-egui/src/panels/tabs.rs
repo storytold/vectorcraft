@@ -20,7 +20,7 @@ const ALIGNS: [(TabAlign, &str); 4] = [(TabAlign::Left, "⇥"), (TabAlign::Cente
 /// The name of alignment `a`'s button: its tool tip and what screen readers call it. A line of
 /// vertical type runs from top to bottom, so in vertical type a Left stop is named Top-Justified
 /// and a Right stop is named Bottom-Justified.
-fn align_name(a: TabAlign, vertical: bool) -> &'static str {
+pub(crate) fn align_name(a: TabAlign, vertical: bool) -> &'static str {
     match (a, vertical) {
         (TabAlign::Left, false) => tl!("Left-Justified Tab"),
         (TabAlign::Left, true) => tl!("Top-Justified Tab"),

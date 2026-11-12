@@ -1493,7 +1493,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "css.exportFile",
         "Export CSS…",
         "",
-        "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…], warnings (css.export's; the status bar shows the first)}",
+        "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…], warnings (css.export's; the status bar shows the first and how many there are, and hovering the message lists up to 30 of them, fewer when the window is small, with how many were left out)}",
     ),
     (
         "file.print",
