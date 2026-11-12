@@ -954,6 +954,51 @@ fn bad_place_params_are_errors() {
     assert!(top_children(&s).is_empty());
 }
 
+#[test]
+fn place_params_of_the_wrong_type_are_refused_and_null_keeps_the_default() {
+    let mut s = session();
+    let ok = png(2, 2, [0; 4], None);
+    let with = |extra: Value| {
+        let mut p = file("x.png", &ok);
+        if let (Some(o), Value::Object(e)) = (p.as_object_mut(), extra) {
+            o.extend(e);
+        }
+        p
+    };
+    let queue = |extra: Value| {
+        let mut p = json!({ "files": [file("x.png", &ok)] });
+        if let (Some(o), Value::Object(e)) = (p.as_object_mut(), extra) {
+            o.extend(e);
+        }
+        p
+    };
+    for (cmd, p, msg) in [
+        ("file.place", with(json!({"link": "false"})), "`link` must be true or false"),
+        ("file.place", with(json!({"replace": 1})), "`replace` must be true or false"),
+        ("file.place", with(json!({"template": "true"})), "`template` must be true or false"),
+        ("file.place.queue", queue(json!({"link": "false"})), "`link` must be true or false"),
+        ("file.place.queue", queue(json!({"template": 1})), "`template` must be true or false"),
+        ("file.place.queue", queue(json!({"thumbnail": "8"})), "`thumbnail` must be a number"),
+        ("file.place.info", with(json!({"link": "no"})), "`link` must be true or false"),
+        ("file.place.info", with(json!({"thumbnail": "8"})), "`thumbnail` must be a number"),
+    ] {
+        let e = match s.execute(cmd, &p) {
+            Ok(r) => panic!("{cmd} gave {r}"),
+            Err(e) => e.to_string(),
+        };
+        assert!(e.contains(msg), "{cmd}: {e}");
+        assert_eq!(s.tool_id(), "selection", "{cmd}: the tool stays");
+        assert!(top_children(&s).is_empty(), "{cmd}: nothing placed");
+    }
+    let placed = s.execute("file.place", &with(json!({"link": null, "replace": null, "template": null}))).unwrap();
+    assert_eq!(placed["ids"].as_array().unwrap().len(), 1);
+    assert_eq!(top_children(&s).len(), 1, "placed on the current layer, not a template layer");
+    let info = s.execute("file.place.info", &with(json!({"link": null, "thumbnail": null}))).unwrap();
+    assert!(info.get("thumbnailBase64").is_none(), "{info}");
+    let r = s.execute("file.place.queue", &queue(json!({"link": null, "template": null, "thumbnail": null}))).unwrap();
+    assert_eq!(r["count"], 1, "{r}");
+}
+
 /// An SVG placed with `crop: "crop"` given is framed and clipped by its viewBox, as a PDF by its
 /// page, so art drawn on a shared canvas keeps its place and scale; by default (and with
 /// "bounding") it is fitted by its art's bounds (#788).

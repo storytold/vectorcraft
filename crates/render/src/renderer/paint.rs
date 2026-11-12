@@ -22,7 +22,7 @@ impl Renderer {
     }
 
     pub(super) fn draw_shape(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, bp: &BezPath, rule: FillRule) {
-        if !drawable(bp, f.view, n) {
+        if !drawable(self.control_box(n, bp), f.view, n) {
             return;
         }
         if fx::has_fx(n) {
@@ -71,6 +71,19 @@ impl Renderer {
                 }
             }
         }
+    }
+
+    /// The box of the control points of shape `bp` of `n`: kept with its path when `bp` is the
+    /// path kept for `n`'s id ([`crate::kept_paths::KeptPath::control_box`]), else measured.
+    fn control_box(&self, n: &Node, bp: &BezPath) -> Rect {
+        if let Some(k) = self.kept.get(&n.id)
+            && std::ptr::eq(Arc::as_ptr(&k.path), bp)
+        {
+            return k.control_box();
+        }
+        #[cfg(test)]
+        CONTROL_BOXES_MEASURED.with(|c| c.set(c.get() + 1));
+        bp.control_box()
     }
 
     /// Multiply the folded object opacity into a solid paint.
@@ -471,6 +484,9 @@ thread_local! {
     /// How many sets of gradient stroke slices [`Renderer::fill_path_gradient`] has made on this
     /// thread.
     pub(crate) static SLICES_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many shapes' control boxes [`Renderer::draw_shape`] has measured from their path on this
+    /// thread.
+    pub(crate) static CONTROL_BOXES_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Paint `p` of a slice ([`Slices`]) moved by `by`: a gradient's start, end and focal point moved.

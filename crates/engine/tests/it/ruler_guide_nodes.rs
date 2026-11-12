@@ -257,14 +257,25 @@ fn guides_made_while_editing_a_mask_a_pattern_or_a_symbol_stay() {
     assert!(!in_symbol, "the guide is not part of the symbol");
 }
 
+/// `bytes` without the lines that depend on when the file was written: the PDF dates, and the XMP
+/// packet (one line, with its dates and IDs) and trailer `/ID`.
+fn undated(bytes: &[u8]) -> Vec<u8> {
+    let stamps: [&[u8]; 5] = [b"CreationDate", b"ModDate", b"xmp:CreateDate", b"xmp:ModifyDate", b"/ID["];
+    let dated = |line: &&[u8]| stamps.iter().any(|s| line.windows(s.len()).any(|w| w == *s));
+    bytes.split(|b| *b == b'\n').filter(|l| !dated(l)).flat_map(|l| l.iter().copied().chain(*b"\n")).collect()
+}
+
 /// The bytes of each export format (PDF without the embedded native document, which keeps the
-/// guides), and the box Fit All in Window fits (the art and every artboard).
-fn exports(s: &mut Session) -> (Vec<(String, String)>, Option<vectorcraft_geom::Rect>) {
+/// guides, and without its dates), and the box Fit All in Window fits (the art and every artboard).
+fn exports(s: &mut Session) -> (Vec<(String, Vec<u8>)>, Option<vectorcraft_geom::Rect>) {
     let files = [json!({"format": "svg"}), json!({"format": "pdf", "preserveEditing": false}), json!({"format": "png"}), json!({"format": "psd"})]
         .iter()
         .map(|p| {
             let out = s.execute("document.export", p).unwrap();
-            (p["format"].as_str().unwrap().to_string(), out["dataBase64"].as_str().unwrap().to_string())
+            let bytes = vectorcraft_format::base64_decode(out["dataBase64"].as_str().unwrap()).unwrap();
+            let format = p["format"].as_str().unwrap().to_string();
+            let bytes = if format == "pdf" { undated(&bytes) } else { bytes };
+            (format, bytes)
         })
         .collect();
     let d = &s.doc().unwrap().doc;

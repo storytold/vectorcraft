@@ -1,7 +1,7 @@
 use super::exporter::{UNDECODED, address, blend, color, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable, xf};
 use super::{
-    Affine, AppearanceItem, BezPath, BlendMode, Exporter, Fill, FillRule, LineCap, LineJoin, Mark, Node, NodeKind, NormalizedF32, Paint, Path, Rect,
-    Shape, Stroke, StrokeAlign, StrokeDash, StrokeLayer, Surface, WrittenShape, krilla, stroke,
+    Affine, AppearanceItem, BezPath, BlendMode, Exporter, Fill, FillRule, GradientKind, LineCap, LineJoin, Mark, Node, NodeKind, NormalizedF32,
+    Paint, Path, Rect, Shape, Stroke, StrokeAlign, StrokeDash, StrokeLayer, Surface, WrittenShape, krilla, stroke,
 };
 
 /// An object's visual box for leaving out what is off the page. A plain group or layer also holds
@@ -433,11 +433,15 @@ impl Exporter<'_> {
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
     /// [`Self::area`] draws as art: a pattern swatch or a gradient drawn as pixels
     /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of spot
-    /// inks ([`Self::perceptual_spot`])?
+    /// inks ([`Self::perceptual_spot`]), or a conic gradient that can't be a sweep shading (in
+    /// PDF/A, or with more than [`super::paint::MAX_SWEEP_STOPS`] stops)?
     pub(super) fn area_paint(&self, p: &Paint, fill: bool) -> bool {
         match p {
             Paint::Pattern { pattern, .. } => self.doc.pattern(pattern).is_some(),
-            Paint::Gradient(g) => g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill),
+            Paint::Gradient(g) => {
+                let sweep_unwritable = || !self.sweeps || g.gradient.expanded().nth(super::paint::MAX_SWEEP_STOPS).is_some();
+                (g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill)) || (g.gradient.kind == GradientKind::Conic && sweep_unwritable())
+            }
             _ => false,
         }
     }

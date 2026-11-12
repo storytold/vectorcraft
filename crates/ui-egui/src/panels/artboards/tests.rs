@@ -382,6 +382,32 @@ fn paste_and_cut_with_the_artboard_tool_make_its_artboard_active() {
     assert_eq!(active(&app), (1, json!(1)), "Cut Artboard 3: Artboard 2");
 }
 
+/// With the Artboard tool selecting several artboards, Paste in Place, in Front and in Back put a
+/// copy of the copied object on each, where it was on the artboard it was copied from; with one
+/// selected, on the active one.
+#[test]
+fn in_place_pastes_put_a_copy_on_each_artboard_the_artboard_tool_selects() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
+    let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.origin()).collect();
+    let r = app.run("shape.rectangle", json!({"x": boards[0].x + 10.0, "y": boards[0].y + 20.0, "width": 5, "height": 5})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    app.run("edit.copy", json!({})).unwrap();
+    app.select_tool("artboard");
+    let offset = vectorcraft_geom::Vec2::new(10.0, 20.0);
+    let pasted = |app: &mut VectorcraftApp, id: &str| -> Vec<vectorcraft_geom::Point> {
+        let r = app.run(id, json!({})).unwrap();
+        let doc = &app.session.active().unwrap().doc;
+        r["ids"].as_array().unwrap().iter().map(|i| doc.bounds_of(&[vectorcraft_doc::NodeId(i.as_u64().unwrap())], false).unwrap().origin()).collect()
+    };
+    for id in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        app.run("tool.setOption", json!({"key": "selected", "value": [2, 0]})).unwrap();
+        assert_eq!(pasted(&mut app, id), [boards[0] + offset, boards[2] + offset], "{id}");
+        app.run("tool.setOption", json!({"key": "selected", "value": [1]})).unwrap();
+        assert_eq!(pasted(&mut app, id), [boards[1] + offset], "{id}: the active artboard");
+    }
+}
+
 /// `tool.setOption` with the Artboard tool's `selected` or `active` makes the artboard the tool
 /// then has active the active one.
 #[test]
