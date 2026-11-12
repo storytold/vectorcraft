@@ -15,7 +15,11 @@ use crate::{FilePick, Services, VectorcraftApp, dialogs};
 
 mod export;
 mod open;
+mod read_only_save;
 mod save;
+
+#[cfg(test)]
+mod tests_read_only_save;
 
 pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, export_pdf, hide_exports, reveal, save_command_output};
 pub(crate) use export::{
@@ -29,6 +33,7 @@ pub use open::{
 };
 #[cfg(test)]
 pub(crate) use open::{open_file, opened_with_notes};
+pub(crate) use save::save_current;
 pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
 pub(crate) use save::{export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to};
 #[cfg(test)]

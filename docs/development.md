@@ -1,5 +1,6 @@
 # Development
 
+> **Last updated:** 2026-11-12 · **Change:** Tests canonicalize temporary roots and normalize Windows verbatim prefixes before comparing preset refusal paths or probing a case-variant script folder (#6860); production access checks unchanged.
 > **Last updated:** 2026-11-12 · **Change:** minor (clipboard failure helper follows its Linux/BSD and test callers; previously: Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending).
 > **Last updated:** 2026-11-01 · **Change:** Linux: Automatic Linux Display Server opens the window through XWayland when a pen is attached on a Wayland session, so the pen draws (#4967); `VECTORCRAFT_NATIVE_WAYLAND=1` keeps Wayland.
 > **Last updated:** 2026-10-31 · **Change:** files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance`.
@@ -512,6 +513,7 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-12 | minor | Tests (#6860): compare preset refusal roots after canonicalization and Windows display normalization; canonicalize the script fixture base before constructing `MAIN`. This keeps macOS `/var` → `/private/var` aliases from masking the case-sensitivity checks; no production-code change. |
 | 2026-11-12 | minor | Compile the clipboard failure helper only for Linux/BSD worker callers and unit tests; keep production macOS free of the unused helper without suppressing workspace dead-code warnings. |
 | 2026-11-06 | minor | Localisation: Hindi catalog, zero/one plurals, desktop and web font requirements; AI/MT draft, native review pending. |
 | 2026-10-31 | minor | Files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance` opts out. |
