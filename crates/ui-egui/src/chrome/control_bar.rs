@@ -180,7 +180,8 @@ fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
     labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
 }
 
-/// The size of the Control bar's Align, Distribute and area type vertical alignment buttons.
+/// The size of the Control bar's Align, Distribute and area type vertical alignment buttons, and
+/// the height of its Align To menu.
 const BUTTON: f32 = 24.0;
 
 /// The space ahead of the separator that ends a group of the Control bar's controls.
@@ -218,54 +219,129 @@ fn separator_width(ui: &Ui) -> f32 {
 }
 
 /// The room the controls at the end of the Control bar need: the Transform link, or Document Setup
-/// and Preferences with nothing selected. The groups ahead of them (the Paragraph section, area
-/// type's vertical alignment, the Align and Distribute buttons) show only while it is left, so
-/// the bar trims them from its right end (#5372), after the inline X/Y/W/H fields.
-fn end_width(ui: &Ui, nothing_selected: bool) -> f32 {
-    if nothing_selected { DOCUMENT_SETUP_WIDTH + ui.spacing().item_spacing.x + PREFERENCES_WIDTH } else { crate::panels::transform::link_width(ui) }
+/// and Preferences with nothing selected, or none while the panel menu has that group off. The
+/// groups ahead of them (the Paragraph section, area type's vertical alignment, the Align buttons,
+/// the Align To menu and the Distribute buttons) show only while it is left, so the bar trims them
+/// from its right end (#5372), after the inline X/Y/W/H fields.
+fn end_width(app: &VectorcraftApp, ui: &Ui, nothing_selected: bool) -> f32 {
+    if nothing_selected {
+        if group_on(app, "documentOptions") { DOCUMENT_SETUP_WIDTH + ui.spacing().item_spacing.x + PREFERENCES_WIDTH } else { 0.0 }
+    } else if group_on(app, "transform") {
+        crate::panels::transform::link_width(ui)
+    } else {
+        0.0
+    }
 }
 
 /// Draws the Control bar's groups between its Character controls and the Transform link, and
 /// returns whether the Transform link and X/Y/W/H follow (false: nothing is selected, and Document
-/// Setup and Preferences, drawn here, end the bar). The groups are the Paragraph section and area
-/// type's vertical alignment (#3759), then the Align buttons and, for two or more objects, the
-/// Distribute buttons (a single object keeps the bar as it was); each shows only while the end of
-/// the bar keeps its room.
+/// Setup and Preferences, drawn here, end the bar, or the Transform group is off). The groups are
+/// the Paragraph section and area type's vertical alignment (#3759), then the Align buttons, the
+/// Align To menu and, for two or more objects, the Distribute buttons (a single object keeps the bar
+/// as it was); each shows only while the end of the bar keeps its room. Groups the panel menu has
+/// off are left out, and take no room.
 fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize) -> bool {
     let nothing = objects == 0;
-    if crate::panels::paragraph::control_bar(app, ui, BUTTON, |ui| group_end_width(ui) + end_width(ui, nothing)) {
+    let end = end_width(app, ui, nothing);
+    if group_on(app, "paragraph") && crate::panels::paragraph::control_bar(app, ui, BUTTON, |ui| group_end_width(ui) + end) {
         group_end(ui);
     }
-    if crate::panels::properties::vertical_align::shown(app).is_some()
-        && ui.available_width() >= buttons_width(ui, 4) + group_end_width(ui) + end_width(ui, nothing)
+    if group_on(app, "verticalAlignment")
+        && crate::panels::properties::vertical_align::shown(app).is_some()
+        && ui.available_width() >= buttons_width(ui, 4) + group_end_width(ui) + end
         && crate::panels::properties::vertical_align::buttons(app, ui, BUTTON)
     {
         group_end(ui);
     }
     if nothing {
-        if widgets::flat_button(ui, tl!("Document Setup"), DOCUMENT_SETUP_WIDTH).clicked() {
-            app.run("file.documentSetup", json!({})).ok();
-        }
-        if widgets::flat_button(ui, tl!("Preferences"), PREFERENCES_WIDTH).clicked() {
-            app.run("edit.preferences", json!({})).ok();
+        if group_on(app, "documentOptions") {
+            if widgets::flat_button(ui, tl!("Document Setup"), DOCUMENT_SETUP_WIDTH).clicked() {
+                app.run("file.documentSetup", json!({})).ok();
+            }
+            if widgets::flat_button(ui, tl!("Preferences"), PREFERENCES_WIDTH).clicked() {
+                app.run("edit.preferences", json!({})).ok();
+            }
         }
         return false;
     }
-    let end = separator_width(ui) + end_width(ui, false);
-    if ui.available_width() >= buttons_width(ui, 7) + end {
+    let transform = group_on(app, "transform");
+    let end = if transform { separator_width(ui) + end } else { 0.0 };
+    if group_on(app, "alignDistribute") && ui.available_width() >= buttons_width(ui, 7) + end {
         crate::panels::align::align_buttons(app, ui, BUTTON);
-        if objects > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
-            ui.add_space(GROUP_GAP);
-            crate::panels::align::distribute_buttons(app, ui, BUTTON);
+        if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x + end {
+            crate::panels::align::align_to_menu(app, ui, BUTTON);
+            if objects > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
+                ui.add_space(GROUP_GAP);
+                crate::panels::align::distribute_buttons(app, ui, BUTTON);
+            }
         }
-        separator(ui);
+        if transform {
+            separator(ui);
+        }
     }
-    true
+    transform
 }
 
 /// The edges of the window the Control bar docks to (`window.control.dock {edge}`): the top, then
 /// the bottom.
 pub const CONTROL_BAR_EDGES: [&str; 2] = ["top", "bottom"];
+
+/// The groups of the Control bar's options that its panel menu turns on or off
+/// (`window.control.options {group, visible?}`), by id, in the menu's order. Every group is on
+/// until it is turned off. A group that is off stays out of the bar even while its tool or object
+/// is selected; one that is on still shows only while the selection or the tool calls for it.
+pub const CONTROL_BAR_GROUPS: [&str; 15] = [
+    "snapping",
+    "anchors",
+    "toolOptions",
+    "objectOptions",
+    "imageOptions",
+    "fillStroke",
+    "opacity",
+    "graphicStyle",
+    "character",
+    "paragraph",
+    "verticalAlignment",
+    "alignDistribute",
+    "transform",
+    "artboardOptions",
+    "documentOptions",
+];
+
+/// The panel menu's label for group `group` of [`CONTROL_BAR_GROUPS`], translated.
+fn group_label(group: &str) -> &'static str {
+    match group {
+        "snapping" => tl!("Snapping"),
+        "anchors" => tl!("Anchor Points"),
+        "toolOptions" => tl!("Tool Options"),
+        "objectOptions" => tl!("Object Options"),
+        "imageOptions" => tl!("Image Options"),
+        "fillStroke" => tl!("Fill and Stroke"),
+        "opacity" => tl!("Opacity"),
+        "graphicStyle" => tl!("Graphic Style"),
+        "character" => tl!("Character"),
+        "paragraph" => tl!("Paragraph"),
+        "verticalAlignment" => tl!("Vertical Alignment"),
+        "alignDistribute" => tl!("Align and Distribute"),
+        "transform" => tl!("Transform"),
+        "artboardOptions" => tl!("Artboard Options"),
+        _ => tl!("Document Options"),
+    }
+}
+
+/// Whether group `group` of [`CONTROL_BAR_GROUPS`] is on, so its controls may show in the bar.
+pub(crate) fn group_on(app: &VectorcraftApp, group: &str) -> bool {
+    !app.ui.control_bar_hidden_groups.contains(group)
+}
+
+/// Reads the groups of [`CONTROL_BAR_GROUPS`] that are off, as kept in the preferences and in a
+/// workspace. Ids the list does not hold are dropped, and a value that is not a list of strings
+/// reads as no group off, so every group shows.
+pub fn read_hidden_groups<'de, D: serde::Deserializer<'de>>(d: D) -> Result<std::collections::BTreeSet<String>, D::Error> {
+    let value = <serde_json::Value as serde::Deserialize>::deserialize(d)?;
+    let ids = value.as_array().into_iter().flatten().filter_map(serde_json::Value::as_str);
+    Ok(ids.filter(|id| CONTROL_BAR_GROUPS.contains(id)).map(str::to_string).collect())
+}
 
 /// The side of the Control bar's panel menu button, at the bar's right end.
 const MENU_BUTTON: f32 = 16.0;
@@ -278,18 +354,82 @@ fn dock(app: &mut VectorcraftApp, edge: &str) {
     crate::menus::invoke(app, "window.control.dock", json!({ "edge": edge }));
 }
 
-/// The Control bar's panel menu: Dock to Top and Dock to Bottom, the edge the bar is docked to
-/// checked.
+/// The Control bar's panel menu: an item for each group of [`CONTROL_BAR_GROUPS`], checked while
+/// the group is on, which turns it on or off; then Dock to Top and Dock to Bottom, the edge the bar
+/// is docked to checked. In a window too short for every item, the list scrolls.
 fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let resp = crate::panels::menu_button(ui, "control", rect);
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(160.0);
-        for (i, label) in [tl!("Dock to Top"), tl!("Dock to Bottom")].into_iter().enumerate() {
-            if widgets::menu_item(ui, label, true, usize::from(app.ui.control_bar_bottom) == i) {
-                dock(app, CONTROL_BAR_EDGES[i]);
+        widgets::menu_scroll(ui, |ui| {
+            for group in CONTROL_BAR_GROUPS {
+                if widgets::menu_item(ui, group_label(group), true, group_on(app, group)) {
+                    crate::menus::invoke(app, "window.control.options", json!({ "group": group }));
+                }
             }
-        }
+            ui.separator();
+            for (i, label) in [tl!("Dock to Top"), tl!("Dock to Bottom")].into_iter().enumerate() {
+                if widgets::menu_item(ui, label, true, usize::from(app.ui.control_bar_bottom) == i) {
+                    dock(app, CONTROL_BAR_EDGES[i]);
+                }
+            }
+        });
     });
+}
+
+/// The Control bar's Fill and Stroke group: the fill and stroke chips, the Stroke link, the weight
+/// and the width profile, and the separator after them.
+fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let shown_stroke = crate::panels::current_stroke(app);
+    let mixed = crate::panels::stroke_mixed(app, ui.ctx());
+    let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
+    crate::panels::paint_chip(app, ui, false, 22.0, true);
+    crate::panels::paint_chip(app, ui, true, 22.0, true);
+    // The link opens the Stroke panel as a popover under it; then the weight spinner
+    // (with presets) and the width profile.
+    stroke_panel::link(app, ui, tl!("Stroke:"));
+    stroke_panel::weight_field(app, ui, "cb-stroke", weight, 100.0);
+    if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
+        app.run("stroke.set", json!({"profile": id})).ok();
+    }
+    ui.add_space(4.0);
+    ui.separator();
+}
+
+/// The Control bar's Opacity group (its link and field, showing `opacity`) and, with something
+/// `selected`, its Graphic Style group (Style, Recolor Artwork and Global Edit Options), each while
+/// the panel menu has it on, and the separator after them.
+fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity: f32, selected: bool) {
+    let (opacity_on, style_on) = (group_on(app, "opacity"), group_on(app, "graphicStyle") && selected);
+    if opacity_on {
+        // A click opens the Transparency panel; a drag scrubs the field (#4088).
+        if crate::scrub::link_label(ui, egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline()).clicked() {
+            app.ui.open_panel = Some("transparency".into());
+        }
+        if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, 56.0)
+            && selected
+        {
+            app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
+        }
+    }
+    if style_on {
+        // Style picker: the selection's graphic style; its menu applies another.
+        ui.add_space(4.0);
+        if ui.link(egui::RichText::new(tl!("Style:")).size(12.0).color(t.text).underline()).clicked() {
+            app.ui.open_panel = Some("graphicStyles".into());
+        }
+        let resp = widgets::chip_button_named(ui, 22.0, true, tl!("Graphic Style"), |ui, r| crate::panels::graphic_styles::paint_linked(app, ui, r));
+        egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
+        // Recolor Artwork, when the selection has colours to recolour.
+        let colored = app.session.active().is_some_and(|st| crate::canvas::has_colors(&st.doc, &st.selection.objects));
+        if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 24.0).clicked() {
+            crate::menus::invoke(app, "ui.recolorDialog", json!({}));
+        }
+        global_edit_options(app, ui);
+    }
+    if opacity_on || style_on {
+        ui.separator();
+    }
 }
 
 /// The Control bar's gripper. Dragging it shows a band along the top or the bottom edge of the
@@ -345,7 +485,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     return;
                 }
                 // The Artboard tool's controls fill the narrowest window, so they keep it to themselves there.
-                if app.session.tool_id() != "artboard" || ui.available_width() >= ARTBOARD_SNAPPING_WIDTH {
+                if group_on(app, "snapping") && (app.session.tool_id() != "artboard" || ui.available_width() >= ARTBOARD_SNAPPING_WIDTH) {
                     snapping_menu(app, ui);
                 }
                 let Some(st) = app.session.active() else { return };
@@ -374,64 +514,40 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 // With the Artboard tool in use, the bar shows the active artboard's controls in place
                 // of the object controls.
-                if crate::panels::artboards::control_bar(app, ui) {
+                let (artboard_options, transform) = (group_on(app, "artboardOptions"), group_on(app, "transform"));
+                if crate::panels::artboards::control_bar(app, ui, artboard_options, transform) {
                     return;
                 }
-                if anchors != AnchorControls::None {
+                if anchors != AnchorControls::None && group_on(app, "anchors") {
                     anchor_buttons(app, ui, anchors);
                 }
-                isolation_button(app, ui);
+                let object_options = group_on(app, "objectOptions");
+                if object_options {
+                    isolation_button(app, ui);
+                }
                 ui.add_space(6.0);
-                // An image or an Image Trace object shows its own controls in place of Fill and Stroke.
-                let image = crate::place::control_bar_details(app, ui) || crate::panels::image_trace::control_bar(app, ui);
-                crate::toolbar::control_bar_options(app, ui);
-                crate::dialogs::envelope::control_bar(app, ui);
-                crate::panels::symbols::control_bar(app, ui);
+                // An image or an Image Trace object shows its own controls in place of Fill and Stroke,
+                // and leaves Fill and Stroke out while the Image Options group is off too.
+                let image = if group_on(app, "imageOptions") {
+                    crate::place::control_bar_details(app, ui) || crate::panels::image_trace::control_bar(app, ui)
+                } else {
+                    crate::place::selected_image_info(app).is_some() || crate::panels::image_trace::selected_trace(app).is_some()
+                };
+                if group_on(app, "toolOptions") {
+                    crate::toolbar::control_bar_options(app, ui);
+                }
+                if object_options {
+                    crate::dialogs::envelope::control_bar(app, ui);
+                    crate::panels::symbols::control_bar(app, ui);
+                }
                 let opacity = if has_first { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
-                if !image {
-                    let shown_stroke = crate::panels::current_stroke(app);
-                    let mixed = crate::panels::stroke_mixed(app, ui.ctx());
-                    let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
-                    crate::panels::paint_chip(app, ui, false, 22.0, true);
-                    crate::panels::paint_chip(app, ui, true, 22.0, true);
-                    // The link opens the Stroke panel as a popover under it; then the weight spinner
-                    // (with presets) and the width profile.
-                    stroke_panel::link(app, ui, tl!("Stroke:"));
-                    stroke_panel::weight_field(app, ui, "cb-stroke", weight, 100.0);
-                    if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
-                        app.run("stroke.set", json!({"profile": id})).ok();
-                    }
-                    ui.add_space(4.0);
-                    ui.separator();
+                if !image && group_on(app, "fillStroke") {
+                    fill_and_stroke(app, ui);
                 }
-                // A click opens the Transparency panel; a drag scrubs the field (#4088).
-                if crate::scrub::link_label(ui, egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline()).clicked() {
-                    app.ui.open_panel = Some("transparency".into());
+                opacity_and_style(app, ui, &t, opacity, !sel.is_empty());
+                if group_on(app, "character") {
+                    crate::panels::character::control_bar(app, ui);
                 }
-                if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, 56.0)
-                    && !sel.is_empty()
-                {
-                    app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
-                }
-                if !sel.is_empty() {
-                    // Style picker: the selection's graphic style; its menu applies another.
-                    ui.add_space(4.0);
-                    if ui.link(egui::RichText::new(tl!("Style:")).size(12.0).color(t.text).underline()).clicked() {
-                        app.ui.open_panel = Some("graphicStyles".into());
-                    }
-                    let resp = widgets::chip_button_named(ui, 22.0, true, tl!("Graphic Style"), |ui, r| {
-                        crate::panels::graphic_styles::paint_linked(app, ui, r)
-                    });
-                    egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
-                    // Recolor Artwork, when the selection has colours to recolour.
-                    let colored = app.session.active().is_some_and(|st| crate::canvas::has_colors(&st.doc, &st.selection.objects));
-                    if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 24.0).clicked() {
-                        crate::menus::invoke(app, "ui.recolorDialog", json!({}));
-                    }
-                    global_edit_options(app, ui);
-                }
-                ui.separator();
-                crate::panels::character::control_bar(app, ui);
                 if !groups_before_transform(app, ui, sel.len()) {
                     return;
                 }

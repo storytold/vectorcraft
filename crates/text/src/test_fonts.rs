@@ -399,6 +399,41 @@ pub fn vertical_punctuation_font(alternates: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`full_width_font`].
+pub const FULL_WIDTH_FAMILY: &str = "Fullwidthtest Sans";
+
+/// The ideographs and Japanese punctuation [`full_width_font`] sets one em wide.
+pub const FULL_WIDTH_CHARS: &str = "一二三四五六「」、。";
+
+/// A test-only cmap over bundled Source Sans 3: [`FULL_WIDTH_CHARS`] use the one-em-wide glyph of
+/// U+2318, so Japanese composition is tested without OS fonts; Latin letters and the space keep
+/// their own glyphs.
+pub fn full_width_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let wide = write_fonts::types::GlyphId::new(charmap.map('\u{2318}')?.to_u32());
+    let latin = ('A'..='Z').chain('a'..='z').chain([' ']);
+    let mut mappings: Vec<(char, write_fonts::types::GlyphId)> = FULL_WIDTH_CHARS.chars().map(|c| (c, wide)).collect();
+    for c in latin {
+        mappings.push((c, write_fonts::types::GlyphId::new(charmap.map(c)?.to_u32())));
+    }
+    let cmap = Cmap::from_mappings(mappings).ok()?;
+    let name = name_table(&[(1, FULL_WIDTH_FAMILY), (2, "Regular"), (4, "Fullwidthtest Sans Regular"), (6, "FullwidthtestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"GSUB") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`half_form_font`].
 pub const HALF_FORM_FAMILY: &str = "Halftest Sans";
 

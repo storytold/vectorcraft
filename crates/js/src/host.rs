@@ -85,11 +85,13 @@ pub enum Arg {
     Bool,
 }
 
-/// How the arguments of a host function are read.
+/// How the arguments of a host function are read, and its result given.
 #[derive(Clone)]
 pub(crate) enum ArgRead {
     /// Each as [`Data`].
     Data,
+    /// Each as [`Data`], with the result given frozen, as [`HostItem::Value`] gives its value.
+    Frozen,
     /// Each as the string `String(value)` gives.
     Text,
     /// One by one as the list says; those past its end are not read.
@@ -109,6 +111,15 @@ pub enum HostItem {
     Converted(Vec<Arg>, HostFunction),
     /// A property whose value the function gives each time it is read.
     Getter(HostFunction),
+    /// A property whose value the function gives each time it is read, frozen as
+    /// [`HostItem::Value`] gives its value.
+    FrozenGetter(HostFunction),
+    /// A property whose value `get` gives each time it is read, and that `set` is given each value
+    /// assigned to it, as its one argument; an error from `set` is thrown to the script.
+    Property {
+        get: HostFunction,
+        set: HostFunction,
+    },
     /// A frozen object with these members.
     Object(Vec<(String, HostItem)>),
     /// A function whose host function gives JavaScript source as a string, which then runs as
@@ -123,6 +134,23 @@ pub enum HostItem {
         end: Rc<dyn Fn()>,
         strict_writes: Rc<dyn Fn() -> Option<bool>>,
     },
+    /// A read-only property that reads the interpreter's own state.
+    Script(ScriptItem),
+}
+
+/// The interpreter's own state a host object can show.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScriptItem {
+    /// The global object itself, with every global the script has made.
+    Global,
+    /// The last `Error` object thrown in the current run, caught or not, or `null` before one.
+    LastError,
+    /// The line of the script's code that reads it, counted from 1.
+    Line,
+    /// The running frames of the script's code, outermost first, one a line as `name:line`: the
+    /// global code is `[global]` and a function without a name `[anonymous]`. At most 64 frames
+    /// are listed, the innermost ones, after a line `…` when some are left out.
+    Stack,
 }
 
 enum Step {
@@ -336,7 +364,7 @@ impl Interp {
         let result = f(data);
         self.can_wait.set(false);
         match result {
-            Ok(d) => self.write_data(d, 0, false),
+            Ok(d) => self.write_data(d, 0, matches!(how, ArgRead::Frozen)),
             Err(HostError::Wait) if can_wait => {
                 self.waiting = true;
                 self.pause.set(true);
@@ -369,11 +397,29 @@ impl Interp {
         let writes = strict_writes().unwrap_or_else(|| self.writes_mode());
         self.evaluated = self.evaluated.saturating_add(1);
         let tag = std::mem::replace(&mut self.source_tag, self.evaluated);
-        let code = self.encode_source(&source).and_then(|units| self.compile_source_writes(&units, false, writes, crate::bytecode::CodeKind::Eval));
+        // UTF-8 takes at most 3 bytes for each UTF-16 code unit, so the fuel for a third of the
+        // bytes is taken before the source is encoded, and the rest after. A source within the
+        // source limit must fit in the heap whole before it is encoded; a longer one is refused as
+        // a syntax error when it is encoded.
+        let floor = source.len().div_ceil(3);
+        let fits = |interp: &mut Self| {
+            let units = source.encode_utf16().count();
+            if interp.check_source_units(units).is_ok() { interp.reserve_heap(string_bytes(units)) } else { Ok(()) }
+        };
+        let code = self.prepare_source(floor).and_then(|()| fits(self)).map(|()| {
+            let units = self.encode_source(&source);
+            let rest = match &units {
+                Ok(units) => self.prepare_source(units.len().saturating_sub(floor)),
+                Err(_) => Ok(()),
+            };
+            rest.map(|()| units.and_then(|units| self.compile_source_writes(&units, false, writes, crate::bytecode::CodeKind::Eval)))
+        });
+        let code = code.and_then(|c| c);
         self.source_tag = tag;
         let r = match code {
-            Ok(code) => self.run_global(code, true),
-            Err(e) => Err(self.compile_error_to_abrupt(e)),
+            Ok(Ok(code)) => self.run_global(code, true),
+            Ok(Err(e)) => Err(self.compile_error_to_abrupt(e)),
+            Err(limit) => Err(limit),
         };
         end();
         r
@@ -389,14 +435,14 @@ impl Interp {
         let mut data = Vec::with_capacity(args.len());
         // A conversion can run the script's own `toString`, which may collect garbage.
         let mark = self.temp_roots.len();
-        if !matches!(how, ArgRead::Data) {
+        if !matches!(how, ArgRead::Data | ArgRead::Frozen) {
             self.temp_roots.extend(args.iter().cloned());
         }
         let mut read = Ok(());
         for (i, a) in args.iter().enumerate() {
             reading.path.push(Step::Index(u32::try_from(i).unwrap_or(u32::MAX)));
             let d = match how {
-                ArgRead::Data => self.read_data(a, &mut reading),
+                ArgRead::Data | ArgRead::Frozen => self.read_data(a, &mut reading),
                 ArgRead::Text => self.read_text(a, &mut reading),
                 ArgRead::Each(list) => match list.get(i) {
                     Some(Arg::TextOrUndefined) if matches!(a, Value::Undefined) => Ok(Data::Undefined),
@@ -462,7 +508,7 @@ impl Interp {
         self.define(global, key(name), Prop::Data { value: Value::Object(o), flags: 0 })
     }
 
-    fn host_object(&mut self, path: &str, items: Vec<(String, HostItem)>) -> JsResult<ObjId> {
+    pub(crate) fn host_object(&mut self, path: &str, items: Vec<(String, HostItem)>) -> JsResult<ObjId> {
         let o = self.new_object();
         let mark = self.temp_roots.len();
         self.temp_roots.push(Value::Object(o));
@@ -484,6 +530,12 @@ impl Interp {
         let prop = match item {
             HostItem::Value(d) => Prop::Data { value: self.write_data(d, 0, true)?, flags: ENUMERABLE },
             HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, ArgRead::Data)), set: None, flags: ENUMERABLE },
+            HostItem::FrozenGetter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, ArgRead::Frozen)), set: None, flags: ENUMERABLE },
+            HostItem::Property { get, set } => Prop::Accessor {
+                get: Some(self.host_function(get, &full, ArgRead::Data)),
+                set: Some(self.host_function(set, &full, ArgRead::Data)),
+                flags: ENUMERABLE,
+            },
             HostItem::Object(items) => Prop::Data { value: Value::Object(self.host_object(&full, items)?), flags: ENUMERABLE },
             HostItem::Function(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Data)), flags: ENUMERABLE },
             HostItem::TextFunction(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Text)), flags: ENUMERABLE },
@@ -496,6 +548,13 @@ impl Interp {
                 let f = self.heap.alloc_object(Object::new(Class::Function(func), Some(proto)));
                 Prop::Data { value: Value::Object(f), flags: ENUMERABLE }
             }
+            HostItem::Script(item) => match crate::builtins::extensions::getter(item) {
+                None => Prop::Data { value: Value::Object(self.global), flags: ENUMERABLE },
+                Some((name, f)) => {
+                    let get = crate::builtins::native(self, name, f, 0, crate::heap::NativeKind::Plain, false)?;
+                    Prop::Accessor { get: Some(get), set: None, flags: ENUMERABLE }
+                }
+            },
         };
         self.define(o, key(&name), prop)
     }

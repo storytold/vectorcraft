@@ -136,11 +136,12 @@ fn ai_layer_names_are_read_as_pdf_doc_encoding() {
 
 #[test]
 fn load_options_read_text_and_layers() {
-    let o = LoadOptions::from_params("x", &json!({"textAs": "Outlines", "layers": false})).unwrap();
-    assert_eq!((o.text_as, o.layers), (TextAs::Outlines, false));
+    let o = LoadOptions::from_params("x", &json!({"textAs": "Outlines", "layers": false, "hiddenLayers": true, "embeddedFonts": false})).unwrap();
+    assert_eq!((o.text_as, o.layers, o.hidden_layers, o.embedded_fonts), (TextAs::Outlines, false, true, false));
     assert!(o.is_partial(), "without its hidden layers, Save doesn't write the file back");
     let d = LoadOptions::default();
     assert_eq!((d.text_as, d.layers, d.is_partial()), (TextAs::Text, true, false));
+    assert_eq!((d.hidden_layers, d.embedded_fonts), (false, true));
     let n = LoadOptions { native: false, ..Default::default() };
     assert!(n.is_partial(), "without the document it carries, Save doesn't write the file back");
 }

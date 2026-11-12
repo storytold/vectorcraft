@@ -135,6 +135,7 @@ impl VectorcraftApp {
             last_window_title: String::new(),
             fullscreen_for_mode: false,
             graphics_adapter: None,
+            beacon: &crate::hang_beacon::BEACON,
             place: Default::default(),
             system_paste: false,
             clipboard_image_request: None,
@@ -343,7 +344,11 @@ impl VectorcraftApp {
         crate::script_runs::poll(self);
         crate::scripts_menu::poll(self, ctx);
         if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
-            ctx.request_repaint();
+            // A script in `$.sleep` goes on when its time is up; until then the app can idle.
+            match self.session.script_sleep_left() {
+                Some(left) => ctx.request_repaint_after(left),
+                None => ctx.request_repaint(),
+            }
         }
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);

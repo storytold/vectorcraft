@@ -472,6 +472,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{edge: \"top\"|\"bottom\"} dock the Control bar to the top of the window, under the menu bar, or to its bottom, as the bar's panel menu (Dock to Top, Dock to Bottom) and a drag of its gripper do; kept with the workspace; another edge is an error and changes nothing; returns {edge}",
     ),
+    (
+        "window.control.options",
+        "Control Bar Options",
+        "",
+        "{group: \"snapping\"|\"anchors\"|\"toolOptions\"|\"objectOptions\"|\"imageOptions\"|\"fillStroke\"|\"opacity\"|\"graphicStyle\"|\"character\"|\"paragraph\"|\"verticalAlignment\"|\"alignDistribute\"|\"transform\"|\"artboardOptions\"|\"documentOptions\", visible?: bool} turn a group of the Control bar's options on (true), off (false) or toggle it (omitted), as the bar's panel menu does; a group that is off stays out of the bar even while its tool or object is selected, and one that is on shows only while the selection or the tool calls for it; every group starts on; kept with the workspace; another group or a `visible` that is not true or false is an error and changes nothing; returns {group, visible}",
+    ),
     ("window.toolbar", "Tools", "", "{}"),
     (
         "window.toolbarColumns",
@@ -743,6 +749,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open the Safe Mode dialog (dialog `safeMode`): whether VectorCraft is in Safe Mode, and the disabled plug-ins, each with Enable on Re-launch (engine: plugin.setEnabled). Closing it leaves Safe Mode as it is; Safe Mode is chosen at launch (--safe-mode, or the choice after a launch that stopped while a plug-in was loading, dialog `pluginStopped`)",
     ),
+    (
+        "help.copyTroubleshootingInfo",
+        "Copy Troubleshooting Info",
+        "",
+        "{} put text for a bug report on the clipboard: the version, and in the desktop app the platform, the window system, the graphics processor, the commands and frame times of the last few frames, and the hang reports of this session and the session before (no document contents or file paths) → {chars}",
+    ),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
     (
         "ui.swatchOptions",
@@ -805,6 +817,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} clear the settings of the section shown, Basic Character Formats, Advanced Character Formats, Character Color or OpenType Features, in the open Character Style Options or New Character Style dialog; available only on those sections",
     ),
     (
+        "ui.paraStyleOptions",
+        "Paragraph Style Options",
+        "",
+        "{name} open Paragraph Style Options (dialog `paraStyleOptions`, sections General, Basic Paragraph Formats, Composition, Hyphenation and Justification); OK runs paraStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
+    ),
+    (
+        "ui.paraStyleOptions.resetPanel",
+        "Reset Panel",
+        "",
+        "{} clear the settings of the section shown, Basic Paragraph Formats, Composition, Hyphenation or Justification, in the open Paragraph Style Options or New Paragraph Style dialog; available only on those sections",
+    ),
+    (
         "ui.newCharStyle",
         "New Character Style…",
         "",
@@ -814,7 +838,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.newParaStyle",
         "New Paragraph Style…",
         "",
-        "{} open New Paragraph Style (dialog `newTextStyle`, field `name`, filled in with the name paraStyle.new {} would give the style), what Alt-clicking the Paragraph Styles panel's New button opens; OK runs paraStyle.new with the name and the paragraph of the Type tool's selection (else the selected type) as it was when the dialog opened; Cancel adds no style",
+        "{} open New Paragraph Style (dialog `newTextStyle`, field `name`, filled in with the name paraStyle.new {} would give the style), what Alt-clicking the Paragraph Styles panel's New button opens; the dialog also has the sections of Paragraph Style Options, filled in from the paragraph of the Type tool's selection (else the selected type) as it was when the dialog opened; OK runs paraStyle.new with the name and those attrs; Cancel adds no style",
     ),
     (
         "ui.symbolOptions",
@@ -1195,7 +1219,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorPanel",
         "Color Panel Options",
         "",
-        "{mode?: grayscale|rgb|hsb|cmyk|websafe, options?: bool} pick the Color panel's mode as its panel menu does (the active color converts to the mode's model as one undo step), and Show Options (true) or Hide Options (false); both are kept with the preferences; RGB, HSB, Web Safe RGB and hex values use the working RGB space (ui.inspect: ui.color_mode, ui.color_hide_options) → {mode (null: none picked yet), options, shown: the mode the panel shows the color in, or tint for a tint of a global or spot swatch}",
+        "{mode?: grayscale|rgb|hsb|cmyk|websafe, options?: bool, recentColors?: bool} pick the Color panel's mode as its panel menu does (the active color converts to the mode's model as one undo step), Show Options (true) or Hide Options (false), and check (true) or uncheck (false) Show Recent Colors, which shows or hides the panel's Recent Colors row (applied colors still join the list while it is hidden; the Swatches panel keeps its row); all three are kept with the preferences; RGB, HSB, Web Safe RGB and hex values use the working RGB space (ui.inspect: ui.color_mode, ui.color_hide_options, ui.color_show_recent_colors) → {mode (null: none picked yet), options, recentColors, shown: the mode the panel shows the color in, or tint for a tint of a global or spot swatch}",
     ),
     (
         "ui.savePdfDialog",
@@ -1378,7 +1402,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::INSERT_STOP,
         "Insert Stop",
         "",
-        "{set?: index, action?: index, step?: index, message?, allowContinue?: bool} insert a stop, at which a playing action waits and shows message. With set and action (0 is the top set or action), the stop goes into that action, after step, else after its last step; without them it goes into the recording in progress, after the steps recorded so far. message defaults to none, and allowContinue, which offers Continue in the message box, defaults to false. A stop in an action becomes the panel's selected step, and its action and set become the selected ones. An index past the last set, action or step, a param of another type, params that are not an object, or no action and no recording is an error and changes nothing. The panel menu's Insert Stop… (dialog `actionStopRecord` with message, allowContinue, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
+        "{set?: index, action?: index, step?: index, message?, allowContinue?: bool} insert a stop, at which a playing action waits and shows message. With set and action (0 is the top set or action), the stop goes into that action, after step, else after its last step; without them it goes into the recording in progress, after the steps recorded so far. message defaults to none, and allowContinue, which offers Continue in the message box, defaults to false. A stop in an action becomes the panel's selected step, and its action and set become the selected ones. An index past the last set, action or step, a param of another type, params that are not an object, no action and no recording, or a stop that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. The panel menu's Insert Stop… (dialog `actionStopRecord` with message, allowContinue, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
+    ),
+    (
+        crate::panels::actions::INSERT_MENU_ITEM,
+        "Insert Menu Item",
+        "",
+        "{set?: index, action?: index, step?: index, command, params?: object} insert the command of a menu item as a step, without running it; the step plays as choosing the item runs it. command and params (default {}) must be those of a menu item that can be a step: one that runs an engine command, whose label does not end with \"…\", outside the VectorCraft, File, Window and Help menus, and that is not Undo, Redo, a Paste, a batch (command.batch), a preference (prefs.*) or action (action.*) command, an Object › Align item, Image Trace's Make or Make and Expand, Pattern's Make or Edit Pattern, a saved selection, saved view or recent font item, or a plug-in's item. The place is as ui.action.insertStop takes it: with set and action, after step, else after the action's last step; without them, the recording in progress. The new step becomes the panel's selected step, and its action and set become the selected ones. A command and params that no such menu item has, a param of another type, params that are not an object, no action and no recording, or a step that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. The panel menu's Insert Menu Item… (dialog `actionInsertMenuItem` with find, command, params, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
     ),
     (
         crate::panels::actions::CONTINUE_PLAYBACK,
@@ -1494,25 +1524,25 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.dialog",
         "Plug-in…",
         "",
-        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step)",
+        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns)",
     ),
     (
         "ui.installPlugin",
         "Install Plug-in…",
         "",
-        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing. Only a person can press OK when it asks about permissions or a heavy budget: ui.dialog.confirm, answer_dialog and synthetic input are refused → plugin.install's result | {pending: \"pluginInstall\"} while it asks about permissions or a heavy budget | {pending: \"confirm\"} while it asks only about replacing",
+        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing. Only a person can press OK: ui.dialog.confirm, answer_dialog and synthetic input are refused. When automation asked (a control or MCP request, synthetic input, or a file dialog one of them opened, even when the person picked the file), replace: true doesn't skip the question about replacing, and nothing in the dialog installs it, the person's OK included: the person chooses Object › Plug-ins › Install Plug-in… to install it → plugin.install's result | {pending: \"pluginInstall\"} while it asks | {pending: \"pluginInstall\", approval: \"personMustStartInstall\"} while it asks what automation asked | null on the web without path or dataBase64, once the browser's file picker opens (the picked file is handled as above)",
     ),
     (
         "plugin.cancelRuns",
         "Cancel Plug-in Run",
         "",
-        "{} stop every heavy filter running in the background (its progress window's Cancel): it stops at the next slice of its budget and changes nothing → {cancelled: n}",
+        "{} stop every filter running in the background (its progress window's Cancel): it stops at the next slice of its budget and changes nothing → {cancelled: n}",
     ),
     (
         "plugin.hideRuns",
         "Continue in Background",
         "",
-        "{} close the progress window of the heavy filters running in the background; they go on, shown in the status bar → {hidden: n}",
+        "{} close the progress window of the filters running in the background; they go on, shown in the status bar → {hidden: n}",
     ),
     (
         "imageTrace.cancelRuns",

@@ -688,6 +688,10 @@ impl Session {
         for e in self.prefs.keep_folders(&mut p) {
             log::warn!("{e}");
         }
+        // Saved gradient presets get names no built-in preset or other saved one has.
+        for (old, new) in super::gradpresets::rename_clashing_presets(&mut p.gradient_presets) {
+            log::warn!("saved gradient preset {old} is listed as {new}: another preset has its name");
+        }
         // The edit the active tool computes on another thread is applied first (the Preferences
         // dialog applies its settings here, outside a command). A failure to apply it was the
         // edit's own, and the preferences apply all the same.
@@ -698,6 +702,9 @@ impl Session {
         let history_changed = p.history_states != self.prefs.history_states;
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
+        if p.plugins_folder.trim().is_empty() && !self.prefs.plugins_folder.trim().is_empty() {
+            super::plugin::forget_prefs_folder(&self.prefs.plugins_folder);
+        }
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
         let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
         let lock_guides_changed = p.lock_guides_by_default != self.prefs.lock_guides_by_default;
@@ -763,7 +770,7 @@ impl Session {
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!(query "prefs.get", "Get Preferences", [], None, "{key?} → the value of one preference (or preference group: eyedropper), or {prefs: {…all…}}", always, get),
+        cmd!(query "prefs.get", "Get Preferences", [], None, "{key?} → the value of one preference (or preference group: eyedropper), or {prefs: {…all…}}; under automation read roots a folder preference outside them is null, and an export preset's folder outside them is left out", always, get),
         cmd!(
             query "prefs.set",
             "Set Preference",
@@ -774,7 +781,7 @@ pub fn specs() -> Vec<CommandSpec> {
             set
         ),
         cmd!(query "prefs.reset", "Reset Preferences", [], None, "{category?} reset one category (or everything) to defaults", always, reset),
-        cmd!(query "prefs.list", "List Preferences", [], None, "{} → [{key, category, section, label, kind, value, …}] every preference", always, list),
+        cmd!(query "prefs.list", "List Preferences", [], None, "{} → [{key, category, section, label, kind, value, …}] every preference; under automation read roots a folder preference's value outside them is null", always, list),
         cmd!(
             query "prefs.export",
             "Export Preferences",
@@ -880,8 +887,42 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "imported": values.len() }))
 }
 
+/// The preferences that name a folder: the [`FOLDER_PREFS`] and the scratch disks.
+const PATH_PREFS: [&str; 6] = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
+
+/// The scratch disk choices that are not folders.
+const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
+
+/// The preferences as `prefs.get`, `prefs.list`, `prefs.set` and `prefs.reset` show them to the
+/// request being served. Under automation read roots, a folder preference ([`PATH_PREFS`]) outside
+/// them is `null`, as `ui.inspect` leaves it out, and an export preset's `folder` outside them is
+/// left out. An empty value (the default folder) and a scratch
+/// disk choice ([`SCRATCH_CHOICES`]) are shown. Without roots the preferences are shown as they are.
+fn shown_prefs(prefs: &Prefs) -> Value {
+    let mut all = prefs.to_json();
+    if crate::file_access::current().is_none() {
+        return all;
+    }
+    // The app trims a folder before it uses it.
+    let hidden = |path: &str| !path.trim().is_empty() && crate::file_access::check_read(path.trim()).is_err();
+    for key in PATH_PREFS {
+        let Some(path) = all[key].as_str() else { continue };
+        if hidden(path) && !(key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path.trim())) {
+            all[key] = Value::Null;
+        }
+    }
+    if let Some(presets) = all.get_mut("screenExportPresets").and_then(Value::as_array_mut) {
+        for settings in presets.iter_mut().filter_map(|p| p.get_mut("settings").and_then(Value::as_object_mut)) {
+            if settings.get("folder").and_then(Value::as_str).is_some_and(hidden) {
+                settings.remove("folder");
+            }
+        }
+    }
+    all
+}
+
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
-    let all = s.prefs.to_json();
+    let all = shown_prefs(&s.prefs);
     match str_param(p, "key") {
         Some(k) if spec(k).is_some() || PREF_GROUPS.contains(&k) => Ok(all[k].clone()),
         Some(k) => Err(bad("prefs.get", format!("unknown preference `{k}`"))),
@@ -909,7 +950,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     if document_units && values.contains_key("unitsGeneral") && s.active().is_some() {
         s.set_document_units(s.default_units())?;
     }
-    let all = s.prefs.to_json();
+    let all = shown_prefs(&s.prefs);
     Ok(Value::Object(values.keys().map(|k| (k.clone(), all[k.as_str()].clone())).collect()))
 }
 
@@ -923,11 +964,11 @@ fn reset(s: &mut Session, p: &Value) -> Result<Value> {
     let mut next = s.prefs.clone();
     next.reset(cat);
     s.apply_prefs(next);
-    Ok(json!({ "prefs": s.prefs.to_json() }))
+    Ok(json!({ "prefs": shown_prefs(&s.prefs) }))
 }
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
-    let all = s.prefs.to_json();
+    let all = shown_prefs(&s.prefs);
     Ok(Value::Array(
         PREF_SPECS
             .iter()

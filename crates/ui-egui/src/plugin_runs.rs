@@ -13,7 +13,9 @@
 //! A filter of plug-in API level 2 may report how far it has got (`vc_progress`): the progress
 //! window then shows a bar with the share done. Its Cancel also makes the filter's `vc_cancelled`
 //! return 1, so a filter that checks it stops at once; one that doesn't stops at the next slice of
-//! its budget.
+//! its budget. A light filter that may report its progress (the `progress` permission) and calls
+//! no commands runs here too, under its light budget, so its progress and Cancel show while it
+//! computes.
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
@@ -152,7 +154,7 @@ fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
     }
 }
 
-/// The progress window's Cancel (also Esc): every heavy filter running stops (at once when it checks
+/// The progress window's Cancel (also Esc): every filter running in the background stops (at once when it checks
 /// `vc_cancelled`, else at the next slice of its budget) and changes nothing → `{cancelled: n}`.
 pub fn cancel_all(app: &mut VectorcraftApp) -> Value {
     let mut n = 0;

@@ -457,6 +457,7 @@ impl FontDb {
             let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
             sys.scans = sys.scans.wrapping_add(1);
             sys.misses.clear();
+            sys.file_searches = 0;
         }
         self.changed();
         n

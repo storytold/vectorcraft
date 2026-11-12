@@ -31,13 +31,24 @@
 //! A run writes to the Script Console with `$.write` and `$.writeln`, and `vc.log` adds a line
 //! there too. The session's console gets a start line, the run's output, its uncaught error, an end
 //! line and a report line; the run's report holds its own output and error, its time, its host
-//! calls by kind and its slowest commands.
+//! calls by kind and its slowest commands. The rest of `$`, and the global `localize` and
+//! `toSource`, are in [`dollar`].
 //!
 //! `alert`, `confirm` and `prompt` open dialogs ([`dialogs`]): in the app the run waits for the
 //! person's answer, and a run with nobody to ask takes its answers from `script.run`'s `answers`.
+//!
+//! `File` and `Folder` read files inside the script's own folder ([`files`]).
+//!
+//! A script with `#targetengine name` runs in that named engine, which the session keeps with the
+//! globals its runs leave, at most [`MAX_ENGINES`] of them with [`ENGINE_HEAP_BYTES`] of heap each
+//! (VectorCraft's own limits). A script without the line, or with `main`, gets a new realm for each
+//! run. An engine keeps no document and no run: its host functions reach the run through a link
+//! that holds the run's host only while the run goes on. An error, a limit or a stop puts the
+//! documents back and keeps the engine's globals; an internal error drops the engine.
 
 pub mod console;
 pub mod dialogs;
+pub mod dollar;
 pub mod include;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
@@ -56,6 +67,7 @@ use crate::{
     Clipboard, DocState, DrawMode, EngineError, Journal, NodeId, PaintDefaults, Result, Session, cmd, command_specs, guard, waits_for_tool_edit,
 };
 
+pub mod files;
 pub mod folder;
 
 /// The most bytes of source a run takes, as a file or as `source`.
@@ -94,7 +106,7 @@ const MAX_BRIDGE_BYTES: u64 = 4 << 30;
 /// The version `vc.api.version` gives.
 pub const API_VERSION: &str = "1.0";
 /// The features `vc.api.has` knows.
-pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs"];
+pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs", "dollar"];
 /// The most commands a run's report lists in `slowestCommands`.
 pub const SLOWEST_COMMANDS: usize = 5;
 
@@ -153,6 +165,8 @@ pub(crate) struct Request {
     pub source: String,
     pub args: Map<String, Value>,
     pub fuel: u64,
+    /// The locale the run starts with (`$.locale`).
+    pub locale: String,
     /// The answers to the dialogs of a run with nobody to ask, in order.
     pub answers: Vec<DialogAnswer>,
 }
@@ -166,21 +180,171 @@ thread_local! {
 static NEXT_JOB: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// A session's hold on its running job: while one exists the lease is held. Dropping it ends the job.
+/// It keeps the run's number and its name as console lines give it, so the run's console entry can
+/// end when the job is gone.
 #[derive(Debug)]
-pub struct JobKey(u64);
+pub struct JobKey {
+    id: u64,
+    run: u64,
+    name: Arc<str>,
+}
 
 impl Drop for JobKey {
     fn drop(&mut self) {
         let _ = JOBS.try_with(|jobs| {
             if let Ok(mut jobs) = jobs.try_borrow_mut() {
-                jobs.remove(&self.0);
+                jobs.remove(&self.id);
             }
         });
     }
 }
 
 fn with_job<T>(key: &JobKey, f: impl FnOnce(&mut Job) -> T) -> Option<T> {
-    JOBS.with(|jobs| jobs.borrow_mut().get_mut(&key.0).map(f))
+    JOBS.with(|jobs| jobs.borrow_mut().get_mut(&key.id).map(f))
+}
+
+/// The most named engines (`#targetengine`) a session keeps.
+pub const MAX_ENGINES: usize = 8;
+/// The heap a named engine may use, with what it keeps between runs.
+pub const ENGINE_HEAP_BYTES: usize = 64 << 20;
+/// The engine of a script without `#targetengine`, which `#targetengine main` also names: a new
+/// one for each run, never kept.
+pub const MAIN_ENGINE: &str = "main";
+
+/// The run a script's host functions act for. A named engine keeps its functions between runs, so
+/// they find the run through this link, which holds the run's [`Host`] only while the run goes on.
+type Link = Rc<RefCell<Option<Rc<Host>>>>;
+
+/// The host of the run `link` holds, or an error when no run holds it.
+fn current(link: &Link) -> std::result::Result<Rc<Host>, HostError> {
+    link.borrow().clone().ok_or_else(|| HostError::Error(NO_RUN.to_string()))
+}
+
+/// A named engine: its interpreter, with the globals its runs left (`None` while a run has it),
+/// the link its host functions use, and its heap after its last run.
+struct Engine {
+    name: String,
+    realm: Option<Realm>,
+    link: Link,
+    heap: usize,
+}
+
+/// The named engines of one thread's sessions, by their key, each in the order they were made.
+struct ThreadEngines {
+    thread: std::thread::ThreadId,
+    by_key: HashMap<u64, Vec<Engine>>,
+}
+
+impl ThreadEngines {
+    fn new() -> Self {
+        let thread = std::thread::current().id();
+        released().insert(thread, Vec::new());
+        Self { thread, by_key: HashMap::new() }
+    }
+}
+
+impl Drop for ThreadEngines {
+    fn drop(&mut self) {
+        released().remove(&self.thread);
+    }
+}
+
+thread_local! {
+    /// The named engines of this thread's sessions. They are held here, and not in their session,
+    /// because they hold interpreters, which stay on this thread.
+    static ENGINES: RefCell<ThreadEngines> = RefCell::new(ThreadEngines::new());
+}
+
+static NEXT_ENGINES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// For each thread that holds engines, the keys of the ones sessions let go of on another thread.
+/// The thread drops them the next time it uses its engines; a thread that has ended has no entry,
+/// since its engines ended with it.
+static RELEASED_ENGINES: std::sync::LazyLock<std::sync::Mutex<HashMap<std::thread::ThreadId, Vec<u64>>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+
+fn released() -> std::sync::MutexGuard<'static, HashMap<std::thread::ThreadId, Vec<u64>>> {
+    RELEASED_ENGINES.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Lets the engines with key `id` go, for `thread`, which holds them, to drop.
+fn release_engines(thread: std::thread::ThreadId, id: u64) {
+    if let Some(ids) = released().get_mut(&thread) {
+        ids.push(id);
+    }
+}
+
+/// A session's hold on its named engines: their key, and the thread that holds them once a run
+/// made one. Dropping it drops them. The engines stay on that thread, so a session used on another
+/// thread lets them go and starts there with none.
+#[derive(Debug)]
+pub struct EnginesKey(std::sync::Mutex<(u64, Option<std::thread::ThreadId>)>);
+
+impl EnginesKey {
+    pub(crate) fn new() -> Self {
+        Self(std::sync::Mutex::new((NEXT_ENGINES.fetch_add(1, std::sync::atomic::Ordering::Relaxed), None)))
+    }
+
+    /// The key of the session's engines on this thread.
+    fn here(&self) -> u64 {
+        let mut key = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let thread = std::thread::current().id();
+        match key.1 {
+            Some(t) if t != thread => {
+                release_engines(t, key.0);
+                *key = (NEXT_ENGINES.fetch_add(1, std::sync::atomic::Ordering::Relaxed), Some(thread));
+            }
+            Some(_) => {}
+            None => key.1 = Some(thread),
+        }
+        key.0
+    }
+}
+
+impl Drop for EnginesKey {
+    fn drop(&mut self) {
+        let (id, thread) = *self.0.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(t) = thread.filter(|t| *t != std::thread::current().id()) {
+            release_engines(t, id);
+            return;
+        }
+        let gone = ENGINES.try_with(|engines| engines.try_borrow_mut().ok().and_then(|mut e| e.by_key.remove(&id)));
+        drop(gone);
+    }
+}
+
+fn with_engines<T>(key: &EnginesKey, f: impl FnOnce(&mut Vec<Engine>) -> T) -> T {
+    let id = key.here();
+    ENGINES.with(|engines| {
+        let gone: Vec<Vec<Engine>> = {
+            let mut here = engines.borrow_mut();
+            let ids = released().get_mut(&here.thread).map(std::mem::take).unwrap_or_default();
+            ids.iter().filter_map(|id| here.by_key.remove(id)).collect()
+        };
+        drop(gone);
+        f(engines.borrow_mut().by_key.entry(id).or_default())
+    })
+}
+
+/// Tests: the named engines this thread holds, for every session.
+#[cfg(test)]
+pub(crate) fn engines_on_this_thread() -> usize {
+    ENGINES.with(|engines| engines.borrow().by_key.values().map(Vec::len).sum())
+}
+
+/// Tests: whether engines can still be let go for `thread`, which holds an entry while it lives.
+#[cfg(test)]
+pub(crate) fn releases_kept_for(thread: std::thread::ThreadId) -> bool {
+    released().contains_key(&thread)
+}
+
+/// The heap of a named engine.
+fn engine_heap() -> usize {
+    #[cfg(test)]
+    if let Some(n) = TEST_ENGINE_HEAP.with(Cell::get) {
+        return n;
+    }
+    ENGINE_HEAP_BYTES
 }
 
 /// The state a script changes that a rollback puts back.
@@ -492,6 +656,8 @@ struct Host {
     dialogs: dialogs::Dialogs,
     /// The files the run reads: its includes and `$.evalFile`'s.
     files: RefCell<include::Files>,
+    /// What `File` and `Folder` have open and have read.
+    disk: RefCell<files::Disk>,
     /// Where the lines of the script's expanded source came from.
     script_map: RefCell<include::SourceMap>,
     /// The same for each source `$.evalFile` gave, in order.
@@ -499,8 +665,18 @@ struct Host {
     /// The file, line and column of each error `$.evalFile` raised for a file it could not run, in
     /// order: the error's mark ([`HostError::Marked`]) is its index.
     eval_failures: RefCell<Vec<(Arc<str>, u32, u32)>>,
+    /// When the run started, where the platform has a clock.
+    started: Option<std::time::Instant>,
+    /// The time since [`Host::started`] at which a `$.sleep` ends.
+    wake_at: Cell<Option<std::time::Duration>>,
+    /// Set while a host function runs where the run can stop at the call ([`Realm::wait_flag`]).
+    can_wait: Rc<Cell<bool>>,
     /// What the last `#strict` line of the file `$.evalFile` last gave set (`None` without one).
     eval_strict: Cell<Option<bool>>,
+    /// The values of `$` that belong to the run.
+    dollar: dollar::RunState,
+    /// The run's `args`, which `vc.args` gives, and their size as `vc.args` charges it.
+    args: RefCell<(Data, u64)>,
 }
 
 /// A run's host calls by kind, as its report gives them in `hostCallCounts`.
@@ -511,6 +687,10 @@ struct Counts {
     command_list_reads: Cell<u64>,
     vc_log: Cell<u64>,
     console_writes: Cell<u64>,
+    /// Calls of `File` and `Folder` that reach the host ([`files`]).
+    file_calls: Cell<u64>,
+    /// `execute` calls, which open nothing.
+    file_executes: Cell<u64>,
 }
 
 impl Counts {
@@ -521,6 +701,8 @@ impl Counts {
             "commandListReads": self.command_list_reads.get(),
             "vcLog": self.vc_log.get(),
             "consoleWrites": self.console_writes.get(),
+            "fileCalls": self.file_calls.get(),
+            "fileExecutes": self.file_executes.get(),
         })
     }
 }
@@ -575,6 +757,51 @@ impl Host {
             pending.end_line(|line, cut| self.line(console::Entry::Output(line), cut));
         }
     }
+
+    /// The time since the run started; none without a clock.
+    fn elapsed(&self) -> Option<std::time::Duration> {
+        #[cfg(test)]
+        if TEST_NO_CLOCK.with(Cell::get) {
+            return None;
+        }
+        #[cfg(test)]
+        if let Some(d) = TEST_ELAPSED.with(Cell::get) {
+            return Some(d);
+        }
+        self.started.map(|s| s.elapsed())
+    }
+
+    /// `$.sleep`: ends the slice, and the run does not go on until `d` has passed. Without a clock
+    /// it does not wait. A getter, a conversion, a built-in's callback or a file `$.evalFile` runs
+    /// cannot stop at the call, so a wait there is an error, with or without a clock.
+    fn sleep(&self, d: std::time::Duration) -> std::result::Result<(), HostError> {
+        if d.is_zero() {
+            return Ok(());
+        }
+        if !self.can_wait.get() {
+            return Err(HostError::Error(
+                "$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code"
+                    .into(),
+            ));
+        }
+        if let Some(now) = self.elapsed() {
+            self.wake_at.set(Some(now.saturating_add(d)));
+            self.pause.set(true);
+        }
+        Ok(())
+    }
+
+    /// The time left of a `$.sleep`, or none when the run is not asleep.
+    fn asleep(&self) -> Option<std::time::Duration> {
+        let wake = self.wake_at.get()?;
+        let left = self.elapsed().map_or(std::time::Duration::ZERO, |now| wake.saturating_sub(now));
+        if left.is_zero() {
+            self.wake_at.set(None);
+            return None;
+        }
+        Some(left)
+    }
+
     fn over(&self, limit: &str) -> HostError {
         HostError::Abort(limit.to_string())
     }
@@ -632,6 +859,10 @@ impl Host {
 struct Job {
     realm: Realm,
     host: Rc<Host>,
+    /// The link the realm's host functions find `host` through.
+    link: Link,
+    /// The named engine the realm belongs to, which gets it back when the run ends.
+    engine: Option<String>,
     /// Between slices the working copy; during the last slice's commit the state before the run.
     world: World,
     /// The documents open when the run began, by [`DocState::uid`].
@@ -942,11 +1173,13 @@ fn each_line(text: &str, mut done: impl FnMut(String, bool)) {
 /// The `$` object: `$.write(...values)` writes the values to the Script Console as `String(value)`
 /// gives them, one after another, and `$.writeln(...values)` does the same and ends the line.
 /// `$.evalFile(path[, timeout])` runs a file and gives its last value, `$.fileName` is the file
-/// being run and `$.includePath` the `#includepath` list.
-fn dollar_object(host: &Rc<Host>) -> Vec<(String, HostItem)> {
+/// being run and `$.includePath` the `#includepath` list. Its other members are
+/// [`dollar::members`].
+fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcraft_js::Localization>) -> Vec<(String, HostItem)> {
     let writer = |end: bool| {
-        let h = host.clone();
+        let l = link.clone();
         HostItem::TextFunction(function(move |a| {
+            let h = current(&l)?;
             let text: String = a.iter().map(|d| if let Data::String(s) = d { s.as_str() } else { "" }).collect();
             h.charge_call(text.len() as u64 + 2)?;
             bump(&h.counts.console_writes);
@@ -955,30 +1188,35 @@ fn dollar_object(host: &Rc<Host>) -> Vec<(String, HostItem)> {
         }))
     };
     let getter = |read: fn(&include::Files) -> String| {
-        let h = host.clone();
+        let l = link.clone();
         HostItem::Getter(function(move |_| {
+            let h = current(&l)?;
             let text = read(&h.files.borrow());
             h.charge_call(text.len() as u64 + 2)?;
             Ok(Data::String(text))
         }))
     };
     let eval_file = {
-        let h = host.clone();
-        let end = host.clone();
-        let strict = host.clone();
+        let (l, end, strict) = (link.clone(), link.clone(), link.clone());
         HostItem::Evaluator {
-            source: function(move |a| eval_file(&h, a)),
-            end: Rc::new(move || end.files.borrow_mut().end_eval()),
-            strict_writes: Rc::new(move || strict.eval_strict.get()),
+            source: function(move |a| eval_file(&*current(&l)?, a)),
+            end: Rc::new(move || {
+                if let Ok(h) = current(&end) {
+                    h.files.borrow_mut().end_eval();
+                }
+            }),
+            strict_writes: Rc::new(move || current(&strict).ok().and_then(|h| h.eval_strict.get())),
         }
     };
-    vec![
+    let mut items = vec![
         ("write".into(), writer(false)),
         ("writeln".into(), writer(true)),
         ("evalFile".into(), eval_file),
         ("fileName".into(), getter(include::Files::file_name)),
         ("includePath".into(), getter(include::Files::include_path)),
-    ]
+    ];
+    items.extend(dollar::members(link, info, localization));
+    items
 }
 
 /// `$.evalFile(path[, timeout])`: the source of the file `path` names, relative to the file being
@@ -1024,32 +1262,46 @@ fn function(f: impl Fn(Vec<Data>) -> std::result::Result<Data, HostError> + 'sta
     Rc::new(f)
 }
 
-fn vc_object(host: &Rc<Host>, args: Data) -> Vec<(String, HostItem)> {
+/// The `vc` object, made once for each realm: its members act for the run `link` holds when they
+/// are called.
+fn vc_object(link: &Link) -> Vec<(String, HostItem)> {
+    let args = {
+        let l = link.clone();
+        function(move |_| {
+            let h = current(&l)?;
+            let (args, size) = &*h.args.borrow();
+            h.charge_call(*size)?;
+            Ok(args.clone())
+        })
+    };
     let run = {
-        let h = host.clone();
-        function(move |a| vc_run(&h, a))
+        let l = link.clone();
+        function(move |a| vc_run(&current(&l)?, a))
     };
     let document = {
-        let h = host.clone();
+        let l = link.clone();
         function(move |_| {
+            let h = current(&l)?;
             h.charge_call(64)?;
             bump(&h.counts.document_reads);
             vc_document(&h)
         })
     };
     let commands = {
-        let h = host.clone();
+        let l = link.clone();
         let list = Rc::new(vc_commands());
         let size = data_size(&list);
         function(move |_| {
+            let h = current(&l)?;
             h.charge_call(size)?;
             bump(&h.counts.command_list_reads);
             Ok((*list).clone())
         })
     };
     let log = {
-        let h = host.clone();
+        let l = link.clone();
         function(move |a| {
+            let h = current(&l)?;
             h.charge_call(data_size(a.first().unwrap_or(&Data::Undefined)))?;
             bump(&h.counts.vc_log);
             vc_log(&h, a)
@@ -1061,7 +1313,7 @@ fn vc_object(host: &Rc<Host>, args: Data) -> Vec<(String, HostItem)> {
         ("document".into(), HostItem::Getter(document)),
         ("commands".into(), HostItem::Getter(commands)),
         ("log".into(), HostItem::Function(log)),
-        ("args".into(), HostItem::Value(args)),
+        ("args".into(), HostItem::FrozenGetter(args)),
         (
             "api".into(),
             HostItem::Object(vec![("version".into(), HostItem::Value(Data::String(API_VERSION.into()))), ("has".into(), HostItem::Function(has))]),
@@ -1082,7 +1334,7 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 
 /// `message`, with what to do about a failure that comes from a script written for another program.
 fn explained(kind: &RunErrorKind, message: &str) -> String {
-    const HOST_OBJECTS: &[&str] = &["app", "File", "Folder", "Window", "BridgeTalk", "activeDocument", "documents"];
+    const HOST_OBJECTS: &[&str] = &["app", "Window", "BridgeTalk", "activeDocument", "documents"];
     let names_host_object =
         message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
     if *kind == RunErrorKind::Thrown && names_host_object {
@@ -1124,13 +1376,16 @@ fn located(host: &Host, tag: u32, mark: Option<u32>, e: &RunError) -> (RunError,
     if e.line == 0 {
         return (e.clone(), None);
     }
+    // An error in code from another source, such as a function an earlier run of a named engine
+    // defined, has no place in this run's files, so it is given without one.
+    let unplaced = || (RunError { kind: e.kind.clone(), message: e.message.clone(), line: 0, column: 0 }, None);
     match tag {
         0 => map(&host.script_map.borrow(), true),
         n if n != vectorcraft_js::UNKNOWN_SOURCE => match host.eval_maps.borrow().get(n as usize - 1) {
             Some(m) => map(m, false),
-            None => (e.clone(), None),
+            None => unplaced(),
         },
-        _ => (e.clone(), None),
+        _ => unplaced(),
     }
 }
 
@@ -1148,6 +1403,95 @@ impl Session {
     /// Is a script running? While one is, the commands that change anything are refused.
     pub fn script_running(&self) -> bool {
         self.script_key.is_some()
+    }
+
+    /// The named engine of the running script.
+    fn running_engine(&self) -> Option<String> {
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.engine.clone())).flatten()
+    }
+
+    /// The named engines (`#targetengine`) this session keeps, in the order they were made: each
+    /// one's name, its heap after its last run in bytes, and whether a run has it now.
+    pub fn script_engines(&self) -> Vec<(String, usize, bool)> {
+        with_engines(&self.script_engines, |engines| engines.iter().map(|e| (e.name.clone(), e.heap, e.realm.is_none())).collect())
+    }
+
+    /// Drops the named engine `name` and the globals its runs left; a later run that names it gets a
+    /// new one.
+    pub fn drop_script_engine(&mut self, name: &str) -> Result<()> {
+        if name == MAIN_ENGINE {
+            return Err(EngineError::Other(DROP_MAIN.to_string()));
+        }
+        if self.running_engine().as_deref() == Some(name) {
+            return Err(EngineError::Busy);
+        }
+        let gone = with_engines(&self.script_engines, |engines| {
+            let at = engines.iter().position(|e| e.name == name)?;
+            Some(engines.remove(at))
+        });
+        match gone {
+            Some(engine) => {
+                drop(engine);
+                Ok(())
+            }
+            None => Err(EngineError::Other(format!("there is no script engine named {name:?}"))),
+        }
+    }
+
+    /// The realm of the named engine `name` for a run, with the link its host functions use: the
+    /// realm its last run left, or `None` for an engine made now. → the kind and text of the
+    /// failure when the engine cannot be had.
+    fn take_engine(&mut self, name: &str) -> std::result::Result<(Option<Realm>, Link), (include::FailKind, String)> {
+        if cfg!(target_arch = "wasm32") {
+            return Err((include::FailKind::Error, NO_ENGINES_ON_WEB.to_string()));
+        }
+        with_engines(&self.script_engines, |engines| {
+            if let Some(e) = engines.iter_mut().find(|e| e.name == name) {
+                let realm = e.realm.take().ok_or((include::FailKind::Error, ENGINE_BUSY.to_string()))?;
+                return Ok((Some(realm), e.link.clone()));
+            }
+            if engines.len() >= MAX_ENGINES {
+                return Err((
+                    include::FailKind::Limit,
+                    format!("a session keeps at most {MAX_ENGINES} script engines; drop one with script.engine.drop"),
+                ));
+            }
+            let link: Link = Rc::new(RefCell::new(None));
+            engines.push(Engine { name: name.to_string(), realm: None, link: link.clone(), heap: 0 });
+            Ok((None, link))
+        })
+    }
+
+    /// The end of a run in engine `engine` (`None` for a realm that is not kept): the link no longer
+    /// holds the run, and the engine keeps `realm`, or is dropped without one.
+    fn return_engine(&self, engine: Option<&str>, link: &Link, realm: Option<Realm>) {
+        let host = link.borrow_mut().take();
+        drop(host);
+        let Some(name) = engine else { return };
+        let mut realm = realm;
+        let heap = realm.as_mut().map(Realm::collect_garbage);
+        let gone = with_engines(&self.script_engines, |engines| {
+            let at = engines.iter().position(|e| e.name == name)?;
+            match (realm.take(), engines.get_mut(at)) {
+                (Some(r), Some(e)) => {
+                    e.realm = Some(r);
+                    e.heap = heap.unwrap_or(0);
+                    None
+                }
+                _ => Some(engines.remove(at)),
+            }
+        });
+        drop(gone);
+        drop(realm);
+    }
+
+    /// The end of `job`: its engine gets its realm back, with a run that was stopped where it was
+    /// ended, unless the run ended with an internal error, which drops the engine.
+    fn end_job(&self, job: Job, internal: bool) {
+        let Job { mut realm, link, engine, host, .. } = job;
+        drop(host);
+        realm.end();
+        self.return_engine(engine.as_deref(), &link, (!internal).then_some(realm));
     }
 
     /// The flag that stops the script running in this session from any thread, at its next
@@ -1184,6 +1528,15 @@ impl Session {
     /// to stop no longer waits: the next [`Session::script_pump`] ends it.
     pub fn script_waiting(&self) -> bool {
         !self.script_stop.is_set() && self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.waiting.get())).unwrap_or(false)
+    }
+
+    /// The time left of the running script's `$.sleep`, or none when it is not asleep. A run asked
+    /// to stop is not asleep: the next [`Session::script_pump`] ends it.
+    pub fn script_sleep_left(&self) -> Option<std::time::Duration> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.asleep())).flatten()
     }
 
     /// The dialog (`alert`, `confirm` or `prompt`) the running script waits at for the person's
@@ -1235,12 +1588,8 @@ impl Session {
     /// ([`Self::script_report`]). False with none running.
     pub fn script_abandon(&mut self) -> bool {
         let Some(key) = self.script_key.take() else { return false };
-        let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.0)) else {
-            drop(key);
-            raise_ids(self);
-            self.script_stop.clear();
-            self.reset_tool();
-            cmd::compositefonts::sync(self);
+        let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
+            self.script_gone(key, console::Ending::Stopped);
             return true;
         };
         drop(key);
@@ -1248,6 +1597,26 @@ impl Session {
         let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
         let _ = self.script_failed(job, &e);
         true
+    }
+
+    /// Ends the run whose job is no longer held: its console entry ends with `ending`, with no
+    /// report line, since its time and host calls went with the job, and the session's state is
+    /// put back as at the end of any run.
+    fn script_gone(&mut self, key: JobKey, ending: console::Ending) {
+        let line = console::ConsoleLine { run: key.run, name: key.name.clone(), entry: console::Entry::End(ending) };
+        self.script_console.push(line, false);
+        drop(key);
+        // The realm of the job's named engine went with the job, so the engine is dropped.
+        let lost: Vec<Engine> = with_engines(&self.script_engines, |engines| {
+            let (lost, kept) = std::mem::take(engines).into_iter().partition(|e| e.realm.is_none());
+            *engines = kept;
+            lost
+        });
+        drop(lost);
+        raise_ids(self);
+        self.script_stop.clear();
+        self.reset_tool();
+        cmd::compositefonts::sync(self);
     }
 
     /// A script can't start while a document holds a drag in progress or an undo group, which its
@@ -1281,9 +1650,40 @@ impl Session {
             Ok(include::Expanded { name: Some(name), .. }) if !request.name_given => name.clone(),
             _ => request.name,
         };
-        let limits = Limits { fuel: request.fuel, heap_bytes: HEAP_BYTES, ..Limits::default() };
+        // The engine named by `#targetengine`, other than `main`: its realm, kept from its last run,
+        // or none for an engine this run makes.
+        let named = match &expanded {
+            Ok(include::Expanded { engine: Some((engine, line, column)), .. }) if engine != MAIN_ENGINE => Some((engine.clone(), *line, *column)),
+            _ => None,
+        };
+        let (expanded, kept) = match named {
+            None => (expanded, None),
+            Some((engine, line, column)) => match self.take_engine(&engine) {
+                Ok(kept) => (expanded, Some((engine, kept))),
+                Err((kind, message)) => {
+                    let file = Arc::from(files.file_name());
+                    (Err(include::Failure { kind, message, index: 0, file, line, column }), None)
+                }
+            },
+        };
+        let heap_bytes = if kept.is_some() { engine_heap() } else { HEAP_BYTES };
+        let limits = Limits { fuel: request.fuel, heap_bytes, ..Limits::default() };
+        let (engine, realm, link) = match kept {
+            None => (None, None, Rc::new(RefCell::new(None))),
+            Some((engine, (realm, link))) => (Some(engine), realm, link),
+        };
+        // A realm made here gets the script extensions, `$` and the dialogs; a kept one has them
+        // from its first run, and they act for the run that calls them.
+        let fresh = realm.is_none();
         let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), ..Options::default() };
-        let mut realm = Realm::with_options(options, limits);
+        let strict = options.strict;
+        let mut realm = match realm {
+            Some(mut realm) => {
+                realm.set_limits(limits);
+                realm
+            }
+            None => Realm::with_options(options, limits),
+        };
         realm.share_interrupt(&self.script_stop);
         realm.set_data_limits(DataLimits::default());
         self.script_runs += 1;
@@ -1311,30 +1711,56 @@ impl Session {
             commands: RefCell::default(),
             run_nanos: Cell::new(0),
             dialogs: dialogs::Dialogs::new(self.script_frames, &realm, request.answers),
+            disk: RefCell::new(files::Disk::new(files.scope())),
             files: RefCell::new(files),
             script_map: RefCell::default(),
             eval_maps: RefCell::default(),
             eval_failures: RefCell::default(),
+            started: clock(),
+            wake_at: Cell::new(None),
+            can_wait: realm.wait_flag(),
             eval_strict: Cell::new(None),
+            dollar: dollar::RunState::new(&request.locale),
+            args: RefCell::new((Data::Undefined, 0)),
         });
-        let args = to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0))
-            .map_err(|place| EngineError::BadParams { cmd: "script.run".into(), msg: format!("`args{place}` is nested more than 64 levels deep") })?;
+        *link.borrow_mut() = Some(host.clone());
+        let args = match to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0)) {
+            Ok(args) => args,
+            Err(place) => {
+                self.return_engine(engine.as_deref(), &link, (!fresh).then_some(realm));
+                return Err(EngineError::BadParams { cmd: "script.run".into(), msg: format!("`args{place}` is nested more than 64 levels deep") });
+            }
+        };
+        let size = data_size(&args);
+        *host.args.borrow_mut() = (args, size);
         let line = console::ConsoleLine { run: host.run, name: host.name.clone(), entry: console::Entry::Start };
         self.script_console.push(line, false);
+        let engine_name = match &expanded {
+            Ok(include::Expanded { engine: Some((name, ..)), .. }) => Some(name.clone()),
+            _ => None,
+        };
+        let info = dollar::RunInfo { strict, engine: engine_name };
+        let localization = realm.localization();
+        dollar::start_run(&localization, &request.locale);
         let started = match expanded {
             Err(f) => Err(preprocessor_error(f)),
             Ok(expanded) => {
                 *host.script_map.borrow_mut() = expanded.map;
                 realm.set_strict_writes(expanded.strict == Some(true));
-                realm
-                    .define_host_object("vc", vc_object(&host, args))
-                    .and_then(|()| realm.define_host_object("$", dollar_object(&host)))
-                    .and_then(|()| dialogs::install(&mut realm, &host))
+                (if fresh { realm.add_script_extensions() } else { Ok(()) })
+                    .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
+                    .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
+                    .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
+                    .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| realm.start(&expanded.source))
                     .map_err(|e| located(&host, realm.error_source(), realm.error_mark(), &e))
             }
         };
         if let Err((e, file)) = started {
+            // An engine this run made is not kept: only a run that starts makes one. An internal
+            // error drops a kept one.
+            let keep = !fresh && e.kind != RunErrorKind::Internal;
+            self.return_engine(engine.as_deref(), &link, keep.then_some(realm));
             let mut report = failure_report(&name, &e, file.as_deref(), &host, 0, 0);
             close_run(self, &host, &mut report, ending(&e.kind));
             let message = failure_text(&report);
@@ -1342,10 +1768,11 @@ impl Session {
             return Err(EngineError::Other(message));
         }
         let scope = crate::file_access::ScopeHandle::capture();
-        let job = Job { realm, host, world: World::working(self), start_uids: open, name: name.clone(), scope };
+        let (run, line_name) = (host.run, host.name.clone());
+        let job = Job { realm, host, link, engine, world: World::working(self), start_uids: open, name: name.clone(), scope };
         let id = NEXT_JOB.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         JOBS.with(|jobs| jobs.borrow_mut().insert(id, job));
-        self.script_key = Some(JobKey(id));
+        self.script_key = Some(JobKey { id, run, name: line_name });
         Ok(name)
     }
 
@@ -1353,14 +1780,19 @@ impl Session {
     /// run has ended: its report, or the error that ended it, with the documents put back.
     pub fn script_pump(&mut self) -> Option<Result<Value>> {
         let key = self.script_key.take()?;
-        let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.0)) else {
+        let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
+            self.script_gone(key, console::Ending::Internal);
             return Some(Err(EngineError::Other(JOB_GONE.to_string())));
         };
         if let Some(e) = job.host.dialogs.take_failure() {
             return Some(self.script_failed(job, &e));
         }
-        if (job.host.waiting.get() || job.host.dialogs.is_waiting()) && !self.script_stop.is_set() {
-            JOBS.with(|jobs| jobs.borrow_mut().insert(key.0, job));
+        // A canceled request ends a sleep or a wait at this pump.
+        if vectorcraft_doc::cancel::check().is_err() {
+            self.script_stop.set();
+        }
+        if (job.host.waiting.get() || job.host.asleep().is_some() || job.host.dialogs.is_waiting()) && !self.script_stop.is_set() {
+            JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
             self.script_key = Some(key);
             return None;
         }
@@ -1369,9 +1801,6 @@ impl Session {
             let kind = LimitKind::Interrupted;
             let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
             return Some(self.script_failed(job, &e));
-        }
-        if vectorcraft_doc::cancel::check().is_err() {
-            self.script_stop.set();
         }
         job.host.calls_this_slice.set(0);
         let outcome = run_slice(self, &mut job);
@@ -1382,7 +1811,7 @@ impl Session {
             }
             Ok(Err(e)) => Some(self.script_failed(job, &e)),
             Ok(Ok(Progress::Paused)) => {
-                JOBS.with(|jobs| jobs.borrow_mut().insert(key.0, job));
+                JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
                 self.script_key = Some(key);
                 None
             }
@@ -1406,7 +1835,7 @@ impl Session {
         let (e, file) = located(&job.host, job.realm.error_source(), job.realm.error_mark(), e);
         let mut report = failure_report(&job.name, &e, file.as_deref(), &job.host, fuel_left, job.realm.limits().fuel.saturating_sub(fuel_left));
         close_run(self, &job.host, &mut report, ending(&e.kind));
-        drop(job);
+        self.end_job(job, e.kind == RunErrorKind::Internal);
         raise_ids(self);
         self.script_stop.clear();
         self.reset_tool();
@@ -1488,6 +1917,7 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         close_run(self, host, &mut report, console::Ending::Finished);
+        self.end_job(job, false);
         self.script_report = Some(report.clone());
         Ok(report)
     }
@@ -1500,6 +1930,11 @@ impl Session {
             }
             if self.script_waiting() || self.script_dialog().is_some() {
                 self.script_stop.set();
+            }
+            // A `$.sleep` waits here, where nothing is drawn, instead of turning the loop over.
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(left) = self.script_sleep_left() {
+                std::thread::sleep(left.min(std::time::Duration::from_millis(100)));
             }
         }
     }
@@ -1521,6 +1956,10 @@ const NO_RECOVERY_COPY: &str = "a recovery copy could not be written, so the scr
 const EVAL_NO_PATH: &str = "$.evalFile requires a file path";
 const EVAL_TIMEOUT: &str = "$.evalFile: the timeout must be a finite number of milliseconds, 0 or more";
 const EVAL_ARGUMENTS: &str = "$.evalFile: takes a file path and a timeout";
+const NO_RUN: &str = "this function's script run has ended";
+const DROP_MAIN: &str = "the main script engine is new for each run and is never kept, so it cannot be dropped";
+const NO_ENGINES_ON_WEB: &str = "named script engines (#targetengine) are not available on the web";
+const ENGINE_BUSY: &str = "the script engine is in use by another run";
 
 /// The report of a run that failed; `file` is the included file the error is in.
 fn failure_report(name: &str, e: &RunError, file: Option<&str>, host: &Host, fuel_left: u64, fuel_used: u64) -> Value {
@@ -1653,6 +2092,13 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     r
 }
 
+/// Tests: removes the session's running job while the session keeps its hold on it. → whether a
+/// job was removed.
+#[cfg(test)]
+pub(crate) fn forget_job(s: &Session) -> bool {
+    s.script_key.as_ref().is_some_and(|k| JOBS.with(|jobs| jobs.borrow_mut().remove(&k.id)).is_some())
+}
+
 /// The objects a run may add before it is asked to continue or stop.
 fn growth_objects() -> u64 {
     #[cfg(test)]
@@ -1679,6 +2125,12 @@ thread_local! {
     pub(crate) static PANIC_IN_SLICE: Cell<bool> = const { Cell::new(false) };
     /// Tests: the objects a run may add in place of [`GROWTH_OBJECTS`].
     pub(crate) static TEST_GROWTH: Cell<Option<u64>> = const { Cell::new(None) };
+    /// Tests: the heap of a named engine in place of [`ENGINE_HEAP_BYTES`].
+    pub(crate) static TEST_ENGINE_HEAP: Cell<Option<usize>> = const { Cell::new(None) };
     /// Tests: the `JSINCLUDE` folders in place of the environment's.
     pub(crate) static TEST_JSINCLUDE: RefCell<Option<Vec<std::path::PathBuf>>> = const { RefCell::new(None) };
+    /// Tests: the time since a run started, in place of its clock's.
+    pub(crate) static TEST_ELAPSED: Cell<Option<std::time::Duration>> = const { Cell::new(None) };
+    /// Tests: runs have no clock, as in a wasm build.
+    pub(crate) static TEST_NO_CLOCK: Cell<bool> = const { Cell::new(false) };
 }

@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Close Path",
             [],
             None,
-            "{id, subpath?: usize (the open subpath to close, 0 included; default: the last open one), in?: [x,y] (handle into the first anchor), independent?: bool}",
+            "{id, subpath?: usize (the open subpath to close, 0 included; default: the last open one), in?: [x,y] (handle into the first anchor, placed as path.setHandle places it: a smooth first anchor keeps its outgoing handle in line at its own length, a corner keeps it where it is), out?: [x,y] (the first anchor's outgoing handle, placed after `in`; the anchor becomes a corner), independent?: bool (`in` makes the first anchor a corner and leaves its outgoing handle)}",
             has_doc,
             close
         ),
@@ -202,14 +202,18 @@ fn append_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-/// Close the active open subpath of `id`, optionally setting the incoming handle of the first anchor.
+/// Close the active open subpath of `id`, optionally setting the handles of the first anchor. The
+/// incoming handle moves as Move Direction Handle moves it: the outgoing handle turns with it only
+/// on a smooth anchor, so the first segment of a path that starts at a corner keeps its shape.
 fn close(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("path.close", "missing id"))?;
     let subpath = p.get("subpath").and_then(Value::as_u64).map(|u| u as usize);
-    let h_in = match p.get("in").filter(|h| !h.is_null()) {
-        None => None,
-        Some(h) => Some(finite_numbers(h).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad("path.close", "`in` must be [x, y]"))?),
+    let handle = |key: &str| match p.get(key).filter(|h| !h.is_null()) {
+        None => Ok(None),
+        Some(h) => finite_numbers(h).map(|[x, y]| Some(Point::new(x, y))).ok_or_else(|| bad("path.close", format!("`{key}` must be [x, y]"))),
     };
+    let h_in = handle("in")?;
+    let h_out = handle("out")?;
     let independent = switch_or(p, "independent", false, "path.close")?;
     s.edit("Close Path", |d, sel| {
         let path = path_mut(d, id)?;
@@ -218,11 +222,13 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
             None => path.subpaths.iter_mut().rev().find(|s| !s.closed).ok_or_else(|| EngineError::Other("path is already closed".into()))?,
         };
         sp.closed = true;
-        if let (Some(h), Some(first)) = (h_in, sp.anchors.first_mut()) {
-            first.h_in = h;
-            if !independent {
-                first.h_out = first.p - (h - first.p);
-                first.kind = AnchorKind::Smooth;
+        if let Some(first) = sp.anchors.first_mut() {
+            if let Some(h) = h_in {
+                first.set_handle(false, h, independent);
+            }
+            if let Some(h) = h_out {
+                first.h_out = h;
+                first.kind = AnchorKind::Corner;
             }
         }
         let top = compound_or_self(d, id);
@@ -289,9 +295,7 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
         }
         if is_translation && (delta.x != 0.0 || delta.y != 0.0) {
             for &i in &sel.guides {
-                if let Some(g) = doc.guides.get_mut(i) {
-                    *g = g.moved(delta);
-                }
+                doc.edit_ruler_guide(i, |g| *g = g.moved(delta));
             }
         }
         Ok(())
@@ -1232,7 +1236,7 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Clear", |d, selection| {
         if with_guides {
             let gone = selection.guides.clone();
-            d.retain_guides(selection, |i, _| !gone.contains(&i));
+            d.retain_guides(selection, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         }
         let targets: BTreeSet<NodeId> = whole.into_iter().filter(|id| d.node(*id).is_some_and(|n| !n.is_layer())).collect();
         let whole_ids: Vec<NodeId> = targets

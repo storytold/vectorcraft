@@ -304,12 +304,17 @@ fn frames_with_injected_input_are_confined() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// The enabled File › Open Recent Files rows `ui.menu.list` returns: (id, label).
+/// Every File › Open Recent Files row `ui.menu.list` returns, disabled ones included: (id, label),
+/// the label of a disabled row starting "(disabled) ".
 fn recent_rows(entries: &Value) -> Vec<(String, String)> {
     let rows = entries.as_array().map(Vec::as_slice).unwrap_or_default();
     rows.iter()
-        .filter(|e| e["command"].as_str().is_some_and(|c| c.starts_with("file.openRecent")) && e["enabled"] == true)
-        .map(|e| (e["command"].as_str().unwrap_or_default().to_string(), e["label"].as_str().unwrap_or_default().to_string()))
+        .filter(|e| e["command"].as_str().is_some_and(|c| c.starts_with("file.openRecent")))
+        .map(|e| {
+            let label = e["label"].as_str().unwrap_or_default();
+            let label = if e["enabled"] == true { label.to_string() } else { format!("(disabled) {label}") };
+            (e["command"].as_str().unwrap_or_default().to_string(), label)
+        })
         .collect()
 }
 
@@ -353,6 +358,208 @@ fn recent_files_outside_the_read_root_are_not_listed_or_opened() {
     let listed = vectorcraft_engine::file_access::confine(write_only.as_ref(), || serde_json::to_value(crate::menus::menu_entries(&app)).unwrap());
     assert!(recent_rows(&listed).is_empty(), "{listed}");
     let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out the paths outside the read root that the person's work put in it: files
+/// still opening, recent files, a library panel's file and folder preferences, saved and in the
+/// Preferences dialog.
+#[test]
+fn ui_inspect_leaves_out_paths_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect");
+    std::fs::copy(base.join("in/a.svg"), base.join("in/c.svg")).unwrap();
+    let (a, b, c) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")), s(base.join("in/c.svg")));
+    let svg = std::fs::read(&a).unwrap();
+    for path in [&a, &b, &c] {
+        assert!(crate::opening::start(&mut app, path, svg.clone()).is_ok(), "{path} opens off the UI thread");
+    }
+    app.ui.recent_files = vec![a.clone(), b.clone(), c.clone()];
+    let panel = |id: &str, path: &str| -> crate::panels::library_panel::LibraryPanel {
+        serde_json::from_value(json!({"kind": "swatches", "id": id, "path": path})).unwrap()
+    };
+    let theirs = format!("loaded/{b}");
+    app.ui.library_panels = vec![panel("mine", &a), panel(&theirs, &b)];
+    app.ui.open_panel = Some(format!("library:swatches:{theirs}"));
+    let (inside, outside) = (s(base.join("in")), s(base.join("outside")));
+    app.ui.engine_prefs = json!({
+        "fontsFolder": inside, "templatesFolder": outside, "recoveryFolder": outside, "scratchPrimary": "Startup",
+        "scratchSecondary": "../private", "pluginsFolder": "",
+    });
+    app.ui.dialog = Some(crate::state::Dialog::new("preferences", json!({"fontsFolder": inside, "templatesFolder": outside})));
+
+    // The person sees every path.
+    let ctx = egui::Context::default();
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["opening"], json!([a, b, c]));
+    assert_eq!(person["ui"]["recent_files"], json!([a, b, c]));
+    assert_eq!(person["ui"]["library_panels"][1]["path"], b);
+    assert_eq!(person["ui"]["engine_prefs"]["templatesFolder"], outside);
+
+    // The client sees the ones inside the read root, in the same order.
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    assert_eq!(r["result"]["opening"], json!([a, c]), "{r}");
+    assert_eq!(ui["recent_files"], json!([a, c]));
+    assert_eq!(ui["library_panels"][0]["path"], a);
+    assert_eq!((ui["library_panels"][1]["id"].as_str(), ui["library_panels"][1].get("path")), (Some("loaded/b.svg"), None), "the panel stays");
+    assert_eq!(ui["open_panel"], "library:swatches:loaded/b.svg");
+    let prefs = ui["engine_prefs"].as_object().unwrap();
+    assert_eq!(
+        (prefs["fontsFolder"].as_str(), prefs["scratchPrimary"].as_str(), prefs["pluginsFolder"].as_str()),
+        (Some(inside.as_str()), Some("Startup"), Some(""))
+    );
+    assert!(["templatesFolder", "recoveryFolder", "scratchSecondary"].iter().all(|k| !prefs.contains_key(*k)), "{prefs:?}");
+    let fields = ui["dialog"]["fields"].as_object().unwrap();
+    assert_eq!((fields["fontsFolder"].as_str(), fields.get("templatesFolder")), (Some(inside.as_str()), None), "the Preferences dialog's copy too");
+    let hidden = json!(outside).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    let r = request(&mut app, &tx, "ui.docking", json!({}));
+    assert_eq!(r["result"]["flyout"], "library:swatches:loaded/b.svg", "{r}");
+    assert_eq!(crate::panel_docking::inspect(&app, &ctx)["flyout"], json!(format!("library:swatches:{theirs}")), "the person's");
+    assert_eq!(app.ui.recent_files, [a.clone(), b.clone(), c.clone()], "the UI state is not changed");
+    assert_eq!(app.opening.pending.len(), 3, "and no open is canceled");
+
+    // A write root alone lets the client read none of them.
+    let write_only = AutomationRoots::new(&[], &[&base.join("out")]).unwrap();
+    let listed = vectorcraft_engine::file_access::confine(write_only.as_ref(), || crate::control::inspect(&app, &ctx));
+    assert_eq!((&listed["opening"], &listed["ui"]["recent_files"]), (&json!([]), &json!([])), "{listed}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Two libraries loaded from outside the read root under the same file name, only the second of them
+/// in a library panel: `ui.inspect` and `swatch.library.list` show the second under the same id, and
+/// that id finds it.
+#[test]
+fn ui_inspect_and_library_commands_show_a_hidden_library_under_one_id() {
+    let (mut app, tx, base) = confined("one-id");
+    let (x, y) = (base.join("outside/x/Kit.gpl"), base.join("outside/y/Kit.gpl"));
+    for (path, colors) in [(&x, "0 0 0 Black\n"), (&y, "0 0 0 Black\n255 255 255 White\n")] {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, format!("GIMP Palette\nName: Kit\n{colors}")).unwrap();
+        app.session.execute("swatch.library.load", &json!({"path": s(path.clone())})).unwrap();
+    }
+    let second = format!("loaded/{}", s(y.clone()));
+    app.ui.library_panels = vec![serde_json::from_value(json!({"kind": "swatches", "id": second, "path": s(y.clone())})).unwrap()];
+
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/Kit.gpl (2)", "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "swatch.library.list", "params": {}}));
+    let libs = r["result"]["libraries"].as_array().unwrap_or_else(|| panic!("{r}"));
+    let loaded: Vec<&Value> = libs.iter().filter(|l| l["category"] == "loaded").map(|l| &l["id"]).collect();
+    assert_eq!(loaded, [&json!("loaded/Kit.gpl"), &json!("loaded/Kit.gpl (2)")], "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "swatch.library.get", "params": {"library": "loaded/Kit.gpl (2)"}}));
+    assert_eq!(r["result"]["swatches"].as_array().map(Vec::len), Some(2), "the second library: {r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A closed panel's former place, as `ui.docking_hidden` keeps it.
+fn hidden_place() -> craft_ui::docking::Location<String> {
+    serde_json::from_value(json!({"floating": null, "anchor": null, "placement": {"Tab": {"before": null}}, "size": null, "stack": null})).unwrap()
+}
+
+/// `ui.inspect` hides the path of a library loaded from outside the read root wherever the reply holds
+/// its id, also when its panel is closed: here only the Color Guide's limit and a closed panel's place
+/// name it.
+#[test]
+fn ui_inspect_hides_a_closed_librarys_path_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-closed-lib");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.docking_hidden.insert(format!("library:swatches:{theirs}"), hidden_place());
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    assert_eq!(ui["color_guide_limit"], "loaded/b.svg", "{r}");
+    assert!(ui["docking_hidden"].as_object().unwrap().contains_key("library:swatches:loaded/b.svg"), "{r}");
+    let hidden = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    assert_eq!(crate::control::inspect(&app, &egui::Context::default())["ui"]["color_guide_limit"], json!(theirs), "the person's");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Two libraries loaded from outside the read root with the same file name stay two in `ui.inspect`:
+/// the second one shows as `loaded/<file name> (2)`, the same in every place the reply names it.
+#[test]
+fn ui_inspect_keeps_two_hidden_libraries_with_one_file_name_apart() {
+    let (mut app, tx, base) = confined("inspect-same-name");
+    let (x, y) = (format!("loaded/{}", s(base.join("outside/x/b.svg"))), format!("loaded/{}", s(base.join("outside/y/b.svg"))));
+    let panel = |id: &str| -> crate::panels::library_panel::LibraryPanel { serde_json::from_value(json!({"kind": "swatches", "id": id})).unwrap() };
+    app.ui.library_panels = vec![panel(&x), panel(&y)];
+    for id in [&x, &y] {
+        app.ui.docking_hidden.insert(format!("library:swatches:{id}"), hidden_place());
+    }
+    app.ui.color_guide_limit = y.clone();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    let ids: Vec<_> = ui["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
+    assert_eq!(ids, [json!("loaded/b.svg"), json!("loaded/b.svg (2)")], "{r}");
+    let keys: Vec<_> = ui["docking_hidden"].as_object().unwrap().keys().cloned().collect();
+    assert_eq!(keys, ["library:swatches:loaded/b.svg", "library:swatches:loaded/b.svg (2)"], "no entry is dropped: {r}");
+    assert_eq!(ui["color_guide_limit"], "loaded/b.svg (2)", "the same id everywhere");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` and `ui.docking` show a hidden library under the same id, also when another hidden
+/// library with the same file name is in only one of the replies (here as the Color Guide's limit).
+#[test]
+fn ui_inspect_and_ui_docking_give_a_hidden_library_the_same_id() {
+    let (mut app, tx, base) = confined("inspect-docking-same-id");
+    let (x, y) = (format!("loaded/{}", s(base.join("outside/x/b.svg"))), format!("loaded/{}", s(base.join("outside/y/b.svg"))));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": y})).unwrap();
+    app.ui.library_panels = vec![panel];
+    app.ui.open_panel = Some(format!("library:swatches:{y}"));
+    app.ui.color_guide_limit = x.clone();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    assert_eq!(
+        (ui["color_guide_limit"].as_str(), ui["open_panel"].as_str()),
+        (Some("loaded/b.svg"), Some("library:swatches:loaded/b.svg (2)")),
+        "{r}"
+    );
+    let d = request(&mut app, &tx, "ui.docking", json!({}));
+    assert_eq!(d["result"]["flyout"], ui["open_panel"], "{d}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` rewrites only the ids of libraries the UI state refers to: a script's report line and
+/// a command palette query that look like a library id, with no such library, stay as written, and
+/// the query does not take the file name of a real library outside the root.
+#[test]
+fn ui_inspect_keeps_text_that_only_looks_like_a_library_id() {
+    let (mut app, tx, base) = confined("inspect-lookalike");
+    let real = format!("loaded/{}", s(base.join("outside/x/d.svg")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": real})).unwrap();
+    app.ui.library_panels = vec![panel];
+    let query = format!("library:swatches:loaded/{}", s(base.join("outside/d.svg")));
+    app.ui.palette_query = query.clone();
+    let text = format!("loaded/{}", s(base.join("outside/c.svg")));
+    let source = format!("vc.log({})", json!(text));
+    app.session.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_pump().is_some() {
+            break;
+        }
+    }
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["log"], json!([text]), "{r}");
+    assert_eq!(r["result"]["ui"]["palette_query"], json!(query), "{r}");
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/d.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A client without automation roots sees every loaded library's full id in `ui.inspect`.
+#[test]
+fn ui_inspect_shows_full_library_ids_without_a_read_root() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    let theirs = format!("loaded/{}", s(std::env::temp_dir().join("vc-ui-roots-unconfined").join("b.svg")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": theirs})).unwrap();
+    app.ui.library_panels = vec![panel];
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.docking_hidden.insert(format!("library:swatches:{theirs}"), hidden_place());
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    assert_eq!((&ui["library_panels"][0]["id"], &ui["color_guide_limit"]), (&json!(theirs), &json!(theirs)), "{r}");
+    assert!(ui["docking_hidden"].as_object().unwrap().contains_key(&format!("library:swatches:{theirs}")), "{r}");
 }
 
 /// Hidden logic-only ticks between the injection and its UI pass must not drain another step:
@@ -423,9 +630,11 @@ fn an_unidentifiable_stale_injected_batch_fails_closed() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// A plug-in's permissions are approved only by a person. A control request (or MCP, which comes
-/// through it) can't pass `grant`, can't answer the approval dialog or rewrite what it installs,
-/// and a frame of synthetic input can't press its OK; the person at the keyboard can.
+/// A plug-in's permissions are approved only by a person who asked for the install. A control
+/// request (or MCP, which comes through it) can't pass `grant`, can't answer the approval dialog or
+/// rewrite what it installs, and a frame of synthetic input can't press its OK. The person can't
+/// approve the question automation asked either: they start Install Plug-in… themselves, which asks
+/// again, and its OK installs.
 #[test]
 fn automation_cannot_approve_a_plugin_install() {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -443,8 +652,9 @@ fn automation_cannot_approve_a_plugin_install() {
 
     let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": {"dataBase64": data}}));
     assert_eq!(r["result"]["pending"], crate::dialogs::plugin::INSTALL_KIND, "{r}");
+    assert_eq!(r["result"]["approval"], crate::dialogs::plugin::PERSON_MUST_START_INSTALL, "{r}");
     let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
-    refused(&r, "Only the person at the keyboard");
+    refused(&r, ASKED);
     assert!(app.ui.dialog.is_some(), "the refused answer leaves it open");
     assert!(vectorcraft_plugins::registry::get(id).is_none());
 
@@ -455,16 +665,291 @@ fn automation_cannot_approve_a_plugin_install() {
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"fields": [{"field": "__params", "value": {"dataBase64": "AAAA"}}]}));
     assert!(r.get("error").is_none(), "{r}");
     let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
-    refused(&r, "Only the person at the keyboard");
+    refused(&r, ASKED);
     assert!(app.ui.dialog.is_some() && vectorcraft_plugins::registry::get(id).is_none());
+    // Shown for long enough for a person's OK, it still refuses automation, and the person too.
+    super::plugins::show_approval(&mut app);
+    let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
+    refused(&r, ASKED);
     app.synthetic_frame = true;
-    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains("Only the person at the keyboard"));
+    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED));
     assert!(vectorcraft_plugins::registry::get(id).is_none());
     app.synthetic_frame = false;
+    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED), "a person's OK on automation's question");
+    assert!(app.ui.dialog.is_some() && vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
 
+    // The person starts Install Plug-in… with the file: a new question, which a person's OK approves
+    // once it was shown for the delay, and which automation still can't.
+    let r = app.run("ui.installPlugin", json!({"dataBase64": data})).unwrap();
+    assert_eq!(r, json!({"pending": crate::dialogs::plugin::INSTALL_KIND}), "the person's question");
+    assert_eq!(crate::dialogs::confirm(&mut app).unwrap()["pending"], crate::dialogs::plugin::INSTALL_KIND, "not shown yet");
+    super::plugins::show_approval(&mut app);
+    let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
+    refused(&r, "Only the person at the keyboard");
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(vectorcraft_plugins::permissions::sha256_hex(&bytes)));
     app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// The refusal of an OK on an install question automation asked.
+const ASKED: &str = "Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.";
+
+/// The approval module `id` that lists `doc.read`, and its bytes as base64.
+fn approval_module(id: &str) -> (Vec<u8>, String) {
+    let manifest = format!(r#"{{"id":"{id}","name":"Approval","version":"1","kind":"filter","permissions":["doc.read"]}}"#);
+    let bytes = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let data = vectorcraft_format::base64_encode(&bytes);
+    (bytes, data)
+}
+
+/// An install question that a control request asked keeps OK disabled in the person's window, even
+/// once it was shown for the delay: a person's click, Enter or Space install nothing, and the dialog
+/// says to start Install Plug-in…. Cancel still closes it at once.
+#[test]
+fn a_person_cannot_approve_an_install_question_automation_asked() {
+    use super::plugins::{at, click_ok, ok_enabled, waiting, window};
+    use egui_kittest::kittest::Queryable;
+    let id = "test.ui.approval.asked";
+    let (tx, rx) = std::sync::mpsc::channel();
+    let app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    let mut h = window(app);
+    let (_, data) = approval_module(id);
+    let r = request(h.state_mut(), &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": {"dataBase64": data}}));
+    assert_eq!(r["result"]["approval"], crate::dialogs::plugin::PERSON_MUST_START_INSTALL, "{r}");
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    at(&mut h, 10.6);
+    assert!(!ok_enabled(&h), "OK stays disabled past the delay");
+    assert!(h.query_by_label(ASKED).is_some(), "the dialog says what to do");
+    click_ok(&mut h, 10.7);
+    at(&mut h, 10.8);
+    assert!(waiting(h.state(), id), "a person's click");
+    for (key, time) in [(egui::Key::Enter, 10.9), (egui::Key::Space, 11.0)] {
+        h.key_press(key);
+        at(&mut h, time);
+        assert!(waiting(h.state(), id), "{key:?}");
+    }
+    assert!(crate::dialogs::confirm(h.state_mut()).unwrap_err().contains(ASKED), "a confirm that skips the button");
+    assert!(waiting(h.state(), id));
+    h.get_by_label("Cancel").click();
+    at(&mut h, 11.1);
+    assert!(h.state().ui.dialog.is_none() && h.state().pending_plugin_install.is_none(), "Cancel");
+    assert!(vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
+}
+
+/// A question automation asks in place of the one a person asked can't be approved: it keeps
+/// automation's origin, though the person's question was shown and ready.
+#[test]
+fn automation_replacing_a_persons_install_question_does_not_take_its_approval() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    let (mine, theirs) = ("test.ui.approval.mine", "test.ui.approval.theirs");
+    app.run("ui.installPlugin", json!({"dataBase64": approval_module(mine).1})).unwrap();
+    super::plugins::show_approval(&mut app);
+    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": {"dataBase64": approval_module(theirs).1}}));
+    assert_eq!(r["result"]["approval"], crate::dialogs::plugin::PERSON_MUST_START_INSTALL, "{r}");
+    super::plugins::show_approval(&mut app);
+    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED));
+    for id in [mine, theirs] {
+        assert!(vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none(), "{id}");
+    }
+    // Asked again by automation with the same file, it is still automation's.
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.installPlugin", "params": {"dataBase64": approval_module(mine).1}}));
+    assert_eq!(r["result"]["approval"], crate::dialogs::plugin::PERSON_MUST_START_INSTALL, "{r}");
+    super::plugins::show_approval(&mut app);
+    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED));
+    assert!(vectorcraft_plugins::registry::get(mine).is_none());
+}
+
+/// A file a person picks in the file dialog that a control request opened (Install Plug-in… or
+/// File › Open with no path) is automation's request: its question can't be approved. The file
+/// dialog a person opens asks a question they can approve. On the desktop the dialog answers later
+/// ([`crate::picks`]); on the web the file arrives through the picker's inbox, apart from drops and
+/// the page's script, which is automation.
+#[test]
+fn a_file_picked_in_a_dialog_automation_opened_stays_automations() {
+    let base = std::env::temp_dir().join(format!("vc-ui-approval-picked-{}", std::process::id()));
+    std::fs::create_dir_all(&base).unwrap();
+    let (desktop, web) = ("test.ui.approval.picked", "test.ui.approval.picked.web");
+    let (bytes, _) = approval_module(desktop);
+    let wasm = base.join("picked.wasm");
+    std::fs::write(&wasm, &bytes).unwrap();
+    let mut services = Services::default();
+    let (shown, _) = super::picks::off_the_ui_thread(&mut services);
+    services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), services).with_control(rx);
+    let pick = |app: &mut VectorcraftApp| {
+        shown.answer(&[&s(wasm.clone())]);
+        crate::picks::poll(app, &egui::Context::default());
+    };
+    for command in ["ui.installPlugin", "file.open"] {
+        let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": command, "params": {}}));
+        assert!(app.file_dialog_open(), "{command}: {r}");
+        pick(&mut app);
+        assert!(super::plugins::waiting(&app, desktop), "{command}: {:?}", app.ui.status);
+        super::plugins::show_approval(&mut app);
+        assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED), "{command}");
+        crate::dialogs::cancel(&mut app);
+    }
+    let _ = app.run("ui.installPlugin", json!({}));
+    assert!(app.file_dialog_open());
+    pick(&mut app);
+    super::plugins::show_approval(&mut app);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(vectorcraft_plugins::registry::granted(desktop).map(|g| g.hash), Some(vectorcraft_plugins::permissions::sha256_hex(&bytes)));
+    app.run("plugin.remove", json!({"id": desktop})).unwrap();
+
+    // The web: the browser's file picker answers through its own inbox, apart from the files a
+    // person drops and the ones the page's script hands over.
+    let (dropped, page) = <(crate::services::Inbox, crate::services::Inbox)>::default();
+    let picked = crate::services::PickedInbox::default();
+    let services = Services {
+        open_async: Some(Box::new(|| {})),
+        inbox: Some(dropped.clone()),
+        picked_inbox: Some(picked.clone()),
+        page_inbox: Some(page.clone()),
+        ..Default::default()
+    };
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), services).with_control(rx);
+    let (by_drop, by_page) = ("test.ui.approval.picked.dropped", "test.ui.approval.picked.page");
+    let file = |id: &str| (format!("{id}.wasm"), approval_module(id).0);
+    let hand_over = |app: &mut VectorcraftApp, inbox: &crate::services::Inbox, id: &str| {
+        inbox.lock().unwrap().push(file(id));
+        app.drain_inbox();
+    };
+    // The picker answers with a file, or `None` when it is canceled.
+    let answer = |app: &mut VectorcraftApp, id: Option<&str>| {
+        picked.lock().unwrap().push(id.map(file));
+        app.drain_inbox();
+    };
+    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": {}}));
+    assert!(r.get("error").is_none(), "{r}");
+    // A file the person drops before the picker answers stays the person's.
+    hand_over(&mut app, &dropped, by_drop);
+    super::plugins::show_approval(&mut app);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(vectorcraft_plugins::registry::granted(by_drop).is_some());
+    answer(&mut app, Some(web));
+    super::plugins::show_approval(&mut app);
+    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED), "the web");
+    crate::dialogs::cancel(&mut app);
+    app.run("ui.installPlugin", json!({})).unwrap();
+    answer(&mut app, Some(web));
+    super::plugins::show_approval(&mut app);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(vectorcraft_plugins::registry::granted(web).is_some());
+    // Opening the picker again as the person before it answers automation leaves the answer
+    // automation's.
+    let (again, after) = ("test.ui.approval.picked.again", "test.ui.approval.picked.after");
+    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": {}}));
+    assert!(r.get("error").is_none(), "{r}");
+    app.run("ui.installPlugin", json!({})).unwrap();
+    answer(&mut app, Some(again));
+    super::plugins::show_approval(&mut app);
+    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED), "opened again");
+    crate::dialogs::cancel(&mut app);
+    // Once the other picker is canceled, the next one the person opens answers for them again.
+    answer(&mut app, None);
+    app.run("ui.installPlugin", json!({})).unwrap();
+    answer(&mut app, Some(after));
+    super::plugins::show_approval(&mut app);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(vectorcraft_plugins::registry::granted(after).is_some());
+    // The page's script is automation.
+    hand_over(&mut app, &page, by_page);
+    super::plugins::show_approval(&mut app);
+    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED), "the page's script");
+    crate::dialogs::cancel(&mut app);
+    assert!(vectorcraft_plugins::registry::granted(by_page).is_none());
+    for id in [web, by_drop, after] {
+        app.run("plugin.remove", json!({"id": id})).unwrap();
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A `.wasm` that a control request opens by path (`app.open`) asks a question that can't be
+/// approved; one the person opens can be.
+#[test]
+fn a_plugin_automation_opened_by_path_asks_a_question_no_one_approves() {
+    let base = std::env::temp_dir().join(format!("vc-ui-approval-open-{}", std::process::id()));
+    std::fs::create_dir_all(&base).unwrap();
+    let id = "test.ui.approval.opened";
+    let (bytes, _) = approval_module(id);
+    let wasm = base.join("opened.wasm");
+    std::fs::write(&wasm, &bytes).unwrap();
+    let services = Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), services).with_control(rx);
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(wasm.clone())}));
+    assert!(r.get("error").is_none(), "{r}");
+    assert!(super::plugins::waiting(&app, id));
+    super::plugins::show_approval(&mut app);
+    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED));
+    crate::dialogs::cancel(&mut app);
+    crate::io::open_path(&mut app, &s(wasm.clone())).unwrap();
+    super::plugins::show_approval(&mut app);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(vectorcraft_plugins::registry::granted(id).is_some());
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A module that takes the place of another with its id, and asks for nothing else: automation's
+/// `replace: true` doesn't skip the question and its question can't be approved. The question a
+/// person asked keeps what it installs out of reach of `ui.dialog.set`, refuses a control confirm,
+/// and the person's own OK replaces.
+#[test]
+fn automation_cannot_approve_replacing_a_plugin() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    let id = "test.ui.approval.replaced";
+    let plain = |output: &str| {
+        wat::parse_str(vectorcraft_plugins::wat::returning(&format!(r#"{{"id":"{id}","name":"Plain","kind":"filter"}}"#), output)).unwrap()
+    };
+    let (first, other) = (plain(r#"{"objects":[]}"#), plain(r#"{"objects":[],"error":null}"#));
+    let installed = || vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string());
+    let first_hash = vectorcraft_plugins::permissions::sha256_hex(&first);
+    let data = vectorcraft_format::base64_encode(&other);
+    app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&first)})).unwrap();
+    assert_eq!(installed(), Some(first_hash.clone()));
+
+    for params in [json!({"dataBase64": data}), json!({"dataBase64": data, "replace": true})] {
+        let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": params}));
+        assert_eq!(r["result"]["pending"], crate::dialogs::plugin::INSTALL_KIND, "{params}: {r}");
+        assert_eq!(r["result"]["approval"], crate::dialogs::plugin::PERSON_MUST_START_INSTALL, "{params}: {r}");
+        let pending = app.pending_plugin_install.as_ref().unwrap();
+        assert_eq!(pending.message, "Install “Plain” in place of the plug-in with the same ID?");
+        super::plugins::show_approval(&mut app);
+        assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED), "{params}");
+        let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
+        assert!(r["error"].as_str().is_some_and(|e| e.contains(ASKED)), "{r}");
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(installed(), Some(first_hash.clone()), "{params}");
+    }
+
+    // The person's question: a control request can't point its OK at other bytes, nor press it.
+    let r = app.run("ui.installPlugin", json!({"dataBase64": data})).unwrap();
+    assert_eq!(r, json!({"pending": crate::dialogs::plugin::INSTALL_KIND}));
+    let evil = vectorcraft_format::base64_encode(&plain(r#"{"objects":[{"name":"x"}]}"#));
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"fields": [{"field": "__params", "value": {"dataBase64": evil, "replace": true}}]}));
+    assert!(r.get("error").is_none(), "{r}");
+    super::plugins::show_approval(&mut app);
+    let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("Only the person at the keyboard")), "{r}");
+    assert_eq!(installed(), Some(first_hash.clone()));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(installed(), Some(vectorcraft_plugins::permissions::sha256_hex(&other)), "the bytes the question showed");
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    // A module that asks for nothing still installs at once when automation asks.
+    let free = "test.ui.approval.free";
+    let module = wat::parse_str(vectorcraft_plugins::wat::returning(&format!(r#"{{"id":"{free}","name":"Free","kind":"filter"}}"#), "{}")).unwrap();
+    let params = json!({"dataBase64": vectorcraft_format::base64_encode(&module)});
+    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": params}));
+    assert!(r["result"]["pending"].is_null() && app.ui.dialog.is_none(), "{r}");
+    assert!(vectorcraft_plugins::registry::get(free).is_some());
+    app.run("plugin.remove", json!({"id": free})).unwrap();
 }
 
 type DialogHarness = egui_kittest::Harness<'static, VectorcraftApp>;
@@ -491,10 +976,10 @@ fn still_waiting(h: &DialogHarness, id: &str) -> bool {
         && vectorcraft_plugins::registry::granted(id).is_none()
 }
 
-/// Keys and pointer input sent through the control path approve nothing at the open install
-/// approval: Enter and Space press nothing with no button focused, and with OK focused they and a
-/// `ui.click` on it press it and are refused. `ui.pointer` drives the canvas. A person's click on
-/// the same button approves.
+/// Keys and pointer input sent through the control path approve nothing at the install approval a
+/// person asked for: Enter and Space press nothing with no button focused, and with OK focused they
+/// and a `ui.click` on it press it and are refused. `ui.pointer` drives the canvas. A person's click
+/// on the same button approves.
 #[test]
 fn injected_keys_and_pointer_input_cannot_approve_a_plugin_install() {
     use egui_kittest::kittest::{NodeT, Queryable};
@@ -506,8 +991,8 @@ fn injected_keys_and_pointer_input_cannot_approve_a_plugin_install() {
     let manifest = format!(r#"{{"id":"{id}","name":"Approval","version":"1","kind":"filter","permissions":["doc.read"]}}"#);
     let bytes = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
     let data = vectorcraft_format::base64_encode(&bytes);
-    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": {"dataBase64": data}}));
-    assert_eq!(r["result"]["pending"], crate::dialogs::plugin::INSTALL_KIND, "{r}");
+    let r = app.run("ui.installPlugin", json!({"dataBase64": data})).unwrap();
+    assert_eq!(r, json!({"pending": crate::dialogs::plugin::INSTALL_KIND}), "the person's question");
     let mut fonts = false;
     let mut h: DialogHarness = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
         move |ui, app: &mut VectorcraftApp| {

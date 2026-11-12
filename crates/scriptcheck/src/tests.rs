@@ -35,6 +35,7 @@ const FEATURE_CASES: &[(&str, &str, &str)] = &[
     ("directive.target", "  //@target acme", "x(); //@target acme"),
     ("directive.targetengine", "#targetengine session", "var targetengine = 'session';"),
     ("dollar", "$.writeln('hi');", "log.writeln('hi');"),
+    ("dollar", "$.localize = true;", "obj.localize = true;"),
     ("dollar.env", "var home = $.getenv('HOME');", "var home = env.getenv('HOME');"),
     ("dollar.evalFile", "$.evalFile(f);", "loader.evalFile(f);"),
     ("dynamicCode", "eval(code);", "safe.eval(code);"),
@@ -68,7 +69,6 @@ const FEATURE_CASES: &[(&str, &str, &str)] = &[
     ("file.write", "Folder.temp.remove();", "cache.temp.remove();"),
     ("hostCheck", "if (parseInt(app.version) < 20) {}", "if (parseInt(appVersion) < 20) {}"),
     ("localize", "var s = localize(text);", "var s = text.localize;"),
-    ("localize", "var s = $.localize(text);", "var s = obj.localize(text);"),
     ("menuCommand", "app.executeMenuCommand('acmecopyall');", "executeMenuCommand('acmecopyall');"),
     ("notify", "alert('done');", "panel.alert('done');"),
     ("notify", "if (confirm('Go?')) {}", "function confirm(m) {}"),
@@ -100,6 +100,15 @@ fn each_feature_is_found_where_it_is_and_nowhere_else() {
         assert!(r.needs.contains(&need), "{with}: {:?}", r.needs);
         let r = report(without);
         assert!(feature(&r, id).is_none(), "{id} found in {without:?}");
+    }
+}
+
+#[test]
+fn the_dollar_objects_localize_property_is_not_the_global_localize_function() {
+    for src in ["$.localize = true;", "if ($.localize) {}", "var s = $.localize(text);"] {
+        let r = report(src);
+        assert!(feature(&r, "dollar").is_some(), "{src}: {:?}", r.features);
+        assert!(feature(&r, "localize").is_none(), "{src}: {:?}", r.features);
     }
 }
 
@@ -200,7 +209,7 @@ fn directives_are_read_at_the_start_of_a_line_in_both_forms() {
     let includes: Vec<_> = r.includes.iter().map(|i| (i.value.as_str(), i.line, i.status)).collect();
     assert_eq!(includes, [("lib/a.jsxinc", 3, IncludeStatus::NotRead)]);
     assert_eq!(problems(&r), [("unknownDirective", Some(8), Some("#pragma")), ("unknownDirective", Some(9), Some("#!"))]);
-    assert_eq!(r.needs, [Need::Language, Need::HostOnly]);
+    assert_eq!(r.needs, [Need::Language], "VectorCraft runs #targetengine");
 }
 
 #[test]
@@ -257,6 +266,104 @@ fn names_written_with_escapes_are_read_as_the_names_they_spell() {
     assert!(feature(&r, "dynamicCode").is_some());
     assert_eq!(r.outside.iter().map(|o| o.id).collect::<Vec<_>>(), ["unseenCode"]);
     assert_eq!(r.lines, 3);
+}
+
+/// `src` with the escapes in its names written as the characters they stand for.
+fn unescaped(src: &str) -> String {
+    let limits = Limits::default();
+    crate::analyze::unescaped(std::borrow::Cow::Borrowed(src), &mut crate::report::Acc::new(&limits)).into_owned()
+}
+
+#[test]
+fn names_are_made_of_the_unicode_identifier_characters() {
+    // U+2118 (Other_ID_Start) starts a name, and U+203F (connector punctuation), U+00B7
+    // (Other_ID_Continue) and the zero width non-joiner and joiner continue one.
+    // Unicode 17.0 assigned the letter U+088F and the combining mark U+1ACF.
+    for name in ["\u{2118}a", "a\u{203F}b", "a\u{B7}b", "a\u{200C}b", "a\u{200D}b", "_\u{2118}", "$_a1", "\u{E9}t\u{E9}", "\u{88F}", "_\u{1ACF}"] {
+        assert_eq!(tokens(name), [(T::Ident, name)], "{name:?}");
+    }
+    for (src, want) in [
+        // Characters that only continue a name, and digits, don't start one.
+        ("\u{203F}a", [(T::Other, "\u{203F}"), (T::Ident, "a")]),
+        ("\u{1ACF}a", [(T::Other, "\u{1ACF}"), (T::Ident, "a")]),
+        ("\u{B7}a", [(T::Other, "\u{B7}"), (T::Ident, "a")]),
+        ("\u{200C}a", [(T::Other, "\u{200C}"), (T::Ident, "a")]),
+        ("0a", [(T::Number, "0"), (T::Ident, "a")]),
+        // A superscript digit (category No) and a letter that is Pattern_Syntax are in no name.
+        ("a\u{B2}", [(T::Ident, "a"), (T::Other, "\u{B2}")]),
+        ("a\u{2E2F}", [(T::Ident, "a"), (T::Other, "\u{2E2F}")]),
+        ("\u{2E2F}a", [(T::Other, "\u{2E2F}"), (T::Ident, "a")]),
+        // `#` and a name away from the start of a line, and a regular expression's flags.
+        ("a #\u{2118}b", [(T::Ident, "a"), (T::Other, "#\u{2118}b")]),
+        ("=/a/g\u{B2}", [(T::RegExp, "/a/g"), (T::Other, "\u{B2}")]),
+    ] {
+        let mut got = tokens(src);
+        if src.starts_with('=') {
+            got.remove(0);
+        }
+        assert_eq!(got, want, "{src:?}");
+    }
+    assert_eq!(tokens("a #\u{B2}"), [(T::Ident, "a"), (T::Other, "#"), (T::Other, "\u{B2}")]);
+    assert_eq!(tokens("=/a/g\u{200D}"), [(T::Punct, "="), (T::RegExp, "/a/g\u{200D}")]);
+    // The code in an XML literal's braces reads names by the same rule.
+    assert!(tokens("var x = <a>{\u{2118}b + c\u{203F}d}</a>;").iter().filter(|t| t.0 == T::Ident).any(|t| t.1 == "c\u{203F}d"));
+    assert!(tokens("var x = <a>{\u{2118}b}</a>;").contains(&(T::Ident, "\u{2118}b")));
+}
+
+#[test]
+fn an_escape_stands_for_a_character_only_where_a_name_may_hold_it() {
+    for (src, want) in [
+        ("\\u2118a", "\u{2118}a"),
+        ("a\\u203Fb", "a\u{203F}b"),
+        ("a\\u00B7b", "a\u{B7}b"),
+        ("a\\u200Cb", "a\u{200C}b"),
+        ("a\\u200Db", "a\u{200D}b"),
+        ("a\\u0030", "a0"),
+        ("\\u0024\\u005F", "$_"),
+        ("\\u088F", "\u{88F}"),
+        ("_\\u1ACF", "_\u{1ACF}"),
+        // Not at the start of a name.
+        ("\\u0030abc", "\\u0030abc"),
+        ("\\u1ACFa", "\\u1ACFa"),
+        ("\\u203Fa", "\\u203Fa"),
+        ("\\u00B7a", "\\u00B7a"),
+        // In no name.
+        ("a\\u00B2", "a\\u00B2"),
+        ("a\\u2E2F", "a\\u2E2F"),
+        ("\\u2E2F", "\\u2E2F"),
+        // Malformed escapes and a lone surrogate.
+        ("\\u", "\\u"),
+        ("a\\u12;", "a\\u12;"),
+        ("a\\uZZZZ", "a\\uZZZZ"),
+        ("a\\uD800", "a\\uD800"),
+        ("", ""),
+    ] {
+        assert_eq!(unescaped(src), want, "{src:?}");
+    }
+    let r = report("\\u0061pp.a\\u203Fb;\napp.\\u2118c;\n");
+    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(members, ["app.a\u{203F}b", "app.\u{2118}c"]);
+    // An escape a name may not hold where it stands, or a malformed one, is not part of a name.
+    for (src, want) in [
+        ("\\u0030a", [(T::Other, "\\"), (T::Ident, "u0030a")]),
+        ("a\\u00B2", [(T::Ident, "a"), (T::Other, "\\")]),
+        ("a\\u12", [(T::Ident, "a"), (T::Other, "\\")]),
+        ("a\\uD800", [(T::Ident, "a"), (T::Other, "\\")]),
+    ] {
+        assert_eq!(tokens(src).get(..2), Some(&want[..]), "{src:?}");
+    }
+    assert_eq!(tokens("a\\u0030\\u200C"), [(T::Ident, "a\\u0030\\u200C")]);
+    let r = report("app.\\u0030abc;\napp.a\\u00B2;\n");
+    assert!(r.members.iter().all(|m| !m.name.contains('\\') && !m.name.contains("0abc")), "{:?}", r.members);
+}
+
+#[test]
+fn malformed_escapes_in_bulk_are_read_once_through() {
+    let src = format!("{}\n{}\nalert(1);\n", "\\u\\uD800\\u12\\u0030\\u2118".repeat(20_000), "a\u{203F}".repeat(20_000));
+    let r = report(&src);
+    assert_eq!(r.lines, 3);
+    assert_eq!(feature(&r, "notify").map(|f| f.lines.as_slice()), Some(&[3][..]));
+    assert!(r.steps <= 5 * src.len() + 16, "{} steps for {} bytes", r.steps, src.len());
 }
 
 #[test]

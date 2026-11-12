@@ -88,6 +88,9 @@ pub(super) struct Builder<'p> {
     pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,
     pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
+    /// The scale factors of each decoded raster by its key: drawn again, it is placed from them
+    /// without its pixels being decoded and converted again.
+    pub(super) raster_scales: HashMap<u128, (f32, f32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
     pub(super) cmyk_keys: HashSet<u128>,
     /// Images in a Separation space, by key: the paint of their ink, or `None` when they open in

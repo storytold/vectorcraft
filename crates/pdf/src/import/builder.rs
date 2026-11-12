@@ -35,6 +35,7 @@ impl<'p> Builder<'p> {
             actual: Default::default(),
             images: HashMap::new(),
             image_keys: HashMap::new(),
+            raster_scales: HashMap::new(),
             cmyk_keys: HashSet::new(),
             separation_paints: HashMap::new(),
             opaque: HashSet::new(),

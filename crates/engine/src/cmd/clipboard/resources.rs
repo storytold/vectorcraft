@@ -28,7 +28,7 @@ use vectorcraft_doc::{
 use super::super::brushsym::{set_natural_size, stored_natural_size};
 
 use super::super::patterncmds::add_pattern;
-use super::super::{Result, bad, unique_name};
+use super::super::{EngineError, Result, bad, unique_name};
 use super::Clipboard;
 
 /// A resource kind objects refer to (graphic styles by id, the others by name).
@@ -165,6 +165,23 @@ fn node_filters(n: &Node, out: &mut BTreeSet<(String, String)>) {
         appearance_filters(&m.appearance, out);
         if let Some(mask) = &m.extras().mask {
             node_filters(&mask.art, out);
+        }
+    });
+}
+
+/// The names the SVG filter effects of appearance `a` give (its own and its fills' and strokes').
+fn appearance_filter_names(a: &Appearance, out: &mut BTreeSet<String>) {
+    let items = a.items.iter().flat_map(|i| i.effects().iter());
+    let named = a.effects.iter().chain(items).filter(|e| e.id == Appearance::SVG_FILTER);
+    out.extend(named.filter_map(|e| e.params.get("name").and_then(Value::as_str)).map(str::to_string));
+}
+
+/// The names the SVG filter effects in the subtree of `n` give (opacity-mask art included).
+fn node_filter_names(n: &Node, out: &mut BTreeSet<String>) {
+    n.walk(&mut |m| {
+        appearance_filter_names(&m.appearance, out);
+        if let Some(mask) = &m.extras().mask {
+            node_filter_names(&mask.art, out);
         }
     });
 }
@@ -1045,8 +1062,9 @@ impl Clipboard {
     }
 
     /// Add the resources the objects use to `d` (inside the paste's undo step) and work out how
-    /// pasted copies relink to them.
-    pub(crate) fn import_into(&self, d: &mut Document, choices: &SwatchChoices, same_doc: bool) -> Imported {
+    /// pasted copies relink to them. An error, with `d` unchanged, when a pasted SVG filter finds no
+    /// free name ([`Self::filter_links`]).
+    pub(crate) fn import_into(&self, d: &mut Document, choices: &SwatchChoices, same_doc: bool) -> Result<Imported> {
         self.import_used(d, &self.used(), choices, same_doc, false)
     }
 
@@ -1055,9 +1073,9 @@ impl Clipboard {
     /// each style, symbol, pattern and brush comes after the styles, symbols, patterns and brushes it uses
     /// ([`use_order`]), so that it is compared and relinked with their names here, and each loop
     /// of definitions that use each other is matched on its own ([`loop_groups`]).
-    fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, in_use_order: bool) -> Imported {
+    fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, in_use_order: bool) -> Result<Imported> {
         let mut out = Imported::default();
-        out.relink.filters = self.filter_links(d, same_doc);
+        out.relink.filters = self.filter_links(d, same_doc)?;
         self.import_images(d, used, same_doc, &mut out);
         self.import_swatches(d, used, choices, same_doc, &mut out);
         // Brushes whose art shows no symbols or patterns, before the symbols and patterns whose art
@@ -1220,16 +1238,16 @@ impl Clipboard {
             && out.relink.styles.is_empty()
             && out.relink.colors.is_empty()
             && used.styles.is_empty());
-        out
+        Ok(out)
     }
 
     /// How the pasted SVG filter effects relink ([`Relink::filters`]). Each names the document's
     /// filter of its name; one that draws another definition than that filter takes the document's
     /// filter when pasted back into the document it came from, and elsewhere keeps its own under a
-    /// free name, so editing or deleting the document's filter leaves it alone. When that name would
+    /// name no filter or effect of the document gives, so editing or deleting the document's filter leaves it alone. When that name would
     /// make the filter too long to draw, the free name is a shorter start of its name ("Shif"), else
-    /// a free letter or digit; the filter's id is always its name.
-    fn filter_links(&self, d: &Document, same_doc: bool) -> BTreeMap<(String, String), (String, String)> {
+    /// a free letter, digit or other printable ASCII character; the filter's id is always its name. An error when no free name fits.
+    fn filter_links(&self, d: &Document, same_doc: bool) -> Result<BTreeMap<(String, String), (String, String)>> {
         let mut found = BTreeSet::new();
         for n in &self.nodes {
             node_filters(n, &mut found);
@@ -1247,31 +1265,57 @@ impl Clipboard {
             appearance_filters(&g.appearance, &mut found);
         }
         let mut taken: BTreeSet<String> = d.svg_filters.iter().map(|f| f.name.clone()).chain(found.iter().map(|(n, _)| n.clone())).collect();
+        let mut effects_read = false;
         let mut links = BTreeMap::new();
         for (name, xml) in found {
             let Some(held) = d.svg_filters.iter().find(|f| f.name == name).filter(|f| f.xml != xml.trim()) else { continue };
             let to = if same_doc {
                 (name.clone(), held.xml.clone())
             } else {
+                // The names the document's effects give are taken too, those whose filter was
+                // deleted included: defining a filter of that name later changes every effect that
+                // names it. They are read at the first rename only.
+                if !effects_read {
+                    effects_read = true;
+                    for root in d.art_roots() {
+                        node_filter_names(root, &mut taken);
+                    }
+                    for a in vectorcraft_brush::library(d).iter().flat_map(Brush::art) {
+                        node_filter_names(a, &mut taken);
+                    }
+                    for g in &d.graphic_styles {
+                        appearance_filter_names(&g.appearance, &mut taken);
+                    }
+                }
                 // Free names made from the starts of the name, longest first, then free letters and
-                // digits: the first under which the filter still draws.
+                // digits, then other single printable ASCII characters: the first under which the
+                // filter still draws.
                 let mut ends: Vec<usize> = name.char_indices().map(|(i, _)| i).skip(1).collect();
                 ends.push(name.len());
                 let starts = ends.iter().rev().filter_map(|&end| name.get(..end).map(str::trim_end)).filter(|b| !b.is_empty());
                 let shorter = starts.map(|b| unique_name(b, |n| taken.contains(n)));
-                let single = ('a'..='z').chain('0'..='9').map(String::from).filter(|n| !taken.contains(n));
+                let single = ('a'..='z')
+                    .chain('0'..='9')
+                    .chain('A'..='Z')
+                    .chain(('!'..='~').filter(|c| !c.is_ascii_alphanumeric()))
+                    .map(String::from)
+                    .filter(|n| !taken.contains(n));
                 let renamed = shorter.chain(single).find_map(|new| {
                     let drawn = vectorcraft_render::effects::svg_filter::with_id(&xml, &new)
-                        .filter(|x| vectorcraft_render::effects::svg_filter::check(x).is_ok())?;
+                        .filter(|x| vectorcraft_render::effects::svg_filter::check(x).is_ok_and(|id| id == new))?;
                     Some((new, drawn))
                 });
-                let Some((new, drawn)) = renamed else { continue };
+                let Some((new, drawn)) = renamed else {
+                    return Err(EngineError::Other(format!(
+                        "the pasted SVG filter {name:?} draws differently from the document's filter of that name, and no free name fits it"
+                    )));
+                };
                 taken.insert(new.clone());
                 (new, drawn)
             };
             links.insert((name, xml), to);
         }
-        links
+        Ok(links)
     }
 
     /// Image blobs: a different blob under a key the document uses gets a new key.
@@ -1391,13 +1435,13 @@ pub(crate) struct LoadedStyle {
 /// a pattern added under a free name and a pattern follows a style renamed on the way in. A style
 /// `d` has under its name, or a numbered copy of it ("Body 2"), that is the same once relinked is
 /// used; any other is added under a free name. → each style of `src` placed, in order, character
-/// styles first.
-pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, paras: bool) -> Vec<LoadedStyle> {
+/// styles first. An error, as [`Clipboard::import_into`] gives.
+pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, paras: bool) -> Result<Vec<LoadedStyle>> {
     let library = OnceCell::new();
     let used = Used::of_text_styles(&Defs::of(src, &library), chars, paras);
     let clip = Clipboard::with_used(src, &used, &library, vec![]);
     let before = [&d.char_styles, &d.para_styles].map(|l| l.iter().map(|s| s.name.clone()).collect::<BTreeSet<_>>());
-    let out = clip.import_used(d, &used, &SwatchChoices::default(), false, true);
+    let out = clip.import_used(d, &used, &SwatchChoices::default(), false, true)?;
     let mut placed: Vec<LoadedStyle> = vec![];
     for (para, r, list) in [(false, Res::CharStyle, &clip.char_styles), (true, Res::ParaStyle, &clip.para_styles)] {
         for s in list {
@@ -1407,7 +1451,7 @@ pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, 
             placed.push(LoadedStyle { para, name, added });
         }
     }
-    placed
+    Ok(placed)
 }
 
 /// Swatch `w` in `d` ([`existing`]), else added under a free name (swatches and colour groups

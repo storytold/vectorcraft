@@ -1,4 +1,4 @@
-use super::analysis::{Scratch, has_effects, masked, outlined_text, overlapping, reach};
+use super::analysis::{Scratch, finite, flatten_groups, has_effects, masked, outlined_text, overlapping, painted, reach};
 use super::compose::{Builder, CLEAR, Composer, Elem, Fill, Kind, Px, WHITE};
 use super::options::FlattenOptions;
 use super::{
@@ -115,7 +115,7 @@ pub(super) fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render:
     let mut out = Plan { flat: vec![], kept: vec![], transparent: roots.iter().zip(&see_through).filter(|(_, t)| **t).map(|(id, _)| *id).collect() };
     // Baking above stopped early when cancelled; each group is a place to stop (a plan changes nothing).
     vectorcraft_doc::cancel::check()?;
-    let mut queue = overlapping(&reaches)?;
+    let mut queue = groups(src, roots, &plain, &reaches, &see_through, o)?;
     queue.reverse();
     while let Some(g) = queue.pop() {
         vectorcraft_doc::cancel::check()?;
@@ -193,6 +193,46 @@ pub(super) fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render:
         };
         out.flat.push(Flat { roots: ids, regions, area, raster, lines });
     }
+    Ok(out)
+}
+
+/// `roots` of `src` (`plain`: as plain art; `reaches`: where each can paint, clipped) in the
+/// groups that flatten together ([`flatten_groups`]), each in paint order, by their first object.
+/// Objects that overlap (as [`overlapping`] groups them) stay in one group when one of them is
+/// inside a clip group or clipping layer: [`inside_and_under`] and [`place_of`] then decide where
+/// they go.
+fn groups(
+    src: &Document,
+    roots: &[NodeId],
+    plain: &[Node],
+    reaches: &[Option<Rect>],
+    see_through: &[bool],
+    o: &FlattenOptions,
+) -> Result<Vec<Vec<usize>>> {
+    // An image clipped to its regions, opaque over white, reaches a pixel past them; a group's
+    // image is no larger than the art it overlaps, so its pixels are no wider than this.
+    let opaque_edge = o.no_transparency.is_some() && o.clip_complex_regions && !o.preserve_alpha;
+    let ppi = o.line_art_ppi.min(o.gradient_ppi).max(1.0);
+    let extent = |ids: &mut dyn Iterator<Item = usize>| ids.filter_map(|i| reaches[i].filter(finite)).reduce(|a, b| a.union(b)).unwrap_or_default();
+    // Where the widest such pixel is wider than the margins of two reaches, objects that close
+    // overlap too.
+    let widest = if opaque_edge { 1.0 / raster_scale(extent(&mut (0..reaches.len())), ppi) } else { 0.0 };
+    let grow = ((widest - 2.0) / 2.0).max(0.0);
+    let near: Vec<Option<Rect>> = reaches.iter().map(|b| b.map(|b| b.inflate(grow, grow))).collect();
+    let mut out = vec![];
+    for g in overlapping(if grow > 0.0 { &near } else { reaches })? {
+        let clipped = || clips_count() && g.iter().any(|&i| !clip_ancestors(src, roots[i]).is_empty());
+        if g.len() < 2 || !g.iter().any(|&i| see_through[i]) || clipped() {
+            out.push(g);
+            continue;
+        }
+        let fringe = if opaque_edge { 1.0 / raster_scale(extent(&mut g.iter().copied()), ppi) } else { 0.0 };
+        let local = |v: &[Option<Rect>]| g.iter().map(|&i| v[i]).collect::<Vec<_>>();
+        let painted: Vec<Option<Rect>> = g.iter().map(|&i| painted(&plain[i])).collect();
+        let see: Vec<bool> = g.iter().map(|&i| see_through[i]).collect();
+        out.extend(flatten_groups(&local(reaches), &painted, &see, fringe)?.into_iter().map(|l| l.into_iter().map(|k| g[k]).collect::<Vec<_>>()));
+    }
+    out.sort_by_key(|g| g.first().copied());
     Ok(out)
 }
 
@@ -482,11 +522,7 @@ fn region_fill(elems: &[Elem], sources: &[usize], o: &FlattenOptions, cmyk: bool
 /// amounts (a CMYK TIFF), so its CMYK colours keep their numbers (#2160); other images are PNGs.
 /// Fails when the image can't be encoded.
 fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Option<PathData>, o: &FlattenOptions) -> Result<Raster> {
-    let mut scale = ppi / 72.0;
-    scale = scale.min((MAX_PIXELS / (rect.width() * rect.height()).max(1.0)).sqrt());
-    // No side longer than the renderer draws: the image grows by a pixel on each side and is
-    // rounded up to whole pixels below.
-    scale = scale.min((f64::from(vectorcraft_render::MAX_RASTER_SIDE) - 4.0) / rect.width().max(rect.height()).max(1.0));
+    let scale = raster_scale(rect, ppi);
     let px = 1.0 / scale;
     let rect = rect.inflate(px, px);
     let clip = clip.map(|c| Some(po::offset_path(&c, px, po::Join::Miter, 4.0)).filter(|g| !g.is_empty()).unwrap_or(c));
@@ -559,6 +595,14 @@ fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Optio
     Ok(Raster { blob: ImageBlob::new("image/png", png), width: img.width, height: img.height, xf, clip })
 }
 
+/// Pixels per point of an image of `rect` at `ppi`: lower when the image would be larger than
+/// [`MAX_PIXELS`], or have a side longer than the renderer draws (the image grows by a pixel on
+/// each side and is rounded up to whole pixels).
+fn raster_scale(rect: Rect, ppi: f64) -> f64 {
+    let scale = (ppi / 72.0).min((MAX_PIXELS / (rect.width() * rect.height()).max(1.0)).sqrt());
+    scale.min((f64::from(vectorcraft_render::MAX_RASTER_SIDE) - 4.0) / rect.width().max(rect.height()).max(1.0))
+}
+
 /// `n` at full opacity with Normal blending throughout (objects, fills and strokes).
 pub(super) fn opaque(n: &mut Node) {
     n.opacity = 1.0;
@@ -621,7 +665,7 @@ pub(crate) fn flatten_expanded(doc: &Document, o: &FlattenOptions) -> Result<Opt
     let mut roots = vec![];
     for l in doc.layers.iter().filter(|l| l.visible && !matches!(l.kind, NodeKind::Layer { template: true, .. })) {
         let children = l.children().map_or(&[][..], Vec::as_slice);
-        roots.extend(children.iter().skip(usize::from(l.clips())).filter(|c| c.visible).map(|c| c.id));
+        roots.extend(children.iter().skip(usize::from(l.clips())).filter(|c| c.visible && !c.is_ruler_guide()).map(|c| c.id));
     }
     let plan = plan(doc, &roots, o, true)?;
     if plan.flat.is_empty() && !plan.kept.iter().any(|id| doc.node(*id).is_some_and(|n| kept_work(n, o))) {
@@ -640,6 +684,8 @@ pub(super) fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan
     // The groups replace their objects in one pass at the end. When an object is listed twice or
     // lies inside another listed one, each group replaces its objects as it is made instead.
     let one_pass = separate(d, &plan.flat.iter().flat_map(|f| f.roots.iter().copied()).collect::<Vec<_>>());
+    // A sublayer that becomes flat art gives its ruler guides to the layer that held it.
+    let guides = held_guides(d, plan.flat.iter().flat_map(|f| f.roots.iter().copied()));
     for f in plan.flat {
         // A group always has objects.
         let Some(top) = place_of(d, &f.roots) else { continue };
@@ -703,6 +749,9 @@ pub(super) fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan
     if !flat.is_empty() {
         d.insert_beside(flat, true)?;
     }
+    for (layer, guide) in guides {
+        d.insert(Some(layer), usize::MAX, guide)?;
+    }
     let brushes = if o.strokes_to_outlines { vectorcraft_brush::library(d) } else { vec![] };
     for mut id in plan.kept {
         if o.text_to_outlines {
@@ -745,6 +794,23 @@ fn place_of(d: &Document, roots: &[NodeId]) -> Option<NodeId> {
     let place =
         roots.iter().zip(&all).rev().find(|(r, mine)| shared(mine) && !leaves_fill(mine) && layer_state(d, **r) == state && !leaves_compositing(**r));
     Some(place.map_or(top, |(r, _)| *r))
+}
+
+/// The ruler guides of each of `roots` that is a sublayer (in its sublayers too), with the layer
+/// that holds it, in order. Other objects hold none.
+fn held_guides(d: &Document, roots: impl IntoIterator<Item = NodeId>) -> Vec<(NodeId, Node)> {
+    let mut out = vec![];
+    for id in roots {
+        let (Some(n), Some(parent)) = (d.node(id), d.parent_of(id)) else { continue };
+        if n.holds_ruler_guides() {
+            n.walk(&mut |c| {
+                if c.is_ruler_guide() {
+                    out.push((parent, c.clone()));
+                }
+            });
+        }
+    }
+    out
 }
 
 /// An image of `r` (in a clip group when it is clipped).
@@ -827,5 +893,70 @@ fn drop_overprints(n: &mut Node) {
         for c in ch {
             drop_overprints(Arc::make_mut(c));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::Session;
+
+    #[test]
+    fn a_flattened_sublayer_gives_its_ruler_guides_to_its_layer() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let sub = NodeId(s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap()["id"].as_u64().unwrap());
+        s.execute("layer.setCurrent", &json!({"id": sub.0})).unwrap();
+        let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        s.execute("transparency.set", &json!({"ids": [r], "opacity": 50})).unwrap();
+        let d = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let g = Node::new(d.alloc_id(), NodeKind::RulerGuide { vertical: true, pos: 5.0, artboard: None });
+        let g = d.insert(Some(sub), usize::MAX, g).unwrap();
+        let flat = flatten_document(&s.doc().unwrap().doc, &FlattenOptions::default()).unwrap().unwrap();
+        assert!(flat.node(sub).is_none(), "the sublayer became flat art");
+        assert!(flat.node(g).is_some_and(Node::is_ruler_guide), "its guide is kept");
+        assert_eq!(flat.parent_of(g), Some(layer));
+        assert_eq!(flat.children(Some(layer)).and_then(|c| c.last()).map(|c| c.id), Some(g));
+    }
+
+    /// In a file without transparency with Clip Complex Regions on, art under a group's opaque
+    /// image within one of its pixels joins the group, also where a long image is made at a lower
+    /// resolution and its pixels are wider than at the preset's.
+    #[test]
+    fn art_under_the_edge_of_a_long_opaque_image_joins_its_group() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 31000, "height": 100})).unwrap();
+        let rect = |s: &mut Session, x: f64, w: f64| {
+            let id = s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": w, "height": 10})).unwrap()["id"].as_u64().unwrap();
+            s.execute("paint.setStroke", &json!({"none": true, "ids": [id]})).unwrap();
+            NodeId(id)
+        };
+        // 0.5 pt left of A: wider than a pixel at 300 ppi, narrower than one of a 30,000 pt image.
+        let d = rect(&mut s, 40.0, 19.5);
+        let a = rect(&mut s, 60.0, 40.0);
+        let t = rect(&mut s, 95.0, 30_000.0);
+        s.execute("transparency.set", &json!({"ids": [t.0], "opacity": 50})).unwrap();
+        let o = FlattenOptions { no_transparency: Some(Default::default()), clip_complex_regions: true, ..FlattenOptions::default() };
+        let doc = &s.doc().unwrap().doc;
+        let long = plan(doc, &[d, a, t], &o, false).unwrap();
+        assert!(long.kept.is_empty(), "{:?}", long.kept);
+        assert_eq!(long.flat.iter().map(|f| f.roots.clone()).collect::<Vec<_>>(), vec![vec![d, a, t]]);
+        // Short, the image has 300 ppi pixels: D stays.
+        let short = rect(&mut s, 95.0, 40.0);
+        s.execute("transparency.set", &json!({"ids": [short.0], "opacity": 50})).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(plan(doc, &[d, a, short], &o, false).unwrap().kept, vec![d]);
+        // 100,000 pt long, its pixels are over 3 pt wide: art 3 pt away, whose reach doesn't touch
+        // A's, joins too.
+        let far = rect(&mut s, 40.0, 17.0);
+        let longer = rect(&mut s, 95.0, 100_000.0);
+        s.execute("transparency.set", &json!({"ids": [longer.0], "opacity": 50})).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        let p = plan(doc, &[far, a, longer], &o, false).unwrap();
+        assert!(p.kept.is_empty(), "{:?}", p.kept);
+        assert_eq!(p.flat.iter().map(|f| f.roots.clone()).collect::<Vec<_>>(), vec![vec![far, a, longer]]);
     }
 }

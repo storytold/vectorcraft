@@ -1244,9 +1244,9 @@ impl<'a> Reader<'a> {
                     None => None,
                 };
                 let pos = if vertical { p.x } else { p.y };
-                pos.is_finite().then_some(Guide { vertical, pos, artboard, layer: None })
+                pos.is_finite().then_some(Guide { artboard, ..Guide::new(vertical, pos) })
             };
-            take_ruler_guides(&mut doc.layers, &pick, &mut doc.guides, 0);
+            take_ruler_guides(&mut doc.layers, &pick, 0);
         }
         let mut brushes = self.brush_library();
         if let Some((lib, _)) = &brushes {
@@ -1429,9 +1429,9 @@ fn ruler_guide(a: Point, b: Point, centre: Option<(f64, f64)>, boards: &[Rect]) 
     }
 }
 
-/// Moves the children of the layers and sublayers of `nodes` that `pick` makes a guide of into
-/// `guides`, each on its layer.
-fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Guide>, guides: &mut Vec<Guide>, depth: usize) {
+/// Makes the children of the layers and sublayers of `nodes` that `pick` makes a guide of into
+/// ruler guide nodes with the same ids, moved to the top of their layer in their order.
+fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Guide>, depth: usize) {
     if depth > MAX_DEPTH {
         return;
     }
@@ -1439,16 +1439,17 @@ fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Gu
         if !matches!(n.kind, NodeKind::Layer { .. }) {
             continue;
         }
-        let id = n.id;
         let Some(kids) = Arc::make_mut(n).children_mut() else { continue };
+        let mut guides = vec![];
         kids.retain(|k| match pick(k.id) {
             Some(g) => {
-                guides.push(Guide { layer: Some(id), ..g });
+                guides.push(Arc::new(Node::new(k.id, NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard })));
                 false
             }
             None => true,
         });
-        take_ruler_guides(kids, pick, guides, depth + 1);
+        take_ruler_guides(kids, pick, depth + 1);
+        kids.extend(guides);
     }
 }
 

@@ -333,6 +333,27 @@ fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
             store_selected(d, &selected);
         }
     });
+    shadow_controls(ui, d);
+}
+
+/// The Shadows switch, and below it while the switch is on or mixed, the shadow's Position,
+/// Distance from Object and Shadow Bounds. The first light casts the shadow, so they are
+/// unavailable while Shading is off.
+fn shadow_controls(ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.add_enabled_ui(flag(d, "shade", true) != Some(false), |ui| {
+        toggle(ui, d, "shadow", tl!("Shadows"), false);
+        if flag(d, "shadow", false) == Some(false) {
+            return;
+        }
+        let positions: Vec<(Value, &str)> = super::effect::own_choices(&d.str("__effect"), "shadowPosition", false)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(label, value)| (json!(value), label))
+            .collect();
+        choice(ui, d, "shadowPosition", tl!("Position"), &positions);
+        number(ui, d, "shadowDistance", tl!("Distance from Object"), (0.0, 100.0), "%", 1, None);
+        number(ui, d, "shadowBounds", tl!("Shadow Bounds"), (10.0, 400.0), "%", 1, None);
+    });
 }
 
 fn lighting_presets(ui: &mut egui::Ui, d: &mut Dialog) {

@@ -170,7 +170,7 @@ much there is only once the run has ended.
   Cancel (also Esc) and Continue in Background (`plugin.cancelRuns`, `plugin.hideRuns`). When it is done its result is
   applied as `plugin.run` with the same parameters and objects, as one undo step, unless the document or the plug-in
   changed meanwhile: then nothing changes, and the status bar says to run it again. On the web, which has no threads,
-  it runs at once; the instruction budget alone bounds it there.
+  it runs at once, under the same instruction budget and 300 s limit.
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
 
@@ -212,7 +212,21 @@ capability model proposed for PhotoCraft plug-ins
   names shown have control and bidirectional characters escaped (`\u{202E}`) and are cut to 64 characters.
   Only a person can press its OK: `ui.dialog.confirm`, MCP's `answer_dialog` and injected input (`ui.key`, `ui.click`)
   are refused and the dialog stays open. Enter confirms it only when OK has the keyboard focus. `ui.dialog.set` can't
-  change what it installs.
+  change what it installs. OK stays disabled until the question has been on screen in the focused window for half a
+  second (VectorCraft's own value, from the delay the security guidance at
+  https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/security/security-considerations-for-browser-ui.md
+  gives for dialog boxes), so a click, Enter or Space, or a press begun before then, installs nothing. The half second
+  starts over for every new question, even one that reads the same, and when the window gets the focus back. Cancel
+  and Escape work at once. A module that would take the place of the installed plug-in with its id asks in the same
+  dialog.
+- **An install that automation asked for is not approved in its dialog.** When a control request, MCP, injected input,
+  or a file dialog that one of them opened (even when the person picks the file there) leads to the approval dialog, its
+  OK stays disabled, a confirm is refused even after the half second, and the dialog says that automation asked for the
+  install. `ui.installPlugin` returns `{pending: "pluginInstall", approval: "personMustStartInstall"}`. Cancel still
+  closes it. To install the plug-in, the person chooses Object › Plug-ins › Install Plug-in… and picks the file, or
+  opens it with File › Open or drops it on the window: the module is inspected again and the new question waits its
+  half second. A request's `replace: true` does not skip asking about taking another module's place. A module that
+  needs no approval still installs at once from any request. This is VectorCraft's own rule.
 - `plugin.install` refuses the module, naming the permissions it needs, unless this module already has a recorded grant
   (`plugin.inspect`'s `needsApproval` tells it beforehand). A request's `grant` is refused too: `plugin.install` takes
   it only with the approval the dialog gives. A `vectorcraft-cli mcp` or `run` started with `--allow-plugin-grants`
@@ -226,6 +240,13 @@ capability model proposed for PhotoCraft plug-ins
   `VECTORCRAFT_NO_PREFS` set there is no store, and a `grant` accepted under the flag lasts for that session only.
   With `--allow-plugin-grants`, pass `hash` set to the `plugin.inspect` entry's `hash` so that the module installed is
   the one the user saw.
+- The approval protects against plug-ins and automation clients (MCP, scripts and CLI requests): none of them can
+  approve a module's permissions. VectorCraft's own code records a grant only after that approval and when it loads
+  `grants.json`, and installs a module that lists permissions only under a grant recorded for this very module,
+  also when it loads the Additional Plug-ins Folder. The approval does not protect against native code linked into
+  VectorCraft or against another program running as the same user, which can change the files in the `Plug-ins`
+  folder. `grants.json` is not signed, so such a program can add a grant to it. `--allow-plugin-grants` is a choice
+  the person starting a headless session makes.
 - **Replacing asks first.** When the file is another module than the plug-in installed with its id, or, with none
   installed, its id has settings and a cache in the `Plug-ins` folder, Install Plug-in… and File › Open show its id
   and SHA-256 and ask whether to install it in place of that plug-in, which gives it the settings and cache kept for
@@ -240,7 +261,9 @@ capability model proposed for PhotoCraft plug-ins
   records the new hash. When the new module or its grant can't be written to the `Plug-ins` folder, the folder keeps
   the old module and its grant, and the old module loads at the next start. If the write that puts the old module back
   fails as well, the folder holds the new module with the old grant, the grant does not cover that module, and the
-  plug-in is skipped at the next start until it is approved again. A grant whose hash is not 64 lower-case
+  plug-in is skipped at the next start until it is approved again. When the folder held no module for that id, that
+  write removes the new module; when the removal fails, the folder holds the new module and no grant covers it. In
+  both cases a disabled plug-in is turned on, as for any install the folder holds. A grant whose hash is not 64 lower-case
   hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
   module that lists no permissions under that id, so the earlier bytes need a new approval. When `plugin.remove` can't
   remove the grant from `grants.json`, it returns an error, the plug-in stays installed, and a second `plugin.remove`
@@ -248,14 +271,16 @@ capability model proposed for PhotoCraft plug-ins
   write the module to the `Plug-ins` folder, or can't remove the grant from `grants.json`, the folder keeps the module
   it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
   removed and the module already stored can't be read back or written back, the new module stays in the folder, and
-  the grant does not count for the rest of the session. The grant also does not count when the folder held no module
-  for that id. A
+  the grant stops counting. The grant also stops counting when the folder held no module for that id. A
   `grants.json` larger than 1 MiB, or one that is not a JSON list, grants nothing: the new module stays in the folder,
   and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
   removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
-  permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant does not count for
-  the rest of the session, or until the plug-in is granted again, including for the next load, which tries the removal
-  again. In Safe Mode, and for
+  permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant stops counting,
+  including for the next load, which tries the removal again. A grant that stops counting in either of these cases
+  does not count for any session in the same process that uses the same `Plug-ins` folder, by any path to it, until
+  `grants.json` can be written for that plug-in, as when the plug-in is granted again. Another process on the same
+  folder, for example `vectorcraft-cli` beside the app, still reads `grants.json` as it is written. A grant for the
+  same id kept in another `Plug-ins` folder counts. In Safe Mode, and for
   a stored module that the user disabled,
   VectorCraft does not read the module, and `grants.json` keeps the grant for its id. The Additional Plug-ins Folder
   and `plugin.reload` do not change the `Plug-ins` folder: when they leave a module that lists no permissions under an
@@ -336,7 +361,11 @@ still returns `1`. `vc_progress`, `vc_cancelled` and `vc_log` need `progress`; t
   and one the manifest doesn't allow (an `api` below 2, or without the import's permission) refuse the module, and the
   error names the import and the permission.
 - A filter's or an exporter's progress is shown as a share: a heavy filter's progress window and the export's progress
-  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. A plug-in that checks it can
+  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. In the desktop app a light
+  filter that lists `progress` runs in the background as a heavy one does, under its light budget, when it runs at once
+  from Object › Plug-ins or its shortcut, or when OK runs it with Preview off; with Preview on, its dialog keeps the
+  previewed run. A filter that also lists a `commandAllowlist` runs where it is called, since its command calls need
+  the document. A plug-in that checks `vc_cancelled` can
   stop early, and the host discards what it returns after the Cancel or after its time budget ran out; one that
   ignores it is still stopped by the instruction and time budgets. With a known total, a report is passed on only when
   it reaches another tenth of a percent; with an unknown total, each change of `done` is passed on. After 2,000 reports
@@ -394,11 +423,18 @@ A live effect runs while the art draws, so keep the entries it uses small.
   write leaves in the `cache` folder does not count toward the caps, and clearing the cache removes it.
 - A plug-in reaches only the storage of its own id. Replacing it with another module of the same id
   (`plugin.install` with `replace: true`, after the user agreed) keeps the storage; `plugin.remove` deletes it, and a run of the plug-in still going gets `-5` from every storage call after that.
-  `plugin.remove` first renames the folder (adding `.removed` to its name). When that fails, `plugin.remove` fails
-  and the plug-in stays installed with its storage as it was. Files that can't be deleted after the rename stay in the
-  `.removed` folder, where no plug-in reaches them. A later `plugin.remove` tries again to delete them when a plug-in
-  with that id is installed or a storage folder for the id exists, and that deletion can fail too. For an id that
-  isn't installed and has only a `.removed` folder, `plugin.remove` does not delete the folder and fails as not found.
+  `plugin.remove` first renames the folder, adding `.removed` to its name (or `.removing` while a `.removed` folder
+  holds settings an earlier removal kept). When that fails, `plugin.remove` fails and the plug-in stays installed with
+  its storage as it was. Before VectorCraft deletes a renamed folder, it writes an empty file beside it with `.delete`
+  added to the folder's name, and removes that file once the folder is gone. When that file can't be written, the
+  folder is not deleted and is treated like any renamed folder without a `.delete` file (see below). Files that can't be deleted stay in the
+  renamed folder with the `.delete` file beside it, where no plug-in reaches them. A later `plugin.remove` tries again
+  to delete them when a plug-in with that id is installed or a storage folder for the id exists, and that deletion can
+  fail too. For an id that isn't installed and has only such a folder, `plugin.remove` does not delete it and fails as
+  not found. When `plugin.remove` can't remove the grant and can't rename the folder back either, its error names the
+  renamed folder. The next load, install or `plugin.remove` of the plug-in renames a renamed folder that has no
+  `.delete` file back while the plug-in has no folder of its own; when it has one, that folder is used and the renamed
+  folder stays until `plugin.remove` deletes both.
   `plugin.remove` with the id of a plug-in that isn't installed deletes the storage kept for that id, when there is
   any.
   `plugin.clearCache` empties the cache and leaves the settings, and `plugin.list` and
