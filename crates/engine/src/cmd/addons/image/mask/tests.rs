@@ -646,6 +646,28 @@ fn a_live_color_adjustment_keeps_the_hidden_colors_hidden() {
     assert!(px.get_pixel(4, 4).0[3] == 255 && px.get_pixel(4, 4).0 != RED, "SVG: the red block, recolored");
 }
 
+/// An image whose masked pixels are missing from the document is drawn and expanded from its own
+/// pixels with a live color adjustment, as it is drawn without one.
+#[test]
+fn a_live_color_adjustment_recolors_the_image_when_its_masked_pixels_are_missing() {
+    let (mut s, id) = open(&framed());
+    s.execute(COLOR_MASK, &hide_white()).unwrap();
+    s.execute("effect.apply", &json!({"effect": "adjust.hueSaturation", "params": {"hue": 120}})).unwrap();
+    let mut d = doc(&s).clone();
+    let masked = mask_of(&d, id).unwrap().key;
+    assert!(d.images.remove(&masked).is_some(), "the masked pixels were in the document");
+    assert_eq!(drawn(&d, id, 1, 1), WHITE, "the white shows");
+    let block = drawn(&d, id, 4, 4);
+    assert!(block[3] == 255 && block != RED, "the red block, recolored: {block:?}");
+    let node = d.node(id).unwrap().clone();
+    let out = vectorcraft_render::effects::adjust_in_document(&mut d, &node, None).unwrap();
+    let NodeKind::Image(im) = &out.kind else { panic!("an image") };
+    assert_ne!(im.key, image_of(&d, id).key, "the expanded image is recolored");
+    assert_eq!(Document::color_mask_of(&out), None, "the expanded image has no mask to make again from the recolored pixels");
+    let px = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!(px.get_pixel(1, 1).0, WHITE, "the expanded image shows the white");
+}
+
 /// An envelope warp draws the image's masked pixels in its pieces.
 #[test]
 fn an_envelope_warp_draws_the_masked_pixels() {
