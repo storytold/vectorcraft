@@ -564,13 +564,14 @@ fn a_preset_export_reopens_on_its_rows() {
 struct ScreensFrame {
     ctx: egui::Context,
     time: f64,
+    cpu: Option<ScreensCpu>,
 }
 
 impl ScreensFrame {
     fn new() -> Self {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
-        Self { ctx, time: 0.0 }
+        Self { ctx, time: 0.0, cpu: None }
     }
 
     fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
@@ -582,6 +583,9 @@ impl ScreensFrame {
             ..Default::default()
         };
         let mut out = self.ctx.run_ui(input, |ui| super::show(app, ui.ctx()));
+        if let Some(cpu) = &mut self.cpu {
+            cpu.update(&out);
+        }
         out.textures_delta.clear();
         out
     }
@@ -819,16 +823,9 @@ fn tiff_dropdown_exports_scaled_artboards_with_options_and_reopens() {
     assert_eq!(field(&app, "formats")[0]["format"], "png");
 }
 
-/// The Example line names the first file the export writes for the same settings: the item's file
-/// name, a prefix with characters Windows does not allow, a range, a Windows device name as an item
-/// folder, the rows' folders and sizes, Create Sub-folders, a vector row's size suffix, the counter
-/// typed as text, and the Layers and Selection tabs.
-/// The dialog is laid out as Illustrator's: two tabs (Artboards, Assets), Clear Selection and the
-/// prefix under the thumbnails, Create Sub-folders by scale or format, Export PDFs As, the iOS and
-/// Android rows, and how many items and files the export takes; no naming, layer or selection
-/// pages, presets bar or folders list.
+/// The existing export controls stay visible beside the filename pattern and counter controls.
 #[test]
-fn the_dialog_is_laid_out_as_illustrators() {
+fn filename_pattern_controls_keep_the_existing_export_layout() {
     let (mut app, _) = app(3, false);
     open(&mut app);
     let text = crate::tests_labels::shapes_text(&ScreensFrame::new().settle(&mut app));
@@ -853,11 +850,15 @@ fn the_dialog_is_laid_out_as_illustrators() {
         "+ Add Scale",
         "Clear Selection",
         "Prefix:",
+        "File Name:",
+        "Start at:",
+        "Count:",
+        "Per Item",
         "Selected: 3, Total number of files to export: 3",
     ] {
         assert!(text.lines().any(|l| l.trim() == label), "{label} missing:\n{text}");
     }
-    for gone in ["Layers", "Selection", "Export Preset:", "File Name:", "Folders:", "Start at:"] {
+    for gone in ["Layers", "Selection", "Export Preset:", "Folders:"] {
         assert!(!text.lines().any(|l| l.trim() == gone), "{gone} shown:\n{text}");
     }
 }
@@ -936,23 +937,27 @@ fn sub_folders_and_single_file_pdfs() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Save Preset… on an applied preset saves the dialog's rows, settings, prefix and sub-folders and
-/// keeps the preset's keys the dialog does not show (a file name pattern, other export settings).
+/// Save Preset keeps the edited naming controls with the rows, prefix and sub-folders, without
+/// discarding an applied preset's other export options.
 #[test]
-fn saving_an_applied_preset_keeps_the_keys_the_dialog_does_not_show() {
+fn filename_pattern_edits_are_saved_in_presets_without_losing_other_options() {
     use export_for_screens::PresetPick;
     let (mut app, _) = app(2, false);
     app.run(
         "document.exportPresets.save",
         json!({
             "name": "Repeat",
-            "settings": {"formats": [{"format": "png"}], "name": "<name>-###", "counterPer": "file", "antiAlias": "none", "prefix": "a-"}
+            "settings": {"formats": [{"format": "png"}], "name": "<name>-###", "counterStart": 7, "counterPer": "file", "antiAlias": "none", "prefix": "a-"}
         }),
     )
     .unwrap();
     open(&mut app);
     let preset = export_for_screens::export_presets(&mut app).as_array().unwrap().iter().find(|p| p["name"] == "Repeat").cloned().unwrap();
     export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &preset);
+    assert_eq!((field(&app, "name"), field(&app, "counterStart"), field(&app, "counterPer")), (json!("<name>-###"), json!(7), json!("file")));
+    set(&mut app, "name", json!("new-####"));
+    set(&mut app, "counterStart", json!("9"));
+    set(&mut app, "counterPer", json!("item"));
     set(&mut app, "prefix", json!("b-"));
     set(&mut app, "subfolders", json!(true));
     set(&mut app, "subfolderBy", json!("format"));
@@ -962,9 +967,29 @@ fn saving_an_applied_preset_keeps_the_keys_the_dialog_does_not_show() {
 
     let saved = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Repeat").unwrap_or_else(|| panic!("{}", app.ui.status));
     let s = &saved.settings;
-    assert_eq!((s.get("counterPer"), s.get("antiAlias"), s.get("name")), (Some(&json!("file")), Some(&json!("none")), Some(&json!("<name>-###"))));
+    assert_eq!((s.get("counterPer"), s.get("antiAlias"), s.get("name")), (Some(&json!("item")), Some(&json!("none")), Some(&json!("new-####"))));
+    assert_eq!(s.get("counterStart"), Some(&json!(9)));
     assert_eq!((s.get("prefix"), s.get("folders")), (Some(&json!("b-")), Some(&json!("format"))));
     assert_eq!(field(&app, "exportPreset"), "Repeat");
+
+    // Null names are absent to the real preset backend, so retain these valid dialog edits.
+    let retained = (json!("new-####"), json!("b-"), json!("9"), json!("item"));
+    assert_eq!((field(&app, "name"), field(&app, "prefix"), field(&app, "counterStart"), field(&app, "counterPer")), retained);
+    let null_preset = app
+        .run(
+            "document.exportPresets.save",
+            json!({
+                "name": "Unspecified naming",
+                "settings": {"formats": [{"format": "png"}], "name": null, "prefix": null, "counterStart": null, "counterPer": null}
+            }),
+        )
+        .unwrap();
+    for key in ["name", "prefix", "counterStart", "counterPer"] {
+        assert_eq!(null_preset["settings"].get(key), Some(&Value::Null), "the saved preset retains {key}: null");
+    }
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &null_preset);
+    assert_eq!((field(&app, "name"), field(&app, "prefix"), field(&app, "counterStart"), field(&app, "counterPer")), retained);
+    assert_eq!(field(&app, "exportPreset"), "Unspecified naming");
 }
 
 /// Save Preset… on an applied preset saves the dialog's Include Bleed and Include Artboard Fill.
@@ -1259,4 +1284,328 @@ fn the_dialog_builds_the_preset_list_again_only_when_the_presets_change() {
     let list = field(&app, "__exportPresets");
     let mine = list.as_array().unwrap().iter().find(|p| p["name"] == "Mine").unwrap();
     assert_eq!(mine["settings"]["formats"][0]["format"], "pdf", "{list}");
+}
+
+/// Read the actual download through the existing bounded, CRC-checking ZIP reader. Its lookups
+/// ignore ASCII case; the caller separately checks exact reported filename spelling. Four expected
+/// paths and a four-entry limit leave no room for missing, duplicate or unrelated entries.
+fn assert_filename_zip_download(log: &Log, index: usize, expected: &Value) {
+    let expected = expected.as_array().unwrap();
+    assert_eq!(expected.len(), 4);
+    let log = log.borrow();
+    let archive = fileio::zip::Archive::open(&log[index].1, expected.len()).unwrap();
+    for name in expected {
+        let name = name.as_str().unwrap();
+        let bytes = archive.read(name, 1024 * 1024).unwrap().unwrap_or_else(|| panic!("missing ZIP entry {name}"));
+        assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"), "{name} is a PNG payload");
+        let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png).unwrap();
+        assert!(image.width() > 0 && image.height() > 0, "{name} decodes to nonempty pixels");
+    }
+}
+
+/// Actual text/popup input reaches exported filenames for both artboards and collected selection
+/// assets. Cancel discards draft settings; blank names restore the existing item/prefix/suffix path.
+#[test]
+fn filename_pattern_input_exports_artboards_and_collected_assets_and_reopens() {
+    let type_field = |h: &mut ScreensFrame, app: &mut VectorcraftApp, label: &str, offset: f32, value: &str| {
+        let out = h.settle(app);
+        let at = screen_text_at(&out, label) + egui::vec2(offset, 0.0);
+        h.click(app, at);
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        let mut events = vec![key(egui::Key::A, egui::Modifiers::COMMAND), key(egui::Key::Backspace, egui::Modifiers::NONE)];
+        if !value.is_empty() {
+            events.push(egui::Event::Text(value.into()));
+        }
+        h.frame(app, events);
+    };
+    for collected in [false, true] {
+        let (mut app, log) = app(2, true);
+        if collected {
+            let mut rectangle = |x| app.run("shape.rectangle", json!({"x": x, "y": 5, "width": 8, "height": 6})).unwrap()["id"].clone();
+            let ids = [rectangle(2), rectangle(20)];
+            app.run("select.set", json!({"ids": ids})).unwrap();
+        }
+        let open_tab = |app: &mut VectorcraftApp| {
+            if collected {
+                app.run("file.exportSelection", json!({"multiple": true})).unwrap();
+            } else {
+                open(app);
+            }
+        };
+        open_tab(&mut app);
+        let saved_before = app.session.active().unwrap().doc.export_settings.clone();
+        assert_eq!((field(&app, "name"), field(&app, "counterStart"), field(&app, "counterPer")), (json!(""), json!(1), json!("item")));
+        let mut h = ScreensFrame::new();
+        type_field(&mut h, &mut app, "File Name:", 100.0, "discard-####");
+        assert_eq!(field(&app, "name"), "discard-####", "the actual field accepts typing");
+        super::cancel(&mut app);
+        assert!(log.borrow().is_empty());
+        assert_eq!(app.session.active().unwrap().doc.export_settings, saved_before);
+        open_tab(&mut app);
+        assert_eq!(field(&app, "name"), "", "Cancel did not save the draft name");
+
+        let formats = json!([{"format": "png", "scale": "1x", "suffix": ""}, {"format": "png", "scale": "2x", "suffix": "@2x"}]);
+        set(&mut app, "formats", formats.clone());
+        set(&mut app, "prefix", json!("proof-"));
+        type_field(&mut h, &mut app, "File Name:", 100.0, "batch-####");
+        type_field(&mut h, &mut app, "Start at:", 65.0, "7");
+        h.choose(&mut app, "Per Item", "Per File");
+        assert_eq!((field(&app, "name"), field(&app, "counterStart"), field(&app, "counterPer")), (json!("batch-####"), json!("7"), json!("file")));
+        let settings = field(&app, "settings");
+        let result = confirm(&mut app).unwrap();
+        let per_file = json!(["1x/proof-batch-0007.png", "2x/proof-batch-0008@2x.png", "1x/proof-batch-0009.png", "2x/proof-batch-0010@2x.png"]);
+        assert_eq!(result["files"], per_file, "artboards/assets={collected}");
+        assert_filename_zip_download(&log, 0, &per_file);
+        assert_eq!(log.borrow().len(), 1, "the real export produced a download");
+        assert!(log.borrow()[0].1.starts_with(b"PK"), "four encoded files are downloaded as a ZIP");
+        assert!(app.ui.dialog.is_none());
+        open_tab(&mut app);
+        assert_eq!((field(&app, "name"), field(&app, "counterStart"), field(&app, "counterPer")), (json!("batch-####"), json!(7), json!("file")));
+        assert_eq!((field(&app, "prefix"), field(&app, "formats"), field(&app, "settings")), (json!("proof-"), formats.clone(), settings));
+
+        type_field(&mut h, &mut app, "File Name:", 100.0, "");
+        h.choose(&mut app, "Per File", "Per Item");
+        let result = confirm(&mut app).unwrap();
+        let item = if collected { "Asset" } else { "Artboard" };
+        let original_names = json!([
+            format!("1x/proof-{item}-1.png"),
+            format!("2x/proof-{item}-1@2x.png"),
+            format!("1x/proof-{item}-2.png"),
+            format!("2x/proof-{item}-2@2x.png")
+        ]);
+        assert_eq!(result["files"], original_names, "blank uses the original names and keeps prefix/suffix");
+        assert_filename_zip_download(&log, 1, &original_names);
+        assert_eq!(log.borrow().len(), 2);
+        open_tab(&mut app);
+        assert_eq!((field(&app, "name"), field(&app, "counterPer")), (json!(""), json!("item")));
+        // Per Item must share a counter between an item's scales even when a nonblank
+        // pattern uses it; clearing the pattern above alone would not exercise this setting.
+        type_field(&mut h, &mut app, "File Name:", 100.0, "batch-####");
+        let result = confirm(&mut app).unwrap();
+        let per_item = json!(["1x/proof-batch-0007.png", "2x/proof-batch-0007@2x.png", "1x/proof-batch-0008.png", "2x/proof-batch-0008@2x.png"]);
+        assert_eq!(result["files"], per_item, "each item's two scales share its counter: assets={collected}");
+        assert_eq!(log.borrow().len(), 3);
+        assert_filename_zip_download(&log, 2, &per_item);
+        open_tab(&mut app);
+        assert_eq!((field(&app, "name"), field(&app, "counterPer")), (json!("batch-####"), json!("item")));
+
+        // This odd integer cannot survive a round-trip through f64. The actual filenames,
+        // archive entries and reopened field all retain it, including the next item's counter.
+        type_field(&mut h, &mut app, "Start at:", 65.0, "9007199254740993");
+        let result = confirm(&mut app).unwrap();
+        let exact = json!([
+            "1x/proof-batch-9007199254740993.png",
+            "2x/proof-batch-9007199254740993@2x.png",
+            "1x/proof-batch-9007199254740994.png",
+            "2x/proof-batch-9007199254740994@2x.png"
+        ]);
+        assert_eq!(result["files"], exact, "large counters stay exact in output names: assets={collected}");
+        assert_eq!(log.borrow().len(), 4);
+        assert_filename_zip_download(&log, 3, &exact);
+        open_tab(&mut app);
+        assert_eq!(field(&app, "counterStart"), json!(9007199254740993_u64), "reopened counter stays exact");
+        let saved = app.session.active().unwrap().doc.export_settings.clone();
+        for invalid in ["-1", "18446744073709551616"] {
+            type_field(&mut h, &mut app, "Start at:", 65.0, invalid);
+            assert!(confirm(&mut app).is_err(), "invalid counter keeps the dialog and writes nothing: {invalid}");
+            assert_eq!(kind(&app), Some(export_for_screens::KIND));
+            assert_eq!(log.borrow().len(), 4);
+            assert_eq!(app.session.active().unwrap().doc.export_settings, saved);
+        }
+    }
+}
+
+// CPU-only images of production dialog meshes. Unknown content refuses the capture.
+#[derive(Default)]
+struct ScreensCpu {
+    textures: std::collections::HashMap<egui::TextureId, egui::ColorImage>,
+    free_after_paint: Vec<egui::TextureId>,
+}
+
+impl ScreensCpu {
+    fn update(&mut self, out: &egui::FullOutput) {
+        // Previous frees can retire now; this frame must still paint its own freed textures.
+        for id in self.free_after_paint.drain(..) {
+            self.textures.remove(&id);
+        }
+        for (id, patches) in &out.textures_delta.set {
+            assert!(matches!(id, egui::TextureId::Managed(_)), "unavailable user texture");
+            for delta in patches {
+                assert_eq!(delta.options, egui::TextureOptions::LINEAR, "unsupported sampler");
+                let egui::ImageData::Color(image) = &delta.image;
+                assert!(image.width() > 0 && image.height() > 0);
+                assert_eq!(image.pixels.len(), image.width().checked_mul(image.height()).unwrap());
+                if let Some([x, y]) = delta.pos {
+                    let dst = self.textures.get_mut(id).expect("patch before allocation");
+                    assert!(x.checked_add(image.width()).unwrap() <= dst.width());
+                    assert!(y.checked_add(image.height()).unwrap() <= dst.height());
+                    let width = dst.width();
+                    for row in 0..image.height() {
+                        let at = (y + row) * width + x;
+                        dst.pixels[at..at + image.width()].copy_from_slice(&image.pixels[row * image.width()..(row + 1) * image.width()]);
+                    }
+                } else {
+                    self.textures.insert(*id, (**image).clone());
+                }
+            }
+        }
+        self.free_after_paint = out.textures_delta.free.iter().copied().collect();
+    }
+
+    fn png(&self, ctx: &egui::Context, mut out: egui::FullOutput) -> image::RgbaImage {
+        assert!(!ctx.has_pending_images(), "unfinished production images");
+        let ppp = out.pixels_per_point;
+        assert!(ppp.is_finite() && ppp > 0.0);
+        let viewport = ctx.content_rect();
+        assert_eq!(viewport.min, egui::Pos2::ZERO);
+        let size = ((viewport.width() * ppp).ceil() as usize, (viewport.height() * ppp).ceil() as usize);
+        assert!(size.0 > 0 && size.1 > 0 && size.0 <= 4096 && size.1 <= 4096);
+        let mut pixels = vec![[0.0f32; 4]; size.0.checked_mul(size.1).unwrap()];
+        let primitives = ctx.tessellate(std::mem::take(&mut out.shapes), ppp);
+        let mut thumbnails = 0;
+        let cross = |a: (i64, i64), b: (i64, i64), c: (i64, i64)| {
+            i128::from(b.0 - a.0) * i128::from(c.1 - a.1) - i128::from(b.1 - a.1) * i128::from(c.0 - a.0)
+        };
+        for primitive in primitives {
+            let egui::epaint::Primitive::Mesh(mesh) = primitive.primitive else { panic!("unsupported paint callback") };
+            assert!(matches!(mesh.texture_id, egui::TextureId::Managed(_)), "unavailable user texture");
+            let atlas = self.textures.get(&mesh.texture_id).expect("missing referenced texture");
+            if mesh.texture_id != egui::TextureId::Managed(0) && atlas.width() >= 40 && atlas.height() >= 40 {
+                thumbnails += 1;
+            }
+            assert_eq!(mesh.indices.len() % 3, 0, "incomplete triangle");
+            for v in &mesh.vertices {
+                assert!(v.pos.x.is_finite() && v.pos.y.is_finite() && v.uv.x.is_finite() && v.uv.y.is_finite());
+                assert!((v.pos.x * ppp).abs() < 1_000_000.0 && (v.pos.y * ppp).abs() < 1_000_000.0);
+            }
+            assert!(
+                !primitive.clip_rect.min.x.is_nan()
+                    && !primitive.clip_rect.min.y.is_nan()
+                    && !primitive.clip_rect.max.x.is_nan()
+                    && !primitive.clip_rect.max.y.is_nan()
+            );
+            let clip = primitive.clip_rect.intersect(viewport);
+            assert!(!clip.min.x.is_nan() && !clip.min.y.is_nan() && !clip.max.x.is_nan() && !clip.max.y.is_nan());
+            for [i, j, k] in mesh.indices.as_chunks::<3>().0 {
+                let mut v = [
+                    *mesh.vertices.get(*i as usize).expect("triangle index"),
+                    *mesh.vertices.get(*j as usize).expect("triangle index"),
+                    *mesh.vertices.get(*k as usize).expect("triangle index"),
+                ];
+                let at = |v: &egui::epaint::Vertex| ((v.pos.x * ppp * 256.0).round() as i64, (v.pos.y * ppp * 256.0).round() as i64);
+                let area = cross(at(&v[0]), at(&v[1]), at(&v[2]));
+                if area == 0 {
+                    continue;
+                }
+                if area < 0 {
+                    v.swap(1, 2);
+                }
+                let area = area.abs() as f32;
+                let [a, b, c] = [at(&v[0]), at(&v[1]), at(&v[2])];
+                let range = |lo: i64, hi: i64, clip_lo: f32, clip_hi: f32, n: usize| {
+                    let lo = (lo as f32 / 256.0).max(clip_lo * ppp).floor().max(0.0) as usize;
+                    let hi = ((hi as f32 / 256.0).min(clip_hi * ppp).ceil().max(0.0) as usize).min(n);
+                    lo..hi
+                };
+                let upper_left = |p: (i64, i64), q: (i64, i64)| q.1 < p.1 || (q.1 == p.1 && q.0 > p.0);
+                for y in range(a.1.min(b.1).min(c.1), a.1.max(b.1).max(c.1), clip.min.y, clip.max.y, size.1) {
+                    for x in range(a.0.min(b.0).min(c.0), a.0.max(b.0).max(c.0), clip.min.x, clip.max.x, size.0) {
+                        if !clip.contains(egui::pos2((x as f32 + 0.5) / ppp, (y as f32 + 0.5) / ppp)) {
+                            continue;
+                        }
+                        let q = (x as i64 * 256 + 128, y as i64 * 256 + 128);
+                        let (w0, w1, w2) = (cross(b, c, q), cross(c, a, q), cross(a, b, q));
+                        let inside = |w: i128, p, q| w > 0 || (w == 0 && upper_left(p, q));
+                        if !(inside(w0, b, c) && inside(w1, c, a) && inside(w2, a, b)) {
+                            continue;
+                        }
+                        let (w0, w1, w2) = (w0 as f32 / area, w1 as f32 / area, w2 as f32 / area);
+                        let uv = (w0 * v[0].uv.x + w1 * v[1].uv.x + w2 * v[2].uv.x, w0 * v[0].uv.y + w1 * v[1].uv.y + w2 * v[2].uv.y);
+                        let texel = screens_cpu_sample(atlas, uv);
+                        let channels = [v[0].color.to_array(), v[1].color.to_array(), v[2].color.to_array()];
+                        let src: [f32; 4] = std::array::from_fn(|i| {
+                            (w0 * f32::from(channels[0][i]) + w1 * f32::from(channels[1][i]) + w2 * f32::from(channels[2][i])) * texel[i] / 255.0
+                        });
+                        let dst = &mut pixels[y * size.0 + x];
+                        let keep = 1.0 - src[3] / 255.0;
+                        for i in 0..4 {
+                            dst[i] = src[i] + dst[i] * keep;
+                        }
+                    }
+                }
+            }
+        }
+        assert!(thumbnails > 0, "no production thumbnail was painted");
+        let mut png = image::RgbaImage::new(size.0 as u32, size.1 as u32);
+        for (dst, src) in png.pixels_mut().zip(pixels) {
+            let c = src.map(|v| v.round().clamp(0.0, 255.0) as u8);
+            *dst = image::Rgba(egui::Color32::from_rgba_premultiplied(c[0], c[1], c[2], c[3]).to_srgba_unmultiplied());
+        }
+        png
+    }
+}
+
+fn screens_cpu_sample(atlas: &egui::ColorImage, uv: (f32, f32)) -> [f32; 4] {
+    let (w, h) = (atlas.width(), atlas.height());
+    let (x, y) = (uv.0.clamp(0.0, 1.0) * w as f32 - 0.5, uv.1.clamp(0.0, 1.0) * h as f32 - 0.5);
+    let (fx, fy) = (x - x.floor(), y - y.floor());
+    let texel =
+        |dx: f32, dy: f32| atlas[(((x.floor() + dx).max(0.0) as usize).min(w - 1), ((y.floor() + dy).max(0.0) as usize).min(h - 1))].to_array();
+    let (a, b, c, d) = (texel(0.0, 0.0), texel(1.0, 0.0), texel(0.0, 1.0), texel(1.0, 1.0));
+    std::array::from_fn(|i| {
+        let top = f32::from(a[i]) * (1.0 - fx) + f32::from(b[i]) * fx;
+        let bottom = f32::from(c[i]) * (1.0 - fx) + f32::from(d[i]) * fx;
+        top * (1.0 - fy) + bottom * fy
+    })
+}
+
+/// A headless CPU image of the actual production dialog, not an OS/GPU screenshot.
+#[test]
+fn filename_pattern_cpu_images_cover_artboards_and_assets() {
+    let folder = temp_folder("filename-cpu-images");
+    std::fs::create_dir_all(&folder).unwrap();
+    for collected in [false, true] {
+        let (mut app, _) = app(2, false);
+        if collected {
+            let ids: Vec<Value> = [2, 20]
+                .into_iter()
+                .map(|x| app.run("shape.rectangle", json!({"x": x, "y": 5, "width": 8, "height": 6})).unwrap()["id"].clone())
+                .collect();
+            app.run("select.set", json!({"ids": ids})).unwrap();
+            app.run("file.exportSelection", json!({"multiple": true})).unwrap();
+        } else {
+            open(&mut app);
+        }
+        set(&mut app, "folder", json!(folder.to_string_lossy()));
+        let mut h = ScreensFrame::new();
+        crate::theme::apply(&h.ctx, crate::theme::Brightness::MediumDark);
+        egui_extras::install_image_loaders(&h.ctx);
+        h.cpu = Some(ScreensCpu::default());
+        // The production dialog's embedded icon sources, never replacement art.
+        for icon in ["layout-grid", "dc-list-view", "folder-open", "menu", "settings", "x"] {
+            let poll = crate::icons::source(icon).load(&h.ctx, egui::TextureOptions::LINEAR, egui::load::SizeHint::Height(24)).unwrap();
+            assert!(poll.is_ready(), "unfinished icon {icon}");
+        }
+        for (label, offset, value) in [("File Name:", 100.0, "batch-####"), ("Start at:", 65.0, "7")] {
+            let out = h.settle(&mut app);
+            let at = screen_text_at(&out, label) + egui::vec2(offset, 0.0);
+            h.click(&mut app, at);
+            let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+            h.frame(
+                &mut app,
+                vec![key(egui::Key::A, egui::Modifiers::COMMAND), key(egui::Key::Backspace, egui::Modifiers::NONE), egui::Event::Text(value.into())],
+            );
+        }
+        h.choose(&mut app, "Per Item", "Per File");
+        assert_eq!((field(&app, "name"), field(&app, "counterStart"), field(&app, "counterPer")), (json!("batch-####"), json!("7"), json!("file")));
+        let out = h.settle(&mut app);
+        let text = crate::tests_labels::shapes_text(&out);
+        for label in ["File Name:", "Start at:", "Count:", "Per File", "batch-####"] {
+            assert!(text.contains(label), "missing {label}");
+        }
+        let png = h.cpu.as_ref().unwrap().png(&h.ctx, out);
+        let path = folder.join(if collected { "assets.png" } else { "artboards.png" });
+        png.save_with_format(&path, image::ImageFormat::Png).unwrap();
+        println!("6720 CPU DIALOG PNG: {}", path.display());
+    }
 }

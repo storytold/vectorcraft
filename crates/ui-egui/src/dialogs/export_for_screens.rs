@@ -1,5 +1,5 @@
-//! File → Export → Export for Screens, laid out as Illustrator's: on the left the Artboards and
-//! Assets tabs (thumbnails with checkboxes, in a grid or a list), Clear Selection and the prefix;
+//! File → Export → Export for Screens: on the left the Artboards and
+//! Assets tabs (thumbnails with checkboxes, in a grid or a list), Clear Selection and filename controls;
 //! on the right Select (All, a range or Full Document, Include Bleed, Include Artboard Fill), the destination (folder
 //! picker, Open Location after Export, Create Sub-folders by scale or by format; the web downloads
 //! instead), Export PDFs As (one file of every artboard or a file each), and the format rows (scale
@@ -11,14 +11,15 @@
 //! Export on, the files are encoded and written on the background thread
 //! ([`crate::background`]) after the dialog closes.
 //!
-//! `document.exportForScreens` does more than the dialog shows (layers, the selection, file name
-//! patterns, a folder per item): those are for scripts and MCP.
+//! The filename pattern and counter apply to either tab; blank keeps the item's own name.
+//! Layers, direct selection export and a folder per item remain available to scripts and MCP.
 //!
 //! Fields (`ui.dialog.set`): `tab` (artboards|assets), `select` (all|range|full), `range`,
 //! `boards` ([bool] per artboard), `assets` ([asset id] checked on the Assets tab), `includeBleed`,
 //! `includeArtboardFill`,
 //! `folder`, `openLocation`, `subfolders`, `subfolderBy` (scale|format), `pdfs` (single|multiple),
-//! `prefix`, `preset` (""|mobile|density: where the rows came from), `formats` (rows of
+//! `prefix`, `name` (filename pattern, blank for item names), `counterStart`, `counterPer` (item|file),
+//! `preset` (""|mobile|density: where the rows came from), `formats` (rows of
 //! `document.exportForScreens`, `scale` as text), `settings` ({png|png8|jpg|webp|gif|tiff|svg|pdf:
 //! {…}}), `view` (grid|list), `exportPreset` (the format preset applied last, "" for none);
 //! `__settings` names the format whose Format Settings show ("" when closed), `__savePreset` is the
@@ -175,6 +176,9 @@ pub fn open(app: &mut VectorcraftApp) {
         "__itemFolders": folders.filter(|f| matches!(*f, "item" | "itemFormat")).unwrap_or_default(),
         "pdfs": if get("pdfs").and_then(Value::as_str) == Some("single") { "single" } else { "multiple" },
         "prefix": get("prefix").and_then(Value::as_str).unwrap_or_default(),
+        "name": get("name").and_then(Value::as_str).unwrap_or_default(),
+        "counterStart": get("counterStart").and_then(Value::as_u64).unwrap_or(1),
+        "counterPer": get("counterPer").and_then(Value::as_str).unwrap_or("item"),
         "preset": preset.unwrap_or_default(),
         "formats": rows,
         "settings": settings,
@@ -353,10 +357,21 @@ fn selection_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Val
     p.insert("subfolders".into(), json!(folders == "rows"));
     p.insert("folders".into(), json!(folders));
     p.insert("pdfs".into(), json!(if single { "single" } else { "multiple" }));
-    p.insert("prefix".into(), json!(d.str("prefix")));
+    filename_params(d, &mut p)?;
     p.insert("formats".into(), Value::Array(rows));
     p.insert("settings".into(), d.fields.get("settings").cloned().unwrap_or(json!({})));
     Ok((p, files, pieces))
+}
+
+/// Naming shared by an export and a saved preset. Keep the typed counter exact (including values
+/// beyond f64's integer precision), and refuse invalid text without discarding the other settings.
+fn filename_params(d: &Dialog, p: &mut Map<String, Value>) -> Result<(), String> {
+    let start = d.str("counterStart").trim().parse::<u64>().map_err(|_| "enter a non-negative whole number for Start at".to_string())?;
+    p.insert("prefix".into(), json!(d.str("prefix")));
+    p.insert("name".into(), json!(d.str("name")));
+    p.insert("counterStart".into(), json!(start));
+    p.insert("counterPer".into(), json!(d.str("counterPer")));
+    Ok(())
 }
 
 /// The `folders` the dialog's sub-folder controls give: `none`, `format`, or a folder per scale
@@ -418,6 +433,17 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 }
                 widgets::dim_label(ui, tl!("Prefix:"));
                 form::text(ui, d, "prefix", (ui.available_width() - 4.0).max(60.0));
+            });
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                widgets::dim_label(ui, tl!("File Name:"));
+                form::text_named(ui, d, "name", tl!("File Name:"), LEFT_W - 84.0);
+            });
+            widgets::dim_label(ui, tl!("Blank keeps item names. Example: <name>-####."));
+            ui.horizontal(|ui| {
+                widgets::dim_label(ui, tl!("Start at:"));
+                form::text_named(ui, d, "counterStart", tl!("Start at:"), 54.0);
+                form::choice(ui, d, "counterPer", tl!("Count:"), (44.0, 100.0), &[("item", "Per Item"), ("file", "Per File")]);
             });
         });
         let (sep, _) = ui.allocate_exact_size(egui::vec2(17.0, PANE_H + 60.0), egui::Sense::hover());
@@ -847,7 +873,7 @@ pub(super) fn preset_set(app: &mut VectorcraftApp) -> Result<(), String> {
 }
 
 /// Act on what the format presets menu of dialog `d` asked for. Save keeps the applied preset's
-/// keys that the dialog does not show (a file name pattern, Full Document, a folder).
+/// keys that the dialog does not show (Full Document, a folder).
 pub(super) fn preset_pick(app: &mut VectorcraftApp, d: &mut Dialog, pick: PresetPick) {
     let done = match pick {
         PresetPick::Apply(preset) => {
@@ -862,19 +888,32 @@ pub(super) fn preset_pick(app: &mut VectorcraftApp, d: &mut Dialog, pick: Preset
                 .and_then(|p| p["settings"].as_object())
                 .cloned()
                 .unwrap_or_default();
-            for key in ["formats", "preset", "settings", "prefix", "folders", "subfolders", "includeBleed", "includeArtboardFill"] {
+            for key in [
+                "formats",
+                "preset",
+                "settings",
+                "name",
+                "prefix",
+                "counterStart",
+                "counterPer",
+                "folders",
+                "subfolders",
+                "includeBleed",
+                "includeArtboardFill",
+            ] {
                 settings.remove(key);
             }
             settings.insert("formats".into(), d.fields.get("formats").cloned().unwrap_or(json!([])));
             settings.insert("settings".into(), d.fields.get("settings").cloned().unwrap_or(json!({})));
-            settings.insert("prefix".into(), json!(d.str("prefix")));
             settings.insert("folders".into(), json!(folders(d)));
             for key in ["includeBleed", "includeArtboardFill"] {
                 settings.insert(key.into(), json!(d.bool(key)));
             }
-            app.run("document.exportPresets.save", json!({"name": name, "settings": settings})).map(|r| {
-                d.fields.remove("__savePreset");
-                d.fields.insert("exportPreset".into(), r["name"].clone());
+            filename_params(d, &mut settings).and_then(|()| {
+                app.run("document.exportPresets.save", json!({"name": name, "settings": settings})).map(|r| {
+                    d.fields.remove("__savePreset");
+                    d.fields.insert("exportPreset".into(), r["name"].clone());
+                })
             })
         }
         PresetPick::Delete(name) => app.run("document.exportPresets.delete", json!({ "name": name })).map(|_| {
@@ -893,7 +932,7 @@ pub(super) fn preset_pick(app: &mut VectorcraftApp, d: &mut Dialog, pick: Preset
 }
 
 /// Set the dialog to format preset `preset` (`{name, settings}`): its rows (or the mobile or
-/// density rows it names), their settings, the prefix and the sub-folders; what it doesn't name
+/// density rows it names), their settings, the naming and the sub-folders; what it doesn't name
 /// keeps the dialog's value.
 pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
     let st = &preset["settings"];
@@ -927,8 +966,10 @@ pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
         d.fields.insert("subfolderBy".into(), json!(if f == "format" { "format" } else { "scale" }));
         d.fields.insert("__itemFolders".into(), json!(if matches!(f, "item" | "itemFormat") { f } else { "" }));
     }
-    if let Some(prefix) = st["prefix"].as_str() {
-        d.fields.insert("prefix".into(), json!(prefix));
+    for key in ["name", "prefix", "counterStart", "counterPer"] {
+        if let Some(value) = st.get(key).filter(|v| !v.is_null()) {
+            d.fields.insert(key.into(), value.clone());
+        }
     }
     for key in ["includeBleed", "includeArtboardFill"] {
         if let Some(b) = st[key].as_bool() {
