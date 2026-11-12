@@ -1444,6 +1444,8 @@ font-technology	Variable	Változó
 	Extrude & Bevel…	Kihúzás és élletörés…
 	3D (Classic)	3D (klasszikus)
 	Extrude & Bevel (Classic)…	Kihúzás és élletörés (klasszikus)…
+	Revolve (Classic)…	Forgatás tengely körül (klasszikus)…
+	Rotate (Classic)…	Elforgatás (klasszikus)…
 	Surface	Felület
 	Wireframe	Drótváz
 	No Shading	Nincs árnyékolás
@@ -6670,6 +6672,10 @@ breakText	Glyphs	Glifák
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Körvonalak használnak egyet vagy többet ezek közül az ecsetek közül. Leveszed az ecseteket ezekről a körvonalakról, és törlöd az ecseteket?
 	Remove Strokes	Körvonalak eltávolítása
 	Place Brush Art	Ecsetgrafika elhelyezése
+	Replace Brush Art	Ecsetgrafika cseréje
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Körvonalak használják ezt az ecsetet. Alkalmazod az új grafikát ezekre a körvonalakra, vagy változatlanul hagyod őket, és hozzáadod az ecset egy másolatát az új grafikával?
+	Apply to Strokes	Alkalmazás a körvonalakra
+	Leave Strokes	Körvonalak megtartása
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` ecsetnek nincs grafikája (csak a szóró-, a grafikus és a mintázatecseteknek van)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Elrendezőeszközök

@@ -1097,6 +1097,8 @@ font-technology	Variable	Μεταβλητές
 	Extrude & Bevel…	Εξώθηση και λοξότμηση…
 	3D (Classic)	3D (κλασικό)
 	Extrude & Bevel (Classic)…	Εξώθηση και λοξότμηση (κλασικό)…
+	Revolve (Classic)…	Περιστροφή γύρω από άξονα (κλασικό)…
+	Rotate (Classic)…	Περιστροφή (κλασικό)…
 	Surface	Επιφάνεια
 	Wireframe	Συρματόπλεγμα
 	No Shading	Χωρίς σκίαση
@@ -6638,6 +6640,10 @@ breakText	Glyphs	Γλύφοι
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Περιγράμματα χρησιμοποιούν ένα ή περισσότερα από αυτά τα πινέλα. Να αφαιρεθούν τα πινέλα από αυτά τα περιγράμματα και να διαγραφούν τα πινέλα;
 	Remove Strokes	Αφαίρεση περιγραμμάτων
 	Place Brush Art	Τοποθέτηση σχεδίου πινέλου
+	Replace Brush Art	Αντικατάσταση σχεδίου πινέλου
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Περιγράμματα χρησιμοποιούν αυτό το πινέλο. Να εφαρμοστεί το νέο σχέδιο σε αυτά τα περιγράμματα ή να μείνουν ως έχουν και να προστεθεί αντίγραφο του πινέλου με το νέο σχέδιο;
+	Apply to Strokes	Εφαρμογή στα περιγράμματα
+	Leave Strokes	Διατήρηση περιγραμμάτων
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` δεν έχει σχέδιο (έχουν μόνο τα πινέλα διασποράς, σχεδίου και μοτίβου)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Εργαλεία διάταξης

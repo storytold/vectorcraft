@@ -1162,6 +1162,8 @@ font-technology	Variable	Variabili
 	Extrude & Bevel…	Estrusione e smusso…
 	3D (Classic)	3D (classico)
 	Extrude & Bevel (Classic)…	Estrusione e smusso (classico)…
+	Revolve (Classic)…	Rivoluzione (classico)…
+	Rotate (Classic)…	Ruota (classico)…
 	Surface	Superficie
 	Wireframe	Reticolo
 	No Shading	Nessuna ombreggiatura
@@ -6315,6 +6317,10 @@ breakText	Glyphs	Glifi
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Alcune tracce usano uno o più di questi pennelli. Rimuovere i pennelli da queste tracce ed eliminare i pennelli?
 	Remove Strokes	Rimuovi tracce
 	Place Brush Art	Inserisci grafica del pennello
+	Replace Brush Art	Sostituisci grafica del pennello
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Alcune tracce usano questo pennello. Applicare la nuova grafica a queste tracce, o lasciarle come sono e aggiungere una copia del pennello con la nuova grafica?
+	Apply to Strokes	Applica alle tracce
+	Leave Strokes	Lascia le tracce
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` non ha una grafica (ce l’hanno solo i pennelli a dispersione, artistici e motivo)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Strumenti di disposizione

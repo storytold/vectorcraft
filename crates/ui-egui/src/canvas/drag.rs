@@ -293,9 +293,7 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     let tool = app.session.tool_id();
     let Some(st) = app.session.active().filter(|_| matches!(tool, "selection" | "directSelection" | "groupSelection")) else { return false };
     // The tool's interaction while it moves (or Alt-copies) the selection.
-    if !st.interaction.as_ref().is_some_and(|i| i.label == "Move" || i.label == "Copy") {
-        return false;
-    }
+    let Some(it) = st.interaction.as_ref().filter(|i| i.label == "Move" || i.label == "Copy") else { return false };
     if tool != "selection" && st.selection.objects.iter().any(|id| st.selection.partial(*id).is_some() || st.selection.segments.contains_key(id)) {
         return false;
     }
@@ -305,7 +303,9 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     if on_canvas(ui, resp, p) && ui.input(|i| i.pointer.has_pointer()) {
         return false;
     }
-    let ids = st.selection.objects.clone();
+    // The art the drag started with: the release rolls the move back to it, and an Alt-copy's
+    // copies, selected while it previews, go with that.
+    let ids = it.selection.objects.clone();
     egui::DragAndDrop::set_payload(ui.ctx(), widgets::PanelDrag::Art(ids));
     true
 }

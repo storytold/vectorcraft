@@ -1153,6 +1153,8 @@ font-technology	Variable	Variables
 	Extrude & Bevel…	Extrusión y biselado…
 	3D (Classic)	3D (clásico)
 	Extrude & Bevel (Classic)…	Extrusión y biselado (clásico)…
+	Revolve (Classic)…	Revolución (clásico)…
+	Rotate (Classic)…	Rotar (clásico)…
 	Surface	Superficie
 	Wireframe	Malla
 	No Shading	Sin sombreado
@@ -6629,6 +6631,10 @@ breakText	Glyphs	Glifos
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Algunos trazos usan uno o más de estos pinceles. ¿Quitar los pinceles de esos trazos y eliminar los pinceles?
 	Remove Strokes	Quitar trazos
 	Place Brush Art	Colocar ilustración del pincel
+	Replace Brush Art	Reemplazar ilustración del pincel
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Algunos trazos usan este pincel. ¿Aplicar la nueva ilustración a esos trazos, o dejarlos como están y añadir una copia del pincel con la nueva ilustración?
+	Apply to Strokes	Aplicar a los trazos
+	Leave Strokes	Dejar los trazos
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` no tiene ilustración (solo la tienen los pinceles de dispersión, de arte y de motivo)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Herramientas de organización

@@ -493,6 +493,8 @@
 	Extrude & Bevel…	Pursota ja viistä…
 	3D (Classic)	3D (perinteinen)
 	Extrude & Bevel (Classic)…	Pursota ja viistä (perinteinen)…
+	Revolve (Classic)…	Pyöräytä (perinteinen)…
+	Rotate (Classic)…	Kierrä (perinteinen)…
 	Surface	Pinta
 	Wireframe	Rautalanka
 	No Shading	Ei varjostusta
@@ -6716,6 +6718,10 @@ breakText	Glyphs	Merkit
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Viivat käyttävät yhtä tai useampaa näistä siveltimistä. Irrotetaanko siveltimet näistä viivoista ja poistetaanko siveltimet?
 	Remove Strokes	Poista viivat
 	Place Brush Art	Sijoita siveltimen kuvitus
+	Replace Brush Art	Korvaa siveltimen kuvitus
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Viivat käyttävät tätä sivellintä. Käytetäänkö uutta kuvitusta näissä viivoissa, vai jätetäänkö ne ennalleen ja lisätään siveltimestä kopio, jossa on uusi kuvitus?
+	Apply to Strokes	Käytä viivoihin
+	Leave Strokes	Jätä viivat ennalleen
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` ei sisällä kuvitusta (kuvitus on vain sirote-, taide- ja kuviosiveltimissä)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Järjestelytyökalut

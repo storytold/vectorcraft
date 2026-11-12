@@ -422,6 +422,8 @@
 	Extrude & Bevel…	ამოწევა და წაკვეთა…
 	3D (Classic)	3D (კლასიკური)
 	Extrude & Bevel (Classic)…	ამოწევა და წაკვეთა (კლასიკური)…
+	Revolve (Classic)…	ბრუნვა (კლასიკური)…
+	Rotate (Classic)…	შემობრუნება (კლასიკური)…
 	Surface	ზედაპირი
 	Wireframe	მავთულის ჩარჩო
 	No Shading	დაჩრდილვის გარეშე
@@ -6712,6 +6714,10 @@ breakText	Glyphs	გლიფები
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	კონტურები იყენებს ამ ფუნჯებიდან ერთს ან მეტს. მოიხსნას ფუნჯები ამ კონტურებიდან და წაიშალოს ფუნჯები?
 	Remove Strokes	კონტურების მოხსნა
 	Place Brush Art	ფუნჯის ნახატის განთავსება
+	Replace Brush Art	ფუნჯის ნახატის ჩანაცვლება
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	კონტურები იყენებს ამ ფუნჯს. გამოყენებულ იქნას ახალი ნახატი ამ კონტურებზე, თუ დარჩეს ისინი როგორც არის და დაემატოს ფუნჯის ასლი ახალი ნახატით?
+	Apply to Strokes	კონტურებზე გამოყენება
+	Leave Strokes	კონტურების დატოვება
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` ნახატი არ აქვს (ნახატი მხოლოდ გაფანტვის, მხატვრულ და პატერნის ფუნჯებს აქვს)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	განლაგების ხელსაწყოები

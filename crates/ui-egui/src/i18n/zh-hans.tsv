@@ -1094,6 +1094,8 @@ antiAlias	Sharp	锐利
 	Extrude & Bevel…	突出与斜角…
 	3D (Classic)	3D (经典)
 	Extrude & Bevel (Classic)…	突出与斜角 (经典)…
+	Revolve (Classic)…	回转 (经典)…
+	Rotate (Classic)…	旋转 (经典)…
 	Surface	表面
 	Wireframe	线框
 	No Shading	无底纹
@@ -6527,6 +6529,10 @@ breakText	Glyphs	字形
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有描边使用了其中一个或多个画笔。要从这些描边移除画笔并删除画笔吗？
 	Remove Strokes	移除描边
 	Place Brush Art	置入画笔图稿
+	Replace Brush Art	替换画笔图稿
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有描边使用了此画笔。要将新图稿应用到这些描边，还是保留描边不变并添加一个使用新图稿的画笔副本？
+	Apply to Strokes	应用于描边
+	Leave Strokes	保留描边
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 没有图稿 (只有散布画笔、艺术画笔和图案画笔有图稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
