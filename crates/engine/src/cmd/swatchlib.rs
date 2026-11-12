@@ -471,6 +471,15 @@ fn file_name(path: &str) -> String {
     std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().to_string())
 }
 
+/// The file name a concealed library or path is shown by: the last part of `path` as this platform
+/// splits a path, so that outside Windows a `\` stays part of the name. Another platform's absolute
+/// path ([`crate::file_access::written_elsewhere`]), and a path this platform gives no file name (one
+/// that ends in `..`), are split after the last `/` or `\` instead. `path` itself when it has no such part.
+pub fn concealed_file_name(path: &str) -> String {
+    let native = (!crate::file_access::written_elsewhere(path)).then(|| std::path::Path::new(path).file_name()).flatten();
+    native.map_or_else(|| path.rsplit(['/', '\\']).find(|part| !part.is_empty()).unwrap_or(path).to_string(), |n| n.to_string_lossy().into_owned())
+}
+
 /// May the request being served read `path` ([`crate::file_access::check_read`])? Always, without
 /// roots in force. Another platform's absolute path ([`crate::file_access::written_elsewhere`]) is
 /// never readable under a read root.
@@ -480,8 +489,8 @@ fn readable(path: &str) -> bool {
 
 /// The loaded library ids (`loaded/<path>`) whose file the request being served may not read, each
 /// with the id a reply shows instead: `loaded/<file name>`, as a library loaded without a path is
-/// named. The file name is the last part of the path after either separator, and a path saved as
-/// another platform's absolute path counts as one the request may not read. The ids are those of the
+/// named. The file name is [`concealed_file_name`], and a path saved as another platform's absolute
+/// path counts as one the request may not read. The ids are those of the
 /// session's swatch, brush, symbol and graphic style libraries, then `others` (ids the UI state refers
 /// to). When another id already is or shows that id, the next free
 /// one of `loaded/<file name> (2)`, `(3)` and so on is shown, so that two libraries stay two. A library
@@ -501,11 +510,7 @@ pub fn concealed_library_ids(s: &Session, others: impl IntoIterator<Item = Strin
     let mut taken = BTreeSet::new();
     for ids in [session, others] {
         for id in ids {
-            let name = id.strip_prefix("loaded/").filter(|path| !path.is_empty()).map(|path| {
-                // Either separator: a path saved on another platform counts as a path here too.
-                let name = path.rsplit(['/', '\\']).find(|part| !part.is_empty()).unwrap_or(path).to_string();
-                (name, path)
-            });
+            let name = id.strip_prefix("loaded/").filter(|path| !path.is_empty()).map(|path| (concealed_file_name(path), path));
             match name {
                 Some((name, path)) if name != path && !readable(path) => hidden.push((id, name)),
                 _ => {

@@ -238,6 +238,25 @@ fn swatch_library_replies_leave_out_paths_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Outside Windows a `\` is part of a file name: a concealed library saved at `<folder>/weird\name.gpl`
+/// is shown under its whole file name. Another platform's absolute path is still named by the part
+/// after its last `\`.
+#[cfg(not(windows))]
+#[test]
+fn a_concealed_library_keeps_a_backslash_in_its_file_name() {
+    let base = folder("backslash-name");
+    let roots = AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+    let native = format!("loaded/{}/weird\\name.gpl", text(&base.join("a")));
+    let foreign = r"loaded/C:\Users\someone\other.gpl".to_string();
+    let s = Session::new();
+    let mut hidden = confine(roots.as_ref(), || cmd::swatchlib::concealed_library_ids(&s, [native.clone(), foreign.clone()]));
+    let _ = std::fs::remove_dir_all(base);
+    hidden.sort();
+    let mut want = vec![(foreign, "loaded/other.gpl".to_string()), (native, "loaded/weird\\name.gpl".to_string())];
+    want.sort();
+    assert_eq!(hidden, want);
+}
+
 /// A concealed library keeps the id a client was shown when another library with the same file name,
 /// whose full id sorts before it, is loaded later: the id still finds the first library.
 #[test]
