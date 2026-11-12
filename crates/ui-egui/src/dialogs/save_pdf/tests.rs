@@ -158,6 +158,30 @@ fn a_page_of_the_arts_bounds_is_written_in_the_background() {
     assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 1);
 }
 
+/// A document without a title of its own, saved to a file, is titled after that file in the PDF,
+/// and viewers show the file name, with or without Use Artboards; one with its own title shows
+/// that title.
+#[test]
+fn a_page_of_the_arts_bounds_shows_the_title_only_when_it_is_the_documents_own() {
+    let (mut app, written, _) = app();
+    app.session.doc_mut().unwrap().path = Some("/docs/Poster.vectorcraft".into());
+    for artboards in [true, false] {
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/t.pdf", "useArtboards": artboards, "compression": {"compressText": false}})).unwrap();
+        super::super::confirm(&mut app).unwrap();
+    }
+    std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc).title = "Spring Sale".into();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/t.pdf", "useArtboards": false, "compression": {"compressText": false}})).unwrap();
+    super::super::confirm(&mut app).unwrap();
+    let w = written.borrow();
+    assert_eq!(w.len(), 3);
+    let texts: Vec<String> = w.iter().map(|(_, b)| String::from_utf8_lossy(b).into_owned()).collect();
+    for (pdf, artboards) in texts[..2].iter().zip([true, false]) {
+        assert!(pdf.contains("/Title(Poster)"), "useArtboards {artboards}");
+        assert!(!pdf.contains("/DisplayDocTitle true"), "useArtboards {artboards}");
+    }
+    assert!(texts[2].contains("/Title(Spring Sale)") && texts[2].contains("/DisplayDocTitle true"));
+}
+
 #[test]
 fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
     let (mut app, written, opened) = app();

@@ -293,6 +293,23 @@ fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
         app.ui.dialog = None;
     }
     assert_eq!(std::fs::read(&path).unwrap(), saved);
+    // Also when File › Save as PDF… leaves the file to the save panel and the panel picks the PDF
+    // the document was opened from.
+    let pdf = d.join("a.pdf").to_string_lossy().to_string();
+    std::fs::write(&pdf, b"%PDF-1.7 as opened").unwrap();
+    app.session.doc_mut().unwrap().imported_from = Some(pdf.clone());
+    let picked = pdf.clone();
+    app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+    for artboards in [true, false] {
+        app.run("ui.savePdfDialog", json!({"useArtboards": artboards})).unwrap();
+        dialogs::confirm(&mut app).unwrap();
+        let asked = app.ui.dialog.as_ref().filter(|d| d.kind == dialogs::confirm::KIND);
+        assert!(asked.is_some_and(|d| d.str("detail").contains("“hidden type”")), "picked, useArtboards {artboards}");
+        app.ui.dialog = None;
+    }
+    assert_eq!(std::fs::read(&pdf).unwrap(), b"%PDF-1.7 as opened");
+    app.services.pick_save = None;
+    app.session.doc_mut().unwrap().imported_from = Some(path.clone());
     // Another name doesn't ask.
     let copy = d.join("b.svg").to_string_lossy().to_string();
     assert!(app.run("file.exportAs", json!({"path": copy, "format": "svg"})).unwrap().get("pending").is_none());

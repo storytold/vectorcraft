@@ -44,6 +44,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         std::borrow::Cow::Borrowed(_) => st.doc.clone(),
         std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
     };
+    // A PDF shows its title in the viewer's title bar only when it is the document's own, not the
+    // file name it was titled after, as `document.export` writes it.
+    let own_title = fileio::has_own_title(&doc);
     let doc = fileio::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, std::sync::Arc::new);
     let uid = st.uid;
     let path = export_path(app, path, f)?;
@@ -68,6 +71,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     let (mut params, target) = (params.clone(), path.clone());
     if let Some(o) = params.as_object_mut() {
         o.insert("path".into(), json!(path));
+        if f.id == "pdf" {
+            o.insert("_displayDocTitle".into(), json!(own_title));
+        }
     }
     // The progress dialog's counts and Cancel: a cancelled export stops drawing and never starts
     // writing.
@@ -199,15 +205,29 @@ pub(crate) fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut par
 /// to `path` (else a picked or suggested name) → `{path, bytes, warnings}`. With
 /// `viewAfterSaving`, the written file opens in the system viewer (not on the web, which
 /// downloads it). Writing over the file the document was opened from, when opening it left things
-/// out, asks first and runs `file.export.pdf` again on OK.
-pub fn export_pdf(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+/// out, asks first, for a given path and for one the save panel picked, and runs
+/// `file.export.pdf` again on OK.
+pub fn export_pdf(app: &mut VectorcraftApp, mut params: Value) -> Result<Value, String> {
     if let Some(path) = params.get("path").and_then(Value::as_str)
         && let Some(r) = ask_before_losing(app, path, "file.export.pdf", &params)
     {
         return Ok(r);
     }
     let view = params.get("viewAfterSaving").and_then(Value::as_bool).unwrap_or(false);
-    let (path, mut v) = run_to_file(app, "document.exportPdf", "pdf", params)?;
+    let given = params.as_object_mut().and_then(|o| o.remove("path")).and_then(|p| p.as_str().map(str::to_string));
+    let mut v = app.session.execute("document.exportPdf", &params).map_err(|e| e.to_string())?;
+    let bytes = take_output(&mut v)?;
+    let path = match given {
+        Some(p) => p,
+        None => {
+            let picked = target_path(app, None, "pdf")?;
+            if let Some(r) = ask_before_losing(app, &picked, "file.export.pdf", &params) {
+                return Ok(r);
+            }
+            picked
+        }
+    };
+    write_reporting(app, &path, &bytes)?;
     if view {
         view_file(app, &path);
     }
