@@ -2028,6 +2028,9 @@ digits	Malayalam	Malajálamské
 	Right Indent	Odsazení zprava
 	Right-to-Left Paragraph Direction	Směr odstavce zprava doleva
 	Roman Hanging Punctuation	Visící latinková interpunkce
+	Korean Line Break Anywhere	Zalomení korejského řádku kdekoli
+	East Asian Composition Settings	Nastavení východoasijské sazby
+	Korean Composition Settings	Nastavení korejské sazby
 	Select a text object to edit its paragraph attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho odstavce.
 	Single-line Composer	Sazba jednoho řádku
 	Toggle Line Composer	Přepnout sazbu řádků

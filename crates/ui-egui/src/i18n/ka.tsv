@@ -1760,6 +1760,9 @@ digits	Malayalam	მალაიალამური
 	Right Indent	მარჯვენა შეწევა
 	Right-to-Left Paragraph Direction	აბზაცის მიმართულება მარჯვნიდან მარცხნივ
 	Roman Hanging Punctuation	ლათინური გამოწეული პუნქტუაცია
+	Korean Line Break Anywhere	კორეული სტრიქონის გადატანა ნებისმიერ ადგილას
+	East Asian Composition Settings	აღმოსავლეთ აზიური აწყობის პარამეტრები
+	Korean Composition Settings	კორეული აწყობის პარამეტრები
 	Select a text object to edit its paragraph attributes.	აბზაცის ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
 	Single-line Composer	სტრიქონის მიხედვით აწყობა
 	Toggle Line Composer	აწყობის რეჟიმის გადართვა

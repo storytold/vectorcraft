@@ -378,7 +378,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         // Load Actions… refuses a file over its size limit without reading all of it.
         read_head: Some(Box::new(read_file_head)),
         write: Some(Box::new(write_file)),
-        exists: Some(Box::new(|p: &str| std::path::Path::new(p).exists())),
+        exists: Some(std::sync::Arc::new(|p: &str| std::path::Path::new(p).exists())),
         // Background Save and Export write from a worker thread.
         write_shared: Some(std::sync::Arc::new(write_file)),
         // Native saves stream into the file as they are encoded.

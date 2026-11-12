@@ -76,6 +76,9 @@ pub(crate) struct SGlyph {
     /// A word of a script written without spaces (Thai, Lao, Khmer, Myanmar) ends after the
     /// glyph's cluster, so a line may break there ([`mark_word_ends`]).
     pub word_end: bool,
+    /// A letter of a Korean word kept whole (Korean Line Break Anywhere off): a CJK character
+    /// here doesn't let the line break after it ([`keep_korean_words`]).
+    pub keeps_word: bool,
     /// No Break (Character panel menu): keep this glyph on the same line as the neighbouring
     /// glyphs that have it.
     pub no_break: bool,
@@ -158,7 +161,7 @@ impl SGlyph {
         self.is_space()
             || self.word_end
             || matches!(self.ch, '-' | '\u{2010}' | '\u{2013}' | '\u{2014}' | '/' | SOFT_HYPHEN | '\u{2028}')
-            || is_cjk(self.ch)
+            || (is_cjk(self.ch) && !self.keeps_word)
     }
     /// A soft (discretionary) hyphen: invisible unless a line breaks after it.
     pub fn is_soft_hyphen(&self) -> bool {
@@ -325,6 +328,30 @@ pub(crate) fn mark_word_ends(text: &str, start: usize, sg: &mut [SGlyph]) {
     for g in sg.iter_mut().filter(|g| g.inline.is_none() && is_unspaced_script(g.ch)) {
         g.word_end = breaks.binary_search(&(g.byte + g.len)).is_ok();
     }
+}
+
+/// Korean Line Break Anywhere off: mark the letters of each Korean word of `sg` (a paragraph's
+/// glyphs) as [`SGlyph::keeps_word`], so the word breaks only at its spaces and punctuation. A
+/// Korean word is the run of glyphs between spaces and forced line breaks when any of them is
+/// Hangul; its Han, kana and full-width letters are kept with it. Punctuation in it still lets
+/// the line break after it, and runs without Hangul keep their own breaks.
+pub(crate) fn keep_korean_words(sg: &mut [SGlyph]) {
+    let mut start = 0;
+    while start < sg.len() {
+        let len = sg[start..].iter().position(|g| g.is_space() || g.ch == '\u{2028}').unwrap_or(sg.len() - start);
+        let word = &mut sg[start..start + len];
+        if word.iter().any(|g| g.inline.is_none() && is_hangul(g.ch)) {
+            for g in word.iter_mut().filter(|g| g.inline.is_none()) {
+                g.keeps_word = g.ch.is_alphanumeric();
+            }
+        }
+        start += len + 1;
+    }
+}
+
+/// Is `c` Hangul: a syllable, a jamo or a compatibility jamo (full or half width)?
+pub(crate) fn is_hangul(c: char) -> bool {
+    c.script() == Script::Hangul
 }
 
 pub(crate) fn is_cjk(c: char) -> bool {
@@ -1059,6 +1086,7 @@ fn inline_glyph(
         level,
         inline: Some(InlineBox { art: drawn, xf }),
         word_end: false,
+        keeps_word: false,
         no_break: st.no_break,
         vertical_roman: false,
         cursive: false,
@@ -1530,6 +1558,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             level: *level,
             inline: None,
             word_end: false,
+            keeps_word: false,
             no_break: gst.no_break,
             vertical_roman: gst.standard_vertical_roman,
             cursive,

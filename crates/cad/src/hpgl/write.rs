@@ -18,15 +18,19 @@
 //! An HP-GL plot with a coordinate outside −32,768 to 32,767 (16-bit numbers, the range older
 //! devices read) gets a warning; HP-GL/2's encoded polylines take the wider range.
 //! The pens are drawn in turn (pen 1's paths, then pen 2's), each in paint order or, with
-//! `sort`, each next path the one that starts nearest where the pen stopped.
+//! `sort`, each next path the one that starts nearest where the pen stopped. With `inside_first`,
+//! a pen draws a path only after every path of its own that lies inside it (a letter's counter
+//! before the letter, a hole before the part).
 //!
 //! HP-GL writes `IN;`, then for each pen `PU;SP<n>;` and per path `PUx,y;PDx,y,…;`, then `PU;SP0;`.
 //! HP-GL/2 also writes the palette (`NP` and a `PC` color for each pen) and draws each pen's paths
 //! as one encoded polyline (`PE`, base 64).
 
 mod clip;
+mod nest;
 
-use std::collections::HashSet;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashSet};
 use std::sync::Arc;
 
 use kurbo::PathEl;
@@ -51,7 +55,8 @@ pub const TOLERANCE_RANGE: std::ops::RangeInclusive<f64> = 0.01..=10.0;
 pub const MAX_PENS: usize = 255;
 /// The most points the plots of one export hold.
 const MAX_POINTS: usize = if cfg!(test) { 100_000 } else { 10_000_000 };
-/// The most point comparisons sorting may make, over the whole plot.
+/// The most work sorting paths and finding which lie inside others may take, over the whole plot:
+/// one for each point or box compared.
 const MAX_SORT_WORK: u64 = if cfg!(test) { 100_000 } else { 500_000_000 };
 /// The most edge tests clipping masks may take, over the whole plot.
 const MAX_CLIP_TESTS: u64 = if cfg!(test) { 1_000_000 } else { 200_000_000 };
@@ -74,6 +79,8 @@ const OUT_OF_RANGE: &str = "art past 8,388,607 plotter units (about 210 m) from 
 const PAST_CLASSIC_RANGE: &str = "the plot has coordinates past 32,767 plotter units (about 82 cm) from the origin, which older HP-GL devices may not read: HP-GL/2 takes a wider range";
 const MANY_COLORS: &str = "the art has more than 255 colors: the colors past those draw with the pen of the nearest color";
 const UNSORTED: &str = "the plot has too many paths to sort in full: the rest are drawn in paint order";
+const UNSORTED_INSIDE: &str = "the plot has too many paths to sort in full: the rest are drawn in paint order, each after the paths inside it";
+const UNNESTED: &str = "the plot has too many paths to find in full which lie inside others: from the pen where that stopped, a path may be drawn before the paths inside it";
 const TOO_DEEP: &str = "symbols, blends, envelopes and repeats nested more than 8 deep were left out";
 const LIVE_LEFT_OUT: &str = "blends, envelopes and repeats make too many objects: the art past 4 million objects was left out";
 const SYMBOLS_LEFT_OUT: &str = "symbols placed inside symbols hold too many objects: the instances past that were left out";
@@ -151,6 +158,8 @@ pub struct HpglOptions {
     pub origin: Origin,
     /// Draw each pen's paths nearest first, instead of in paint order.
     pub sort: bool,
+    /// Draw a path only after the pen's paths that lie inside it.
+    pub inside_first: bool,
     /// The area plotted (document space): its bottom-left corner or center is the origin, and the
     /// art is cut at its edges.
     pub region: Rect,
@@ -158,7 +167,15 @@ pub struct HpglOptions {
 
 impl Default for HpglOptions {
     fn default() -> Self {
-        Self { version: Version::default(), tolerance: DEFAULT_TOLERANCE, pens: vec![], origin: Origin::default(), sort: false, region: Rect::ZERO }
+        Self {
+            version: Version::default(),
+            tolerance: DEFAULT_TOLERANCE,
+            pens: vec![],
+            origin: Origin::default(),
+            sort: false,
+            inside_first: false,
+            region: Rect::ZERO,
+        }
     }
 }
 
@@ -263,14 +280,10 @@ pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> R
         if !by_pen.iter().all(Vec::is_empty) {
             pen_warnings.iter().for_each(|w| warn(&mut warnings, w));
         }
-        if opts.sort {
+        if opts.sort || opts.inside_first {
             let (mut at, mut work) = ((0, 0), MAX_SORT_WORK);
             for paths in &mut by_pen {
-                let (stop, sorted) = nearest_first(paths, at, &mut work);
-                at = stop;
-                if !sorted {
-                    warn(&mut warnings, UNSORTED);
-                }
+                at = reorder(paths, at, &mut work, opts.sort, opts.inside_first, &mut warnings);
             }
         }
         if opts.version == Version::Hpgl && by_pen.iter().flatten().flatten().any(|(x, y)| !CLASSIC_RANGE.contains(x) || !CLASSIC_RANGE.contains(y)) {
@@ -348,25 +361,50 @@ fn box_dist2(p: (i64, i64), b: [i64; 4]) -> i128 {
     dx * dx + dy * dy
 }
 
-/// `paths` reordered from `at`: each next path is the one nearest where the pen stopped, by its
-/// start or, for an open path (then drawn backwards), its end, or for a closed path any of its
-/// points (where it then starts). Comparing points stops once `work` is spent; the paths left keep
-/// their order. Returns where the pen stops, and `false` when the work ran out.
-fn nearest_first(paths: &mut Vec<Vec<(i64, i64)>>, mut at: (i64, i64), work: &mut u64) -> ((i64, i64), bool) {
-    // Each path with its box.
-    let mut left: Vec<_> = std::mem::take(paths)
-        .into_iter()
-        .map(|p| {
-            let b = p.iter().fold([i64::MAX, i64::MAX, i64::MIN, i64::MIN], |b, q| [b[0].min(q.0), b[1].min(q.1), b[2].max(q.0), b[3].max(q.1)]);
-            (p, b)
-        })
-        .collect();
+/// `paths` (one pen's) reordered from `at`. With `nearest`, each next path is the one nearest
+/// where the pen stopped, by its start or, for an open path (then drawn backwards), its end, or
+/// for a closed path any of its points (where it then starts); without, the first in paint order.
+/// With `inside_first`, a path is drawn only once every path lying inside it ([`nest::outer`]) is.
+/// Once `work` is spent, the paths left keep paint order, each after the paths inside it with
+/// `inside_first`, with a warning. Returns where the pen stops.
+fn reorder(
+    paths: &mut Vec<Vec<(i64, i64)>>,
+    mut at: (i64, i64),
+    work: &mut u64,
+    nearest: bool,
+    inside_first: bool,
+    warnings: &mut Vec<String>,
+) -> (i64, i64) {
+    let boxes: Vec<[i64; 4]> = paths.iter().map(|p| nest::bounds(p)).collect();
+    // The paths each path lies inside, and how many paths inside each are still to draw.
+    let outer = inside_first.then(|| nest::outer(paths, &boxes, work)).flatten();
+    if inside_first && outer.is_none() {
+        warn(warnings, UNNESTED);
+    }
+    let mut waiting = vec![0usize; paths.len()];
+    for o in outer.iter().flatten().flatten() {
+        if let Some(w) = waiting.get_mut(*o) {
+            *w += 1;
+        }
+    }
+    if !nearest {
+        if let Some(outer) = &outer {
+            let all = std::mem::take(paths).into_iter().enumerate().collect();
+            inner_first(all, outer, &mut waiting, paths);
+        }
+        return at;
+    }
+    // Each path with its index and box.
+    let mut left: Vec<_> = std::mem::take(paths).into_iter().zip(boxes).enumerate().map(|(i, (p, b))| (i, p, b)).collect();
     while !left.is_empty() {
         // (index, reversed, the closed path's point to start at, distance)
-        let mut best: (usize, bool, Option<usize>, i128) = (0, false, None, i128::MAX);
-        for (i, (p, b)) in left.iter().enumerate() {
+        let mut best: (usize, bool, Option<usize>, i128) = (usize::MAX, false, None, i128::MAX);
+        for (i, (j, p, b)) in left.iter().enumerate() {
             let (Some(&s), Some(&e)) = (p.first(), p.last()) else { continue };
             *work = work.saturating_sub(1);
+            if waiting.get(*j).is_some_and(|w| *w > 0) {
+                continue;
+            }
             if s == e && p.len() > 2 {
                 if box_dist2(at, *b) >= best.3 {
                     continue;
@@ -387,11 +425,27 @@ fn nearest_first(paths: &mut Vec<Vec<(i64, i64)>>, mut at: (i64, i64), work: &mu
                 best = (i, true, None, de);
             }
         }
-        if *work == 0 {
-            paths.extend(left.into_iter().map(|(p, _)| p));
-            return (at, false);
+        // Spent, or no path free to draw (which only a fault could cause): the rest in paint
+        // order, each after the paths inside it.
+        if *work == 0 || best.0 >= left.len() {
+            match &outer {
+                Some(outer) => {
+                    warn(warnings, UNSORTED_INSIDE);
+                    inner_first(left.into_iter().map(|(j, p, _)| (j, p)).collect(), outer, &mut waiting, paths);
+                }
+                None => {
+                    warn(warnings, UNSORTED);
+                    paths.extend(left.into_iter().map(|(_, p, _)| p));
+                }
+            }
+            return at;
         }
-        let (mut p, _) = left.remove(best.0);
+        let (j, mut p, _) = left.remove(best.0);
+        for o in outer.as_ref().and_then(|outer| outer.get(j)).into_iter().flatten() {
+            if let Some(w) = waiting.get_mut(*o) {
+                *w = w.saturating_sub(1);
+            }
+        }
         if best.1 {
             p.reverse();
         } else if let Some(k) = best.2 {
@@ -408,7 +462,39 @@ fn nearest_first(paths: &mut Vec<Vec<(i64, i64)>>, mut at: (i64, i64), work: &mu
         }
         paths.push(p);
     }
-    (at, true)
+    at
+}
+
+/// Appends `left` (each path with its index among the pen's paths) to `paths` in paint order,
+/// each after the paths lying inside it: `outer` lists the paths each lies inside, and `waiting`
+/// counts, for each, the paths inside it still to draw. [`nest::outer`] puts a path only inside
+/// larger ones, so every path comes free; a path left waiting by a fault is drawn last.
+fn inner_first(left: Vec<(usize, Vec<(i64, i64)>)>, outer: &[Vec<usize>], waiting: &mut [usize], paths: &mut Vec<Vec<(i64, i64)>>) {
+    let mut held: Vec<Option<Vec<(i64, i64)>>> = (0..outer.len()).map(|_| None).collect();
+    let mut free = BinaryHeap::new();
+    for (j, p) in left {
+        if let Some(h) = held.get_mut(j) {
+            if waiting.get(j).is_none_or(|w| *w == 0) {
+                free.push(Reverse(j));
+            }
+            *h = Some(p);
+        } else {
+            paths.push(p);
+        }
+    }
+    while let Some(Reverse(j)) = free.pop() {
+        let Some(p) = held.get_mut(j).and_then(Option::take) else { continue };
+        paths.push(p);
+        for &o in outer.get(j).into_iter().flatten() {
+            if let Some(w) = waiting.get_mut(o) {
+                *w = w.saturating_sub(1);
+                if *w == 0 {
+                    free.push(Reverse(o));
+                }
+            }
+        }
+    }
+    paths.extend(held.into_iter().flatten());
 }
 
 /// HP-GL: `IN;`, each pen's paths as `PU` and `PD`, `PU;SP0;`.

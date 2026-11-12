@@ -1975,6 +1975,9 @@ font-technology	Variable	Μεταβλητές
 	Right:	Δεξιά:
 	Rise…	Ανύψωση…
 	Roman Hanging Punctuation	Κρεμαστή στίξη όρθιας γραφής
+	Korean Line Break Anywhere	Αλλαγή γραμμής κορεατικών οπουδήποτε
+	East Asian Composition Settings	Ρυθμίσεις σύνθεσης ανατολικής Ασίας
+	Korean Composition Settings	Ρυθμίσεις κορεατικής σύνθεσης
 	Rotate	Περιστροφή
 	Rotate View Tool	Εργαλείο περιστροφής προβολής (Rotate View Tool)
 	Trackpad Gesture to Rotate View	Περιστροφή προβολής με χειρονομία στην επιφάνεια αφής
