@@ -889,3 +889,80 @@ fn classic_parameters_are_checked() {
         assert!(err.starts_with(says), "{p}: {err}");
     }
 }
+
+/// The red square, stroked black, with Rotate (Classic) and `params`: its surfaces, the fill's
+/// plane first, then the stroke's outline.
+fn classic_rotate(params: Value) -> Vec<Node> {
+    let mut n = square_node();
+    n.appearance.effects.push(fx(CLASSIC_ROTATE, params));
+    solid_art(&n).unwrap().children().unwrap().iter().map(|s| (**s).clone()).collect()
+}
+
+#[test]
+fn classic_rotate_turns_every_fill_and_stroke_as_one_plane() {
+    let front = json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0});
+    let surfaces = classic_rotate(front.clone());
+    assert_eq!(surfaces.len(), 2, "the fill's plane and the stroke's outline");
+    assert!(surfaces.iter().all(|s| s.children().unwrap().len() == 1), "each is one flat face");
+    let fill = surfaces[0].visual_bounds().unwrap();
+    assert!((fill.width() - 100.0).abs() < 1.0 && (fill.height() - 100.0).abs() < 1.0, "{fill:?}");
+    // Turned 60° about the vertical axis, the square shows half its width and all its height,
+    // about the center of its bounds.
+    let turned = classic_rotate(json!({"rotationX": 0, "rotationY": 60, "rotationZ": 0}))[0].visual_bounds().unwrap();
+    assert!((turned.width() - 50.0).abs() < 1.0 && (turned.height() - 100.0).abs() < 1.0, "{turned:?}");
+    assert!((turned.center().x - 150.0).abs() < 1.0, "{turned:?}");
+    // Turned past 90°, the back of the plane is drawn.
+    let back = classic_rotate(json!({"rotationX": 0, "rotationY": 150, "rotationZ": 0}));
+    assert!(back[0].visual_bounds().is_some_and(|b| (b.width() - 100.0 * 30f64.to_radians().cos()).abs() < 1.0));
+}
+
+#[test]
+fn classic_rotate_shades_with_no_shading_or_diffuse() {
+    let rgb = |p: Value| fill_rgb(&classic_rotate(p)[0].children().unwrap()[0]);
+    // No Shading keeps the paint, the color itself kept.
+    let mut n = square_node();
+    n.appearance.effects.push(fx(CLASSIC_ROTATE, json!({"surface": "none"})));
+    let art = solid_art(&n).unwrap();
+    let AppearanceItem::Fill(f) = &faces(&art)[0].appearance.items[0] else { panic!("a fill first") };
+    assert_eq!(f.paint, Paint::solid(RED));
+    // Diffuse: straight on with the light in front, the face is fully lit; turned away from the
+    // light, it is the red darkened toward black.
+    let lit = json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "lightHeight": 90});
+    assert!(close3(rgb(lit), RED.to_rgb()));
+    let [r, g, b] = rgb(json!({"rotationX": 0, "rotationY": 70, "rotationZ": 0, "lightHeight": 90}));
+    assert!(r < 0.8 - 0.05 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4, "{r} {g} {b}");
+    // No light: the ambient share of the red. A custom shading color darkens toward that color;
+    // None keeps the paint.
+    let dark = rgb(json!({"lightIntensity": 0, "ambient": 20, "blendSteps": 256}));
+    assert!((dark[0] - 0.8 * 0.2).abs() < 0.01, "{dark:?}");
+    let blue = rgb(json!({"lightIntensity": 0, "ambient": 20, "shadingColor": "custom", "shadingCustom": "#0000ff"}));
+    assert!(blue[2] > blue[0] / 8.0 + 0.01, "{blue:?}");
+    assert!(close3(rgb(json!({"lightIntensity": 0, "shadingColor": "none"})), RED.to_rgb()));
+}
+
+#[test]
+fn classic_rotate_parameters_are_checked() {
+    let n = square_node();
+    let check = |p: Value| validate_solid(&n, CLASSIC_ROTATE, &crate::merged_params(CLASSIC_ROTATE, &p));
+    assert!(check(json!({})).is_ok());
+    assert!(check(json!({"surface": "none", "shadingColor": "custom", "shadingCustom": "#12aBcd", "blendSteps": 1})).is_ok());
+    for (p, says) in [
+        (json!({"surface": "plastic"}), "`surface` must be one of none, diffuse"),
+        (json!({"surface": "wireframe"}), "`surface` must be one of none, diffuse"),
+        (json!({"surface": 2}), "`surface` must be one of"),
+        (json!({"shadingColor": "red"}), "`shadingColor` must be one of black, custom, none"),
+        (json!({"shadingCustom": "#fff"}), "`shadingCustom` must be a #rrggbb color"),
+        (json!({"rotationX": 181}), "`rotationX` must be between -180 and 180 (got 181)"),
+        (json!({"perspectiveAngle": 161}), "`perspectiveAngle` must be between 0 and 160 (got 161)"),
+        (json!({"lightIntensity": 101}), "`lightIntensity` must be between 0 and 100 (got 101)"),
+        (json!({"blendSteps": 0}), "`blendSteps` must be a whole number between 1 and 256 (got 0)"),
+        (json!({"lightBehind": 1}), "`lightBehind` must be true or false"),
+        (json!({"highlightSize": 50}), "unknown parameter `highlightSize`"),
+        (json!({"drawHiddenFaces": true}), "unknown parameter `drawHiddenFaces`"),
+        (json!({"shadow": true}), "unknown parameter `shadow`"),
+        (json!({"lights": []}), "lights must contain one to ten lights"),
+    ] {
+        let err = check(p.clone()).unwrap_err();
+        assert!(err.starts_with(says), "{p}: {err}");
+    }
+}

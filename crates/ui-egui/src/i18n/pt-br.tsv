@@ -1046,6 +1046,8 @@ antiAlias	Sharp	Nítido
 	Extrude & Bevel…	Extrusão e Bisel…
 	3D (Classic)	3D (Clássico)
 	Extrude & Bevel (Classic)…	Extrusão e Bisel (Clássico)…
+	Revolve (Classic)…	Revolver (Clássico)…
+	Rotate (Classic)…	Girar (Clássico)…
 	Surface	Superfície
 	Wireframe	Aramado
 	No Shading	Sem Sombreamento
@@ -1278,6 +1280,14 @@ antiAlias	Sharp	Nítido
 	Hair Space	Espaço Fino
 	Hand Tool	Ferramenta Mão
 	Hand-Drawn	Desenhado à Mão
+	Painted and Sketched	Pintado e Esboçado
+	Washed Blue	Azul Lavado
+	Bristle Ochre	Ocre de Cerdas
+	Pastel Heather	Urze Pastel
+	Charcoal Shade	Sombra a Carvão
+	Ink Contour	Contorno a Nanquim
+	Wet Ink	Nanquim Úmido
+	Fine Pen	Pena Fina
 	Handles	Alças
 	Hard Light	Luz Forte
 	Hard Mix	Mistura definida
@@ -3798,6 +3808,7 @@ axis	Both	Ambos
 @msg	`globalAdjust` must be an object	`globalAdjust` deve ser um objeto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` deve ser 1, 3 ou 5
 @msg	`stops` must be an array	`stops` deve ser uma matriz
+@msg	`{key}` must be an array	`{key}` deve ser uma matriz
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` deve ser um objeto com opções de SVG (veja document.formats)
 @msg	`{_1}` is no save command	`{_1}` não é um comando de salvar
 @msg	`{area}` is no recovery area name	`{area}` não é o nome de uma área de recuperação
@@ -5940,6 +5951,7 @@ mark-style	Japanese	Japonesas
 	Ruby	Ruby
 	Geometric Guides	Guias geométricas
 	Geometric Patterns	Padrões geométricos
+	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
 	Ease Out	Saída suave
 	Ease In Out	Entrada e saída suaves
@@ -6426,6 +6438,10 @@ anchor	Points:	Pontos:
 @msg	features lists at most {max} tags	features aceita no máximo {max} marcas
 @msg	unknown OpenType feature `{t}`	recurso OpenType desconhecido `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve ser um número maior que 0 e no máximo {max}
+@msg	{label} must be at most {max} characters	{label} deve ter no máximo {max} caracteres
+@msg	{label} must be one character	{label} deve ser um único caractere
+@msg	at most {max} tab stops	no máximo {max} paradas de tabulação
+@msg	unknown align `{other}`	alinhamento desconhecido `{other}`
 @msg	no character style `{name}`	Estilo de caractere `{name}` não encontrado
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6589,6 +6605,12 @@ breakText	Glyphs	Glifos
 	Delete the selected brushes?	Excluir os pincéis selecionados?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Traçados usam um ou mais destes pincéis. Remover os pincéis desses traçados e excluir os pincéis?
 	Remove Strokes	Remover Traçados
+	Place Brush Art	Colocar Arte do Pincel
+	Replace Brush Art	Substituir Arte do Pincel
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Traçados usam este pincel. Aplicar a nova arte a esses traçados, ou deixá-los como estão e adicionar uma cópia do pincel com a nova arte?
+	Apply to Strokes	Aplicar aos Traçados
+	Leave Strokes	Manter Traçados
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` não tem arte (só os pincéis de dispersão, de arte e de padrão têm)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Ferramentas de Organização
 	Arrange in Grid…	Organizar em Grade…
@@ -6995,6 +7017,19 @@ swatch	Yellow Green	Verde-amarelado
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} linha anterior descartada|{n} linhas anteriores descartadas
 @plural	{n} line cut|{n} lines cut	{n} linha cortada|{n} linhas cortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`
+
+# Learn panel
+	Learn	Aprender
+	Explore tutorials	Explorar tutoriais
+	For you	Para você
+	Skills	Habilidades
+	Get started	Primeiros passos
+	Quick skill guide	Guia rápido de habilidades
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriais práticos curtos das ferramentas essenciais, agrupados por habilidade. Escolha uma habilidade para ver os tutoriais dela.
+	List Tutorials	Listar Tutoriais
+	Show Tutorial	Mostrar Tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Atualizar Efeitos Adiados

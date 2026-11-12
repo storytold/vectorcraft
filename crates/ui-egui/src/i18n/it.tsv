@@ -1162,6 +1162,8 @@ font-technology	Variable	Variabili
 	Extrude & Bevel…	Estrusione e smusso…
 	3D (Classic)	3D (classico)
 	Extrude & Bevel (Classic)…	Estrusione e smusso (classico)…
+	Revolve (Classic)…	Rivoluzione (classico)…
+	Rotate (Classic)…	Ruota (classico)…
 	Surface	Superficie
 	Wireframe	Reticolo
 	No Shading	Nessuna ombreggiatura
@@ -1474,6 +1476,14 @@ file-filter	Templates	Modelli
 	Hair Space	Spazio sottilissimo
 	Hand Tool	Strumento Mano
 	Hand-Drawn	Disegnato a mano
+	Painted and Sketched	Dipinto e schizzato
+	Washed Blue	Blu slavato
+	Bristle Ochre	Ocra a setole
+	Pastel Heather	Erica pastello
+	Charcoal Shade	Ombra a carboncino
+	Ink Contour	Contorno a china
+	Wet Ink	China bagnata
+	Fine Pen	Pennino fine
 	Handles	Maniglie
 	Hard Light	Luce intensa
 	Hard Mix	Miscela intensa
@@ -4302,6 +4312,7 @@ axis	Both	Entrambi
 @msg	`globalAdjust` must be an object	`globalAdjust` deve essere un oggetto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` deve essere 1, 3 o 5
 @msg	`stops` must be an array	`stops` deve essere un array
+@msg	`{key}` must be an array	`{key}` deve essere un array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` deve essere un oggetto di opzioni SVG (vedi document.formats)
 @msg	`{_1}` is no save command	`{_1}` non è un comando di salvataggio
 @msg	`{area}` is no recovery area name	`{area}` non è il nome di un'area di recupero
@@ -5648,6 +5659,7 @@ lighting	Light	Luce
 	Ruby	Ruby
 	Geometric Guides	Guide geometriche
 	Geometric Patterns	Motivi geometrici
+	Grit Textures	Texture granulose
 	Ease In	Inizio graduale
 	Ease Out	Fine graduale
 	Ease In Out	Inizio e fine graduali
@@ -6138,6 +6150,10 @@ anchor	Points:	Punti:
 @msg	features lists at most {max} tags	features contiene al massimo {max} tag
 @msg	unknown OpenType feature `{t}`	funzione OpenType sconosciuta `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve essere un numero maggiore di 0 e al massimo {max}
+@msg	{label} must be at most {max} characters	{label} deve avere al massimo {max} caratteri
+@msg	{label} must be one character	{label} deve essere un solo carattere
+@msg	at most {max} tab stops	al massimo {max} tabulazioni
+@msg	unknown align `{other}`	allineamento sconosciuto `{other}`
 @msg	no character style `{name}`	Stile di carattere `{name}` non trovato
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6300,6 +6316,12 @@ breakText	Glyphs	Glifi
 	Delete the selected brushes?	Eliminare i pennelli selezionati?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Alcune tracce usano uno o più di questi pennelli. Rimuovere i pennelli da queste tracce ed eliminare i pennelli?
 	Remove Strokes	Rimuovi tracce
+	Place Brush Art	Inserisci grafica del pennello
+	Replace Brush Art	Sostituisci grafica del pennello
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Alcune tracce usano questo pennello. Applicare la nuova grafica a queste tracce, o lasciarle come sono e aggiungere una copia del pennello con la nuova grafica?
+	Apply to Strokes	Applica alle tracce
+	Leave Strokes	Lascia le tracce
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` non ha una grafica (ce l’hanno solo i pennelli a dispersione, artistici e motivo)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Strumenti di disposizione
 	Arrange in Grid…	Disponi in griglia…
@@ -6551,6 +6573,19 @@ breakText	Glyphs	Glifi
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} riga precedente scartata|{n} righe precedenti scartate
 @plural	{n} line cut|{n} lines cut	{n} riga tagliata|{n} righe tagliate
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`
+
+# Learn panel
+	Learn	Impara
+	Explore tutorials	Esplora i tutorial
+	For you	Per te
+	Skills	Competenze
+	Get started	Per iniziare
+	Quick skill guide	Guida rapida alle competenze
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Brevi tutorial pratici sugli strumenti essenziali, raggruppati per competenza. Scegli una competenza per vederne i tutorial.
+	List Tutorials	Elenca tutorial
+	Show Tutorial	Mostra tutorial
+@msg	missing `tutorial` (see learn.list)	manca `tutorial` (vedi learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial sconosciuto `{id}` (vedi learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Aggiorna effetti rimandati
