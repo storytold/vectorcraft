@@ -6681,3 +6681,10 @@ breakText	Glyphs	Glyffer
 # Deferred plug-in effects
 	Refresh Deferred Effects	Opdatér udskudte effekter
 	Deferred Effects	Udskudte effekter
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Skæreværktøjer
+	Stencil Bridges…	Stencilbroer…
+	Stencil Bridges	Stencilbroer
+	Shortest Crossing	Korteste krydsning
+	Direction	Retning
