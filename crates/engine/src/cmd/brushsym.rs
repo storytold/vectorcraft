@@ -33,8 +33,8 @@ mod symbols;
 
 pub(crate) use brushes::{apply_brush, brush_targets, stroke_paint};
 use brushes::{
-    brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_remove,
-    brush_selection_art, brush_set_current, brush_unused, expand_brush,
+    brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_place_art,
+    brush_remove, brush_selection_art, brush_set_current, brush_unused, expand_brush,
 };
 pub(crate) use dynamic::{edit_part, part_only, selected_part};
 use dynamic::{symbol_instance_reset, symbol_instance_select_part, symbol_instance_set_appearance};
@@ -66,6 +66,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?|id?} → {art: the object brush.new takes as a new scatter or art brush's art and as a new pattern brush's side tile (several objects become one group), or null when nothing is selected or ids name no object}",
             has_doc,
             brush_selection_art
+        ),
+        cmd!(
+            "brush.placeArt",
+            "Place Brush Art",
+            [],
+            None,
+            "{name, x?, y?} place a copy of the art a scatter, art or pattern brush is made of, centered on (x, y) (default: the center of the first artboard), and select it, as dragging the brush from the Brushes panel onto an empty part of the canvas does; a pattern brush places its tiles left to right (side, outer corner, inner corner, start, end; the ones it has art for) 10 pt apart, each in a group named Side Tile, Outer Corner Tile, Inner Corner Tile, Start Tile or End Tile, with an unpainted rectangle at the back of a tile that has a repeat frame marking that frame; a calligraphic or bristle brush is refused → {id}",
+            has_doc,
+            brush_place_art
         ),
         cmd!(
             "brush.apply",

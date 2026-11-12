@@ -4489,6 +4489,41 @@ fn cmd_ruler_drags_make_guides_of_the_active_artboard_when_the_preference_is_on(
     assert_eq!(owners(&mut s)[4..], [Value::Null, json!(1)]);
 }
 
+/// The rulers' origin dragged out of their corner snaps as a drawn point does: onto a shape's
+/// corner and edge, the artboard's centre, and with Snap to Point along a ruler guide; with
+/// nothing on it stays at the pointer. The drag changes nothing, and its guides go when it ends.
+#[test]
+fn the_ruler_origin_dragged_from_the_corner_snaps_as_a_drawn_point() {
+    use vectorcraft_geom::Point;
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 300})).unwrap();
+    let (n, doc) = (undo_len(&s), s.doc().unwrap().doc.clone());
+    let v = ViewInfo::default();
+    let at = |s: &mut Session, x, y| s.ruler_origin_drag(Some(Point::new(x, y)), v).unwrap();
+    assert_eq!(at(&mut s, 101.5, 98.5), Point::new(100.0, 100.0), "the corner");
+    assert!(!s.overlays(v).is_empty(), "the guide showing it");
+    assert_eq!(at(&mut s, 130.0, 202.0), Point::new(130.0, 200.0), "the bottom edge");
+    assert_eq!(at(&mut s, 398.0, 301.5), Point::new(400.0, 300.0), "the artboard's centre");
+    assert_eq!(at(&mut s, 302.0, 50.0).x, 300.0, "along the ruler guide");
+    assert_eq!(s.ruler_origin_drag(None, v), None, "off the canvas");
+    assert!(s.overlays(v).is_empty());
+    assert_eq!(at(&mut s, 101.5, 98.5), Point::new(100.0, 100.0));
+    s.end_ruler_origin_drag();
+    assert!(s.overlays(v).is_empty());
+    assert_eq!((undo_len(&s), &*s.doc().unwrap().doc), (n, &*doc), "nothing changed");
+    // Nothing on: it stays at the pointer.
+    let off = ViewInfo { smart_guides: false, snap_to_point: false, ..v };
+    assert_eq!(s.ruler_origin_drag(Some(Point::new(101.5, 98.5)), off), Some(Point::new(101.5, 98.5)));
+    s.end_ruler_origin_drag();
+    // Snap to Grid: onto a gridline crossing.
+    let grid = ViewInfo { snap_to_grid: true, ..v };
+    let p = s.ruler_origin_drag(Some(Point::new(101.5, 98.5)), grid).unwrap();
+    s.end_ruler_origin_drag();
+    assert_eq!(p, Point::new(p.x.round(), p.y.round()), "{p:?}");
+    assert_ne!(p, Point::new(101.5, 98.5));
+}
+
 /// Guides saved before guides had layers are put on a layer when the document opens.
 #[test]
 fn guides_from_older_files_are_put_on_a_layer() {

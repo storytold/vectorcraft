@@ -262,6 +262,10 @@
 	Blend Options…	Možnosti prolnutí…
 	Expand	Rozložit
 	Replace Spine	Nahradit páteř
+	Create Spine	Vytvořit páteř
+	Create Spine:	Vytvořit páteř:
+	Always	Vždy
+	Never	Nikdy
 	Reverse Spine	Obrátit páteř
 	Reverse Front to Back	Obrátit pořadí zepředu dozadu
 	Envelope Distort	Deformace obálkou
@@ -817,6 +821,14 @@
 	Damp Paper	Vlhký papír
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
+	Painted and Sketched	Malované a skicované
+	Washed Blue	Rozmytá modrá
+	Bristle Ochre	Okr štětcem
+	Pastel Heather	Pastelový vřes
+	Charcoal Shade	Stín uhlem
+	Ink Contour	Obrys tuší
+	Wet Ink	Mokrá tuš
+	Fine Pen	Jemné pero
 	Gradient Finishes	Přechodové povrchy
 	Shape Effects	Efekty tvarů
 	Blends and Transparency	Prolnutí a průhlednost
@@ -2392,6 +2404,8 @@ digits	Malayalam	Malajálamské
 	Export Selected Art Only	Exportovat jen vybranou kresbu
 	Number of Colors:	Počet barev:
 	Raster File Format:	Formát rastrového souboru:
+	Include Placed Images	Zahrnout umístěné obrazy
+	Include Fill Hatches	Zahrnout šrafy výplní
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Plné barvy vyžadují verzi 2004 nebo novější: zapíše se nejbližší z 256 barev.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Text se převede na křivky a tahy, které čára CAD nedokáže vykreslit, se stanou vyplněnými tvary.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text zůstane textem a každý tah bude čárou s vlastní tloušťkou a čárkováním.
@@ -4555,6 +4569,7 @@ imageTrace	Outline	Obrys
 @msg	`globalAdjust` must be an object	`globalAdjust` musí být objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musí být 1, 3 nebo 5
 @msg	`stops` must be an array	`stops` musí být pole
+@msg	`{key}` must be an array	`{key}` musí být pole
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musí být objekt s možnostmi SVG (viz document.formats)
 @msg	`{_1}` is no save command	`{_1}` není příkaz pro uložení
 @msg	`{area}` is no recovery area name	`{area}` není název oblasti obnovení
@@ -6020,6 +6035,7 @@ mark-style	Japanese	Japonské
 	Ruby	Ruby
 	Geometric Guides	Geometrická vodítka
 	Geometric Patterns	Geometrické vzorky
+	Grit Textures	Zrnité textury
 	Ease In	Pozvolný začátek
 	Ease Out	Pozvolný konec
 	Ease In Out	Pozvolný začátek a konec
@@ -6078,6 +6094,8 @@ axis	Y Axis	osa Y
 	Version: {version}	Verze: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Nainstalovat „{name}“ místo zásuvného modulu se stejným ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tento soubor není zásuvný modul dříve nainstalovaný s tímto ID. Získá nastavení a mezipaměť uchovávané pro toto ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ je jiný modul než zásuvný modul s ID {_1} a získal by nastavení a mezipaměť uchovávané pro něj: nainstalujte ho s `replace: true`, jakmile uživatel souhlasí
 	File SHA-256: {hash}	SHA-256 souboru: {hash}
 	Read the objects it is given	Číst objekty, které dostane
@@ -6140,6 +6158,12 @@ axis	Y Axis	osa Y
 @msg	command {name}: `label` must be 1-64 printable characters	příkaz {name}: `label` musí mít 1-64 tisknutelných znaků
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	příkaz {name}: použijte id o 1-{MAX_COMMAND_ID} znacích z a-z 0-9 _, které začíná písmenem
 @msg	command {name}: {e}	příkaz {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (řádek {line}, sloupec {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` musí být seznam příkazů, každý s `id` a `label`
+@msg	command {name} must be an object with an `id` and a `label`	příkaz {name} musí být objekt s `id` a `label`
+@msg	missing field `{key}`	chybí pole `{key}`
+@msg	duplicate field `{key}`	pole `{key}` je uvedeno dvakrát
 @msg	only a filter or a live effect declares `commands`	`commands` deklaruje jen filtr nebo živý efekt
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nemá SHA-256 uvedený v `hash`: nic nebylo nainstalováno
@@ -6497,6 +6521,10 @@ anchor	Points:	Body:
 @msg	features lists at most {max} tags	features obsahuje nejvýše {max} značek
 @msg	unknown OpenType feature `{t}`	neznámá funkce OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musí být číslo větší než 0 a nejvýše {max}
+@msg	{label} must be at most {max} characters	{label} smí mít nejvýše {max} znaků
+@msg	{label} must be one character	{label} musí být jeden znak
+@msg	at most {max} tab stops	nejvýše {max} zarážek tabulátoru
+@msg	unknown align `{other}`	neznámé zarovnání `{other}`
 @msg	no character style `{name}`	styl znaků `{name}` neexistuje
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6658,6 +6686,8 @@ breakText	Glyphs	Glyfy
 	Delete the selected brushes?	Odstranit vybrané štětce?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Tahy používají jeden nebo více z těchto štětců. Odebrat štětce z těchto tahů a odstranit štětce?
 	Remove Strokes	Odebrat tahy
+	Place Brush Art	Umístit kresbu štětce
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nemá kresbu (mají ji jen rozptylové, obrazové a vzorkové štětce)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Nástroje uspořádání
 	Arrange in Grid…	Uspořádat do mřížky…

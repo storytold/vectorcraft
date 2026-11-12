@@ -262,6 +262,10 @@
 	Blend Options…	Vermengopties…
 	Expand	Uitbreiden
 	Replace Spine	Rug vervangen
+	Create Spine	Rug maken
+	Create Spine:	Rug maken:
+	Always	Altijd
+	Never	Nooit
 	Reverse Spine	Rug omkeren
 	Reverse Front to Back	Van voor naar achter omkeren
 	Envelope Distort	Envelopvervorming
@@ -768,6 +772,14 @@
 	Damp Paper	Vochtig papier
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
+	Painted and Sketched	Geschilderd en geschetst
+	Washed Blue	Verwassen blauw
+	Bristle Ochre	Borsteloker
+	Pastel Heather	Pastelheide
+	Charcoal Shade	Houtskoolschaduw
+	Ink Contour	Inktcontour
+	Wet Ink	Natte inkt
+	Fine Pen	Fijne pen
 	Gradient Finishes	Verloopafwerkingen
 	Shape Effects	Vormeffecten
 	Blends and Transparency	Vermengingen en transparantie
@@ -2209,6 +2221,8 @@ digits	Malayalam	Malayalam
 	Export Selected Art Only	Alleen geselecteerde artwork exporteren
 	Number of Colors:	Aantal kleuren:
 	Raster File Format:	Rasterbestandsindeling:
+	Include Placed Images	Geplaatste afbeeldingen opnemen
+	Include Fill Hatches	Arceringen van vullingen opnemen
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Echte kleur vereist versie 2004 of later: de dichtstbijzijnde van 256 kleuren wordt weggeschreven.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst wordt omlijningen, en lijnen die een CAD-lijn niet kan tekenen, worden gevulde vormen.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst blijft tekst en elke lijn wordt een lijn met zijn eigen lijndikte en streepjes.
@@ -5905,6 +5919,7 @@ swatch	Bright Violet	Felviolet
 	Ruby	Ruby
 	Geometric Guides	Geometrische hulplijnen
 	Geometric Patterns	Geometrische patronen
+	Grit Textures	Korrelige texturen
 	Ease In	Langzaam beginnen
 	Ease Out	Langzaam eindigen
 	Ease In Out	Langzaam beginnen en eindigen
@@ -5958,6 +5973,7 @@ axis	Y Axis	Y-as
 	Version: {version}	Versie: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}” installeren in plaats van de plug-in met dezelfde ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Dit bestand is niet de plug-in die eerder met deze ID was geïnstalleerd. Het krijgt de instellingen en cache die voor die ID bewaard zijn.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Een automatisering heeft gevraagd deze plug-in te installeren. Kies zelf Object › Plug-ins › Plug-in installeren… om hem te installeren.
 	File SHA-256: {hash}	SHA-256 van het bestand: {hash}
 	Read the objects it is given	De objecten lezen die het krijgt
 	Change, add and delete objects in the document	Objecten in het document wijzigen, toevoegen en verwijderen
@@ -6446,6 +6462,8 @@ breakText	Glyphs	Glyphs
 	Delete the selected brushes?	Geselecteerde kwasten verwijderen?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Contouren gebruiken een of meer van deze kwasten. De kwasten van deze contouren halen en de kwasten verwijderen?
 	Remove Strokes	Contouren verwijderen
+	Place Brush Art	Penseelillustratie plaatsen
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` heeft geen illustratie (alleen verspreidings-, art- en patroonpenselen hebben er een)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Schikgereedschappen
 	Arrange in Grid…	In raster schikken…

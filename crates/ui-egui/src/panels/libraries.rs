@@ -827,8 +827,7 @@ pub(crate) fn import(app: &mut VectorcraftApp, p: Value) -> Result<Value, String
 /// Import Library…: a picked `.vclibrary` file becomes a new library (on the web the picked file
 /// arrives later through [`crate::io::open_bytes`]).
 fn import_picked(app: &mut VectorcraftApp) {
-    if let Some(f) = app.services.open_async.as_mut() {
-        f();
+    if crate::picks::open_async(app) {
         return;
     }
     let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Libraries", LIBRARY_EXTS)], ..Default::default() };

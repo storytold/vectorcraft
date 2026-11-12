@@ -483,6 +483,93 @@ pub(super) fn brush_options(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "name": out }))
 }
 
+/// The name `brush.placeArt` gives each pattern brush tile it places, by tile, in the order it
+/// places them.
+const TILE_NAMES: [&str; 5] = ["Side Tile", "Outer Corner Tile", "Inner Corner Tile", "Start Tile", "End Tile"];
+
+/// The space between the pattern brush tiles `brush.placeArt` places, in points.
+const TILE_GAP: f64 = 10.0;
+
+/// The message for a brush that is not made of art.
+fn no_art(name: &str) -> String {
+    format!("`{name}` has no art (only scatter, art and pattern brushes do)")
+}
+
+/// Tile `i` of `p` ([`TILE_NAMES`] order): its art and its repeat frame, when it has art.
+fn tile(p: &brush::PatternBrush, i: usize) -> Option<(&Node, Option<vectorcraft_geom::Rect>)> {
+    match i {
+        0 => Some((&p.side, p.side_frame)),
+        1 => p.outer_corner.as_ref().map(|n| (n, p.outer_corner_frame)),
+        2 => p.inner_corner.as_ref().map(|n| (n, p.inner_corner_frame)),
+        3 => p.start.as_ref().map(|n| (n, p.start_frame)),
+        _ => p.end.as_ref().map(|n| (n, p.end_frame)),
+    }
+}
+
+/// The art `brush.placeArt` places for brush `b`, in the brush's own coordinates: a scatter or art
+/// brush's art, or a pattern brush's tiles in a row, each in a group named for its tile
+/// ([`TILE_NAMES`]), with an unpainted rectangle at the back of a tile that has a repeat frame
+/// marking that frame. `None` for a brush that is not made of art. Symbol instances in the art are
+/// measured by their symbols' art in `symbols`.
+fn placed_art(b: &Brush, symbols: &vectorcraft_doc::SymbolBoxes) -> Option<Node> {
+    match &b.kind {
+        BrushKind::Scatter(sc) => Some(sc.art.clone()),
+        BrushKind::Art(a) => Some(a.art.clone()),
+        BrushKind::Pattern(pb) => {
+            let mut tiles = vec![];
+            let mut x = 0.0;
+            for (i, tile_name) in TILE_NAMES.iter().enumerate() {
+                let Some((art, frame)) = tile(pb, i) else { continue };
+                let mut children = vec![];
+                if let Some(f) = frame {
+                    let marker = Node::path(
+                        NodeId(0),
+                        vectorcraft_geom::shapes::rectangle(f),
+                        vectorcraft_doc::Appearance::basic(Paint::None, Paint::None, 1.0),
+                    );
+                    children.push(Arc::new(marker));
+                }
+                children.push(Arc::new(art.clone()));
+                let mut g = Node::group(NodeId(0), children);
+                g.name = Some((*tile_name).to_string());
+                let Some(r) = g.geometric_bounds_with(symbols) else { continue };
+                // Each tile sits right of the one before it, centered on the line y = 0.
+                g.transform(vectorcraft_geom::Affine::translate((x - r.x0, -r.center().y)), false);
+                x += r.width() + TILE_GAP;
+                tiles.push(Arc::new(g));
+            }
+            Some(Node::group(NodeId(0), tiles))
+        }
+        BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => None,
+    }
+}
+
+/// `brush.placeArt`: a copy of the art brush `name` is made of, centered on (`x`, `y`) (default: the
+/// center of the first artboard) in the layer new art goes into, and selected, as one undo step.
+/// Scatter and art brushes place their art; pattern brushes place their tiles ([`placed_art`]).
+pub(super) fn brush_place_art(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "brush.placeArt";
+    let name = name_param(p, C)?.to_string();
+    let d = &s.doc()?.doc;
+    let center = d.artboards.first().map(|a| a.rect.center()).unwrap_or(super::Point::ZERO);
+    let at = super::Point::new(super::number_or(p, "x", center.x, C)?, super::number_or(p, "y", center.y, C)?);
+    let b = brush::find(d, &name).ok_or_else(|| bad(C, format!("no brush named `{name}`")))?;
+    let symbols = d.symbol_boxes();
+    let mut art = placed_art(&b, &symbols).ok_or_else(|| bad(C, no_art(&name)))?;
+    if let Some(r) = art.geometric_bounds_with(&symbols) {
+        art.transform(vectorcraft_geom::Affine::translate(at - r.center()), false);
+    }
+    let parent = s.doc()?.target_parent()?;
+    let id = s.edit("Place Brush Art", |d, sel| {
+        let art = d.reid(&art);
+        let id = art.id;
+        d.insert(parent, usize::MAX, art)?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0 }))
+}
+
 pub(super) fn expand_brush(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = brush_targets(&s.doc()?.doc, &roots(s, p)?);
     let ids: Vec<NodeId> = ids.into_iter().filter(|id| s.doc().ok().and_then(|st| st.doc.node(*id)).is_some_and(brush::has_brush)).collect();
