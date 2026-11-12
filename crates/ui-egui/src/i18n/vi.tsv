@@ -6242,6 +6242,10 @@ breakText	Glyphs	Glyph
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Có nét đang dùng một hoặc nhiều cọ này. Gỡ cọ khỏi các nét đó và xóa cọ?
 	Remove Strokes	Gỡ nét
 	Place Brush Art	Đặt đối tượng của cọ
+	Replace Brush Art	Thay đối tượng của cọ
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Có nét đang dùng cọ này. Áp dụng đối tượng mới cho các nét đó, hay giữ nguyên chúng và thêm một bản sao của cọ với đối tượng mới?
+	Apply to Strokes	Áp dụng cho nét
+	Leave Strokes	Giữ nguyên nét
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` không có đối tượng (chỉ cọ phân tán, cọ bản vẽ và cọ họa tiết mới có)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Công cụ sắp xếp

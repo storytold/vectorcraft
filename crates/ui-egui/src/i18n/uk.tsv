@@ -6241,6 +6241,10 @@ breakText	Glyphs	Гліфи
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Обведення використовують один або кілька з цих пензлів. Забрати пензлі з цих обведень і видалити пензлі?
 	Remove Strokes	Забрати обведення
 	Place Brush Art	Розмістити малюнок пензля
+	Replace Brush Art	Замінити малюнок пензля
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обведення використовують цей пензель. Застосувати новий малюнок до цих обведень чи залишити їх як є і додати копію пензля з новим малюнком?
+	Apply to Strokes	Застосувати до обведень
+	Leave Strokes	Залишити обведення
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	у `{name}` немає малюнка (він є лише в пензлів-розпорошень, художніх і візерункових пензлів)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Інструменти розміщення

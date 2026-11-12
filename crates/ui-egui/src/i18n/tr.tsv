@@ -6596,6 +6596,10 @@ breakText	Glyphs	Glifler
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturlar bu fırçalardan birini veya daha fazlasını kullanıyor. Fırçalar bu konturlardan kaldırılsın ve fırçalar silinsin mi?
 	Remove Strokes	Konturları Kaldır
 	Place Brush Art	Fırça Çizimini Yerleştir
+	Replace Brush Art	Fırça Çizimini Değiştir
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturlar bu fırçayı kullanıyor. Yeni çizim bu konturlara uygulansın mı, yoksa konturlar olduğu gibi bırakılıp fırçanın yeni çizimli bir kopyası mı eklensin?
+	Apply to Strokes	Konturlara Uygula
+	Leave Strokes	Konturları Bırak
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` fırçasının çizimi yok (yalnızca serpme, resim ve desen fırçalarının çizimi vardır)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Düzenleme Araçları

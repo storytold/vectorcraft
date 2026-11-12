@@ -6379,6 +6379,10 @@ breakText	Glyphs	Glif
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Stroke menggunakan satu atau beberapa kuas ini. Lepaskan kuas dari stroke tersebut dan hapus kuasnya?
 	Remove Strokes	Hapus Stroke
 	Place Brush Art	Tempatkan karya seni kuas
+	Replace Brush Art	Ganti karya seni kuas
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Stroke menggunakan kuas ini. Terapkan karya seni baru ke stroke tersebut, atau biarkan apa adanya dan tambahkan salinan kuas dengan karya seni baru?
+	Apply to Strokes	Terapkan ke Stroke
+	Leave Strokes	Biarkan Stroke
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` tidak memiliki karya seni (hanya kuas sebar, kuas seni, dan kuas pola yang memilikinya)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Alat penyusunan

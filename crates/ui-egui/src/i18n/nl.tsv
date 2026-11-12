@@ -6430,6 +6430,10 @@ breakText	Glyphs	Glyphs
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Contouren gebruiken een of meer van deze kwasten. De kwasten van deze contouren halen en de kwasten verwijderen?
 	Remove Strokes	Contouren verwijderen
 	Place Brush Art	Penseelillustratie plaatsen
+	Replace Brush Art	Penseelillustratie vervangen
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Contouren gebruiken dit penseel. De nieuwe illustratie op deze contouren toepassen, of ze laten zoals ze zijn en een kopie van het penseel met de nieuwe illustratie toevoegen?
+	Apply to Strokes	Op contouren toepassen
+	Leave Strokes	Contouren behouden
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` heeft geen illustratie (alleen verspreidings-, art- en patroonpenselen hebben er een)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Schikgereedschappen
