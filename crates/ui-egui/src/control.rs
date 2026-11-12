@@ -320,7 +320,8 @@ const PANEL_FIELDS: [&str; 7] =
 /// request may not read, each with the id a reply shows instead: `loaded/<file name>`, as a library
 /// loaded without a path is named. The UI state refers to a library by its bare id in a library panel
 /// and the Color Guide's limit, by a panel id (`library:<kind>:loaded/<path>`) in the fields of
-/// [`PANEL_FIELDS`] and the workspaces' layouts, and by either in the `library` and `panel` params of
+/// [`PANEL_FIELDS`], the workspaces' layouts and the keys of shortcut overrides (`panel:<panel id>`,
+/// saved and in an open Keyboard Shortcuts dialog), and by either in the `library` and `panel` params of
 /// recorded actions' steps. Text the person types (a command palette query, a workspace's or an
 /// action's name) is not read. The session's loaded libraries whose file the request may not read are
 /// hidden too. The ids are numbered as the library commands number them
@@ -331,6 +332,12 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Hiding {
     let ui = serde_json::to_value(&app.ui).unwrap_or_default();
     for field in PANEL_FIELDS {
         collect_library_panel_ids(&ui[field], &mut rest);
+    }
+    // A shortcut for showing a panel is keyed `panel:<id>`, saved and in an open Keyboard Shortcuts dialog.
+    for overrides in [&ui["shortcut_overrides"], &ui["dialog"]["fields"]["overrides"]] {
+        for panel in overrides.as_object().into_iter().flat_map(|o| o.keys()).filter_map(|key| key.strip_prefix("panel:")) {
+            collect_library_panel_ids(&json!(panel), &mut rest);
+        }
     }
     collect_library_params(&ui["action_sets"], &mut rest);
     for workspace in ["custom_workspaces", "workspace_changes"].iter().filter_map(|k| ui[k].as_array()).flatten() {
@@ -389,15 +396,18 @@ impl Hiding {
     }
 
     /// Adds the sent paths of `pairs`, each as a hidden id with the id shown. A hidden id this one holds
-    /// for the same path (written with either separator, relative or as the absolute path it reads as
-    /// ([`absolute_form`]), and in any case of ASCII letters with `fold`) is shown as the sent path is.
+    /// for the same path (written with either separator when it is a Windows path
+    /// ([`splits_at_backslash`]), relative or as the absolute path it reads as ([`absolute_form`]), and
+    /// in any case of ASCII letters with `fold`) is shown as the sent path is.
     fn set_hidden(&mut self, pairs: Vec<(String, String)>, fold: bool) {
         let key = |id: &str| {
             let path = id.strip_prefix("loaded/").unwrap_or(id);
-            let id = absolute_form(path).unwrap_or_else(|| path.to_string()).replace('\\', "/");
-            if fold { id.to_ascii_lowercase() } else { id }
+            let id = absolute_form(path).unwrap_or_else(|| path.to_string());
+            let windows = splits_at_backslash(&id);
+            let id = if windows { id.replace('\\', "/") } else { id };
+            (windows, if fold { id.to_ascii_lowercase() } else { id })
         };
-        let sent: Vec<String> = pairs.iter().map(|(id, _)| key(id)).collect();
+        let sent: Vec<(bool, String)> = pairs.iter().map(|(id, _)| key(id)).collect();
         for (id, shown) in &mut self.hidden {
             if let Some(at) = sent.iter().position(|k| *k == key(id)) {
                 shown.clone_from(&pairs[at].1);
@@ -499,11 +509,19 @@ fn hide_library_ids(v: &mut Value, hiding: &Hiding) {
 
 /// The text [`hide_library_ids`] replaces, in two groups: the hidden libraries' text, then the text of
 /// the paths the request sent ([`Hiding::sent`]), each longest first. For each id, that is the id with
-/// the id shown, and the path in it with the file name shown, the path written with either separator
-/// too, and as `{:?}` quotes it (each `\`, quote and control character escaped). A relative path is
-/// also replaced as the absolute path the file access check reads it as, against the working folder.
+/// the id shown, and the path in it with the file name shown, a Windows path ([`splits_at_backslash`])
+/// written with either separator too, and as `{:?}` quotes it (each `\`, quote and control character
+/// escaped). A relative path is also replaced as the absolute path the file access check reads it as,
+/// against the working folder.
 fn hidden_text(hiding: &Hiding) -> Vec<Vec<(String, String)>> {
     vec![text_pairs(&hiding.hidden), text_pairs(&hiding.sent)]
+}
+
+/// Is `path` a Windows path, whose parts a `\` separates as well as a `/`: any path on Windows, and
+/// elsewhere one that starts with a drive (`C:`) or a `\`? Outside Windows, a `\` in any other path is
+/// part of a name.
+fn splits_at_backslash(path: &str) -> bool {
+    cfg!(windows) || path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic())
 }
 
 /// The absolute path that `path`, a relative path (one that does not start with a separator, a drive
@@ -525,10 +543,15 @@ fn text_pairs(ids: &[(String, String)]) -> Vec<(String, String)> {
         let path = &id["loaded/".len()..];
         let name = shown.strip_prefix("loaded/").unwrap_or(shown);
         for path in std::iter::once(path.to_string()).chain(absolute_form(path)) {
-            let (forward, back) = (path.replace('\\', "/"), path.replace('/', "\\"));
-            let debug = [quoted(&path), quoted(&forward), quoted(&back)].map(|p| (p, quoted(name)));
-            let plain = [path, forward, back].map(|p| (p, name.to_string()));
-            for (path, name) in plain.into_iter().chain(debug) {
+            // A Windows path is also written with the other separator; outside Windows, a native
+            // path's `\` is part of a name, so that path is written only as it is.
+            let mut spellings = vec![path.clone()];
+            if splits_at_backslash(&path) {
+                spellings.extend([path.replace('\\', "/"), path.replace('/', "\\")].into_iter().filter(|p| splits_at_backslash(p)));
+            }
+            let debug: Vec<_> = spellings.iter().map(|p| (quoted(p), quoted(name))).collect();
+            let plain = spellings.into_iter().map(|p| (p, name.to_string()));
+            for (path, name) in plain.chain(debug) {
                 for (from, to) in [(format!("loaded/{path}"), format!("loaded/{name}")), (path, name)] {
                     if !pairs.iter().any(|(f, _)| *f == from) {
                         pairs.push((from, to));
@@ -1048,9 +1071,10 @@ fn packet_mods(value: Option<&Value>) -> Result<Option<Mods>, String> {
 
 /// The params that name a library or a library panel, at any depth of a request (`ui.set {panel}`,
 /// `engine.execute {params: {panel}}`, `ui.libraryPanel {panel, library}`), with the docking
-/// commands' destinations (`window.panel.move {anchor, before}`, `window.panel.float {onto, above,
-/// below}`) and a list of panels.
-const LIBRARY_PARAMS: [&str; 8] = ["panel", "library", "anchor", "before", "onto", "above", "below", "panels"];
+/// commands' destinations (`window.panel.move {anchor, before}`, `ui.dock {target}`,
+/// `window.panel.float {onto, above, below}`) and a list of panels. Only a whole id is translated
+/// ([`swap_whole_ids`]), so other text in these params stays.
+const LIBRARY_PARAMS: [&str; 9] = ["panel", "library", "anchor", "target", "before", "onto", "above", "below", "panels"];
 
 /// The param of `window.panel.layout` that holds a serialized docking action: each panel id in it is
 /// translated.

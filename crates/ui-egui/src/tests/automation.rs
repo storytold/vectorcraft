@@ -1042,12 +1042,41 @@ fn ui_set_reopens_a_hidden_librarys_panel_by_its_shown_id() {
     );
     assert_eq!(r["ok"], true, "{r}");
     assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    // So does `ui.dock`'s move, whose destination is `target`.
+    let r = request(
+        &mut app,
+        &tx,
+        "engine.execute",
+        json!({"command": "ui.dock", "params": {"operation": "move", "panel": "properties", "target": shown, "zone": "tab"}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    let layout = crate::panel_docking::layout_of(&app.ui);
+    assert!(layout.contains(&real) && !layout.contains(&shown.to_string()), "no second panel: {layout:?}");
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
     // An error that quotes the panel shows the id the client gave, and other text is not rewritten.
     let r = request(&mut app, &tx, "ui.set", json!({"panel": "library:bogus:loaded/b.svg"}));
     assert_eq!(r["ok"], false, "{r}");
     assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
     let r = request(&mut app, &tx, "ui.set", json!({"status": "loaded/b.svg"}));
     assert_eq!((r["ok"].as_bool(), app.ui.status.as_str()), (Some(true), "loaded/b.svg"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A shortcut for showing the panel of a library outside the read root, saved and in an open Keyboard
+/// Shortcuts dialog, is keyed by the panel id shown, also when nothing else refers to the library.
+#[test]
+fn ui_inspect_hides_a_library_panels_path_in_shortcut_overrides() {
+    let (mut app, tx, base) = confined("shortcut-hidden-panel");
+    let real = format!("panel:library:swatches:loaded/{}", s(base.join("outside/b.svg")));
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, &real, "Cmd+Alt+Shift+F7");
+    app.ui.dialog = Some(crate::state::Dialog::new("shortcuts", json!({"overrides": { real.clone(): "Cmd+Alt+Shift+F8" }})));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let shown = "panel:library:swatches:loaded/b.svg";
+    let ui = &r["result"]["ui"];
+    assert_eq!(ui["shortcut_overrides"][shown], "Cmd+Alt+Shift+F7", "{r}");
+    assert_eq!(ui["dialog"]["fields"]["overrides"][shown], "Cmd+Alt+Shift+F8", "{r}");
+    let hidden = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
     let _ = std::fs::remove_dir_all(base);
 }
 

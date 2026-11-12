@@ -154,10 +154,13 @@ the suite) keep the agent to the folders you give it:
   empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
   roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
   Color Guide's `ui.color_guide_limit`, a closed panel's key in `ui.docking_hidden` and the `library` and `panel`
-  params of a recorded action's steps in `ui.action_sets`, also when its panel is closed. A path written with
+  params of a recorded action's steps in `ui.action_sets`, and the keys of shortcut overrides (`panel:<panel id>`
+  in `ui.shortcut_overrides` and an open Keyboard Shortcuts dialog's `ui.dialog.fields.overrides`), also when its
+  panel is closed. A path written with
   either separator counts as a path, also one saved on another platform, and outside Windows a path that starts
   with a drive (`C:`) or a `\` counts as outside the roots. Outside Windows, any other path keeps a `\` in its
-  file name (`/libs/a\b.ase` shows as `loaded/a\b.ase`). When another hidden library has the same
+  file name (`/libs/a\b.ase` shows as `loaded/a\b.ase`), and a reply matches it only as written, not with `/`
+  in place of the `\`. When another hidden library has the same
   file name, the libraries take `loaded/<file name>`, `loaded/<file name> (2)`, `(3)` and so on in the order they
   are first shown. Libraries first shown in the same reply are numbered in the order of their full ids, the
   libraries loaded in this session first, then those only the UI state names. Each one keeps its id for the rest
@@ -165,8 +168,8 @@ the suite) keep the agent to the folders you give it:
   file name is loaded. A hidden library skips an id that a library loaded without a path already has, and only a
   library loaded later from data under that file name, which takes the id itself, moves a hidden one to the next
   free number. The other entries keep their order, and the app's own state is not changed. A request may name such a library or its panel by the id
-  shown in a `panel`, `library` or `panels` param, in a docking destination (`anchor`, `before`, `onto`, `above`,
-  `below`) and in `window.panel.layout`'s `action` (`ui.set {panel: "library:swatches:loaded/<file name>"}`
+  shown in a `panel`, `library` or `panels` param, in a docking destination (`anchor`, `target`, `before`, `onto`,
+  `above`, `below`) and in `window.panel.layout`'s `action` (`ui.set {panel: "library:swatches:loaded/<file name>"}`
   reopens its panel), and the reply to such a request shows that id and file name wherever the library's id or path
   appears, an error included. Every reply under the read roots shows a hidden library's id as the id shown and its
   path as the file name in every string and key, the status text (`ui.status`), dialogs, the command palette query
