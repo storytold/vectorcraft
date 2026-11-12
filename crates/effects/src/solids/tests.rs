@@ -415,15 +415,16 @@ fn a_translucent_stroke_is_a_surface_of_its_own() {
 }
 
 /// With a light that is not white, a fill in a gradient with transparent stops is drawn with an
-/// opacity mask over its whole surface: the fill's solid and the stroke's stay surfaces of their
-/// own, and the mask stays on the fill's. Under a white light the same object is one surface.
+/// opacity mask: its faces still take their places in the one order of the fill's and the
+/// stroke's faces, in runs that each carry the mask. Under a white light the faces carry the
+/// gradient itself and no mask.
 #[test]
-fn a_masked_surface_under_a_colored_light_stays_whole() {
+fn a_masked_surface_under_a_colored_light_keeps_the_shared_face_order() {
     use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
     let mut half = GradientStop::new(1.0, RED);
     half.opacity = 0.5;
     let gradient = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, RED), half]));
-    for (lights, surfaces) in [(json!({"lights": [{"color": "#ff8080"}]}), 2), (json!({}), 1)] {
+    for (lights, masked) in [(json!({"lights": [{"color": "#ff8080"}]}), true), (json!({}), false)] {
         let mut n = stroked_rect(100.0);
         if let Some(AppearanceItem::Fill(f)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {
             f.paint = Paint::Gradient(Box::new(gradient.clone()));
@@ -431,8 +432,10 @@ fn a_masked_surface_under_a_colored_light_stays_whole() {
         n.appearance.effects.push(fx(EXTRUDE, lights.clone()));
         let art = solid_art(&n).unwrap();
         let drawn = art.children().unwrap();
-        assert_eq!(drawn.len(), surfaces, "{lights}");
-        assert_eq!(drawn[0].extras().mask.is_some(), surfaces == 2, "{lights}");
+        assert_eq!(drawn.len(), 1, "{lights}: one order of faces");
+        let runs: Vec<&Arc<Node>> = drawn[0].children().unwrap().iter().filter(|c| c.extras().mask.is_some()).collect();
+        assert_eq!(!runs.is_empty(), masked, "{lights}");
+        assert!(runs.iter().all(|r| r.children().unwrap().iter().all(|f| !blue(f))), "{lights}: the mask stays on the fill's faces");
     }
 }
 
@@ -847,7 +850,9 @@ fn classic_shading_keeps_a_gradients_transparency() {
         }
         let art = solid_art(&n).unwrap();
         let surface = &art.children().unwrap()[0];
-        assert_eq!(surface.extras().mask.is_some(), masked, "{end}");
+        let mut has_mask = false;
+        surface.walk(&mut |c| has_mask |= c.extras().mask.is_some());
+        assert_eq!(has_mask, masked, "{end}");
         let mut opaque = true;
         surface.walk(&mut |c| {
             for item in &c.appearance.items {
@@ -859,6 +864,67 @@ fn classic_shading_keeps_a_gradients_transparency() {
             }
         });
         assert!(opaque, "{end}: the faces are drawn opaque");
+    }
+}
+
+/// A group member in a gradient with transparent stops keeps the shared back-to-front order of
+/// every member's faces: its faces go in runs that carry its opacity mask, and the other member's
+/// faces are drawn between them where they are in front of some and behind others. Here a square
+/// frame in the gradient holds a square in its hole: the frame's inner walls are behind the square
+/// and its front cap is in front of the square's walls.
+#[test]
+fn a_member_in_a_transparent_gradient_keeps_the_shared_face_order() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let square = |b: &mut BezPath, x0: f64, x1: f64, clockwise: bool| {
+        let corners = [(x0, x0), (x1, x0), (x1, x1), (x0, x1)];
+        let mut points = corners.to_vec();
+        if !clockwise {
+            points.reverse();
+        }
+        b.move_to(points[0]);
+        for p in &points[1..] {
+            b.line_to(*p);
+        }
+        b.close_path();
+    };
+    let art = |id: &str, params: &Value, end_opacity: f32| {
+        let mut end = GradientStop::new(1.0, Color::BLACK);
+        end.opacity = end_opacity;
+        let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, RED), end]))));
+        let mut b = BezPath::new();
+        square(&mut b, 100.0, 300.0, true);
+        square(&mut b, 150.0, 250.0, false);
+        let frame = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(gradient, Paint::None, 0.0));
+        let mut b = BezPath::new();
+        square(&mut b, 185.0, 215.0, true);
+        let inner = Node::path(NodeId(2), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(BLUE), Paint::None, 0.0));
+        let mut g = Node::group(NodeId(3), vec![Arc::new(frame), Arc::new(inner)]);
+        g.appearance.effects.push(fx(id, params.clone()));
+        solid_art(&g).unwrap_or_else(|| panic!("{id}"))
+    };
+    // The drawing order: `M` for a group with an opacity mask, `F` for a face outside one.
+    fn visit(n: &Node, order: &mut String) {
+        if n.extras().mask.is_some() {
+            order.push('M');
+            return;
+        }
+        if n.path_data().is_some() {
+            order.push('F');
+        }
+        for c in n.children().into_iter().flatten() {
+            visit(c, order);
+        }
+    }
+    let order = |art: &Node| {
+        let mut order = String::new();
+        visit(art, &mut order);
+        order
+    };
+    for (id, params) in [(CLASSIC_EXTRUDE, json!({})), (EXTRUDE, json!({"lights": [{"color": "#ff8080"}]}))] {
+        assert!(!order(&art(id, &params, 1.0)).contains('M'), "{id}: an opaque gradient needs no mask");
+        let masked = order(&art(id, &params, 0.5));
+        let (first, last) = (masked.find('M').unwrap(), masked.rfind('M').unwrap());
+        assert!(masked.get(first..last).is_some_and(|between| between.contains('F')), "{id}: faces between the member's runs: {masked}");
     }
 }
 

@@ -271,7 +271,7 @@ fn stop_ends_only_the_search_it_names() {
     let (tx, rx) = mpsc::channel();
     let search = findfiles::start(root.clone(), s.search_rules.clone(), Limits::default(), 1, 2, Arc::new(Blocked(Mutex::new(rx)))).unwrap();
     let links = vec![Sought { name: "a.png".into(), path: "/gone/a.png".into(), ids: vec![], size: None, hash: None }];
-    s.link_search = Some(LinkSearch { id: 7, folder: root.to_string_lossy().into_owned(), links, sizes: Arc::default(), search });
+    s.link_search = Some(LinkSearch { id: 7, folder: root.to_string_lossy().into_owned(), doc: None, links, sizes: Arc::default(), search });
     let until = Instant::now() + WAIT;
     while s.execute("links.findFiles", &json!({})).unwrap()["searched"]["read"] != 1 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
@@ -282,6 +282,116 @@ fn stop_ends_only_the_search_it_names() {
     let r = s.execute("links.findFiles", &json!({})).unwrap();
     assert_eq!((r["state"].as_str(), r["stopped"].as_str(), r["id"].as_u64()), (Some("stopped"), Some("stop"), Some(7)));
     drop(tx);
+}
+
+/// A caller confined by read roots sees, in the replies to a search another caller started and to
+/// its own, only the paths inside its read roots: the files found outside them, a link's saved path
+/// outside them and the folder searched are left out, and the rows, ids and counts stay. Without
+/// roots, the replies are as before.
+#[test]
+fn a_search_shows_a_confined_caller_only_paths_inside_its_read_roots() {
+    let root = folder("read-roots");
+    let mut s = session_for(&root);
+    let photo = png(40, 30, RED);
+    write(&root.join("lrf-away/photo.png"), &photo);
+    let id = placed(&mut s, &root.join("lrf-away/photo.png"));
+    std::fs::remove_file(root.join("lrf-away/photo.png")).unwrap();
+    // Files of the name with other contents: the search reads every folder.
+    let other = png(40, 30, BLUE);
+    let (home, wide) = (root.join("home"), root.join("lrf-wide"));
+    write(&home.join("photo.png"), &other);
+    write(&wide.join("photo.png"), &other);
+    let roots = |read: &[&Path], write: &[&Path]| crate::file_access::AutomationRoots::new(read, write).unwrap().unwrap();
+    let (narrow, write_only, broad) = (roots(&[&home], &[]), roots(&[], &[&root]), roots(&[&root], &[]));
+    let ask = |s: &mut Session, r: &Arc<crate::file_access::AutomationRoots>, p: Value| {
+        crate::file_access::confine(Some(r), || s.execute("links.findFiles", &p).unwrap())
+    };
+    let hidden = |r: &Value| {
+        let text = r.to_string();
+        assert!(!text.contains("lrf-away") && !text.contains("lrf-wide") && r.get("folder").is_none(), "{r}");
+        let row = &r["links"][0];
+        assert_eq!((row["name"].as_str(), &row["ids"], row.get("path")), (Some("photo.png"), &json!([id]), None), "{r}");
+    };
+    // Started with the broad roots, over the whole folder.
+    let r = ask(&mut s, &broad, json!({"folder": root}));
+    assert_eq!(r["folder"], json!(root), "{r}");
+    finished(&mut s);
+    let all = ask(&mut s, &broad, json!({}));
+    assert_eq!(all["links"][0]["files"].as_array().map(Vec::len), Some(2), "{all}");
+    for r in [ask(&mut s, &narrow, json!({})), ask(&mut s, &narrow, json!({"stop": true}))] {
+        hidden(&r);
+        assert_eq!(r["links"][0]["files"], json!([{"path": home.join("photo.png"), "size": other.len(), "match": "name"}]), "{r}");
+        assert_eq!((&r["state"], &r["searched"], &r["id"]), (&all["state"], &all["searched"], &all["id"]), "{r}");
+    }
+    let r = ask(&mut s, &write_only, json!({}));
+    hidden(&r);
+    assert_eq!(r["links"][0]["files"], json!([]), "{r}");
+    // Without roots, every path shows.
+    let r = s.execute("links.findFiles", &json!({})).unwrap();
+    assert_eq!((&r["folder"], &r["links"][0]["path"]), (&json!(root), &json!(root.join("lrf-away/photo.png"))), "{r}");
+    assert_eq!(r["links"][0]["files"].as_array().map(Vec::len), Some(2), "{r}");
+    // The narrow caller's own search shows the folder it gave.
+    let r = ask(&mut s, &narrow, json!({"folder": home}));
+    assert_eq!(r["folder"], json!(home), "{r}");
+    finished(&mut s);
+    let r = ask(&mut s, &narrow, json!({}));
+    assert_eq!((&r["folder"], r["links"][0].get("path")), (&json!(home), None), "{r}");
+    // A search that failed: the reason shows without the path to a caller outside its folder.
+    ask(&mut s, &broad, json!({"folder": root.join("lrf-wide/gone")}));
+    let r = finished(&mut s);
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("lrf-wide")), "{r}");
+    let r = ask(&mut s, &narrow, json!({}));
+    assert_eq!((r["state"].as_str(), r["error"].as_str()), (Some("failed"), Some("the folder can't be read")), "{r}");
+    hidden(&r);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A link's saved path relative to the document is shown to a confined caller when it leads to a
+/// file inside its read roots, and left out when `..` leads out of them.
+#[test]
+fn a_relative_link_path_is_judged_from_the_documents_folder() {
+    let root = folder("read-roots-relative");
+    let mut s = session_for(&root);
+    let home = root.join("home");
+    write(&root.join("lrf-away/photo.png"), &png(40, 30, RED));
+    let id = placed(&mut s, &root.join("lrf-away/photo.png"));
+    std::fs::create_dir_all(&home).unwrap();
+    s.execute("document.save", &json!({"path": home.join("poster.vectorcraft")})).unwrap();
+    let narrow = crate::file_access::AutomationRoots::new(&[&home], &[]).unwrap().unwrap();
+    for (saved, shown) in [("sub/photo.png", true), ("../lrf-away/photo.png", false)] {
+        s.edit("relative path", |d, _| {
+            if let NodeKind::Image(im) = &mut d.node_mut(NodeId(id)).unwrap().kind {
+                im.link.as_mut().unwrap().path = saved.into();
+            }
+            Ok(())
+        })
+        .unwrap();
+        let r = crate::file_access::confine(Some(&narrow), || s.execute("links.findFiles", &json!({"folder": home, "ids": [id]})).unwrap());
+        assert_eq!(r["links"][0].get("path"), shown.then(|| json!(saved)).as_ref(), "{saved}: {r}");
+        finished(&mut s);
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// `image.info` leaves a linked file outside the confined caller's read roots unnamed (`link`
+/// null), as `links.info` leaves it out, and keeps the other fields.
+#[test]
+fn image_info_leaves_out_a_link_outside_the_read_roots() {
+    let root = folder("read-roots-info");
+    let mut s = session_for(&root);
+    let pic = root.join("lrf-away/photo.png");
+    write(&pic, &png(40, 30, RED));
+    let id = placed(&mut s, &pic);
+    std::fs::create_dir_all(root.join("home")).unwrap();
+    let narrow = crate::file_access::AutomationRoots::new(&[&root.join("home")], &[]).unwrap().unwrap();
+    let ask = |s: &mut Session, cmd: &str| crate::file_access::confine(Some(&narrow), || s.execute(cmd, &json!({"id": id})).unwrap());
+    let r = ask(&mut s, "image.info");
+    assert_eq!((&r["link"], &r["linked"], &r["pixelWidth"], &r["id"]), (&Value::Null, &json!(true), &json!(40), &json!(id)), "{r}");
+    assert!(!r.to_string().contains("lrf-away"), "{r}");
+    let info = ask(&mut s, "links.info");
+    assert!(info.get("link").is_none() && !info.to_string().contains("lrf-away"), "{info}");
+    assert_eq!(s.execute("image.info", &json!({"id": id})).unwrap()["link"], json!(pic));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]

@@ -398,6 +398,8 @@
 	Stair Step	Stepenice
 	Gravity	Gravitacija
 	Type on a Path Options…	Opcije teksta na putanji…
+	Center on Top	Centriraj na vrhu
+	Center on Bottom	Centriraj na dnu
 	Threaded Text	Povezani tekst
 	Create	Kreiraj
 	Release Selection	Oslobodi odabir
@@ -5875,6 +5877,7 @@ mark-style	Japanese	Japanski
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrijske vodilice
+	Optical Effects	Optički efekti
 	Geometric Patterns	Geometrijski uzorci
 	Grit Textures	Zrnaste teksture
 	Ease In	Ublaži ulaz
@@ -6123,6 +6126,11 @@ axis	Y Axis	Y osa
 	Grass Fan	Lepeza za travu
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici
+	Dry Media	Suhi mediji
+	Chalk Grain	Zrno krede
+	Graphite Pencil	Grafitna olovka
+	Wax Crayon	Voštana bojica
+	Charcoal Dust	Ugljena prašina
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)
