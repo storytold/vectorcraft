@@ -251,8 +251,9 @@ fn every_preset_and_version_keeps_a_20_m_page_or_says_why_not() {
                 assert!(r.bytes.starts_with(format!("%PDF-{header}").as_bytes()), "{}", c.label());
                 assert_eq!(raw_numbers(&r.bytes, "/UserUnit", 1), [3.938], "{}", c.label());
                 assert!((raw_meters(&r.bytes).0 - 20.0).abs() < 0.001, "{}", c.label());
-                let raised = r.warnings.iter().any(|w| w.starts_with("PDF 1.5 has no UserUnit") && w.ends_with("the file is written as PDF 1.6"));
-                assert_eq!(raised, c == Compatibility::Pdf15, "{}: {:?}", c.label(), r.warnings);
+                let raised =
+                    r.setting_notes.iter().any(|w| w.starts_with("PDF 1.5 has no UserUnit") && w.ends_with("the file is written as PDF 1.6"));
+                assert_eq!(raised, c == Compatibility::Pdf15, "{}: {:?}", c.label(), r.setting_notes);
             }
         }
     }
@@ -288,11 +289,11 @@ fn pdfa2b_at_pdf_1_4_writes_a_long_page_as_pdf_1_6_within_14400_units() {
             assert!(media[2] - media[0] <= 14_400.0 && media[3] - media[1] <= 14_400.0, "{side} {in_points}: {media:?}");
             assert!(((media[2] - media[0]) * unit[0] - side).abs() < side * 0.001, "{side} {in_points}: {media:?} {unit:?}");
             let raised = "PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6";
-            assert!(r.warnings.iter().any(|w| w == raised), "{side} {in_points}: {:?}", r.warnings);
+            assert!(r.setting_notes.iter().any(|w| w == raised), "{side} {in_points}: {:?}", r.setting_notes);
         }
         let r = report(&sized(14_400.0, 300.0), set.clone()).unwrap();
         assert!(r.bytes.starts_with(b"%PDF-1.4"), "{in_points}");
-        assert!(!r.warnings.iter().any(|w| w.contains("has no UserUnit")), "{in_points}: {:?}", r.warnings);
+        assert!(!r.setting_notes.iter().any(|w| w.contains("has no UserUnit")), "{in_points}: {:?}", r.setting_notes);
     }
 }
 
@@ -500,7 +501,7 @@ fn long_pages_in_points_keeps_every_version_and_changes_nothing_where_pages_are_
         assert!(r.bytes.starts_with(format!("%PDF-{}", c.id()).as_bytes()), "{}", c.label());
         assert_eq!(raw_numbers(&r.bytes, "/UserUnit", 1), Vec::<f64>::new(), "{}", c.label());
         assert!((raw_meters(&r.bytes).0 - 10.0).abs() < 0.001, "{}", c.label());
-        assert!(!r.warnings.iter().any(|w| w.starts_with("PDF 1.5 has no UserUnit")), "{}: {:?}", c.label(), r.warnings);
+        assert!(!r.setting_notes.iter().any(|w| w.starts_with("PDF 1.5 has no UserUnit")), "{}: {:?}", c.label(), r.setting_notes);
         assert_eq!(long_page_warnings(&r).len(), 1, "{}: {:?}", c.label(), r.warnings);
         if matches!(c, Compatibility::Pdf13 | Compatibility::Pdf14) {
             assert_eq!(r.bytes, report(&d, set).unwrap().bytes, "{}", c.label());
