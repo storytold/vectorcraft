@@ -467,6 +467,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "perspective.transform",
     "recolor.apply",
     "recolor.colors",
+    "recolor.pickTheme",
     "recolor.randomize",
     "recolor.reduce",
     "select.add",

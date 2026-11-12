@@ -2922,6 +2922,8 @@ mark-style	Japanese	日本式
 	No settings found	設定が見つかりません
 	Reset Profiles	プロファイルをリセット
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
+	Color Theme Picker	カラーテーマピッカー
+	Click or drag across the art to pick its colors; Shift adds more	アートワークをクリックまたはドラッグしてカラーを取得します。Shift キーで追加します
 	Reset to Default	初期設定に戻す
 	Reset to White, Black	白、黒にリセット
 	Reset {name}	{name}をリセット
