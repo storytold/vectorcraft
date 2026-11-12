@@ -576,6 +576,19 @@ fn a_view_gesture_on_a_graphics_handle_is_left_to_the_canvas() {
 }
 
 #[test]
+fn a_click_on_a_graphics_handle_records_no_undo_step() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic", "x": 5.03})).unwrap();
+    let history = undo_len(&app);
+    let handle = handles_screen(&app, 155.03, 150.0);
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, false)]));
+    assert_eq!(undo_len(&app), history);
+    assert_eq!(graphics(&app)[0]["x"], json!(5.03));
+}
+
+#[test]
 fn a_selection_change_during_a_handle_drag_ends_it() {
     let (mut app, ctx) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();

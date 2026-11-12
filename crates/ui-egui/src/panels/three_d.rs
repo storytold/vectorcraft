@@ -342,6 +342,15 @@ fn drag_owner(app: &VectorcraftApp) -> (u64, Vec<u64>) {
     app.session.active().map(|st| (st.uid, st.selection.objects.iter().map(|id| id.0).collect())).unwrap_or_default()
 }
 
+/// The offset, rounded to 0.1 pt, that a handle drag to offset (`x`, `y`) gives graphic `g`. `None`
+/// when the graphic stays where it is: the pointer is where the handle was grabbed, or the rounded
+/// offset is the graphic's own, so a click on a handle records no undo step.
+fn moved_to(g: &vectorcraft_effects::MappedGraphic, x: f64, y: f64) -> Option<(f64, f64)> {
+    let rounded = ((x * 10.0).round() / 10.0, (y * 10.0).round() / 10.0);
+    let still = (x - g.x).abs() < 1e-6 && (y - g.y).abs() < 1e-6;
+    (!still && rounded != (g.x, g.y)).then_some(rounded)
+}
+
 /// How near a press must be to a graphic's handle to grab it, in screen points.
 const HANDLE_REACH: f32 = 8.0;
 
@@ -364,9 +373,9 @@ pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, res
         if let (Some(p), Some((frame, mut list, _))) = (pointer, graphic_handles(app, &ctx))
             && let Some((x, y)) = frame.offset_at(drag.face, xf.to_doc(p) - drag.grab)
             && let Some(g) = list.get_mut(drag.index)
+            && let Some((x, y)) = moved_to(g, x, y)
         {
-            g.x = (x * 10.0).round() / 10.0;
-            g.y = (y * 10.0).round() / 10.0;
+            (g.x, g.y) = (x, y);
             let graphics = Value::Array(list.iter().map(vectorcraft_effects::MappedGraphic::to_value).collect());
             let mut changed = Map::new();
             changed.insert(vectorcraft_effects::GRAPHICS.into(), graphics);
