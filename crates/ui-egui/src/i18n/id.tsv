@@ -189,6 +189,15 @@
 	Expand…	Perluas…
 	Expand Appearance	Perluas tampilan
 	Crop Image	Pangkas gambar
+	Image Tools	Alat Gambar
+	Remove Background…	Hapus latar belakang…
+	Remove Background	Hapus latar belakang
+	Background	Latar belakang
+	Edge Color	Warna tepi
+	Picked Colors	Warna pilihan
+	Corner Color	Warna sudut
+	Contiguous	Bersambung
+	Each Channel	Setiap kanal
 	Edit Path	Edit jalur
 	Mask	Masker
 	Rasterize…	Rasterisasi…
@@ -1471,6 +1480,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Baseline Romawi
 	Select a text object to edit its character attributes.	Pilih objek teks untuk mengedit atribut karakternya.
 	Show Options	Tampilkan opsi
+	Show Recent Colors	Tampilkan warna terbaru
 	Small Caps	Kapital kecil
 	Small Caps (on the roadmap)	Kapital kecil (masih dalam roadmap)
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
@@ -1498,6 +1508,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Skalakan dari tengah
 	Up/Down:	Atas/bawah:
 	Left/Right:	Kiri/kanan:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko atas/bawah
+	Tate-chu-yoko Left/Right	Tate-chu-yoko kiri/kanan
 	Underline	Garis bawah
 	Vertical Scale %	Skala vertikal %
 	Axis	Sumbu
@@ -4465,6 +4477,7 @@ imageTrace	Outline	Kontur
 @msg	not a stored central record	bukan rekaman pusat yang tersimpan
 @msg	not a valid plug-in module: {0}	bukan modul plug-in yang valid: {0}
 @msg	not an EMF or WMF file	bukan berkas EMF atau WMF
+@msg	not an HP-GL file	bukan berkas HP-GL
 @msg	not found	tidak ditemukan
 @msg	not in pattern editing mode	tidak dalam mode pengeditan pola
 @msg	finish editing the pattern first	selesaikan pengeditan pola terlebih dahulu

@@ -196,6 +196,15 @@
 	Expand…	Proširi…
 	Expand Appearance	Proširi izgled
 	Crop Image	Izreži sliku
+	Image Tools	Alati za slike
+	Remove Background…	Ukloni pozadinu…
+	Remove Background	Ukloni pozadinu
+	Background	Pozadina
+	Edge Color	Boja ruba
+	Picked Colors	Odabrane boje
+	Corner Color	Boja uglova
+	Contiguous	Susjedni
+	Each Channel	Svaki kanal
 	Edit Path	Uredi putanju
 	Mask	Maska
 	Rasterize…	Rasteriziraj…
@@ -1535,6 +1544,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Latinična osnovna linija
 	Select a text object to edit its character attributes.	Odaberite tekstualni objekat da uredite njegove atribute znakova.
 	Show Options	Prikaži opcije
+	Show Recent Colors	Prikaži nedavne boje
 	Color Panel Options	Opcije panela boja
 	Small Caps	Mala velika slova
 	Small Caps (on the roadmap)	Mala velika slova (u planu)
@@ -1563,6 +1573,8 @@ digits	Malayalam	Malajalam
 	Scale at Center	Skaliraj od centra
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko gore/dolje
+	Tate-chu-yoko Left/Right	Tate-chu-yoko lijevo/desno
 	Underline	Podvučeno
 	Vertical Scale %	Okomita skala %
 	Axis	Osa
@@ -4755,6 +4767,7 @@ imageTrace	Outline	Obris
 @msg	not a stored central record	nije sačuvani centralni zapis
 @msg	not a valid plug-in module: {0}	nije važeći modul dodatka: {0}
 @msg	not an EMF or WMF file	nije EMF ni WMF datoteka
+@msg	not an HP-GL file	nije HP-GL datoteka
 @msg	not an export presets file (format `{_1}`)	nije datoteka predložaka izvoza (format `{_1}`)
 @msg	not an export presets file: {e}	nije datoteka predložaka izvoza: {e}
 @msg	not found	nije pronađeno
