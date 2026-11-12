@@ -740,17 +740,17 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
         let inks: Vec<shadow::Ink> = parts.iter().map(|(item, member, ..)| ink(item, *member)).collect();
         // Inflate's eye is placed for every shape together, as the solids are.
         let added: Vec<Result<std::ops::Range<usize>, String>> = if id == INFLATE {
-            let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _)| (area, *rule)).collect();
+            let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
             let casts: Vec<bool> = inks.iter().map(|i| i.opacity > 0.0).collect();
             caster.inflate(&shapes, &casts, bounds, inflate_options(p), view)
         } else {
             let mut added = vec![];
-            for ((_, _, area, rule, _), ink) in parts.iter().zip(&inks) {
+            for ((_, _, area, rule, _, _), ink) in parts.iter().zip(&inks) {
                 added.push(if ink.opacity > 0.0 { caster.extrude(area, *rule, bounds, extrude_options(p), view) } else { Ok(0..0) });
             }
             added
         };
-        for (((item, _, _, _, scopes), ink), faces) in parts.iter().zip(inks).zip(added) {
+        for (((item, _, _, _, scopes, _), ink), faces) in parts.iter().zip(inks).zip(added) {
             if ink.opacity <= 0.0 {
                 continue;
             }
