@@ -3337,3 +3337,22 @@ fn hebrew_parallel_round3_files_values() {
         );
     }
 }
+
+#[test]
+fn hebrew_parallel_round5_view_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Hide Gradient Annotator", "הסתרת סימוני מעבר הצבע"),
+        ("Hide Print Tiling", "הסתרת חלוקת ההדפסה לאריחים"),
+        ("Hide Slices", "הסתרת פרוסות"),
+        ("Hide Template", "הסתרת התבנית"),
+        ("Hide Thumbnail", "הסתרת תמונה ממוזערת"),
+        ("Hide Thumbnails", "הסתרת תמונות ממוזערות"),
+        ("Hide Video Rulers", "הסתרת סרגלי וידאו"),
+        ("More Align options", "אפשרויות יישור נוספות"),
+        ("Reset Rotate View", "איפוס סיבוב התצוגה"),
+        ("Rearrange All Artboards", "סידור מחדש של כל משטחי העבודה"),
+    ] {
+        assert_eq!(tr(he, source), expected, "Hebrew source mismatch: {source}");
+    }
+}
