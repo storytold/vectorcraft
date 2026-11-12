@@ -308,6 +308,23 @@ fn assign_profile_is_stored_and_undoable() {
     assert_eq!(cmd::colormgmt::doc_profiles(&s.doc().unwrap().doc), (None, None));
 }
 
+/// Assigning the working profiles leaves the active color settings and the other documents'
+/// revisions unchanged.
+#[test]
+fn assigning_the_working_profiles_keeps_the_active_color_settings() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let working = cms::active_settings();
+    let active = cms::active();
+    let other = s.documents()[0].revision;
+    let r = s.execute("edit.assignProfile", &json!({"rgb": working.rgb, "cmyk": working.cmyk})).unwrap();
+    assert_eq!((r["rgb"].as_str(), r["cmyk"].as_str()), (Some(working.rgb.as_str()), Some(working.cmyk.as_str())));
+    assert_eq!(cmd::colormgmt::doc_profiles(&s.doc().unwrap().doc), (Some(working.rgb.clone()), Some(working.cmyk.clone())));
+    assert!(std::sync::Arc::ptr_eq(&active, &cms::active()), "the active color settings were replaced");
+    assert_eq!(s.documents()[0].revision, other, "the other document's revision changed");
+}
+
 #[test]
 fn proof_colors_simulate_press_on_screen() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
