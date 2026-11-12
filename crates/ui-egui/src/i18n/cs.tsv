@@ -118,6 +118,7 @@
 	PDF Presets…	Přednastavení PDF…
 	Perspective Grid Presets…	Přednastavení perspektivní mřížky…
 	Color Settings…	Nastavení barev…
+	Assign Profile	Přiřadit profil
 	Assign Profile…	Přiřadit profil…
 	Keyboard Shortcuts…	Klávesové zkratky…
 # Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
@@ -416,6 +417,9 @@
 	Create Outlines	Převést na křivky
 	Optical Margin Alignment	Optické zarovnání okrajů
 	Dynamic Text	Dynamický text
+	Dynamic Text Presets	Předvolby dynamického textu
+	Arch	Klenba
+@msg	select point type or type on a path	vyberte bodový text nebo text na cestě
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text na cestě ve zřetězeném textu nemůže používat dynamický text: {frames}
 	Fill with Placeholder Text	Vyplnit zástupným textem
 	Insert Inline Symbol	Vložit symbol do textu
@@ -561,6 +565,7 @@
 	Gaussian Blur…	Gaussovské rozostření…
 	View	Zobrazení
 	Preview	Náhled
+	Preview:	Náhled:
 	Overprint Preview	Náhled přetisků
 	Pixel Preview	Náhled obrazových bodů
 	Trim View	Oříznuté zobrazení
@@ -801,6 +806,15 @@
 	Stun Pulse	Omráčení
 	Stealth Fade	Plížení
 	Shield Buff	Štít
+	Textures	Textury
+	Fine Grain	Jemné zrno
+	Canvas Weave	Tkané plátno
+	Burlap Sack	Pytlovina
+	Cracked Glaze	Popraskaná glazura
+	Mosaic Floor	Mozaiková podlaha
+	Quilted Squares	Prošívané čtverce
+	Leaded Glass	Olovnaté sklo
+	Damp Paper	Vlhký papír
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
 	Gradient Finishes	Přechodové povrchy
@@ -822,6 +836,7 @@
 	Spectrum Gradients	Spektrální přechody
 	Sky Gradients	Přechody oblohy
 	Neutral Gradients	Neutrální přechody
+	Organic Fades	Organické přechody
 	Duotone Gradients	Dvoutónové přechody
 	Radial Glows	Kruhové záře
 	Save Swatch Library…	Uložit knihovnu vzorníku…
@@ -1702,6 +1717,7 @@ digits	Malayalam	Malajálamské
 	Points: clicks add free points	Body: kliknutím přidáte volné body
 	Radial Gradient	Kruhový přechod
 	Conic Gradient	Kuželový přechod
+	Diamond Gradient	Kosočtverečný přechod
 	Reset to White, Black	Obnovit na bílou a černou
 	Reverse Gradient	Obrátit přechod
 	Save to Swatches	Uložit do vzorníku
@@ -2072,6 +2088,7 @@ digits	Malayalam	Malajálamské
 	Simulate Paper	Simulovat papír
 	Use Black Point Compensation	Použít kompenzaci černého bodu
 	Working CMYK (don't tag)	Pracovní CMYK (neoznačovat)
+	Working RGB (don't tag)	Pracovní RGB (neoznačovat)
 	{name} (spot)	{name} (přímá)
 	Add to Profiles…	Přidat do profilů…
 	Align Stroke to Center	Zarovnat tah na střed
@@ -4550,6 +4567,7 @@ imageTrace	Outline	Obrys
 @msg	`{key}` must be a number, not {v}	`{key}` musí být číslo, ne {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} musí být unixový čas v sekundách (celé číslo) nebo null
 @msg	`{key}` must be a string	`{key}` musí být řetězec
+@msg	`{key}` must be a profile name or null	`{key}` musí být název profilu nebo null
 @msg	`{key}` must be a whole number	`{key}` musí být celé číslo
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` musí být celé číslo mezi {min} a {max} (zadáno {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musí být mezi {min} a {max} (zadáno {x})
@@ -5044,7 +5062,7 @@ imageTrace	Outline	Obrys
 @msg	unknown format	neznámý formát
 @msg	unknown format `{f}` (Save writes {_1})	neznámý formát `{f}` (Uložit zapisuje {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	neznámý režim volného přechodu `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	neznámý druh přechodu `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	neznámý druh přechodu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	neznámé zvýraznění `{h}`
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
@@ -5828,7 +5846,7 @@ mark-style	Japanese	Japonské
 @msg	span must be "object" or "selection", got {v}	span musí být "object" nebo "selection", ne {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umísťuje `gradient`, ne vzorník
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umísťuje přechod: zadejte `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" umísťuje lineární, radiální nebo kuželový přechod, ne volný přechod
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" umísťuje lineární, radiální, kuželový nebo kosočtverečný přechod, ne volný přechod
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umísťuje samotný přechod: vynechte `start` a `end` (ty ho už umísťují v souřadnicích dokumentu)
 	Make Image Dynamic	Nastavit obraz jako dynamický
 	Import Data Sets…	Importovat sady dat…
@@ -6844,6 +6862,11 @@ breakText	Glyphs	Glyfy
 @msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje jen exportní nebo importní zásuvný modul
 @msg	an importer always gets an import's budget: leave `budget` out	importní zásuvný modul dostává vždy rozpočet importu: vynechte `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopírovat informace pro řešení potíží
+@msg	Copied the troubleshooting info	Informace pro řešení potíží zkopírovány
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Poslední relace VectorCraftu přestala odpovídat, než se zavřela. Nápověda › Kopírovat informace pro řešení potíží zkopíruje podrobnosti pro hlášení chyby
+
 # Safe Mode
 	Safe Mode…	Nouzový režim…
 	Safe Mode	Nouzový režim
@@ -6864,6 +6887,7 @@ breakText	Glyphs	Glyfy
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Zarovnat na mřížku obrazových bodů
+	Align New Objects to Pixel Grid	Zarovnat nové objekty na mřížku obrazových bodů
 	Not Aligned to Pixel Grid	Nezarovnané na mřížku obrazových bodů
 @msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty
 @msg	side is left or right, not `{s}`	side je left nebo right, ne `{s}`

@@ -846,6 +846,30 @@ fn a_person_can_let_a_growing_run_go_on_or_stop_it() {
 }
 
 #[test]
+fn a_run_waiting_to_grow_stops_at_the_next_slice_once_its_work_is_canceled() {
+    TEST_GROWTH.with(|g| g.set(Some(20)));
+    let mut s = two_docs();
+    let before = state(&s);
+    s.script_frames = true;
+    run(&mut s, "for (var i = 0; i < 25; i++) vc.run('shape.rectangle', {x:i,y:1,width:1,height:1});").unwrap();
+    let token = crate::cancel::CancelToken::new();
+    for _ in 0..1_000 {
+        if s.script_waiting() {
+            break;
+        }
+        assert!(crate::cancel::scope(&token, None, || s.script_pump()).is_none());
+    }
+    assert!(s.script_waiting());
+    token.cancel();
+    let ended = crate::cancel::scope(&token, None, || s.script_pump());
+    TEST_GROWTH.with(|g| g.set(None));
+    assert!(ended.expect("the run goes on waiting for Continue").is_err());
+    assert_eq!(s.script_report().unwrap()["kind"], "stopped");
+    assert!(!s.script_running());
+    assert_eq!(state(&s), before);
+}
+
+#[test]
 fn a_file_saved_before_a_failure_stays_written_and_is_named() {
     let path = std::env::temp_dir().join(format!("vc-script-save-{}.svg", std::process::id()));
     let _ = std::fs::remove_file(&path);
