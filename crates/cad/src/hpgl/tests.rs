@@ -440,6 +440,19 @@ fn only_plot_files_are_taken_for_hpgl() {
     assert!(is_hpgl(b"IN;SP1;PU;PD;PU;PD;PU;PD;hello world"));
 }
 
+/// A file read as HP-GL (picked by its extension) may start with any instruction the reader knows,
+/// or one of another set that a semicolon ends; its content alone doesn't make it HP-GL.
+#[test]
+fn a_plot_file_may_start_with_any_instruction() {
+    for f in [&b"SI0.2,0.3;SP1;PA0,0;PD1016,0;"[..], b"DI1,0;SP1;PA0,0;PD1016,0;", b"GC5;SP1;PA0,0;PD1016,0;"] {
+        assert!(!is_hpgl(f), "{:?}", String::from_utf8_lossy(f));
+        assert_eq!(leaves(&plot_bytes(f).document).len(), 1, "{:?}", String::from_utf8_lossy(f));
+    }
+    for f in [&b"GC5"[..], b"SIhello world", b"set terminal png\n"] {
+        assert_eq!(import(f).err().as_deref(), Some("not an HP-GL file"), "{:?}", String::from_utf8_lossy(f));
+    }
+}
+
 #[test]
 fn escapes_that_carry_values_or_data_are_skipped_whole() {
     // A reset leaves HP-GL until a language switch; symbol-set escapes carry a value and a letter.

@@ -79,6 +79,16 @@ fn files_that_are_not_hpgl_are_refused() {
     assert_eq!(text["format"], "txt", "{text}");
 }
 
+/// A plot file named as one opens when its first instruction is one a plot file seldom starts with;
+/// under another name it isn't taken for HP-GL.
+#[test]
+fn a_plot_file_by_its_name_may_start_with_any_instruction() {
+    let plot = b"SI0.2,0.3;SP1;PA0,0;PD1016,0;";
+    let r = Session::new().execute("document.open", &json!({"name": "part.plt", "dataBase64": b64(plot)})).unwrap();
+    assert_eq!(r["format"].as_str(), Some("hpgl"), "{r}");
+    assert!(detect("drawing.prn", plot).is_none_or(|f| f.id != "hpgl"));
+}
+
 #[test]
 fn the_dialogs_and_the_format_list_name_hpgl() {
     let exts = ["plt", "hpgl", "hgl", "hpg"];
