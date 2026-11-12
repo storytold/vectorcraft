@@ -49,6 +49,17 @@ impl FileFonts {
         self.resources = resources.into_iter().map(|(key, face)| (key, face.id(), Arc::downgrade(&face))).collect();
         changed
     }
+
+    /// Remap serialized and validated runtime resource keys together when art changes namespaces.
+    /// The callback applies the same mapping to each occurrence of an original key.
+    pub fn map_keys(&mut self, mut map: impl FnMut(&mut String)) {
+        for font in &mut self.fonts {
+            map(&mut font.key);
+        }
+        for (key, _, _) in &mut self.resources {
+            map(key);
+        }
+    }
 }
 
 impl PartialEq for FileFonts {

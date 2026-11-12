@@ -666,8 +666,8 @@ impl Relink {
                         self.name(Res::ParaStyle, s);
                     }
                 }
-                for ff in t.file_fonts.iter_mut().flat_map(|ff| &mut ff.fonts) {
-                    self.name(Res::Image, &mut ff.key);
+                if let Some(fonts) = &mut t.file_fonts {
+                    fonts.map_keys(|key| self.name(Res::Image, key));
                 }
             }
             NodeKind::Image(im) => self.name(Res::Image, &mut im.key),

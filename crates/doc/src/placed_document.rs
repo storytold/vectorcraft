@@ -516,6 +516,9 @@ fn rename(n: &mut Node, prefix: &str) {
                     paint(&mut r.style.fill);
                     paint(&mut r.style.stroke);
                 }
+                if let Some(fonts) = &mut t.file_fonts {
+                    fonts.map_keys(|key| *key = format!("{prefix}{key}"));
+                }
             }
             NodeKind::Image(im) => im.key = format!("{prefix}{}", im.key),
             NodeKind::PlacedDocument(p) => p.key = format!("{prefix}{}", p.key),

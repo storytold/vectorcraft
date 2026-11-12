@@ -99,6 +99,60 @@ fn only_fonts_referenced_by_active_runs_consume_allowance() {
     assert_eq!(db.read_file_faces().by_id.len(), 1);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn removing_an_installed_exact_face_uses_the_owned_snapshot_fallback() {
+    let dir = std::env::temp_dir().join(format!("vc-file-font-{}-installed-fallback", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    let installed_path = dir.join("Installed.ttf");
+    std::fs::write(&installed_path, blob(800.0).bytes.as_slice()).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    db.set_system_fallback(false);
+    let installed_id = {
+        let (face, matched) = db.resolve(FAMILY, "Regular").unwrap();
+        assert_eq!(matched, super::super::traits::FontMatch::Exact);
+        face.id()
+    };
+    let mut doc = document("carried", blob(200.0));
+    assert!(db.bind_document_file_fonts(&mut doc).is_empty());
+    assert!(db.file_faces(first_text(&doc)).is_empty(), "the installed exact face still wins");
+    assert_eq!(layout(&db, first_text(&doc)).glyphs[0].font_id, installed_id);
+    assert_eq!(db.read_file_faces().by_id.len(), 1, "the referenced carried resource is admitted while dormant");
+    let (carried_id, weak) = {
+        let face = first_text(&doc).file_fonts.as_ref().unwrap().face("carried").unwrap();
+        assert_ne!(face.id(), installed_id);
+        assert_eq!(face.bytes(), doc.images["carried"].bytes.as_slice());
+        (face.id(), Arc::downgrade(&face))
+    };
+    let undo = doc.clone();
+    let resource = doc.images["carried"].clone();
+    let cached_text = first_text(&doc).clone();
+    let replacement = blob(900.0);
+    assert!(db.keep_file_font_up_to(&replacement, 1).is_none(), "dormant owned resources count toward the live allowance");
+
+    std::fs::remove_file(&installed_path).unwrap();
+    std::fs::remove_dir(&dir).unwrap();
+    assert_eq!(db.load_system_fonts(), 0);
+    assert!(db.face_by_id(installed_id).is_none());
+    for retained in [&doc, &undo] {
+        assert_eq!(layout(&db, first_text(retained)).glyphs[0].font_id, carried_id, "removal needs no reopen or rebind");
+    }
+
+    doc.images.clear();
+    assert!(!db.bind_document_file_fonts(&mut doc).is_empty());
+    assert!(db.file_faces(first_text(&doc)).is_empty());
+    drop(doc);
+    assert_eq!(layout(&db, first_text(&undo)).glyphs[0].font_id, carried_id, "current-document rebinding cannot revoke Undo ownership");
+    drop(undo);
+    assert_eq!(layout(&db, &cached_text).glyphs[0].font_id, carried_id, "a resource snapshot still owns the carried face");
+    assert!(db.keep_file_font_up_to(&replacement, 1).is_none());
+    drop(resource);
+    assert!(weak.upgrade().is_none());
+    assert!(db.face_by_id(carried_id).is_none());
+    assert!(db.file_faces(&cached_text).is_empty(), "text bindings alone do not own admission");
+    assert!(db.keep_file_font_up_to(&replacement, 1).is_some(), "closing the last resource owner releases allowance");
+}
+
 #[test]
 fn document_snapshots_and_inflight_faces_keep_only_live_allowance() {
     let db = FontDb::with_font_dirs(vec![]);

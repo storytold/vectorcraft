@@ -681,13 +681,13 @@ impl FontDb {
 
     /// Bind only references whose owning document actually carries the bytes. A serialized
     /// reference without its blob cannot borrow a font another document loaded.
+    /// Keep owned fallbacks bound even while an installed exact face wins, in case it is removed.
     /// The return value says whether every active reference was admitted.
     pub fn bind_file_fonts<'a>(&self, t: &mut vectorcraft_doc::TextObject, image: impl Fn(&str) -> Option<&'a vectorcraft_doc::ImageBlob>) -> bool {
         let mut resources: Vec<(String, Arc<dyn vectorcraft_doc::FileFontFace>)> = vec![];
         let mut complete = true;
         for font in t.file_fonts_in_use() {
             if !t.runs.iter().any(|r| r.style.font_family == font.family && r.style.font_style == font.style)
-                || self.resolve(&font.family, &font.style).is_some_and(|(_, m)| m == super::traits::FontMatch::Exact)
                 || resources.iter().any(|(key, _)| *key == font.key)
             {
                 continue;

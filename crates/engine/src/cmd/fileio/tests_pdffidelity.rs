@@ -259,27 +259,31 @@ fn type_in_a_font_the_pdf_carries_keeps_its_look_until_edited() {
     assert_eq!(glyphs(&s), (at, carried));
 }
 
+fn owned_font_document(family: &str, width: f64) -> (vectorcraft_doc::Document, vectorcraft_doc::ImageBlob, vectorcraft_doc::NodeId) {
+    use kurbo::{Point, Rect, Shape};
+    use vectorcraft_doc::{CharStyle, Document, FILE_FONT_MIME, FileFont, FileFonts, ImageBlob, Node, TextObject};
+    use vectorcraft_text::{FileFontInfo, FileGlyph, build_file_font};
+
+    let info = FileFontInfo { family: family.into(), style: "Regular".into(), ..Default::default() };
+    let g = FileGlyph { ch: 'x', outline: Rect::new(0.0, 0.0, width, 700.0).to_path(0.1), advance: width + 100.0 };
+    let blob = ImageBlob::new(FILE_FONT_MIME, build_file_font(&info, &[g]).unwrap());
+    let mut doc = Document::new(100.0, 100.0);
+    doc.images.insert("chosen".into(), blob.clone());
+    let mut t = TextObject::point(Point::new(10.0, 40.0), "x", CharStyle { font_family: family.into(), size: 20.0, ..Default::default() });
+    t.file_fonts = Some(Box::new(FileFonts::new(vec![FileFont { family: family.into(), style: "Regular".into(), key: "chosen".into() }], "x")));
+    let id = doc.alloc_id();
+    doc.insert(None, usize::MAX, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    (doc, blob, id)
+}
+
 /// No machine fonts are needed: the two native documents own different synthetic glyphs under
 /// the same key. Paste must relink its own bytes, including after closing the source tab.
 #[test]
 fn owned_file_fonts_survive_native_open_close_clipboard_undo_and_export() {
-    use kurbo::{Point, Rect, Shape};
-    use vectorcraft_doc::{CharStyle, Document, FILE_FONT_MIME, FileFont, FileFonts, ImageBlob, Node, TextObject};
-    use vectorcraft_text::{FileFontInfo, FileGlyph, FontDb, build_file_font};
+    use vectorcraft_doc::Document;
+    use vectorcraft_text::FontDb;
 
     const FAMILY: &str = "Native Owned File Font Regression";
-    let make = |width| {
-        let info = FileFontInfo { family: FAMILY.into(), style: "Regular".into(), ..Default::default() };
-        let g = FileGlyph { ch: 'x', outline: Rect::new(0.0, 0.0, width, 700.0).to_path(0.1), advance: width + 100.0 };
-        let blob = ImageBlob::new(FILE_FONT_MIME, build_file_font(&info, &[g]).unwrap());
-        let mut doc = Document::new(100.0, 100.0);
-        doc.images.insert("chosen".into(), blob.clone());
-        let mut t = TextObject::point(Point::new(10.0, 40.0), "x", CharStyle { font_family: FAMILY.into(), size: 20.0, ..Default::default() });
-        t.file_fonts = Some(Box::new(FileFonts::new(vec![FileFont { family: FAMILY.into(), style: "Regular".into(), key: "chosen".into() }], "x")));
-        let id = doc.alloc_id();
-        doc.insert(None, usize::MAX, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
-        (doc, blob, id)
-    };
     let open_native = |s: &mut Session, doc: &Document| {
         let bytes = vectorcraft_format::save_file(doc);
         s.execute("document.open", &json!({"name": "font.vectorcraft", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap()
@@ -289,8 +293,8 @@ fn owned_file_fonts_survive_native_open_close_clipboard_undo_and_export() {
         let g = &vectorcraft_text::layout(FontDb::global(), t).glyphs[0];
         FontDb::global().face_by_id(g.font_id).unwrap()
     };
-    let (a, a_blob, a_id) = make(200.0);
-    let (b, b_blob, b_id) = make(800.0);
+    let (a, a_blob, a_id) = owned_font_document(FAMILY, 200.0);
+    let (b, b_blob, b_id) = owned_font_document(FAMILY, 800.0);
     let mut s = Session::new();
     open_native(&mut s, &a);
     let a_index = s.active_index().unwrap();
@@ -328,4 +332,110 @@ fn owned_file_fonts_survive_native_open_close_clipboard_undo_and_export() {
     let report = open_native(&mut s, &unowned);
     assert!(report["warnings"].to_string().contains(FAMILY));
     assert_eq!(glyphs(&s).1, 0, "a metadata-only reference cannot borrow any open document's font");
+}
+
+/// Place owns its carried font even after the decoded source is dropped, whether the destination
+/// reuses an equal unbound blob or renames a key occupied by another font.
+#[test]
+fn placed_fonts_keep_owned_bytes_after_resource_reuse_or_name_collision() {
+    use vectorcraft_doc::Document;
+    use vectorcraft_text::FontDb;
+
+    const FAMILY: &str = "Placed Owned Font Regression";
+    let (source, expected, _) = owned_font_document(FAMILY, 200.0);
+    let bytes = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&source));
+    for same_bytes in [true, false] {
+        let mut host = Document::new(100.0, 100.0);
+        let blob = if same_bytes { expected.clone() } else { owned_font_document(FAMILY, 800.0).1 };
+        host.images.insert("chosen".into(), blob);
+        let mut s = Session::new();
+        s.add_document(host, None);
+        let placed = s.execute("file.place", &json!({"name": "font.vectorcraft", "dataBase64": bytes, "link": false})).unwrap();
+        assert!(placed["warnings"].as_array().unwrap().is_empty(), "{placed}");
+        let check = |s: &Session| {
+            let db = FontDb::global();
+            let mut drawn = 0;
+            s.doc().unwrap().doc.walk(|n| {
+                if let NodeKind::Text(t) = &n.kind {
+                    for g in vectorcraft_text::layout(db, t).glyphs {
+                        assert!(db.is_file_font(g.font_id), "the destination, not a source cache, owns the font");
+                        assert_eq!(db.face_by_id(g.font_id).unwrap().file_data(), expected.bytes.as_slice());
+                        drawn += 1;
+                    }
+                }
+            });
+            assert_eq!(drawn, 1);
+        };
+        check(&s);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(glyphs(&s).1, 0);
+        s.execute("edit.redo", &json!({})).unwrap();
+        check(&s);
+        let saved = s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap();
+        let reopened = s.execute("document.open", &json!({"name": "placed.vectorcraft", "dataBase64": saved["dataBase64"]})).unwrap();
+        assert!(reopened["warnings"].as_array().unwrap().is_empty(), "{reopened}");
+        check(&s);
+    }
+}
+
+fn linked_owned_font_document(family: &str) -> (vectorcraft_doc::Document, vectorcraft_doc::ImageBlob, vectorcraft_doc::NodeId) {
+    use kurbo::Affine;
+    use vectorcraft_doc::{Document, ImageBlob, LinkInfo, Node, PlacedDocument};
+
+    let (source, expected, _) = owned_font_document(family, 200.0);
+    let bytes = vectorcraft_format::save_file(&source);
+    let blob = ImageBlob::new("application/json", bytes);
+    let key = format!("placed-font-{}", blob.content_key());
+    let mut host = Document::new(100.0, 100.0);
+    host.images.insert("chosen".into(), owned_font_document(family, 800.0).1);
+    host.images.insert(key.clone(), blob);
+    let placed = PlacedDocument {
+        key,
+        link: LinkInfo::new("/font-placement-regression.vectorcraft"),
+        bounding: false,
+        page_box: Default::default(),
+        width: 100.0,
+        height: 100.0,
+        xf: Affine::IDENTITY,
+        placement: Default::default(),
+    };
+    let id = host.alloc_id();
+    host.insert(None, usize::MAX, Node::new(id, NodeKind::PlacedDocument(Box::new(placed)))).unwrap();
+    (host, expected, id)
+}
+
+/// Break Link and older-version saves must preserve the placed file's own bytes rather than bind
+/// text to the host's unrelated font under the same key when reopened.
+#[test]
+fn placed_carried_fonts_survive_break_link_and_older_version_save() {
+    use vectorcraft_text::FontDb;
+
+    for break_link in [true, false] {
+        let family = if break_link { "Break Link Owned Font Regression" } else { "Older Save Owned Font Regression" };
+        let (host, expected, id) = linked_owned_font_document(family);
+        let mut s = Session::new();
+        s.add_document(host, None);
+        if break_link {
+            let embedded = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+            assert_eq!(embedded["embedded"], json!([id.0]), "{embedded}");
+            assert_eq!(glyphs(&s).1, 1);
+        }
+        let version = if break_link { vectorcraft_format::VERSION } else { vectorcraft_format::VERSION - 1 };
+        let saved = s.execute("document.serialize", &json!({"format": "vectorcraft", "version": version, "preview": false})).unwrap();
+        let reopened = s.execute("document.open", &json!({"name": "placed-font.vectorcraft", "dataBase64": saved["dataBase64"]})).unwrap();
+        assert!(reopened["warnings"].as_array().unwrap().is_empty(), "{reopened}");
+        let db = FontDb::global();
+        let mut drawn = 0;
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                for g in vectorcraft_text::layout(db, t).glyphs {
+                    assert!(db.is_file_font(g.font_id));
+                    assert_eq!(db.face_by_id(g.font_id).unwrap().file_data(), expected.bytes.as_slice(), "{family}");
+                    drawn += 1;
+                }
+            }
+        });
+        assert_eq!(drawn, 1, "{family}");
+        assert!(!s.doc().unwrap().doc.has_placed(), "the reopened art is editable, not a linked source");
+    }
 }

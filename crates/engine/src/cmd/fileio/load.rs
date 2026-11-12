@@ -170,8 +170,11 @@ fn restore_or_import(
     let mut fallback = None;
     if let Some((intact, bytes)) = editing {
         let native = if intact { bytes() } else { None };
-        match native.and_then(|b| native_file(&b).ok()) {
-            Some((doc, _, warnings)) => return Ok((doc, warnings, true)),
+        match native.and_then(|b| decode_native_file(&b).ok()) {
+            Some((mut doc, _, mut warnings)) => {
+                warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
+                return Ok((doc, warnings, true));
+            }
             None => fallback = Some(if intact { EDITING_DAMAGED } else { EDITING_STALE }),
         }
     }
@@ -182,13 +185,12 @@ fn restore_or_import(
     Ok((doc, warnings, false))
 }
 
-/// A native file's document and details, the colour profiles it carries installed where missing
-/// (with a warning for each that can't be used).
-pub(crate) fn native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
-    let mut f = vectorcraft_format::load_file(bytes).map_err(err)?;
+/// Decode a native file and install its colour profiles, preserving profile and depth warnings.
+/// The caller must assemble any external resources and bind file fonts before layout.
+pub(crate) fn decode_native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
+    let f = vectorcraft_format::load_file(bytes).map_err(err)?;
     let mut warnings = super::native::install_profiles(f.profiles);
     warnings.extend(f.depth_notes);
-    warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut f.doc));
     Ok((f.doc, f.info, warnings))
 }
 
@@ -388,7 +390,8 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             })?
         }
         "vectorcraft" | "template" => {
-            let (d, info, warnings) = native_file(bytes)?;
+            let (mut d, info, mut warnings) = decode_native_file(bytes)?;
+            warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut d));
             native_pdf_compatible = Some(info.pdf_compatible);
             converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;
             (d, warnings, false)

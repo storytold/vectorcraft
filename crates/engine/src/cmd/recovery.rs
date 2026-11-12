@@ -1417,7 +1417,7 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     let bytes = store.read(&format!("{file}{DOC_EXT}")).map_err(EngineError::Other)?;
     let meta_bytes = store.read(&format!("{file}{META_EXT}")).unwrap_or_default();
     let meta: Meta = serde_json::from_slice(&meta_bytes).unwrap_or_default();
-    let (mut doc, _, mut warnings) = fileio::native_file(&bytes).map_err(|e| EngineError::Other(format!("recovery copy `{file}`: {e}")))?;
+    let (mut doc, _, mut warnings) = fileio::decode_native_file(&bytes).map_err(|e| EngineError::Other(format!("recovery copy `{file}`: {e}")))?;
     // A frame whose first paragraph continues from the frame before draws it without the
     // paragraph's first-line indent and list marker.
     super::threads::mark_continued(&mut doc);
@@ -1469,6 +1469,8 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     let links_from = meta.path.clone().or_else(|| meta.links_from.clone());
     let base = super::links::LinkBase::file(links_from.as_deref());
     let links = super::links::resolve(&mut doc, base, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
+    // Bind only after the copy's external resources and linked files have been restored.
+    warnings.extend(Session::refresh_text_bounds(&mut doc));
     let index = s.add_document(doc, meta.path.clone());
     let st = s.doc_mut()?;
     st.recovered = true;
