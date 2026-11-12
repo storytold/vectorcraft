@@ -323,8 +323,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 - **Done:** Numeric fields keep a text drag's start when the pointer gains focus and movement exceeds the click threshold (#1326, in part). A completed focus click selects the whole value; keyboard focus, double-click and numeric stepping remain regression-tested. Short movements still classified as clicks can select all; that case remains open.
 
-- **Done:** DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves keep their open state. DXF export now recognizes circular cubic paths conservatively and writes native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE, and a non-circular ellipse keeps the existing fallback. Alter Paths for Appearance outlines only the strokes a CAD line can't draw (aligned, profiled, offset dashes, wider than 2.11 mm, or in R13 and R14), so a 1 pt circle or arc stays a CIRCLE or ARC. CNC preset and VCarve QA remain open. Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture. Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests/distortkeys.rs`.
-- **Done:** DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves keep their open state. DXF export now recognizes circular cubic paths conservatively and writes native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE. A closed four-cubic ellipse, or a circle scaled out of proportion, is written as a native ELLIPSE in R13 and later; R12 keeps the existing fallback. CNC preset and VCarve QA remain open. Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture. Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests/distortkeys.rs`.
+- **Done:** DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves keep their open state. DXF export now recognizes circular cubic paths conservatively and writes native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE. A closed four-cubic ellipse, or a circle scaled out of proportion, is written as a native ELLIPSE in R13 and later; R12 keeps the existing fallback. Alter Paths for Appearance outlines only the strokes a CAD line can't draw (aligned, profiled, offset dashes, wider than 2.11 mm, or in R13 and R14), so a 1 pt circle or arc stays a CIRCLE or ARC. DXF Options' Preset menu and `document.exportDxf`'s `dxfPreset: "cnc"` set the CNC / CAM options (#5500); VCarve QA remains open. Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture. Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests/distortkeys.rs`.
 
 - **Done:** Simplify and Add Anchor Points clear stale component selections on rewritten paths; Simplify previews and reports original/new point counts (#1272).
 - **Done:** Object › Path › Simplify opens its slider at the Auto-Simplify level for the selection and previews that result, as the [manual-simplify page](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/manually-simplify-paths.html) describes; simplifying only a Direct Selection part of a path is done too (G1).
@@ -631,8 +630,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   libraries ([public source](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/create-new-brush-libraries.html),
   [import](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/import-brushes-from-brush-libraries-or-other-files.html)):
   Window › Brush Libraries and the Brushes panel's Brush Libraries Menu open each library in a library panel of
-  its own (six original libraries generated in code: Art Ribbons, Calligraphic Nibs, Pattern Borders, Scatter
-  Shapes, Game Trails and Energy Beams; User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
+  its own (seven original libraries generated in code: Art Ribbons, Calligraphic Nibs, Bristle Brushes (one
+  bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Game Trails and Energy Beams; User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
   click adds a
   brush to the document's Brushes with the patterns, symbols and other resources its art uses, as one undo
   step (applied to the selected paths in the same step), dragging one onto a path adds and applies it and
@@ -646,12 +645,14 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Direct Selection of a path, compound path or type inside a dynamic instance also takes opacity and blend
   (`transparency.set`) and a gradient or pattern fill or stroke (`paint.setFill` / `paint.setStroke`,
   Eyedropper), for that instance only;
-  graphic style libraries (Window › Graphic Style Libraries; nine original libraries generated in code, including
+  graphic style libraries (Window › Graphic Style Libraries; ten original libraries generated in code, including
   Game HUD with Health Fill, Mana Glow, Damage Flash, Quest Outline, Coin Shine and Boss Alert, Status Effects
-  with Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade and Shield Buff, and Textures with Fine Grain,
-  Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper, painted with
-  the texture effects; User Defined; Other Library…; `graphicStyle.libraries`, `graphicStyle.addFromLibrary`).
-- **Missing:** more built-in brush libraries beyond the six shipped (and further graphic-style libraries beyond the nine shipped, and further symbol libraries beyond Basic
+  with Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade and Shield Buff, Painted and Sketched with
+  Washed Blue, Bristle Ochre, Pastel Heather, Charcoal Shade, Ink Contour, Wet Ink and Fine Pen, and Textures with
+  Fine Grain, Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper,
+  painted with the texture effects; User Defined; Other Library…; `graphicStyle.libraries`,
+  `graphicStyle.addFromLibrary`).
+- **Missing:** more built-in brush libraries beyond the seven shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
   Global Edit of groups holding type or images, rotated copies as matches and highlighting matches before the
   start; 9-slice guides outside the symbol's art (a dragged guide stops at the art's edge).
@@ -663,7 +664,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Extrude & Bevel, Inflate and Rotate with Position presets ([three-d.md](three-d.md), #1407). Colored Inflate has automatic smooth vector lighting from shared membrane normals. White-light Inflate keeps its existing appearance. All four take one to ten colored directional lights, with neutral ambient applied once, a light list and independent previewing controls. Standard, Diffuse, Top Left and Right select original rigs, shared with commands; manual settings show Custom.
 - **Missing:** materials (base, Substance, graphics), shadows,
   ray-traced rendering, angular cut caps, exact visibility for intersecting and concave surfaces, the rest of 3D
-  Classic (Revolve, Rotate, Map Art), Turntable, textures, map art and shading in 3D export.
+  Classic (Map Art), Turntable, textures, map art and shading in 3D export.
 - **Impact:** specialist; Materials is the one menu stub left.
 - **Estimate:** 25–45 h; plan in `plan/` before coding.
 
@@ -857,6 +858,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | An imported document's own title (an SVG's root `<title>`, a PDF's XMP `dc:title` else its Info `Title`) goes into File Info only; the document's name stays the file's name (#3626); no scored gap or estimate reassessed. |
 | 2026-11-11 | minor | Eyedropper copies effective character dimensions between transformed text objects (#6404); scores and estimates unchanged. |
 | 2026-11-11 | minor | G5: built-in Energy Beams brush library (Laser Bolt, Plasma Arc, Charge Wave, Spark Trail); Missing trimmed; estimate 5–15 → 4–14 h; MCP Brush libraries list Energy Beams. |
 | 2026-11-11 | minor | G5: built-in Skill Icons symbol library (Attack, Defend, Heal, Buff, Ult); Missing trimmed; estimate 6–16 → 5–15 h; MCP Symbol libraries list Skill Icons. |

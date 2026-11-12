@@ -734,8 +734,20 @@ fn soft_kinsoku_lets_small_kana_and_the_prolonged_sound_mark_start_a_line() {
 }
 
 /// Glyph indices inside `g[ws..we]` (a word) where a hyphenated break may go under `opts`, in the
-/// language of the word's first letter.
+/// language of the word's first letter; never next to a Hangul letter, which takes no hyphen, and
+/// nowhere in a Korean word that Korean Line Break Anywhere off keeps whole.
 fn hyphen_breaks(text: &str, g: &[SGlyph], ws: usize, we: usize, opts: &HyphenationOptions) -> Vec<usize> {
+    if g.get(ws..we).is_some_and(|word| word.iter().any(|h| h.keeps_word)) {
+        return Vec::new();
+    }
+    let mut points = word_hyphen_breaks(text, g, ws, we, opts);
+    let hangul = |i: usize| g.get(i).is_some_and(|h| h.inline.is_none() && crate::shape::is_hangul(h.ch));
+    points.retain(|&k| !hangul(k.wrapping_sub(1)) && !hangul(k));
+    points
+}
+
+/// [`hyphen_breaks`] before the points next to Hangul are left out.
+fn word_hyphen_breaks(text: &str, g: &[SGlyph], ws: usize, we: usize, opts: &HyphenationOptions) -> Vec<usize> {
     // Strip leading/trailing punctuation (quotes, commas).
     let (mut a, mut b) = (ws, we);
     while a < b && !g[a].is_letter() {

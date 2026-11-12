@@ -294,6 +294,24 @@ impl Facet {
         }
         PathData::from_bezpath(&bp)
     }
+
+    /// Revolve's face `face` as a facet: its polygon, curved outline, depth, normal and lighting.
+    /// A face that joins the profile's ends round the axis is a side; a cap is an end.
+    pub(crate) fn of_face(face: crate::Face) -> Self {
+        Facet {
+            contours: vec![face.points],
+            depth: face.depth,
+            brightness: face.brightness,
+            illumination: face.illumination,
+            normal: face.normal,
+            rgb_gradient: None,
+            outline: face.outline,
+            side: !face.cap,
+            away: false,
+            #[cfg(test)]
+            view: vec![],
+        }
+    }
 }
 
 fn finite(v: f64, fallback: f64, min: f64, max: f64) -> f64 {

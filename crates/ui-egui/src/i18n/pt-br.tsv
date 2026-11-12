@@ -1046,6 +1046,8 @@ antiAlias	Sharp	Nítido
 	Extrude & Bevel…	Extrusão e Bisel…
 	3D (Classic)	3D (Clássico)
 	Extrude & Bevel (Classic)…	Extrusão e Bisel (Clássico)…
+	Revolve (Classic)…	Revolver (Clássico)…
+	Rotate (Classic)…	Girar (Clássico)…
 	Surface	Superfície
 	Wireframe	Aramado
 	No Shading	Sem Sombreamento
@@ -1278,6 +1280,14 @@ antiAlias	Sharp	Nítido
 	Hair Space	Espaço Fino
 	Hand Tool	Ferramenta Mão
 	Hand-Drawn	Desenhado à Mão
+	Painted and Sketched	Pintado e Esboçado
+	Washed Blue	Azul Lavado
+	Bristle Ochre	Ocre de Cerdas
+	Pastel Heather	Urze Pastel
+	Charcoal Shade	Sombra a Carvão
+	Ink Contour	Contorno a Nanquim
+	Wet Ink	Nanquim Úmido
+	Fine Pen	Pena Fina
 	Handles	Alças
 	Hard Light	Luz Forte
 	Hard Mix	Mistura definida
@@ -1954,6 +1964,7 @@ antiAlias	Sharp	Nítido
 	Order:	Ordem:
 	Ordinals	Ordinais
 	Organic Fades	Esmaecimentos Orgânicos
+	Holographic	Holográficos
 	Orientation	Orientação
 	Orientation:	Orientação:
 	Original	Original
@@ -2203,6 +2214,8 @@ digits	Malayalam	Malaiala
 	Range:	Intervalo:
 	Raster Effects	Efeitos de Raster
 	Raster File Format:	Formato de Arquivo Raster:
+	Include Placed Images	Incluir Imagens Inseridas
+	Include Fill Hatches	Incluir Hachuras dos Preenchimentos
 	Raster Sample Size:	Tamanho da Amostra Raster:
 	Raster/Vector Balance:	Equilíbrio Raster/Vetor:
 	Rasterize Unsupported Art	Rasterizar Arte Não Suportada
@@ -2358,6 +2371,10 @@ digits	Malayalam	Malaiala
 	Replace:	Substituir:
 	Replace Font	Substituir Fonte
 	Replace Spine	Substituir Coluna
+	Create Spine	Criar Coluna
+	Create Spine:	Criar Coluna:
+	Always	Sempre
+	Never	Nunca
 	Replace Symbol	Substituir Símbolo
 	Reset Transformation	Redefinir Transformação
 	Replace With Font	Substituir Com Fonte
@@ -2430,6 +2447,9 @@ digits	Malayalam	Malaiala
 	Rise…	Rise…
 	Roman Baseline	Linha de Base Romana
 	Roman Hanging Punctuation	Pontuação Pendurada Romana
+	Korean Line Break Anywhere	Quebra de Linha Coreana em Qualquer Lugar
+	East Asian Composition Settings	Configurações de Composição do Leste Asiático
+	Korean Composition Settings	Configurações de Composição Coreana
 	Rotate	Girar
 	Rotate Tool	Ferramenta Girar
 	Rotate View Tool	Ferramenta Girar Visualização
@@ -3792,6 +3812,7 @@ axis	Both	Ambos
 @msg	`globalAdjust` must be an object	`globalAdjust` deve ser um objeto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` deve ser 1, 3 ou 5
 @msg	`stops` must be an array	`stops` deve ser uma matriz
+@msg	`{key}` must be an array	`{key}` deve ser uma matriz
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` deve ser um objeto com opções de SVG (veja document.formats)
 @msg	`{_1}` is no save command	`{_1}` não é um comando de salvar
 @msg	`{area}` is no recovery area name	`{area}` não é o nome de uma área de recuperação
@@ -4099,6 +4120,7 @@ axis	Both	Ambos
 @msg	not a valid plug-in module: {0}	não é um módulo de plug-in válido: {0}
 @msg	not an EMF or WMF file	não é um arquivo EMF ou WMF
 @msg	not an HP-GL file	não é um arquivo HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` deve ser uma matriz de 1 a 255 cores #rrggbb
 @msg	not found	não encontrado
 @msg	not in pattern editing mode	não está no modo de edição de padrão
 @msg	finish editing the pattern first	termine de editar o padrão primeiro
@@ -5936,6 +5958,7 @@ mark-style	Japanese	Japonesas
 	Ruby	Ruby
 	Geometric Guides	Guias geométricas
 	Geometric Patterns	Padrões geométricos
+	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
 	Ease Out	Saída suave
 	Ease In Out	Entrada e saída suaves
@@ -5994,6 +6017,8 @@ axis	Y Axis	Eixo Y
 	Version: {version}	Versão: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instalar “{name}” no lugar do plug-in com o mesmo ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Este arquivo não é o plug-in instalado antes com este ID. Ele recebe as configurações e o cache guardados para esse ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Uma automação pediu para instalar este plug-in. Para instalá-lo, escolha Objeto › Plug-ins › Instalar Plug-in… você mesmo.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Uma automação pediu para instalar este plug-in. Para instalá-lo, escolha Objeto › Plug-ins › Instalar Plug-in… você mesmo.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” é um módulo diferente do plug-in com ID {_1} e receberia as configurações e o cache guardados para ele: instale-o com `replace: true` depois que o usuário concordar
 	File SHA-256: {hash}	SHA-256 do arquivo: {hash}
 	Read the objects it is given	Ler os objetos que recebe
@@ -6056,6 +6081,12 @@ axis	Y Axis	Eixo Y
 @msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` deve ter 1-64 caracteres imprimíveis
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: use um id de 1-{MAX_COMMAND_ID} caracteres de a-z 0-9 _ que comece com uma letra
 @msg	command {name}: {e}	comando {name}: {e}
+@msg	manifest: {e}	manifesto: {e}
+@msg	manifest: {e} at line {line} column {column}	manifesto: {e} (linha {line}, coluna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` deve ser uma lista de comandos, cada um com `id` e `label`
+@msg	command {name} must be an object with an `id` and a `label`	o comando {name} deve ser um objeto com `id` e `label`
+@msg	missing field `{key}`	falta o campo `{key}`
+@msg	duplicate field `{key}`	campo `{key}` duplicado
 @msg	only a filter or a live effect declares `commands`	só um filtro ou um efeito dinâmico declara `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	o módulo não tem o SHA-256 indicado em `hash`: nada foi instalado
@@ -6204,6 +6235,17 @@ axis	Y Axis	Eixo Y
 	Charge Wave	Onda de carga
 	Spark Trail	Rastro de faíscas
 	Calligraphic Nibs	Penas Caligráficas
+	Bristle Brushes	Pincéis de Cerdas
+	Fine Liner	Traço Fino
+	Pointed Flat	Chato Pontudo
+	Stubby Round	Redondo Curto
+	Dry Scrub	Esfregado Seco
+	Soft Dome	Cúpula Suave
+	Filbert	Língua de Gato
+	Angled Round	Redondo Chanfrado
+	Angled Flat	Chato Chanfrado
+	Fan Blender	Leque Esfumador
+	Grass Fan	Leque de Grama
 	Pattern Borders	Bordas de Padrão
 	Scatter Shapes	Formas de Dispersão
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
@@ -6414,6 +6456,10 @@ anchor	Points:	Pontos:
 @msg	features lists at most {max} tags	features aceita no máximo {max} marcas
 @msg	unknown OpenType feature `{t}`	recurso OpenType desconhecido `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve ser um número maior que 0 e no máximo {max}
+@msg	{label} must be at most {max} characters	{label} deve ter no máximo {max} caracteres
+@msg	{label} must be one character	{label} deve ser um único caractere
+@msg	at most {max} tab stops	no máximo {max} paradas de tabulação
+@msg	unknown align `{other}`	alinhamento desconhecido `{other}`
 @msg	no character style `{name}`	Estilo de caractere `{name}` não encontrado
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6577,6 +6623,12 @@ breakText	Glyphs	Glifos
 	Delete the selected brushes?	Excluir os pincéis selecionados?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Traçados usam um ou mais destes pincéis. Remover os pincéis desses traçados e excluir os pincéis?
 	Remove Strokes	Remover Traçados
+	Place Brush Art	Colocar Arte do Pincel
+	Replace Brush Art	Substituir Arte do Pincel
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Traçados usam este pincel. Aplicar a nova arte a esses traçados, ou deixá-los como estão e adicionar uma cópia do pincel com a nova arte?
+	Apply to Strokes	Aplicar aos Traçados
+	Leave Strokes	Manter Traçados
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` não tem arte (só os pincéis de dispersão, de arte e de padrão têm)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Ferramentas de Organização
 	Arrange in Grid…	Organizar em Grade…
@@ -6984,8 +7036,33 @@ swatch	Yellow Green	Verde-amarelado
 @plural	{n} line cut|{n} lines cut	{n} linha cortada|{n} linhas cortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`
 
+# Learn panel
+	Learn	Aprender
+	Explore tutorials	Explorar tutoriais
+	For you	Para você
+	Skills	Habilidades
+	Get started	Primeiros passos
+	Quick skill guide	Guia rápido de habilidades
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriais práticos curtos das ferramentas essenciais, agrupados por habilidade. Escolha uma habilidade para ver os tutoriais dela.
+	List Tutorials	Listar Tutoriais
+	Show Tutorial	Mostrar Tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Atualizar Efeitos Adiados
 	Deferred Effects	Efeitos Adiados
 @msg	no plug-in effect is deferred	nenhum efeito de plug-in está adiado
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aberto com {n} efeito de plug-in adiado. Efeito › Atualizar Efeitos Adiados o executa.|Aberto com {n} efeitos de plug-in adiados. Efeito › Atualizar Efeitos Adiados os executa.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Ferramentas de Corte
+	Stencil Bridges…	Pontes de Estêncil…
+	Stencil Bridges	Pontes de Estêncil
+	Shortest Crossing	Travessia mais curta
+	Direction	Direção
+@msg	The selected art has no islands to bridge	A arte selecionada não tem ilhas para unir
+@msg	No bridge of this width fits across the selected art	Nenhuma ponte desta largura cabe na arte selecionada
+@msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
+@msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}

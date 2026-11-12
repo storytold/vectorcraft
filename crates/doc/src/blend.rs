@@ -1051,17 +1051,51 @@ fn pinned(spec: &BlendSpec, keys: usize, n: usize) -> Option<Vec<usize>> {
 /// - a pinned spine (`key_anchors`): the stored spine's first subpath with each key's anchor (and
 ///   its handles) moved onto the key's centre, so moving a key moves its end of the spine;
 /// - a spine from Replace Spine: its first subpath, `None` for the anchors (the keys spread
-///   evenly along it by arc length).
+///   evenly along it by arc length) while the keys sit there; once one is moved off, pinned as
+///   above at the anchors where they were spread.
+///
+/// `None` for a blend made without a spine ([`BlendSpec::no_spine`]).
 pub fn blend_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Option<Vec<usize>>)> {
+    if spec.no_spine {
+        return None;
+    }
+    layout_spine(keys, spec)
+}
+
+/// The spine `spec` stores, unless the blend was made without one.
+fn stored_spine(spec: &BlendSpec) -> Option<&PathData> {
+    spec.spine.as_ref().filter(|_| !spec.no_spine)
+}
+
+/// [`blend_spine`] for placing the steps: a blend made without a spine still places them on the
+/// straight lines between its key centers.
+fn layout_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Option<Vec<usize>>)> {
     if keys.len() < 2 {
         return None;
     }
-    let Some(stored) = &spec.spine else {
+    let Some(stored) = stored_spine(spec) else {
         let centers: Vec<Point> = keys.iter().map(|k| center_of(k)).collect();
         return Some((PathData::single(SubPath::polyline(&centers, false)), Some((0..keys.len()).collect())));
     };
     let mut first = stored.subpaths.first()?.clone();
-    let Some(ka) = pinned(spec, keys.len(), first.anchors.len()) else { return Some((PathData::single(first), None)) };
+    let Some(ka) = pinned(spec, keys.len(), first.anchors.len()) else {
+        let mut path = PathData::single(first);
+        // A key moved off where Replace Spine spread it takes its point of the spine along, as
+        // on a pinned spine; otherwise the steps would put it back on the spine (#6809).
+        if Spine::new(&path).is_none_or(|sp| keys_spread_along(keys, &sp)) {
+            return Some((path, None));
+        }
+        let Some(mut ka) = spread_anchors(&mut path, keys.len()) else { return Some((path, None)) };
+        let mut first = path.subpaths.into_iter().next()?;
+        open_at_start(&mut first, &mut ka);
+        for (k, &ai) in keys.iter().zip(&ka) {
+            if let Some(a) = first.anchors.get_mut(ai) {
+                let d = center_of(k) - a.p;
+                a.translate(d);
+            }
+        }
+        return Some((PathData::single(first), Some(ka)));
+    };
     for (k, &ai) in keys.iter().zip(&ka) {
         let c = center_of(k);
         if let Some(a) = first.anchors.get_mut(ai) {
@@ -1075,21 +1109,62 @@ pub fn blend_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Op
 /// [`blend_spine`] with every key on an anchor: a spine from Replace Spine gets anchors where its
 /// keys sit (by arc length), so editing it keeps them in place.
 pub fn pin_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Vec<usize>)> {
-    let (mut path, anchors) = blend_spine(keys, spec)?;
-    if let Some(a) = anchors {
-        return Some((path, a));
+    // A spine from Replace Spine is pinned as stored, even with a key moved off it (where
+    // [`blend_spine`] moves that key's point along): the layout is the same.
+    if keys.len() >= 2
+        && let Some(first) = stored_spine(spec).and_then(|s| s.subpaths.first())
+        && pinned(spec, keys.len(), first.anchors.len()).is_none()
+    {
+        let mut path = PathData::single(first.clone());
+        let mut out = spread_anchors(&mut path, keys.len())?;
+        // A closed spine's end keys get points of their own, so that once pinned each still
+        // moves only its own end.
+        let mut sp = path.subpaths.into_iter().next()?;
+        open_at_start(&mut sp, &mut out);
+        return Some((PathData::single(sp), out));
     }
+    let (path, anchors) = blend_spine(keys, spec)?;
+    Some((path, anchors?))
+}
+
+/// Do `keys` sit where a spine from Replace Spine spreads them: evenly along `spine` by arc length
+/// (within a hundredth of a point, as [`anchor_at_length`] matches anchors)?
+fn keys_spread_along(keys: &[Arc<Node>], spine: &Spine) -> bool {
     let k = keys.len();
-    let total = Spine::new(&path)?.length();
+    keys.iter().enumerate().all(|(i, key)| {
+        let f = if k > 1 { i as f64 / (k - 1) as f64 } else { 0.0 };
+        center_of(key).distance(spine.at(f).0) < 0.01
+    })
+}
+
+/// Open closed spine `sp` at its first anchor when the last key sits there with the first (as
+/// [`spread_anchors`] puts them): a copy of that anchor at the end takes the closing segment and
+/// the last key, so the two end keys move their ends of the spine apart.
+fn open_at_start(sp: &mut SubPath, ka: &mut [usize]) {
+    let Some(&start) = sp.anchors.first() else { return };
+    if !sp.closed || ka.len() < 2 {
+        return;
+    }
+    if let Some(last) = ka.last_mut().filter(|a| **a == 0) {
+        *last = sp.anchors.len();
+        sp.anchors.push(start);
+        sp.closed = false;
+    }
+}
+
+/// The anchors of `path`'s first subpath that `k` keys spread evenly along it by arc length sit
+/// on, splitting segments where none is.
+fn spread_anchors(path: &mut PathData, k: usize) -> Option<Vec<usize>> {
+    let total = Spine::new(path)?.length();
     let closed = path.subpaths.first().is_some_and(|s| s.closed);
     let mut out = vec![0usize];
     for i in 1..k.saturating_sub(1) {
         let s = total * i as f64 / (k - 1) as f64;
-        out.push(anchor_at_length(&mut path, s)?);
+        out.push(anchor_at_length(path, s)?);
     }
     let last = path.subpaths.first().map_or(0, |sp| if closed { 0 } else { sp.anchors.len().saturating_sub(1) });
     out.push(last);
-    Some((path, out))
+    Some(out)
 }
 
 /// The anchor of the first subpath at arc length `s`: an existing one within a hundredth of a
@@ -1127,10 +1202,10 @@ impl Rail {
     /// `None` when nothing moves: no stored spine and the steps keep the page's orientation.
     fn new(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<Self> {
         let rotate = spec.orientation == BlendOrientation::AlignToPath;
-        if spec.spine.is_none() && !rotate {
+        if stored_spine(spec).is_none() && !rotate {
             return None;
         }
-        let (path, anchors) = blend_spine(keys, spec)?;
+        let (path, anchors) = layout_spine(keys, spec)?;
         let spine = Spine::new(&path)?;
         let total = spine.length();
         let k = keys.len();
@@ -1192,10 +1267,10 @@ impl Rail {
 /// spine it is moved to, and so does its own centre, which it turns about. `None` when nothing
 /// moves.
 pub(crate) fn rail_reach(keys: &[Arc<Node>], spec: &BlendSpec, symbols: Option<&crate::SymbolBoxes>) -> Option<Rect> {
-    if spec.spine.is_none() && spec.orientation != BlendOrientation::AlignToPath {
+    if stored_spine(spec).is_none() && spec.orientation != BlendOrientation::AlignToPath {
         return None;
     }
-    let spine = blend_spine(keys, spec)?.0.bounds()?;
+    let spine = layout_spine(keys, spec)?.0.bounds()?;
     let radius = keys
         .iter()
         .filter_map(|k| {
@@ -1404,7 +1479,9 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
         for j in 1..=n {
             // Even position of the step, then where the easing puts its shape and its colours.
             let u = j as f64 / (n + 1) as f64;
-            let (t, tc) = (if rail.is_some() { spec.ease.apply(u) } else { u }, spec.color_position(u));
+            // Easing needs a spine: a blend made without one keeps its steps evenly spaced.
+            let eased = rail.is_some() && !spec.no_spine;
+            let (t, tc) = (if eased { spec.ease.apply(u) } else { u }, spec.color_position(u));
             let mut s = lerp.at_eased(t, tc);
             if let Some(r) = &rail {
                 r.place(&mut s, i, t);

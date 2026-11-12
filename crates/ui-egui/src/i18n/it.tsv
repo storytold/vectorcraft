@@ -1162,6 +1162,8 @@ font-technology	Variable	Variabili
 	Extrude & Bevel…	Estrusione e smusso…
 	3D (Classic)	3D (classico)
 	Extrude & Bevel (Classic)…	Estrusione e smusso (classico)…
+	Revolve (Classic)…	Rivoluzione (classico)…
+	Rotate (Classic)…	Ruota (classico)…
 	Surface	Superficie
 	Wireframe	Reticolo
 	No Shading	Nessuna ombreggiatura
@@ -1474,6 +1476,14 @@ file-filter	Templates	Modelli
 	Hair Space	Spazio sottilissimo
 	Hand Tool	Strumento Mano
 	Hand-Drawn	Disegnato a mano
+	Painted and Sketched	Dipinto e schizzato
+	Washed Blue	Blu slavato
+	Bristle Ochre	Ocra a setole
+	Pastel Heather	Erica pastello
+	Charcoal Shade	Ombra a carboncino
+	Ink Contour	Contorno a china
+	Wet Ink	China bagnata
+	Fine Pen	Pennino fine
 	Handles	Maniglie
 	Hard Light	Luce intensa
 	Hard Mix	Miscela intensa
@@ -2395,6 +2405,7 @@ file-filter	Templates	Modelli
 	Options:	Opzioni:
 	Options…	Opzioni…
 	Organic Fades	Dissolvenze organiche
+	Holographic	Olografici
 	or more spaces with a tab	o più spazi con una tabulazione
 	Order:	Ordine:
 	Ordinals	Ordinali
@@ -2683,6 +2694,8 @@ digits	Malayalam	Malayalam
 	Range:	Intervallo:
 	Raster Effects	Effetti raster
 	Raster File Format:	Formato file raster:
+	Include Placed Images	Includi immagini inserite
+	Include Fill Hatches	Includi tratteggi dei riempimenti
 	Raster Sample Size:	Dimensione campione raster:
 	Raster/Vector Balance:	Bilanciamento raster/vettoriale:
 	Rasterize	Rasterizza
@@ -2864,6 +2877,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Sostituisci font
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Sostituiscilo con un altro file oppure ignoralo: le sue immagini continueranno a mostrare l'anteprima salvata con il documento.
 	Replace Spine	Sostituisci dorsale
+	Create Spine	Crea dorsale
+	Create Spine:	Crea dorsale:
+	Always	Sempre
+	Never	Mai
 	Replace Symbol	Sostituisci simbolo
 	Reset Transformation	Reimposta trasformazione
 	Replace With Font	Sostituisci con font
@@ -2943,6 +2960,9 @@ digits	Malayalam	Malayalam
 	Rise…	Ascesa…
 	Roman Baseline	Linea di base romana
 	Roman Hanging Punctuation	Punteggiatura sporgente romana
+	Korean Line Break Anywhere	Interruzione di riga coreana ovunque
+	East Asian Composition Settings	Impostazioni di composizione dell’Asia orientale
+	Korean Composition Settings	Impostazioni di composizione coreana
 	Rotate	Ruota
 	Rotate 90° CW	Ruota di 90° in senso orario
 	Rotate Tool	Strumento Ruota
@@ -4296,6 +4316,7 @@ axis	Both	Entrambi
 @msg	`globalAdjust` must be an object	`globalAdjust` deve essere un oggetto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` deve essere 1, 3 o 5
 @msg	`stops` must be an array	`stops` deve essere un array
+@msg	`{key}` must be an array	`{key}` deve essere un array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` deve essere un oggetto di opzioni SVG (vedi document.formats)
 @msg	`{_1}` is no save command	`{_1}` non è un comando di salvataggio
 @msg	`{area}` is no recovery area name	`{area}` non è il nome di un'area di recupero
@@ -4614,6 +4635,7 @@ axis	Both	Entrambi
 @msg	not a valid plug-in module: {0}	non è un modulo plug-in valido: {0}
 @msg	not an EMF or WMF file	non è un file EMF o WMF
 @msg	not an HP-GL file	non è un file HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` deve essere un elenco da 1 a 255 colori #rrggbb
 @msg	not found	non trovato
 @msg	not in pattern editing mode	non sei in modalità modifica motivo
 @msg	finish editing the pattern first	termina prima la modifica del motivo
@@ -5644,6 +5666,7 @@ lighting	Light	Luce
 	Ruby	Ruby
 	Geometric Guides	Guide geometriche
 	Geometric Patterns	Motivi geometrici
+	Grit Textures	Texture granulose
 	Ease In	Inizio graduale
 	Ease Out	Fine graduale
 	Ease In Out	Inizio e fine graduali
@@ -5704,6 +5727,8 @@ axis	Y Axis	Asse Y
 	Version: {version}	Versione: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installare “{name}” al posto del plug-in con lo stesso ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Questo file non è il plug-in installato prima con questo ID. Riceve le impostazioni e la cache conservate per quell’ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Un’automazione ha chiesto di installare questo plug-in. Per installarlo, scegli Oggetto › Plug-in › Installa plug-in… di persona.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Un’automazione ha chiesto di installare questo plug-in. Per installarlo, scegli Oggetto › Plug-in › Installa plug-in… di persona.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” è un modulo diverso dal plug-in con ID {_1} e riceverebbe le impostazioni e la cache conservate per esso: installalo con `replace: true` quando l’utente acconsente
 	File SHA-256: {hash}	SHA-256 del file: {hash}
 	Read the objects it is given	Leggere gli oggetti che riceve
@@ -5766,6 +5791,12 @@ axis	Y Axis	Asse Y
 @msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` deve avere 1-64 caratteri stampabili
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: usa un id di 1-{MAX_COMMAND_ID} caratteri tra a-z 0-9 _ che inizi con una lettera
 @msg	command {name}: {e}	comando {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (riga {line}, colonna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` deve essere un elenco di comandi, ciascuno con `id` e `label`
+@msg	command {name} must be an object with an `id` and a `label`	il comando {name} deve essere un oggetto con `id` e `label`
+@msg	missing field `{key}`	campo `{key}` mancante
+@msg	duplicate field `{key}`	campo `{key}` duplicato
 @msg	only a filter or a live effect declares `commands`	solo un filtro o un effetto dinamico dichiara `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	il modulo non ha lo SHA-256 indicato da `hash`: non è stato installato nulla
@@ -5914,6 +5945,17 @@ axis	Y Axis	Asse Y
 	Charge Wave	Onda di carica
 	Spark Trail	Scia di scintille
 	Calligraphic Nibs	Pennini calligrafici
+	Bristle Brushes	Pennelli a setole
+	Fine Liner	Tratto fine
+	Pointed Flat	Piatto appuntito
+	Stubby Round	Tondo corto
+	Dry Scrub	Strofinato secco
+	Soft Dome	Cupola morbida
+	Filbert	Lingua di gatto
+	Angled Round	Tondo obliquo
+	Angled Flat	Piatto obliquo
+	Fan Blender	Ventaglio sfumino
+	Grass Fan	Ventaglio per erba
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
 	Save Brush Library…	Salva libreria pennelli…
@@ -6126,6 +6168,10 @@ anchor	Points:	Punti:
 @msg	features lists at most {max} tags	features contiene al massimo {max} tag
 @msg	unknown OpenType feature `{t}`	funzione OpenType sconosciuta `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve essere un numero maggiore di 0 e al massimo {max}
+@msg	{label} must be at most {max} characters	{label} deve avere al massimo {max} caratteri
+@msg	{label} must be one character	{label} deve essere un solo carattere
+@msg	at most {max} tab stops	al massimo {max} tabulazioni
+@msg	unknown align `{other}`	allineamento sconosciuto `{other}`
 @msg	no character style `{name}`	Stile di carattere `{name}` non trovato
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6288,6 +6334,12 @@ breakText	Glyphs	Glifi
 	Delete the selected brushes?	Eliminare i pennelli selezionati?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Alcune tracce usano uno o più di questi pennelli. Rimuovere i pennelli da queste tracce ed eliminare i pennelli?
 	Remove Strokes	Rimuovi tracce
+	Place Brush Art	Inserisci grafica del pennello
+	Replace Brush Art	Sostituisci grafica del pennello
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Alcune tracce usano questo pennello. Applicare la nuova grafica a queste tracce, o lasciarle come sono e aggiungere una copia del pennello con la nuova grafica?
+	Apply to Strokes	Applica alle tracce
+	Leave Strokes	Lascia le tracce
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` non ha una grafica (ce l’hanno solo i pennelli a dispersione, artistici e motivo)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Strumenti di disposizione
 	Arrange in Grid…	Disponi in griglia…
@@ -6540,8 +6592,33 @@ breakText	Glyphs	Glifi
 @plural	{n} line cut|{n} lines cut	{n} riga tagliata|{n} righe tagliate
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`
 
+# Learn panel
+	Learn	Impara
+	Explore tutorials	Esplora i tutorial
+	For you	Per te
+	Skills	Competenze
+	Get started	Per iniziare
+	Quick skill guide	Guida rapida alle competenze
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Brevi tutorial pratici sugli strumenti essenziali, raggruppati per competenza. Scegli una competenza per vederne i tutorial.
+	List Tutorials	Elenca tutorial
+	Show Tutorial	Mostra tutorial
+@msg	missing `tutorial` (see learn.list)	manca `tutorial` (vedi learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial sconosciuto `{id}` (vedi learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Aggiorna effetti rimandati
 	Deferred Effects	Effetti rimandati
 @msg	no plug-in effect is deferred	nessun effetto plug-in è rimandato
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aperto con {n} effetto plug-in rimandato. Effetto › Aggiorna effetti rimandati lo esegue.|Aperto con {n} effetti plug-in rimandati. Effetto › Aggiorna effetti rimandati li esegue.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Strumenti di taglio
+	Stencil Bridges…	Ponti per stencil…
+	Stencil Bridges	Ponti per stencil
+	Shortest Crossing	Attraversamento più breve
+	Direction	Direzione
+@msg	The selected art has no islands to bridge	La grafica selezionata non ha isole da collegare
+@msg	No bridge of this width fits across the selected art	Nessun ponte di questa larghezza entra nella grafica selezionata
+@msg	Some islands could not be joined to the area around the art	Non è stato possibile collegare alcune isole all’area intorno alla grafica
+@msg	`width` must be from {lo} to {hi} pt	`width` deve essere compreso tra {lo} e {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve essere un numero intero compreso tra 1 e {MAX_BRIDGES_PER_ISLAND}
