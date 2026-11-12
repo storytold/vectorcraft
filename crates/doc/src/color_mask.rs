@@ -57,17 +57,28 @@ pub struct ColorMask {
     /// The hidden colors (8-bit RGB) with [`MaskBackground::Colors`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub colors: Vec<[u8; 3]>,
-    /// Only the matching pixels that reach in from an edge are hidden.
-    #[serde(default)]
+    /// Only the matching pixels that reach in from an edge are hidden. A record without it reads
+    /// as `true`, the command's default.
+    #[serde(default = "default_contiguous")]
     pub contiguous: bool,
     #[serde(default, rename = "match")]
     pub measure: MaskMatch,
-    /// How near a color must be to be hidden, 0 to 100 (see [`MaskMatch`]).
-    #[serde(default)]
+    /// How near a color must be to be hidden, 0 to 100 (see [`MaskMatch`]). A record without it
+    /// reads as 10, the command's default.
+    #[serde(default = "default_percent")]
     pub tolerance: f64,
-    /// The band past the tolerance over which pixels fade from hidden to shown, 0 to 100.
-    #[serde(default)]
+    /// The band past the tolerance over which pixels fade from hidden to shown, 0 to 100. A record
+    /// without it reads as 10, the command's default.
+    #[serde(default = "default_percent")]
     pub softness: f64,
+}
+
+fn default_contiguous() -> bool {
+    true
+}
+
+fn default_percent() -> f64 {
+    10.0
 }
 
 impl ColorMask {
@@ -167,6 +178,17 @@ mod tests {
         // A node without one writes none.
         let plain = Node::new(NodeId(6), NodeKind::Image(Box::new(image("own"))));
         assert!(serde_json::to_value(&plain).unwrap().get("color_mask").is_none());
+    }
+
+    /// A record that leaves out settings reads them as the command's defaults: edge color,
+    /// contiguous, distance, tolerance and softness 10.
+    #[test]
+    fn a_record_without_settings_reads_the_defaults() {
+        let m: ColorMask = serde_json::from_value(serde_json::json!({"key": "masked", "from": "own"})).unwrap();
+        assert_eq!(
+            (m.background, m.colors.len(), m.contiguous, m.measure, m.tolerance, m.softness),
+            (MaskBackground::Edges, 0, true, MaskMatch::Distance, 10.0, 10.0)
+        );
     }
 
     fn unreachable_kind() -> ! {

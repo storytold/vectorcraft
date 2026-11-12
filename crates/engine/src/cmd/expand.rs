@@ -834,8 +834,8 @@ fn blended(n: &Node) -> bool {
     n.opacity < 1.0 || n.blend != BlendMode::Normal
 }
 
-/// Whether `n` (art of `d`) is or holds an image with see-through pixels (key in `keys`), a
-/// colorize paint that `colorize` counts, opacity or a blending mode of its own or of a group in
+/// Whether `n` (art of `d`) is or holds an image with see-through pixels (key in `keys`, a
+/// color-masked image's masked pixels counted as its own), a colorize paint that `colorize` counts, opacity or a blending mode of its own or of a group in
 /// `n`, or anywhere when `on`, also in the tile art of the pattern fills of the paths in `n`, down
 /// to `levels` patterns. Hidden art doesn't count.
 fn transparent_image(d: &Document, n: &Node, keys: &BTreeSet<String>, colorize: &dyn Fn(&Document, &Node) -> bool, on: bool, levels: u32) -> bool {
@@ -844,7 +844,9 @@ fn transparent_image(d: &Document, n: &Node, keys: &BTreeSet<String>, colorize: 
     }
     let on = on || blended(n);
     match &n.kind {
-        NodeKind::Image(im) => on || keys.contains(&im.key) || (n.extras().colorize.is_some() && colorize(d, n)),
+        NodeKind::Image(im) => {
+            on || keys.contains(&im.key) || keys.contains(&d.shown_image(n, im).key) || (n.extras().colorize.is_some() && colorize(d, n))
+        }
         NodeKind::Path { .. } | NodeKind::Compound { .. } => {
             n.appearance.items.iter().any(|i| pattern_fill_holds_transparent_image(d, i, keys, colorize, on, levels))
         }

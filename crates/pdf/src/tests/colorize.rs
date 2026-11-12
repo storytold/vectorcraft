@@ -202,6 +202,42 @@ fn separations_print_a_color_masked_image_as_it_shows() {
     }
 }
 
+/// A colorized image with a color mask keeps its colorize paint on the plates when its masked
+/// pixels take it, as on the canvas, though its own pixels are a preview that doesn't.
+#[test]
+fn separations_colorize_masked_pixels_whose_own_pixels_are_a_preview() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let preview = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+    d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
+    let mut png = vec![];
+    image::GrayAlphaImage::from_raw(2, 1, vec![0, 0, 255, 255])
+        .unwrap()
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    d.images.insert("shown".into(), ImageBlob::png(png));
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
+        key: "shown".into(),
+        from: "pic".into(),
+        background: vectorcraft_doc::color_mask::MaskBackground::Colors,
+        colors: vec![[0, 0, 0]],
+        contiguous: false,
+        measure: vectorcraft_doc::color_mask::MaskMatch::Distance,
+        tolerance: 0.0,
+        softness: 0.0,
+    }));
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+    assert!(!job.plates.is_empty());
+    for p in &job.plates {
+        let n = &p.layers[0].children().unwrap()[0];
+        let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+        assert!(n.extras().colorize.is_some(), "the masked pixels take the colorize paint");
+        assert_eq!(p.image_blob(im).and_then(|b| b.coverage()).unwrap().2, [0, 0], "separated as the masked pixels");
+    }
+}
+
 /// A linked image showing the missing-link placeholder is written in the placeholder's own colors
 /// though it keeps a colorize paint for its file, and printed separations separate it as an
 /// uncolorized image.

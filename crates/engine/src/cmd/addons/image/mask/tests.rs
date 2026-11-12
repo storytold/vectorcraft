@@ -318,6 +318,8 @@ fn color_mask_refuses_previews_and_images_too_large() {
     let e = s.execute(COLOR_MASK, &hide_white()).unwrap_err().to_string();
     assert!(e.contains(COLOR_MASK) && e.contains("the linked image shows its preview: embed or relink it first"), "{e}");
     assert_eq!(mask_of(doc(&s), id), None);
+    // Without settings, the dialog's query reads the settings and opens on the defaults.
+    assert_eq!(s.execute(COLOR_MASK, &json!({})).unwrap()["masked"], json!(false));
     let (mut s, _) = open(&crate::tests_linkspanel::png_header(10_632, 10_631));
     let e = s.execute(COLOR_MASK, &hide_white()).unwrap_err().to_string();
     assert!(e.contains(COLOR_MASK) && e.contains("an image of 10632 × 10631 pixels is too large to change"), "{e}");
@@ -378,7 +380,7 @@ fn gray_framed() -> Vec<u8> {
 }
 
 /// Masked pixels have an alpha channel: a grayscale image colorized with a process color can't
-/// take a mask (or have its background removed), and a masked one can't take a process color.
+/// take a mask, and a masked one can't take a process color.
 #[test]
 fn a_process_color_does_not_colorize_masked_gray_pixels() {
     const REFUSED: &str = "a process color can't colorize a grayscale image with transparency";
@@ -387,8 +389,6 @@ fn a_process_color_does_not_colorize_masked_gray_pixels() {
     assert!(doc(&s).node(id).unwrap().extras().colorize.is_some(), "a gray image without alpha takes a process color");
     let (before, steps) = (doc(&s).clone(), undo_len(&s));
     let e = s.execute(COLOR_MASK, &hide_white()).unwrap_err().to_string();
-    assert!(e.contains(REFUSED), "{e}");
-    let e = s.execute(super::super::REMOVE_BACKGROUND, &hide_white()).unwrap_err().to_string();
     assert!(e.contains(REFUSED), "{e}");
     assert_eq!((doc(&s), undo_len(&s)), (&before, steps));
     // Black colorizes gray pixels with alpha: the mask is set, then a process color is refused.
@@ -585,22 +585,78 @@ fn ai_editing_data_writes_the_masked_pixels() {
     written_with_the_mask(|d| vectorcraft_eps::export_ai_editing(d, &o).unwrap().program);
 }
 
-/// PDF/X-1a flattens a masked image, whose hidden pixels are transparency, and writes no soft
-/// mask.
+/// PDF/X-1a and PDF/X-3 flatten a masked image, whose hidden pixels are transparency, and write no
+/// soft mask.
 #[test]
-fn pdf_x1a_flattens_the_hidden_pixels() {
-    let (mut s, _) = open(&framed());
-    let export = |s: &mut Session| {
-        let v = s.execute("document.exportPdf", &json!({"standard": "pdfX1a", "compression": {"compressText": false}})).unwrap();
-        let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
-        (String::from_utf8_lossy(&bytes).into_owned(), v["warnings"].to_string())
-    };
-    let (_, warnings) = export(&mut s);
-    assert!(!warnings.contains("flattened"), "an opaque image: {warnings}");
-    s.execute(COLOR_MASK, &hide_white()).unwrap();
-    let (text, warnings) = export(&mut s);
-    assert!(warnings.contains("flattened"), "{warnings}");
-    assert!(!text.contains("/SMask"));
+fn pdf_x1a_and_x3_flatten_the_hidden_pixels() {
+    for standard in ["pdfX1a", "pdfX3"] {
+        let (mut s, _) = open(&framed());
+        let export = |s: &mut Session| {
+            let v = s.execute("document.exportPdf", &json!({"standard": standard, "compression": {"compressText": false}})).unwrap();
+            let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
+            (String::from_utf8_lossy(&bytes).into_owned(), v["warnings"].to_string())
+        };
+        let (_, warnings) = export(&mut s);
+        assert!(!warnings.contains("flattened"), "{standard}, an opaque image: {warnings}");
+        s.execute(COLOR_MASK, &hide_white()).unwrap();
+        let (text, warnings) = export(&mut s);
+        assert!(warnings.contains("flattened"), "{standard}: {warnings}");
+        assert!(!text.contains("/SMask"), "{standard}");
+    }
+}
+
+/// The legacy .ai flattens a masked image, whose hidden pixels are transparency, as it flattens an
+/// image whose background was removed, and `transparentImages: "omit"` leaves both out.
+#[test]
+fn legacy_ai_flattens_a_masked_image_as_a_see_through_one() {
+    let warnings = |s: &Session, p: &Value| crate::cmd::fileio::encode_all(doc(s), "ai", p).unwrap().warnings;
+    let (mut masked, _) = open(&framed());
+    masked.execute(COLOR_MASK, &hide_white()).unwrap();
+    let (mut cleared, _) = open(&framed());
+    cleared.execute(super::super::REMOVE_BACKGROUND, &hide_white()).unwrap();
+    for (p, said) in [(json!({"aiVersion": 7}), "are flattened"), (json!({"aiVersion": 7, "transparentImages": "omit"}), "are left out")] {
+        let w = warnings(&masked, &p);
+        assert!(w.iter().any(|w| w.contains("transparent images") && w.contains(said)), "{p}: {w:?}");
+        assert_eq!(w, warnings(&cleared, &p), "{p}");
+    }
+}
+
+/// A pattern whose tile holds a masked image counts as one with a see-through image, so outputs
+/// without transparency expand it before they flatten.
+#[test]
+fn a_pattern_tile_with_a_masked_image_counts_as_see_through() {
+    let href = format!("data:image/png;base64,{}", vectorcraft_format::base64_encode(&framed()));
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100" viewBox="0 0 100 100"><defs><pattern id="p" patternUnits="userSpaceOnUse" width="12" height="10"><image width="12" height="10" xlink:href="{href}"/></pattern></defs><rect width="100" height="100" fill="url(#p)"/></svg>"##
+    );
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "p.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    let mut d = doc(&s).clone();
+    let see_through =
+        |d: &Document| crate::cmd::expand::has_transparent_image_patterns(d, &crate::cmd::flatten::see_through_images(d), &|_, _| false);
+    assert!(!see_through(&d), "an opaque tile");
+    let hidden = png(DynamicImage::ImageRgba8(image::RgbaImage::from_fn(12, 10, |x, _| image::Rgba(if x == 0 { [0; 4] } else { RED }))));
+    d.images.insert("masked".into(), ImageBlob::png(hidden));
+    fn image_in(n: &mut vectorcraft_doc::Node) -> Option<&mut vectorcraft_doc::Node> {
+        if matches!(n.kind, NodeKind::Image(_)) {
+            return Some(n);
+        }
+        n.children_mut()?.iter_mut().find_map(|c| image_in(std::sync::Arc::make_mut(c)))
+    }
+    let node = d.patterns.iter_mut().flat_map(|p| p.art.iter_mut()).find_map(|a| image_in(std::sync::Arc::make_mut(a))).unwrap();
+    let NodeKind::Image(im) = &node.kind else { panic!("the tile's image") };
+    let from = im.key.clone();
+    node.extras_mut().color_mask = Some(Box::new(ColorMask {
+        key: "masked".into(),
+        from,
+        background: MaskBackground::Colors,
+        colors: vec![[255, 255, 255]],
+        contiguous: false,
+        measure: vectorcraft_doc::color_mask::MaskMatch::Distance,
+        tolerance: 0.0,
+        softness: 0.0,
+    }));
+    assert!(see_through(&d), "the tile shows its masked pixels");
 }
 
 /// SVG writes a colorized gray image with a mask as the coverage of its masked pixels, shared by

@@ -9827,11 +9827,9 @@ change in one undo step, and an image that `ids` names twice changes once. An im
 as it is, and when none changes the command adds no undo step and returns `changed: 0`. `cleared` counts the pixels
 made fully clear in the images that changed. The command refuses, and changes nothing, when an image is CMYK, a linked
 image shows its preview (embed or relink it first), an image would need more than the decode allowance while it is
-worked on (2 GiB, or 512 MiB in the web app, counted from the file's header before it is decoded), every pixel of an
-image would be cleared, or a grayscale image colorized with a process color would get an alpha channel (a colorize
-color on a grayscale image with transparency is a spot color, black or white). Remove Background… opens the command's
-dialog with Preview off; with Preview on, the canvas shows the result for the values in the dialog, and Cancel puts the
-image back. While a dialog previews the command,
+worked on (2 GiB, or 512 MiB in the web app, counted from the file's header before it is decoded), or every pixel of an
+image would be cleared. Remove Background… opens the command's dialog with Preview off; with Preview on, the canvas
+shows the result for the values in the dialog, and Cancel puts the image back. While a dialog previews the command,
 the session keeps the decoded pixels of the images it changes (at most 128 MiB, or 32 MiB in the web app), so the next
 preview step does not decode them again; it releases them when the dialog closes with OK or Cancel. A run that is not
 a preview step does not keep them.
