@@ -172,9 +172,11 @@ the suite) keep the agent to the folders you give it:
   read roots, and the preset stays. The preferences themselves are not changed.
 - `document.inspect` (`inspect_document`) gives `path` as null when the document's file is outside the read roots.
   `document.json` names a linked image or placed file outside them by its file name alone in the link's `path`, and
-  leaves out the link's `relative`, `size` and `modified`. It also names a data set's image value outside them by
-  its file name alone, and leaves out the `folder` of `export_settings` (the settings Export for Screens last used)
-  when that folder is outside them. The document itself is not changed.
+  leaves out the link's `relative`, `size` and `modified`. This covers the art of the brushes in `unknown.brushes`
+  too. A link whose file is inside them keeps its `path` but leaves out a `relative` that leads outside them. A
+  stored brush entry that does not read as a brush is left out of `unknown.brushes`. `document.json` also names a data set's image
+  value outside them by its file name alone, and leaves out the `folder` of `export_settings` (the settings Export
+  for Screens last used) when that folder is outside them. The document itself is not changed.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice

@@ -1136,6 +1136,50 @@ fn document_replies_leave_out_paths_outside_the_read_roots() {
     assert_eq!(s.execute("document.inspect", &json!({})).unwrap()["path"], json!(poster));
 }
 
+/// `document.json` for a confined caller: a linked image in a brush's art outside the read roots
+/// is named by its file name, a stored brush entry that does not read as a brush is left out, and a
+/// link inside them whose stored relative path leads outside them loses that relative path.
+#[test]
+fn document_json_checks_brush_art_and_relative_paths_against_the_read_roots() {
+    let away = Folder::new("doc-brr-away");
+    let home = Folder::new("doc-brr-home");
+    let pic = away.file("photo.png");
+    write(&pic, &crate::tests_links::png(60, 30, BLUE));
+    let near_pic = home.file("near.png");
+    write(&near_pic, &crate::tests_links::png(20, 10, RED));
+    let mut s = session();
+    let r = s.execute("file.place", &json!({"path": pic, "at": [50, 50]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    let image = r["ids"][0].as_u64().unwrap();
+    let r = s.execute("file.place", &json!({"path": near_pic, "at": [150, 50]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    s.execute("brush.new", &json!({"type": "art", "name": "Photo Band", "ids": [image]})).unwrap();
+    save(&mut s, &home.file("poster.vectorcraft"));
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let lib = d.unknown.get_mut(vectorcraft_brush::DOC_KEY).and_then(Value::as_array_mut).unwrap();
+        lib.push(json!({"name": "Broken Band", "type": "unknown kind", "note": pic}));
+        d.update_links(|l| {
+            if l.name() == "near.png" {
+                l.relative = Some("../doc-brr-away/near.png".into());
+            }
+        });
+    }
+    let unconfined = s.execute("document.json", &json!({})).unwrap().to_string();
+    for part in [json!(pic).to_string(), "Broken Band".into(), "../doc-brr-away/near.png".into()] {
+        assert!(unconfined.contains(&part), "{part}: {unconfined}");
+    }
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[]).unwrap().unwrap();
+    let model = crate::file_access::confine(Some(&roots), || s.execute("document.json", &json!({}))).unwrap();
+    let text = model.to_string();
+    assert!(!text.contains("doc-brr-away") && !text.contains("Broken Band"), "{text}");
+    assert!(text.contains("\"path\":\"photo.png\"") && text.contains("Photo Band"), "{text}");
+    assert!(text.contains(&json!(near_pic).to_string()), "{text}");
+    // The document keeps its brushes and links.
+    let stored = s.doc().unwrap().doc.unknown.get(vectorcraft_brush::DOC_KEY).unwrap().to_string();
+    assert!(stored.contains("Broken Band") && stored.contains(&json!(pic).to_string()), "{stored}");
+}
+
 /// Save As reads its defaults from the catalog; using them must retain current editable links.
 #[test]
 fn native_save_catalog_defaults_keep_placed_documents_editable() {

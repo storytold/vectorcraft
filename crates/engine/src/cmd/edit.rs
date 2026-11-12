@@ -50,9 +50,9 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             doc_compare
         ),
-        cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model (with automation read roots, a linked or placed file outside them is named by its file name alone, without its relative path, size or date, and so is a data set's image value outside them; a folder outside them is left out of export_settings)", has_doc, |s, _| {
+        cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model (with automation read roots, a linked or placed file outside them is named by its file name alone, without its relative path, size or date, in brush art too, and so is a data set's image value outside them; a relative path that leads outside them is left out; a stored brush entry that does not read as a brush is left out; a folder outside them is left out of export_settings)", has_doc, |s, _| {
             let st = s.doc()?;
-            let d = super::links::with_hidden_paths_named(&st.doc, super::links::LinkBase::of(st).doc);
+            let d = super::links::with_hidden_paths_named(&st.doc, super::links::LinkBase::of(st));
             Ok(serde_json::to_value(&*d).unwrap_or(Value::Null))
         }),
         cmd!(
