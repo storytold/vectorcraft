@@ -2626,18 +2626,22 @@ already walks Image Trace. Short agent entry points:
   VectorCraft's own rule. A stop in an action becomes the panel's selected step, and its action and set become the
   selected ones. An index past the last set, action or step, a param of another type, params that are not an
   object, no action and no recording, or a stop that would give the action more than 10,000 steps or its set's file
-  more than 8 MiB is an error, and then nothing changes. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
+  more than 8 MiB is an error, and then nothing changes. The limits count the steps that the recording in progress
+  adds to the set. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
   (`message`, `allowContinue`, `set`, `action`, `step`), whose OK runs this.
 - Actions: `ui.action.insertMenuItem {set?, action?, step?, command, params?}` inserts a menu item's command as a step
   without running it. `command` and `params` (default: `{}`) must be those of an item in the menus that can be a step:
   an item that runs a document command without opening a dialog first, outside the File, Window and Help menus, and
-  not Undo, Redo, a Paste command, Object › Align (its items add the Align To choice when clicked), a preference
+  not Undo, Redo, a Paste command, Object › Align (its items add the Align To choice when clicked), Object › Image
+  Trace › Make or Make and Expand (the menu traces off the UI thread, with progress and Cancel), Object › Pattern ›
+  Make or Edit Pattern (the menu also opens the Pattern Options panel), a preference
   toggle, an Actions command or a recent-font, saved-selection or saved-view slot. Disabled items are listed, and playback checks the step when it runs. With `set` and `action`, the
   step goes into that action, after step `step`, else after its last step, becomes the panel's selected step, and the
   command returns `{set, action, step}`. Without them it goes into the recording in progress and returns
   `{recording: true}`. A command no such item runs, params that are not an object, an index past the last set, action
   or step, no action and no recording, or a step that would give the action more than 10,000 steps or its set's file
-  more than 8 MiB is an error, and then nothing changes. The panel menu's Insert Menu Item… opens the
+  more than 8 MiB is an error, and then nothing changes. The limits count the steps that the recording in progress
+  adds to the set. The panel menu's Insert Menu Item… opens the
   `actionInsertMenuItem` dialog (`find`, `command`, `params`, `set`, `action`, `step`): typing in Find and pressing
   Find picks the one item whose menu path, shown name or command id holds every word typed, or lists the matches, and
   OK runs this.

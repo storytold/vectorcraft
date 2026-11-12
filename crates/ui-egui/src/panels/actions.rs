@@ -937,7 +937,33 @@ fn recording_room(app: &VectorcraftApp, step: &(String, Value)) -> Result<(), St
     Ok(())
 }
 
-/// Puts `step` where params `p` say ([`insert_stop`]) → what [`insert_stop`] returns.
+/// What Stop Playing/Recording adds to a set ([`recorded_into`]).
+struct Recorded {
+    /// The set's action that the recording records into; None for the new action that the
+    /// recording adds.
+    into: Option<usize>,
+    /// The new action's name.
+    name: String,
+    /// The steps recorded so far.
+    steps: Vec<(String, Value)>,
+}
+
+/// What Stop Playing/Recording adds to set `set`; None when the recording in progress adds nothing
+/// to it.
+fn recorded_into(app: &VectorcraftApp, set: usize) -> Option<Recorded> {
+    let (recording_set, name, start) = app.ui.recording.as_ref()?;
+    let into = match app.ui.recording_into {
+        Some(id) => Some(app.ui.action_sets.get(set)?.actions.iter().position(|a| a.id == id)?),
+        None if *recording_set == set => None,
+        None => return None,
+    };
+    let steps = app.session.journal_for_action(app.session.journal.held().unwrap_or(*start));
+    Some(Recorded { into, name: name.clone(), steps })
+}
+
+/// Puts `step` where params `p` say ([`insert_stop`]) → what [`insert_stop`] returns. When the
+/// recording in progress adds steps to the set, the limits count them as Stop Playing/Recording
+/// would leave the set.
 fn insert(app: &mut VectorcraftApp, p: &Value, step: (String, Value)) -> Result<Value, String> {
     let index = |k: &str| p.get(k).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
     if p.get("set").is_none() && p.get("action").is_none() && p.get("step").is_none() {
@@ -949,19 +975,35 @@ fn insert(app: &mut VectorcraftApp, p: &Value, step: (String, Value)) -> Result<
         return Ok(json!({"recording": true}));
     }
     let (set, at) = index("set").zip(index("action")).ok_or("no such action")?;
+    let recorded = recorded_into(app, set);
+    let pending = match &recorded {
+        Some(r) if r.into == Some(at) => r.steps.len(),
+        _ => 0,
+    };
     let s = app.ui.action_sets.get_mut(set).filter(|s| at < s.actions.len()).ok_or("no such action")?;
     let action = &mut s.actions[at];
     let after = match p.get("step") {
         None => action.steps.len(),
         Some(_) => index("step").filter(|&s| s < action.steps.len()).ok_or("no such action step")? + 1,
     };
-    if action.steps.len() >= files::MAX_ACTION_STEPS {
+    if action.steps.len() + pending >= files::MAX_ACTION_STEPS {
         return Err("the action already has 10,000 steps".into());
     }
     let excluded = action.excluded_steps.clone();
     action.insert_step(after, step);
     let id = action.id;
-    if files::write_set(s).len() > files::MAX_SET_FILE {
+    let file_len = match recorded {
+        None => files::write_set(s).len(),
+        Some(Recorded { into, name, steps }) => {
+            let mut kept = s.clone();
+            match into {
+                Some(into) => kept.actions[into].steps.extend(steps),
+                None => kept.actions.push(Action::new(name, steps)),
+            }
+            files::write_set(&kept).len()
+        }
+    };
+    if file_len > files::MAX_SET_FILE {
         let action = &mut s.actions[at];
         action.steps.remove(after);
         action.excluded_steps = excluded;
@@ -4116,6 +4158,12 @@ mod tests {
             (place(json!({"command": "edit.paste"})), none),
             // Align, whose menu items add the Align To choice when clicked.
             (place(json!({"command": "object.align", "params": {"horizontal": "left"}})), none),
+            // Image Trace, whose menu items trace off the UI thread with progress and Cancel.
+            (place(json!({"command": "imageTrace.make", "params": {"preset": "Default"}})), none),
+            (place(json!({"command": "imageTrace.makeAndExpand", "params": {"preset": "Default"}})), none),
+            // Pattern's Make and Edit Pattern, whose menu items open the Pattern Options panel.
+            (place(json!({"command": "object.pattern.make"})), none),
+            (place(json!({"command": "object.pattern.edit"})), none),
             // Params that no menu item gives its command.
             (place(json!({"command": "type.changeCase"})), none),
             (place(json!({"command": "type.changeCase", "params": {"case": "middle"}})), none),
@@ -4223,6 +4271,53 @@ mod tests {
         app.run(STOP_RECORDING, json!({})).unwrap();
         assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "nothing was recorded into the action");
         assert!(files::write_set(&app.ui.action_sets[0]).len() <= files::MAX_SET_FILE);
+    }
+
+    /// A step put by its set and action into the action that the recording in progress records into
+    /// counts the steps recorded so far, which Stop Playing/Recording adds to that action.
+    #[test]
+    fn steps_inserted_into_the_action_being_recorded_into_count_the_recorded_steps() {
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_sets[0].actions.push(Action::new("Other", vec![]));
+        let into = app.ui.action_sets[0].actions[0].id;
+        let stored = app.ui.action_sets[0].actions[0].steps.len();
+        app.run(START_RECORDING, json!({})).unwrap();
+        app.ui.recording_into = Some(into);
+        for _ in stored..files::MAX_ACTION_STEPS {
+            app.session.journal.push(("object.group".to_string(), json!({})));
+        }
+        let steps = "the action already has 10,000 steps";
+        assert_eq!(app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": "object.group"})).unwrap_err(), steps);
+        assert_eq!(app.run(INSERT_STOP, json!({"set": 0, "action": 0})).unwrap_err(), steps);
+        assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), stored, "nothing was inserted");
+        assert!(app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 1, "command": "object.group"})).is_ok(), "another action takes the step");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        let saved = files::write_set(&app.ui.action_sets[0]);
+        assert_eq!(files::read_set(&saved, "Test").unwrap().actions[0].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
+
+        let (mut app, _) = app_with_three_moves();
+        let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+        let into = app.ui.action_sets[0].actions[0].id;
+        let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+        app.run(START_RECORDING, json!({})).unwrap();
+        app.ui.recording_into = Some(into);
+        app.session.journal.push(pad(room - 8));
+        let size = "the action set would be larger than 8 MiB";
+        assert_eq!(app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": "object.group"})).unwrap_err(), size);
+        assert_eq!(app.run(INSERT_STOP, json!({"set": 0, "action": 0})).unwrap_err(), size);
+        // Another action of the set counts them too, for a recording into an action and for a
+        // recording that adds a new action.
+        for into_first in [true, false] {
+            let (mut app, _) = app_with_three_moves();
+            app.ui.action_sets[0].actions.push(Action::new("Other", vec![]));
+            let first = app.ui.action_sets[0].actions[0].id;
+            app.run(START_RECORDING, json!({})).unwrap();
+            app.ui.recording_into = into_first.then_some(first);
+            app.session.journal.push(pad(room - 8));
+            let r = app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 1, "command": "object.group"}));
+            assert_eq!(r.unwrap_err(), size, "recording into the first action: {into_first}");
+            assert!(app.ui.action_sets[0].actions[1].steps.is_empty(), "recording into the first action: {into_first}");
+        }
     }
 
     /// A step inserted from the menu saves and loads as the command and params it holds, with its

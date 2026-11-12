@@ -144,19 +144,27 @@ pub struct InsertableItem {
 /// files), Window (panels and workspaces) and Help.
 const NOT_INSERTED_MENUS: [&str; 4] = ["VectorCraft", "File", "Window", "Help"];
 
+/// Commands whose menu items do more than run the command, which action playback does not do:
+/// Object › Image Trace › Make and Make and Expand trace off the UI thread with progress and Cancel
+/// ([`crate::trace_runs::start`]), and Object › Pattern › Make and Edit Pattern open the Pattern
+/// Options panel.
+const MENU_ONLY_COMMANDS: [&str; 4] = ["imageTrace.make", "imageTrace.makeAndExpand", "object.pattern.make", "object.pattern.edit"];
+
 /// Whether the item labeled `label` in menu `title`, which runs command `id` with `p`, can be a step
 /// of an action. It can when it runs an engine command, which action playback runs as the menu
 /// does; its label does not end with "…", the mark of an item that asks for values first; it is not
 /// in a menu of [`NOT_INSERTED_MENUS`]; and it is not Undo, Redo, a Paste, an item that stands for a
 /// saved selection, a saved view or a recent font, a plug-in's item or an action's own command. Nor
 /// is it Object › Align, whose menu items add the Align To choice and the selection's key to their
-/// params when clicked ([`crate::panels::align::with_align_to`]), which playback does not.
+/// params when clicked ([`crate::panels::align::with_align_to`]), which playback does not, or another
+/// item of [`MENU_ONLY_COMMANDS`].
 pub fn insertable(title: &str, label: &str, id: &str, p: &Value) -> bool {
     use super::slots::{RECENT_FONT_IDS, SAVED_SELECTION_IDS, SAVED_VIEW_IDS};
     vectorcraft_engine::find_command(id).is_some()
         && !label.ends_with('…')
         && !NOT_INSERTED_MENUS.contains(&title)
         && !matches!(id, "edit.undo" | "edit.redo" | "command.batch" | "object.align")
+        && !MENU_ONLY_COMMANDS.contains(&id)
         && !id.starts_with("edit.paste")
         && !id.starts_with("prefs.")
         && !id.starts_with("action.")

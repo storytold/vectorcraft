@@ -208,8 +208,9 @@ mod tests {
     }
 
     /// The list holds the menu items that run an engine command without asking for values first,
-    /// outside the application, File, Window and Help menus, and leaves out Undo, Redo, the Pastes
-    /// and the saved-selection, saved-view and recent-font items.
+    /// outside the application, File, Window and Help menus, and leaves out Undo, Redo, the Pastes,
+    /// Object › Align, Image Trace's Make and Make and Expand, Pattern's Make and Edit Pattern and the
+    /// saved-selection, saved-view and recent-font items.
     #[test]
     fn the_list_holds_only_menu_items_that_can_be_steps() {
         let items = menus::insertable_items(true);
@@ -224,9 +225,21 @@ mod tests {
         for command in ["object.group", "object.ungroup", "object.arrange.bringToFront"] {
             assert!(has(command), "{command}");
         }
-        for command in
-            ["edit.undo", "edit.redo", "edit.paste", "edit.pasteInFront", "object.move", "object.align", "file.save", "view.zoomIn", "select.recall1"]
-        {
+        for command in [
+            "edit.undo",
+            "edit.redo",
+            "edit.paste",
+            "edit.pasteInFront",
+            "object.move",
+            "object.align",
+            "imageTrace.make",
+            "imageTrace.makeAndExpand",
+            "object.pattern.make",
+            "object.pattern.edit",
+            "file.save",
+            "view.zoomIn",
+            "select.recall1",
+        ] {
             assert!(!has(command), "{command}");
         }
     }
