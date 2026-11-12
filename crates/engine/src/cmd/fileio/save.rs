@@ -307,7 +307,9 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     };
     let modified = date_param(p, "modified", cmd)?;
     if let Some(path) = &path {
-        super::check_not_lossy_overwrite(st, path, p, cmd)?;
+        // Without a path, it is the document's own file: the error names it as the request may see it.
+        let given = str_param(p, "path").is_some_and(|g| !g.is_empty());
+        super::check_not_lossy_overwrite(st, path, p, cmd).map_err(|e| if given { e } else { super::access::naming_in_error(e, path) })?;
     }
     let written = written_as(cmd, format, &Value::Object(options.clone()));
     let top = NATIVE_OPTIONS.iter().filter(|k| p.get(**k).is_some_and(|v| !v.is_null())).map(|k| k.to_string());
@@ -1056,7 +1058,12 @@ pub(crate) fn save(s: &mut Session, mode: SaveMode, p: &Value) -> Result<Value> 
     let plan = save_plan(s, mode, p)?;
     let job = save_job(s, plan)?;
     let uid = s.doc()?.uid;
-    let mut out = job.write_streamed(&mut super::write_save_file_with)?;
+    let given = str_param(p, "path").is_some_and(|g| !g.is_empty());
+    // Without a path, the files written are the document's own file and those beside it.
+    let mut write = |path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>| {
+        super::write_save_file_with(path, fill).map_err(|e| if given { e } else { super::access::naming_in_error(e, path) })
+    };
+    let mut out = job.write_streamed(&mut write)?;
     job.complete(s, uid);
     leave_out_unreadable_save_paths(&mut out, str_param(p, "path"));
     Ok(out)
@@ -1111,7 +1118,8 @@ fn can_revert(s: &Session) -> std::result::Result<(), String> {
 fn revert(s: &mut Session, _: &Value) -> Result<Value> {
     let index = s.active_index().ok_or(crate::EngineError::NoDocument)?;
     let path = s.doc()?.path.clone().ok_or_else(|| bad("file.revert", "the document has never been saved"))?;
-    let Loaded { mut doc, native_pdf_compatible, .. } = load(&path, &read_file(&path)?)?.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
+    let bytes = read_file(&path).map_err(|e| super::access::naming_in_error(e, &path))?;
+    let Loaded { mut doc, native_pdf_compatible, .. } = load(&path, &bytes)?.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     doc.template = false;
     // Back to the saved file: its recovery copy has nothing left to recover.
     let uid = s.doc()?.uid;

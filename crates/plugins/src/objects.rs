@@ -1244,8 +1244,11 @@ pub fn apply_output(doc: &mut Document, inputs: &[NodeId], out: Vec<OutObject>, 
         match o.id {
             Some(id) => {
                 let mut n = originals.remove(&id).ok_or_else(|| {
-                    let why = if wanted.contains(&id) { "is listed twice" } else { "is not the id of an input object" };
-                    out_err(&at, format!("{} {why}", id.0))
+                    if wanted.contains(&id) {
+                        out_err(&at, format!("{} is listed twice", id.0))
+                    } else {
+                        out_err(&at, format!("{} is not the id of an input object", id.0))
+                    }
                 })?;
                 // Type, images and symbol instances are only read: writing one would make it a path.
                 if input_kind(&n).is_some() && !o.kept {

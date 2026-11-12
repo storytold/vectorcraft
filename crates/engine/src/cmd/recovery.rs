@@ -1276,15 +1276,16 @@ enum Owner {
 /// dropped) and, with `take` in a store without locks, taken over with a fresh heartbeat, so
 /// another app leaves it alone meanwhile. In a store without locks an area is gone only when
 /// nothing says its app runs: no announcement (or the store can't tell) and no heartbeat for three
-/// intervals but the one this session wrote taking it over.
-fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<Hold>, take: bool) -> Owner {
+/// intervals but the one this session wrote taking it over. `held` names the gone apps' areas the
+/// caller already holds.
+fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<Hold>, take: bool, held: &[&str]) -> Owner {
     if s.recovery.own.as_ref().is_some_and(|o| o.area == area && o.store.location() == store.location()) {
         return Owner::Mine;
     }
     match store.lock(area) {
         Ok(Lock::Held(h)) => {
             // Copies an app left here when it had to leave the area stay its own while it runs.
-            if let Some(who) = keeper(s, store, area) {
+            if let Some(who) = keeper(s, store, area, held) {
                 return who;
             }
             hold.push(h);
@@ -1295,7 +1296,7 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
             if store.announced(area).unwrap_or(false) || beating(store, area, stale_after(s), s.recovery.adopted.get(area).copied()) {
                 return Owner::Running;
             }
-            if let Some(who) = keeper(s, store, area) {
+            if let Some(who) = keeper(s, store, area, held) {
                 return who;
             }
             // Best effort: without it another app might offer the copies too, which loses nothing.
@@ -1311,12 +1312,14 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
 /// `<its area>/keeps-<area>` ([`mark_left`]): this session, or another app that is running. `None`:
 /// no app that runs keeps them. An entry counts only in an area this account can lock or tell is
 /// held ([`holder`]), so an entry in a folder of another account, or in one whose lock can't be
-/// checked, keeps nothing. A store that can't be listed now keeps them (a copy kept loses nothing).
-fn keeper(s: &Session, store: &dyn RecoveryStore, area: &str) -> Option<Owner> {
+/// checked, keeps nothing. So does an entry in one of the gone apps' areas the caller holds
+/// (`held`), whose lock this session would otherwise find taken. A store that can't be listed now
+/// keeps them (a copy kept loses nothing).
+fn keeper(s: &Session, store: &dyn RecoveryStore, area: &str, held: &[&str]) -> Option<Owner> {
     let Ok(names) = store.list() else { return Some(Owner::Running) };
     let mark = format!("/{KEEPS}{area}");
     let mut who = None;
-    for k in names.iter().filter_map(|n| n.strip_suffix(mark.as_str())).filter(|k| *k != area) {
+    for k in names.iter().filter_map(|n| n.strip_suffix(mark.as_str())).filter(|k| *k != area && !held.contains(k)) {
         match holder(s, store, k) {
             Owner::Mine => return Some(Owner::Mine),
             Owner::Running => who = Some(Owner::Running),
@@ -1378,7 +1381,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let mut rows = vec![];
     for area in store.areas().map_err(EngineError::Other)? {
         let mut hold = vec![];
-        let who = owner(s, store.as_ref(), &area, &mut hold, false);
+        let who = owner(s, store.as_ref(), &area, &mut hold, false, &[]);
         let files: Vec<&String> = copies.iter().filter(|(a, _)| *a == area).map(|(_, f)| f).collect();
         for f in &files {
             let meta = read_meta(store.as_ref(), f);
@@ -1418,10 +1421,11 @@ fn targets(s: &mut Session, store: &dyn RecoveryStore, cmd: &str, p: &Value) -> 
     }
     let picked = |c: &str| file.is_none_or(|f| f == c) && !left.iter().any(|l| l == c);
     let areas: BTreeSet<&str> = copies.iter().filter(|(_, c)| picked(c)).map(|(a, _)| a.as_str()).collect();
-    let mut out = vec![];
+    let mut out: Vec<Target> = vec![];
     for area in areas {
         let mut hold = vec![];
-        match (owner(s, store, area, &mut hold, true), file) {
+        let held: Vec<&str> = out.iter().map(|(a, _, _)| a.as_str()).collect();
+        match (owner(s, store, area, &mut hold, true, &held), file) {
             (Owner::Gone, _) => {
                 let files = copies.iter().filter(|(a, c)| a == area && picked(c)).map(|(_, c)| c.clone()).collect();
                 out.push((area.to_string(), files, hold));

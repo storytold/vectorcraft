@@ -1854,6 +1854,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
 	Roman Hanging Punctuation	Romeinse hangende leestekens
 	Korean Line Break Anywhere	Koreaans regeleinde overal
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Instellingen voor Oost-Aziatische zetting
 	Korean Composition Settings	Instellingen voor Koreaanse zetting
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
@@ -2924,6 +2925,7 @@ antiAlias	Sharp	Scherp
 	Hide Code	Code verbergen
 	Images:	Afbeeldingen:
 	Include Metadata	Metadata opnemen
+	Include Variable Data	Variabelegegevens opnemen
 	Internal CSS	Interne CSS
 	Layer Names	Laagnamen
 	Minify	Minify
@@ -3357,6 +3359,7 @@ theme	Appearance	Vormgeving
 	Move Mesh Points	Maaspunten verplaatsen
 	Move Spine Point	Aspunt verplaatsen
 	Reshape Spine Segment	Segment van de as opnieuw vormgeven
+	Blend Easing	Blend-easing
 	Reset with Mesh	Opnieuw instellen met maas
 	Reset with Warp	Opnieuw instellen met vervorming
 	Set Mesh Point Color	Kleur van maaspunt instellen
@@ -6137,6 +6140,11 @@ axis	Y Axis	Y-as
 	User Brush Library 9	Penseelbibliotheek van gebruiker 9
 	User Brush Library 10	Penseelbibliotheek van gebruiker 10
 	Art Ribbons	Illustratielinten
+	Ink and Wash	Inkt en wassing
+	Tapered Ink	Taps toelopende inkt
+	Brush Pen	Penseelstift
+	Soft Wash	Zachte wassing
+	Pooling Wash	Wassing met rand
 	Zigzag	Zigzag
 	Burst Ray	Inslagstraal
 	Dash Trail	Streepspoor
