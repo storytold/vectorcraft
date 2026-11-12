@@ -258,7 +258,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "distort.roughen",
             "Roughen…",
             DT,
-            "{size: 0..100 (5), relative: bool (true: % of size; false: pt), detail: per inch 0..100 (10), points: \"smooth\"|\"corner\", seed: int (0)}",
+            "{size: 0..100 (5; 0 keeps the outline and adds its points along it), relative: bool (true: % of size; false: pt), detail: per inch 0..100 (10), points: \"smooth\"|\"corner\", seed: int (0)}",
             json!({"size": 5.0, "relative": true, "detail": 10.0, "points": "smooth", "seed": 0}),
         ),
         g(
