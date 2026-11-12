@@ -2982,8 +2982,13 @@ fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
 fn a_filter_plugin_row_translates_its_path_and_not_its_name() {
     let zh = crate::i18n::Lang::from_code("zh-hant").unwrap();
     crate::i18n::set_current(zh);
-    let entry =
-        |key: &str| crate::shortcut_editor::Entry { key: key.into(), label: "Group".into(), group: "Object › Plug-ins".into(), is_tool: false };
+    let entry = |key: &str| crate::shortcut_editor::Entry {
+        key: key.into(),
+        label: "Group".into(),
+        group: "Object › Plug-ins".into(),
+        is_tool: false,
+        shows_key: false,
+    };
     let path = format!("{} › {}", crate::i18n::tr(zh, "Object"), crate::i18n::tr(zh, "Plug-ins"));
     let (filter, command) = (crate::shortcut_editor::shown_name(&entry("plugin:a.b")), crate::shortcut_editor::shown_name(&entry("object.group")));
     crate::i18n::set_current(crate::i18n::Lang::EN);
