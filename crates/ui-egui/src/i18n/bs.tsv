@@ -256,6 +256,10 @@
 	Blend Options…	Opcije stapanja…
 	Expand	Proširi
 	Replace Spine	Zamijeni kičmu
+	Create Spine	Kreiraj kičmu
+	Create Spine:	Kreiraj kičmu:
+	Always	Uvijek
+	Never	Nikad
 	Reverse Spine	Obrni kičmu
 	Reverse Front to Back	Obrni od naprijed prema nazad
 	Envelope Distort	Izobličenje omotnicom
@@ -2362,6 +2366,8 @@ digits	Malayalam	Malajalam
 	Export Selected Art Only	Izvezi samo odabrani crtež
 	Number of Colors:	Broj boja:
 	Raster File Format:	Format rasterske datoteke:
+	Include Placed Images	Uključi postavljene slike
+	Include Fill Hatches	Uključi šrafure ispuna
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Prava boja zahtijeva verziju 2004 ili noviju: zapisuje se najbliža od 256 boja.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst postaje obrisi, a potezi koje CAD linija ne može nacrtati postaju ispunjeni oblici.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst ostaje tekst, a svaki potez je linija sa svojom debljinom i crticama.
@@ -5912,6 +5918,8 @@ axis	Y Axis	Y osa
 	Version: {version}	Verzija: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instalirati „{name}” umjesto dodatka s istim ID-om?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ova datoteka nije dodatak ranije instaliran s ovim ID-om. Dobija postavke i predmemoriju sačuvane za taj ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatizacija je zatražila instalaciju ovog dodatka. Da biste ga instalirali, izaberite Objekat › Dodaci › Instaliraj dodatak… sami.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatizacija je zatražila instalaciju ovog dodatka. Da biste ga instalirali, izaberite Objekat › Dodaci › Instaliraj dodatak… sami.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” je drugi modul od dodatka s ID-om {_1} i dobio bi postavke i predmemoriju sačuvane za njega: instalirajte ga s `replace: true` kada korisnik pristane
 	File SHA-256: {hash}	SHA-256 datoteke: {hash}
 	Read the objects it is given	Čitati objekte koje dobije

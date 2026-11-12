@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert To Point Type",
             ["Type"],
             None,
-            "{ids?|id?} area type → point type; soft line wraps become line breaks, and a frame of threaded text leaves its thread with the text it holds → {ids}",
+            "{ids?|id?} area type → point type; soft line wraps become line breaks, a frame of threaded text leaves its thread with the text it holds, and Dynamic Text (Block) is turned off, keeping the sizes it set → {ids}",
             has_selection,
             to_point
         ),
@@ -410,6 +410,9 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
                 Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => x1,
                 _ => x0,
             };
+            // Point type has no Dynamic Text: Block is turned off, keeping the sizes it set, so
+            // converting back to area type does not turn it on again.
+            t.dynamic_text = false;
             t.kind = TextKind::Point;
             t.xf *= Affine::translate((ox, baseline));
             refresh_bounds(t);
