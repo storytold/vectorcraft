@@ -1472,6 +1472,14 @@ and `amount` in `color.harmony`; `angle` in `paint.editGradient` and in the `gra
 `width` and `tolerance` in `livePaint.strokeEdge`. A null is read as a key left out. A gradient stop that names a
 swatch refuses a `tint` that is not a number with `` stop 0: `tint` must be a number ``.
 
+The Edit, document, guide and slice commands also check the type of each param and change nothing when one is
+wrong. A value that is not a number gets `` `dx` must be a number, not "10" ``: `dx` and `dy` in `edit.duplicate`,
+`edit.paste`, `guide.move` and `object.slice.duplicate`. A value that is not true or false gets
+`` `toggle` must be true or false ``: `summary` in `document.node`, `cancel` in `edit.undoGroup.end`, `vertical` in
+`guide.add`, `toggle` in `guide.select` and `object.slice.select`, `copy` in `guide.move` and `delete` in
+`select.editSaved`. `name` in `select.save` and `newName` in `select.editSaved` must be strings, and `index` in
+`file.close` must be a non-negative integer. A null is read as a key left out.
+
 `text.setStyle` refuses a `size` that is neither a number nor a length with a unit (`"12 pt"`, `"5 mm"`) with
 `` `size` must be a number, not true ``, and a `tracking` that is neither a number nor a number written as a string
 (`"20"`) with `` `tracking` must be a number, not false ``. It and `text.setRangeStyle` refuse a `font` or `style` that is not a string
