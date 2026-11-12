@@ -1310,6 +1310,77 @@ fn a_noisy_gradient_keeps_its_tones_without_specks() {
     assert!(res.paths.len() <= 2 * res.palette.len(), "{} paths of {} colours", res.paths.len(), res.palette.len());
 }
 
+/// A shaded ball and a lit wall on a dark mottled ground, with `noise` levels of noise per channel:
+/// a photo's tones, in color or (`gray`) as their grays.
+fn photo_scene(noise: f64, gray: bool) -> Raster {
+    Raster::from_fn(160, 128, |x, y| {
+        let ground = f64::from(20 + 10 * ((x / 16 + y / 16) % 3));
+        let (dx, dy) = (f64::from(x) - 60.0, f64::from(y) - 64.0);
+        let c = if dx * dx + dy * dy < 1600.0 {
+            let shade = 0.25 + 0.75 * (1.0 - (dx + dy + 40.0) / 110.0).max(0.0);
+            [210.0 * shade + 20.0, 150.0 * shade + 20.0, 100.0 * shade + 20.0]
+        } else if x >= 110 {
+            let t = f64::from(y) / 127.0;
+            [200.0 - 90.0 * t, 180.0 - 40.0 * t, 70.0 + 50.0 * t]
+        } else {
+            [ground; 3]
+        };
+        let p = [0, 1, 2].map(|k| (c[k] + noise * jitter(x, y, k as u32)).round().clamp(0.0, 255.0) as u8);
+        if gray {
+            let g = quantize::luma([p[0], p[1], p[2], 255]);
+            [g, g, g, 255]
+        } else {
+            [p[0], p[1], p[2], 255]
+        }
+    })
+}
+
+#[test]
+fn a_gray_photo_is_continuous_tone_as_its_color_original_is() {
+    for noise in [4.0, 6.0] {
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, true)), "gray, noise {noise}");
+    }
+    // Three-color gray flat art stays flat art with up to 16 levels of uniform noise. (Heavier
+    // noise or JPEG artifacts can make gray flat art continuous tone.)
+    let clean = three_colour_art(0.0);
+    for noise in [0.0, 8.0, 16.0] {
+        let mut gray = three_colour_art(noise);
+        for p in gray.rgba.as_chunks_mut::<4>().0 {
+            let g = quantize::luma(*p);
+            p[..3].fill(g);
+        }
+        assert!(!quantize::continuous_tone(&gray), "gray flat art, noise {noise}");
+        // The same noise on every channel, as a gray scan has it.
+        let scan = Raster::from_fn(clean.width, clean.height, |x, y| {
+            let i = ((y * clean.width + x) * 4) as usize;
+            let g = f64::from(quantize::luma([clean.rgba[i], clean.rgba[i + 1], clean.rgba[i + 2], 255]));
+            let v = (g + noise * jitter(x, y, 0)).round().clamp(0.0, 255.0) as u8;
+            [v, v, v, 255]
+        });
+        assert!(!quantize::continuous_tone(&scan), "gray scan of flat art, noise {noise}");
+    }
+    // Nine clean equal gray bands, more levels than eight colors can hold, stay flat art.
+    for step in [15, 30] {
+        let bands = Raster::from_fn(180, 60, |x, _| {
+            let v = (x / 20 * step) as u8;
+            [v, v, v, 255]
+        });
+        assert!(!quantize::continuous_tone(&bands), "nine gray bands {step} levels apart");
+    }
+}
+
+#[test]
+fn a_gray_photo_is_smoothed_before_it_is_traced() {
+    // As a color photo is. Traced with its noise, the noise mixes neighboring tones into one,
+    // leaving fewer colors than asked for, and steps the edges between them (more anchors).
+    for noise in [4.0, 6.0] {
+        let res = trace(&photo_scene(noise, true), &sixteen_colors());
+        assert!(res.palette.len() >= 14, "noise {noise}: {} colors", res.palette.len());
+        assert!(res.anchor_count() <= 1100, "noise {noise}: {} anchors", res.anchor_count());
+    }
+}
+
 #[test]
 fn stacked_layers_go_by_lightness_and_leave_ignored_white_alone() {
     // Stripes: black, white, mid gray, light gray (the widest).
