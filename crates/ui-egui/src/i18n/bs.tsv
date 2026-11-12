@@ -2362,6 +2362,8 @@ digits	Malayalam	Malajalam
 	Export Selected Art Only	Izvezi samo odabrani crtež
 	Number of Colors:	Broj boja:
 	Raster File Format:	Format rasterske datoteke:
+	Include Placed Images	Uključi postavljene slike
+	Include Fill Hatches	Uključi šrafure ispuna
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Prava boja zahtijeva verziju 2004 ili noviju: zapisuje se najbliža od 256 boja.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst postaje obrisi, a potezi koje CAD linija ne može nacrtati postaju ispunjeni oblici.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst ostaje tekst, a svaki potez je linija sa svojom debljinom i crticama.

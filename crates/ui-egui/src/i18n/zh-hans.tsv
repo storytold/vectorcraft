@@ -2543,6 +2543,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Range:	范围：
 	Raster Effects	栅格效果
 	Raster File Format:	栅格文件格式：
+	Include Placed Images	包含置入的图像
+	Include Fill Hatches	包含填色的图案填充
 	Raster Sample Size:	栅格取样大小：
 	Raster/Vector Balance:	栅格/矢量平衡：
 	Rasterize	栅格化

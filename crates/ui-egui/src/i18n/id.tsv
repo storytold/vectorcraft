@@ -2194,6 +2194,8 @@ digits	Malayalam	Malayalam
 	Export Selected Art Only	Ekspor hanya karya seni terpilih
 	Number of Colors:	Jumlah warna:
 	Raster File Format:	Format file raster:
+	Include Placed Images	Sertakan gambar yang ditempatkan
+	Include Fill Hatches	Sertakan arsiran isian
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Warna sejati memerlukan versi 2004 atau lebih baru: yang ditulis adalah warna terdekat dari 256 warna.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Teks menjadi garis luar, dan stroke yang tidak dapat digambar oleh garis CAD menjadi bentuk terisi.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Teks tetap berupa teks, dan setiap stroke menjadi garis dengan ketebalan dan pola putus-putusnya.

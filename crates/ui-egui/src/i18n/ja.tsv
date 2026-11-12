@@ -2727,6 +2727,8 @@ mark-style	Japanese	日本式
 	Randomly change saturation and brightness	彩度と明度をランダムに変更
 	Range:	範囲:
 	Raster File Format:	ラスターファイル形式:
+	Include Placed Images	配置画像を含める
+	Include Fill Hatches	塗りのハッチングを含める
 	Raster Sample Size:	ラスターのサンプルサイズ:
 	Raster/Vector Balance:	ラスター／ベクターのバランス:
 	Rasterize Unsupported Art	非対応のアートをラスタライズ

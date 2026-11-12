@@ -2194,6 +2194,8 @@ digits	Malayalam	Malayalam
 	Export Selected Art Only	Eksportér kun markeret grafik
 	Number of Colors:	Antal farver:
 	Raster File Format:	Rasterfilformat:
+	Include Placed Images	Medtag placerede billeder
+	Include Fill Hatches	Medtag skraveringer af udfyldninger
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Ægte farve kræver version 2004 eller senere: den nærmeste af 256 farver skrives.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst bliver til omrids, og konturer, som en CAD-linje ikke kan tegne, bliver til udfyldte figurer.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst forbliver tekst, og hver kontur er en linje med sin linjevægt og streger.

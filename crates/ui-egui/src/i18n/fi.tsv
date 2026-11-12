@@ -2350,6 +2350,8 @@ digits	Malayalam	Malajalam
 	Export Selected Art Only	Vie vain valittu kuvitus
 	Number of Colors:	Värien määrä:
 	Raster File Format:	Rasteritiedoston muoto:
+	Include Placed Images	Sisällytä sijoitetut kuvat
+	Include Fill Hatches	Sisällytä täyttöjen viivoitukset
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Täysväri vaatii version 2004 tai uudemman: käytetään lähintä 256 väristä.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Teksti muunnetaan ääriviivoiksi, ja viivat, joita CAD-viiva ei pysty piirtämään, muuttuvat täytetyiksi muodoiksi.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Teksti säilyy tekstinä, ja jokainen viiva on viiva, jolla on oma viivanpaksuutensa ja katkoviivansa.
