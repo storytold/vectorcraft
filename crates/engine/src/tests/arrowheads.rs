@@ -348,3 +348,18 @@ fn a_symbol_whose_shapes_cannot_be_combined_is_skipped() {
     let skipped: Vec<&str> = read.skipped.iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(skipped, ["Broken", "Broken Clip"], "{:?}", read.skipped);
 }
+
+#[test]
+fn a_group_used_as_the_clipping_path_adds_none_of_its_own_fills() {
+    // A group holding a filled 20 × 4 bar clips a filled 4 × 4 square: the group paints nothing as
+    // the clipping path, so the head is the square alone.
+    let bar = polygon(&[(0.0, 0.0), (20.0, 0.0), (20.0, 4.0), (0.0, 4.0)], filled());
+    let mask = Node::group(NodeId(0), vec![Arc::new(bar)]);
+    let square = polygon(&[(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)], filled());
+    let mut d = Document::new(100.0, 100.0);
+    add_symbol(&mut d, "Group Clip", Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(mask), Arc::new(square)], clip: true }));
+    let read = heads_of(&d);
+    assert_eq!(read.heads.len(), 1, "{:?}", read.skipped);
+    let b = read.heads[0].path.bounds().unwrap();
+    assert!((b.width() - 4.0).abs() < 1e-3 && (b.height() - 4.0).abs() < 1e-3, "the square alone: {b:?}");
+}

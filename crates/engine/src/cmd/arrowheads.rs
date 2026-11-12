@@ -222,7 +222,8 @@ impl Shapes {
 /// their strokes' outlines, its groups' members included (baking has already made a group's own
 /// fills and strokes art among its members), and the areas its gradient meshes cover. A clip
 /// group's clipped art is clipped to
-/// its clipping path, whose own fill and stroke paint unclipped, as on the canvas. Hidden or fully
+/// its clipping path, whose own fill and stroke paint unclipped, as on the canvas; a group used as
+/// the clipping path paints nothing ([`clip_paint`]). Hidden or fully
 /// transparent art is left out.
 fn painted(d: &mut Document, brushes: &[vectorcraft_brush::Brush], n: &Node, out: &mut Shapes) {
     if !n.visible || n.opacity <= 0.0 || out.too_detailed {
@@ -239,7 +240,7 @@ fn painted(d: &mut Document, brushes: &[vectorcraft_brush::Brush], n: &Node, out
         }
         NodeKind::Group { children, clip: true } => {
             let Some((clip, rest)) = children.split_first() else { return };
-            painted(d, brushes, clip, out);
+            clip_paint(clip).iter().for_each(|part| painted(d, brushes, part, out));
             // Nothing to clip by hides the clipped art, as on the canvas.
             let Some((outline, rule)) = vectorcraft_render::effects::clip_outline(clip) else { return };
             let mut inside = Shapes { anchors: out.anchors, ..Default::default() };
@@ -253,6 +254,14 @@ fn painted(d: &mut Document, brushes: &[vectorcraft_brush::Brush], n: &Node, out
     }
 }
 
+/// What clipping path `clip` paints ([`Node::clip_paint`]): its fills and its strokes, each as a
+/// copy of it keeping only those. A group or another object that does not paint as a clipping
+/// path gives neither.
+fn clip_paint(clip: &Node) -> Vec<Node> {
+    let paint = clip.clip_paint();
+    [paint.fill, paint.stroke].into_iter().flatten().collect()
+}
+
 /// The areas the shown paths and gradient meshes in `n` (an outlined stroke) fill, clipped by its
 /// clip groups, whose clipping paths' own fills paint unclipped. A stroke with a gradient along or
 /// across it is outlined as gradient meshes clipped to the stroke's outline.
@@ -264,7 +273,7 @@ fn fills_in(n: &Node, out: &mut Shapes) {
         NodeKind::Mesh(_) => mesh_area(n, out),
         NodeKind::Group { children, clip: true } => {
             let Some((clip, rest)) = children.split_first() else { return };
-            fills_in(clip, out);
+            clip_paint(clip).iter().for_each(|part| fills_in(part, out));
             let Some((outline, rule)) = vectorcraft_render::effects::clip_outline(clip) else { return };
             let mut inside = Shapes { anchors: out.anchors, ..Default::default() };
             rest.iter().for_each(|c| fills_in(c, &mut inside));
