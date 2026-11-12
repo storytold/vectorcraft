@@ -454,6 +454,27 @@ fn art_past_the_plotter_range_is_cut_off() {
     assert_eq!(text(&out), "IN;PU;SP1;PU0,706;PD141,706;PU;SP0;");
 }
 
+/// HP-GL past 16-bit coordinates is written as it is, with a warning; HP-GL/2 gets none.
+#[test]
+fn hpgl_past_16_bit_coordinates_warns() {
+    let region = Rect::new(-2400.0, 0.0, 2400.0, 100.0);
+    // Past 32,767 from the bottom-left corner, within the range from the center.
+    let d = doc_with(|d| vec![stroked(d, line((-2000.0, 50.0), (2000.0, 50.0)), Color::BLACK)]);
+    let out = plot(&d, &HpglOptions { region, ..HpglOptions::default() });
+    assert_eq!(out.warnings, [PAST_CLASSIC_RANGE]);
+    assert_eq!(text(&out), "IN;PU;SP1;PU5644,706;PD62089,706;PU;SP0;");
+    let out = plot(&d, &HpglOptions { region, origin: Origin::Center, ..HpglOptions::default() });
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(text(&out), "IN;PU;SP1;PU-28222,0;PD28222,0;PU;SP0;");
+    // Past −32,768 and 32,767 from the center.
+    let d = doc_with(|d| vec![stroked(d, line((-2400.0, 50.0), (2400.0, 50.0)), Color::BLACK)]);
+    let out = plot(&d, &HpglOptions { region, origin: Origin::Center, ..HpglOptions::default() });
+    assert_eq!(out.warnings, [PAST_CLASSIC_RANGE]);
+    assert_eq!(text(&out), "IN;PU;SP1;PU-33867,0;PD33867,0;PU;SP0;");
+    let out = plot(&d, &HpglOptions { region, origin: Origin::Center, version: Version::Hpgl2, ..HpglOptions::default() });
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+}
+
 #[test]
 fn a_plot_stops_at_its_point_budget() {
     let d = doc_with(|d| (0..MAX_POINTS / 4).map(|i| stroked(d, rect(1.0, 1.0, 2.0 + (i % 50) as f64, 3.0), Color::BLACK)).collect());

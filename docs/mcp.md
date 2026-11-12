@@ -6419,10 +6419,12 @@ are VectorCraft's own.
 
 `hpglVersion: "hpgl"` (the default) writes `IN;`, then for each pen `PU;SP<n>;` and each path `PUx,y;PDx,y,…;`, and
 ends with `PU;SP0;`. `"hpgl2"` also writes the palette (`NP` and a `PC` color for each pen) and draws each pen's
-paths as one encoded polyline (`PE`, base 64), which takes fewer bytes than the same moves as text. `warnings` names
+paths as one encoded polyline (`PE`, base 64), which takes fewer bytes than the same moves as text. An `"hpgl"` plot
+with a coordinate outside −32,768 to 32,767 units (about 82 cm from the origin, the range of 16-bit numbers) is written
+as it is, with a warning that older devices may not read it; this check is VectorCraft's own. `warnings` names
 type drawn as outlines, inline graphics in type (left out), placed images, opacity masks, raster effects, stroke
-looks that are not drawn, art past the plotter's range, colors past 255 pens, and the limits on points, clipping
-work, symbols, live art, nesting depth and sorting.
+looks that are not drawn, art past the plotter's range, HP-GL coordinates past 16-bit numbers, colors past 255 pens,
+and the limits on points, clipping work, symbols, live art, nesting depth and sorting.
 
 ```json
 {"name":"export","arguments":{"path":"/tmp/decal.plt","format":"hpgl"}}
