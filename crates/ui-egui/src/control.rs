@@ -251,7 +251,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         fields.remove("floating_panels");
         leave_out_unreadable_paths(fields);
     }
-    let mut inspected = json!({
+    json!({
         "scriptRunning": app.session.script_running(),
         "scriptReport": app.session.script_report(),
         "tool": app.session.tool_id(),
@@ -307,9 +307,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // A native file dialog open off the UI thread (`open`, `place`, `save`, `folder`), waiting
         // for the person at the computer: what asked for it runs again when it answers.
         "fileDialog": app.picks.waiting_kind(),
-    });
-    hide_library_ids(&mut inspected, &unreadable_library_ids(app));
-    inspected
+    })
 }
 
 /// The fields of the UI state, by their keys in `ui.inspect`'s `ui`, that hold panel ids: the panel
@@ -435,7 +433,10 @@ fn collect_sent_paths(v: &Value, path_param: bool, out: &mut Vec<(String, String
             Some(None) => percent_decoded(&s[5..]),
             None => s.to_string(),
         };
-        let Some(name) = path.rsplit(['/', '\\']).find(|part| !part.is_empty()).filter(|name| *name != path) else { return };
+        let name = vectorcraft_engine::cmd::swatchlib::concealed_file_name(&path);
+        if name == path {
+            return;
+        }
         let pair = (format!("loaded/{path}"), format!("loaded/{name}"));
         if !out.contains(&pair) {
             out.push(pair);
@@ -709,17 +710,22 @@ fn decoded_with_spans(text: &str) -> Option<(String, Vec<(usize, usize)>)> {
 }
 
 /// Is `from`, a relative path (one that does not start with a separator, a drive or `loaded/`), at
-/// `text[at..]` the end of a longer path: is it preceded by a letter, a digit, `_`, `-`, `.`, `~` or a
-/// separator other than one after `.` or `..`? `/work/data/icon.svg` does not hold the path
-/// `data/icon.svg`; `./data/icon.svg` does.
+/// `text[at..]` the end of a longer path: after any `.` and `..` parts just before it, is it preceded by
+/// a letter, a digit, `_`, `-`, `.`, `~` or a separator? `/work/data/icon.svg` and
+/// `/work/./data/icon.svg` do not hold the path `data/icon.svg`; `./data/icon.svg` and
+/// `../data/icon.svg` do.
 fn ends_a_longer_path(text: &str, at: usize, from: &str) -> bool {
     let absolute =
         from.starts_with(['/', '\\']) || from.starts_with("loaded/") || matches!(from.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
-    let before = &text[..at];
-    !absolute
-        && !before.ends_with("./")
-        && !before.ends_with(".\\")
-        && before.ends_with(|c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '~' | '/' | '\\'))
+    let mut before = &text[..at];
+    while let Some(head) = before.strip_suffix(['/', '\\']) {
+        let Some(rest) = head.strip_suffix("..").or_else(|| head.strip_suffix('.')) else { break };
+        before = rest;
+        if !before.ends_with(['/', '\\']) {
+            break;
+        }
+    }
+    !absolute && before.ends_with(|c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '~' | '/' | '\\'))
 }
 
 /// Does text that follows a path continue it: a letter, a digit, `_` or a separator, after any `.`,
@@ -1176,12 +1182,7 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
         "engine.commands" => ok(all_commands(app)),
         "document.inspect" => wrap(app.run("document.inspect", p.clone())),
         "ui.inspect" => ok(inspect(app, ctx)),
-        "ui.docking" => {
-            let mut docking = crate::panel_docking::inspect(app, ctx);
-            let ids = unreadable_library_ids(app);
-            hide_library_ids(&mut docking, &ids);
-            ok(docking)
-        }
+        "ui.docking" => ok(crate::panel_docking::inspect(app, ctx)),
         // A request that stops with a panic quoting the status text, after clearing the Color Guide's
         // limit with `forget`.
         #[cfg(test)]

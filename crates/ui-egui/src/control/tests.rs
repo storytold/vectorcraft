@@ -278,14 +278,54 @@ fn another_platforms_absolute_path_is_unreadable() {
     assert_eq!(sent, [(format!("loaded/{path}"), "loaded/private.svg".to_string())]);
 }
 
-/// A hidden relative path is hidden where it stands alone or after `./`, and stays where it ends a
-/// longer path.
+/// A hidden relative path is hidden where it stands alone or after leading `./` and `../` parts, and
+/// stays where it ends a longer path, also one with a `.` or `..` part before it.
 #[test]
 fn a_reply_keeps_a_longer_path_that_ends_with_a_hidden_relative_path() {
     let hidden = hiding(&[("loaded/data/icon.svg", "loaded/icon.svg")], &[]);
     let mut reply = json!({"result": "kept /work/data/icon.svg and xdata/icon.svg, hid ./data/icon.svg, \"data/icon.svg\" and loaded/data/icon.svg"});
     hide_under_a_root("relative", &mut reply, &hidden);
     assert_eq!(reply["result"], "kept /work/data/icon.svg and xdata/icon.svg, hid ./icon.svg, \"icon.svg\" and loaded/icon.svg", "{reply}");
+    let mut reply = json!({"result": "kept /allowed/./data/icon.svg, /allowed/../data/icon.svg and a./data/icon.svg, hid ../data/icon.svg and './../data/icon.svg'"});
+    hide_under_a_root("relative-dots", &mut reply, &hidden);
+    assert_eq!(
+        reply["result"], "kept /allowed/./data/icon.svg, /allowed/../data/icon.svg and a./data/icon.svg, hid ../icon.svg and './../icon.svg'",
+        "{reply}"
+    );
+}
+
+/// Outside Windows a `\` is part of a file name: a sent path outside the read root is shown by its
+/// whole file name.
+#[cfg(not(windows))]
+#[test]
+fn a_sent_path_keeps_a_backslash_in_its_file_name() {
+    let root = std::env::temp_dir().join(format!("vc-sent-backslash-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let mut sent = Vec::new();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || super::sent_paths(&json!({"path": "/out/weird\\name.svg"}), &mut sent));
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(sent, [("loaded//out/weird\\name.svg".to_string(), "loaded/weird\\name.svg".to_string())]);
+}
+
+/// `ui.inspect` and `ui.docking` show a hidden library whose file is at the top of the file system
+/// (`/b.svg`) as `loaded/b.svg`, with its separator.
+#[test]
+fn a_hidden_library_at_the_top_of_the_file_system_keeps_its_shown_id() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let panel = "library:swatches:loaded//b.svg".to_string();
+    app.ui.color_guide_limit = "loaded//b.svg".to_string();
+    app.ui.open_panel = Some(panel);
+    let root = std::env::temp_dir().join(format!("vc-top-level-library-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let (inspected, docking) = vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        (input_request(&mut app, "ui.inspect", json!({})), input_request(&mut app, "ui.docking", json!({})))
+    });
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(inspected["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{inspected}");
+    assert_eq!(inspected["result"]["ui"]["open_panel"], "library:swatches:loaded/b.svg", "{inspected}");
+    assert_eq!(docking["result"]["flyout"], "library:swatches:loaded/b.svg", "{docking}");
 }
 
 /// A path outside the read root that a request sent is shown by its file name in a reply that succeeded
