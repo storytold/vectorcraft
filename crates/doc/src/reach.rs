@@ -400,13 +400,15 @@ impl StrokeLayer {
     /// past the end; with [`ArrowAlign::Tip`] its tip is on the end and it lies back along the
     /// chord the path bends through under it, so anywhere within its length of the end.
     fn head_contains(&self, at: Point, out: Vec2, end: bool, p: Point, tol: f64) -> bool {
-        let Some(kind) = (if end { self.end_arrow } else { self.start_arrow }) else { return false };
+        let Some(kind) = (if end { &self.end_arrow } else { &self.start_arrow }) else { return false };
         let (hw, v) = (self.arrow_weight(end), p - at);
         match self.arrow_align {
             ArrowAlign::Tip => v.hypot() <= kind.reach() * hw + tol,
             ArrowAlign::Extend => {
                 let along = v.dot(out);
-                v.cross(out).abs() <= kind.half_width() * hw + tol && along <= 4.0 * hw + self.width / 2.0 + tol && along >= -kind.reach() * hw - tol
+                v.cross(out).abs() <= kind.half_width() * hw + tol
+                    && along <= kind.length() * hw + self.width / 2.0 + tol
+                    && along >= -kind.reach() * hw - tol
             }
         }
     }

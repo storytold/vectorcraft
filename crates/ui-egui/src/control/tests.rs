@@ -1073,8 +1073,8 @@ fn menu_dialogs_open_after_a_merge_on_another_thread() {
 }
 
 /// The Separations panel's checkboxes and a preference set while a Shape Builder merge is
-/// computed on another thread give the documents new revisions: the merge is applied first,
-/// and the document keeps it.
+/// computed on another thread apply the merge first, and the document keeps it. The checkboxes
+/// leave the view off, so they apply it by command id without giving the documents new revisions.
 #[test]
 fn panels_that_redraw_apply_a_merge_on_another_thread_first() {
     let cases = [

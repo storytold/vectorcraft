@@ -359,8 +359,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Patterns and Scale Strokes & Effects: off, Transform Objects leaves the geometry in place; the other two scale
   stroke weights, dashes and the fills' and strokes' effect distances and move pattern tiles with the object, copy
   `k` by the transformation `k` times. Canvas, export and Expand Appearance agree. A Transform effect in a fill's or
-  stroke's own effect list applies the two options to that fill or stroke and its later effects in the same way.
-  Not yet: object effects after it keep their distances.
+  stroke's own effect list applies the two options to that fill or stroke; the effects listed after it keep their
+  distances and apply to the transformed art, as an object's later effects do.
 - **Done (#937, reproduced case):** Shape Builder regions on art of more than 4,096 segments (traced or type
   outlines): the planar map no longer gives up there, so lines cut such art instead of the tool offering whole
   shapes (the planar map's edge-source and face lookups were quadratic in the segments, now indexed, and the cap is 65,536; Divide with open paths shares it). The edge-source index files a long segment under the grid cells along it, so a diagonal hatch (every line's bounds hold most points) no longer costs a scan of the hatch per edge. The grid holds a budget of references (64 per item plus four rows' or columns' worth), the items past it scanned, so coincident segments can't make it quadratic in memory.

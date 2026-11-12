@@ -3367,6 +3367,71 @@ fn stroked_type_keeps_its_cap_join_and_miter_limit() {
 }
 
 #[test]
+fn type_painted_with_a_pattern_takes_it_from_the_art_style_its_paint_names() {
+    // GUARDS: type filled or stroked with a pattern swatch came in black: the text document keeps
+    // black as the paint's colour, and the pattern is in the art style that key 5 of the paint
+    // names, a style of one paint (`/SimpleStyle`) whose matrix is in art space.
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_geom::Point;
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let simple = |name: &str, paint: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n0 O\n{paint}\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Paint ;\n /Def ;\n"
+        )
+    };
+    let pattern = |m: &str| format!("(Dots) 0 0 1 1 0 0 0 0 0 [{m}] p");
+    let styles = [
+        simple("Anon 1", &pattern("1 0 0 1 0 0")),
+        simple("Anon 2", &pattern("2 0 0 2 10 20")),
+        // Styles that give no pattern: one the file doesn't define, a matrix that doesn't place, no
+        // name, a colour after the pattern, a colour, a gradient.
+        simple("Anon 3", "(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p"),
+        simple("Anon 4", &pattern("0 0 0 0 0 0")),
+        simple("Anon 5", "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p"),
+        simple("Anon 6", &format!("{}\n0 0 0 1 k", pattern("1 0 0 1 0 0"))),
+        simple("Anon 7", "0 0 0 1 k"),
+        simple("Anon 8", "0 Bb\n2 (Rainbow) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB"),
+    ]
+    .concat();
+    let styles = format!("%AI9_BeginArtStyles\n{styles}%AI9_EndArtStyles\n");
+    let doc = text_document(&[("abcdefghijklmnopq\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let one = "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 18 >>";
+    assert!(doc.contains(one));
+    let black = |style: &str| format!("<< /99 /CAITextPaint /0 << /0 0 /1 [ 1.0 0.0 ] >> /5 ({style}) >>");
+    let run = |own: &str| format!("<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 {own} >> >> >> /1 2 >>");
+    let mut runs = vec![run(&format!("/53 {}", black("Anon 1"))), run(&format!("/53 {} /57 true /54 {} /63 2.0", black("Anon 7"), black("Anon 2")))];
+    runs.extend((3..=8).map(|n| run(&format!("/53 {}", black(&format!("Anon {n}"))))));
+    // A style the file doesn't have, over "q" and the story's end.
+    runs.push(run(&format!("/53 {}", black("Anon 9"))));
+    let doc = doc.replacen(one, &runs.join(" "), 1);
+    let art = native_with_text(&format!("{dots}{styles}{}{}", layer("Back", true, &square(10, 10)), layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let t = texts[0];
+    // Each character's fill and stroke, a pattern as where its tile's top left corner is.
+    let paint = |p: &Paint| match p {
+        Paint::Pattern { pattern, xf } => {
+            let at = t.xf * *xf * Point::ZERO;
+            format!("{pattern} at {:.3} {:.3}", at.x, at.y)
+        }
+        Paint::Solid { color, .. } if *color == Color::gray(1.0) => "black".into(),
+        Paint::None => "none".into(),
+        other => format!("{other:?}"),
+    };
+    let chars: Vec<(char, String, String)> =
+        t.runs.iter().flat_map(|r| r.text.chars().map(|c| (c, paint(&r.style.fill), paint(&r.style.stroke))).collect::<Vec<_>>()).collect();
+    let want = |c: char, fill: &str, stroke: &str| (c, fill.to_string(), stroke.to_string());
+    // The tile's top left (0, 4) in art space, on a page 100 high: (0, 96). Scaled twice and moved
+    // by (10, 20): (10, 28) in art space, (10, 72) in the document.
+    let mut expected = vec![want('a', "Dots at 0.000 96.000", "none"), want('b', "Dots at 0.000 96.000", "none")];
+    expected.extend(['c', 'd'].map(|c| want(c, "black", "Dots at 10.000 72.000")));
+    expected.extend("efghijklmnopq".chars().map(|c| want(c, "black", "none")));
+    assert_eq!(chars, expected);
+    assert_eq!(r.document.pattern("Dots").map(|p| p.tile.height()), Some(4.0));
+}
+
+#[test]
 fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
     for bad in ["(2)", "2.5", "1e300", "-2", "1", "true", "[ 2 ]"] {
         let doc = vertical_text_document(&text_document(&[("x1\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0)
