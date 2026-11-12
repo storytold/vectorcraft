@@ -302,6 +302,8 @@ pub struct Session {
     pub(crate) press_point: Option<Option<(usize, cmd::gradient::StopOwner)>>,
     /// A guide being dragged out of a ruler ([`Session::ruler_guide`]).
     pub(crate) ruler_guide: Option<vectorcraft_tools::rulerguide::NewGuide>,
+    /// The rulers' origin being dragged out of their corner ([`Session::ruler_origin_drag`]).
+    pub(crate) ruler_origin: Option<vectorcraft_tools::rulerguide::OriginDrag>,
     /// Which selected type overflows its frame, for the ports every tool but the Type tools shows.
     pub(crate) port_marks: vectorcraft_tools::text::PortMarks,
     /// The last search for the files of missing fonts (`text.findFontFiles`), until another

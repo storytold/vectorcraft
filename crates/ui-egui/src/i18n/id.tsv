@@ -454,6 +454,8 @@
 	Extrude & Bevel…	Ekstrusi & bevel…
 	3D (Classic)	3D (klasik)
 	Extrude & Bevel (Classic)…	Ekstrusi & bevel (klasik)…
+	Revolve (Classic)…	Revolusi (klasik)…
+	Rotate (Classic)…	Putar (klasik)…
 	Surface	Permukaan
 	Wireframe	Kerangka kawat
 	No Shading	Tanpa pengarsiran
@@ -758,6 +760,14 @@
 	Damp Paper	Kertas Basah
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
+	Painted and Sketched	Lukisan dan sketsa
+	Washed Blue	Biru luntur
+	Bristle Ochre	Oker kuas kering
+	Pastel Heather	Ungu pastel
+	Charcoal Shade	Bayangan arang
+	Ink Contour	Kontur tinta
+	Wet Ink	Tinta basah
+	Fine Pen	Pena halus
 	Gradient Finishes	Finishing gradien
 	Shape Effects	Efek bentuk
 	Blends and Transparency	Blend dan transparansi
@@ -5859,6 +5869,7 @@ swatch	Bright Violet	Violet cerah
 	Ruby	Ruby
 	Geometric Guides	Panduan Geometris
 	Geometric Patterns	Pola Geometris
+	Grit Textures	Tekstur Butiran
 	Ease In	Awal Lambat
 	Ease Out	Akhir Lambat
 	Ease In Out	Awal dan Akhir Lambat
@@ -6401,6 +6412,12 @@ breakText	Glyphs	Glif
 	Delete the selected brushes?	Hapus kuas yang dipilih?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Stroke menggunakan satu atau beberapa kuas ini. Lepaskan kuas dari stroke tersebut dan hapus kuasnya?
 	Remove Strokes	Hapus Stroke
+	Place Brush Art	Tempatkan karya seni kuas
+	Replace Brush Art	Ganti karya seni kuas
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Stroke menggunakan kuas ini. Terapkan karya seni baru ke stroke tersebut, atau biarkan apa adanya dan tambahkan salinan kuas dengan karya seni baru?
+	Apply to Strokes	Terapkan ke Stroke
+	Leave Strokes	Biarkan Stroke
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` tidak memiliki karya seni (hanya kuas sebar, kuas seni, dan kuas pola yang memilikinya)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Alat penyusunan
 	Arrange in Grid…	Susun dalam grid…
@@ -6634,6 +6651,19 @@ breakText	Glyphs	Glif
 @plural	{n} host call|{n} host calls	{n} panggilan host
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} baris lama dibuang
 @plural	{n} line cut|{n} lines cut	{n} baris dipotong
+
+# Learn panel
+	Learn	Belajar
+	Explore tutorials	Jelajahi tutorial
+	For you	Untuk Anda
+	Skills	Keterampilan
+	Get started	Memulai
+	Quick skill guide	Panduan cepat keterampilan
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorial praktik singkat untuk alat-alat utama, dikelompokkan menurut keterampilan. Pilih keterampilan untuk melihat tutorialnya.
+	List Tutorials	Daftar tutorial
+	Show Tutorial	Tampilkan tutorial
+@msg	missing `tutorial` (see learn.list)	`tutorial` tidak ada (lihat learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial `{id}` tidak dikenal (lihat learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Segarkan efek yang ditunda

@@ -455,6 +455,8 @@
 	Extrude & Bevel…	Wyciągnięcie i fazowanie…
 	3D (Classic)	3D (klasyczne)
 	Extrude & Bevel (Classic)…	Wyciągnięcie i fazowanie (klasyczne)…
+	Revolve (Classic)…	Obrót (klasyczny)…
+	Rotate (Classic)…	Obróć (klasyczny)…
 	Surface	Powierzchnia
 	Wireframe	Szkielet
 	No Shading	Bez cieniowania
@@ -768,6 +770,14 @@
 	Damp Paper	Wilgotny papier
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
+	Painted and Sketched	Malowane i szkicowane
+	Washed Blue	Rozmyty błękit
+	Bristle Ochre	Ochra pędzlem
+	Pastel Heather	Pastelowy wrzos
+	Charcoal Shade	Cień węglem
+	Ink Contour	Kontur tuszem
+	Wet Ink	Mokry tusz
+	Fine Pen	Cienkie pióro
 	Gradient Finishes	Wykończenia gradientowe
 	Shape Effects	Efekty kształtów
 	Blends and Transparency	Przejścia i przezroczystość
@@ -4383,6 +4393,7 @@ imageTrace	Outline	Kontur
 @msg	`globalAdjust` must be an object	`globalAdjust` musi być obiektem
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musi wynosić 1, 3 lub 5
 @msg	`stops` must be an array	`stops` musi być tablicą
+@msg	`{key}` must be an array	`{key}` musi być tablicą
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musi być obiektem opcji SVG (patrz document.formats)
 @msg	`{_1}` is no save command	`{_1}` nie jest poleceniem zapisu
 @msg	`{area}` is no recovery area name	`{area}` nie jest nazwą obszaru odzyskiwania
@@ -5879,6 +5890,7 @@ mark-style	Japanese	Japońskie
 	Ruby	Ruby
 	Geometric Guides	Geometryczne linie pomocnicze
 	Geometric Patterns	Wzorki geometryczne
+	Grit Textures	Tekstury ziarniste
 	Ease In	Łagodny początek
 	Ease Out	Łagodny koniec
 	Ease In Out	Łagodny początek i koniec
@@ -6365,6 +6377,10 @@ anchor	Points:	Punkty:
 @msg	features lists at most {max} tags	features może zawierać najwyżej {max} znaczników
 @msg	unknown OpenType feature `{t}`	nieznana funkcja OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musi być liczbą większą od 0 i nie większą niż {max}
+@msg	{label} must be at most {max} characters	{label} może mieć najwyżej {max} znaków
+@msg	{label} must be one character	{label} musi być jednym znakiem
+@msg	at most {max} tab stops	najwyżej {max} tabulatorów
+@msg	unknown align `{other}`	nieznane wyrównanie `{other}`
 @msg	no character style `{name}`	Nie znaleziono stylu znakowego `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6527,6 +6543,12 @@ breakText	Glyphs	Glify
 	Delete the selected brushes?	Usunąć zaznaczone pędzle?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Obrysy używają co najmniej jednego z tych pędzli. Zdjąć pędzle z tych obrysów i usunąć pędzle?
 	Remove Strokes	Usuń obrysy
+	Place Brush Art	Umieść kompozycję pędzla
+	Replace Brush Art	Zastąp kompozycję pędzla
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Obrysy używają tego pędzla. Zastosować nową kompozycję do tych obrysów, czy pozostawić je bez zmian i dodać kopię pędzla z nową kompozycją?
+	Apply to Strokes	Zastosuj do obrysów
+	Leave Strokes	Pozostaw obrysy
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nie ma kompozycji (mają ją tylko pędzle rozproszone, artystyczne i wzorka)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Narzędzia układania
 	Arrange in Grid…	Ułóż w siatce…
@@ -6778,6 +6800,19 @@ breakText	Glyphs	Glify
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} odrzucony wcześniejszy wiersz|{n} odrzucone wcześniejsze wiersze|{n} odrzuconych wcześniejszych wierszy
 @plural	{n} line cut|{n} lines cut	{n} skrócony wiersz|{n} skrócone wiersze|{n} skróconych wierszy
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` muszą być numerami wierszy przechowywanych w konsoli, `first` przed `last`
+
+# Learn panel
+	Learn	Nauka
+	Explore tutorials	Przeglądaj samouczki
+	For you	Dla Ciebie
+	Skills	Umiejętności
+	Get started	Pierwsze kroki
+	Quick skill guide	Krótki przewodnik po umiejętnościach
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Krótkie praktyczne samouczki dotyczące podstawowych narzędzi, pogrupowane według umiejętności. Wybierz umiejętność, aby zobaczyć jej samouczki.
+	List Tutorials	Wyświetl samouczki
+	Show Tutorial	Pokaż samouczek
+@msg	missing `tutorial` (see learn.list)	brak `tutorial` (patrz learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	nieznany samouczek `{id}` (patrz learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Odśwież odroczone efekty
