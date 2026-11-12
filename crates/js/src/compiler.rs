@@ -538,6 +538,11 @@ impl<'a> FnCompiler<'a> {
                 self.emit(Op::Rot3);
                 self.emit(Op::SetIndex);
             }
+            Some(Expr::XmlScopeName(name)) => {
+                self.xml_scope_ref(target, *name)?;
+                self.emit(Op::Rot3);
+                self.emit(Op::SetIndex);
+            }
             _ => {
                 self.expr(target)?;
                 self.emit(Op::Pop);
@@ -854,6 +859,15 @@ impl<'a> FnCompiler<'a> {
         Ok(())
     }
 
+    /// Pushes the nearest XML value in scope that holds the E4X name `name` of the expression
+    /// `id`, then the name, as an assignment, update or `delete` uses them.
+    fn xml_scope_ref(&mut self, id: ExprId, name: ExprId) -> CResult<()> {
+        self.expr(name)?;
+        self.at(self.ast.expr_span(id).start);
+        self.emit(Op::XmlScopeRef);
+        Ok(())
+    }
+
     fn xml_literal(&mut self, parts: &[XmlPart], list: bool) -> CResult<()> {
         for part in parts {
             match part {
@@ -1096,6 +1110,10 @@ impl<'a> FnCompiler<'a> {
                 self.expr(*index)?;
                 self.emit(Op::DeleteIndex);
             }
+            Some(Expr::XmlScopeName(name)) => {
+                self.xml_scope_ref(arg, *name)?;
+                self.emit(Op::DeleteIndex);
+            }
             _ => {
                 self.expr(arg)?;
                 self.emit(Op::Pop);
@@ -1202,6 +1220,13 @@ impl<'a> FnCompiler<'a> {
                     self.emit(Op::GetIndex);
                 }
             }
+            Some(Expr::XmlScopeName(name)) => {
+                self.xml_scope_ref(target, *name)?;
+                if op.is_some() {
+                    self.emit(Op::Dup2);
+                    self.emit(Op::GetIndex);
+                }
+            }
             _ => {
                 self.expr(target)?;
                 if op.is_none() {
@@ -1222,7 +1247,7 @@ impl<'a> FnCompiler<'a> {
                 let n = self.name_key(key_of(&property.name));
                 self.emit(Op::SetMember(n));
             }
-            Some(Expr::Index { .. }) => self.emit(Op::SetIndex),
+            Some(Expr::Index { .. } | Expr::XmlScopeName(_)) => self.emit(Op::SetIndex),
             _ => self.throw_invalid_target(),
         }
         Ok(())
@@ -1244,6 +1269,10 @@ impl<'a> FnCompiler<'a> {
             Some(Expr::Index { object, index }) => {
                 self.expr(*object)?;
                 self.expr(*index)?;
+                self.emit(Op::IncIndex { prefix, dec });
+            }
+            Some(Expr::XmlScopeName(name)) => {
+                self.xml_scope_ref(target, *name)?;
                 self.emit(Op::IncIndex { prefix, dec });
             }
             _ => {

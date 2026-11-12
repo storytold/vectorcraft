@@ -637,6 +637,95 @@ fn a_scope_name_skips_a_list_without_that_name() {
 }
 
 #[test]
+fn bare_attribute_assignment_uses_nearest_holder() {
+    truth("var x = <a b='1'/>; with (x) { @b = '2'; } x.@b == '2'");
+    truth("var outer = <o id='1'/>; var inner = <i/>; with (outer) with (inner) { @id = '9'; } outer.@id == '9' && inner.@id.length() === 0");
+    truth("var outer = <o id='1'/>; var inner = <i id='2'/>; with (outer) with (inner) { @id = '9'; } outer.@id == '1' && inner.@id == '9'");
+    truth("var outer = <o id='1'/>; var inner = <><i/></>; with (outer) with (inner) { @id = '9'; } outer.@id == '9' && inner.@id.length() === 0");
+    truth("var x = <a b='1'/>; with (x) with ({ b: 7 }) { @b = '3'; } x.@b == '3'");
+    truth("with (<a b='1'/>) { (@b = 5) === 5 }");
+    truth("var x = <a b='1' c='2'/>; with (x) { @b = @c = 'v'; } x.@b == 'v' && x.@c == 'v'");
+    truth("var n = 0; var x = <a b='1'/>; with (x) { @[(n++, 'b')] = 'z'; } n === 1 && x.@b == 'z' && x.attributes().length() === 1");
+    truth("var x = <a><c>1</c></a>; with (x) { *::c = '2'; } x.c == '2' && x.*.length() === 1");
+    truth("var x = <a b='1'/>; x.@b = '4'; x.@b == '4'");
+}
+
+#[test]
+fn bare_qualified_assignment_keeps_namespace() {
+    truth(
+        "var ns = new Namespace('u'); var x = <a xmlns:p='u'><p:c>1</p:c><c>0</c></a>; with (x) { ns::c = '2'; } \
+         x.ns::c == '2' && x.ns::c.name().uri === 'u' && x.c == '0' && x.*.length() === 2",
+    );
+    truth(
+        "var ns = new Namespace('u'); var x = <a xmlns:p='u' p:t='1' t='0'/>; with (x) { @ns::t = '5'; } \
+         x.@ns::t == '5' && x.@ns::t.name().uri === 'u' && x.@t == '0'",
+    );
+}
+
+#[test]
+fn bare_assignment_in_filter_mutates_each_matching_item() {
+    truth("var l = <><i id='1'/><i id='2'/></>; var r = l.(@id = 'z', true); r.length() === 2 && l[0].@id == 'z' && l[1].@id == 'z'");
+    truth("var l = <><i n='1'/><i n='2'/></>; var r = l.(@n = 0); r.length() === 0 && l[0].@n == '0' && l[1].@n == '0'");
+    truth("var l = <><i n='1'/><i n='2'/></>; var r = l.(@n = 'k'); r.length() === 2");
+    truth("var o = <o k='1'/>; var l = <><i/><i/></>; with (o) { l.(@k += 'x', true); } o.@k == '1xx' && l[0].@k.length() === 0");
+}
+
+#[test]
+fn bare_assignment_without_holder_throws_reference_error_before_rhs() {
+    assert_eq!(thrown_name("@a = 1"), "ReferenceError");
+    assert_eq!(thrown_name("with ({ a: 1 }) { @a = 1 }"), "ReferenceError");
+    assert_eq!(thrown_name("with (<x/>) { @a = 1 }"), "ReferenceError");
+    assert_eq!(thrown_name("with (<x/>) { @a += 1 }"), "ReferenceError");
+    assert_eq!(thrown_name("with (<x/>) { @a++ }"), "ReferenceError");
+    assert_eq!(thrown_name("var ns = new Namespace('u'); with (<x><c/></x>) { ns::c = 1 }"), "ReferenceError");
+    truth("var n = 0; var e = ''; try { with (<x/>) { @a = (n++, 1); } } catch (err) { e = err.name; } e === 'ReferenceError' && n === 0");
+    truth(
+        "var b = 'g'; var x = <x/>; var e = ''; try { with (x) { @b = 'w'; } } catch (err) { e = err.name; } \
+         e === 'ReferenceError' && b === 'g' && x.@b.length() === 0 && x.*.length() === 0",
+    );
+}
+
+#[test]
+fn bare_name_read_without_holder_throws_reference_error() {
+    assert_eq!(thrown_name("with (<x/>) { @a }"), "ReferenceError");
+    assert_eq!(thrown_name("var l = <><i id='1'/><i/></>; l.(@id == '1')"), "ReferenceError");
+    truth("var o = <o id='0'/>; var l = <><i id='1'/><i/></>; var r; with (o) { r = l.(@id == '1'); } r.length() === 1");
+}
+
+#[test]
+fn bare_scope_compound_and_updates_resolve_once() {
+    truth("var n = 0; var x = <a t='1'/>; with (x) { @[(n++, 't')] += 1; } n === 1 && x.@t == '11'");
+    truth("var n = 0; var x = <a t='1'/>; with (x) { @[(n++, 't')]++; } n === 1 && x.@t == '2'");
+    truth("var x = <a t='1'/>; var r; with (x) { r = ++@t; } r === 2 && x.@t == '2'");
+    truth("var x = <a t='1'/>; var r; with (x) { r = @t++; } r === 1 && x.@t == '2'");
+    truth("var x = <a t='5'/>; var r; with (x) { r = --@t; } r === 4 && x.@t == '4'");
+    truth("var x = <a t='5'/>; var r; with (x) { r = @t--; } r === 5 && x.@t == '4'");
+}
+
+#[test]
+fn bare_scope_delete_removes_attribute() {
+    truth("var x = <a t='1' u='2'/>; var r; with (x) { r = delete @t; } r === true && x.@t.length() === 0 && x.@u == '2'");
+    truth("var x = <a><c/><d/></a>; with (x) { delete *::c; } x.c.length() === 0 && x.d.length() === 1");
+    assert_eq!(thrown_name("with (<a/>) { delete @t }"), "ReferenceError");
+}
+
+#[test]
+fn bare_scope_for_targets_assign_each_iteration() {
+    truth("var x = <a k=''/>; var s = ''; with (x) { for (@k in { p: 1, q: 2 }) s += @k; } s === 'pq' && x.@k == 'q'");
+    truth("var x = <a k=''/>; var s = ''; with (x) { for each (@k in [3, 4]) s += @k; } s === '34' && x.@k == '4'");
+    assert_eq!(thrown_name("with (<a/>) { for (@k in { p: 1 }); }"), "ReferenceError");
+}
+
+#[test]
+fn bare_scope_targets_need_e4x_option() {
+    for src in ["@a = 1", "ns::a = 1", "@a += 1", "++@a", "@a--", "for (@a in o);", "for each (@a in o);", "\"use strict\"; @a = 1"] {
+        assert!(parse(src, &Options::default()).is_err(), "{src}");
+        assert!(parse(src, &e4x()).is_ok(), "{src}");
+    }
+    truth("'use strict'; var l = <><i b='1'/></>; l.(@b = '2', true); l[0].@b == '2'");
+}
+
+#[test]
 fn a_bracket_key_converts_to_a_string_before_it_names_a_child() {
     truth("var x = <a><true>1</true></a>; x[true] == '1' && (true in x) && !(false in x)");
     truth("var x = <a><null>1</null></a>; x[null] == '1' && x[undefined].length() === 0 && x[1.5].length() === 0 && x[-1].length() === 0");

@@ -922,6 +922,7 @@ impl Interp {
             Op::XmlEscape(kind) => self.op_xml_escape(kind),
             Op::XmlLiteral { parts, list } => self.op_xml_literal(parts, list),
             Op::XmlScopeGet => self.op_xml_scope_get(),
+            Op::XmlScopeRef => self.op_xml_scope_ref(),
             Op::XmlFilterStart => self.op_xml_filter_start(),
             Op::XmlFilterNext(t) => self.op_xml_filter_next(t),
             Op::XmlFilterTest => self.op_xml_filter_test(),

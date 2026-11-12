@@ -160,8 +160,11 @@ pub(crate) enum Op {
         parts: u32,
         list: bool,
     },
-    /// `name` → the value of the name on the nearest XML value in scope.
+    /// `name` → the value of the name on the nearest XML value in scope that holds it.
     XmlScopeGet,
+    /// `name` → `object name`: the nearest XML value in scope that holds the name, for an
+    /// assignment, update or `delete`.
+    XmlScopeRef,
     /// `object` → the filter's state.
     XmlFilterStart,
     /// `state` → `state item`, or jumps with `state` when the items are used up.
@@ -308,6 +311,7 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::XmlDescendants | Op::XmlFilterTest => e(2, 1),
         Op::XmlEscape(_) | Op::XmlScopeGet | Op::XmlFilterStart | Op::XmlFilterEnd => e(1, 1),
         Op::XmlLiteral { parts, .. } => e(parts, 1),
+        Op::XmlScopeRef => e(1, 2),
         Op::ForEachValue => e(2, 2),
         Op::SetDefaultNamespace => e(1, 0),
     })
