@@ -5,6 +5,7 @@ pub mod cleanup;
 pub mod color;
 pub mod compounds;
 pub mod contour;
+pub mod cutting;
 pub mod document;
 pub mod enclosing_lasso;
 pub mod image;
@@ -25,6 +26,7 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Color Effects", color::menu()),
         Item::Sub("Compound Shapes", compounds::menu()),
         Item::Sub("Contour", contour::menu()),
+        Item::Sub("Cutting Tools", cutting::menu()),
         Item::Sub("Document Tools", document::menu()),
         Item::Sub("Enclosing Lasso", enclosing_lasso::menu()),
         Item::Sub("Image Tools", image::menu()),

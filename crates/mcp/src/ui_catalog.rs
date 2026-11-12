@@ -634,6 +634,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{collapsed?: bool} collapse every expanded dock column to icons (true), expand the outer dock column, Properties | Layers | Libraries (false), or toggle the outer column (omitted), as the double arrow at the top of the dock does; returns the new state",
     ),
+    (
+        "window.learn",
+        "Learn",
+        "",
+        "{show?: bool} show (true), hide (false) or toggle (omitted or null) the Learn panel, as Window › Learn and the app bar's Explore tutorials button do; any other value is an error and changes nothing; returns whether the panel shows",
+    ),
+    (
+        "learn.list",
+        "List Tutorials",
+        "",
+        "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
+    ),
+    (
+        "learn.show",
+        "Show Tutorial",
+        "",
+        "{tutorial: id (see learn.list)} show the Learn panel on its Skills tab with that tutorial's numbered steps, as choosing its skill and then the tutorial does; a missing, non-string or unknown id is an error and changes nothing; returns {skill, tutorial, title, steps: [text]}",
+    ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (
         "window.workspace",
@@ -747,6 +765,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Safe Mode…",
         "",
         "{} open the Safe Mode dialog (dialog `safeMode`): whether VectorCraft is in Safe Mode, and the disabled plug-ins, each with Enable on Re-launch (engine: plugin.setEnabled). Closing it leaves Safe Mode as it is; Safe Mode is chosen at launch (--safe-mode, or the choice after a launch that stopped while a plug-in was loading, dialog `pluginStopped`)",
+    ),
+    (
+        "help.copyTroubleshootingInfo",
+        "Copy Troubleshooting Info",
+        "",
+        "{} put text for a bug report on the clipboard: the version, and in the desktop app the platform, the window system, the graphics processor, the commands and frame times of the last few frames, and the hang reports of this session and the session before (no document contents or file paths) → {chars}",
     ),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
     (
@@ -1486,7 +1510,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "css.exportFile",
         "Export CSS…",
         "",
-        "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…], warnings (css.export's; the status bar shows the first)}",
+        "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…], warnings (css.export's; the status bar shows the first and how many there are, and hovering the message lists up to 30 of them, fewer when the window is small, with how many were left out)}",
     ),
     (
         "file.print",
@@ -1523,7 +1547,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.installPlugin",
         "Install Plug-in…",
         "",
-        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing. Only a person can press OK when it asks about permissions or a heavy budget: ui.dialog.confirm, answer_dialog and synthetic input are refused → plugin.install's result | {pending: \"pluginInstall\"} while it asks about permissions or a heavy budget | {pending: \"confirm\"} while it asks only about replacing",
+        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing. Only a person can press OK: ui.dialog.confirm, answer_dialog and synthetic input are refused. When automation asked (a control or MCP request, synthetic input, or a file dialog one of them opened, even when the person picked the file), replace: true doesn't skip the question about replacing, and nothing in the dialog installs it, the person's OK included: the person chooses Object › Plug-ins › Install Plug-in… to install it → plugin.install's result | {pending: \"pluginInstall\"} while it asks | {pending: \"pluginInstall\", approval: \"personMustStartInstall\"} while it asks what automation asked | null on the web without path or dataBase64, once the browser's file picker opens (the picked file is handled as above)",
     ),
     (
         "plugin.cancelRuns",

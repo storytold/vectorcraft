@@ -577,8 +577,8 @@ pub fn image_summary(i: &Value) -> (String, String) {
 }
 
 /// The Control bar for the one selected image: Linked File or Embedded, its file name, colour mode
-/// and effective resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask and
-/// Crop Image. Whether one image is selected.
+/// and effective resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask,
+/// Crop Image and Remove Background. Whether one image is selected.
 pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
     let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
@@ -595,7 +595,11 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
     ui.separator();
     link_buttons(app, ui, id, linked, &name, None);
     crate::panels::image_trace::trace_button(app, ui, crate::panels::image_trace::TRACE_BUTTON_W);
-    for (label, cmd, w) in [(tl!("Mask"), "object.maskImage", 52.0), (tl!("Crop Image"), "ui.cropImage", 84.0)] {
+    for (label, cmd, w) in [
+        (tl!("Mask"), "object.maskImage", 52.0),
+        (tl!("Crop Image"), "ui.cropImage", 84.0),
+        (tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND, 128.0),
+    ] {
         if widgets::flat_button(ui, label, w).clicked() {
             crate::menus::invoke(app, cmd, json!({}));
         }

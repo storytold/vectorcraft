@@ -1257,6 +1257,10 @@ impl<'a> Writer<'a> {
             return;
         }
         self.warn(TYPE);
+        // The outlines keep the sizes Dynamic Text draws the type at, but not the setting.
+        if matches!(&n.kind, NodeKind::Text(t) if t.dynamic_text) {
+            self.warn(DYNAMIC_TEXT);
+        }
         let doc = self.doc;
         let resolved = match &n.kind {
             NodeKind::Text(t) => Some(doc.inline_resolved(t).into_owned()),

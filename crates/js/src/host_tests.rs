@@ -638,6 +638,76 @@ fn error_sources_count_from_the_last_script_and_code_from_an_earlier_one_is_unkn
     assert_eq!(r.error_source(), 0, "a syntax error is in the script");
 }
 
+#[test]
+fn error_tags_stay_the_same_from_run_to_run_and_are_never_shared() {
+    let mut r = realm(10_000_000);
+    let source: HostFunction = Rc::new(|_| Ok(Data::String("function inEval() { throw new Error('in eval'); }".into())));
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    r.define_host_object("host", vec![("load".into(), load)]).unwrap();
+    assert_eq!(r.script_tag(), UNKNOWN_SOURCE, "no script yet");
+    r.run("function late() { throw new Error('late'); }\nhost.load(); host.load();").unwrap();
+    let first = r.script_tag();
+    assert_ne!(first, UNKNOWN_SOURCE);
+    assert!(r.run("\nlate()").is_err());
+    let second = r.script_tag();
+    assert!(second > first + 2, "the evaluator's two sources took the tags after the first script");
+    assert_eq!((r.error_source(), r.error_tag()), (UNKNOWN_SOURCE, first), "late keeps its script's tag");
+    assert!(r.run("inEval()").is_err());
+    assert_eq!(r.error_tag(), first + 2, "the second source the evaluator gave in the first run");
+    assert!(r.run("\nthrow 1").is_err());
+    assert_eq!((r.error_source(), r.error_tag()), (0, r.script_tag()));
+    // Once the tags are used up, a source gets no tag rather than one an earlier source has.
+    r.set_last_tag(UNKNOWN_SOURCE - 3);
+    r.run("function nearEnd() { throw 1; }\nhost.load(); host.load(); host.load();").unwrap();
+    assert_eq!(r.script_tag(), UNKNOWN_SOURCE - 2);
+    assert!(r.run("nearEnd()").is_err());
+    assert_eq!(r.script_tag(), UNKNOWN_SOURCE, "a script after the last tag");
+    assert_eq!(r.error_tag(), UNKNOWN_SOURCE - 2);
+    assert!(r.run("inEval()").is_err());
+    assert_eq!(r.error_tag(), UNKNOWN_SOURCE, "the third source came after the last tag");
+    assert!(r.run("\nthrow 1").is_err());
+    assert_eq!((r.error_source(), r.error_tag()), (UNKNOWN_SOURCE, UNKNOWN_SOURCE));
+}
+
+#[test]
+fn an_evaluators_source_takes_fuel_before_it_is_parsed() {
+    // The evaluator gives 131,072 spaces and a number: far more code units than the fuel left.
+    let ends = Rc::new(Cell::new(0));
+    let ended = ends.clone();
+    let source: HostFunction = Rc::new(|_| Ok(Data::String(format!("{}7", " ".repeat(1 << 17)))));
+    let item = HostItem::Evaluator { source, end: Rc::new(move || ended.set(ended.get() + 1)), strict_writes: Rc::new(|| None) };
+    let mut r = realm(10_000);
+    r.define_host_object("host", vec![("evaluate".into(), item)]).unwrap();
+    let e = r.run("host.evaluate()").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel));
+    assert_eq!(ends.get(), 1, "the evaluator's end runs once");
+    // This fuel covers a third of the source's bytes but not all of its code units.
+    r.set_limits(Limits { fuel: 60_000, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Limit(LimitKind::Fuel));
+    assert_eq!(ends.get(), 2);
+    r.set_limits(Limits { fuel: 1_000_000, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()"), Ok(JsValue::Number(7.0)));
+    assert_eq!(ends.get(), 3);
+}
+
+#[test]
+fn an_evaluators_whole_source_must_fit_in_the_heap_before_it_is_parsed() {
+    // A third of the source and the other two thirds each fit in the heap; the whole does not.
+    // The source does not parse, so a parse would throw a syntax error instead.
+    let n = (1 << 17) + 1;
+    let source: HostFunction = Rc::new(move |_| Ok(Data::String(format!("{}(", " ".repeat(n - 1)))));
+    let item = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    let mut r = realm(1_000_000);
+    r.define_host_object("host", vec![("evaluate".into(), item)]).unwrap();
+    r.interp().collect_for_room();
+    let heap_bytes = r.interp().heap.bytes + crate::heap::string_bytes(n * 5 / 6);
+    r.set_limits(Limits { fuel: 1_000_000, heap_bytes, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Limit(LimitKind::Heap));
+    // With room for the whole source, it is parsed.
+    r.set_limits(Limits { fuel: 1_000_000, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Thrown);
+}
+
 proptest::proptest! {
     /// A slice size does not change what a script computes.
     #[test]

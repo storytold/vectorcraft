@@ -1,8 +1,8 @@
 //! DXF Options (Export As → DXF): a preset (Custom, or CNC / CAM, which sets the options below for
 //! cutting software and shows Custom again once one is changed), version, scale (1 unit of the
-//! art = N drawing units) and lineweights, number of colours, the format of placed images,
-//! Preserve Appearance or Maximize Editability, and Export Selected Art Only, Alter Paths for
-//! Appearance and Outline Text.
+//! art = N drawing units) and lineweights, number of colours, the format of placed images and
+//! Include Placed Images, Preserve Appearance or Maximize Editability, and Export Selected Art
+//! Only, Alter Paths for Appearance, Outline Text and Include Fill Hatches.
 //!
 //! Fields: `document.export` params (`format: dxf`, `path?`, the artboard choice) and the DXF
 //! options of `document.exportDxf`. OK remembers the options for next time and writes the file
@@ -58,6 +58,8 @@ fn preset_fields(preset: DxfPreset) -> Map<String, Value> {
         ("scaleLineweights", json!(o.scale_lineweights)),
         ("colors", json!(o.colors.id())),
         ("rasterFormat", json!(o.raster.id())),
+        ("includeImages", json!(o.include_images)),
+        ("includeHatches", json!(o.include_hatches)),
         ("preserve", json!(o.preserve.id())),
         ("alterPaths", json!(o.alter_paths)),
         ("outlineText", json!(o.outline_text)),
@@ -140,6 +142,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     let rasters: Vec<(&str, &str)> = RasterFormat::ALL.iter().map(|r| (r.id(), r.label())).collect();
     choice(ui, d, "rasterFormat", tl!("Raster File Format:"), &rasters);
+    ui.horizontal(|ui| {
+        ui.add_space(LABEL + 8.0);
+        check(ui, d, "includeImages", tl!("Include Placed Images"));
+    });
     ui.add_space(10.0);
     widgets::subheader(ui, tl!("Export Option"));
     let preserve = Preserve::from_id(&d.str("preserve")).unwrap_or_default();
@@ -162,6 +168,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if widgets::check(ui, tl!("Outline Text"), appearance || d.bool("outlineText"), !appearance) {
         d.fields.insert("outlineText".into(), json!(!d.bool("outlineText")));
     }
+    check(ui, d, "includeHatches", tl!("Include Fill Hatches"));
     ui.add_space(8.0);
     super::form::caption(
         ui,

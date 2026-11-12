@@ -43,6 +43,7 @@ pub mod font_menu;
 mod frame_rate;
 mod free_transform;
 pub mod graphics;
+pub mod hang_beacon;
 pub mod i18n;
 pub mod icon_data;
 pub mod icons;
@@ -80,6 +81,7 @@ pub mod toolbar;
 mod tools_float;
 pub mod touch;
 pub mod trace_runs;
+pub mod troubleshooting;
 mod ui_fonts;
 pub mod unsaved;
 pub mod updates_ui;
@@ -120,7 +122,8 @@ pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
-    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, ReadFn, RevealFn, Services, WriteFn,
+    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, PickedInbox, ReadFn, RevealFn, Services,
+    WriteFn,
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
@@ -228,6 +231,9 @@ pub struct VectorcraftApp {
     /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
     /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
     pub graphics_adapter: Option<String>,
+    /// Where [`Self::run`] marks each command for the desktop app's hang report:
+    /// [`hang_beacon::BEACON`], or a test's own.
+    pub(crate) beacon: &'static hang_beacon::Beacon,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
     /// The Paste commands can paste from the system clipboard alone: it holds something to paste

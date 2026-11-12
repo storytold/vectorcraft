@@ -1855,6 +1855,38 @@ fn convert_to_artboards_names_by_the_artboards_the_document_has() {
     assert_eq!(name_after(&|s| _ = s.execute("edit.undo", &json!({})).unwrap()), "Artboard 3");
 }
 
+/// Convert to Artboards on several objects gives each new artboard an id above the ids given out
+/// before and the deleted artboard's, and names it one past the highest id the artboards have,
+/// counting the artboards it has just added. With an artboard whose id is `u32::MAX` (a damaged
+/// file), each new artboard takes the smallest free id and the name stays at `u32::MAX`.
+#[test]
+fn convert_to_artboards_gives_each_object_the_next_id_and_name() {
+    let convert = |s: &mut Session| {
+        let ids: Vec<NodeId> = (0..3).map(|i| rect(s, 3000.0 + 300.0 * f64::from(i), 0.0, 200.0, 100.0)).collect();
+        sel(s, &ids);
+        assert_eq!(s.execute("artboard.convertToArtboards", &json!({})).unwrap()["artboards"], 3);
+        let d = &s.doc().unwrap().doc;
+        d.artboards.iter().map(|a| (a.id, a.name.clone())).collect::<Vec<_>>()
+    };
+    let named = |pairs: &[(u32, &str)]| pairs.iter().map(|&(id, n)| (id, n.to_string())).collect::<Vec<_>>();
+
+    // Artboards 1 and 2 are left after artboard 3 is deleted, so its id stays given out.
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    let ids: Vec<u32> = s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect();
+    assert_eq!(ids, [1, 2]);
+    let got = convert(&mut s);
+    assert_eq!(got, named(&[(1, "Artboard 1"), (2, "Artboard 2"), (4, "Artboard 3"), (5, "Artboard 5"), (6, "Artboard 6")]));
+
+    let mut s = session();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).artboards[0].id = u32::MAX;
+    let got = convert(&mut s);
+    let top = format!("Artboard {}", u32::MAX);
+    assert_eq!(got, named(&[(u32::MAX, "Artboard 1"), (1, &top), (2, &top), (3, &top)]));
+}
+
 /// Rearrange All Artboards refuses `columns` that are not a whole number (a fraction, a negative number or a string),
 /// and the artboards stay where they were; 1.0, as the Rearrange All Artboards dialog sends a count, is one column.
 #[test]
@@ -4455,6 +4487,41 @@ fn cmd_ruler_drags_make_guides_of_the_active_artboard_when_the_preference_is_on(
     drag(&mut s, v, true, 1050.0, Mods::default());
     assert_eq!(guides(&s)[4..], [(true, 400.0), (true, 1050.0)]);
     assert_eq!(owners(&mut s)[4..], [Value::Null, json!(1)]);
+}
+
+/// The rulers' origin dragged out of their corner snaps as a drawn point does: onto a shape's
+/// corner and edge, the artboard's centre, and with Snap to Point along a ruler guide; with
+/// nothing on it stays at the pointer. The drag changes nothing, and its guides go when it ends.
+#[test]
+fn the_ruler_origin_dragged_from_the_corner_snaps_as_a_drawn_point() {
+    use vectorcraft_geom::Point;
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 300})).unwrap();
+    let (n, doc) = (undo_len(&s), s.doc().unwrap().doc.clone());
+    let v = ViewInfo::default();
+    let at = |s: &mut Session, x, y| s.ruler_origin_drag(Some(Point::new(x, y)), v).unwrap();
+    assert_eq!(at(&mut s, 101.5, 98.5), Point::new(100.0, 100.0), "the corner");
+    assert!(!s.overlays(v).is_empty(), "the guide showing it");
+    assert_eq!(at(&mut s, 130.0, 202.0), Point::new(130.0, 200.0), "the bottom edge");
+    assert_eq!(at(&mut s, 398.0, 301.5), Point::new(400.0, 300.0), "the artboard's centre");
+    assert_eq!(at(&mut s, 302.0, 50.0).x, 300.0, "along the ruler guide");
+    assert_eq!(s.ruler_origin_drag(None, v), None, "off the canvas");
+    assert!(s.overlays(v).is_empty());
+    assert_eq!(at(&mut s, 101.5, 98.5), Point::new(100.0, 100.0));
+    s.end_ruler_origin_drag();
+    assert!(s.overlays(v).is_empty());
+    assert_eq!((undo_len(&s), &*s.doc().unwrap().doc), (n, &*doc), "nothing changed");
+    // Nothing on: it stays at the pointer.
+    let off = ViewInfo { smart_guides: false, snap_to_point: false, ..v };
+    assert_eq!(s.ruler_origin_drag(Some(Point::new(101.5, 98.5)), off), Some(Point::new(101.5, 98.5)));
+    s.end_ruler_origin_drag();
+    // Snap to Grid: onto a gridline crossing.
+    let grid = ViewInfo { snap_to_grid: true, ..v };
+    let p = s.ruler_origin_drag(Some(Point::new(101.5, 98.5)), grid).unwrap();
+    s.end_ruler_origin_drag();
+    assert_eq!(p, Point::new(p.x.round(), p.y.round()), "{p:?}");
+    assert_ne!(p, Point::new(101.5, 98.5));
 }
 
 /// Guides saved before guides had layers are put on a layer when the document opens.
