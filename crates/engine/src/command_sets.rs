@@ -84,7 +84,7 @@ pub(crate) fn strip_replay_only(id: &str, p: &mut Value) {
 /// Queries that apply the edit the active tool is computing before they run, as edits do
 /// ([`Session::finish_tool_edit`]): a batch runs edits, Find Objects with `select`, Select All
 /// Instances and Lock Guides change the selection, and the proof views, the preferences and added
-/// fonts give the documents new revisions (they draw again, and type lays out again).
+/// fonts can give the documents new revisions (they draw again, and type lays out again).
 const WAIT_FOR_TOOL_EDIT: &[&str] = &[
     "script.run",
     "command.batch",
