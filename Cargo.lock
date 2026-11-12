@@ -970,7 +970,7 @@ dependencies = [
 [[package]]
 name = "craft-affinity"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=119415f46f601e20b9bc6b1b4d6979ceda86d88e#119415f46f601e20b9bc6b1b4d6979ceda86d88e"
+source = "git+https://github.com/storytold/craft-libs?rev=228f6d0c50f1fdee4c5124603602993fc79d4c9d#228f6d0c50f1fdee4c5124603602993fc79d4c9d"
 dependencies = [
  "crc32fast",
  "flate2",
