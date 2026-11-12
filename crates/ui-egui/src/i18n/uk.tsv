@@ -6548,6 +6548,19 @@ breakText	Glyphs	Гліфи
 @plural	{n} line cut|{n} lines cut	{n} рядок обрізано|{n} рядки обрізано|{n} рядків обрізано
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` і `last` мають бути номерами рядків, які зберігає консоль, причому `first` не пізніше `last`
 
+# Learn panel
+	Learn	Навчання
+	Explore tutorials	Переглянути уроки
+	For you	Для вас
+	Skills	Навички
+	Get started	Початок роботи
+	Quick skill guide	Короткий посібник із навичок
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Короткі практичні уроки з основних інструментів, згруповані за навичками. Виберіть навичку, щоб побачити її уроки.
+	List Tutorials	Перелічити уроки
+	Show Tutorial	Показати урок
+@msg	missing `tutorial` (see learn.list)	відсутній `tutorial` (див. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	невідомий урок `{id}` (див. learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Оновити відкладені ефекти
 	Deferred Effects	Відкладені ефекти

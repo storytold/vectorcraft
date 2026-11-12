@@ -8372,6 +8372,19 @@ theme	Appearance	अपीयरेंस
 @plural	{n} line cut|{n} lines cut	{n} पंक्ति काटी गई|{n} पंक्तियाँ काटी गईं
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में
 
+# Learn panel
+	Learn	सीखें
+	Explore tutorials	ट्यूटोरियल देखें
+	For you	आपके लिए
+	Skills	कौशल
+	Get started	शुरू करें
+	Quick skill guide	त्वरित कौशल गाइड
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	आवश्यक टूल के लिए छोटे व्यावहारिक ट्यूटोरियल, कौशल के अनुसार समूहित। किसी कौशल के ट्यूटोरियल देखने के लिए उसे चुनें।
+	List Tutorials	ट्यूटोरियल की सूची
+	Show Tutorial	ट्यूटोरियल दिखाएँ
+@msg	missing `tutorial` (see learn.list)	लापता `tutorial` (learn.list देखें)
+@msg	unknown tutorial `{id}` (see learn.list)	अज्ञात ट्यूटोरियल `{id}` (learn.list देखें)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	स्थगित इफ़ेक्ट्स रिफ्रेश करें
 	Deferred Effects	स्थगित इफ़ेक्ट्स

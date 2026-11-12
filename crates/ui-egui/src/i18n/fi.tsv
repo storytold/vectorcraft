@@ -6974,6 +6974,19 @@ breakText	Glyphs	Merkit
 @plural	{n} line cut|{n} lines cut	{n} rivi katkaistu|{n} riviä katkaistu
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ja `last` on oltava konsolin säilyttämien rivien numeroita, `first` ennen arvoa `last`
 
+# Learn panel
+	Learn	Opi
+	Explore tutorials	Tutustu opetusohjelmiin
+	For you	Sinulle
+	Skills	Taidot
+	Get started	Aloitus
+	Quick skill guide	Pikaopas taitoihin
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Lyhyitä käytännön opetusohjelmia tärkeimmistä työkaluista taidoittain ryhmiteltyinä. Valitse taito nähdäksesi sen opetusohjelmat.
+	List Tutorials	Luettele opetusohjelmat
+	Show Tutorial	Näytä opetusohjelma
+@msg	missing `tutorial` (see learn.list)	`tutorial` puuttuu (ks. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tuntematon opetusohjelma `{id}` (ks. learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Päivitä lykätyt tehosteet
 	Deferred Effects	Lykätyt tehosteet

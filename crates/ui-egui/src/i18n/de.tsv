@@ -6534,6 +6534,19 @@ breakText	Glyphs	Glyphen
 @plural	{n} line cut|{n} lines cut	{n} Zeile gekürzt|{n} Zeilen gekürzt
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` und `last` müssen Nummern von Zeilen sein, die die Konsole enthält, `first` vor `last`
 
+# Learn panel
+	Learn	Lernen
+	Explore tutorials	Lernprogramme entdecken
+	For you	Für Sie
+	Skills	Fertigkeiten
+	Get started	Erste Schritte
+	Quick skill guide	Kurzanleitung zu Fertigkeiten
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Kurze praktische Lernprogramme zu den wichtigsten Werkzeugen, nach Fertigkeiten geordnet. Wählen Sie eine Fertigkeit, um ihre Lernprogramme zu sehen.
+	List Tutorials	Lernprogramme auflisten
+	Show Tutorial	Lernprogramm anzeigen
+@msg	missing `tutorial` (see learn.list)	`tutorial` fehlt (siehe learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	unbekanntes Lernprogramm `{id}` (siehe learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Zurückgestellte Effekte aktualisieren
 	Deferred Effects	Zurückgestellte Effekte

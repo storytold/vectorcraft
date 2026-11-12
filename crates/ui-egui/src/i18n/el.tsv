@@ -6891,6 +6891,19 @@ breakText	Glyphs	Γλύφοι
 @plural	{n} line cut|{n} lines cut	{n} γραμμή περικόπηκε|{n} γραμμές περικόπηκαν
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	Τα `first` και `last` πρέπει να είναι αριθμοί γραμμών που κρατά η κονσόλα, το `first` πριν από το `last`
 
+# Learn panel
+	Learn	Εκμάθηση
+	Explore tutorials	Εξερεύνηση οδηγών εκμάθησης
+	For you	Για εσάς
+	Skills	Δεξιότητες
+	Get started	Πρώτα βήματα
+	Quick skill guide	Γρήγορος οδηγός δεξιοτήτων
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Σύντομοι πρακτικοί οδηγοί για τα βασικά εργαλεία, ομαδοποιημένοι ανά δεξιότητα. Επιλέξτε μια δεξιότητα για να δείτε τους οδηγούς της.
+	List Tutorials	Λίστα οδηγών εκμάθησης
+	Show Tutorial	Εμφάνιση οδηγού εκμάθησης
+@msg	missing `tutorial` (see learn.list)	λείπει το `tutorial` (δείτε learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	άγνωστος οδηγός εκμάθησης `{id}` (δείτε learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή
 	Deferred Effects	Εφέ σε αναμονή

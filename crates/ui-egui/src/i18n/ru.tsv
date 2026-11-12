@@ -7028,6 +7028,19 @@ shape	Open	Открытый
 @plural	{n} line cut|{n} lines cut	{n} строка обрезана|{n} строки обрезаны|{n} строк обрезано
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`
 
+# Learn panel
+	Learn	Обучение
+	Explore tutorials	Обзор уроков
+	For you	Для вас
+	Skills	Навыки
+	Get started	Начало работы
+	Quick skill guide	Краткое руководство по навыкам
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Короткие практические уроки по основным инструментам, сгруппированные по навыкам. Выберите навык, чтобы увидеть его уроки.
+	List Tutorials	Перечислить уроки
+	Show Tutorial	Показать урок
+@msg	missing `tutorial` (see learn.list)	отсутствует `tutorial` (см. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	неизвестный урок `{id}` (см. learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновить отложенные эффекты
 	Deferred Effects	Отложенные эффекты

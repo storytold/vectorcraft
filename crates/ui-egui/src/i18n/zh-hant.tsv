@@ -6583,6 +6583,19 @@ breakText	Glyphs	字符
 @plural	{n} line cut|{n} lines cut	已截斷 {n} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後
 
+# Learn panel
+	Learn	學習
+	Explore tutorials	瀏覽教學課程
+	For you	為你推薦
+	Skills	技能
+	Get started	入門
+	Quick skill guide	快速技能指南
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	針對基本工具的簡短實作教學課程，依技能分組。選擇一項技能即可查看其教學課程。
+	List Tutorials	列出教學課程
+	Show Tutorial	顯示教學課程
+@msg	missing `tutorial` (see learn.list)	未提供 `tutorial` (請參閱 learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	未知的教學課程 `{id}` (請參閱 learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	重新整理延後的效果
 	Deferred Effects	延後的效果

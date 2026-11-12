@@ -6882,6 +6882,19 @@ breakText	Glyphs	Glifos
 @plural	{n} line cut|{n} lines cut	{n} línea recortada|{n} líneas recortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` y `last` deben ser números de líneas que la consola conserva, `first` antes que `last`
 
+# Learn panel
+	Learn	Aprender
+	Explore tutorials	Explorar tutoriales
+	For you	Para ti
+	Skills	Habilidades
+	Get started	Primeros pasos
+	Quick skill guide	Guía rápida de habilidades
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriales prácticos breves sobre las herramientas esenciales, agrupados por habilidad. Elige una habilidad para ver sus tutoriales.
+	List Tutorials	Enumerar tutoriales
+	Show Tutorial	Mostrar tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (consulta learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconocido `{id}` (consulta learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualizar efectos aplazados
 	Deferred Effects	Efectos aplazados
