@@ -10,7 +10,7 @@
 
 use std::cmp::Ordering;
 
-use unicode_general_category::{GeneralCategory as G, get_general_category};
+use unicode_properties::{GeneralCategory as G, UnicodeGeneralCategory};
 
 use crate::catalog;
 use crate::report::{TOO_DEEP, UNTERMINATED_COMMENT, UNTERMINATED_REGEXP, UNTERMINATED_STRING, UNTERMINATED_TEMPLATE};
@@ -137,7 +137,7 @@ fn is_blank(c: char) -> bool {
 /// A character a name may start with: a Unicode `ID_Start` character, `$` or `_` (the Names and
 /// Keywords clause of current ECMA-262 editions). `ID_Start` is the letters (categories Lu, Ll, Lt,
 /// Lm, Lo and Nl) and `Other_ID_Start`, less `Pattern_Syntax` and `Pattern_White_Space` (Unicode
-/// Standard Annex #31). The categories come from Unicode 16.0.
+/// Standard Annex #31). The categories come from Unicode 17.0.
 pub(crate) fn ident_start(c: char) -> bool {
     match c {
         '$' | '_' => true,
@@ -145,7 +145,7 @@ pub(crate) fn ident_start(c: char) -> bool {
         _ if is_other_id_start(c) => true,
         _ => {
             matches!(
-                get_general_category(c),
+                c.general_category(),
                 G::UppercaseLetter | G::LowercaseLetter | G::TitlecaseLetter | G::ModifierLetter | G::OtherLetter | G::LetterNumber
             ) && !is_pattern_syntax(c)
         }
@@ -162,10 +162,7 @@ pub(crate) fn ident_part(c: char) -> bool {
         _ if ident_start(c) => true,
         _ if c.is_ascii() => false,
         _ if is_other_id_continue(c) => true,
-        _ => {
-            matches!(get_general_category(c), G::NonspacingMark | G::SpacingMark | G::DecimalNumber | G::ConnectorPunctuation)
-                && !is_pattern_syntax(c)
-        }
+        _ => matches!(c.general_category(), G::NonspacingMark | G::SpacingMark | G::DecimalNumber | G::ConnectorPunctuation) && !is_pattern_syntax(c),
     }
 }
 
@@ -179,13 +176,13 @@ pub(crate) fn escaped(s: &str) -> Option<char> {
         .and_then(char::from_u32)
 }
 
-/// `Other_ID_Start` (Unicode PropList 16.0): characters kept in `ID_Start` though their category is
+/// `Other_ID_Start` (Unicode PropList 17.0): characters kept in `ID_Start` though their category is
 /// not a letter.
 fn is_other_id_start(c: char) -> bool {
     matches!(c, '\u{1885}' | '\u{1886}' | '\u{2118}' | '\u{212E}' | '\u{309B}' | '\u{309C}')
 }
 
-/// `Other_ID_Continue` (Unicode PropList 16.0): characters kept in `ID_Continue` though their
+/// `Other_ID_Continue` (Unicode PropList 17.0): characters kept in `ID_Continue` though their
 /// category is not a letter, mark, digit or connector.
 fn is_other_id_continue(c: char) -> bool {
     matches!(c, '\u{B7}' | '\u{387}' | '\u{1369}'..='\u{1371}' | '\u{19DA}' | '\u{200C}' | '\u{200D}' | '\u{30FB}' | '\u{FF65}')

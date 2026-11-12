@@ -862,6 +862,13 @@
 	Dock Panel	Telakoi paneeli
 	Dock to Top	Telakoi ylös
 	Dock to Bottom	Telakoi alas
+	Control Bar Options	Ohjauspalkin asetukset
+	Tool Options	Työkalun asetukset
+	Object Options	Objektin asetukset
+	Image Options	Kuvan asetukset
+	Vertical Alignment	Pystysuora tasaus
+	Align and Distribute	Tasaa ja jaa
+	Document Options	Asiakirjan asetukset
 	Dock Control Bar	Telakoi ohjauspalkki
 	Float Tool Group	Kelluta työkaluryhmä
 	Services	Palvelut
@@ -1145,6 +1152,8 @@ lighting	Light	Valo
 	Toolbar: Single/Double Column	Työkalurivi: yksi/kaksi saraketta
 	Toolbar: Add Tool	Työkalurivi: lisää työkalu
 	Toolbar: Remove Tool	Työkalurivi: poista työkalu
+	Add Tool…	Lisää työkalu…
+	Remove Tool	Poista työkalu
 	Toolbar: Reset	Työkalurivi: palauta
 	Two Point Perspective Preset 1	Kahden pisteen perspektiivin esiasetus 1
 	Two Point Perspective Preset 2	Kahden pisteen perspektiivin esiasetus 2
@@ -1524,6 +1533,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Latinalainen perusviiva
 	Select a text object to edit its character attributes.	Valitse tekstiobjekti, jonka merkkimääritteitä haluat muokata.
 	Show Options	Näytä asetukset
+	Show Recent Colors	Näytä viimeisimmät värit
 	Small Caps	Kapiteelit
 	Small Caps (on the roadmap)	Kapiteelit (suunnitteilla)
 	Standard Vertical Roman Alignment	Tavallinen pystysuuntainen latinalainen tasaus
@@ -1653,6 +1663,7 @@ digits	Malayalam	Malajalam
 	No gradient swatches	Ei liukuvärimalleja
 	Points: clicks add free points	Pisteet: napsautukset lisäävät vapaita pisteitä
 	Radial Gradient	Säteittäinen liukuväri
+	Conic Gradient	Kartiomainen liukuväri
 	Reset to White, Black	Palauta valkoinen, musta
 	Reverse Gradient	Käännä liukuväri
 	Save to Swatches	Tallenna värimalleihin
@@ -4423,6 +4434,8 @@ imageTrace	Outline	Ääriviiva
 @msg	`groupColors` must be an array	`groupColors` on oltava taulukko
 @msg	`library` is a library id or name (see {list})	`library` on kirjaston tunnus tai nimi (ks. {list})
 @msg	`mode` applies to freeform gradients	`mode` koskee vapaamuotoisia liukuvärejä
+@msg	a negative `aspect` applies to conic gradients	negatiivinen `aspect` koskee kartiomaisia liukuvärejä
+@msg	`focal` applies to radial gradients	`focal` koskee säteittäisiä liukuvärejä
 @msg	`preserve` must be an object	`preserve` on oltava objekti
 @msg	`globalAdjust` must be an object	`globalAdjust` on oltava objekti
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` on oltava 1, 3 tai 5
@@ -4912,7 +4925,7 @@ imageTrace	Outline	Ääriviiva
 @msg	unknown format	tuntematon muoto
 @msg	unknown format `{f}` (Save writes {_1})	tuntematon muoto `{f}` (Tallenna kirjoittaa muotoja {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	tuntematon vapaamuototila `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	tuntematon liukuvärin laji `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tuntematon liukuvärin laji `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	tuntematon korostus `{h}`
 @msg	unknown option `{path}.{k}`	tuntematon asetus `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	tuntematon päällepainatusten käsittely `{o}` (preserve, simulate tai discard)
@@ -5143,7 +5156,13 @@ imageTrace	Outline	Ääriviiva
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	tässä HEIC- tai HEIF-tiedostossa on kuvatyyppi, jota ei voi lukea
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- ja HEIF-kuvia ei voi avata tässä versiossa
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	tämä PSD-kuva on liian suuri luettavaksi ({_1} × {_2} pikseliä)
-@msg	zipped 32-bit PSD image data with prediction can't be read	ennustusta käyttävää zip-pakattua 32-bittistä PSD-kuvadataa ei voi lukea
+@msg	zipped 1-bit PSD image data with prediction can't be read	ennustusta käyttävää zip-pakattua 1-bittistä PSD-kuvadataa ei voi lukea
+@msg	the PSD file's layer data uses an unknown compression ({m})	tämän PSD-tiedoston tasodata käyttää tuntematonta pakkausta ({m})
+@msg	the PSD file's layer records are damaged	tämän PSD-tiedoston tasotietueet ovat vahingoittuneet
+@msg	the PSD file's layer groups are nested too deeply	tämän PSD-tiedoston tasoryhmät ovat sisäkkäin liian syvällä
+@msg	a layer of the PSD file is too large to read	tämän PSD-tiedoston taso on liian suuri luettavaksi
+@msg	the PSD file's layers take more memory to read than allowed	tämän PSD-tiedoston tasojen lukeminen vaatii enemmän muistia kuin sallitaan
+@msg	the layers can't be read ({e}): the file opened as its merged image	tasoja ei voi lukea ({e}): tiedosto avattiin yhdistettynä kuvanaan
 @msg	{depth}-bit PSD files in this colour mode can't be read	tässä väritilassa olevia {depth}-bittisiä PSD-tiedostoja ei voi lukea
 @msg	the PSD file is cut short	tämä PSD-tiedosto on katkennut
 @msg	the PSD file's header is damaged	tämän PSD-tiedoston otsake on vaurioitunut
@@ -5591,6 +5610,11 @@ mark-style	Japanese	Japanilainen
 	Softness	Pehmeys
 	Ambient Light	Ympäristövalo
 	Light behind the object	Valo objektin takana
+	Shadows	Varjot
+	Distance from Object	Etäisyys objektista
+	Shadow Bounds	Varjon rajat
+	Behind Object	Objektin takana
+	Below Object	Objektin alla
 	3D Lighting Preset	3D-valaistuksen esiasetus
 	Standard	Vakio
 	Diffuse	Hajavalo
@@ -5750,7 +5774,7 @@ mark-style	Japanese	Japanilainen
 @msg	span must be "object" or "selection", got {v}	span-arvon on oltava "object" tai "selection", saatiin {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" sijoittaa `gradient`-liukuvärin, ei värimallia
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" sijoittaa liukuvärin: anna `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" sijoittaa lineaarisen tai säteittäisen liukuvärin, ei vapaamuotoista
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" sijoittaa lineaarisen, säteittäisen tai kartiomaisen liukuvärin, ei vapaamuotoista
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" sijoittaa itse liukuvärin: jätä pois `start` ja `end` (ne sijoittavat sen jo asiakirjan koordinaatteihin)
 @msg	the Color Picker is not open	värinvalitsin ei ole auki
 @msg	the Simplify slider is not open	Yksinkertaista-liukusäädin ei ole auki
@@ -6089,6 +6113,11 @@ axis	Y Axis	Y-akseli
 @msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	muistibudjetti (objekti {_1} tarvitsee {size} tavua syötettä, jäljellä {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektibudjetti (yli {MAX_OBJECTS} vain luku -objektia)
+@msg	instruction budget	käskybudjetti
+@msg	time budget	aikabudjetti
+@msg	memory budget (the selection is too large to hand over)	muistibudjetti (valinta on liian suuri luovutettavaksi)
+@msg	output size ({what} is {len} bytes, limit {max})	tulosteen koko ({what}: {len} tavua, raja {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	laajennuksen käyttöoikeutta ei voi poistaa laajennusvarastosta
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	käyttöoikeus `{shown}` on varattu myöhemmälle laajennus-API:lle; tämä isäntä ei myönnä sitä
 @msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	”{name}” pyytää käyttöoikeuksia {asked}: ihmisen on hyväksyttävä ne työpöytäsovelluksessa, tai anna `grant` istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants
@@ -6125,6 +6154,16 @@ axis	Y Axis	Y-akseli
 @msg	message must be text	message on oltava tekstiä
 @msg	allowContinue must be true or false	allowContinue on oltava true tai false
 @msg	Batch cannot play an action with a stop	Erä ei voi toistaa toimintoa, jossa on pysäytys
+	Insert Menu Item…	Lisää valikkokohta…
+	Insert Menu Item	Lisää valikkokohta
+	Menu Item:	Valikkokohta:
+	No menu item matches.	Mikään valikkokohta ei vastaa hakua.
+	Several menu items match. Choose one from the list.	Useampi valikkokohta vastaa hakua. Valitse yksi luettelosta.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Valintaikkunan avaavia kohtia sekä Tiedosto-, Ikkuna- ja Ohje-valikkojen kohtia ei luetella.
+@msg	command must be text	command on oltava tekstiä
+@msg	no menu item that can be inserted runs this command	mikään lisättävissä oleva valikkokohta ei suorita tätä komentoa
+@msg	the action already has 10,000 steps	toiminnossa on jo 10 000 vaihetta
+@msg	the action set would be larger than 8 MiB	toimintosarja olisi suurempi kuin 8 MiB
 	Playback Options	Toistoasetukset
 	Accelerated	Nopeutettu
 	Step by Step	Vaihe kerrallaan
@@ -6435,9 +6474,12 @@ anchor	Points:	Pisteet:
 @msg	{label} must be a number	{label} on oltava luku
 @msg	{label} must be a number of at least 0.1	{label} on oltava vähintään 0,1
 	Advanced Character Formats	Merkkien lisämuotoilut
+	Basic Paragraph Formats	Kappaleiden perusmuotoilut
+	Composition	Ladonta
 	Horizontal Scale	Vaakaskaalaus
 	Vertical Scale	Pystyskaalaus
 @msg	{label} must be a number from {min} to {max}	{label} on oltava luku {min} ja {max} väliltä
+@msg	{label} must be a whole number from {min} to {max}	{label} on oltava kokonaisluku {min} ja {max} väliltä
 	Character Color	Merkin väri
 	OpenType Features	OpenType-ominaisuudet
 	Stylistic Sets	Tyylisarjat
@@ -6826,6 +6868,7 @@ breakText	Glyphs	Merkit
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Tasaa pikseliruudukkoon
+	Not Aligned to Pixel Grid	Ei tasattu pikseliruudukkoon
 @msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon
 @msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`
 	Ignore All	Ohita kaikki

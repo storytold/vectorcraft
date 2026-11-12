@@ -20,6 +20,10 @@
 //! focal point (where the first stop sits): drag it to make the gradient off-centre, back onto
 //! the centre to centre it.
 //!
+//! A conic gradient shows the same extent ellipse, aspect handle and center ring, without a focal
+//! dot: the bar runs from the center to where the sweep starts, its stops along it by their share
+//! of the turn.
+//!
 //! On a freeform gradient the tool edits its points instead (see `freeform`).
 
 use serde_json::{Value, json};
@@ -99,12 +103,18 @@ impl Annotator {
     fn with(geom: GradientGeom, stops: &[GradientStop]) -> Self {
         Self { geom, gradient: Gradient::new(GradientKind::Linear, stops.to_vec()) }
     }
+    /// Placed by a center and an extent ellipse (radial and conic)?
     fn radial(&self) -> bool {
+        self.gradient.kind.is_centered()
+    }
+    /// Has a focal point to drag (radial only)?
+    fn focal(&self) -> bool {
         self.gradient.kind == GradientKind::Radial
     }
-    /// A radial's aspect handle: on the extent ellipse, across the bar from the stops.
+    /// A radial's (or conic's) aspect handle: on the extent ellipse, across the bar from the
+    /// stops (a mirrored conic's too: its negative aspect only turns the sweep the other way).
     pub fn aspect_point(&self) -> Point {
-        self.geom.start - self.normal() * (self.vector().hypot() * self.geom.aspect)
+        self.geom.start - self.normal() * (self.vector().hypot() * self.geom.aspect.abs())
     }
     /// How far `p` is from a radial's extent ellipse (approximately, along the ray from the
     /// centre).
@@ -160,7 +170,7 @@ impl Annotator {
             return Some(Part::End);
         }
         let radial = self.radial();
-        if radial && near(Some(self.geom.focal_point()), FOCAL_HIT) {
+        if self.focal() && near(Some(self.geom.focal_point()), FOCAL_HIT) {
             return Some(Part::Focal);
         }
         if near(Some(self.geom.start), if radial { CENTRE_HIT } else { HANDLE }) {
@@ -256,7 +266,7 @@ fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
     o.extend([
         Overlay::Line { a: s, b: e, color: BAR, dashed: false },
         Overlay::Line { a: s + shade, b: e + shade, color: LIGHT, dashed: false },
-        Overlay::Handle { p: if a.radial() { a.geom.focal_point() } else { s }, color: BAR },
+        Overlay::Handle { p: if a.focal() { a.geom.focal_point() } else { s }, color: BAR },
         Overlay::Anchor { p: e, color: BAR, filled: true, size: 7.0 },
     ]);
     let len = a.vector().hypot();
@@ -386,10 +396,12 @@ impl GradientTool {
                 ("paint.setGradientGeom", params)
             }
             Grab::Aspect(geom) => {
-                // The pointer's distance across the bar, as a fraction of the radius.
+                // The pointer's distance across the bar, as a fraction of the radius; a mirrored
+                // conic (negative aspect) stays mirrored.
                 let across = Annotator::with(*geom, &[]).project(p).1.abs();
                 let mut params = Self::geom_params(cx, geom.start, geom.end);
-                params["aspect"] = json!(across / geom.length().max(1e-12) * 100.0);
+                let sign = if geom.is_mirrored() { -1.0 } else { 1.0 };
+                params["aspect"] = json!(sign * across / geom.length().max(1e-12) * 100.0);
                 ("paint.setGradientGeom", params)
             }
             Grab::Stop { index, from, copy } => {

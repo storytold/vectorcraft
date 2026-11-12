@@ -478,6 +478,24 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 None => Err(format!("`{key}` must be one of {}", edges.join(", "))),
             }
         }
+        // The Control bar's panel menu: a group of the bar's options on or off.
+        "window.control.options" => {
+            let groups = crate::chrome::CONTROL_BAR_GROUPS;
+            match (groups.iter().find(|g| s("group").as_deref() == Some(**g)), opt_bool(p, "visible")) {
+                (None, _) => Err(format!("`group` must be one of {}", groups.join(", "))),
+                (_, Err(e)) => Err(e),
+                (Some(&group), Ok(visible)) => {
+                    let hidden = &mut app.ui.control_bar_hidden_groups;
+                    let visible = visible.unwrap_or_else(|| hidden.contains(group));
+                    if visible {
+                        hidden.remove(group);
+                    } else {
+                        hidden.insert(group.to_string());
+                    }
+                    Ok(json!({ "group": group, "visible": visible }))
+                }
+            }
+        }
         "window.toolbar" => flag(&mut app.ui.toolbar),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
@@ -694,6 +712,11 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             None => Err("missing `name`".into()),
         },
         "ui.charStyleOptions.resetPanel" => crate::dialogs::char_style_options::reset_panel(app),
+        "ui.paraStyleOptions" => match s("name") {
+            Some(name) => crate::dialogs::para_style_options::open(app, &name),
+            None => Err("missing `name`".into()),
+        },
+        "ui.paraStyleOptions.resetPanel" => crate::dialogs::para_style_options::reset_panel(app),
         "ui.newCharStyle" => crate::panels::text_styles::open_new(app, crate::panels::text_styles::Kind::Char),
         "ui.newParaStyle" => crate::panels::text_styles::open_new(app, crate::panels::text_styles::Kind::Para),
         "ui.symbolOptions" => {
@@ -897,6 +920,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::START_RECORDING => crate::panels::actions::record(app, p),
         crate::panels::actions::STOP_RECORDING => crate::panels::actions::stop(app, p),
         crate::panels::actions::INSERT_STOP => crate::panels::actions::insert_stop(app, p),
+        crate::panels::actions::INSERT_MENU_ITEM => crate::panels::actions::insert_menu_item(app, p),
         crate::panels::actions::CONTINUE_PLAYBACK => crate::panels::actions::continue_playback(app, p),
         crate::panels::actions::DELETE_STEP => crate::panels::actions::delete_step(app, p),
         "ui.batchDialog" => {

@@ -16,16 +16,16 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
     let v = &app.ui.view;
     // An item that can be on or off is `Some` whatever the document and selection (off with none):
     // the macOS menu bar can't change an item's kind without rebuilding.
-    // The first type object (of type on a path, with `onpath`) among the selected objects and the
-    // objects inside them, in the order the type commands act on them.
-    let selected_text = |onpath: bool| {
+    // The first type object of a kind `kinds` takes among the selected objects and the objects
+    // inside them, in the order the type commands act on them.
+    let selected_text = |kinds: fn(&vectorcraft_engine::doc::TextKind) -> bool| {
         let st = app.session.active()?;
         let mut found = None;
         for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
             n.walk(&mut |c| {
                 if found.is_none()
                     && let vectorcraft_engine::doc::NodeKind::Text(t) = &c.kind
-                    && (!onpath || matches!(t.kind, vectorcraft_engine::doc::TextKind::OnPath { .. }))
+                    && kinds(&t.kind)
                 {
                     found = Some(t);
                 }
@@ -41,17 +41,17 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             crate::panels::character::shared_text_flag(app, |t| t.vertical) == Some(id == "type.orientation.vertical")
         }
         "type.opticalMarginAlignment" => crate::panels::character::shared_text_flag(app, |t| t.optical_margin) == Some(true),
-        // Dynamic Text of the first selected type on a path, which the item turns the other way.
-        "type.dynamicText" => selected_text(true).is_some_and(|t| t.dynamic_text),
+        // Dynamic Text of the first selected type on a path or area type, which the item turns the
+        // other way.
+        "type.dynamicText" => selected_text(|k| !matches!(k, vectorcraft_engine::doc::TextKind::Point)).is_some_and(|t| t.dynamic_text),
         "view.outline" => app.outline_view(),
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
         "view.snapToPixel" => v.snap_to_pixel,
         "view.snapToGlyph" => v.snap_to_glyph,
         // Type on a Path effect of the selected path type.
-        "type.pathOptions" if p.get("effect").is_some() => {
-            selected_text(true).is_some_and(|t| p.get("effect").and_then(Value::as_str) == Some(t.path_effect.id()))
-        }
+        "type.pathOptions" if p.get("effect").is_some() => selected_text(|k| matches!(k, vectorcraft_engine::doc::TextKind::OnPath { .. }))
+            .is_some_and(|t| p.get("effect").and_then(Value::as_str) == Some(t.path_effect.id())),
         "view.smartGuides" => v.smart_guides,
         "edit.autoSpellCheck" => v.auto_spell_check,
         "view.grid" => v.grid,
@@ -66,6 +66,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.control.dock" => {
             p.get("edge").and_then(Value::as_str) == Some(crate::chrome::CONTROL_BAR_EDGES[usize::from(app.ui.control_bar_bottom)])
         }
+        "window.control.options" => p
+            .get("group")
+            .and_then(Value::as_str)
+            .is_some_and(|g| crate::chrome::CONTROL_BAR_GROUPS.contains(&g) && !app.ui.control_bar_hidden_groups.contains(g)),
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
         "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
@@ -267,11 +271,18 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
-        "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => app.session.active().is_some(),
+        "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.paraStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => {
+            app.session.active().is_some()
+        }
         "ui.charStyleOptions.resetPanel" => app.ui.dialog.as_ref().is_some_and(|d| {
             (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
                 && crate::dialogs::char_style_options::can_reset(d)
         }),
+        "ui.paraStyleOptions.resetPanel" => app
+            .ui
+            .dialog
+            .as_ref()
+            .is_some_and(|d| crate::dialogs::para_style_options::is_paragraph_dialog(d) && crate::dialogs::para_style_options::can_reset(d)),
         "ui.newArtboard" | "artboard.selectAll" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
