@@ -262,6 +262,7 @@ font-technology	Variable	Variables
 	Asset Export Settings	Ajustes de exportación de recursos
 	Assets	Recursos
 	Assign	Asignar
+	Assign Profile	Asignar perfil
 	Assign Profile…	Asignar perfil…
 	Assign:	Asignar:
 	Attach to Active Plane	Adjuntar al plano activo
@@ -700,6 +701,15 @@ font-technology	Variable	Variables
 	Created:	Creado:
 	Crop	Recortar
 	Crop Image	Recortar imagen
+	Image Tools	Herramientas de imagen
+	Remove Background…	Quitar fondo…
+	Remove Background	Quitar fondo
+	Background	Fondo
+	Edge Color	Color del borde
+	Picked Colors	Colores elegidos
+	Corner Color	Color de las esquinas
+	Contiguous	Contiguo
+	Each Channel	Cada canal
 	Edit Path	Editar trazado
 	Mask	Máscara
 	Crop Marks	Marcas de corte
@@ -2336,6 +2346,9 @@ font-technology	Variable	Variables
 	Optical	Óptico
 	Optical Margin Alignment	Alineación óptica de márgenes
 	Dynamic Text	Texto dinámico
+	Dynamic Text Presets	Ajustes preestablecidos de texto dinámico
+	Arch	Bóveda
+@msg	select point type or type on a path	seleccione texto de punto o texto en trazado
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el texto en trazado de un texto enlazado no puede usar texto dinámico: {frames}
 	Optimize for fast web view	Optimizar para vista web rápida
 	Optimized	Optimizado
@@ -2343,6 +2356,7 @@ font-technology	Variable	Variables
 	Options for Selection…	Opciones de la selección…
 	Options:	Opciones:
 	Options…	Opciones…
+	Organic Fades	Desvanecidos orgánicos
 	or more spaces with a tab	o más espacios por una tabulación
 	Order:	Orden:
 	Ordinals	Ordinales
@@ -2534,6 +2548,7 @@ font-technology	Variable	Variables
 	Presets:	Preajustes:
 	Press 	Presiona 
 	Preview	Vista previa
+	Preview:	Vista previa:
 	Preview All Layers	Previsualizar todas las capas
 	Preview in Browser	Previsualizar en el navegador
 	Preview in Browser needs the desktop app (the web downloads files instead)	Previsualizar en el navegador requiere la aplicación de escritorio (la versión web descarga los archivos)
@@ -2613,6 +2628,7 @@ digits	Malayalam	Malayálam
 	Radial Glows	Resplandores radiales
 	Radial Gradient	Degradado radial
 	Conic Gradient	Degradado cónico
+	Diamond Gradient	Degradado de rombo
 	Radius 1	Radio 1
 	Radius 2	Radio 2
 	Radius1	Radio1
@@ -2625,6 +2641,8 @@ digits	Malayalam	Malayálam
 	Range:	Rango:
 	Raster Effects	Efectos de rasterización
 	Raster File Format:	Formato de archivo ráster:
+	Include Placed Images	Incluir imágenes colocadas
+	Include Fill Hatches	Incluir sombreados de relleno
 	Raster Sample Size:	Tamaño de muestra ráster:
 	Raster/Vector Balance:	Equilibrio ráster/vectorial:
 	Rasterize	Rasterizar
@@ -2806,6 +2824,10 @@ digits	Malayalam	Malayálam
 	Replace Font	Reemplazar fuente
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplázalo con otro archivo o ignóralo: sus imágenes seguirán mostrando la vista previa guardada con el documento.
 	Replace Spine	Reemplazar eje
+	Create Spine	Crear eje
+	Create Spine:	Crear eje:
+	Always	Siempre
+	Never	Nunca
 	Replace Symbol	Reemplazar símbolo
 	Reset Transformation	Restablecer transformación
 	Replace With Font	Reemplazar con fuente
@@ -3167,6 +3189,15 @@ digits	Malayalam	Malayálam
 	Stun Pulse	Aturdimiento
 	Stealth Fade	Sigilo
 	Shield Buff	Escudo
+	Textures	Texturas
+	Fine Grain	Grano fino
+	Canvas Weave	Tejido de lienzo
+	Burlap Sack	Saco de arpillera
+	Cracked Glaze	Esmalte agrietado
+	Mosaic Floor	Suelo de mosaico
+	Quilted Squares	Cuadros acolchados
+	Leaded Glass	Vidrio emplomado
+	Damp Paper	Papel húmedo
 	Shape	Forma
 	Shape Builder	Generador de formas
 	Shape Builder Regions	Regiones del generador de formas
@@ -3229,6 +3260,7 @@ digits	Malayalam	Malayálam
 	Show Modified	Mostrar modificados
 	Show Note	Mostrar nota
 	Show Options	Mostrar opciones
+	Show Recent Colors	Mostrar colores recientes
 	Show Original Path	Mostrar trazado original
 	Open this dialog with these settings next time	Abrir este cuadro de diálogo con estos ajustes la próxima vez
 	Auto-Simplify	Simplificar automáticamente
@@ -3533,6 +3565,8 @@ digits	Malayalam	Malayálam
 	Scale at Center	Escalar desde el centro
 	Up/Down:	Arriba/abajo:
 	Left/Right:	Izquierda/derecha:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko arriba/abajo
+	Tate-chu-yoko Left/Right	Tate-chu-yoko izquierda/derecha
 	Temperature	Temperatura
 	Temperature/Tint…	Temperatura/tinte…
 	Template	Plantilla
@@ -3868,6 +3902,7 @@ digits	Malayalam	Malayálam
 	Windows	Windows
 	Working CMYK	CMYK de trabajo
 	Working CMYK (don't tag)	CMYK de trabajo (sin etiquetar)
+	Working RGB (don't tag)	RGB de trabajo (sin etiquetar)
 	Workspace	Espacio de trabajo
 	Workspace {i}	Espacio de trabajo {i}
 	Wrinkle Tool	Herramienta Arrugar
@@ -4229,6 +4264,7 @@ axis	Both	Ambos
 @msg	`{key}` must be a number, not {v}	`{key}` debe ser un número, no {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} debe ser un tiempo Unix en segundos (un entero) o null
 @msg	`{key}` must be a string	`{key}` debe ser un texto
+@msg	`{key}` must be a profile name or null	`{key}` debe ser un nombre de perfil o null
 @msg	`{key}` must be a whole number	`{key}` debe ser un número entero
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` debe ser un número entero entre {min} y {max} (se recibió {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` debe estar entre {min} y {max} (se recibió {x})
@@ -4381,6 +4417,7 @@ axis	Both	Ambos
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): se escribe con un UserUnit de {unit}, así que las aplicaciones que ignoran UserUnit la muestran ese número de veces más pequeña
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): las páginas {label} se escriben sin UserUnit, en puntos, y las aplicaciones que respetan el límite recortan la página a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 no tiene UserUnit, que una página de más de 14.400 pt (200 in) necesita para conservar su tamaño: el archivo se escribe como PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 no tiene UserUnit, que una página de más de 14.400 pt (200 in) necesita para no superar el límite de página de PDF/A-2, de 14.400 unidades: el archivo se escribe como PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la página de la mesa de trabajo {n} mide {size}, demasiado larga y estrecha para los lados de página de PDF de 3 a 14.400 unidades: se escribe con una UserUnit de {unit}, que mantiene el lado corto en 3 unidades o más, y las aplicaciones que respetan el límite recortan el lado largo a 14.400 unidades
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	los archivos {label} admiten números reales de hasta {max}, y la página de la mesa de trabajo {n}, de {side} pt, necesita otros mayores: elija PDF 1.6 o posterior sin estándar PDF/X, o una mesa de trabajo más pequeña
 @msg	invalid image data for `{0}`	datos de imagen no válidos para `{0}`
@@ -4529,6 +4566,7 @@ axis	Both	Ambos
 @msg	not a stored central record	no es un registro central almacenado
 @msg	not a valid plug-in module: {0}	no es un módulo de plugin válido: {0}
 @msg	not an EMF or WMF file	no es un archivo EMF ni WMF
+@msg	not an HP-GL file	no es un archivo HP-GL
 @msg	not found	no se encontró
 @msg	not in pattern editing mode	no está en el modo de edición de motivos
 @msg	finish editing the pattern first	termina primero la edición del motivo
@@ -4608,6 +4646,14 @@ axis	Both	Ambos
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	este calco crearía más de {max} puntos de ancla, más de los que el documento puede mostrar con fluidez: sube Ruido, baja Trazados o Colores, o elige un preajuste de menor fidelidad
 @msg	select an envelope	selecciona una envolvente
 @msg	select an image	selecciona una imagen
+@msg	`background` must be edges, corners or colors	`background` debe ser edges, corners o colors
+@msg	`match` must be distance or channels	`match` debe ser distance o channels
+@msg	`{key}` must be from 0 to 100	`{key}` debe estar entre 0 y 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` debe contener de 1 a 16 colores, cada uno en hexadecimal (#rrggbb o #rgb) o como black, white, red, green o blue
+@msg	the linked image shows its preview: embed or relink it first	la imagen vinculada muestra su vista previa: incrústala o vuelve a vincularla primero
+@msg	a CMYK image has no transparency to set	una imagen CMYK no tiene transparencia que establecer
+@msg	every pixel matches the background: no image would be left	todos los píxeles coinciden con el fondo: no quedaría ninguna imagen
+@msg	an image of {w} × {h} pixels is too large to change	una imagen de {w} × {h} píxeles es demasiado grande para cambiarla
 @msg	select an object in perspective	selecciona un objeto en perspectiva
 @msg	select artwork (or a colour group) to recolor	selecciona la ilustración (o un grupo de colores) que quieres volver a colorear
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloreado completado; sin cambios: {locked} y {hidden}
@@ -4714,7 +4760,7 @@ axis	Both	Ambos
 @msg	unknown format	formato desconocido
 @msg	unknown format `{f}` (Save writes {_1})	formato desconocido `{f}` (Guardar escribe {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modo de forma libre desconocido `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo de degradado desconocido `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipo de degradado desconocido `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	resaltado desconocido `{h}`
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
@@ -5668,6 +5714,11 @@ mark-style	Japanese	Japonesas
 	Softness	Suavidad
 	Ambient Light	Luz ambiental
 	Light behind the object	Luz detrás del objeto
+	Shadows	Sombras
+	Distance from Object	Distancia del objeto
+	Shadow Bounds	Límites de la sombra
+	Behind Object	Detrás del objeto
+	Below Object	Debajo del objeto
 	3D Lighting Preset	Ajuste preestablecido de iluminación 3D
 	Standard	Estándar
 	Diffuse	Difusa
@@ -5733,7 +5784,7 @@ mark-style	Japanese	Japonesas
 @msg	span must be "object" or "selection", got {v}	span debe ser "object" o "selection", no {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" coloca un `gradient`, no una muestra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" coloca un degradado: indique `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" coloca un degradado lineal, radial o cónico, no uno de forma libre
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" coloca un degradado lineal, radial, cónico o de rombo, no uno de forma libre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" coloca el propio degradado: omita `start` y `end` (ya lo colocan en coordenadas del documento)
 	Make Image Dynamic	Hacer imagen dinámica
 	Import Data Sets…	Importar conjuntos de datos…
@@ -5974,6 +6025,8 @@ axis	Y Axis	Eje Y
 	Version: {version}	Versión: {version}
 	Install “{name}” in place of the plug-in with the same ID?	¿Instalar “{name}” en lugar del plugin con el mismo ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Este archivo no es el plugin instalado antes con este ID. Recibe la configuración y la caché guardadas para ese ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatización pidió instalar este plugin. Para instalarlo, elige Objeto › Plugins › Instalar plugin… tú mismo.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatización pidió instalar este plugin. Para instalarlo, elige Objeto › Plugins › Instalar plugin… tú mismo.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” es un módulo distinto del plugin con ID {_1} y recibiría la configuración y la caché guardadas para él: instálalo con `replace: true` cuando el usuario lo acepte
 	File SHA-256: {hash}	SHA-256 del archivo: {hash}
 	Read the objects it is given	Leer los objetos que recibe
@@ -6036,6 +6089,12 @@ axis	Y Axis	Eje Y
 @msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` debe tener 1-64 caracteres imprimibles
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: usa un id de 1-{MAX_COMMAND_ID} caracteres de a-z 0-9 _ que empiece por una letra
 @msg	command {name}: {e}	comando {name}: {e}
+@msg	manifest: {e}	manifiesto: {e}
+@msg	manifest: {e} at line {line} column {column}	manifiesto: {e} (línea {line}, columna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` debe ser una lista de comandos, cada uno con `id` y `label`
+@msg	command {name} must be an object with an `id` and a `label`	el comando {name} debe ser un objeto con `id` y `label`
+@msg	missing field `{key}`	falta el campo `{key}`
+@msg	duplicate field `{key}`	el campo `{key}` está repetido
 @msg	only a filter or a live effect declares `commands`	solo un filtro o un efecto interactivo declara `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el módulo no tiene el SHA-256 que indica `hash`: no se instaló nada
@@ -6060,6 +6119,16 @@ axis	Y Axis	Eje Y
 @msg	message must be text	message debe ser texto
 @msg	allowContinue must be true or false	allowContinue debe ser true o false
 @msg	Batch cannot play an action with a stop	Lote no puede reproducir una acción con una parada
+	Insert Menu Item…	Insertar elemento de menú…
+	Insert Menu Item	Insertar elemento de menú
+	Menu Item:	Elemento de menú:
+	No menu item matches.	Ningún elemento de menú coincide.
+	Several menu items match. Choose one from the list.	Coinciden varios elementos de menú. Elija uno de la lista.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	No se muestran los elementos que abren un cuadro de diálogo ni los de los menús Archivo, Ventana y Ayuda.
+@msg	command must be text	command debe ser texto
+@msg	no menu item that can be inserted runs this command	ningún elemento de menú que se pueda insertar ejecuta este comando
+@msg	the action already has 10,000 steps	la acción ya tiene 10 000 pasos
+@msg	the action set would be larger than 8 MiB	el conjunto de acciones superaría los 8 MiB
 	Playback Options	Opciones de reproducción
 	Accelerated	Acelerada
 	Step by Step	Paso a paso
@@ -6740,6 +6809,11 @@ breakText	Glyphs	Glifos
 @msg	only an exporter or an importer declares `extensions`	solo un plugin de exportación o de importación declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un plugin de importación siempre recibe el presupuesto de una importación: omita `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copiar información de solución de problemas
+@msg	Copied the troubleshooting info	Se copió la información de solución de problemas
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	La última sesión de VectorCraft dejó de responder antes de cerrarse. Ayuda › Copiar información de solución de problemas copia los detalles para un informe de error
+
 # Safe Mode
 	Safe Mode…	Modo seguro…
 	Safe Mode	Modo seguro
@@ -6760,6 +6834,7 @@ breakText	Glyphs	Glifos
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinear con cuadrícula de píxeles
+	Align New Objects to Pixel Grid	Alinear objetos nuevos con cuadrícula de píxeles
 	Not Aligned to Pixel Grid	No alineado con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`

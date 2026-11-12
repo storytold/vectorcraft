@@ -583,6 +583,96 @@ fn a_shape_tool_moves_the_selection_by_its_centre_point_and_turns_it_from_a_corn
     assert_eq!(a.first(), Some(&Action::Begin("Rectangle".into())), "{a:?}");
 }
 
+/// With a shape tool, a drag on one of the eight handles of the selection's bounding box scales the
+/// selection, as with the Selection tool, instead of drawing a new shape from the handle.
+#[test]
+fn a_shape_tool_scales_the_selection_by_its_bounding_box_handles() {
+    let (d, s) = unfilled_live_rect();
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let corner = Point::new(200.0, 200.0);
+    for id in ["rectangle", "roundedRectangle", "polygon", "star", "ellipse"] {
+        let mut t = ShapeTool::new(id);
+        assert_eq!(t.cursor(&c, corner, Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{id}");
+        // No Smart Guide for a new shape's start over a handle.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, corner.x, corner.y));
+        assert!(t.overlays(&c).is_empty(), "{id}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Scale".into())], "{id}");
+        // A resize: the canvas keeps the box on show at the changing bounds.
+        assert!(t.busy() && t.transforming() && t.resizing(), "{id}");
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 220.0, 230.0));
+        let want = scale_for_drag(Rect::new(100.0, 100.0, 200.0, 200.0), Handle::BottomRight, Point::new(220.0, 230.0), false, false);
+        assert_eq!(a, vec![Action::Preview("object.transform".into(), json!({"matrix": matrix_json(want), "copy": false}))], "{id}");
+        assert_eq!(t.cursor(&c, Point::new(220.0, 230.0), Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{id}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 220.0, 230.0)), vec![Action::Commit], "{id}");
+        assert!(!t.busy() && !t.transforming() && !t.resizing(), "{id}");
+    }
+    // The side handles scale along one axis; Escape turns the scale back.
+    let mut t = ShapeTool::new("rectangle");
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 100.0)), vec![Action::Begin("Scale".into())]);
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 150.0, 80.0));
+    let want = scale_for_drag(Rect::new(100.0, 100.0, 200.0, 200.0), Handle::Top, Point::new(150.0, 80.0), false, false);
+    assert_eq!(a, vec![Action::Preview("object.transform".into(), json!({"matrix": matrix_json(want), "copy": false}))]);
+    assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(!t.busy());
+    // Backtick pressed after the last drag: the release previews the scale again for the patterns
+    // only, then commits.
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y));
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 220.0, 230.0));
+    let a = t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 220.0, 230.0) });
+    let want = scale_for_drag(Rect::new(100.0, 100.0, 200.0, 200.0), Handle::BottomRight, Point::new(220.0, 230.0), false, false);
+    let patterns = json!({"matrix": matrix_json(want), "copy": false, "objects": false, "patterns": true});
+    assert_eq!(a, vec![Action::Preview("object.transform".into(), patterns), Action::Commit]);
+    assert!(!t.busy());
+    // View › Hide Bounding Box hides the handles, and a press there draws a new shape.
+    let hidden = ToolContext { show_bbox: false, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("rectangle");
+    assert_eq!(t.cursor(&hidden, corner, Mods::default()), Cursor::Crosshair);
+    t.pointer(&hidden, &PointerEvent::new(PointerKind::Down, corner.x, corner.y));
+    let a = t.pointer(&hidden, &PointerEvent::new(PointerKind::Drag, 240.0, 240.0));
+    assert_eq!(a.first(), Some(&Action::Begin("Rectangle".into())), "{a:?}");
+    // The Line Segment tool shows no box, so its press draws.
+    let mut t = ShapeTool::new("lineSegment");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y));
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 240.0, 240.0));
+    assert_eq!(a.first(), Some(&Action::Begin("Line".into())), "{a:?}");
+}
+
+/// A shape tool's press scales the selection only on the drawn handle square: 3 screen points from
+/// the handle's centre along each axis at the default Anchor Size, at any zoom. A press 4 points
+/// from it draws a new shape; at Anchor Size 7 the square is 10 points wide and that press scales.
+#[test]
+fn a_shape_tool_draws_from_a_press_just_beside_a_handle() {
+    let (d, s) = unfilled_live_rect();
+    let p = paint();
+    for zoom in [1.0, 4.0] {
+        let c = ToolContext { zoom, ..cx(&d, &s, &p) };
+        let on = Point::new(200.0 + 3.0 / zoom, 200.0 - 3.0 / zoom);
+        let mut t = ShapeTool::new("rectangle");
+        assert_eq!(t.cursor(&c, on, Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{zoom}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, on.x, on.y)), vec![Action::Begin("Scale".into())], "{zoom}");
+        let beside = Point::new(200.0 + 2.0 / zoom, 200.0 + 4.0 / zoom);
+        let mut t = ShapeTool::new("rectangle");
+        assert_eq!(t.cursor(&c, beside, Mods::default()), Cursor::Crosshair, "{zoom}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, beside.x, beside.y));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 260.0, 260.0));
+        assert_eq!(a.first(), Some(&Action::Begin("Rectangle".into())), "{zoom}: {a:?}");
+        let big = ToolContext { anchor_size: 7, ..c };
+        let mut t = ShapeTool::new("rectangle");
+        assert_eq!(t.cursor(&big, beside, Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{zoom}");
+        assert_eq!(t.pointer(&big, &PointerEvent::new(PointerKind::Down, beside.x, beside.y)), vec![Action::Begin("Scale".into())], "{zoom}");
+    }
+    // In a view turned 45°, the drawn square stays square to the screen: a press 3 screen points
+    // right of and below the handle's centre, 4.24 pt along the box's x axis, scales.
+    let screen = turned_view(45.0);
+    let c = ToolContext { screen, ..cx(&d, &s, &p) };
+    let f = screen.unwrap_or_else(|| panic!("a turned view"));
+    let corner = Point::new(200.0, 200.0) + f.right * 3.0 + f.down * 3.0;
+    let mut t = ShapeTool::new("rectangle");
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Scale".into())]);
+}
+
 /// Two selected live rectangles, the second placed so that its top-left Live Corners widget (10 pt
 /// in along the corner's bisector) lands on the first one's centre point.
 fn two_live_rects() -> (vectorcraft_doc::Document, Selection) {

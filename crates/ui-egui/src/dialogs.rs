@@ -8,6 +8,7 @@
 
 mod about;
 pub mod action_batch;
+pub mod action_insert_menu_item;
 pub mod action_new;
 pub mod action_playback;
 pub mod action_set_options;
@@ -391,6 +392,7 @@ registry! {
     ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
     ActionStopRecord: [action_stop::RECORD_KIND] => action_stop::RECORD_SPEC,
     ActionStopMessage: [action_stop::MESSAGE_KIND] => action_stop::MESSAGE_SPEC,
+    ActionInsertMenuItem: [action_insert_menu_item::KIND] => action_insert_menu_item::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,

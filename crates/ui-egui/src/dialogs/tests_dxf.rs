@@ -50,13 +50,15 @@ fn the_cnc_cam_preset_sets_the_fields_and_a_change_shows_custom() {
     frame(&mut app);
     let d = app.ui.dialog.as_ref().unwrap();
     let fields = |d: &crate::state::Dialog| {
-        ["dxfPreset", "version", "unit", "scale", "colors", "preserve", "alterPaths", "outlineText"].map(|k| d.str(k)).join(" ")
+        ["dxfPreset", "version", "unit", "scale", "colors", "preserve", "alterPaths", "outlineText", "includeImages", "includeHatches"]
+            .map(|k| d.str(k))
+            .join(" ")
     };
-    assert_eq!(fields(d), "cnc 2000 Millimeters 1.0 256 editability false true");
+    assert_eq!(fields(d), "cnc 2000 Millimeters 1.0 256 editability false true false false");
     // Any change to a field the preset sets shows Custom, and keeps the other fields.
     set(&mut app, "colors", json!("true"));
     frame(&mut app);
-    assert_eq!(fields(app.ui.dialog.as_ref().unwrap()), "custom 2000 Millimeters 1.0 true editability false true");
+    assert_eq!(fields(app.ui.dialog.as_ref().unwrap()), "custom 2000 Millimeters 1.0 true editability false true false false");
     set(&mut app, "colors", json!("256"));
     frame(&mut app);
     assert_eq!(app.ui.dialog.as_ref().unwrap().str("dxfPreset"), "cnc", "matching every field again");
@@ -70,12 +72,12 @@ fn the_cnc_cam_preset_sets_the_fields_and_a_change_shows_custom() {
     assert_eq!(app.ui.dialog.as_ref().unwrap().str("dxfPreset"), "cnc");
     set(&mut app, "dxfPreset", json!("custom"));
     frame(&mut app);
-    assert_eq!(fields(app.ui.dialog.as_ref().unwrap()), "custom 2018 Millimeters 1.0 true appearance false false");
+    assert_eq!(fields(app.ui.dialog.as_ref().unwrap()), "custom 2018 Millimeters 1.0 true appearance false false true true");
     // A preset the command gives sets the fields it does not give.
     app.ui.dialog = None;
     app.run("ui.dxfOptionsDialog", json!({"dxfPreset": "cnc", "unit": "Inches"})).unwrap();
     let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(fields(d), "custom 2000 Inches 1.0 256 editability false true");
+    assert_eq!(fields(d), "custom 2000 Inches 1.0 256 editability false true false false");
     // A preset set and confirmed without drawing (the control channel) sets its fields too.
     set(&mut app, "dxfPreset", json!("cnc"));
     confirm(&mut app).unwrap();
@@ -84,7 +86,7 @@ fn the_cnc_cam_preset_sets_the_fields_and_a_change_shows_custom() {
     app.run("ui.dxfOptionsDialog", json!({"dxfPreset": "custom"})).unwrap();
     let d = app.ui.dialog.as_mut().unwrap();
     set_field(d, "dxfPreset".into(), json!("cnc"));
-    assert_eq!(fields(d), "cnc 2000 Millimeters 1.0 256 editability false true");
+    assert_eq!(fields(d), "cnc 2000 Millimeters 1.0 256 editability false true false false");
     set_field(d, "unit".into(), json!("Inches"));
     assert_eq!(d.str("dxfPreset"), "custom");
     // Setting the preset again sets its fields again.
@@ -94,10 +96,49 @@ fn the_cnc_cam_preset_sets_the_fields_and_a_change_shows_custom() {
     // Setting Custom while Custom is shown still puts back the defaults.
     let mut reset = d.clone();
     set_field(&mut reset, "dxfPreset".into(), json!("custom"));
-    assert_eq!(fields(&reset), "custom 2018 Millimeters 1.0 true appearance false false");
+    assert_eq!(fields(&reset), "custom 2018 Millimeters 1.0 true appearance false false true true");
     confirm(&mut app).unwrap();
     let remembered = ["dxfPreset", "version", "unit"].map(|k| app.ui.dxf_options[k].as_str());
     assert_eq!(remembered, [Some("custom"), Some("2000"), Some("Inches")]);
+}
+
+#[test]
+fn include_placed_images_and_fill_hatches_follow_the_preset_and_a_change_shows_custom() {
+    let (mut app, written) = app(1);
+    let shown = |app: &VectorcraftApp| {
+        let d = app.ui.dialog.as_ref().unwrap();
+        (d.str("dxfPreset"), d.bool("includeImages"), d.bool("includeHatches"))
+    };
+    app.run("ui.dxfOptionsDialog", json!({"path": "/out/a.dxf"})).unwrap();
+    frame(&mut app);
+    assert_eq!(shown(&app), ("custom".into(), true, true));
+    confirm(&mut app).unwrap();
+    assert!(text(&written.borrow()[0].1).contains("\nHATCH\n"), "Custom keeps the fill's hatch");
+    app.run("ui.dxfOptionsDialog", json!({"path": "/out/b.dxf"})).unwrap();
+    set(&mut app, "dxfPreset", json!("cnc"));
+    frame(&mut app);
+    assert_eq!(shown(&app), ("cnc".into(), false, false));
+    // Either checkbox changed shows Custom; both back as the preset sets them show CNC / CAM.
+    set(&mut app, "includeHatches", json!(true));
+    frame(&mut app);
+    assert_eq!(shown(&app), ("custom".into(), false, true));
+    set(&mut app, "includeHatches", json!(false));
+    set(&mut app, "includeImages", json!(true));
+    frame(&mut app);
+    assert_eq!(shown(&app), ("custom".into(), true, false));
+    set(&mut app, "includeImages", json!(false));
+    frame(&mut app);
+    assert_eq!(shown(&app).0, "cnc");
+    confirm(&mut app).unwrap();
+    assert!(!text(&written.borrow()[1].1).contains("\nHATCH\n"), "CNC / CAM writes the fill's outline alone");
+    let remembered = ["includeImages", "includeHatches"].map(|k| app.ui.dxf_options[k].as_bool());
+    assert_eq!(remembered, [Some(false), Some(false)]);
+    // The next DXF Options start from them, and Custom turns both back on.
+    crate::menus::invoke(&mut app, "ui.dxfOptionsDialog", json!({}));
+    assert_eq!(shown(&app), ("cnc".into(), false, false));
+    set(&mut app, "dxfPreset", json!("custom"));
+    frame(&mut app);
+    assert_eq!(shown(&app), ("custom".into(), true, true));
 }
 
 #[test]

@@ -397,3 +397,59 @@ fn a_conic_shows_its_extent_ellipse_and_aspect_handle_without_a_focal_dot() {
         assert!((v["aspect"].as_f64().unwrap() - want).abs() < 1e-9, "{aspect}: {v}");
     }
 }
+
+/// A diamond shows its square (a corner at the end of the vector) with the aspect handle and
+/// center ring of a radial, without a focal dot. Dragging the aspect handle of one a file gave a
+/// negative aspect sets a positive one.
+#[test]
+fn a_diamond_shows_its_square_and_aspect_handle() {
+    for aspect in [0.5, -0.5] {
+        let (mut d, s) = graded(two());
+        let n = d.node_mut(s.objects[0]).unwrap();
+        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
+        g.gradient.kind = GradientKind::Diamond;
+        g.geom.as_mut().unwrap().aspect = aspect;
+        let geom = g.geom.unwrap();
+        n.appearance.set_fill(Paint::Gradient(g));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let o = GradientTool::default().overlays(&cx);
+        let squares: Vec<_> = o.iter().filter_map(|o| if let Overlay::Path { path, dashed: true, .. } = o { Some(path) } else { None }).collect();
+        assert_eq!(squares.len(), 1, "the square");
+        // Four straight sides through the corners: the end of the vector, the aspect handle and
+        // their mirrors about the center.
+        let corners: Vec<Point> = squares[0].elements().iter().filter_map(|e| e.end_point()).collect();
+        let u = geom.end - geom.start;
+        let w = Vec2::new(u.y, -u.x) * 0.5;
+        for want in [geom.end, geom.start - w, geom.start - u, geom.start + w] {
+            assert!(corners.iter().any(|c| c.distance(want) < 1e-9), "{aspect}: {want:?} in {corners:?}");
+        }
+        assert!(!squares[0].elements().iter().any(|e| matches!(e, vectorcraft_geom::kurbo::PathEl::CurveTo(..))), "straight sides");
+        assert!(o.contains(&Overlay::Handle { p: Point::new(100.0, 100.0), color: BAR }), "{aspect}: {o:?}");
+        let a = Annotator::of(&cx).unwrap();
+        assert_eq!(a.hit(&cx, Point::new(100.0, 100.0)), Some(Part::Aspect));
+        let mut t = GradientTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, Point::new(100.0, 100.0)));
+        let v = preview(&t.pointer(&cx, &ev(PointerKind::Drag, Point::new(100.0, 80.0)))).clone();
+        assert!((v["aspect"].as_f64().unwrap() - 70.0).abs() < 1e-9, "{aspect}: {v}");
+    }
+}
+
+/// Dragging the aspect handle of a radial a file gave a negative aspect (which the commands
+/// refuse) sets a positive one, as for a diamond: only a conic's sign mirrors it.
+#[test]
+fn a_radial_with_a_negative_aspect_drags_to_a_positive_one() {
+    let (mut d, s) = graded(two());
+    let n = d.node_mut(s.objects[0]).unwrap();
+    let Paint::Gradient(mut g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
+    g.gradient.kind = GradientKind::Radial;
+    g.geom.as_mut().unwrap().aspect = -0.5;
+    n.appearance.set_fill(Paint::Gradient(g));
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    assert_eq!(Annotator::of(&cx).unwrap().hit(&cx, Point::new(100.0, 100.0)), Some(Part::Aspect));
+    let mut t = GradientTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, Point::new(100.0, 100.0)));
+    let v = preview(&t.pointer(&cx, &ev(PointerKind::Drag, Point::new(100.0, 80.0)))).clone();
+    assert!((v["aspect"].as_f64().unwrap() - 70.0).abs() < 1e-9, "{v}");
+}

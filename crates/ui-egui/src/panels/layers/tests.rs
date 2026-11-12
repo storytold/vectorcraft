@@ -272,12 +272,44 @@ fn closing_a_document_releases_only_its_layer_thumbnails() {
     });
 }
 
+/// From now on each reading of this thread's render budget clock is `ms` later than the one before.
+/// A render reads it before and after, so each row thumbnail rendered takes `ms` of the budget.
+fn clock_steps(ms: f64) {
+    let mut now = 0.0;
+    THUMBS.with(|c| {
+        c.borrow_mut().clock = Some(Box::new(move || {
+            now += ms;
+            now
+        }))
+    });
+}
+
+/// Rendering on the UI thread stops for the pass once the thumbnails rendered in it took the
+/// budget, and the rest render in the next passes.
+#[test]
+fn row_thumbnails_past_the_render_budget_wait_for_the_next_pass() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let renders = || THUMBS.with(|c| c.borrow().renders);
+    // Each render takes 5 ms: after two renders the pass has used 10 ms, past the 8 ms budget.
+    clock_steps(5.0);
+    let mut per_pass = vec![];
+    for _ in 0..4 {
+        let before = renders();
+        frame(&mut app, &ctx, vec![], false);
+        per_pass.push(renders() - before);
+    }
+    assert_eq!(per_pass, [2, 1, 0, 0], "the layer's and two objects' thumbnails, two in the first pass");
+}
+
 #[test]
 fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let (mut app, _, _) = two_rects();
     app.session.execute("select.all", &json!({})).unwrap();
     let ctx = egui::Context::default();
     let renders = || THUMBS.with(|c| c.borrow().renders);
+    // Renders take no time, so every row's thumbnail fits in a pass however busy the machine is.
+    clock_steps(0.0);
     frame(&mut app, &ctx, vec![], false);
     let first = renders();
     assert!(first >= 1, "the rows' thumbnails render at once");
