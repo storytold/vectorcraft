@@ -154,6 +154,35 @@ fn images_bend_as_a_raster_mesh_warp() {
     assert_eq!(svg.matches("<image").count(), 1, "the pieces share the image's pixels");
 }
 
+#[test]
+fn a_colorized_image_keeps_its_color_in_an_envelope() {
+    let mut s = session();
+    let img = image::GrayImage::from_pixel(4, 4, image::Luma([0]));
+    let mut png = vec![];
+    image::DynamicImage::ImageLuma8(img).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let im = s
+        .edit("Place", |d, sel| {
+            d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(png));
+            let id = d.alloc_id();
+            let xf = Affine::translate((100.0, 100.0)) * Affine::scale(10.0);
+            let im =
+                vectorcraft_doc::ImageObject { key: "gray".into(), width: 4, height: 4, xf, link: None, placement: Default::default(), pixels: None };
+            d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
+            sel.set([id]);
+            Ok(id)
+        })
+        .unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [im.0]})).unwrap();
+    sel(&mut s, &[im]);
+    arch(&mut s, 80.0, json!({}));
+    let img = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true);
+    // The black pixels draw in the fill color, in the bent shape.
+    let mid = img.pixel(120, 97);
+    assert!(mid[0] > 200 && mid[1] < 60 && mid[2] < 60, "the middle rose, red: {mid:?}");
+    let inside = img.pixel(120, 120);
+    assert!(inside[0] > 200 && inside[1] < 60 && inside[2] < 60, "red inside: {inside:?}");
+}
+
 /// A selected embedded 2×2 image, 80×80 pt at (100, 100): a red column left of a blue one.
 fn two_color_image(s: &mut Session) -> NodeId {
     let img = image::RgbaImage::from_fn(2, 2, |x, _| if x == 0 { image::Rgba([255, 0, 0, 255]) } else { image::Rgba([0, 0, 255, 255]) });
@@ -286,17 +315,18 @@ fn symbols_bend_with_the_envelope() {
     let e = arch(&mut s, 60.0, json!({}));
     let pts = anchors(&evaluated(&s, e));
     assert!(pts.iter().any(|p| p.y < 90.0), "the symbol's art rose in the middle");
-    // Editing the symbol redraws the envelope (the renderer's cache follows the symbol's art).
+    // Editing the symbol redraws the envelope (the renderer's cache follows the symbol's art). The
+    // arch lifts the middle of the 100..200 box by about 51, so (200, 120) is inside it.
     let mut r = vectorcraft_render::Renderer::new();
     let region = Rect::new(0.0, 0.0, 400.0, 300.0);
-    assert!(r.render_region(&s.doc().unwrap().doc, region, 1.0, true).pixel(200, 150)[1] < 60);
+    assert!(r.render_region(&s.doc().unwrap().doc, region, 1.0, true).pixel(200, 120)[1] < 60);
     s.edit("edit symbol", |d, _| {
         let art = Node::path(NodeId(0), shapes::rectangle(Rect::new(-10.0, -10.0, -8.0, -8.0)), Default::default());
         d.symbols[0].art = Arc::new(art);
         Ok(())
     })
     .unwrap();
-    assert!(r.render_region(&s.doc().unwrap().doc, region, 1.0, true).pixel(200, 150)[1] > 200);
+    assert!(r.render_region(&s.doc().unwrap().doc, region, 1.0, true).pixel(200, 120)[1] > 200);
 }
 
 fn strokes(nodes: &[Node]) -> usize {

@@ -1162,6 +1162,19 @@ fn art_whose_mask_holds_an_image_keeps_its_shape_under_a_warp() {
     assert_eq!(member.extras().mask.as_deref().unwrap().art.geometric_bounds(), Some(Rect::new(0.0, 0.0, 10.0, 10.0)));
 }
 
+/// A Warp effect bends an image's pixels but not the art of its linked mask, so art with such an
+/// image keeps its shape under the warp, with the image and its mask.
+#[test]
+fn art_with_a_masked_image_keeps_its_shape_under_a_warp() {
+    let image = masked_by(image_node(1), white_square(4), true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(image.clone()), sq(2, 20.0, Color::BLACK)]);
+    g.appearance.effects.push(reshaping_effects()[4].clone());
+    let art = evaluate_container(None, &g).unwrap();
+    let ch = art.children().unwrap();
+    assert_eq!(*ch[0], image, "the image and its mask");
+    assert_eq!(ch[1].path_data(), sq(2, 20.0, Color::BLACK).path_data(), "the path keeps its shape");
+}
+
 /// A symbol instance in perspective projects the linked masks of the objects in its art with them.
 #[test]
 fn perspective_projects_the_masks_in_a_symbols_art() {

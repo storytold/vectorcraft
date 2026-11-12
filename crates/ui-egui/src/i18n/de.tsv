@@ -2322,6 +2322,10 @@ file-filter	Templates	Vorlagen
 	Arch	Rundbogen
 @msg	select point type or type on a path	wählen Sie Punkttext oder Pfadtext aus
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	Pfadtext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	Pfadtext auf einem offenen oder zusammengesetzten Pfad lässt sich nicht oben oder unten zentrieren: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	Pfadtext auf einem Pfad ohne Länge oder ohne Höhe lässt sich nicht zentrieren: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	Pfadtext in verkettetem Text lässt sich nicht oben oder unten zentrieren: {frames}
+@msg	select type on a closed path	wählen Sie Pfadtext auf einem geschlossenen Pfad aus
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
 	Options	Optionen
@@ -3677,6 +3681,8 @@ effect	Points	Punkte
 	Type on a Path	Pfadtext
 	Type on a Path Options	Pfadtextoptionen
 	Type on a Path Options…	Pfadtextoptionen…
+	Center on Top	Oben zentrieren
+	Center on Bottom	Unten zentrieren
 	Type on a Path Tool	Pfadtext-Werkzeug
 	Type Orientation	Textrichtung
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text bleibt Text, und jede Kontur ist eine Linie mit ihrer Linienstärke und ihren Strichen.
