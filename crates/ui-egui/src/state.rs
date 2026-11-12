@@ -660,6 +660,11 @@ pub struct UiState {
     /// [`crate::panels::color::deserialize_hide_options`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_hide_options")]
     pub color_hide_options: bool,
+    /// Color panel: Show Recent Colors, which draws its Recent Colors row while the options show
+    /// (`ui.colorPanel`, [`crate::panels::color::deserialize_show_recent_colors`]). The list of
+    /// recent colors keeps filling while the row is hidden.
+    #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
+    pub color_show_recent_colors: bool,
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default)]
     pub svg_options: Value,
@@ -1104,6 +1109,7 @@ impl Default for UiState {
             align_spacing: 0.0,
             color_mode: None,
             color_hide_options: false,
+            color_show_recent_colors: true,
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,
