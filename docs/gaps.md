@@ -594,7 +594,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   On Windows with Windows Ink, the pen's tilt and barrel rotation where the pen reports them (#372; not yet
   tried with a pen).
 - **Missing:** pen pressure on native Wayland (#491, #764) — winit 0.30 reports none there; tilt, bearing and
-  barrel rotation on native Wayland and the web, and for Art, Pattern and Bristle brushes (6D Art Pen, #372);
+  barrel rotation on native Wayland and the web, and for Pattern and Bristle brushes (6D Art Pen, #372);
   the eraser end on native Wayland.
 - **Estimate:** 4–10 h, partly waiting on winit 0.31; needs pen hardware to verify.
 
