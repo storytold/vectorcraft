@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Easing",
             [],
             None,
-            "{id? (default: the first selected blend), easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100)} set one blend's easing and color shift, as the blend widgets on the canvas do; omitted ones keep their value. easingType and ramp need a blend whose steps follow a spine (a replaced or edited spine, or Align to Path, on a blend not made without a spine); out of range, a hidden or locked blend and a blend with no spine are errors. A value that changes nothing records no undo step → {id, easingType, ramp, colorShift, changed}",
+            "{id? (default: the first selected blend), easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100)} set one blend's easing and color shift, as the blend widgets on the canvas do; omitted ones keep their value. easingType and ramp need a blend whose steps follow a spine (a replaced or edited spine, or Align to Path); a blend made without a spine takes them once Replace Spine has given it one; out of range, a hidden or locked blend and a blend with no spine are errors. A value that changes nothing records no undo step → {id, easingType, ramp, colorShift, changed}",
             has_doc,
             blend_set_easing
         ),

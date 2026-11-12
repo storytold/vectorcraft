@@ -481,6 +481,12 @@ fn set_easing_edits_one_blend_and_refuses_what_it_cannot_set() {
     assert_eq!(depth(&s), d3);
     s.execute("object.blend.setEasing", &json!({"id": n.0, "colorShift": 10})).unwrap();
     assert_eq!(spec(&s, n).1.color_shift, 10.0);
+    // Replace Spine gives it a spine, and it takes easing from then on.
+    let path = id_of(&s.execute("path.create", &json!({"d": "M0 320 L200 320"})).unwrap());
+    sel(&mut s, &[n, path]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    let r = s.execute("object.blend.setEasing", &json!({"id": n.0, "easingType": "easeOut", "ramp": 30})).unwrap();
+    assert_eq!((&r["easingType"], &r["ramp"], &r["changed"]), (&json!("easeOut"), &json!(30.0), &json!(true)));
 }
 
 /// Dragging a blend widget with the Selection tool or the Blend tool is one undo step; a click, a
