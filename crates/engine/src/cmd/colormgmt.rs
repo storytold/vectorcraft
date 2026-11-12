@@ -5,7 +5,9 @@
 //! Colour settings and the proof view are process-wide (`vectorcraft_color::cms::active`,
 //! `vectorcraft_render::proof::view`). A document's assigned profiles are stored in
 //! `Document::color_profiles` (files before format v3: `Document.unknown["colorProfiles"]`) and
-//! become active when assigned.
+//! take the place of the working spaces in the active settings when assigned, and when the working
+//! settings change while the document is in front ([`use_front_profiles`]); the working spaces stay
+//! as Edit → Color Settings set them.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -59,7 +61,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Assign Profile…",
             ["Edit"],
             None,
-            "{rgb?: profile|null, cmyk?: profile|null} tag the document with profiles (colour numbers are kept) → {rgb, cmyk}",
+            "{rgb?: profile|null, cmyk?: profile|null} tag the document with profiles (color numbers are kept; null: the working space). Colors then show and convert through the profiles assigned; the working spaces stay as edit.colorSettings set them → {rgb, cmyk}",
             has_doc,
             assign_profile
         ),
@@ -176,9 +178,19 @@ fn touch_all(s: &mut Session) {
     }
 }
 
+/// Make the active settings the working settings with the profiles the front document is assigned
+/// in place of the working spaces (none, or no document open: the working spaces). The open
+/// documents redraw when the active settings change.
+fn use_front_profiles(s: &mut Session) {
+    let (rgb, cmyk) = s.active().map(|d| doc_profiles(&d.doc)).unwrap_or_default();
+    if cms::use_document_profiles(rgb.as_deref(), cmyk.as_deref()) {
+        touch_all(s);
+    }
+}
+
 fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.colorSettings";
-    let mut st = cms::active_settings();
+    let mut st = cms::working_settings();
     let before = st.clone();
     if let Some(v) = text_param(p, "rgb", C)? {
         st.rgb = cms::canonical_name(v).to_string();
@@ -194,6 +206,7 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
         cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
         // Saved for the next start when the app attached a settings file (#6335).
         s.store_color_settings(&st);
+        use_front_profiles(s);
         touch_all(s);
     }
     Ok(settings_json(&st))
@@ -208,10 +221,15 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
     let info = cms::register_icc(&bytes, None).map_err(|e| bad(C, e.to_string()))?;
     // The bytes are kept, not the path: the file may move or go away.
     let remembered = s.store_profile(&info.name, &bytes);
-    // A new file of a working space: the active settings still hold the old one.
-    let working = cms::active_settings();
-    if working.rgb == info.name || working.cmyk == info.name {
+    // A new file of a working space or of an assigned profile in use: the active settings still
+    // hold the old one. A profile the front document is assigned, loaded after it was removed, is
+    // in use again.
+    let (working, active) = (cms::working_settings(), cms::active_settings());
+    let (rgb, cmyk) = s.active().map(|d| doc_profiles(&d.doc)).unwrap_or_default();
+    let front = [rgb, cmyk].iter().any(|n| n.as_deref() == Some(info.name.as_str()));
+    if front || [&working.rgb, &working.cmyk, &active.rgb, &active.cmyk].contains(&&info.name) {
         cms::set_active(&working).map_err(|e| bad(C, e.to_string()))?;
+        use_front_profiles(s);
         touch_all(s);
     }
     Ok(json!({"name": info.name, "kind": info.kind, "remembered": remembered}))
@@ -225,14 +243,20 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     if info.builtin {
         return Err(bad(C, format!("`{name}` is a built-in profile and stays")));
     }
-    let working = cms::active_settings();
+    let working = cms::working_settings();
     if working.rgb == name || working.cmyk == name {
         return Err(bad(C, format!("`{name}` is a working space: choose another with edit.colorSettings first")));
     }
+    let active = cms::active_settings();
     if !cms::unregister_icc(&info.name) {
         return Err(bad(C, format!("no profile named `{name}`")));
     }
     s.unstore_profile(&info.name);
+    // An assigned profile in use: the working space takes its place, as for any document assigned
+    // a profile that is not available.
+    if active.rgb == name || active.cmyk == name {
+        use_front_profiles(s);
+    }
     touch_all(s);
     Ok(json!({"removed": info.name}))
 }
@@ -273,18 +297,9 @@ fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
             d.color_profiles = profiles;
             Ok(())
         })?;
-        let mut st = cms::active_settings();
-        let before = st.clone();
-        if let Some(r) = &rgb {
-            st.rgb = r.clone();
-        }
-        if let Some(c) = &cmyk {
-            st.cmyk = c.clone();
-        }
-        if st != before {
-            cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
-            touch_all(s);
-        }
+        // The document draws through its profiles now, and a Document Color Mode later in the same
+        // batch converts through them. The working spaces stay as they are.
+        use_front_profiles(s);
     }
     Ok(json!({"rgb": rgb, "cmyk": cmyk}))
 }

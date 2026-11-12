@@ -6,8 +6,9 @@
 //! * **CMYK spaces:** [`GENERIC_CMYK`] is our own documented parametric press model
 //!   ([`generic`]); [`DEVICE_CMYK`] is the old profile-free formula (kept for exact legacy numbers);
 //!   any CMYK `.icc` the user loads goes through `moxcms` (LUT-based profiles).
-//! * The **active settings** (Edit → Color Settings) are process-wide; [`crate::Color::to_rgb`]
-//!   uses them. Code that needs deterministic numbers builds its own [`Cms`] with [`Cms::new`].
+//! * The **active settings** are process-wide: the working settings (Edit → Color Settings), with
+//!   the profiles [`use_document_profiles`] last put in place of the working spaces;
+//!   [`crate::Color::to_rgb`] uses them. Code that needs deterministic numbers builds its own [`Cms`] with [`Cms::new`].
 
 pub mod generic;
 pub mod icc;
@@ -890,10 +891,12 @@ impl CmykLut {
 // ---------- the active (process-wide) settings ----------
 
 static ACTIVE: RwLock<Option<Arc<Cms>>> = RwLock::new(None);
+static WORKING: RwLock<Option<Arc<Cms>>> = RwLock::new(None);
 static RGB_IS_SRGB: AtomicBool = AtomicBool::new(true);
 static CMYK_IS_DEVICE: AtomicBool = AtomicBool::new(false);
 
-/// The active colour-management context (Edit → Color Settings).
+/// The active color-management context: the working settings, with the profiles
+/// [`use_document_profiles`] last put in place of the working spaces.
 pub fn active() -> Arc<Cms> {
     if let Some(c) = ACTIVE.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
         return c.clone();
@@ -906,13 +909,61 @@ pub fn active_settings() -> ColorSettings {
     active().settings.clone()
 }
 
-/// Replace the active settings (fails, leaving them unchanged, if a profile is unknown).
+/// The color-management context of Edit → Color Settings (the working spaces, intent and black
+/// point compensation), as [`set_active`] last set them, whatever profiles a document is assigned.
+pub fn working() -> Arc<Cms> {
+    if let Some(c) = WORKING.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        return c.clone();
+    }
+    let mut w = WORKING.write().unwrap_or_else(|e| e.into_inner());
+    w.get_or_insert_with(|| Arc::new(Cms::default())).clone()
+}
+
+/// The settings of [`working`].
+pub fn working_settings() -> ColorSettings {
+    working().settings.clone()
+}
+
+/// Replace the working settings (Edit → Color Settings) and make them the active settings (fails,
+/// leaving both unchanged, if a profile is unknown).
 pub fn set_active(settings: &ColorSettings) -> Result<(), CmsError> {
-    let cms = Cms::new(settings)?;
+    let cms = Arc::new(Cms::new(settings)?);
+    *WORKING.write().unwrap_or_else(|e| e.into_inner()) = Some(cms.clone());
+    install(cms);
+    Ok(())
+}
+
+/// Make the working settings the active settings, with the profiles a document is assigned
+/// (`None`: none) in place of the working spaces. An assigned profile that is not available, or
+/// is not of its model, leaves the working space. The working settings stay as they are. True when
+/// the active settings changed.
+pub fn use_document_profiles(rgb: Option<&str>, cmyk: Option<&str>) -> bool {
+    let working = working();
+    let mut st = working.settings.clone();
+    if let Some(p) = rgb.and_then(profile).filter(|p| p.kind == ProfileKind::Rgb) {
+        st.rgb = p.name;
+    }
+    if let Some(p) = cmyk.and_then(profile).filter(|p| p.kind == ProfileKind::Cmyk) {
+        st.cmyk = p.name;
+    }
+    if st == active().settings {
+        return false;
+    }
+    if st == working.settings {
+        install(working);
+        return true;
+    }
+    // The working settings were checked when they were set; a working profile removed since then
+    // leaves the active settings as they are.
+    let Ok(cms) = Cms::new(&st) else { return false };
+    install(Arc::new(cms));
+    true
+}
+
+fn install(cms: Arc<Cms>) {
     RGB_IS_SRGB.store(cms.rgb_is_srgb(), Ordering::Relaxed);
     CMYK_IS_DEVICE.store(matches!(cms.cmyk, CmykSpace::Device), Ordering::Relaxed);
-    *ACTIVE.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(cms));
-    Ok(())
+    *ACTIVE.write().unwrap_or_else(|e| e.into_inner()) = Some(cms);
 }
 
 /// Fast path for [`Color::to_rgb`]: RGB colours need no conversion while the working space is sRGB.
