@@ -150,6 +150,7 @@ pub(super) fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, reg
         model: t.para_at(0).leading_model,
         next_top: None,
         no_room_for: f64::INFINITY,
+        steps_left: std::rc::Rc::new(std::cell::Cell::new(super::breaking::MAX_TOTAL_STEPS)),
     };
     let markers = list_markers(t, paras);
     for (pi, pr) in paras.iter().enumerate() {
