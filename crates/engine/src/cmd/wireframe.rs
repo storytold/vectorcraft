@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Expand as Wireframes",
         [],
         None,
-        "{ids?: [..] (default: the selected objects)} replace each object that has a visible 3D effect (Extrude & Bevel, Revolve, Inflate, Rotate or one of their 3D (Classic) forms, on the object or on its fills and strokes) with a group of paths: the edges of the faces the effect draws, as the object is turned and projected now, each edge once (edges that meet end to end make one path, closed where it comes back to its start; curved edges stay curves; geometry effects after the 3D effect, on the object or on a fill or stroke, reshape them too), stroked 0.5 pt black with round joins and no fill (VectorCraft's own); the group takes the object's place, id, name, opacity, blending mode, opacity mask, attributes, slice and text wrap and is selected (a layer stays a layer holding the edges, which are selected, and its ruler guides and paths made into guides); objects without a visible 3D effect are left as they are; one undo step. An error, with nothing changed, when no object is selected or given, when none has a visible 3D effect, when an object's solid can't be built or the canvas draws its source art in its place, or when one object's wireframe has more than 1,000,000 edges → {ids}",
+        "{ids?: [..] (default: the selected objects)} replace each object that has a visible 3D effect (Extrude & Bevel, Revolve, Inflate, Rotate or one of their 3D (Classic) forms, on the object or on its fills and strokes) with a group of paths: the edges of the faces the effect draws, as the object is turned and projected now, each edge once (edges that meet end to end make one path, closed where it comes back to its start; curved edges stay curves; geometry effects after the 3D effect, on the object or on a fill or stroke, reshape them too), stroked 0.5 pt black with round joins and no fill (VectorCraft's own); the group takes the object's place, id, name, opacity, blending mode, opacity mask, attributes, slice and text wrap and is selected (a layer stays a layer holding the edges, which are selected, and its ruler guides and paths made into guides; a path inside a compound path in ids stands for the compound path); objects without a visible 3D effect are left as they are; one undo step. An error, with nothing changed, when no object is selected or given, when none has a visible 3D effect, when an object's solid can't be built or the canvas draws its source art in its place, or when one object's wireframe has more than 1,000,000 edges → {ids}",
         has_doc,
         expand_as_wireframes
     )]
@@ -68,7 +68,9 @@ fn expand_as_wireframes(s: &mut Session, p: &Value) -> Result<Value> {
     let mut wires = vec![];
     let mut seen = std::collections::HashSet::new();
     for id in roots {
-        // An id given twice is expanded once.
+        // A path inside a compound path stands for the compound path, which draws it. An id given
+        // twice is expanded once.
+        let id = super::path::compound_or_self(d, id);
         if !seen.insert(id) {
             continue;
         }

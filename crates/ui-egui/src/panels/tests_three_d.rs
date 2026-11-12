@@ -427,6 +427,22 @@ fn expand_as_wireframes_replaces_the_object_with_its_edges() {
     assert_eq!(undo_len(&app), history);
 }
 
+/// The Quick Actions show on the Object tab of the effects that have one (Revolve (Classic)
+/// included) and not on their Rotation tab; Revolve and Rotate show them on their first tab.
+#[test]
+fn quick_actions_show_on_the_object_tab_only() {
+    use crate::state::Dialog;
+    use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, REVOLVE};
+    for effect in [EXTRUDE, INFLATE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE] {
+        for (tab, shown) in [("object", true), ("rotation", false)] {
+            let d = Dialog::new("x", json!({"__effect": effect, "__tab": tab, "__gizmo": "rotation"}));
+            assert_eq!(super::quick_actions_shown(&d), shown, "{effect} {tab}");
+        }
+    }
+    let d = Dialog::new("x", json!({"__effect": REVOLVE, "__tab": "rotation", "__gizmo": "rotation"}));
+    assert!(super::quick_actions_shown(&d));
+}
+
 #[test]
 fn changed_settings_lists_only_new_values() {
     let before = json!({"depth": 50.0, "cap": true, "bevel": "none"});

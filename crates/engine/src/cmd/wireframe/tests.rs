@@ -212,6 +212,23 @@ fn a_painted_effect_after_a_fill_s_3d_effect_finds_the_document_s_swatches() {
     }
 }
 
+/// A path inside a compound path in `ids` stands for the compound path: the compound path becomes
+/// the group, and no member is replaced by a group inside it.
+#[test]
+fn a_compound_path_member_in_ids_expands_the_compound_path() {
+    let (mut s, a) = setup(None);
+    let b = NodeId(s.execute("path.create", &json!({"d":"M250 100L350 100L350 200L250 200Z"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids":[a.0, b.0]})).unwrap();
+    let c = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("effect.apply", &json!({"ids":[c.0],"effect":"threeD.extrude","item":null,"params":{}})).unwrap();
+    let member = s.doc().unwrap().doc.node(c).unwrap().children().unwrap()[0].id;
+    let out = run(&mut s, json!({"ids":[member.0]})).unwrap();
+    assert_eq!(out["ids"], json!([c.0]));
+    let st = s.doc().unwrap();
+    let NodeKind::Group { children, clip: false } = &st.doc.node(c).unwrap().kind else { panic!("the compound path is a group") };
+    assert!(!children.is_empty() && children.iter().all(|ch| ch.path_data().is_some()));
+}
+
 #[test]
 fn bad_ids_are_errors() {
     let (mut s, _) = setup(Some("threeD.extrude"));

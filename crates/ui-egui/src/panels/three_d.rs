@@ -7,7 +7,7 @@
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_effects::{CLASSIC_EXTRUDE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
+use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
 
 use super::{live_run, pstate, set_pstate};
 use crate::VectorcraftApp;
@@ -261,7 +261,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// the first tab of the others (Revolve, Rotate), never on Lighting.
 fn quick_actions_shown(d: &Dialog) -> bool {
     let effect = d.str("__effect");
-    let object_tab = [EXTRUDE, INFLATE, CLASSIC_EXTRUDE].contains(&effect.as_str());
+    let object_tab = [EXTRUDE, INFLATE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE].contains(&effect.as_str());
     !crate::dialogs::revolve_gizmo::lighting(d) && (!object_tab || d.str("__tab") != "rotation")
 }
 
