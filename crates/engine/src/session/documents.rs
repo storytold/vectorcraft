@@ -115,6 +115,7 @@ impl Session {
             recovery: Default::default(),
             in_tool_actions: false,
             previewing: false,
+            decoded_images: Default::default(),
             envelope_defaults: None,
             liquify_stroke: None,
             plane_widget_press: false,
