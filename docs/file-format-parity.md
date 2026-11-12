@@ -290,7 +290,7 @@ Names in the editing data that aren't UTF-8 (layers, objects, artboards, colors,
 | EPS | open, place, save | yes (own PostScript L3 interpreter, Illustrator EPS editing data structure) | yes (L2/L3, TIFF previews) | CIDFonts the file doesn't carry not drawn, but for those over a predefined Unicode CMap (`UniJIS-UCS2-H`), set as type in the font of the CIDFont's name; name-keyed fonts in a FontSet set as type by name; #505; images encoded with `CCITTFaxDecode` (ITU-T T.4 Group 3 and T.6 Group 4, with `K`, `Columns`, `Rows`, `EndOfBlock`, `EndOfLine`, `EncodedByteAlign` and `BlackIs1`) draw, and damaged data keeps the rows decoded before its first damaged row; Type 42 (TrueType) fonts set type at its size (#1553); an embedded Type 1 font's encrypted part is read for its glyphs, which space its type, outline it and draw glyphs without a character, in plain and composite fonts; a Type 42 font that carries its TrueType font gives each code its character by its glyph name or, for names that say nothing (`/g12`), by the glyph's entry in the font's own character map, spaces its type by its own widths and draws glyphs that stand for no character from its outlines; the show operators' spacing along the baseline (`ashow`, `widthshow`, `xshow`, `yshow`, `xyshow`, and the moves of `kshow`'s procedure, run between each two characters) is kept on live type as tracking, so type in a font that isn't installed keeps the file's line lengths (spacing that moves characters off the baseline, as `yshow`, `xyshow` or a `kshow` procedure can, places each character as its own text object); composite (Type 0) fonts with the 8/8 mapping, as PDF-to-PostScript converters write two-byte fonts, draw a Type 42 descendant's glyphs from the TrueType outlines it carries and an embedded Type 1 descendant's from its charstrings, and set other descendants' characters as type at the composite font's size (other mappings are still set as type in the font of their name); CID-keyed fonts (`composefont`, `FMapType` 9 over a CMap built with the CIDInit operators or `Identity-H`/`Identity-V`; `bfchar` and `bfrange` mappings give a base-font descendant its codes or glyph names) draw the glyphs of the Type 0 CIDFonts (Type 1 charstrings in their `StartData` binary data or `GlyphDirectory`) and Type 2 CIDFonts (TrueType glyphs through `CIDMap`) they carry, and the CID-keyed fonts of a FontSet's Compact Font Format data (Type 2 charstrings); a clip only counts as covering the page when its shape does (#1542); an EPS another app copied pastes as editable vector art (`clipboard.importEps`, #1499); a stitched shading keeps its hard colour changes on import (#1654); sampled functions (type 0) interpolate between their samples, multilinearly or by cubics with `Order 3`, and a sampled axial or radial gradient has a stop at each sample; a gradient the page paints as a row of abutting one-colour strips (as Level 2 writers draw smooth shades) imports as one linear gradient, without the seams the strips leave when each is drawn alone; CMYK images, CMYK JPEGs included, keep their ink amounts on import, as from PDF, and the pixels a `MaskColor` or `ImageType 3` mask hides become a grayscale opacity mask; ruzstd 0.9.1 for compressed editing data (#1807, RUSTSEC-2026-0344) |
 | PostScript `.ps` | open, place | yes (the EPS reader reads its first page; `.epsf` files open and place as EPS) | via Print to PostScript | `tests_epsimport.rs` |
 | SVG / SVGZ | open, place, save | yes | yes (SVG Options, Preserve Editing, symbols, filters, rich text) | strongest format; tests in `crates/svg/tests`; text on a path follows basic shapes as their SVG 2 equivalent paths (#1527); CSS transforms and the `font` shorthand (#1565), percentage lengths in symbols (#1596), Inkscape flowed text as area type (#1568) and Inkscape pages as artboards (#1601) import; an unsupported filter is named in its warning (#1598); an artboard exported on its own (Export As with Use Artboards, Export for Screens, Asset Export) has the artboard's name as `<title>`, Save the document's (#3544); attributes in other applications' XML namespaces (`plotter:pen="2"`) kept on their objects from import to export, as `data-*` attributes are (`crates/svg/tests/it/foreign_attributes.rs`); simple shapes export as `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polygon>` and `<polyline>` where they draw the same as the path (#4652, `crates/svg/tests/it/basic_shapes.rs`); the regions of exported masks and filters (opacity masks, inverted masks, knockout groups) cover the art they apply to, and over type keep a region that covers any artwork (#6401, `crates/svg/tests/it/blend_export.rs`) |
-| DXF | open, export | yes | yes (R12–2018) | R13–2018 closed SPLINE flags and control-point closure on import verified (#1299); circular cubic paths export as native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE while non-circular curves keep the existing fallback (`crates/cad/src/tests.rs`); [Autodesk group 70](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-E1F884F8-AA90-4864-A215-3182D47A9C74.htm). DXF 2000–2018 LAYOUT objects write the paper image origin as 148/149 (was a stray 158), the shade plot codes (2004+) and the model type flag, and the plot style placeholder carries no subclass marker (#3085; structure test `r2000_and_later_files_have_the_structure_cad_apps_require`, checked with ezdxf's audit; not yet confirmed in Autodesk Fusion). CNC preset and VCarve QA remain open |
+| DXF | open, export | yes | yes (R12–2018) | R13–2018 closed SPLINE flags and control-point closure on import verified (#1299); circular cubic paths export as native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE while non-circular curves keep the existing fallback (`crates/cad/src/tests.rs`); [Autodesk group 70](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-E1F884F8-AA90-4864-A215-3182D47A9C74.htm). DXF 2000–2018 LAYOUT objects write the paper image origin as 148/149 (was a stray 158), the shade plot codes (2004+) and the model type flag, and the plot style placeholder carries no subclass marker (#3085; structure test `r2000_and_later_files_have_the_structure_cad_apps_require`, checked with ezdxf's audit; not yet confirmed in Autodesk Fusion). DXF Options' Preset menu and `document.exportDxf`'s `dxfPreset: "cnc"` set the CNC / CAM options (#5500); VCarve QA remains open |
 | HP-GL/2 `.plt`, `.hpgl`, `.hgl`, `.hpg` | — | yes (pen moves, pens and widths, line types and attributes, circles, arcs, wedges and Bézier curves, filled and edged rectangles, wedges and polygons, encoded polylines, scaling and rotation; labels, symbol mode, raster images and hatching aren't drawn) | no | recognized by its first instructions after any printer escapes, under its own extensions or one no other format reads; `crates/cad/src/hpgl/tests.rs`, `tests_hpgl.rs`, `import_fuzz.rs` |
 | DWG | open, export | no | no | no open spec; DXF instead |
 | EMF / WMF | open, export | yes | yes | an oversized embedded PNG or JPEG is refused from its header, before any pixels are decoded (#1776) |
@@ -488,25 +488,39 @@ Stop opacity on translated artboards remains outside this regression coverage.
 
 Feature evidence updated 2026-10-26; scores and estimates unchanged.
 
-EPS is offered by Save As, and an opened EPS keeps its own path for ordinary Save. Save writes
-one artboard (the first by default, or the named artboard), retaining its page bounds and transparent
-margins rather than cropping to the drawn artwork. The whole editable VectorCraft document remains
-embedded in EPS comments, including other artboards. Save bounds the optional TIFF preview to
+EPS is offered by Save As, and an opened EPS keeps its own path for ordinary Save. The EPS
+Options of Save As show Use Artboards with All or Range under it, for a separate file per artboard
+([saving in EPS](https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/save-artwork-in-eps-format.html)),
+unchecked by default (the scripting reference's EPS save options list `saveMultipleArtboards` with
+a default of false,
+[scripting reference](https://web.archive.org/web/20160803105056/https://wwwimages.adobe.com/content/dam/Adobe/en/devnet/illustrator/sdk/CC2015_3/Illustrator%20JavaScript%20Scripting%20Reference.pdf)).
+Unchecked, Save writes one file whose bounding box fits all the visible art, as Export does,
+without the artboards' background colors; an opened EPS saved back this way loses the margins its
+page had. With no visible art the page is the first artboard, in its color. Naming artboards with
+`artboard`, `artboards` or `range` turns Use Artboards on. Checked with two or more chosen, the
+file at the path is the central file of the visible art and each artboard is also written to
+`<name>_<artboard>.eps` beside it, holding that artboard. Checked with one chosen, VectorCraft
+writes that artboard as the page of the file at the path alone, retaining its bounds and
+transparent margins. The file the document becomes carries the whole editable VectorCraft document
+in EPS comments, including other artboards. Save bounds the optional TIFF preview to
 1024 pixels on its longest side (about 4 MiB of RGBA pixels), avoiding the roughly 16 MiB preview a
 large artboard otherwise produces. Export keeps its existing 2048-pixel preview cap. Preview
 format choices are unchanged; no public preview-resolution option exists. The EPS PostScript appearance still flattens
 transparency; its existing warnings remain. This does not promise native Illustrator editing-data fidelity.
 
-Cropped and selected-only EPS output remains available through Export. Save refuses those options.
+Selected-only EPS output remains available through Export. Save refuses `selectedOnly`.
 An EPS opened from a preview, a partially interpreted program or damaged native editing data keeps
 its source-loss warning: writing over that original requires explicit confirmation. File › Save uses
 the same engine path and write-failure handling as other document formats.
 
-Synthetic regressions: `tests::save::opened_eps_saves_to_its_own_file_with_editable_data_and_page_margins`,
-`eps_save_keeps_all_editing_artboards_while_printing_one_page`,
+Synthetic regressions: `tests::save::opened_eps_saves_to_its_own_file_around_its_art_or_on_its_page`,
+`eps_save_without_use_artboards_fits_the_box_to_art_past_the_artboard`,
+`eps_save_keeps_all_editing_artboards_in_the_file_of_one_page`,
+`eps_save_with_use_artboards_writes_the_central_file_and_one_per_artboard`,
+`cmd::fileio::tests_artboard_fill::eps_save_draws_the_color_on_an_artboard_page`,
 `eps_save_supports_an_empty_artboard_without_cropping_its_page`,
 `partially_read_eps_requires_confirmation_before_save_back`,
 `eps_with_damaged_editing_data_requires_confirmation_before_save_back`,
 `eps_save_bounds_large_page_preview_without_cropping_vector_or_editing_data`, and the UI regressions
 `file_save_writes_opened_eps_back_without_another_save_as_dialog` and
-`eps_save_as_keeps_page_options_and_writes_eps_without_export_only_switches`.
+`eps_save_as_shows_use_artboards_off_and_writes_the_art_or_the_artboard`.

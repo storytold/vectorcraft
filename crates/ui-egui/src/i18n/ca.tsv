@@ -2917,6 +2917,7 @@ digits	Malayalam	Malaiàlam
 	Options for Selection…	Opcions per a la selecció…
 	Options:	Opcions:
 	Options…	Opcions…
+	Organic Fades	Esvaïments orgànics
 	or more spaces with a tab	o més espais amb un tabulador
 	Orange	Taronja
 	Order:	Ordre:
@@ -3207,6 +3208,7 @@ digits	Malayalam	Malaiàlam
 	Press Quality	Qualitat d’impressió
 	Pressure	Pressió
 	Preview	Previsualització
+	Preview:	Previsualització:
 	Preview (1 inch on the page)	Previsualització (1 polzada a la pàgina)
 	Preview All Layers	Previsualitza totes les capes
 	Preview in Browser	Previsualitza al navegador
@@ -3308,6 +3310,8 @@ digits	Malayalam	Malaiàlam
 	Range:	Interval:
 	Raster Effects	Efectes de ràster
 	Raster File Format:	Format de fitxer de ràster:
+	Include Placed Images	Inclou les imatges col·locades
+	Include Fill Hatches	Inclou les trames dels emplenaments
 	Raster Sample Size:	Mida de mostra de ràster:
 	Raster/Vector Balance:	Equilibri ràster/vector:
 	Rasterize	Rasteritza
@@ -3494,6 +3498,10 @@ digits	Malayalam	Malaiàlam
 	Replace Font	Reemplaça el tipus de lletra
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplaça’l per un altre fitxer o ignora’l: les seves imatges continuaran mostrant la previsualització desada amb el document.
 	Replace Spine	Reemplaça l’espina
+	Create Spine	Crea l’espina
+	Create Spine:	Crea l’espina:
+	Always	Sempre
+	Never	Mai
 	Replace Symbol	Reemplaça el símbol
 	Reset Transformation	Restableix la transformació
 	Replace With Font	Reemplaça per un tipus de lletra
@@ -6122,6 +6130,8 @@ digits	Malayalam	Malaiàlam
 	Version: {version}	Versió: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal·la «{name}» en lloc del complement amb el mateix ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Aquest fitxer no és el complement instal·lat abans amb aquest ID. Rep la configuració i la memòria cau desades per a aquest ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» és un mòdul diferent del complement amb l’ID {_1} i rebria la configuració i la memòria cau desades per a aquest: instal·la’l amb `replace: true` quan l’usuari hi estigui d’acord
 	File SHA-256: {hash}	SHA-256 del fitxer: {hash}
 	Read the objects it is given	Llegir els objectes que rep
@@ -6184,6 +6194,12 @@ digits	Malayalam	Malaiàlam
 @msg	command {name}: `label` must be 1-64 printable characters	ordre {name}: `label` ha de tenir 1-64 caràcters imprimibles
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ordre {name}: fes servir un id d’1-{MAX_COMMAND_ID} caràcters d’a-z 0-9 _ que comenci per una lletra
 @msg	command {name}: {e}	ordre {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (línia {line}, columna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` ha de ser una llista d’ordres, cadascuna amb `id` i `label`
+@msg	command {name} must be an object with an `id` and a `label`	l’ordre {name} ha de ser un objecte amb `id` i `label`
+@msg	missing field `{key}`	falta el camp `{key}`
+@msg	duplicate field `{key}`	el camp `{key}` està repetit
 @msg	only a filter or a live effect declares `commands`	només un filtre o un efecte dinàmic declara `commands`
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res
@@ -6830,6 +6846,11 @@ breakText	Glyphs	Glifs
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un importador declara d’1 a {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	només un exportador o un importador declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un importador sempre rep el pressupost d’una importació: ometeu `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copia la informació de resolució de problemes
+@msg	Copied the troubleshooting info	S’ha copiat la informació de resolució de problemes
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	La darrera sessió del VectorCraft va deixar de respondre abans de tancar-se. Ajuda › Copia la informació de resolució de problemes copia els detalls per a un informe d’error
 
 # Safe Mode
 	Safe Mode…	Mode segur…

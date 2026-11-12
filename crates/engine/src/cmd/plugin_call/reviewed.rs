@@ -676,6 +676,7 @@ pub(super) const DENIED: &[&str] = &[
     "addon.pen.nextSegment",
     "effect.refreshDeferred",
     "graphicStyle.setOptions",
+    "object.blend.createSpine",
     "object.blend.options",
     "object.liquify",
     "object.pathfinder.options",

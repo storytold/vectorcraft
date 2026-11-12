@@ -823,6 +823,14 @@ font-technology	Variable	Варіативні
 	Disable Auto Add/Delete	Вимкнути авто-додавання/видалення
 	Disable Opacity Mask	Вимкнути маску непрозорості
 	Discard	Відкинути
+	Preserve	Зберігати
+	TIFF (Black & White)	TIFF (чорно-білий)
+	TIFF (8-bit Color)	TIFF (8-бітний колір)
+	High Resolution	Висока роздільна здатність
+	Medium Resolution	Середня роздільна здатність
+	Low Resolution	Низька роздільна здатність
+	Language Level 2	Рівень мови 2
+	Language Level 3	Рівень мови 3
 	Discard Empty Type	Видалити порожній текст
 	Discard Recovered Documents	Відкинути відновлені документи
 	Discard White Overprint in Output	Скасувати накладення білого під час виведення
@@ -2378,6 +2386,7 @@ file-filter	Templates	Шаблони
 	Options for Selection…	Параметри виділення…
 	Options:	Параметри:
 	Options…	Параметри…
+	Organic Fades	Органічні згасання
 	or more spaces with a tab	або більше прогалин на табуляцію
 	Order:	Порядок:
 	Ordinals	Порядкові числівники
@@ -2571,6 +2580,7 @@ diagnostics	ui	інтерфейс
 	Presets:	Набори:
 	Press 	Натисніть 
 	Preview	Перегляд
+	Preview:	Перегляд:
 	Preview All Layers	Переглянути всі шари
 	Preview in Browser	Переглянути у браузері
 	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
@@ -2665,6 +2675,8 @@ digits	Malayalam	Малаялам
 	Range:	Діапазон:
 	Raster Effects	Растрові ефекти
 	Raster File Format:	Формат растрового файлу:
+	Include Placed Images	Включати розміщені зображення
+	Include Fill Hatches	Включати штрихування заливок
 	Raster Sample Size:	Розмір растрового зразка:
 	Raster/Vector Balance:	Баланс растрових/векторних:
 	Rasterize	Растеризувати
@@ -2846,6 +2858,10 @@ digits	Malayalam	Малаялам
 	Replace Font	Замінити шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замініть його іншим файлом або ігноруйте: зображення продовжать показувати попередній перегляд, збережений з документом.
 	Replace Spine	Замінити вісь
+	Create Spine	Створити вісь
+	Create Spine:	Створити вісь:
+	Always	Завжди
+	Never	Ніколи
 	Replace Symbol	Замінити символ
 	Reset Transformation	Скинути трансформацію
 	Replace With Font	Замінити шрифтом
@@ -5672,6 +5688,8 @@ axis	Y Axis	Вісь Y
 	Version: {version}	Версія: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Встановити «{name}» замість модуля з тим самим ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Цей файл не є модулем, установленим раніше з цим ID. Він отримає налаштування й кеш, збережені для цього ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизація попросила встановити цей модуль. Щоб установити його, виберіть «Об’єкт › Модулі › Встановити модуль…» самостійно.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизація попросила встановити цей модуль. Щоб установити його, виберіть «Об’єкт › Модулі › Встановити модуль…» самостійно.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» відрізняється від модуля з ID {_1} і отримав би збережені для нього налаштування й кеш: встановіть його з `replace: true`, коли користувач погодиться
 	File SHA-256: {hash}	SHA-256 файлу: {hash}
 	Read the objects it is given	Читати передані йому об’єкти
@@ -5734,6 +5752,12 @@ axis	Y Axis	Вісь Y
 @msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` має містити 1-64 друковані символи
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: використайте id з 1-{MAX_COMMAND_ID} символів a-z 0-9 _, що починається з літери
 @msg	command {name}: {e}	команда {name}: {e}
+@msg	manifest: {e}	маніфест: {e}
+@msg	manifest: {e} at line {line} column {column}	маніфест: {e} (рядок {line}, стовпець {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` має бути списком команд, кожна з `id` і `label`
+@msg	command {name} must be an object with an `id` and a `label`	команда {name} має бути об'єктом з `id` і `label`
+@msg	missing field `{key}`	немає поля `{key}`
+@msg	duplicate field `{key}`	поле `{key}` вказано двічі
 @msg	only a filter or a live effect declares `commands`	`commands` оголошує лише фільтр або динамічний ефект
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	модуль має не той SHA-256, що вказаний у `hash`: нічого не встановлено
@@ -6450,6 +6474,11 @@ breakText	Glyphs	Гліфи
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	модуль імпорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
 @msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копіювати відомості для усунення несправностей
+@msg	Copied the troubleshooting info	Відомості для усунення несправностей скопійовано
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Останній сеанс VectorCraft перестав відповідати перед закриттям. Довідка › Копіювати відомості для усунення несправностей копіює подробиці для звіту про помилку
 
 # Safe Mode
 	Safe Mode…	Безпечний режим…
