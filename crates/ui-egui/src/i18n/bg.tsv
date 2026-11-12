@@ -6396,6 +6396,8 @@ breakText	Glyphs	Глифи
 	Delete the selected brushes?	Да се изтрият избраните четки?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Щрихи използват една или повече от тези четки. Да се премахнат ли четките от тези щрихи и да се изтрият четките?
 	Remove Strokes	Премахване на щрихи
+	Place Brush Art	Поставяне на графика на четка
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` няма графика (имат я само разпръснатите и артистичните четки и четките с мостра)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Инструменти за подреждане
 	Arrange in Grid…	Подреждане в мрежа…

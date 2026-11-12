@@ -6541,6 +6541,8 @@ breakText	Glyphs	Glify
 	Delete the selected brushes?	Usunąć zaznaczone pędzle?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Obrysy używają co najmniej jednego z tych pędzli. Zdjąć pędzle z tych obrysów i usunąć pędzle?
 	Remove Strokes	Usuń obrysy
+	Place Brush Art	Umieść kompozycję pędzla
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nie ma kompozycji (mają ją tylko pędzle rozproszone, artystyczne i wzorka)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Narzędzia układania
 	Arrange in Grid…	Ułóż w siatce…

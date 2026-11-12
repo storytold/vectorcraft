@@ -6603,6 +6603,8 @@ breakText	Glyphs	Glifos
 	Delete the selected brushes?	Excluir os pincéis selecionados?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Traçados usam um ou mais destes pincéis. Remover os pincéis desses traçados e excluir os pincéis?
 	Remove Strokes	Remover Traçados
+	Place Brush Art	Colocar Arte do Pincel
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` não tem arte (só os pincéis de dispersão, de arte e de padrão têm)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Ferramentas de Organização
 	Arrange in Grid…	Organizar em Grade…

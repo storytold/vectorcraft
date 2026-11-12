@@ -6332,6 +6332,8 @@ breakText	Glyphs	字符
 	Delete the selected brushes?	要刪除選取的筆刷嗎？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有筆畫使用了其中一個或多個筆刷。要從這些筆畫移除筆刷並刪除筆刷嗎？
 	Remove Strokes	移除筆畫
+	Place Brush Art	置入筆刷圖稿
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 沒有圖稿 (只有散佈筆刷、藝術筆刷和圖樣筆刷有圖稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
 	Arrange in Grid…	依格狀排列…

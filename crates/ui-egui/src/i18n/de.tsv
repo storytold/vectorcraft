@@ -6280,6 +6280,8 @@ breakText	Glyphs	Glyphen
 	Delete the selected brushes?	Ausgewählte Pinsel löschen?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturen verwenden einen oder mehrere dieser Pinsel. Pinsel von diesen Konturen entfernen und die Pinsel löschen?
 	Remove Strokes	Konturen entfernen
+	Place Brush Art	Pinselgrafik platzieren
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` hat keine Grafik (nur Spezial-, Bild- und Musterpinsel haben eine)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Anordnungswerkzeuge
 	Arrange in Grid…	In Raster anordnen…

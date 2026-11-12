@@ -6379,6 +6379,8 @@ breakText	Glyphs	字形
 	Delete the selected brushes?	選択したブラシを削除しますか？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	これらのブラシの 1 つ以上が線で使われています。それらの線からブラシを外して、ブラシを削除しますか？
 	Remove Strokes	線を削除
+	Place Brush Art	ブラシのアートを配置
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` にはアートがありません (アートを持つのは散布ブラシ、アートブラシ、パターンブラシだけです)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	配置ツール
 	Arrange in Grid…	グリッドに配置…

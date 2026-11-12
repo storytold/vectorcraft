@@ -2,7 +2,8 @@
 //! applies it to the selected paths (and makes it the Paintbrush's current brush); double-clicking
 //! one opens its Brush Options. Shift-click selects a range of brushes, Cmd/Ctrl-click adds or
 //! removes one, and the panel menu's Select All Unused selects the brushes no stroke paints with,
-//! for Delete Brush and Duplicate Brush. Brush libraries open in library panels
+//! for Delete Brush and Duplicate Brush. A scatter, art or pattern brush dragged onto an empty part
+//! of the canvas places a copy of its art there. Brush libraries open in library panels
 //! ([`BrushLibraries`]).
 
 use std::cell::RefCell;

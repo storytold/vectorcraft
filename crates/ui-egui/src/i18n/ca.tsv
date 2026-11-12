@@ -6666,6 +6666,8 @@ breakText	Glyphs	Glifs
 	Delete the selected brushes?	Voleu suprimir els pinzells seleccionats?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Hi ha traços que fan servir un o més d’aquests pinzells. Voleu treure els pinzells d’aquests traços i suprimir els pinzells?
 	Remove Strokes	Elimina els traços
+	Place Brush Art	Col·loca l’art del pinzell
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` no té art (només en tenen els pinzells de dispersió, artístics i de motiu)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Eines d’organització
 	Arrange in Grid…	Organitza en quadrícula…

@@ -6461,6 +6461,8 @@ breakText	Glyphs	Glyphs
 	Delete the selected brushes?	Geselecteerde kwasten verwijderen?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Contouren gebruiken een of meer van deze kwasten. De kwasten van deze contouren halen en de kwasten verwijderen?
 	Remove Strokes	Contouren verwijderen
+	Place Brush Art	Penseelillustratie plaatsen
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` heeft geen illustratie (alleen verspreidings-, art- en patroonpenselen hebben er een)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Schikgereedschappen
 	Arrange in Grid…	In raster schikken…

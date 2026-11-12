@@ -6662,6 +6662,8 @@ breakText	Glyphs	Глифы
 	Delete the selected brushes?	Удалить выбранные кисти?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Обводки используют одну или несколько из этих кистей. Убрать кисти с этих обводок и удалить кисти?
 	Remove Strokes	Убрать обводки
+	Place Brush Art	Поместить рисунок кисти
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	у `{name}` нет рисунка (он есть только у кистей-распылений, художественных и узорных кистей)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Инструменты размещения
 	Arrange in Grid…	Разместить по сетке…
