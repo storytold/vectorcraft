@@ -192,6 +192,19 @@ mod alias_tests {
         font
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_file_search_for_uncovered_characters_stops_at_its_budget() {
+        let db = FontDb::with_font_dirs(vec![]);
+        // The first search scans the font folders, which starts the count again.
+        db.system_fallback('\u{E001}');
+        db.sys.lock().unwrap().file_searches = names::MAX_FILE_SEARCHES;
+        assert!(!db.system_fallback('\u{E000}'));
+        let sys = db.sys.lock().unwrap();
+        assert_eq!(sys.file_searches, names::MAX_FILE_SEARCHES);
+        assert!(!sys.misses.contains(&'\u{E000}'), "an unsearched character is not a remembered miss");
+    }
+
     #[test]
     fn a_collection_lists_at_most_max_faces() {
         let mut font = name_font(&[(3, 0x0409, 1, "Fam"), (3, 0x0409, 2, "Regular")]);

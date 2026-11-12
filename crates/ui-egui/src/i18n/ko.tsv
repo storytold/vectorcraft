@@ -2677,6 +2677,7 @@ mark-style	Japanese	일본식
 	RECENT	최근 항목
 	Radar Graph Tool	레이더 그래프 도구
 	Radial Gradient	방사형 그레이디언트
+	Conic Gradient	원뿔형 그레이디언트
 	Random	무작위
 	Randomize Colors	색상 무작위 변경
 	Randomly change color order	색상 순서를 무작위로 변경
@@ -3312,6 +3313,8 @@ mark-style	Japanese	일본식
 	Toolbar: Single/Double Column	도구 막대: 한 줄/두 줄
 	Toolbar: Add Tool	도구 막대: 도구 추가
 	Toolbar: Remove Tool	도구 막대: 도구 제거
+	Add Tool…	도구 추가…
+	Remove Tool	도구 제거
 	Toolbar: Reset	도구 막대: 재설정
 	Top:	위쪽:
 	Total Width:	전체 너비:
@@ -4017,6 +4020,13 @@ axis	Both	양쪽
 	Dock Panel	패널 고정
 	Dock to Top	위쪽에 고정
 	Dock to Bottom	아래쪽에 고정
+	Control Bar Options	컨트롤 막대 옵션
+	Tool Options	도구 옵션
+	Object Options	개체 옵션
+	Image Options	이미지 옵션
+	Vertical Alignment	세로 정렬
+	Align and Distribute	정렬 및 분포
+	Document Options	문서 옵션
 	Dock Control Bar	컨트롤 막대 고정
 	Drag to float the toolbar	드래그하여 도구 모음 분리
 	Drag to the window's left or right edge to dock	창 왼쪽 또는 오른쪽 가장자리로 드래그하여 고정
@@ -4269,6 +4279,8 @@ theme	Appearance	외관
 @msg	`gradient` must be an object	`gradient`는 개체여야 합니다
 @msg	`groupColors` must be an array	`groupColors`는 배열이어야 합니다
 @msg	`mode` applies to freeform gradients	`mode`는 자유형 그레이디언트에 적용됩니다
+@msg	a negative `aspect` applies to conic gradients	음수 `aspect`는 원뿔형 그레이디언트에 적용됩니다
+@msg	`focal` applies to radial gradients	`focal`은 방사형 그레이디언트에 적용됩니다
 @msg	`preserve` must be an object	`preserve`는 개체여야 합니다
 @msg	`globalAdjust` must be an object	`globalAdjust`는 개체여야 합니다
 @msg	`stops` must be an array	`stops`는 배열이어야 합니다
@@ -4278,7 +4290,7 @@ theme	Appearance	외관
 @msg	stop {i} needs `offset`	정지점 {i}에는 `offset`이 필요합니다
 @msg	stop {i} needs a valid `color`	정지점 {i}에는 올바른 `color`가 필요합니다
 @msg	stop {i}: `{k}` must be a number	정지점 {i}: `{k}`은(는) 숫자여야 합니다
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	알 수 없는 그레이디언트 종류 `{k}`(linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	알 수 없는 그레이디언트 종류 `{k}`(linear, radial, conic, freeform)
 @msg	the art could not be sampled	아트웍을 샘플링할 수 없습니다
 @msg	the art is too light for any dots	아트웍이 너무 밝아 점을 만들 수 없습니다
 @msg	the document has no symbols	문서에 심볼이 없습니다
@@ -4970,7 +4982,13 @@ theme	Appearance	외관
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 또는 HEIF 파일에 읽을 수 없는 종류의 이미지가 있습니다
 @msg	HEIC and HEIF images can't be opened in this build	이 빌드에서는 HEIC 및 HEIF 이미지를 열 수 없습니다
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 이미지가 너무 커서 읽을 수 없습니다({_1} × {_2}픽셀)
-@msg	zipped 32-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 32비트 PSD 이미지 데이터는 읽을 수 없습니다
+@msg	zipped 1-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 1비트 PSD 이미지 데이터는 읽을 수 없습니다
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD 파일의 레이어 데이터가 알 수 없는 압축({m})을 사용합니다
+@msg	the PSD file's layer records are damaged	PSD 파일의 레이어 레코드가 손상되었습니다
+@msg	the PSD file's layer groups are nested too deeply	PSD 파일의 레이어 그룹이 너무 깊이 중첩되어 있습니다
+@msg	a layer of the PSD file is too large to read	PSD 파일의 레이어가 너무 커서 읽을 수 없습니다
+@msg	the PSD file's layers take more memory to read than allowed	PSD 파일의 레이어를 읽는 데 허용된 것보다 많은 메모리가 필요합니다
+@msg	the layers can't be read ({e}): the file opened as its merged image	레이어를 읽을 수 없습니다({e}): 파일이 병합된 이미지로 열렸습니다
 @msg	{depth}-bit PSD files in this colour mode can't be read	이 색상 모드의 {depth}비트 PSD 파일은 읽을 수 없습니다
 @msg	the PSD file is cut short	PSD 파일이 잘려 있습니다
 @msg	the PSD file's header is damaged	PSD 파일의 헤더가 손상되었습니다
@@ -5280,6 +5298,11 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	Shadows	그림자
+	Distance from Object	개체로부터의 거리
+	Shadow Bounds	그림자 범위
+	Behind Object	개체 뒤
+	Below Object	개체 아래
 	3D Lighting Preset	3D 조명 사전 설정
 	Standard	표준
 	Diffuse	확산
@@ -5347,7 +5370,7 @@ lighting	Light	광원
 @msg	span must be "object" or "selection", got {v}	span은 "object" 또는 "selection"이어야 합니다. {v}은(는) 사용할 수 없습니다
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection"은 `gradient`를 배치합니다. 견본은 배치할 수 없습니다
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection"은 그레이디언트를 배치합니다: `gradient`를 지정하세요
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection"은 선형 또는 방사형 그레이디언트를 배치합니다. 자유형 그레이디언트는 배치할 수 없습니다
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection"은 선형, 방사형 또는 원뿔형 그레이디언트를 배치합니다. 자유형 그레이디언트는 배치할 수 없습니다
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection"은 그레이디언트 자체를 배치합니다: `start`와 `end`를 빼세요 (이미 문서 좌표로 배치합니다)
 	Make Image Dynamic	이미지를 동적으로 만들기
 	Import Data Sets…	데이터 세트 가져오기…
@@ -5637,6 +5660,11 @@ axis	Y Axis	Y축
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
+@msg	instruction budget	명령어 예산
+@msg	time budget	시간 예산
+@msg	memory budget (the selection is too large to hand over)	메모리 예산(선택 항목이 너무 커서 넘길 수 없음)
+@msg	output size ({what} is {len} bytes, limit {max})	출력 크기({what}: {len}바이트, 제한 {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	플러그인 저장소에서 플러그인의 권한을 제거할 수 없습니다
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”은(는) {asked} 권한을 요청합니다. 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `grant`를 전달하세요
@@ -5673,6 +5701,16 @@ axis	Y Axis	Y축
 @msg	message must be text	message의 값은 텍스트여야 합니다
 @msg	allowContinue must be true or false	allowContinue의 값은 true 또는 false여야 합니다
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
+	Insert Menu Item…	메뉴 항목 삽입…
+	Insert Menu Item	메뉴 항목 삽입
+	Menu Item:	메뉴 항목:
+	No menu item matches.	일치하는 메뉴 항목이 없습니다.
+	Several menu items match. Choose one from the list.	여러 메뉴 항목이 일치합니다. 목록에서 하나를 선택하세요.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	대화 상자를 여는 항목과 파일, 윈도우, 도움말 메뉴의 항목은 표시되지 않습니다.
+@msg	command must be text	command의 값은 텍스트여야 합니다
+@msg	no menu item that can be inserted runs this command	이 명령을 실행하는 삽입 가능한 메뉴 항목이 없습니다
+@msg	the action already has 10,000 steps	액션에 이미 단계가 10,000개 있습니다
+@msg	the action set would be larger than 8 MiB	액션 세트가 8 MiB를 넘게 됩니다
 	Playback Options	재생 옵션
 	Accelerated	가속
 	Step by Step	단계별
@@ -5986,9 +6024,12 @@ anchor	Points:	포인트:
 @msg	{label} must be a number	{label}은(는) 숫자여야 합니다
 @msg	{label} must be a number of at least 0.1	{label}은(는) 0.1 이상의 숫자여야 합니다
 	Advanced Character Formats	고급 문자 형식
+	Basic Paragraph Formats	기본 단락 형식
+	Composition	조판
 	Horizontal Scale	가로 비율
 	Vertical Scale	세로 비율
 @msg	{label} must be a number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+@msg	{label} must be a whole number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 정수여야 합니다
 	Character Color	문자 색상
 	OpenType Features	OpenType 기능
 	Stylistic Sets	스타일 세트
@@ -6373,6 +6414,7 @@ breakText	Glyphs	글리프
 
 # Align to Pixel Grid
 	Align to Pixel Grid	픽셀 격자에 정렬
+	Not Aligned to Pixel Grid	픽셀 격자에 정렬되지 않음
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
 	Ignore All	모두 무시

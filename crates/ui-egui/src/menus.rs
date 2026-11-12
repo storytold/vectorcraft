@@ -64,7 +64,9 @@ pub(crate) use bar::{home_key, home_showing};
 #[cfg(test)]
 use bar::{menu_body, pointer_reaches_title};
 pub use context::{context_items, context_menu_body, ruler_menu_body, ruler_unit_items};
-pub use entries::{MenuEntry, Row, context_entries, entry, menu_entries, pretty_shortcut, shown_shortcut};
+pub use entries::{
+    InsertableItem, MenuEntry, Row, context_entries, entry, insertable, insertable_items, menu_entries, pretty_shortcut, shown_shortcut,
+};
 pub(crate) use invoke::graph_dialog;
 #[cfg(test)]
 pub(crate) use invoke::with_held_keys;

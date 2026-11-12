@@ -693,8 +693,8 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
         let split_words = !fewer && !matches!(style.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
         // Each cluster's advance and drawing offset as a reader gives them, by its byte offset.
         // Justification…'s Desired word and letter spacing and glyph scaling move characters from
-        // where a reader draws them, on every line.
-        let spaced = !fewer && !style.justification.desired_is_default();
+        // where a reader draws them, on every line (Block's word gap among them).
+        let spaced = !fewer && !t.layout_justification(style).desired_is_default();
         let reader = if split_words || spaced || (!fewer && !style.mojikumi.is_none()) {
             Some(&*kerned.get_or_insert_with(|| reader_advances(t, lay, true)))
         } else {

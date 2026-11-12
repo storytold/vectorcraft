@@ -212,7 +212,12 @@ capability model proposed for PhotoCraft plug-ins
   names shown have control and bidirectional characters escaped (`\u{202E}`) and are cut to 64 characters.
   Only a person can press its OK: `ui.dialog.confirm`, MCP's `answer_dialog` and injected input (`ui.key`, `ui.click`)
   are refused and the dialog stays open. Enter confirms it only when OK has the keyboard focus. `ui.dialog.set` can't
-  change what it installs.
+  change what it installs. OK stays disabled until the question has been on screen in the focused window for half a
+  second (VectorCraft's own value, from the delay the security guidance at
+  https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/security/security-considerations-for-browser-ui.md
+  gives for dialog boxes), so a click, Enter or Space, or a press begun before then, installs nothing. The half second
+  starts over for every new question, even one that reads the same, and when the window gets the focus back. Cancel
+  and Escape work at once.
 - `plugin.install` refuses the module, naming the permissions it needs, unless this module already has a recorded grant
   (`plugin.inspect`'s `needsApproval` tells it beforehand). A request's `grant` is refused too: `plugin.install` takes
   it only with the approval the dialog gives. A `vectorcraft-cli mcp` or `run` started with `--allow-plugin-grants`
@@ -343,7 +348,11 @@ still returns `1`. `vc_progress`, `vc_cancelled` and `vc_log` need `progress`; t
   and one the manifest doesn't allow (an `api` below 2, or without the import's permission) refuse the module, and the
   error names the import and the permission.
 - A filter's or an exporter's progress is shown as a share: a heavy filter's progress window and the export's progress
-  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. A plug-in that checks it can
+  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. In the desktop app a light
+  filter that lists `progress` runs in the background as a heavy one does, under its light budget, when it runs at once
+  from Object › Plug-ins or its shortcut, or when OK runs it with Preview off; with Preview on, its dialog keeps the
+  previewed run. A filter that also lists a `commandAllowlist` runs where it is called, since its command calls need
+  the document. A plug-in that checks `vc_cancelled` can
   stop early, and the host discards what it returns after the Cancel or after its time budget ran out; one that
   ignores it is still stopped by the instruction and time budgets. With a known total, a report is passed on only when
   it reaches another tenth of a percent; with an unknown total, each change of `done` is passed on. After 2,000 reports
@@ -401,11 +410,18 @@ A live effect runs while the art draws, so keep the entries it uses small.
   write leaves in the `cache` folder does not count toward the caps, and clearing the cache removes it.
 - A plug-in reaches only the storage of its own id. Replacing it with another module of the same id
   (`plugin.install` with `replace: true`, after the user agreed) keeps the storage; `plugin.remove` deletes it, and a run of the plug-in still going gets `-5` from every storage call after that.
-  `plugin.remove` first renames the folder (adding `.removed` to its name). When that fails, `plugin.remove` fails
-  and the plug-in stays installed with its storage as it was. Files that can't be deleted after the rename stay in the
-  `.removed` folder, where no plug-in reaches them. A later `plugin.remove` tries again to delete them when a plug-in
-  with that id is installed or a storage folder for the id exists, and that deletion can fail too. For an id that
-  isn't installed and has only a `.removed` folder, `plugin.remove` does not delete the folder and fails as not found.
+  `plugin.remove` first renames the folder, adding `.removed` to its name (or `.removing` while a `.removed` folder
+  holds settings an earlier removal kept). When that fails, `plugin.remove` fails and the plug-in stays installed with
+  its storage as it was. Before VectorCraft deletes a renamed folder, it writes an empty file beside it with `.delete`
+  added to the folder's name, and removes that file once the folder is gone. When that file can't be written, the
+  folder is not deleted and is treated like any renamed folder without a `.delete` file (see below). Files that can't be deleted stay in the
+  renamed folder with the `.delete` file beside it, where no plug-in reaches them. A later `plugin.remove` tries again
+  to delete them when a plug-in with that id is installed or a storage folder for the id exists, and that deletion can
+  fail too. For an id that isn't installed and has only such a folder, `plugin.remove` does not delete it and fails as
+  not found. When `plugin.remove` can't remove the grant and can't rename the folder back either, its error names the
+  renamed folder. The next load, install or `plugin.remove` of the plug-in renames a renamed folder that has no
+  `.delete` file back while the plug-in has no folder of its own; when it has one, that folder is used and the renamed
+  folder stays until `plugin.remove` deletes both.
   `plugin.remove` with the id of a plug-in that isn't installed deletes the storage kept for that id, when there is
   any.
   `plugin.clearCache` empties the cache and leaves the settings, and `plugin.list` and

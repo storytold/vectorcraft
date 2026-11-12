@@ -1014,9 +1014,12 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         }
         super::paragraph::hyphenate_check(app, ui, &para);
+        // Area type: Dynamic Text's Block and its gaps.
+        dynamic_text::rows(app, ui);
     }
 }
 
+pub(crate) mod dynamic_text;
 pub(crate) mod vertical_align;
 
 #[cfg(test)]

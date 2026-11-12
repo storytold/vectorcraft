@@ -102,7 +102,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "shape.flare" => &["diameter", "pathLength"],
         "perspective.grid.set" => &["cell", "distance"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
-        "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin"],
+        "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin", "lineGap"],
         "type.pathOptions" => &["spacing"],
         "object.pathfinder.trap" => &["thickness"],
         _ => &[],
@@ -156,8 +156,8 @@ const RASTERIZE_CMYK: form::Choices = &[("CMYK", "cmyk"), ("Grayscale", "graysca
 /// Type on a Path Options › Align to Path.
 const PATH_ALIGN: form::Choices = &[("Ascender", "ascender"), ("Descender", "descender"), ("Center", "center"), ("Baseline", "baseline")];
 
-/// Area Type Options › Fit.
-const AREA_FIT: form::Choices = &[("None", "none"), ("Auto Size", "autoHeight"), ("Shrink Text to Fit", "shrinkText")];
+/// Area Type Options › Fit (Block is Dynamic Text's, as `type.dynamicText` sets it).
+const AREA_FIT: form::Choices = &[("None", "none"), ("Auto Size", "autoHeight"), ("Shrink Text to Fit", "shrinkText"), ("Block", "block")];
 
 /// Area Type Options › First Baseline.
 const FIRST_BASELINE: form::Choices =

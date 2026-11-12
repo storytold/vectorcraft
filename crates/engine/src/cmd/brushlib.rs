@@ -21,7 +21,7 @@ use super::clipboard::Clipboard;
 use super::clipboard::resources::SwatchChoices;
 use super::patterncmds::add_pattern;
 use super::swatch::str_list;
-use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
+use super::swatchlib::{FileData, LibraryFile, LibraryInfo, concealed_library_id, concealed_library_ids, shown_id, shown_library_id, stem};
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 
 /// The extension of saved brush libraries: native documents.
@@ -462,6 +462,9 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<BrushLibrary>
     if let Some(found) = s.brush_libraries.get(key) {
         return Some(found);
     }
+    if let Some(found) = concealed_library_id(s, key).and_then(|id| s.brush_libraries.get(&id)) {
+        return Some(found);
+    }
     if let Some(b) = BUILTIN.iter().find(|b| b.id == key) {
         return Some((builtin_info(b), builtin_library(key)?));
     }
@@ -476,20 +479,22 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     s.brush_libraries.rescan();
+    let concealed = concealed_library_ids(s, []);
     let libs: Vec<Value> = libraries(s)
         .into_iter()
         .map(|l| {
             let count = library(s, &l.id).map_or(0, |(_, lib)| lib.len());
-            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": s.brush_libraries.path(&l.id)})
+            let (id, path) = (shown_id(&concealed, &l.id), s.brush_libraries.shown_path(&l.id));
+            json!({"id": id, "name": l.name, "category": l.category, "count": count, "path": path})
         })
         .collect();
-    Ok(json!({ "libraries": libs, "userFolder": s.brush_libraries.user_dir() }))
+    Ok(json!({ "libraries": libs, "userFolder": s.brush_libraries.shown_user_dir() }))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
     let (info, lib) = library_param(s, p, "brush.library")?;
     let brushes: Vec<Value> = lib.brushes.iter().map(|b| json!({"name": b.name, "type": b.kind.type_id()})).collect();
-    Ok(json!({"id": info.id, "name": info.name, "category": info.category, "brushes": brushes}))
+    Ok(json!({"id": shown_library_id(s, &info.id), "name": info.name, "category": info.category, "brushes": brushes}))
 }
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
@@ -545,7 +550,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let (added, existing): (Vec<&String>, Vec<&String>) = doc_names.iter().partition(|n| !before.contains(*n));
     let applied: Vec<u64> = paths.iter().map(|id| id.0).collect();
-    Ok(json!({"library": info.id, "names": doc_names, "added": added, "existing": existing, "applied": applied}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "names": doc_names, "added": added, "existing": existing, "applied": applied}))
 }
 
 fn save(s: &mut Session, p: &Value) -> Result<Value> {
@@ -571,5 +576,5 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
         }
         BrushLibrary::from_document(&loaded.doc, &[], stem(file).to_string()).map_err(|e| bad(C, e))
     })?;
-    Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len()}))
 }
