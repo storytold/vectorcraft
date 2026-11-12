@@ -2390,6 +2390,10 @@ file-filter	Templates	Шаблони
 	Arch	Арка
 @msg	select point type or type on a path	виберіть точковий текст або текст за контуром
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст за контуром у пов’язаному тексті не може використовувати динамічний текст: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	не можна центрувати вгорі чи внизу текст за незамкненим або складеним контуром: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	не можна центрувати текст за контуром без довжини або без висоти: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	не можна центрувати вгорі чи внизу текст за контуром у пов’язаному тексті: {frames}
+@msg	select type on a closed path	виділіть текст за замкненим контуром
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано
 	Options	Параметри
@@ -3762,6 +3766,8 @@ effect	Points	Точки
 	Type on a Path	Текст за контуром
 	Type on a Path Options	Параметри тексту за контуром
 	Type on a Path Options…	Параметри тексту за контуром…
+	Center on Top	Центрувати вгорі
+	Center on Bottom	Центрувати внизу
 	Type on a Path Tool	Інструмент «Текст за контуром»
 	Type Orientation	Орієнтація тексту
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Текст залишається текстом, і кожне обведення — лінія з її товщиною та штрихами.
@@ -5643,6 +5649,7 @@ lighting	Light	Світло
 	Ruby…	Рубі…
 	Ruby	Рубі
 	Geometric Guides	Геометричні напрямні
+	Optical Effects	Оптичні ефекти
 	Geometric Patterns	Геометричні візерунки
 	Grit Textures	Зернисті текстури
 	Ease In	Плавний початок
@@ -5941,6 +5948,11 @@ axis	Y Axis	Вісь Y
 	Grass Fan	Віяло для трави
 	Pattern Borders	Візерункові облямівки
 	Scatter Shapes	Розсіяні фігури
+	Dry Media	Сухі матеріали
+	Chalk Grain	Крейдяне зерно
+	Graphite Pencil	Графітний олівець
+	Wax Crayon	Восковий олівець
+	Charcoal Dust	Вугільний пил
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)

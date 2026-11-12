@@ -102,11 +102,20 @@ fn answer(code: u32, results: &HashMap<String, OwnedValue>) -> Result<Option<Sav
         log::warn!("the portal's save dialog picked a file name that isn't UTF-8: nothing is saved");
         return Ok(None);
     };
-    let filter = results.get("current_filter").and_then(|v| {
-        let (label, _globs): (String, Vec<(u32, String)>) = v.try_clone().ok()?.try_into().ok()?;
-        Some(label)
-    });
+    let filter = results.get("current_filter").and_then(|v| filter_label(v));
     Ok(Some(Saved { path, filter }))
+}
+
+/// The label of a file type as the portal sends it, a `(sa(us))` structure; `None` for a value of
+/// another shape.
+fn filter_label(value: &Value<'_>) -> Option<String> {
+    match value {
+        Value::Structure(s) => match s.fields() {
+            [Value::Str(label), Value::Array(globs)] if globs.element_signature() == "(us)" => Some(label.to_string()),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 /// `file:///home/me/A%20b.svg` → `/home/me/A b.svg` (its bytes); `None` for a file elsewhere
@@ -396,6 +405,36 @@ mod tests {
         assert_eq!(pick_answer(saved, &request), ["/home/me/Art/poster"]);
     }
 
+    /// A `current_filter` of another shape than `(sa(us))` (a structure with fewer, other or more
+    /// fields, a string) gives the path alone; `uris` of another shape is an error.
+    #[test]
+    fn an_answer_of_another_shape_is_not_read() {
+        let malformed = [
+            Value::from(("SVG".to_string(),)),
+            Value::from(("SVG".to_string(), vec![(0u32,)])),
+            Value::from(("SVG".to_string(), vec![("*.svg".to_string(), 0u32)])),
+            Value::from((1u32, vec![(0u32, "*.svg".to_string())])),
+            Value::from(("SVG".to_string(), vec![(0u32, "*.svg".to_string())], 1u32)),
+            Value::from("SVG"),
+        ];
+        for filter in malformed {
+            let mut r = results("file:///tmp/card", None);
+            r.insert("current_filter".to_string(), OwnedValue::try_from(filter).unwrap());
+            assert_eq!(answer(0, &r), Ok(Some(Saved { path: "/tmp/card".into(), filter: None })));
+        }
+        let malformed = [
+            Value::from(vec![1u32]),
+            Value::from(vec![("file:///tmp/card".to_string(),)]),
+            Value::from(Vec::<String>::new()),
+            Value::from("file:///tmp/card"),
+        ];
+        for uris in malformed {
+            let mut r = HashMap::new();
+            r.insert("uris".to_string(), OwnedValue::try_from(uris).unwrap());
+            assert!(answer(0, &r).is_err());
+        }
+    }
+
     /// Cancel (1) and a dialog closed another way (2) answer no file; an answer without a local file
     /// is an error, and rfd shows the dialog instead.
     #[test]
@@ -486,10 +525,7 @@ mod tests {
                 }
                 let Ok((_parent, _title, options)) = msg.body().deserialize::<(String, String, HashMap<String, OwnedValue>)>() else { break };
                 let text = |key: &str| options.get(key).and_then(|v| String::try_from(v.try_clone().ok()?).ok());
-                let filter = options.get("current_filter").and_then(|v| {
-                    let (label, _): (String, Vec<(u32, String)>) = v.try_clone().ok()?.try_into().ok()?;
-                    Some(label)
-                });
+                let filter = options.get("current_filter").and_then(|v| filter_label(v));
                 let calls = log.lock().map(|mut l| {
                     l.push((text("current_name"), filter));
                     l.len()

@@ -402,6 +402,8 @@
 	Stair Step	Porras
 	Gravity	Painovoima
 	Type on a Path Options…	Teksti polulla -asetukset…
+	Center on Top	Keskitä ylös
+	Center on Bottom	Keskitä alas
 	Threaded Text	Ketjutettu teksti
 	Create	Luo
 	Release Selection	Vapauta valinta
@@ -422,6 +424,10 @@
 	Arch	Holvi
 @msg	select point type or type on a path	valitse pisteteksti tai polkuteksti
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	ketjutetun tekstin polkuteksti ei voi käyttää dynaamista tekstiä: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	avoimella polulla tai yhdistelmäpolulla olevaa tekstiä ei voi keskittää ylös tai alas: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	polkutekstiä ei voi keskittää polulle, jolla ei ole pituutta tai korkeutta: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	ketjutetun tekstin polkutekstiä ei voi keskittää ylös tai alas: {frames}
+@msg	select type on a closed path	valitse suljetulla polulla oleva teksti
 	Fill with Placeholder Text	Täytä paikkamerkkitekstillä
 	Insert Inline Symbol	Lisää tekstinsisäinen symboli
 	Show Hidden Characters	Näytä piilotetut merkit
@@ -6070,6 +6076,7 @@ swatch	Bright Violet	Kirkas violetti
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriset apuviivat
+	Optical Effects	Optiset tehosteet
 	Geometric Patterns	Geometriset kuviot
 	Grit Textures	Rakeiset tekstuurit
 	Ease In	Hidas alku
@@ -6366,6 +6373,11 @@ axis	Y Axis	Y-akseli
 	Grass Fan	Ruohoviuhka
 	Pattern Borders	Kuvioreunukset
 	Scatter Shapes	Sirontamuodot
+	Dry Media	Kuivat välineet
+	Chalk Grain	Liitujyvä
+	Graphite Pencil	Grafiittikynä
+	Wax Crayon	Vahaliitu
+	Charcoal Dust	Hiilipöly
 	Save Brush Library…	Tallenna sivellinkirjasto…
 @msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
 @msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)

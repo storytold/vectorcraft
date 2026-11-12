@@ -2932,12 +2932,17 @@ digits	Malayalam	Malaiàlam
 	Opens network connections	Obre connexions de xarxa
 	Open…	Obre…
 	Optical	Òptic
+	Optical Effects	Efectes òptics
 	Optical Margin Alignment	Alineació òptica de marges
 	Dynamic Text	Text dinàmic
 	Dynamic Text Presets	Valors predefinits de text dinàmic
 	Arch	Volta
 @msg	select point type or type on a path	seleccioneu text de punt o text sobre un traçat
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el text sobre un traçat d’un text enllaçat no pot fer servir el text dinàmic: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	el text sobre un traçat obert o compost no es pot centrar a dalt o a baix: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	el text sobre un traçat sense longitud o sense alçada no es pot centrar: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	el text sobre un traçat d’un text enllaçat no es pot centrar a dalt o a baix: {frames}
+@msg	select type on a closed path	seleccioneu text sobre un traçat tancat
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat
 	Options	Opcions
@@ -3868,6 +3873,11 @@ digits	Malayalam	Malaiàlam
 	Scatter Brush Options	Opcions del pinzell de dispersió
 	Scatter Graph Tool	Eina de gràfic de dispersió
 	Scatter Shapes	Formes de dispersió
+	Dry Media	Tècniques seques
+	Chalk Grain	Gra de guix
+	Graphite Pencil	Llapis de grafit
+	Wax Crayon	Cera de colors
+	Charcoal Dust	Pols de carbó
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores
@@ -4716,6 +4726,8 @@ digits	Malayalam	Malaiàlam
 	Type on a Path	Text sobre un traçat
 	Type on a Path Options	Opcions de text sobre un traçat
 	Type on a Path Options…	Opcions de text sobre un traçat…
+	Center on Top	Centra a dalt
+	Center on Bottom	Centra a baix
 	Type on a Path Tool	Eina de text sobre un traçat
 	Type Optimized	Optimitzat per al text
 	Type Orientation	Orientació del text

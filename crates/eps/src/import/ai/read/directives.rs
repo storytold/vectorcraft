@@ -1259,7 +1259,7 @@ mod tests {
     fn envelopes_in_symbol_definitions_spend_the_imports_checks() {
         use crate::import::ai::tests::{drawn_content, envelope_content, envelope_of, straight_mesh, warp_keys};
         use vectorcraft_doc::live::EnvelopeKind;
-        let want = EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true };
+        let want = EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true, version: vectorcraft_doc::live::WARP_NET };
         let envelope =
             envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &warp_keys(1, 0.5, 0.0, 0.0, 0), &envelope_content(), 1, &drawn_content(&want));
         let mut reader = Reader::new(b"");

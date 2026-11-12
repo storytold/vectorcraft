@@ -43,6 +43,13 @@ pub type ReadHeadFn = Box<dyn Fn(&str, usize) -> Result<Vec<u8>, String>>;
 
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 
+/// A save writer that keeps typed filesystem failures, on either the UI or background thread.
+pub type SaveWriteFn = Arc<dyn Fn(&str, &[u8]) -> vectorcraft_engine::Result<()> + Send + Sync>;
+
+/// A typed save writer for native files encoded directly into the output.
+pub type SaveStreamFn =
+    Arc<dyn Fn(&str, &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> vectorcraft_engine::Result<()> + Send + Sync>;
+
 /// Shared, so Background Save and Export can check from a worker thread too.
 pub type ExistsFn = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
@@ -140,6 +147,10 @@ pub struct Services {
     /// stream into the file as they are encoded instead of being held whole in memory first.
     /// Without it they are encoded, then written with `write` / `write_shared`.
     pub stream_shared: Option<background::SharedStreamFn>,
+    /// Typed writers for document saves only. Without them the existing string writers are used
+    /// and failures keep their normal dialog. Downloads never use these callbacks.
+    pub save_write: Option<SaveWriteFn>,
+    pub save_stream: Option<SaveStreamFn>,
     /// Open a file (or a folder) in the system's default app for it (desktop: Edit Original, Show
     /// Package). Without it (the web) those answer with an error.
     pub open_file: Option<RevealFn>,

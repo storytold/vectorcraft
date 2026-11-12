@@ -2352,6 +2352,10 @@ font-technology	Variable	Variables
 	Arch	Voûte
 @msg	select point type or type on a path	sélectionnez du texte de point ou du texte curviligne
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	le texte curviligne d’un texte lié ne peut pas utiliser le texte dynamique : {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	un texte curviligne sur un tracé ouvert ou un tracé transparent ne peut pas être centré en haut ou en bas : {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	un texte curviligne sur un tracé sans longueur ou sans hauteur ne peut pas être centré : {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	le texte curviligne d’un texte lié ne peut pas être centré en haut ou en bas : {frames}
+@msg	select type on a closed path	sélectionnez un texte curviligne sur un tracé fermé
 	Optimize for fast web view	Optimiser pour un affichage web rapide
 	Optimized	Optimisé
 	Options	Options
@@ -3714,6 +3718,8 @@ digits	Malayalam	Malayalam
 	Type on a Path	Texte curviligne
 	Type on a Path Options	Options de texte curviligne
 	Type on a Path Options…	Options de texte curviligne…
+	Center on Top	Centrer en haut
+	Center on Bottom	Centrer en bas
 	Type on a Path Tool	Outil Texte curviligne
 	Type Orientation	Orientation du texte
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Le texte reste du texte, et chaque contour devient une ligne avec son épaisseur et ses tirets.
@@ -6035,6 +6041,7 @@ theme	Appearance	Apparence
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Repères géométriques
+	Optical Effects	Effets optiques
 	Geometric Patterns	Motifs géométriques
 	Grit Textures	Textures granuleuses
 	Ease In	Accélération progressive
@@ -6331,6 +6338,11 @@ axis	Y Axis	Axe Y
 	Grass Fan	Éventail à herbe
 	Pattern Borders	Bordures de motif
 	Scatter Shapes	Formes de dispersion
+	Dry Media	Techniques sèches
+	Chalk Grain	Grain de craie
+	Graphite Pencil	Crayon graphite
+	Wax Crayon	Craie grasse
+	Charcoal Dust	Poussière de fusain
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)

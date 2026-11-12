@@ -366,6 +366,8 @@
 	Stair Step	Trappetrin
 	Gravity	Tyngdekraft
 	Type on a Path Options…	Indstillinger for tekst på kurve…
+	Center on Top	Centrer øverst
+	Center on Bottom	Centrer nederst
 	Threaded Text	Sammenkædet tekst
 	Create	Opret
 	Release Selection	Frigør markering
@@ -5873,6 +5875,7 @@ swatch	Bright Violet	Kraftig violet
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriske hjælpelinjer
+	Optical Effects	Optiske effekter
 	Geometric Patterns	Geometriske mønstre
 	Grit Textures	Kornede teksturer
 	Ease In	Langsom start
@@ -6092,6 +6095,11 @@ axis	Y Axis	Y-akse
 	Grass Fan	Græsvifte
 	Pattern Borders	Mønsterborter
 	Scatter Shapes	Spredte former
+	Dry Media	Tørre medier
+	Chalk Grain	Kridtkorn
+	Graphite Pencil	Grafitblyant
+	Wax Crayon	Vokskridt
+	Charcoal Dust	Kulstøv
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger

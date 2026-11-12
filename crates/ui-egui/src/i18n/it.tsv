@@ -2398,6 +2398,10 @@ file-filter	Templates	Modelli
 	Arch	Volta
 @msg	select point type or type on a path	seleziona testo per punti o testo su tracciato
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	il testo su tracciato in un testo concatenato non può usare il testo dinamico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	il testo su un tracciato aperto o composto non può essere centrato in alto o in basso: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	il testo su un tracciato senza lunghezza o senza altezza non può essere centrato: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	il testo su tracciato in un testo concatenato non può essere centrato in alto o in basso: {frames}
+@msg	select type on a closed path	seleziona del testo su un tracciato chiuso
 	Optimize for fast web view	Ottimizza per visualizzazione web veloce
 	Optimized	Ottimizzato
 	Options	Opzioni
@@ -3769,6 +3773,8 @@ digits	Malayalam	Malayalam
 	Type on a Path	Testo su tracciato
 	Type on a Path Options	Opzioni testo su tracciato
 	Type on a Path Options…	Opzioni testo su tracciato…
+	Center on Top	Centra in alto
+	Center on Bottom	Centra in basso
 	Type on a Path Tool	Strumento Testo su tracciato
 	Type Orientation	Orientamento testo
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Il testo resta testo e ogni traccia diventa una linea con il suo spessore e i suoi tratteggi.
@@ -5663,6 +5669,7 @@ lighting	Light	Luce
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guide geometriche
+	Optical Effects	Effetti ottici
 	Geometric Patterns	Motivi geometrici
 	Grit Textures	Texture granulose
 	Ease In	Inizio graduale
@@ -5961,6 +5968,11 @@ axis	Y Axis	Asse Y
 	Grass Fan	Ventaglio per erba
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
+	Dry Media	Tecniche secche
+	Chalk Grain	Grana di gesso
+	Graphite Pencil	Matita di grafite
+	Wax Crayon	Pastello a cera
+	Charcoal Dust	Polvere di carboncino
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)
