@@ -192,6 +192,18 @@ fn a_geometry_effect_after_a_fill_s_3d_effect_reshapes_its_edges() {
     }
 }
 
+/// With two 3D effects, a geometry effect between them reshapes the faces of the one drawn only
+/// once: Revolve is drawn, so a Transform before it moves its profile and not its faces again.
+#[test]
+fn a_geometry_effect_before_the_drawn_3d_effect_is_not_applied_again() {
+    let mut n = solid_square(crate::REVOLVE, json!({}));
+    n.appearance.effects.insert(0, crate::new_effect("distort.transform", &json!({"moveH": 50.0})).unwrap());
+    let alone = bounds(&three_d_wireframe_in(None, &n).unwrap());
+    n.appearance.effects.insert(0, crate::new_effect(super::super::EXTRUDE, &json!({})).unwrap());
+    let both = bounds(&three_d_wireframe_in(None, &n).unwrap());
+    assert!((both.x0 - alone.x0).abs() < 1e-6 && (both.x1 - alone.x1).abs() < 1e-6, "{alone:?} {both:?}");
+}
+
 #[test]
 fn an_object_without_a_visible_3d_effect_is_an_error() {
     let mut n = solid_square(super::super::EXTRUDE, json!({}));

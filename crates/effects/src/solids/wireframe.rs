@@ -52,7 +52,7 @@ pub fn three_d_wireframe_in(doc: Option<&Document>, n: &Node) -> Result<Vec<Path
     }
     let n = &*resolve(doc, n, label)?;
     let faces = if revolve { crate::revolve::revolve_face_paths(doc, n)? } else { solid_face_paths(doc, n)? };
-    let faces = after_geometry(doc, n, faces);
+    let faces = after_geometry(doc, n, faces, revolve);
     let wire = edges(&faces)?;
     if wire.is_empty() {
         return Err(format!("{label} draws no faces for this object"));
@@ -60,10 +60,13 @@ pub fn three_d_wireframe_in(doc: Option<&Document>, n: &Node) -> Result<Vec<Path
     Ok(wire)
 }
 
-/// `faces` reshaped by the visible geometry effects after `n`'s own 3D effect ([`reshaped`]).
-fn after_geometry(doc: Option<&Document>, n: &Node, faces: Vec<PathData>) -> Vec<PathData> {
+/// `faces` reshaped by the visible geometry effects after the 3D effect of `n`'s own that drew them
+/// ([`reshaped`]): its first visible Revolve when `revolve` is set, else its first visible Extrude &
+/// Bevel, Inflate or Rotate.
+fn after_geometry(doc: Option<&Document>, n: &Node, faces: Vec<PathData>, revolve: bool) -> Vec<PathData> {
     let fx = &n.appearance.effects;
-    let Some(index) = fx.iter().position(|e| e.visible && is_three_d(&e.id)) else { return faces };
+    let drawn = if revolve { fx.iter().position(|e| e.visible && crate::revolve::is_revolve(&e.id)) } else { solid(fx).map(|(i, _)| i) };
+    let Some(index) = drawn else { return faces };
     reshaped(faces, fx.get(index + 1..).unwrap_or_default(), &GeomContext { doc, ..GeomContext::of(n) })
 }
 
