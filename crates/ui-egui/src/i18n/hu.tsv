@@ -901,6 +901,15 @@ font-technology	Variable	Változó
 	CRLF (Windows)	CRLF (Windows)
 	Crop	Körülvágás
 	Crop Image	Kép körülvágása
+	Image Tools	Képeszközök
+	Remove Background…	Háttér eltávolítása…
+	Remove Background	Háttér eltávolítása
+	Background	Háttér
+	Edge Color	Szélszín
+	Picked Colors	Kiválasztott színek
+	Corner Color	Sarokszín
+	Contiguous	Összefüggő
+	Each Channel	Minden csatorna
 	Edit Path	Útvonal szerkesztése
 	Crop Marks	Vágójelek
 	Crop To	Körülvágás
@@ -4196,6 +4205,8 @@ mark-style	Japanese	Japán
 	Scale at Center	Méretezés középről
 	Up/Down:	Fel/le:
 	Left/Right:	Balra/jobbra:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko fel/le
+	Tate-chu-yoko Left/Right	Tate-chu-yoko balra/jobbra
 	Technical Drawing	Műszaki rajz
 	Temperature	Színhőmérséklet
 	Temperature/Tint…	Színhőmérséklet/tónus…
@@ -5022,6 +5033,7 @@ imageTrace	Outline	Körvonal
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: {unit} UserUnit értékkel íródik, így a UserUnit-ot figyelmen kívül hagyó alkalmazások ennyiszer kisebbnek mutatják
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: a(z) {label} oldalak UserUnit nélkül, pontokban íródnak, és a korlátot betartó alkalmazások 200 in-re vágják az oldalt
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	a PDF 1.5-ben nincs UserUnit, amelyre egy 14 400 pt-nál (200 in) hosszabb oldalnak szüksége van a mérete megtartásához: a fájl PDF 1.6-ként íródik
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	a PDF 1.4-ben nincs UserUnit, amelyre egy 14 400 pt-nál (200 in) hosszabb oldalnak szüksége van, hogy a PDF/A-2 14 400 egységes oldalkorlátján belül maradjon: a fájl PDF 1.6-ként íródik
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	a(z) {n}. rajztábla oldala {size}, túl hosszú és keskeny a PDF 3 és 14 400 egység közötti oldalaihoz: {unit} UserUnit értékkel íródik, amely a rövid oldalt legalább 3 egységen tartja, és a korlátot betartó alkalmazások a hosszú oldalt 14 400 egységre vágják
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	a(z) {label} fájlok legfeljebb {max} értékű valós számokat tárolnak, a(z) {n}. rajztábla {side} pt hosszú oldalához pedig nagyobbak kellenek: válassza a PDF 1.6-os vagy újabb verziót PDF/X szabvány nélkül, vagy egy kisebb rajztáblát
 @msg	invalid restored panel group	érvénytelen visszaállított panelcsoport
@@ -5216,6 +5228,7 @@ imageTrace	Outline	Körvonal
 @msg	not a VectorCraft shortcut set (missing `overrides`)	nem VectorCraft-billentyűparancskészlet (hiányzik: `overrides`)
 @msg	not a blend	nem összemosás
 @msg	not an EMF or WMF file	nem EMF- vagy WMF-fájl
+@msg	not an HP-GL file	nem HP-GL-fájl
 @msg	not found	nem található
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
 @msg	finish editing the pattern first	előbb fejezd be a mintázat szerkesztését
@@ -5361,6 +5374,14 @@ imageTrace	Outline	Körvonal
 @msg	a symbol can't hold an instance of itself	egy szimbólum nem tartalmazhatja a saját példányát
 @msg	select an envelope	jelölj ki egy burkolót
 @msg	select an image	jelölj ki egy képet
+@msg	`background` must be edges, corners or colors	a `background` értéke edges, corners vagy colors lehet
+@msg	`match` must be distance or channels	a `match` értéke distance vagy channels lehet
+@msg	`{key}` must be from 0 to 100	a `{key}` értéke 0 és 100 között lehet
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	a `colors` 1–16 színt sorolhat fel, mindegyiket hexadecimálisan (#rrggbb vagy #rgb) vagy black, white, red, green vagy blue alakban
+@msg	the linked image shows its preview: embed or relink it first	a csatolt kép az előnézetét mutatja: előbb ágyazd be vagy csatold újra
+@msg	a CMYK image has no transparency to set	a CMYK képnek nincs beállítható átlátszósága
+@msg	every pixel matches the background: no image would be left	minden képpont egyezik a háttérrel: nem maradna kép
+@msg	an image of {w} × {h} pixels is too large to change	egy {w} × {h} pixeles kép túl nagy a módosításhoz
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
 @msg	select an object in perspective	jelölj ki egy perspektivikus objektumot
 @msg	select artwork (or a colour group) to recolor	jelölj ki átszínezendő grafikát (vagy színcsoportot)

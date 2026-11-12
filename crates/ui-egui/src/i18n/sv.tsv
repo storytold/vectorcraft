@@ -688,6 +688,15 @@ font-technology	Variable	Variabla
 	Created:	Skapad:
 	Crop	Beskär
 	Crop Image	Beskär bild
+	Image Tools	Bildverktyg
+	Remove Background…	Ta bort bakgrund…
+	Remove Background	Ta bort bakgrund
+	Background	Bakgrund
+	Edge Color	Kantfärg
+	Picked Colors	Valda färger
+	Corner Color	Hörnfärg
+	Contiguous	Sammanhängande
+	Each Channel	Varje kanal
 	Edit Path	Redigera bana
 	Mask	Maskera
 	Crop Marks	Skärmärken
@@ -3457,6 +3466,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Skala från mitten
 	Up/Down:	Upp/ned:
 	Left/Right:	Vänster/höger:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko upp/ned
+	Tate-chu-yoko Left/Right	Tate-chu-yoko vänster/höger
 	Temperature	Temperatur
 	Temperature/Tint…	Temperatur/färgton…
 	Template	Mall
@@ -4287,6 +4298,7 @@ axis	Both	Båda
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): den skrivs med en UserUnit på {unit}, så appar som ignorerar UserUnit visar den så många gånger mindre
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): {label}-sidor skrivs utan UserUnit, i punkter, och appar som håller sig till gränsen beskär sidan till 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 har ingen UserUnit, som en sida längre än 14 400 pt (200 in) behöver för att behålla sin storlek: filen skrivs som PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 har ingen UserUnit, som en sida längre än 14 400 pt (200 in) behöver för att hålla sig inom PDF/A-2:s sidgräns på 14 400 enheter: filen skrivs som PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	sidan för rityta {n} är {size}, för lång och smal för PDF:s sidlängder på 3 till 14 400 enheter: den skrivs med UserUnit {unit}, som håller den korta sidan på minst 3 enheter, och appar som följer gränsen klipper den långa sidan vid 14 400 enheter
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-filer rymmer reella tal upp till {max}, och sidan för rityta {n}, {side} pt lång, behöver större: välj PDF 1.6 eller senare utan PDF/X-standard, eller en mindre rityta
 @msg	invalid image data for `{0}`	ogiltiga bilddata för `{0}`
@@ -4435,6 +4447,7 @@ axis	Both	Båda
 @msg	not a stored central record	inte en lagrad central post
 @msg	not a valid plug-in module: {0}	inte ett giltigt plugin: {0}
 @msg	not an EMF or WMF file	inte en EMF- eller WMF-fil
+@msg	not an HP-GL file	inte en HP-GL-fil
 @msg	not found	hittades inte
 @msg	not in pattern editing mode	inte i läget för mönsterredigering
 @msg	finish editing the pattern first	slutför redigeringen av mönstret först
@@ -4508,6 +4521,14 @@ axis	Both	Båda
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	spårningen skulle ge fler än {max} ankarpunkter, fler än dokumentet kan visa smidigt: höj Brus, sänk Banor eller Färger, eller välj en förinställning med lägre återgivning
 @msg	select an envelope	markera ett kuvert
 @msg	select an image	markera en bild
+@msg	`background` must be edges, corners or colors	`background` måste vara edges, corners eller colors
+@msg	`match` must be distance or channels	`match` måste vara distance eller channels
+@msg	`{key}` must be from 0 to 100	`{key}` måste vara från 0 till 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` måste lista 1 till 16 färger, var och en hexadecimalt (#rrggbb eller #rgb) eller som black, white, red, green eller blue
+@msg	the linked image shows its preview: embed or relink it first	den länkade bilden visar sin förhandsvisning: bädda in eller länka om den först
+@msg	a CMYK image has no transparency to set	en CMYK-bild har ingen transparens att ställa in
+@msg	every pixel matches the background: no image would be left	varje pixel matchar bakgrunden: ingen bild skulle bli kvar
+@msg	an image of {w} × {h} pixels is too large to change	en bild på {w} × {h} pixlar är för stor för att ändras
 @msg	select an object in perspective	markera ett objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markera grafik (eller en färggrupp) att färga om
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Omfärgning klar; utan ändring: {locked} och {hidden}

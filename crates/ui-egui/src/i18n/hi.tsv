@@ -1099,6 +1099,15 @@ antiAlias	Sharp	शार्प
 	Croatian	क्रोएशियाई
 	Crop	क्रॉप करें
 	Crop Image	फसल की इमेज
+	Image Tools	इमेज टूल
+	Remove Background…	पृष्ठभूमि हटाएँ…
+	Remove Background	पृष्ठभूमि हटाएँ
+	Background	पृष्ठभूमि
+	Edge Color	किनारे का रंग
+	Picked Colors	चुने गए रंग
+	Corner Color	कोनों का रंग
+	Contiguous	सन्निहित
+	Each Channel	प्रत्येक चैनल
 	Crop Marks	क्रॉप मार्क
 	Crop To	करने के लिए फसल
 	Cross	क्रॉस
@@ -2458,6 +2467,8 @@ antiAlias	Sharp	शार्प
 	Left-to-Right Paragraph Direction	बाएँ-से-दाएँ पैराग्राफ़ दिशा
 	Left:	बाएँ:
 	Left/Right:	बाएं / दाएं:
+	Tate-chu-yoko Up/Down	ताते-चू-योको ऊपर/नीचे
+	Tate-chu-yoko Left/Right	ताते-चू-योको बाएं/दाएं
 	Legacy .ai Options	पुराने .ai फ़ॉर्मैट के ऑप्शन्स
 	Legacy (version 7)	पुराना फ़ॉर्मैट (संस्करण 7)
 	Legacy Macintosh RGB (Gamma 1.8)	पुराना Macintosh RGB (गामा 1.8)
@@ -6589,6 +6600,7 @@ antiAlias	Sharp	शार्प
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: इसे {unit} के UserUnit के साथ लिखा जाता है, इसलिए UserUnit को अनदेखा करने वाले ऐप इसे उतने गुना छोटा दिखाते हैं
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: {label} पेज बिना UserUnit के, पॉइंट में लिखे जाते हैं, और सीमा मानने वाले ऐप पेज को 200 in पर काट देते हैं
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 में UserUnit नहीं है, जिसकी 14,400 pt (200 in) से लंबे पेज को अपना आकार बनाए रखने के लिए ज़रूरत होती है: फ़ाइल PDF 1.6 के रूप में लिखी जाती है
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 में UserUnit नहीं है, जिसकी 14,400 pt (200 in) से लंबे पेज को PDF/A-2 की 14,400 इकाइयों की पेज सीमा के भीतर रहने के लिए ज़रूरत होती है: फ़ाइल PDF 1.6 के रूप में लिखी जाती है
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 3 से 14,400 इकाई की पेज भुजाओं के लिए बहुत लंबा और संकरा है: इसे {unit} की UserUnit के साथ लिखा जाता है, जो छोटी भुजा को 3 इकाई या अधिक पर रखती है, और सीमा का पालन करने वाले ऐप लंबी भुजा को 14,400 इकाई पर काट देते हैं
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} फ़ाइलें {max} तक की वास्तविक संख्याएँ रखती हैं, और आर्टबोर्ड {n} का {side} pt लंबा पेज इससे बड़ी संख्याएँ माँगता है: बिना PDF/X मानक के PDF 1.6 या बाद का चुनें, या छोटा आर्टबोर्ड
 @msg	invalid point	अमानवीय बिंदु
@@ -7081,6 +7093,7 @@ antiAlias	Sharp	शार्प
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” लोड किया गया: {n} चरण छोड़ा गया|“{name}” लोड किया गया: {n} चरण छोड़े गए
 @msg	not an action set file	एक एक्शन सेट फ़ाइल नहीं
 @msg	not an EMF or WMF file	नहीं एक EMF या WMF फ़ाइल
+@msg	not an HP-GL file	HP-GL फ़ाइल नहीं है
 @msg	not an export presets file (format `{_1}`)	नहीं निर्यात presets फ़ाइल (format `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)
@@ -7372,6 +7385,14 @@ antiAlias	Sharp	शार्प
 @msg	select a text object	एक टेक्स्ट ऑब्जेक्ट चुनें
 @msg	select an envelope	एक लिफाफे सिलेक्ट करें
 @msg	select an image	एक इमेज चुनें
+@msg	`background` must be edges, corners or colors	`background` edges, corners या colors होना चाहिए
+@msg	`match` must be distance or channels	`match` distance या channels होना चाहिए
+@msg	`{key}` must be from 0 to 100	`{key}` 0 से 100 तक होना चाहिए
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` में 1 से 16 रंग होने चाहिए, हर एक हेक्स (#rrggbb या #rgb) में या black, white, red, green या blue के रूप में
+@msg	the linked image shows its preview: embed or relink it first	लिंक्ड इमेज अपना पूर्वावलोकन दिखा रही है: पहले इसे एम्बेड करें या फिर से लिंक करें
+@msg	a CMYK image has no transparency to set	CMYK इमेज में सेट करने के लिए कोई पारदर्शिता नहीं है
+@msg	every pixel matches the background: no image would be left	हर पिक्सेल पृष्ठभूमि से मेल खाता है: कोई इमेज नहीं बचेगी
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} पिक्सेल की इमेज बदलने के लिए बहुत बड़ी है
 @msg	select an image (or an Image Trace group)	एक इमेज सिलेक्ट करें (या एक इमेज ट्रेस समूह)
 @msg	select an Image Trace object	एक इमेज ट्रेस ऑब्जेक्ट चुनें
 @msg	select an image, or pass id	एक इमेज सिलेक्ट करें, या आईडी पास करें

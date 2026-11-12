@@ -17,6 +17,9 @@ const MAX_BULGE_SAMPLES: f64 = 1024.0;
 /// About how many points of a long piece its first fit uses.
 const COARSE_POINTS: usize = 16;
 
+/// Most times [`fit_through_rec`] splits a run of points, which bounds its recursion.
+const MAX_SPLITS: usize = 40;
+
 /// Unit vector or `None` if (nearly) zero.
 pub(crate) fn unit(v: Vec2) -> Option<Vec2> {
     let l = v.hypot();
@@ -37,7 +40,7 @@ pub(crate) fn end_tangent(c: &CubicBez) -> Vec2 {
 ///
 /// `t0` is the unit tangent leaving `pts[0]`; `t1` is the unit tangent arriving at the last point
 /// (forward direction). Consecutive output cubics are G1 continuous.
-pub(crate) fn fit_cubics(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64) -> Vec<CubicBez> {
+pub fn fit_cubics(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64) -> Vec<CubicBez> {
     let pts = dedup(pts);
     if pts.len() < 2 {
         return Vec::new();
@@ -46,6 +49,43 @@ pub(crate) fn fit_cubics(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64) -> Vec<Cub
     let mut pieces = Vec::new();
     fit_rec(&pts, 0, pts.len() - 1, t0, t1, tol, &mut pieces);
     join_pieces(&pts, &pieces, t0, tol)
+}
+
+/// Fit a chain of cubics through `pts`, sampled from a smooth curve, with maximum error `tol` at
+/// the points.
+///
+/// Unlike [`fit_cubics`], a piece may leave the chords between the points: the points lie on the
+/// curve being fitted, so the piece bows with them (each end keeps its tangent, and a two-point
+/// piece gets handles a third of its chord long). Use this for dense samples of a known curve, and
+/// [`fit_cubics`] for the samples of a polyline. `t0` and `t1` are as in [`fit_cubics`].
+pub fn fit_cubics_through(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64) -> Vec<CubicBez> {
+    let pts = dedup(pts);
+    let mut out = Vec::new();
+    if pts.len() < 2 {
+        return out;
+    }
+    fit_through_rec(&pts, t0, t1, tol.max(1e-9), &mut out, 0);
+    out
+}
+
+/// Fits all of `pts` with one cubic, splitting at its worst point until each piece is within `tol`
+/// of its points (see [`fit_cubics_through`]). `depth` bounds the recursion on hostile points.
+fn fit_through_rec(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64, out: &mut Vec<CubicBez>, depth: usize) {
+    let n = pts.len();
+    if n == 2 {
+        let d = pts[0].distance(pts[1]) / 3.0;
+        out.push(CubicBez::new(pts[0], pts[0] + t0 * d, pts[1] - t1 * d, pts[1]));
+        return;
+    }
+    let (curve, err, split) = fit_single_tol(pts, t0, t1, tol);
+    if err <= tol || depth >= MAX_SPLITS {
+        out.push(curve);
+        return;
+    }
+    let split = split.clamp(1, n - 2);
+    let tc = unit(pts[split + 1] - pts[split - 1]).unwrap_or(t0);
+    fit_through_rec(&pts[..=split], t0, tc, tol, out, depth + 1);
+    fit_through_rec(&pts[split..], tc, t1, tol, out, depth + 1);
 }
 
 /// The curves of `pieces`, which follow each other along `pts` from its first point, leaving it
@@ -150,6 +190,32 @@ fn center_tangent(pts: &[Point], split: usize, tol: f64) -> Option<Vec2> {
 /// the worst point).
 pub(crate) fn fit_single(pts: &[Point], t0: Vec2, t1: Vec2) -> (CubicBez, f64, usize) {
     fit_single_from(pts, chord_params(pts), t0, t1)
+}
+
+/// [`fit_single`] that stops reparameterising once the curve is within `tol` of its points: a
+/// curve already that close needs no better fit, and each Newton round reads every point.
+fn fit_single_tol(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64) -> (CubicBez, f64, usize) {
+    let mut u = chord_params(pts);
+    let mut best = generate(pts, &u, t0, t1);
+    let (mut best_err, mut best_split) = max_error(pts, &best, &u);
+    for _ in 0..MAX_REPARAM {
+        if best_err <= tol {
+            break;
+        }
+        for (i, ui) in u.iter_mut().enumerate() {
+            *ui = newton(&best, pts[i], *ui);
+        }
+        let c = generate(pts, &u, t0, t1);
+        let (e, s) = max_error(pts, &c, &u);
+        if e < best_err {
+            best = c;
+            best_err = e;
+            best_split = s;
+        } else {
+            break;
+        }
+    }
+    (best, best_err, best_split)
 }
 
 /// [`fit_single`] starting from the parameters `u` (one per point, 0 to 1) instead of the
@@ -332,6 +398,25 @@ mod tests {
         let out = fit_cubics(&pts, start_tangent(&c), end_tangent(&c), 0.05);
         assert_eq!(out.len(), 1);
         assert!(out[0].p1.distance(c.p1) < 1.0, "{:?}", out[0]);
+    }
+
+    /// A curve's samples are followed between the points, not chopped to the chords through
+    /// them: a smooth outline fitted from coarse samples must keep its bow (an outline's area
+    /// depends on it), unlike a polyline's samples.
+    #[test]
+    fn through_fit_bows_between_coarse_points() {
+        // The parabola y = 4t(1 - t) over x = 100t, sampled at 8 points.
+        let node = |t: f64| Point::new(100.0 * t, 4.0 * t * (1.0 - t));
+        let pts: Vec<Point> = (0..=8).map(|i| node(i as f64 / 8.0)).collect();
+        let (t0, t1) = (Vec2::new(1.0, 0.04).normalize(), Vec2::new(1.0, -0.04).normalize());
+        let out = fit_cubics_through(&pts, t0, t1, 0.001);
+        for c in &out {
+            for k in 0..=100 {
+                let q = c.eval(k as f64 / 100.0);
+                let want = 4.0 * (q.x / 100.0) * (1.0 - q.x / 100.0);
+                assert!((q.y - want).abs() < 0.01, "{:?} at {q:?} wants {want}", c);
+            }
+        }
     }
 
     #[test]

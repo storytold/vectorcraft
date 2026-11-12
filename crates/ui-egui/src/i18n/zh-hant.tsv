@@ -662,6 +662,15 @@ font-technology	Variable	可變
 	Created:	建立時間：
 	Crop	裁切
 	Crop Image	裁切影像
+	Image Tools	影像工具
+	Remove Background…	移除背景…
+	Remove Background	移除背景
+	Background	背景
+	Edge Color	邊緣顏色
+	Picked Colors	選取的顏色
+	Corner Color	轉角顏色
+	Contiguous	連續
+	Each Channel	每個通道
 	Edit Path	編輯路徑
 	Mask	遮色片
 	Crop Marks	裁切標記
@@ -2172,6 +2181,7 @@ file-filter	Templates	範本
 @msg	the image's pixels don't match its size	影像的像素與其尺寸不符
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
+@msg	not an HP-GL file	不是 HP-GL 檔案
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
 @msg	damaged	已損毀
@@ -2188,6 +2198,7 @@ file-filter	Templates	範本
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：它以 UserUnit {unit} 寫入，因此忽略 UserUnit 的應用程式會將其顯示為縮小相應倍數
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：{label} 頁面不含 UserUnit，以點為單位寫入，遵守上限的應用程式會將頁面裁切為 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持尺寸：檔案將以 PDF 1.6 寫入
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持在 PDF/A-2 的 14,400 單位頁面上限之內：檔案將以 PDF 1.6 寫入
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	工作區域 {n} 的頁面為 {size}，對 PDF 3 至 14,400 單位的頁面邊長而言過長過窄：以 UserUnit {unit} 寫入，使短邊保持 3 單位以上，遵守上限的應用程式會把長邊裁到 14,400 單位
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 檔案的實數最大為 {max}，而工作區域 {n} 的頁面長 {side} pt，需要更大的數：請選擇不含 PDF/X 標準的 PDF 1.6 或更新版本，或使用較小的工作區域
 @msg	page {0} does not exist (the PDF has {1})	頁面 {0} 不存在 (此 PDF 有 {1} 頁)
@@ -2375,6 +2386,14 @@ file-filter	Templates	範本
 @msg	no such view	沒有這個檢視
 @msg	printing isn't available here	此處無法列印
 @msg	select an image	請選取影像
+@msg	`background` must be edges, corners or colors	`background` 必須為 edges、corners 或 colors
+@msg	`match` must be distance or channels	`match` 必須為 distance 或 channels
+@msg	`{key}` must be from 0 to 100	`{key}` 必須介於 0 到 100 之間
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` 必須列出 1 到 16 種顏色，每種寫為十六進位（#rrggbb 或 #rgb）或 black、white、red、green、blue
+@msg	the linked image shows its preview: embed or relink it first	連結影像顯示的是預覽：請先嵌入或重新連結
+@msg	a CMYK image has no transparency to set	CMYK 影像沒有可設定的透明度
+@msg	every pixel matches the background: no image would be left	每個像素都與背景相符：不會留下任何影像
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的影像過大，無法變更
 @msg	the document has no artboards	文件沒有工作區域
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知的工具 `{t}`
@@ -4530,6 +4549,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Scale at Center	從中心縮放
 	Up/Down:	上/下：
 	Left/Right:	左/右：
+	Tate-chu-yoko Up/Down	縱中橫上/下
+	Tate-chu-yoko Left/Right	縱中橫左/右
 	Temperature	色溫
 	Temperature/Tint…	色溫/色調…
 	Template	範本

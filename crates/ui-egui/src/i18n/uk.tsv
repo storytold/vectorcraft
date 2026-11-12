@@ -694,6 +694,15 @@ font-technology	Variable	Варіативні
 	Created:	Створено:
 	Crop	Обрізати
 	Crop Image	Обрізати зображення
+	Image Tools	Інструменти зображення
+	Remove Background…	Видалити фон…
+	Remove Background	Видалити фон
+	Background	Фон
+	Edge Color	Колір краю
+	Picked Colors	Вибрані кольори
+	Corner Color	Колір кутів
+	Contiguous	Суміжні
+	Each Channel	Кожен канал
 	Edit Path	Редагувати контур
 	Mask	Маска
 	Crop Marks	Мітки обрізання
@@ -3573,6 +3582,8 @@ effect	Points	Точки
 	Scale at Center	Масштабувати від центру
 	Up/Down:	Вгору/вниз:
 	Left/Right:	Ліворуч/праворуч:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko вгору/вниз
+	Tate-chu-yoko Left/Right	Tate-chu-yoko ліворуч/праворуч
 	Temperature	Температура
 	Temperature/Tint…	Температура/відтінок…
 	Template	Шаблон
@@ -4418,6 +4429,7 @@ axis	Both	Обидві
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): її записано з UserUnit {unit}, тому застосунки, які ігнорують UserUnit, показують її в стільки ж разів меншою
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): сторінки {label} записуються без UserUnit, у пунктах, і застосунки, що дотримуються обмеження, обрізають сторінку до 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	у PDF 1.5 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб зберегти розмір: файл записується як PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	у PDF 1.4 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб вкластися в межу сторінки PDF/A-2 у 14 400 одиниць: файл записується як PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	сторінка монтажної області {n} має розмір {size} і задовга та завузька для сторін сторінки PDF від 3 до 14 400 одиниць: її записано з UserUnit {unit}, що тримає коротку сторону не менше 3 одиниць, а застосунки, які дотримуються межі, обрізають довгу сторону до 14 400 одиниць
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	файли {label} вміщують дійсні числа до {max}, а сторінці монтажної області {n} завдовжки {side} pt потрібні більші: виберіть PDF 1.6 або новіший без стандарту PDF/X чи меншу монтажну область
 @msg	invalid image data for `{0}`	неприпустимі дані зображення для `{0}`
@@ -4566,6 +4578,7 @@ axis	Both	Обидві
 @msg	not a stored central record	не є збереженим центральним записом
 @msg	not a valid plug-in module: {0}	не є допустимим модулем: {0}
 @msg	not an EMF or WMF file	не є файлом EMF або WMF
+@msg	not an HP-GL file	не є файлом HP-GL
 @msg	not found	не знайдено
 @msg	not in pattern editing mode	не в режимі редагування візерунка
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка
@@ -4645,6 +4658,14 @@ axis	Both	Обидві
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	це трасування створило б більше {max} опорних точок, що більше, ніж документ може плавно відобразити: збільште «Шум», зменште «Контури» або «Кольори» або виберіть набір з меншою точністю
 @msg	select an envelope	виділіть оболонку
 @msg	select an image	виділіть зображення
+@msg	`background` must be edges, corners or colors	`background` має бути edges, corners або colors
+@msg	`match` must be distance or channels	`match` має бути distance або channels
+@msg	`{key}` must be from 0 to 100	`{key}` має бути від 0 до 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` має містити від 1 до 16 кольорів, кожен у шістнадцятковому вигляді (#rrggbb або #rgb) або як black, white, red, green чи blue
+@msg	the linked image shows its preview: embed or relink it first	пов’язане зображення показує попередній перегляд: спочатку вбудуйте його або відновіть зв’язок
+@msg	a CMYK image has no transparency to set	зображення CMYK не має прозорості, яку можна задати
+@msg	every pixel matches the background: no image would be left	кожен піксель збігається з фоном: від зображення нічого не залишилося б
+@msg	an image of {w} × {h} pixels is too large to change	зображення розміром {w} × {h} пікселів завелике для зміни
 @msg	select an object in perspective	виділіть об’єкт у перспективі
 @msg	select artwork (or a colour group) to recolor	виділіть малюнок (або колірну групу) для перефарбовування
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перефарбовування завершено; без змін: {locked} і {hidden}

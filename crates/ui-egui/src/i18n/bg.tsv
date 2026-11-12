@@ -686,6 +686,15 @@ font-technology	Variable	Променливи
 	Created:	Създадено:
 	Crop	Изрязване
 	Crop Image	Изрязване на изображение
+	Image Tools	Инструменти за изображения
+	Remove Background…	Премахване на фона…
+	Remove Background	Премахване на фона
+	Background	Фон
+	Edge Color	Цвят на ръба
+	Picked Colors	Избрани цветове
+	Corner Color	Цвят на ъглите
+	Contiguous	Съседни
+	Each Channel	Всеки канал
 	Edit Path	Редактиране на контура
 	Mask	Маска
 	Crop Marks	Знаци за изрязване
@@ -3448,6 +3457,8 @@ digits	Malayalam	Малаялам
 	Scale at Center	Мащабиране от центъра
 	Up/Down:	Нагоре/надолу:
 	Left/Right:	Наляво/надясно:
+	Tate-chu-yoko Up/Down	Тате-чу-йоко нагоре/надолу
+	Tate-chu-yoko Left/Right	Тате-чу-йоко наляво/надясно
 	Temperature	Температура
 	Temperature/Tint…	Температура/Нюанс…
 	Template	Шаблон
@@ -4366,6 +4377,7 @@ axis	Both	И двете
 @msg	not a stored central record	не е съхранен централен запис
 @msg	not a valid plug-in module: {0}	не е валиден модул за плъгин: {0}
 @msg	not an EMF or WMF file	не е EMF или WMF файл
+@msg	not an HP-GL file	не е HP-GL файл
 @msg	not found	не е открито
 @msg	not in pattern editing mode	не е в режим на редактиране на мостра
 @msg	finish editing the pattern first	първо завършете редактирането на мострата

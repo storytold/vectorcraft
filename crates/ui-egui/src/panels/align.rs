@@ -233,11 +233,106 @@ fn align_to(app: &VectorcraftApp) -> AlignTo {
     if has_key(app) { AlignTo::Key } else { app.ui.align_to }
 }
 
+/// The Align To choices of the Align panel and of the Control bar's Align To menu, in their order.
+const ALIGN_TO: [AlignTo; 3] = [AlignTo::Selection, AlignTo::Key, AlignTo::Artboard];
+
+/// The icon and the translated name of Align To choice `v`.
+fn align_to_icon_name(v: AlignTo) -> (&'static str, &'static str) {
+    match v {
+        AlignTo::Selection => ("dc-alignto-selection", tl!("Align to Selection")),
+        AlignTo::Key => ("dc-alignto-key", tl!("Align to Key Object")),
+        AlignTo::Artboard => ("dc-alignto-artboard", tl!("Align to Artboard")),
+    }
+}
+
+/// The Align To choice that the Align panel and the Control bar show chosen: Artboard while one
+/// object is selected (the buttons then align it to the artboard), else [`align_to`].
+fn shown_align_to(app: &VectorcraftApp) -> AlignTo {
+    aligns_to(align_to(app), objects_aligned(app))
+}
+
+/// Whether Align To choice `v` can be chosen. Align to Key Object needs a key object or a key
+/// guide, or something to make one of: two or more selected objects, or a guide selected with
+/// objects.
+fn can_choose(app: &VectorcraftApp, v: AlignTo) -> bool {
+    v != AlignTo::Key || selection_len(app) >= 2 || has_key(app) || guide_for_key(app).is_some()
+}
+
+/// Chooses Align To `v`, as the Align panel's Align To buttons and the Control bar's Align To menu
+/// do. Align to Key Object makes the topmost selected object the key object, unless there is one
+/// already; with one object, a guide selected with it becomes the key. The stored choice stays as
+/// it was, and Align To shows it again once the key is cleared. Align to Selection and Align to
+/// Artboard store the choice and let go of the key object.
+pub(crate) fn choose_align_to(app: &mut VectorcraftApp, v: AlignTo) {
+    if !can_choose(app, v) {
+        return;
+    }
+    if v == AlignTo::Key {
+        if !has_key(app) {
+            match (topmost(app).filter(|_| selection_len(app) >= 2), guide_for_key(app)) {
+                (Some(id), _) => app.run("select.key", json!({"id": id.0})).ok(),
+                (None, Some(g)) => app.run("select.key", json!({"guide": g})).ok(),
+                (None, None) => None,
+            };
+        }
+    } else {
+        app.ui.align_to = v;
+        if has_key(app) {
+            app.run("select.key", json!({})).ok();
+        }
+    }
+}
+
+/// The width of the Control bar's Align To menu ([`align_to_menu`]) for buttons `size` points
+/// square: the icon of the choice and the arrow after it.
+pub(crate) fn align_to_menu_width(size: f32) -> f32 {
+    size + ALIGN_TO_ARROW
+}
+
+/// The width of the arrow of the Control bar's Align To menu.
+const ALIGN_TO_ARROW: f32 = 14.0;
+
+/// The Control bar's Align To menu, next to its Align buttons: the icon of the choice that the
+/// Align panel's Align To shows ([`shown_align_to`]) and an arrow, `size` points tall. Its menu
+/// lists Align to Selection, Align to Key Object and Align to Artboard with that choice checked,
+/// and a pick chooses it as the Align panel does ([`choose_align_to`]). Align to Key Object is off
+/// while no key object can be made. Screen readers get a combo box named "Align To:" whose value
+/// is the choice.
+pub(crate) fn align_to_menu(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
+    let t = crate::theme::Tokens::get(ui.ctx());
+    let shown = shown_align_to(app);
+    let (icon, name) = align_to_icon_name(shown);
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(align_to_menu_width(size), size), egui::Sense::click());
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, egui::CornerRadius::same(5), t.hover);
+    }
+    let square = egui::Rect::from_min_size(rect.min, egui::vec2(size, size));
+    crate::icons::paint(ui, icon, square.shrink((size * 0.2).round()), t.icon);
+    let arrow = egui::Rect::from_center_size(egui::pos2(square.right() + ALIGN_TO_ARROW / 2.0, rect.center().y), egui::vec2(10.0, 10.0));
+    crate::icons::paint(ui, "chevron-down", arrow, t.text_dim);
+    resp.widget_info(|| egui::WidgetInfo {
+        current_text_value: Some(name.to_owned()),
+        ..egui::WidgetInfo::labeled(egui::Role::ComboBox, ui.is_enabled(), tl!("Align To:"))
+    });
+    let resp = resp.on_hover_text(name);
+    let picked = egui::Popup::menu(&resp).show(|ui| {
+        let mut picked = None;
+        for v in ALIGN_TO {
+            if menu_item(ui, align_to_icon_name(v).1, can_choose(app, v), shown == v) {
+                picked = Some(v);
+            }
+        }
+        picked
+    });
+    if let Some(v) = picked.and_then(|r| r.inner) {
+        choose_align_to(app, v);
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = selection_len(app);
     let guides = selected_guides(app);
     let can_align = n + guides >= 1;
-    let to = align_to(app);
     // `spacing` is the Distribute Spacing value. The Distribute Objects and Distribute Spacing
     // buttons send it while there is a key object or a key guide (#2143).
     let spacing = app.ui.align_spacing;
@@ -299,36 +394,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.vertical(|ui| {
             widgets::subheader(ui, tl!("Align To:"));
             // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
-            let shown = aligns_to(to, objects_aligned(app));
+            let shown = shown_align_to(app);
             ui.horizontal(|ui| {
-                for (v, icon, tip) in [
-                    (AlignTo::Selection, "dc-alignto-selection", tl!("Align to Selection")),
-                    (AlignTo::Key, "dc-alignto-key", tl!("Align to Key Object")),
-                    (AlignTo::Artboard, "dc-alignto-artboard", tl!("Align to Artboard")),
-                ] {
-                    // A key object is one of two or more selected objects, or a guide selected
-                    // with objects.
-                    let on = v != AlignTo::Key || n >= 2 || has_key(app) || guide_for_key(app).is_some();
-                    if widgets::icon_button_enabled(ui, icon, tl!(tip), shown == v, on, 28.0).clicked() {
-                        if v == AlignTo::Key {
-                            // The topmost selected object becomes the key object, unless
-                            // there is one already. The Align To choice stays as it was, and
-                            // Align To shows it again once the key is cleared.
-                            // With one object, a guide selected with it becomes the key.
-                            if !has_key(app) {
-                                match (topmost(app).filter(|_| n >= 2), guide_for_key(app)) {
-                                    (Some(id), _) => app.run("select.key", json!({"id": id.0})).ok(),
-                                    (None, Some(g)) => app.run("select.key", json!({"guide": g})).ok(),
-                                    (None, None) => None,
-                                };
-                            }
-                        } else {
-                            app.ui.align_to = v;
-                            // Aligning to the selection or the artboard lets go of the key object.
-                            if has_key(app) {
-                                app.run("select.key", json!({})).ok();
-                            }
-                        }
+                for v in ALIGN_TO {
+                    let (icon, tip) = align_to_icon_name(v);
+                    if widgets::icon_button_enabled(ui, icon, tip, shown == v, can_choose(app, v), 28.0).clicked() {
+                        choose_align_to(app, v);
                     }
                 }
             });

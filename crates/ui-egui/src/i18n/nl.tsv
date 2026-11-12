@@ -203,6 +203,15 @@
 	Expand…	Uitbreiden…
 	Expand Appearance	Uiterlijk uitbreiden
 	Crop Image	Afbeelding bijsnijden
+	Image Tools	Afbeeldingshulpmiddelen
+	Remove Background…	Achtergrond verwijderen…
+	Remove Background	Achtergrond verwijderen
+	Background	Achtergrond
+	Edge Color	Randkleur
+	Picked Colors	Gekozen kleuren
+	Corner Color	Hoekkleur
+	Contiguous	Aaneengesloten
+	Each Channel	Elk kanaal
 	Edit Path	Pad bewerken
 	Mask	Masker
 	Rasterize…	Rasteriseren…
@@ -1514,6 +1523,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Schalen vanuit het midden
 	Up/Down:	Omhoog/omlaag:
 	Left/Right:	Links/rechts:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko omhoog/omlaag
+	Tate-chu-yoko Left/Right	Tate-chu-yoko links/rechts
 	Underline	Onderstrepen
 	Vertical Scale %	Verticale schaal %
 	Axis	As
@@ -4479,6 +4490,7 @@ imageTrace	Outline	Contour
 @msg	not a stored central record	geen opgeslagen centraal record
 @msg	not a valid plug-in module: {0}	geen geldige plug-inmodule: {0}
 @msg	not an EMF or WMF file	geen EMF- of WMF-bestand
+@msg	not an HP-GL file	geen HP-GL-bestand
 @msg	not found	niet gevonden
 @msg	not in pattern editing mode	niet in patroonbewerkingsmodus
 @msg	finish editing the pattern first	rond eerst het bewerken van het patroon af
