@@ -155,7 +155,8 @@ private editing data. VectorCraft:
   under them, clipped to where they show, along a smooth outline traced at the image's own resolution; that art stays) or omitted (Transparent Images,
   `transparentImages: "flatten"|"omit"`). Type is written as editable text objects (point type, area type and type
   on a path, with their fonts' PostScript names, sizes, colours, alignment, indents, leading, tracking and
-  scaling), which the reading app sets in those fonts; characters outside Windows-1252, vertical type, ruby, inline
+  scaling, and the Standard Vertical Roman Alignment and Tate-chu-yoko marks as `Tv` and `TY`), which the reading
+  app sets in those fonts; characters outside Windows-1252, vertical type, ruby, inline
   graphics and gradient or pattern fills make that type outlines, and so do rotated characters (Character Rotation,
   which a version 7 text object can't hold: the outlines keep the rotation, and the type is no longer editable text
   in the file), and Text: Outlines (`outlineText: true`) writes
