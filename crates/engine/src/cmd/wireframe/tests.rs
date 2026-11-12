@@ -92,6 +92,26 @@ fn a_layer_with_a_3d_effect_stays_a_layer_holding_the_edges() {
     assert_eq!(undo_len(&s), history + 1);
 }
 
+/// A layer's ruler guides are not art: they stay on the layer, after the edges, and are not selected.
+#[test]
+fn a_layer_keeps_its_ruler_guides() {
+    let (mut s, _) = setup(None);
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    let guides = |s: &Session| -> Vec<NodeId> {
+        s.doc().unwrap().doc.node(layer).unwrap().children().unwrap().iter().filter(|c| c.is_ruler_guide()).map(|c| c.id).collect()
+    };
+    let before = guides(&s);
+    assert_eq!(before.len(), 1);
+    s.execute("effect.apply", &json!({"ids":[layer.0],"effect":"threeD.extrude","item":null,"params":{}})).unwrap();
+    run(&mut s, json!({"ids":[layer.0]})).unwrap();
+    assert_eq!(guides(&s), before);
+    let st = s.doc().unwrap();
+    let children = st.doc.node(layer).unwrap().children().unwrap();
+    assert!(children.len() > 1 && children.last().is_some_and(|c| c.is_ruler_guide()));
+    assert!(!st.selection.objects.is_empty() && st.selection.objects.iter().all(|id| !before.contains(id)));
+}
+
 /// The number of segments in the wireframe group `id`.
 fn segments(s: &Session, id: NodeId) -> usize {
     let st = s.doc().unwrap();

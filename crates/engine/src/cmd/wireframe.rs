@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Expand as Wireframes",
         [],
         None,
-        "{ids?: [..] (default: the selected objects)} replace each object that has a visible 3D effect (Extrude & Bevel, Revolve, Inflate, Rotate or one of their 3D (Classic) forms, on the object or on its fills and strokes) with a group of paths: the edges of the faces the effect draws, as the object is turned and projected now, each edge once (edges that meet end to end make one path, closed where it comes back to its start; curved edges stay curves; geometry effects after the 3D effect, on the object or on a fill or stroke, reshape them too), stroked 0.5 pt black with round joins and no fill (VectorCraft's own); the group takes the object's place, id, name, opacity, blending mode, opacity mask, attributes, slice and text wrap and is selected (a layer stays a layer holding the edges, which are selected); objects without a visible 3D effect are left as they are; one undo step. An error, with nothing changed, when no object is selected or given, when none has a visible 3D effect, when an object's solid can't be built or the canvas draws its source art in its place, or when one object's wireframe has more than 1,000,000 edges → {ids}",
+        "{ids?: [..] (default: the selected objects)} replace each object that has a visible 3D effect (Extrude & Bevel, Revolve, Inflate, Rotate or one of their 3D (Classic) forms, on the object or on its fills and strokes) with a group of paths: the edges of the faces the effect draws, as the object is turned and projected now, each edge once (edges that meet end to end make one path, closed where it comes back to its start; curved edges stay curves; geometry effects after the 3D effect, on the object or on a fill or stroke, reshape them too), stroked 0.5 pt black with round joins and no fill (VectorCraft's own); the group takes the object's place, id, name, opacity, blending mode, opacity mask, attributes, slice and text wrap and is selected (a layer stays a layer holding the edges, which are selected, and its ruler guides); objects without a visible 3D effect are left as they are; one undo step. An error, with nothing changed, when no object is selected or given, when none has a visible 3D effect, when an object's solid can't be built or the canvas draws its source art in its place, or when one object's wireframe has more than 1,000,000 edges → {ids}",
         has_doc,
         expand_as_wireframes
     )]
@@ -36,6 +36,25 @@ fn wire_appearance() -> Appearance {
     let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), WIRE_WEIGHT);
     stroke.join = LineJoin::Round;
     Appearance { items: vec![AppearanceItem::Stroke(stroke)], ..Default::default() }
+}
+
+/// The ruler guides of layer `n` and then those of the sublayers inside it, in order, added to
+/// `out`. A guide from a hidden or locked sublayer, or from one inside a hidden or locked group or
+/// sublayer, is hidden or locked itself.
+fn ruler_guides(n: &Node, hidden: bool, locked: bool, out: &mut Vec<Arc<Node>>) {
+    let Some(children) = n.children() else { return };
+    for c in children.iter().filter(|c| c.is_ruler_guide()) {
+        let mut g = c.clone();
+        if hidden || locked {
+            let g = Arc::make_mut(&mut g);
+            g.visible &= !hidden;
+            g.locked |= locked;
+        }
+        out.push(g);
+    }
+    for c in children.iter().filter(|c| !c.is_ruler_guide()) {
+        ruler_guides(c, hidden || !c.visible, locked || c.locked, out);
+    }
 }
 
 fn expand_as_wireframes(s: &mut Session, p: &Value) -> Result<Value> {
@@ -70,9 +89,13 @@ fn expand_as_wireframes(s: &mut Session, p: &Value) -> Result<Value> {
             let Some(source) = d.node(id) else { continue };
             if matches!(source.kind, NodeKind::Layer { .. }) {
                 // A layer stays a layer: its members become the edges, and its 3D effect is removed.
+                // Its ruler guides and those of its sublayers are not art: they stay, after the edges.
                 let mut layer = source.clone();
-                let children: Vec<Arc<Node>> = wire.into_iter().map(|path| Arc::new(Node::path(d.alloc_id(), path, wire_appearance()))).collect();
+                let mut guides = vec![];
+                ruler_guides(source, false, false, &mut guides);
+                let mut children: Vec<Arc<Node>> = wire.into_iter().map(|path| Arc::new(Node::path(d.alloc_id(), path, wire_appearance()))).collect();
                 selected.extend(children.iter().map(|c| c.id));
+                children.extend(guides);
                 if let Some(members) = layer.children_mut() {
                     *members = children;
                 }

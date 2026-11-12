@@ -157,6 +157,19 @@ fn revolve_classic_and_rotate_classic_expand_too() {
     assert_eq!(segments(&plane).len(), 4);
 }
 
+/// The geometry effects after a 3D effect reshape each face on its own, as they reshape each face
+/// of the drawn surface: two faces that touch stay two outlines.
+#[test]
+fn later_geometry_effects_reshape_each_face_on_its_own() {
+    let n = solid_square(super::super::EXTRUDE, json!({}));
+    let fx = [crate::new_effect("path.offsetPath", &json!({"offset": 1.0})).unwrap()];
+    let out = reshaped(vec![square(0.0, 0.0, 10.0), square(10.0, 0.0, 10.0)], &fx, &GeomContext::of(&n));
+    assert_eq!(out.len(), 2, "{out:?}");
+    let (a, b) = (out[0].bounds().unwrap(), out[1].bounds().unwrap());
+    assert!((a.x0 + 1.0).abs() < 1e-3 && (a.x1 - 11.0).abs() < 1e-3, "{a:?}");
+    assert!((b.x0 - 9.0).abs() < 1e-3 && (b.x1 - 21.0).abs() < 1e-3, "{b:?}");
+}
+
 /// A geometry effect after a fill's 3D effect moves that fill's edges, as it moves its drawn surface.
 #[test]
 fn a_geometry_effect_after_a_fill_s_3d_effect_reshapes_its_edges() {

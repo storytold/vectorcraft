@@ -3237,7 +3237,7 @@ on the object or on a fill or stroke, reshape its edges as they reshape the draw
 black stroke with round joins and no fill (VectorCraft's own choice). The group keeps the object's place, id, name,
 visibility, lock, opacity, blending mode, knockout, opacity mask, attributes, slice and text wrap, and the groups
 are selected.
-A layer in `ids` stays a layer: its members are replaced by the edges, which are selected. Objects without a visible 3D effect do not change. It is one undo step and
+A layer in `ids` stays a layer: its members are replaced by the edges, which are selected, and its ruler guides stay. Objects without a visible 3D effect do not change. It is one undo step and
 returns `{ids}`, the groups. It is an error, and nothing changes, when nothing is selected or given, when no object
 has a visible 3D effect, when an object's solid can't be built or the canvas draws its source art in its place, or when one object's wireframe has more than
 1,000,000 edges.

@@ -1,8 +1,10 @@
 //! Expand as Wireframes: the edges of the faces a 3D effect draws, as open and closed paths that
 //! can be edited on their own.
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
 
-use vectorcraft_doc::{AppearanceItem, Document, Effect, Node};
+use vectorcraft_doc::color::{Color, Paint};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId};
 use vectorcraft_geom::{Anchor, CubicBez, PathData, Point, SubPath};
 use vectorcraft_three_d::Facet;
 
@@ -10,7 +12,7 @@ use super::{
     INFLATE, Profile, ROTATE, facets, geometry, has_solid, inflate_options, is_container, is_plane, is_three_d, label_of, members, object_profile,
     region, reshape_members, resolve, solid, solid_paints, solid_parts, union_bounds, view_options,
 };
-use crate::{GeomContext, apply_geometry_with, is_geometry};
+use crate::{GeomContext, is_geometry};
 
 /// The most distinct edges one object's wireframe may have.
 pub(crate) const MAX_WIRE_EDGES: usize = 1_000_000;
@@ -50,7 +52,7 @@ pub fn three_d_wireframe_in(doc: Option<&Document>, n: &Node) -> Result<Vec<Path
     }
     let n = &*resolve(doc, n, label)?;
     let faces = if revolve { crate::revolve::revolve_face_paths(n)? } else { solid_face_paths(n)? };
-    let faces = after_geometry(n, faces);
+    let faces = after_geometry(doc, n, faces);
     let wire = edges(&faces)?;
     if wire.is_empty() {
         return Err(format!("{label} draws no faces for this object"));
@@ -58,24 +60,30 @@ pub fn three_d_wireframe_in(doc: Option<&Document>, n: &Node) -> Result<Vec<Path
     Ok(wire)
 }
 
-/// `faces` reshaped by the visible geometry effects after `n`'s own 3D effect, which act on the
-/// projected art as a whole, about the bounds of all the faces.
-fn after_geometry(n: &Node, faces: Vec<PathData>) -> Vec<PathData> {
+/// `faces` reshaped by the visible geometry effects after `n`'s own 3D effect ([`reshaped`]).
+fn after_geometry(doc: Option<&Document>, n: &Node, faces: Vec<PathData>) -> Vec<PathData> {
     let fx = &n.appearance.effects;
     let Some(index) = fx.iter().position(|e| e.visible && is_three_d(&e.id)) else { return faces };
-    reshaped(faces, fx.get(index + 1..).unwrap_or_default(), &GeomContext::of(n))
+    reshaped(faces, fx.get(index + 1..).unwrap_or_default(), &GeomContext { doc, ..GeomContext::of(n) })
 }
 
-/// `faces` reshaped by the visible geometry effects in `later` (the effects after a 3D effect),
-/// which act on the faces as a whole, about their bounds, as they act on the drawn surface.
+/// `faces` reshaped by the visible geometry effects in `later` (the effects after a 3D effect), as
+/// they reshape the faces of the drawn surface ([`crate::reshape::reshape_leaves`]): each effect
+/// reshapes each face on its own, about the bounds all the faces have before it, and the faces keep
+/// to one budget of anchors together. `ctx` gives the object's id, the seed of a random Transform,
+/// and the document.
 pub(crate) fn reshaped(faces: Vec<PathData>, later: &[Effect], ctx: &GeomContext) -> Vec<PathData> {
-    let after: Vec<Effect> = later.iter().filter(|e| e.visible && is_geometry(&e.id)).cloned().collect();
+    let after: Vec<&Effect> = later.iter().filter(|e| e.visible && is_geometry(&e.id)).collect();
     if after.is_empty() {
         return faces;
     }
-    let joined = PathData::new(faces.into_iter().flat_map(|f| f.subpaths).collect());
-    let Some(bounds) = joined.bounds() else { return vec![joined] };
-    vec![apply_geometry_with(&after, &joined, bounds, ctx)]
+    let id = NodeId(ctx.seed);
+    let fill = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let mut art = Node::group(id, faces.into_iter().map(|f| Arc::new(Node::path(id, f, fill.clone()))).collect());
+    crate::reshape::reshape_leaves(&mut art, &after, later, ctx.doc);
+    let mut out = vec![];
+    art.walk(&mut |c| out.extend(c.path_data().cloned()));
+    out
 }
 
 /// The outline of every face [`super::solid_art`] draws for `n` (already resolved): with the effect
