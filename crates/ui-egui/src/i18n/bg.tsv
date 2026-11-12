@@ -1634,6 +1634,7 @@ font-technology	Variable	Променливи
 	Include Hidden Layers	Включване на скритите слоеве
 	Include Linked Files	Включване на свързаните файлове
 	Include Metadata	Включване на метаданни
+	Include Variable Data	Включване на данни за променливи
 	Include non-printing layers	Включване на слоеве, които не се печат
 	Write pages longer than 200 in at full size in points	Записване на страници, по-дълги от 200 in, в пълен размер в точки
 	Include SVG Code	Включване на SVG код
@@ -2004,6 +2005,7 @@ font-technology	Variable	Променливи
 	Move Slices	Преместване на резени
 	Move Spine Point	Преместване на точка от оста
 	Reshape Spine Segment	Промяна на формата на сегмент от оста
+	Blend Easing	Плавност на преливането
 	Move Brush	Преместване на четка
 	Move Swatch	Преместване на образец
 	Move Up	Преместване нагоре
@@ -2856,6 +2858,7 @@ digits	Malayalam	Малаялам
 	Roman Baseline	Латинска основна линия
 	Roman Hanging Punctuation	Латинска висяща пунктуация
 	Korean Line Break Anywhere	Пренасяне на корейски текст навсякъде
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Настройки за източноазиатска композиция
 	Korean Composition Settings	Настройки за корейска композиция
 	Rotate	Завъртане
@@ -6069,6 +6072,11 @@ axis	Y Axis	Y ос
 	User Brush Library 9	Потребителска библиотека с четки 9
 	User Brush Library 10	Потребителска библиотека с четки 10
 	Art Ribbons	Арт ленти
+	Ink and Wash	Туш и лавиране
+	Tapered Ink	Изтъняващ туш
+	Brush Pen	Писалка-четка
+	Soft Wash	Меко лавиране
+	Pooling Wash	Лавиране с ръб
 	Zigzag	Зигзаг
 	Burst Ray	Лъч на удар
 	Dash Trail	Пунктирна следа

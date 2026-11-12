@@ -231,6 +231,9 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
         cms::set_active(&working).map_err(|e| bad(C, e.to_string()))?;
         use_front_profiles(s);
         touch_all(s);
+    } else if proof_targets(&info.name) {
+        // A new file of the CMYK profile View → Proof Setup targets: redraw.
+        touch_all(s);
     }
     Ok(json!({"name": info.name, "kind": info.kind, "remembered": remembered}))
 }
@@ -259,6 +262,11 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     }
     touch_all(s);
     Ok(json!({"removed": info.name}))
+}
+
+/// Whether View → Proof Setup targets the CMYK profile `name`.
+fn proof_targets(name: &str) -> bool {
+    matches!(proof::view().setup.target, ProofTarget::Cmyk(t) if t == name)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -778,17 +786,33 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(on) = on_param(p, "proof", C)? {
         v.proof_colors = on;
     }
-    proof::set_view(v.clone());
-    touch_all(s);
+    store_view(s, v.clone());
     Ok(view_json(&v))
+}
+
+/// Make `v` the proof view and redraw every document. When `v` equals the current view, the view
+/// and the revisions stay as they are; Separations Preview's visible plates are compared as a set.
+fn store_view(s: &mut Session, v: proof::ProofView) {
+    let shown = |v: &proof::ProofView| proof::ProofView {
+        separations: v.separations.as_ref().map(|vis| {
+            let mut vis = vis.clone();
+            vis.sort();
+            vis.dedup();
+            vis
+        }),
+        ..v.clone()
+    };
+    if shown(&v) != shown(&proof::view()) {
+        proof::set_view(v);
+        touch_all(s);
+    }
 }
 
 fn toggle_view(s: &mut Session, p: &Value, cmd: &str, f: impl FnOnce(&mut proof::ProofView, Option<bool>)) -> Result<Value> {
     let on = on_param(p, "on", cmd)?;
     let mut v = proof::view();
     f(&mut v, on);
-    proof::set_view(v.clone());
-    touch_all(s);
+    store_view(s, v.clone());
     Ok(view_json(&v))
 }
 
@@ -820,7 +844,15 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
     match p.get("plates") {
         None | Some(Value::Null) => {}
         Some(Value::Array(a)) if a.iter().all(Value::is_string) => {
-            v.separations = Some(a.iter().filter_map(Value::as_str).map(check).collect::<Result<Vec<_>>>()?);
+            let mut vis: Vec<String> = Vec::new();
+            for n in a.iter().filter_map(Value::as_str) {
+                let n = check(n)?;
+                // A plate named twice is shown once.
+                if !vis.contains(&n) {
+                    vis.push(n);
+                }
+            }
+            v.separations = Some(vis);
         }
         Some(_) => {
             let key = "plates";
@@ -839,8 +871,7 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
             vis.push(n);
         }
     }
-    proof::set_view(v);
-    touch_all(s);
+    store_view(s, v);
     Ok(plates_json(s))
 }
 

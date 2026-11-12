@@ -1713,6 +1713,7 @@ file-filter	Templates	Шаблоны
 	Include Hidden Layers	Включать скрытые слои
 	Include Linked Files	Включать связанные файлы
 	Include Metadata	Включать метаданные
+	Include Variable Data	Включать данные переменных
 	Include non-printing layers	Включать непечатаемые слои
 	Write pages longer than 200 in at full size in points	Записывать страницы длиннее 200 in в полном размере, в пунктах
 	Include SVG Code	Включать код SVG
@@ -2101,6 +2102,7 @@ file-filter	Templates	Шаблоны
 	Move Slices	Переместить фрагменты
 	Move Spine Point	Переместить точку остова
 	Reshape Spine Segment	Изменить форму сегмента остова
+	Blend Easing	Сглаживание перехода
 	Move Brush	Переместить кисть
 	Move Swatch	Переместить образец
 	Move Up	Переместить вверх
@@ -2965,6 +2967,7 @@ digits	Malayalam	Малаялам
 	Roman Baseline	Римская базовая линия
 	Roman Hanging Punctuation	Римская висячая пунктуация
 	Korean Line Break Anywhere	Перенос корейского текста в любом месте
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Параметры восточноазиатского набора
 	Korean Composition Settings	Параметры корейского набора
 	Rotate	Повернуть
@@ -4844,6 +4847,7 @@ axis	Both	Оба
 @msg	unknown option `{path}.{k}`	неизвестный параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	неизвестная панель `{raw}`
+@msg	panels can't be shown in Presentation Mode	в режиме презентации панели показать нельзя
 @msg	unknown preference `{key}`	неизвестная настройка `{key}`
 @msg	Preferences imported.	Настройки импортированы.
 @msg	not a preferences file: {e}	не является файлом настроек: {e}
@@ -5735,6 +5739,110 @@ axis	Y Axis	Ось Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамический эффект выполняется во время отрисовки документа, поэтому он не может быть `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль экспорта всегда получает бюджет экспорта: не указывайте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запрашивает большой вычислительный бюджет (каждый запуск до {minutes} минут и в {times} раз больше инструкций, чем обычно): его должен одобрить человек в настольном приложении, либо передайте `allowHeavy: true` в сеансе, запущенном с --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` должен содержать 1-64 печатаемых символа
+@msg	`version`, `description` or `author` is too long	`version`, `description` или `author` слишком длинное
+@msg	`warnings` must be a list of strings	`warnings` должно быть списком строк
+@msg	`{k}` must be one of {_1}	`{k}` должно быть одним из: {_1}
+@msg	`{k}` must be {what}	`{k}` должно быть: {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	модуль экспорта объявляет от 1 до {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	вне групп может быть не более {MAX_UNGROUPED} параметров: задайте остальным `group`
+@msg	can't encode the input	не удаётся закодировать входные данные
+@msg	expected {"dataBase64"}	ожидалось {"dataBase64"}
+@msg	expected {"objects"}	ожидалось {"objects"}
+@msg	export `{name}`: {e}	экспорт модуля `{name}`: {e}
+@msg	extension {e} is listed twice	расширение {e} указано дважды
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	расширение {e}: используйте 1-16 строчных букв и цифр, без точки
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	недопустимый ID {_1}: используйте 1-64 символа из A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	недопустимое имя параметра {k}
+@msg	manifest is not UTF-8	манифест не в кодировке UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	манифест слишком длинный (предел {MAX_MANIFEST_BYTES} байт)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	манифест занимает {_1} байт (предел {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	модуль занимает {_1} байт (предел {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	требуется одобрение: он запрашивает {0}, что пользователь разрешает при отдельной установке
+@msg	not JSON: {e}	не JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	не двоичный файл WebAssembly (нет заголовка \0asm)
+@msg	parameter `{k}`: {what}	параметр `{k}`: {what}
+@msg	parameter `{name}`: {what}	параметр `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	параметры модуля должны быть объектом JSON
+@msg	the module must export its linear memory as `memory`	модуль должен экспортировать свою линейную память как `memory`
+@msg	the objects to change are no longer in the document	изменяемых объектов больше нет в документе
+@msg	the runtime panicked	среда выполнения аварийно завершилась
+@msg	unexpected host trap	непредвиденная ловушка (trap) хоста
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version вернула {v}; этот хост реализует версию {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc вернула 0 (нехватка памяти)
+@msg	vc_alloc returned a block outside memory	vc_alloc вернула блок вне памяти
+@msg	vc_run returned error code {packed}	vc_run вернула код ошибки {packed}
+@msg	{_1} is not a file	{_1} не является файлом
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} занимает {_2} байт (предел {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	объектов: {_1} (предел {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} указывает за пределы памяти
+@msg	`angle` must be a number	`angle` должно быть числом
+@msg	`aspect` must be from 0.01 to 100	`aspect` должно быть от 0.01 до 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` должно быть "butt", "round" или "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` должно быть "nonzero" или "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` должно быть адресом https:// длиной не более {MAX_HELP_URL} байт
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` должно содержать 1-{MAX_HELP} печатаемых символов
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` должно быть идентификатором эффекта длиной 1-{MAX_EFFECT_ID} байт
+@msg	`id` must be the id of an input object	`id` должно быть идентификатором входного объекта
+@msg	`join` must be "miter", "round" or "bevel"	`join` должно быть "miter", "round" или "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` и `group` должны содержать 1-{MAX_LABEL} печатаемых символов
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` должно быть 1-{MAX_TEXT}, а значение по умолчанию не длиннее
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` и `maxItems` должны быть 0-{MAX_LIST}, `maxItems` не меньше 1, а значение по умолчанию должно содержать столько элементов
+@msg	`name` must be a string	`name` должно быть строкой
+@msg	`opacity` must be a number	`opacity` должно быть числом
+@msg	`type` must be "path" or "compound"	`type` должно быть "path" или "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` должно содержать 1-{MAX_UNIT} печатаемых символов
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` должно перечислять от 1 до {MAX_CONDITION_VALUES} значений для `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` указывает `{other}`, но это не параметр, объявленный раньше этого
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` указывает не более {MAX_CONDITIONS} параметров
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` принимает значения `{other}`, флажка или списка вариантов
+@msg	`visible` must be true or false	`visible` должно быть true или false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` должно быть числом от {_1} до {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` должно быть массивом не более чем из {MAX_ITEMS} элементов
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	цвет по умолчанию должен быть объектом цвета или шестнадцатеричной строкой, например "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	объект цвета или шестнадцатеричная строка, например "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	произвольный градиент содержит не более {MAX_ITEMS} точек и линий
+@msg	a freeform gradient line names a point it doesn't have	линия произвольного градиента указывает точку, которой в градиенте нет
+@msg	a gradient needs 1-{MAX_ITEMS} stops	градиенту нужно 1-{MAX_ITEMS} точек перехода
+@msg	a list of numbers	список чисел
+@msg	a list of {min_items} to {max_items} numbers	список из {min_items}-{max_items} чисел
+@msg	a new object needs a `path`	новому объекту нужен `path`
+@msg	a number	число
+@msg	a painted live effect returns only `objects`	рисующий динамический эффект возвращает только `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	у части рисующего динамического эффекта есть только `path`, `fillRule`, `fills` и `strokes`
+@msg	a read-only object was left out	пропущен объект только для чтения
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	пропущен объект только для чтения: верните его как один {"id"} или в том виде, в каком он был передан
+@msg	a string	строка
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	у обводки есть только `paint`, `width`, `join`, `cap` и `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	обводка должна иметь вид {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	эффект должен иметь вид {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	эффект на заливке возвращает только `fills`
+@msg	an effect on a stroke returns only `strokes`	эффект на обводке возвращает только `strokes`
+@msg	an object must be a JSON object	объект должен быть объектом JSON
+@msg	bad range	недопустимый диапазон
+@msg	choices must be 1-64 non-empty, printable strings	варианты должны быть 1-64 непустыми печатаемыми строками
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	координата вне диапазона (предел ±{MAX_COORD} pt)
+@msg	default is not one of the options	значение по умолчанию не входит в варианты
+@msg	each piece needs a `path`	каждой части нужен `path`
+@msg	is listed twice	указан дважды
+@msg	pattern transform out of range	преобразование узора вне диапазона
+@msg	read-only field '{field}' changed	изменено поле только для чтения '{field}'
+@msg	stops must be in order of `offset`	точки перехода должны идти в порядке `offset`
+@msg	the document has no pattern {pattern}	в документе нет узора {pattern}
+@msg	the document has no swatch {n}	в документе нет образца {n}
+@msg	the output	вывод
+@msg	the path has no anchor points	у контура нет опорных точек
+@msg	too many anchor points (limit {MAX_ANCHORS})	слишком много опорных точек (предел {MAX_ANCHORS})
+@msg	true or false	true или false
+@msg	unknown key `{k}`; the keys here are {_1}	неизвестный ключ `{k}`; здесь допустимы ключи {_1}
+@msg	{_1} is listed twice	{_1} указан дважды
+@msg	{_1} is not the id of an input object	{_1} не является идентификатором входного объекта
+@msg	{_1} is read-only	{_1} доступен только для чтения
+@msg	{what} must be from {lo} to {hi}	{what}: значение должно быть от {lo} до {hi}
+@msg	a color component	компонент цвета
+@msg	a plate	пластина
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Установить «{name}», которому нужны эти разрешения?
 	ID: {id}	ID: {id}
@@ -5948,6 +6056,11 @@ axis	Y Axis	Ось Y
 	User Brush Library 9	Пользовательская библиотека кистей 9
 	User Brush Library 10	Пользовательская библиотека кистей 10
 	Art Ribbons	Художественные ленты
+	Ink and Wash	Тушь и размывка
+	Tapered Ink	Сужающаяся тушь
+	Brush Pen	Ручка-кисть
+	Soft Wash	Мягкая размывка
+	Pooling Wash	Размывка с ободком
 	Zigzag	Зигзаг
 	Burst Ray	Ударный луч
 	Dash Trail	Пунктирный след

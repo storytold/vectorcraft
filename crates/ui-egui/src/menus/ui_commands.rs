@@ -595,7 +595,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel",
         "Show Panel",
         "",
-        "{panel: id, toggle?: bool} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too); toggle (the Window menu) hides a panel that shows, and shows it again where it was",
+        "{panel: id, toggle?: bool} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too); toggle (the Window menu) hides a panel that can be seen, and shows it again where it was; with the dock hidden by Tab or Shift+Tab, the dock shows again with the panel in front, leaving the toolbar and Control bar as they are; fails and changes nothing in Presentation Mode, which hides every panel",
     ),
     (
         "window.panel.layout",
