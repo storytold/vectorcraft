@@ -248,8 +248,9 @@ pub(super) fn status_readouts(app: &VectorcraftApp, ui: &mut Ui, t: &Tokens) {
 /// Most notes the status message's hover and access information list.
 const MAX_LISTED_NOTES: usize = 30;
 
-/// The notes behind the status message (the open's, [`crate::state::UiState::status_notes`]) when
-/// there are several and the status bar still shows the message they came with, else none.
+/// The notes behind the status message (an open's, a save's or an export's,
+/// [`crate::state::UiState::status_notes`]) when there are several and the status bar still shows
+/// the message they came with, else none.
 fn status_notes(ui: &crate::state::UiState) -> &[String] {
     let notes = ui.status_notes.as_ref().filter(|(status, notes)| *status == ui.status && notes.len() > 1);
     notes.map(|(_, notes)| notes.as_slice()).unwrap_or_default()
