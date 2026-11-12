@@ -313,8 +313,8 @@ fn optical_margin_alignment_is_a_checked_type_menu_item() {
     assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
 }
 
-/// Type › Dynamic Text runs `type.dynamicText`, is enabled for type on a path and area type that
-/// are in no thread, and is checked while the selected type has it on.
+/// Type › Dynamic Text runs `type.dynamicText`, is enabled for point type and for type on a path
+/// and area type that are in no thread, and is checked while the selected type has it on.
 #[test]
 fn dynamic_text_is_a_checked_type_menu_item() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
@@ -334,7 +334,8 @@ fn dynamic_text_is_a_checked_type_menu_item() {
     assert!(!enabled(&app, id));
     let point = app.run("text.create", json!({"x": 10, "y": 10, "text": "Point"})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [point]})).unwrap();
-    assert!(!enabled(&app, id), "point type");
+    assert!(enabled(&app, id), "point type, which it turns into area type with Block on");
+    assert_eq!(checked(&app, id, &Value::Null), Some(false), "point type");
     let path = app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap()["id"].clone();
     let t = app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [t]})).unwrap();
@@ -356,6 +357,11 @@ fn dynamic_text_is_a_checked_type_menu_item() {
     assert_eq!(checked(&app, id, &Value::Null), Some(false));
     app.run(id, json!({})).unwrap();
     assert_eq!(checked(&app, id, &Value::Null), Some(true));
+    // Point type first: unchecked, as the item turns it on.
+    app.run("select.set", json!({"ids": [point, area]})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(false), "point type first");
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(true), "both on");
 }
 
 /// Type › Dynamic Text Presets › Circle, Arch and Bow run `type.dynamicTextPreset` with their
