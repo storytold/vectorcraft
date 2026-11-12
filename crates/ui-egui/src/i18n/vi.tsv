@@ -1051,6 +1051,17 @@ font-technology	Variable	Biến thiên
 	The selected character's font is not available.	Phông chữ của ký tự đã chọn không khả dụng.
 	No alternates for the selected character.	Ký tự đã chọn không có glyph thay thế.
 	Double-click to replace	Bấm đúp để thay thế
+	Select one character with the Type tool first.	Trước hết hãy chọn một ký tự bằng công cụ Chữ.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} là glyph của {font}, không phải của phông chữ mà văn bản đã chọn đang dùng ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} thuộc về {base} (U+{base_code}) {place}; ký tự bạn chọn là {sel} (U+{code}).
+	at the start of a word	ở đầu từ
+	in the middle of a word	ở giữa từ
+	at the end of a word	ở cuối từ
+	standing alone	khi đứng riêng
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} không phải glyph thay thế của {sel} (U+{code}) như ký tự đó đang đứng trong từ của nó.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Bấm đúp để chèn {base} (U+{code}) thay thế: dạng trình bày không nối, còn chữ cái thì nối.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Đã chèn {base} (U+{code}) thay cho dạng trình bày: phông chữ nối nó với các ký tự bên cạnh theo vị trí.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Không có tính năng OpenType nào vẽ glyph này ở đây, nên nó thay glyph của ký tự và có thể không nối với các ký tự bên cạnh.
 	Double-click to insert	Bấm đúp để chèn
 	Double-click to rename	Bấm đúp để đổi tên
 	Double-click to target the contents	Bấm đúp để chọn nội dung
@@ -2334,6 +2345,8 @@ digits	Hindi	Hindi
 	Meters	Mét
 	Method	Phương pháp
 	Method:	Phương pháp:
+	Pad	Kéo dài
+	Repeats	Số lần lặp
 	Mezzotint	Mezzotint
 	Mezzotint…	Mezzotint…
 	Millimeters	Milimét
@@ -3802,6 +3815,9 @@ mark-style	Japanese	Kiểu Nhật
 	Split Path	Tách đường dẫn
 	spot	đặc biệt
 	Spot Color	Màu đặc biệt
+	Spot Color Objects	Đối tượng có màu đặc biệt
+	Pattern Objects	Đối tượng có họa tiết
+	Gradient Objects	Đối tượng có chuyển sắc
 	Spot Colors	Màu đặc biệt
 	Spot Colors…	Màu đặc biệt…
 	Spray Radius	Bán kính phun
@@ -4579,6 +4595,8 @@ theme	Appearance	Giao diện
 @msg	the Smooth slider is not open	Thanh trượt Làm mượt chưa được mở
 @msg	the screen color sampler is already open	công cụ lấy mẫu màu trên màn hình đã được mở
 @msg	this system has no screen color sampler	hệ thống này không có công cụ lấy mẫu màu trên màn hình
+@msg	the screen color sampler did not answer	công cụ lấy mẫu màu trên màn hình không phản hồi
+@msg	the screen color sampler failed	công cụ lấy mẫu màu trên màn hình gặp lỗi
 @msg	bad colour `{hex}` (#rrggbb)	màu không hợp lệ `{hex}` (#rrggbb)
 @msg	bad page tree	cây trang bị lỗi
 @msg	bad shortcut	phím tắt không hợp lệ
@@ -4615,6 +4633,7 @@ theme	Appearance	Giao diện
 @msg	column must be true or a number from 1	column phải là true hoặc số từ 1
 @msg	Combine Slices: the slices have no bounds	Kết hợp lát cắt: các lát cắt không có giới hạn
 @msg	command `{0}` is not available right now: {1}	lệnh `{0}` hiện không khả dụng: {1}
+@msg	command `{id}` is not available right now	lệnh `{id}` hiện không khả dụng
 @msg	compound paths can only contain paths	đường dẫn phức chỉ có thể chứa đường dẫn
 @msg	compressed (RLE) bitmaps can't be read yet	bitmap nén (RLE) chưa thể đọc được
 @msg	Convert to Artboards: selection has no area	Chuyển thành bảng vẽ: vùng chọn không có diện tích
@@ -5695,6 +5714,9 @@ axis	Y Axis	Trục Y
 @msg	`dither` must be true or false	`dither` phải là true hoặc false
 	Perceptual	Theo cảm nhận
 @msg	`method` must be classic or perceptual	`method` phải là classic hoặc perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` phải là pad, repeat hoặc reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` phải là số nguyên từ 1 đến {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` áp dụng cho chuyển sắc tuyến tính, tỏa tròn, hình nón và hình thoi
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Cài đặt “{name}”, plug-in yêu cầu ngân sách tính toán lớn?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Mỗi lần chạy có thể mất tới {minutes} phút và làm khối lượng việc gấp {times} lần mức cho phép với các plug-in khác. Plug-in chạy trong nền và bạn có thể hủy.
@@ -6613,3 +6635,8 @@ breakText	Glyphs	Glyph
 @msg	Some islands could not be joined to the area around the art	Không thể nối một số đảo với vùng xung quanh hình vẽ
 @msg	`width` must be from {lo} to {hi} pt	`width` phải từ {lo} đến {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` phải là số nguyên từ 1 đến {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Khung và đường bóc phần thừa…
+	Weed Box and Lines	Khung và đường bóc phần thừa
+	Margin	Lề
+	Box	Khung
+	Swatch	Mẫu màu

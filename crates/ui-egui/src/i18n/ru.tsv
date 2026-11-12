@@ -892,6 +892,17 @@ font-technology	Variable	Вариативные
 	The selected character's font is not available.	Шрифт выделенного символа недоступен.
 	No alternates for the selected character.	У выделенного символа нет альтернатив.
 	Double-click to replace	Дважды щёлкните для замены
+	Select one character with the Type tool first.	Сначала выделите один символ инструментом «Текст».
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — глиф шрифта {font}, а не шрифта выделенного текста ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} относится к символу {base} (U+{base_code}) {place}; выделен символ {sel} (U+{code}).
+	at the start of a word	в начале слова
+	in the middle of a word	в середине слова
+	at the end of a word	в конце слова
+	standing alone	в отдельном виде
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} не является альтернативой символа {sel} (U+{code}) в том виде, как он стоит в своём слове.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Дважды щёлкните, чтобы вставить вместо него {base} (U+{code}): форма представления не соединяется, буква соединяется.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Вместо формы представления вставлено {base} (U+{code}): шрифт соединяет его с соседними по положению.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ни одна функция OpenType не рисует здесь этот глиф, поэтому он заменяет глиф символа и может не соединяться с соседними символами.
 	Double-click to insert	Дважды щёлкните для вставки
 	Double-click to rename	Дважды щёлкните для переименования
 	Double-click to target the contents	Дважды щёлкните, чтобы выбрать содержимое как объект
@@ -2021,6 +2032,8 @@ file-filter	Templates	Шаблоны
 	Metallic Gradients	Металлические градиенты
 	Meters	Метры
 	Method:	Метод:
+	Pad	Продлить
+	Repeats	Число повторов
 	Millimeters	Миллиметры
 	Minify	Минифицировать
 	Minimal	Минимальный
@@ -3450,6 +3463,9 @@ digits	Malayalam	Малаялам
 	Split Path	Разделить контур
 	spot	плашечный
 	Spot Color	Плашечный цвет
+	Spot Color Objects	Объекты с плашечными цветами
+	Pattern Objects	Объекты с узорами
+	Gradient Objects	Объекты с градиентами
 	Spot Colors	Плашечные цвета
 	Spot Colors…	Плашечные цвета…
 	Spread:	Разворот:
@@ -4415,6 +4431,8 @@ axis	Both	Оба
 @msg	the Smooth slider is not open	ползунок «Сгладить» не открыт
 @msg	the screen color sampler is already open	средство выбора цвета с экрана уже открыто
 @msg	this system has no screen color sampler	в этой системе нет средства выбора цвета с экрана
+@msg	the screen color sampler did not answer	средство выбора цвета с экрана не ответило
+@msg	the screen color sampler failed	в средстве выбора цвета с экрана произошла ошибка
 @msg	bad colour `{hex}` (#rrggbb)	недопустимый цвет `{hex}` (#rrggbb)
 @msg	bad page tree	недопустимое дерево страниц
 @msg	bad shortcut	недопустимое сочетание клавиш
@@ -4444,6 +4462,7 @@ axis	Both	Оба
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не является цветом, например "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не более {MAX_TABLE} цветов
 @msg	command `{0}` is not available right now: {1}	команда `{0}` сейчас недоступна: {1}
+@msg	command `{id}` is not available right now	команда `{id}` сейчас недоступна
 @msg	compound paths can only contain paths	составные контуры могут содержать только контуры
 @msg	compressed (RLE) bitmaps can't be read yet	сжатые (RLE) растровые изображения пока не читаются
 @msg	damaged	повреждено
@@ -5700,6 +5719,9 @@ axis	Y Axis	Ось Y
 @msg	`dither` must be true or false	`dither` должно быть true или false
 	Perceptual	Перцепционный
 @msg	`method` must be classic or perceptual	`method` должен быть classic или perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` должен быть pad, repeat или reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` должен быть целым числом от 1 до {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` применяется к линейным, радиальным, коническим и ромбовидным градиентам
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Установить «{name}», которому нужен большой вычислительный бюджет?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Каждый запуск может длиться до {minutes} минут и выполнять в {times} раз больше работы, чем разрешено другим модулям. Он работает в фоне, и его можно отменить.
@@ -7092,3 +7114,8 @@ shape	Open	Открытый
 @msg	Some islands could not be joined to the area around the art	Некоторые островки не удалось соединить с областью вокруг графики
 @msg	`width` must be from {lo} to {hi} pt	`width` должно быть от {lo} до {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` должно быть целым числом от 1 до {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Рамка и линии выборки…
+	Weed Box and Lines	Рамка и линии выборки
+	Margin	Поле
+	Box	Рамка
+	Swatch	Образец
