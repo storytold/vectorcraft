@@ -1124,6 +1124,8 @@ font-technology	Variable	Değişken
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
 	3D (Classic)	3D (Klasik)
 	Extrude & Bevel (Classic)…	Ekstrüzyon ve Eğim (Klasik)…
+	Revolve (Classic)…	Döndür (Klasik)…
+	Rotate (Classic)…	Çevir (Klasik)…
 	Surface	Yüzey
 	Wireframe	Tel Kafes
 	No Shading	Gölgeleme Yok
@@ -2176,6 +2178,7 @@ shape	Open	Açık
 	Options:	Seçenekler:
 	Options…	Seçenekler…
 	Organic Fades	Organik Solmalar
+	Holographic	Holografik
 	or more spaces with a tab	veya sekmeli daha fazla alan
 	Order:	Sipariş:
 	Ordinals	Sıra Sayıları
@@ -2717,6 +2720,9 @@ digits	Malayalam	Malayalam
 	Rise…	Yüksel…
 	Roman Baseline	Roma Taban Çizgisi
 	Roman Hanging Punctuation	Roma Asılı Noktalama İşaretleri
+	Korean Line Break Anywhere	Korece Satırı Her Yerde Kes
+	East Asian Composition Settings	Doğu Asya Dizgi Ayarları
+	Korean Composition Settings	Korece Dizgi Ayarları
 	Rotate	Döndür
 	Rotate 90° CW	90° CW döndür
 	Rotate Tool	Döndürme Aracı
@@ -4334,6 +4340,7 @@ axis	Both	Her İkisi
 @msg	not a valid plug-in module: {0}	geçerli bir eklenti modülü değil: {0}
 @msg	not an EMF or WMF file	EMF veya WMF dosyası değil
 @msg	not an HP-GL file	HP-GL dosyası değil
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 1 ile 255 arasında #rrggbb renginden oluşan bir dizi olmalıdır
 @msg	not an RTF file: it doesn't start with {\\rtf	bir RTF dosyası değil: {\\rtf ile başlamıyor
 @msg	not found	bulunamadı
 @msg	not in pattern editing mode	desen düzenleme modunda değil
@@ -6267,6 +6274,17 @@ axis	Y Axis	Y ekseni
 	Charge Wave	Şarj Dalgası
 	Spark Trail	Kıvılcım İzi
 	Calligraphic Nibs	Kaligrafi Uçları
+	Bristle Brushes	Kıl Fırçalar
+	Fine Liner	İnce Çizgi
+	Pointed Flat	Sivri Düz
+	Stubby Round	Kısa Yuvarlak
+	Dry Scrub	Kuru Ovma
+	Soft Dome	Yumuşak Kubbe
+	Filbert	Kedi Dili
+	Angled Round	Eğik Yuvarlak
+	Angled Flat	Eğik Düz
+	Fan Blender	Harmanlama Yelpazesi
+	Grass Fan	Çim Yelpazesi
 	Pattern Borders	Desen Kenarlıkları
 	Scatter Shapes	Dağılım Şekilleri
 	Dry Media	Kuru Teknikler
@@ -6647,6 +6665,10 @@ breakText	Glyphs	Glifler
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturlar bu fırçalardan birini veya daha fazlasını kullanıyor. Fırçalar bu konturlardan kaldırılsın ve fırçalar silinsin mi?
 	Remove Strokes	Konturları Kaldır
 	Place Brush Art	Fırça Çizimini Yerleştir
+	Replace Brush Art	Fırça Çizimini Değiştir
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturlar bu fırçayı kullanıyor. Yeni çizim bu konturlara uygulansın mı, yoksa konturlar olduğu gibi bırakılıp fırçanın yeni çizimli bir kopyası mı eklensin?
+	Apply to Strokes	Konturlara Uygula
+	Leave Strokes	Konturları Bırak
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` fırçasının çizimi yok (yalnızca serpme, resim ve desen fırçalarının çizimi vardır)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Düzenleme Araçları
@@ -6900,8 +6922,33 @@ breakText	Glyphs	Glifler
 @plural	{n} line cut|{n} lines cut	{n} satır kesildi
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli
 
+# Learn panel
+	Learn	Öğren
+	Explore tutorials	Öğreticileri Keşfet
+	For you	Sizin için
+	Skills	Beceriler
+	Get started	Başlarken
+	Quick skill guide	Hızlı beceri rehberi
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Temel araçlar için becerilere göre gruplanmış kısa uygulamalı öğreticiler. Öğreticilerini görmek için bir beceri seçin.
+	List Tutorials	Öğreticileri Listele
+	Show Tutorial	Öğreticiyi Göster
+@msg	missing `tutorial` (see learn.list)	`tutorial` eksik (bkz. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	bilinmeyen öğretici `{id}` (bkz. learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ertelenen Efektleri Yenile
 	Deferred Effects	Ertelenen Efektler
 @msg	no plug-in effect is deferred	ertelenen eklenti efekti yok
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} eklenti efekti ertelenerek açıldı. Efekt › Ertelenen Efektleri Yenile bunları çalıştırır.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Kesim Araçları
+	Stencil Bridges…	Şablon Köprüleri…
+	Stencil Bridges	Şablon Köprüleri
+	Shortest Crossing	En kısa geçiş
+	Direction	Yön
+@msg	The selected art has no islands to bridge	Seçili çizimde köprüyle bağlanacak ada yok
+@msg	No bridge of this width fits across the selected art	Bu genişlikte bir köprü seçili çizime sığmıyor
+@msg	Some islands could not be joined to the area around the art	Bazı adalar çizimin çevresindeki alana bağlanamadı
+@msg	`width` must be from {lo} to {hi} pt	`width` {lo} ile {hi} pt arasında olmalıdır
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 ile {MAX_BRIDGES_PER_ISLAND} arasında bir tam sayı olmalıdır

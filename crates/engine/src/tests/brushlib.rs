@@ -104,7 +104,10 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     let list = run(&mut s, "brush.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
     let ids: Vec<&str> = libs.iter().map(|l| l["id"].as_str().unwrap()).collect();
-    assert_eq!(ids, ["art-ribbons", "calligraphic-nibs", "pattern-borders", "scatter-shapes", "game-trails", "energy-beams", "dry-media"]);
+    assert_eq!(
+        ids,
+        ["art-ribbons", "calligraphic-nibs", "bristle-brushes", "pattern-borders", "scatter-shapes", "game-trails", "energy-beams", "dry-media"]
+    );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
     let lib = run(&mut s, "brush.library", json!({"library": "art ribbons"}));
     assert_eq!(
@@ -117,19 +120,19 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         trails["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Speed Line", "Dash Trail", "Burst Ray", "Zigzag"]
     );
-    assert_eq!(libs[4]["count"].as_u64(), Some(4));
+    assert_eq!(libs[5]["count"].as_u64(), Some(4));
     let beams = run(&mut s, "brush.library", json!({"library": "energy-beams"}));
     assert_eq!(
         beams["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Laser Bolt", "Plasma Arc", "Charge Wave", "Spark Trail"]
     );
-    assert_eq!(libs[5]["count"].as_u64(), Some(4));
+    assert_eq!(libs[6]["count"].as_u64(), Some(4));
     let dry = run(&mut s, "brush.library", json!({"library": "Dry Media"}));
     assert_eq!(
         dry["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
         [("Chalk Grain", "art"), ("Graphite Pencil", "art"), ("Wax Crayon", "art"), ("Charcoal Dust", "art")]
     );
-    assert_eq!((libs[6]["name"].as_str(), libs[6]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    assert_eq!((libs[7]["name"].as_str(), libs[7]["count"].as_u64()), (Some("Dry Media"), Some(4)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
@@ -138,6 +141,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     for (id, kind) in [
         ("art-ribbons", "art"),
         ("calligraphic-nibs", "calligraphic"),
+        ("bristle-brushes", "bristle"),
         ("pattern-borders", "pattern"),
         ("scatter-shapes", "scatter"),
         ("game-trails", "art"),
@@ -301,6 +305,77 @@ fn the_dry_media_library_holds_grainy_art_brushes_with_bounded_art() {
     for b in &lib.brushes {
         assert_eq!(reopened.brush(&b.name), Some(b), "{}", b.name);
     }
+}
+
+/// Bristle Brushes: one brush per tip shape, every value inside the range the brush keeps (a value
+/// outside would be clamped without notice), names no other library or default brush uses; added
+/// in one step, not twice, and saved as a library they reopen unchanged.
+#[test]
+fn the_bristle_brushes_library_covers_every_tip_shape_within_the_bristle_ranges() {
+    use vectorcraft_brush::{Bristle, BristleShape};
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "bristle-brushes").unwrap();
+    assert_eq!(lib.name, "Bristle Brushes");
+    let names: Vec<String> = lib.brushes.iter().map(|b| b.name.clone()).collect();
+    assert!((8..=10).contains(&names.len()), "{names:?}");
+    let within = |v: f64, (lo, hi): (f64, f64)| (lo..=hi).contains(&v);
+    let mut shapes = vec![];
+    for b in &lib.brushes {
+        let BrushKind::Bristle(x) = &b.kind else { panic!("{} is not a bristle brush", b.name) };
+        assert!(within(x.size, Bristle::SIZE_RANGE) && within(x.length, Bristle::LENGTH_RANGE), "{}", b.name);
+        for v in [x.density, x.thickness, x.opacity, x.stiffness] {
+            assert!(within(v, Bristle::PERCENT_RANGE), "{}: {v}", b.name);
+        }
+        let mut kept = b.clone();
+        kept.sanitize();
+        assert_eq!(&kept, b, "sanitizing changes {}", b.name);
+        assert!(b.name.chars().count() <= Bristle::MAX_NAME_CHARS, "{}", b.name);
+        if !shapes.contains(&x.shape) {
+            shapes.push(x.shape);
+        }
+    }
+    let every = [
+        BristleShape::RoundPoint,
+        BristleShape::FlatPoint,
+        BristleShape::RoundBlunt,
+        BristleShape::FlatBlunt,
+        BristleShape::RoundCurve,
+        BristleShape::FlatCurve,
+        BristleShape::RoundAngle,
+        BristleShape::FlatAngle,
+        BristleShape::RoundFan,
+        BristleShape::FlatFan,
+    ];
+    assert!(every.iter().all(|x| shapes.contains(x)), "{shapes:?}");
+    // Names of its own: no default brush's, no other built-in library's, none twice.
+    let defaults: Vec<&str> = vectorcraft_brush::defaults().iter().map(|b| b.name.as_str()).collect();
+    let others: Vec<String> = cmd::brushlib::BUILTIN
+        .iter()
+        .filter(|b| b.id != "bristle-brushes")
+        .flat_map(|b| cmd::brushlib::library(&s, b.id).unwrap().1.brushes.iter().map(|x| x.name.clone()).collect::<Vec<_>>())
+        .collect();
+    for (i, n) in names.iter().enumerate() {
+        assert!(!defaults.contains(&n.as_str()) && !others.contains(n) && !names[..i].contains(n), "{n}");
+    }
+
+    // Added to a document in one undo step; adding them again adds nothing.
+    let before = (undo_len(&s), brushes(&s));
+    let r = run(&mut s, "brush.addFromLibrary", json!({"library": "Bristle Brushes"}));
+    assert_eq!(strs(&r["added"]), names.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(undo_len(&s), before.0 + 1);
+    assert_eq!(brushes(&s), [before.1.clone(), names.clone()].concat());
+    for b in &lib.brushes {
+        assert_eq!(&brush(&s, &b.name), b);
+    }
+    let again = undo_len(&s);
+    let r = run(&mut s, "brush.addFromLibrary", json!({"library": "bristle-brushes"}));
+    assert_eq!((strs(&r["added"]).len(), strs(&r["existing"]).len(), undo_len(&s)), (0, names.len(), again));
+    // Saved as a library and loaded back: the same brushes, in the same order.
+    let saved = run(&mut s, "brush.saveLibrary", json!({ "names": names, "name": "Bristles" }));
+    let b64 = saved["dataBase64"].as_str().unwrap().to_string();
+    let r = run(&mut s, "brush.loadLibrary", json!({"dataBase64": b64, "name": "Bristles.vectorcraft"}));
+    let (_, reopened) = cmd::brushlib::library(&s, r["library"].as_str().unwrap()).unwrap();
+    assert_eq!(reopened.brushes, lib.brushes);
 }
 
 #[test]

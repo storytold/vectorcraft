@@ -40,7 +40,16 @@ fn built_in_presets_are_the_gradient_libraries_by_theme_with_unique_names() {
     libraries.dedup();
     assert_eq!(
         libraries,
-        ["Spectrum Gradients", "Sky Gradients", "Neutral Gradients", "Organic Fades", "Duotone Gradients", "Radial Glows", "Metallic Gradients"]
+        [
+            "Spectrum Gradients",
+            "Sky Gradients",
+            "Neutral Gradients",
+            "Organic Fades",
+            "Holographic",
+            "Duotone Gradients",
+            "Radial Glows",
+            "Metallic Gradients"
+        ]
     );
     let mut seen = std::collections::HashSet::new();
     assert!(names(&list).iter().all(|n| seen.insert(n.to_lowercase())), "a name names one preset");
@@ -80,6 +89,42 @@ fn an_organic_fade_applies_with_its_method_midpoints_and_opacities() {
     let list = s.execute("gradient.presets.list", &json!({})).unwrap();
     let row = list["presets"].as_array().unwrap().iter().find(|r| r["name"] == "Mist").unwrap().clone();
     assert_eq!(row["gradient"]["method"], "perceptual");
+}
+
+#[test]
+fn a_holographic_foil_applies_in_place_as_one_undo_step() {
+    let (mut s, id) = session_with(json!({"gradient": {"angle": 30}}));
+    let before = paint(&s, id, false);
+    let undo = s.doc().unwrap().history.undo.len();
+    let veil = s.gradient_preset("prism veil").unwrap();
+    assert_eq!((veil.library, veil.gradient.method), (Some("Holographic"), GradientMethod::Perceptual));
+    let r = s.execute("gradient.presets.apply", &json!({"name": "prism veil"})).unwrap();
+    assert_eq!(r["name"].as_str(), Some("Prism Veil"));
+    let g = paint(&s, id, false);
+    assert_eq!((g.gradient.kind, g.gradient.method, &g.gradient.stops), (GradientKind::Linear, GradientMethod::Perceptual, &veil.gradient.stops));
+    assert_eq!(g.gradient.stops.len(), 6);
+    assert_eq!(g.angle, before.angle, "the placement stays");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(s.gradient_preset_name(&g.gradient).as_deref(), Some("Prism Veil"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paint(&s, id, false), before);
+}
+
+/// A preset saved as "Mint Halo" before Holographic existed stays listed under a free name.
+#[test]
+fn a_saved_preset_named_like_a_holographic_glow_gets_a_free_name() {
+    let (mut s, id) = session_with(json!({"gradient": {"kind": "radial"}}));
+    let halo = s.gradient_preset("Mint Halo").unwrap().gradient;
+    let mut own = paint(&s, id, false).gradient;
+    own.dither = true;
+    let mut prefs = s.prefs.clone();
+    prefs.gradient_presets = vec![crate::cmd::GradientPreset { name: "MINT HALO".into(), gradient: own.clone() }];
+    s.apply_prefs(prefs);
+    assert_eq!(s.prefs.gradient_presets.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["MINT HALO 2"]);
+    s.execute("gradient.presets.apply", &json!({"name": "mint halo 2"})).unwrap();
+    assert_eq!(paint(&s, id, false).gradient, own);
+    s.execute("gradient.presets.apply", &json!({"name": "Mint Halo"})).unwrap();
+    assert_eq!(paint(&s, id, false).gradient.stops, halo.stops);
 }
 
 #[test]

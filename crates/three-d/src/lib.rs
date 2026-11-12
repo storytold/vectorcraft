@@ -341,6 +341,9 @@ impl Revolve {
 pub struct Face {
     pub points: Vec<Point>,
     pub depth: f64,
+    /// The face's unit normal in view space (x right, y down, z toward the viewer), turned to the
+    /// side the viewer sees.
+    pub normal: [f64; 3],
     pub brightness: f64,
     pub gradient: Option<ShadeGradient>,
     /// RGB illumination and its unclipped smooth ramp, independent of the legacy white ramp.
@@ -453,6 +456,7 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
     Ok(Some(Face {
         points,
         depth: vertices.iter().map(|v| v.2).sum::<f64>() / vertices.len() as f64,
+        normal: [normal.0, normal.1, normal.2],
         brightness,
         gradient,
         illumination,
@@ -468,6 +472,12 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
 /// Invalid or excessively complex inputs return an error, never a partial surface.
 pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Face>, String> {
     revolve_faces(path, FillRule::NonZero, bounds, options, None)
+}
+
+/// [`revolve`]'s faces as facets, back to front, for the classic surfaces: each keeps its
+/// view-space normal, and its brightness and illumination are those of `options`.
+pub fn revolve_facets(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Facet>, String> {
+    Ok(revolve(path, bounds, options)?.into_iter().map(Facet::of_face).collect())
 }
 
 const TOO_COMPLEX_PROFILE: &str = "Revolve profile is too complex";
