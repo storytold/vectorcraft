@@ -251,6 +251,7 @@ font-technology	Variable	Variabla
 	Asset Export Settings	Inställningar för resursexport
 	Assets	Resurser
 	Assign	Tilldela
+	Assign Profile	Tilldela profil
 	Assign Profile…	Tilldela profil…
 	Assign:	Tilldela:
 	Attach to Active Plane	Koppla till aktivt plan
@@ -2284,6 +2285,9 @@ font-technology	Variable	Variabla
 	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
 	Dynamic Text	Dynamisk text
+	Dynamic Text Presets	Förinställningar för dynamisk text
+	Arch	Valv
+@msg	select point type or type on a path	markera punkttext eller text på bana
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text på bana i länkad text kan inte använda dynamisk text: {frames}
 	Optimize for fast web view	Optimera för snabb webbvisning
 	Optimized	Optimerad
@@ -2559,6 +2563,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Radiellt sken
 	Radial Gradient	Radiell gradient
 	Conic Gradient	Konisk gradient
+	Diamond Gradient	Rombgradient
 	Radius 1	Radie 1
 	Radius 2	Radie 2
 	Radius1	Radie1
@@ -3100,6 +3105,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Bedövning
 	Stealth Fade	Smyga
 	Shield Buff	Sköld
+	Textures	Texturer
+	Fine Grain	Fin kornighet
+	Canvas Weave	Kanvasväv
+	Burlap Sack	Jutesäck
+	Cracked Glaze	Krackelerad glasyr
+	Mosaic Floor	Mosaikgolv
+	Quilted Squares	Quiltade rutor
+	Leaded Glass	Blyinfattat glas
+	Damp Paper	Fuktigt papper
 	Shape	Form
 	Shape Builder	Formbyggare
 	Shape Builder Regions	Formbyggarområden
@@ -3801,6 +3815,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	Arbets-CMYK
 	Working CMYK (don't tag)	Arbets-CMYK (tagga inte)
+	Working RGB (don't tag)	Arbets-RGB (tagga inte)
 	Workspace	Arbetslayout
 	Workspace {i}	Arbetslayout {i}
 	Wrinkle Tool	Skrynkelverktyg
@@ -4634,7 +4649,7 @@ axis	Both	Båda
 @msg	unknown format	okänt format
 @msg	unknown format `{f}` (Save writes {_1})	okänt format `{f}` (Spara skriver {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	okänt fritt läge `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	okänd gradienttyp `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	okänd gradienttyp `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	okänd högdager `{h}`
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
@@ -5787,7 +5802,7 @@ theme	Appearance	Utseende
 @msg	span must be "object" or "selection", got {v}	span måste vara "object" eller "selection", fick {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerar en `gradient`, inte en färgruta
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerar en gradient: ange `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" placerar en linjär, radiell eller konisk gradient, inte en fri
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" placerar en linjär, radiell, konisk eller rombformad gradient, inte en fri
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerar själva gradienten: utelämna `start` och `end` (de placerar den redan i dokumentkoordinater)
 @msg	the Color Picker is not open	färgväljaren är inte öppen
 @msg	the Simplify slider is not open	Förenkla-reglaget är inte öppet
@@ -8335,6 +8350,7 @@ digits	Hindi	Hindi
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Justera mot pixelrutnät
+	Align New Objects to Pixel Grid	Justera nya objekt mot pixelrutnät
 	Not Aligned to Pixel Grid	Inte justerade mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`

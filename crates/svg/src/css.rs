@@ -555,8 +555,8 @@ impl Rules<'_> {
         }
     }
 
-    /// A linear, radial or conic gradient over `b` at `opacity`, with the stops SVG export writes
-    /// (midpoints as stops of their own). `None` for freeform gradients.
+    /// A linear, radial, conic or diamond gradient over `b` at `opacity`, with the stops SVG export
+    /// writes (midpoints as stops of their own). `None` for freeform gradients.
     fn gradient(&mut self, g: &GradientPaint, b: Rect, opacity: f32) -> Option<String> {
         let geom = g.resolve(b);
         let stops = |pos: &dyn Fn(f32) -> f64| {
@@ -580,9 +580,12 @@ impl Rules<'_> {
                 let pos = |t: f32| if line > 1e-9 { (from + t as f64 * length) / line + 0.5 } else { t as f64 };
                 Some(format!("linear-gradient({}deg, {})", fmt_num(angle, 2), stops(&pos)))
             }
-            GradientKind::Radial => {
+            // CSS has no diamond gradient: the ellipse through the square's corners stands in.
+            GradientKind::Radial | GradientKind::Diamond => {
                 let r = (geom.end - geom.start).hypot();
-                if geom.focal.is_some() {
+                if g.gradient.kind == GradientKind::Diamond {
+                    self.warn("diamond gradients are written as radial gradients through their corners");
+                } else if geom.focal.is_some() {
                     self.warn("radial gradients start at their centre (an off-centre focal point is left out)");
                 }
                 let shape = if (geom.aspect - 1.0).abs() < 1e-9 {
