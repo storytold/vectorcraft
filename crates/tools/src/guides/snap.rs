@@ -119,6 +119,13 @@ impl PointSnap {
         Self { targets }
     }
 
+    /// Snapping for a point placed anywhere, as a drawing tool's ([`DrawSnap`]) is: the art in the
+    /// window as targets ([`Targets::for_drawing`]), live text as Snap to Glyph asks.
+    pub fn drawn(cx: &ToolContext) -> Self {
+        let glyphs = (cx.snap_to_glyph && cx.smart_guides && cx.alignment_guides).then_some(cx.glyph_snap);
+        Self::new(cx, || Targets::for_drawing(cx.doc, &[], visible(cx), glyphs))
+    }
+
     /// Where `p` goes, and the guides showing why.
     pub fn snap(&self, cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
         self.snap_from(cx, p, None)

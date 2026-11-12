@@ -50,7 +50,7 @@ use fill::fill_uncovered;
 use fill::{fill_view, polygon_area};
 #[cfg(test)]
 use grid::ruler_rects;
-use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, textured_quad, view_bounds};
+use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, rulers_hidden, textured_quad, view_bounds};
 pub(crate) use grid::{RulerScale, checker_texture, ruler_label, ruler_origin_dragging};
 #[cfg(test)]
 pub(crate) use grid::{TRANSPARENCY_GRID, vertical_label_height};
@@ -98,8 +98,16 @@ pub struct Xf {
 }
 
 impl Xf {
+    /// The mapping of view `v` onto the canvas `rect`, in the points of an interface zoomed by
+    /// `ui_zoom` (Preferences › User Interface › UI Scaling): a document point covers the same
+    /// device pixels at every UI Scaling ([`View::screen_zoom`]).
+    pub fn at(rect: egui::Rect, v: &View, ui_zoom: f32) -> Self {
+        Self { rect, zoom: v.screen_zoom(ui_zoom), center: v.center, rot: v.rotation.to_radians() }
+    }
+    /// [`Self::at`] with the interface unscaled.
+    #[cfg(test)]
     pub fn new(rect: egui::Rect, v: &View) -> Self {
-        Self { rect, zoom: v.zoom, center: v.center, rot: v.rotation.to_radians() }
+        Self::at(rect, v, 1.0)
     }
     pub fn to_screen(&self, p: Point) -> Pos2 {
         let c = self.rect.center();
@@ -255,6 +263,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let bars = app.ui.screen_mode < 2;
     let (full, rect) = view_rects(app, outer, ui.ctx().pixels_per_point());
     app.canvas_rect = Some(rect);
+    app.canvas_ui_zoom = ui.ctx().zoom_factor();
     let fitted = app.view().is_some_and(|v| v.fitted);
     // A document's opening view is fitted to the canvas of the first frame that shows it, and the
     // window's layout can still move the canvas's edges over the next frames. Until the view is
@@ -276,14 +285,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let resp = ui.interact(rect, egui::Id::unique("canvas"), Sense::click_and_drag());
     canvas_input(app, ui, &resp, rect);
     let v = *app.view().unwrap_or(&View::default());
-    let xf = Xf::new(rect, &v);
+    let xf = Xf::at(rect, &v, app.canvas_ui_zoom);
     // While the view pans, zooms or turns under the pointer, the art under it isn't hit-tested.
     let wait = hover_wait(&mut app.canvas.view_moved, ViewKey { rect, zoom: v.zoom, center: v.center, rotation: v.rotation }, ui.input(|i| i.time));
     if let Some(secs) = wait {
         ui.ctx().request_repaint_after_secs(secs as f32);
     }
     let hover_still = wait.is_none();
-    let origin_preview = if app.ui.view.rulers && app.ui.screen_mode < 3 { ruler_input(app, ui, full, rect, &xf) } else { None };
+    let origin_preview = if app.ui.view.rulers && app.ui.screen_mode < 3 { ruler_input(app, ui, full, rect, &xf) } else { rulers_hidden(app, ui) };
     crate::document_drag::drop_on_canvas(app, &resp, &xf);
     panel_drop(app, ui, &resp, &xf);
     // In Presentation Mode a right click or a long touch opens no context menu.
@@ -313,12 +322,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     );
     // View › Pixel Preview: the art as it rasterizes, one pixel per point, while a document pixel
     // is bigger than a screen pixel (below that the screen render already shows it).
-    let pixel = (app.ui.view.pixel_preview && v.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
+    let pixel = (app.ui.view.pixel_preview && xf.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
     // File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview: off, images show
     // their pixels as they rasterize, hard-edged.
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
     let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
-    let key = cache_key(app, ui, st, &t, &v, (w, h, ppp), (pixel, smooth_images, plugins));
+    // The frame renders the view at its zoom in the interface's points, as `xf` maps it.
+    let drawn = v.on_screen(app.canvas_ui_zoom);
+    let key = cache_key(app, ui, st, &t, &drawn, (w, h, ppp), (pixel, smooth_images, plugins));
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
@@ -348,7 +359,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         !waiting
     });
     if wait.is_none() && (!same_frame || app.canvas.texture.is_none() || settle) {
-        let (w, h, view) = frame_view(pixel, (w, h), &v, ppp);
+        let (w, h, view) = frame_view(pixel, (w, h), &drawn, ppp);
         let opts = frame_options(app, &key, mask_view, smooth_images);
         draw_frame(app, ui, Frame { key: &key, doc: &doc, effects: &effects, size: (w, h), view, opts, pixel });
     }
@@ -450,7 +461,7 @@ fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         // wheel, a pan, a Rotate View drag, the Zoom tool and a Presentation Mode click move the view
         // there. A dialog, floating panel or menu over the canvas hides it (Object Highlighting
         // showed through them: #4518), unless a drag that began on the canvas goes on there.
-        let moved = Xf::new(rect, app.view().unwrap_or(&View::default()));
+        let moved = Xf::at(rect, app.view().unwrap_or(&View::default()), app.canvas_ui_zoom);
         let dragging = ui.data(|d| d.get_temp::<Drag>(drag_id()).is_some());
         app.hover_doc =
             ui.input(|i| i.pointer.hover_pos()).filter(|p| rect.contains(*p) && (dragging || drag::on_canvas(ui, resp, *p))).map(|p| moved.to_doc(p));
@@ -1212,3 +1223,5 @@ fn selection_visuals(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_ui_scaling;

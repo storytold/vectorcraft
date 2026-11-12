@@ -3,13 +3,13 @@ use super::encoding::{
     unit, writable,
 };
 use super::{
-    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule, Gradient,
-    GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, DYNAMIC_TEXT, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
+    Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
     LAYER_NAME, LIVE, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection, ParaStyle, PathData,
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND};
+use super::{CONIC, CONIC_WEDGES, DIAMOND, SPREAD, SPREAD_CAPPED};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -39,6 +39,10 @@ pub(super) struct Writer<'a> {
     in_hidden: bool,
     /// The fonts type is set in: PostScript name, and whether it's TrueType.
     pub(super) fonts: Vec<(String, bool)>,
+    /// The Standard Vertical Roman Alignment the last `Tv` set (it lasts into later text objects).
+    roman: bool,
+    /// Inside a Kumi block `1 TY` began (Tate-chu-yoko in horizontal type).
+    kumi: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -59,6 +63,8 @@ impl<'a> Writer<'a> {
             hidden_art: vec![],
             in_hidden: false,
             fonts: vec![],
+            roman: false,
+            kumi: false,
         }
     }
 
@@ -481,7 +487,8 @@ impl<'a> Writer<'a> {
             self.warn(TRANSPARENCY);
         }
         let area = path.to_bezpath().bounding_box();
-        let wedges = g.resolve(area).conic_wedges(area, CONIC_WEDGES, true);
+        let wedges = g.resolve(area).conic_wedges(area, g.gradient.conic_wedge_count(CONIC_WEDGES), true);
+        let spread = g.gradient.spreader();
         self.line("q");
         self.fill_rule(rule);
         let several = path.subpaths.len() > 1;
@@ -495,7 +502,7 @@ impl<'a> Writer<'a> {
             self.line("*U");
         }
         for (pts, t) in wedges {
-            let (color, _) = g.gradient.sample_keep_model(t as f32);
+            let (color, _) = g.gradient.sample_keep_model(spread(t) as f32);
             let wedge = FillLayer { paint: Paint::solid(color), ..f.clone() };
             self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&wedge), None);
         }
@@ -672,6 +679,22 @@ impl<'a> Writer<'a> {
     /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
     /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        // A gradient that repeats or reflects (the format's gradients pad past their ends): its
+        // stops repeated as many times as `bounds` needs, in a definition of its own, no more
+        // stops than the reader reads.
+        if let Some(padded) = g.gradient.padded_within(&g.resolve(bounds), bounds, crate::import::MAX_GRADIENT_STOPS) {
+            self.warn(if padded.capped { SPREAD_CAPPED } else { SPREAD });
+            let geom = padded.geom;
+            let p = GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        // One whose levels over `bounds` are not finite (a vector of no length): its stops
+        // repeated along the vector, padding past it.
+        if g.gradient.is_spread() {
+            self.warn(SPREAD_CAPPED);
+            let p = GradientPaint { gradient: g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS).into_owned(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
         let name = self.define(&g.gradient, g.swatch.as_deref());
         for stop in &g.gradient.stops {
             if stop.opacity < 1.0 {
@@ -733,15 +756,15 @@ impl<'a> Writer<'a> {
     // ---------- type ----------
 
     /// Type: a text object when the format can hold it as text, else its outlines (type with
-    /// rotated characters among them, which keeps their rotation). A run whose
-    /// font size measures a height other than the em box is written at the em size it is drawn
-    /// at ([`vectorcraft_text::FontDb::font_heights_resolved`]).
+    /// rotated characters among them, which keeps their rotation).
     fn text(&mut self, t: &TextObject) {
         if !invertible(t.xf) {
             return;
         }
-        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
-        let t = &*resolved;
+        // Written as text or as outlines, the type keeps its drawn sizes but not the setting.
+        if t.dynamic_text && matches!(t.kind, TextKind::OnPath { .. }) {
+            self.warn(DYNAMIC_TEXT);
+        }
         if !self.outline_text {
             if writable(self.doc, t) {
                 return self.text_object(t);
@@ -759,14 +782,18 @@ impl<'a> Writer<'a> {
     /// A text object (§15): `type To`, the text path (`a b c d tx ty startPt Tp`, an area's frame
     /// or the path type runs along, `TP`), then each run's style and characters, `TO`. The matrix
     /// takes text space (y up, the first baseline's start for point type) to art space; the frame
-    /// and path are in art space, as the specification's examples have them (§15.5).
+    /// and path are in art space, as the specification's examples have them (§15.5). Type that
+    /// Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in, fitted at
+    /// the sizes the Character panel shows; then a run whose font size measures a height other
+    /// than the em box is written at the em size it is drawn at
+    /// ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn text_object(&mut self, t: &TextObject) {
         if lost_attributes(t) {
             self.warn(TYPE_ATTRIBUTES);
         }
-        // Type that Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in.
         let fitted = vectorcraft_text::drawn(t);
-        let t = &*fitted;
+        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(&fitted);
+        let t = &*resolved;
         let m = self.to_art * t.xf * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let (kind, path, start) = match &t.kind {
             TextKind::Point => (0, None, 0.0),
@@ -815,6 +842,10 @@ impl<'a> Writer<'a> {
                 self.line(" Tx");
             }
         }
+        if self.kumi {
+            self.line("0 TY");
+            self.kumi = false;
+        }
         self.line("TO");
     }
 
@@ -834,7 +865,8 @@ impl<'a> Writer<'a> {
     }
 
     /// A run's character attributes and paint style: `Tr`, its fill and stroke, `Tf`, `Ts`, `Tz`,
-    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`.
+    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`; then `Tv` and `TY`
+    /// where Standard Vertical Roman Alignment or Tate-chu-yoko changes.
     fn char_style(&mut self, st: &CharStyle, p: &ParaStyle) {
         let fill = !st.fill.is_none();
         let stroke = st.has_stroke();
@@ -872,6 +904,14 @@ impl<'a> Writer<'a> {
         let leading = st.leading.unwrap_or_else(|| p.justification.auto_leading_for(st.size));
         ps::push_nums(&mut self.body, &[finite(leading, size * 1.2), finite(p.space_before, 0.0)]);
         self.line("Tl");
+        if st.standard_vertical_roman != self.roman {
+            self.roman = st.standard_vertical_roman;
+            self.line(if self.roman { "1 Tv" } else { "0 Tv" });
+        }
+        if st.tate_chu_yoko != self.kumi {
+            self.kumi = st.tate_chu_yoko;
+            self.line(if self.kumi { "1 TY" } else { "0 TY" });
+        }
     }
 
     /// Type as its glyphs' outlines: a group of a compound path for each run, with the run's fill

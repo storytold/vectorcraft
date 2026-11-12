@@ -395,7 +395,7 @@ impl Interp {
             Err(e) => return Err(self.host_error(e)?),
         };
         let writes = strict_writes().unwrap_or_else(|| self.writes_mode());
-        self.evaluated = self.evaluated.saturating_add(1);
+        self.evaluated = crate::realm::next_tag(self.evaluated);
         let tag = std::mem::replace(&mut self.source_tag, self.evaluated);
         // UTF-8 takes at most 3 bytes for each UTF-16 code unit, so the fuel for a third of the
         // bytes is taken before the source is encoded, and the rest after. A source within the

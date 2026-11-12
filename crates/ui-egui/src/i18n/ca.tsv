@@ -608,6 +608,17 @@ antiAlias	Sharp	Nítid
 	Calligraphic Brush	Pinzell cal·ligràfic
 	Calligraphic Brush Options	Opcions del pinzell cal·ligràfic
 	Calligraphic Nibs	Plomes cal·ligràfiques
+	Bristle Brushes	Pinzells de cerres
+	Fine Liner	Traç fi
+	Pointed Flat	Pla punxegut
+	Stubby Round	Rodó curt
+	Dry Scrub	Fregat sec
+	Soft Dome	Cúpula suau
+	Filbert	Llengua de gat
+	Angled Round	Rodó bisellat
+	Angled Flat	Pla bisellat
+	Fan Blender	Ventall difuminador
+	Grass Fan	Ventall d'herba
 	Can't export “{name}”.	No es pot exportar “{name}”.
 	Can't open “{name}”.	No es pot obrir “{name}”.
 	Can't print these settings: see the Summary	No es poden imprimir aquests paràmetres: consulta el resum
@@ -1277,6 +1288,17 @@ antiAlias	Sharp	Nítid
 	The selected character's font is not available.	El tipus de lletra del caràcter seleccionat no està disponible.
 	No alternates for the selected character.	No hi ha alternatives per al caràcter seleccionat.
 	Double-click to replace	Feu doble clic per substituir
+	Select one character with the Type tool first.	Selecciona primer un caràcter amb l’eina de text.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} és un glif de {font}, no del tipus de lletra amb què està escrit el text seleccionat ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertany a {base} (U+{base_code}) {place}; la teva selecció és {sel} (U+{code}).
+	at the start of a word	a l’inici d’una paraula
+	in the middle of a word	al mig d’una paraula
+	at the end of a word	al final d’una paraula
+	standing alone	quan va sol
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} no és una alternativa de {sel} (U+{code}) tal com es troba a la seva paraula.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Feu doble clic per inserir {base} (U+{code}): una forma de presentació no s’uneix, la lletra sí.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	S’ha inserit {base} (U+{code}) en lloc d’una forma de presentació: el tipus de lletra l’uneix als veïns segons la posició.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Cap funció OpenType dibuixa aquest glif aquí, de manera que substitueix el glif del caràcter i pot no unir-se als caràcters veïns.
 	Double-click to insert	Feu doble clic per inserir
 	Double-click to rename	Feu doble clic per canviar el nom
 	Double-click to target the contents	Feu doble clic per apuntar al contingut
@@ -1573,6 +1595,8 @@ antiAlias	Sharp	Nítid
 	Extrude & Bevel…	Extrudeix i bisella…
 	3D (Classic)	3D (clàssic)
 	Extrude & Bevel (Classic)…	Extrudeix i bisella (clàssic)…
+	Revolve (Classic)…	Revoluciona (clàssic)…
+	Rotate (Classic)…	Gira (clàssic)…
 	Surface	Superfície
 	Wireframe	Filferro
 	No Shading	Sense ombra
@@ -1882,6 +1906,7 @@ digits	Malayalam	Malaiàlam
 	Gridline every	Línia de quadrícula cada
 	Gridline every:	Línia de quadrícula cada:
 	Grids In Back	Quadrícules al darrere
+	Grit Textures	Textures granulades
 	Group	Agrupa
 	Group Selection	Selecció de grup
 	Group Selection Tool	Eina de selecció de grup
@@ -1906,6 +1931,14 @@ digits	Malayalam	Malaiàlam
 	Hand	Mà
 	Hand Tool	Eina de mà
 	Hand-Drawn	Dibuixat a mà
+	Painted and Sketched	Pintat i esbossat
+	Washed Blue	Blau rentat
+	Bristle Ochre	Ocre de cerres
+	Pastel Heather	Bruc pastel
+	Charcoal Shade	Ombra de carbó
+	Ink Contour	Contorn de tinta
+	Wet Ink	Tinta humida
+	Fine Pen	Ploma fina
 	Handles	Nanses
 	Hard	Dur
 	Hard Light	Llum dura
@@ -2509,6 +2542,8 @@ digits	Malayalam	Malaiàlam
 	Meters	Metres
 	Method	Mètode
 	Method:	Mètode:
+	Pad	Allarga
+	Repeats	Repeticions
 	Mezzotint	Mezzotinta
 	Mezzotint…	Mezzotinta…
 	Millimeters	Mil·límetres
@@ -2905,12 +2940,17 @@ digits	Malayalam	Malaiàlam
 	Opens network connections	Obre connexions de xarxa
 	Open…	Obre…
 	Optical	Òptic
+	Optical Effects	Efectes òptics
 	Optical Margin Alignment	Alineació òptica de marges
 	Dynamic Text	Text dinàmic
 	Dynamic Text Presets	Valors predefinits de text dinàmic
 	Arch	Volta
 @msg	select point type or type on a path	seleccioneu text de punt o text sobre un traçat
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el text sobre un traçat d’un text enllaçat no pot fer servir el text dinàmic: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	el text sobre un traçat obert o compost no es pot centrar a dalt o a baix: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	el text sobre un traçat sense longitud o sense alçada no es pot centrar: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	el text sobre un traçat d’un text enllaçat no es pot centrar a dalt o a baix: {frames}
+@msg	select type on a closed path	seleccioneu text sobre un traçat tancat
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat
 	Options	Opcions
@@ -2918,6 +2958,7 @@ digits	Malayalam	Malaiàlam
 	Options:	Opcions:
 	Options…	Opcions…
 	Organic Fades	Esvaïments orgànics
+	Holographic	Hologràfics
 	or more spaces with a tab	o més espais amb un tabulador
 	Orange	Taronja
 	Order:	Ordre:
@@ -3621,6 +3662,9 @@ digits	Malayalam	Malaiàlam
 	Roman	Romà
 	Roman Baseline	Línia de base romana
 	Roman Hanging Punctuation	Puntuació penjant romana
+	Korean Line Break Anywhere	Salt de línia coreà a qualsevol lloc
+	East Asian Composition Settings	Configuració de composició de l’Àsia oriental
+	Korean Composition Settings	Configuració de composició coreana
 	Rotate	Gira
 	Rotate 90° CW	Gira 90° en sentit horari
 	Rotate Tool	Eina de gir
@@ -3837,6 +3881,11 @@ digits	Malayalam	Malaiàlam
 	Scatter Brush Options	Opcions del pinzell de dispersió
 	Scatter Graph Tool	Eina de gràfic de dispersió
 	Scatter Shapes	Formes de dispersió
+	Dry Media	Tècniques seques
+	Chalk Grain	Gra de guix
+	Graphite Pencil	Llapis de grafit
+	Wax Crayon	Cera de colors
+	Charcoal Dust	Pols de carbó
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores
@@ -4278,6 +4327,9 @@ digits	Malayalam	Malaiàlam
 	Sponge…	Esponja…
 	spot	directe
 	Spot Color	Color directe
+	Spot Color Objects	Objectes amb colors directes
+	Pattern Objects	Objectes amb motius
+	Gradient Objects	Objectes amb degradats
 	Spot Colors	Colors directes
 	Spot Colors (0)	Colors directes (0)
 	Spot Colors…	Colors directes…
@@ -4617,6 +4669,7 @@ digits	Malayalam	Malaiàlam
 	Tracking	Espaiat
 	Trackpad Gesture to Rotate View	Gesticulació del trackpad per girar la vista
 	Hold a Tool Shortcut to Use the Tool Temporarily	Mantén premuda la drecera d’una eina per usar-la temporalment
+	Show Bounding Box While Moving and Drawing	Mostra el quadre delimitador en moure i dibuixar
 	Trademark Symbol	Símbol de marca comercial
 	Transform	Transforma
 	Transform Again	Transforma de nou
@@ -4685,6 +4738,8 @@ digits	Malayalam	Malaiàlam
 	Type on a Path	Text sobre un traçat
 	Type on a Path Options	Opcions de text sobre un traçat
 	Type on a Path Options…	Opcions de text sobre un traçat…
+	Center on Top	Centra a dalt
+	Center on Bottom	Centra a baix
 	Type on a Path Tool	Eina de text sobre un traçat
 	Type Optimized	Optimitzat per al text
 	Type Orientation	Orientació del text
@@ -5068,6 +5123,9 @@ digits	Malayalam	Malaiàlam
 @msg	`colors` must be an array of colors, not {v}	`colors` ha de ser una matriu de colors, no {v}
 @msg	`library` is a library id or name (see {list})	`library` és un identificador o un nom de biblioteca (vegeu {list})
 @msg	`method` must be classic or perceptual	`method` ha de ser classic o perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` ha de ser pad, repeat o reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` ha de ser un nombre enter d’1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’aplica als degradats lineals, radials, cònics i de rombe
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` i `maxAnchors` han de ser nombres enters
 @msg	`mode` applies to freeform gradients	`mode` s’aplica als degradats de forma lliure
 @msg	a negative `aspect` applies to conic gradients	un `aspect` negatiu s’aplica als degradats cònics
@@ -5081,6 +5139,7 @@ digits	Malayalam	Malaiàlam
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` ha de ser 1, 3 o 5
 @msg	`select` must be true or false	`select` ha de ser true o false
 @msg	`stops` must be an array	`stops` ha de ser una matriu
+@msg	`{key}` must be an array	`{key}` ha de ser una matriu
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` ha de ser un objecte d’opcions SVG (vegeu document.formats)
 @msg	`to` must be "corner" or "smooth"	`to` ha de ser "corner" o "smooth"
 @msg	`{_1}` has no brushes to apply	`{_1}` no té pinzells per aplicar
@@ -5270,6 +5329,7 @@ digits	Malayalam	Malaiàlam
 @msg	column must be true or a number from 1	column ha de ser true o un nombre a partir d’1
 @msg	Combine Slices: the slices have no bounds	Combina els talls: els talls no tenen límits
 @msg	command `{0}` is not available right now: {1}	l’ordre `{0}` no està disponible ara mateix: {1}
+@msg	command `{id}` is not available right now	l’ordre `{id}` no està disponible ara mateix
 @msg	compound paths can only contain paths	els traçats compostos només poden contenir traçats
 @msg	compressed (RLE) bitmaps can't be read yet	encara no es poden llegir els mapes de bits comprimits (RLE)
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control ha de ser fillStroke, coloring, drawMode o screenMode
@@ -5641,6 +5701,7 @@ digits	Malayalam	Malaiàlam
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no és un conjunt de dreceres de VectorCraft (falta `overrides`)
 @msg	not an EMF or WMF file	no és un fitxer EMF o WMF
 @msg	not an HP-GL file	no és un fitxer HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` ha de ser una matriu d’1 a 255 colors #rrggbb
 @msg	not an RTF file: it doesn't start with {\\rtf	no és un fitxer RTF: no comença amb {\\rtf
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
@@ -5991,6 +6052,8 @@ digits	Malayalam	Malaiàlam
 @msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	aquest fitxer PostScript no es pot llegir ({why}): desa’l com a PDF o SVG a l’aplicació que l’ha creat
 @msg	This shortcut file is in a form VectorCraft can't read.	Aquest fitxer de dreceres té un format que VectorCraft no pot llegir.
 @msg	this system has no screen color sampler	aquest sistema no té cap mostrejador de color de pantalla
+@msg	the screen color sampler did not answer	el mostrejador de color de pantalla no ha respost
+@msg	the screen color sampler failed	el mostrejador de color de pantalla ha fallat
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	aquesta traça crearia més de {max} punts d’ancoratge, més dels que el document pot mostrar amb fluïdesa: augmenta el Soroll, redueix Traçats o Colors, o tria un preajust de fidelitat més baixa
 @msg	thumbnail: no page {n} (the file has 1)	miniatura: no hi ha la pàgina {n} (el fitxer en té 1)
 @msg	tintReduction must be from 0 to 100 %	tintReduction ha de ser d’entre 0 i 100 %
@@ -6482,6 +6545,10 @@ anchor	Points:	Punts:
 @msg	features lists at most {max} tags	features admet com a màxim {max} etiquetes
 @msg	unknown OpenType feature `{t}`	funció OpenType desconeguda `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} ha de ser un nombre superior a 0 i com a màxim {max}
+@msg	{label} must be at most {max} characters	{label} ha de tenir com a màxim {max} caràcters
+@msg	{label} must be one character	{label} ha de ser un sol caràcter
+@msg	at most {max} tab stops	com a màxim {max} tabulacions
+@msg	unknown align `{other}`	alineació desconeguda `{other}`
 @msg	no character style `{name}`	No s'ha trobat l'estil de caràcter `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6652,6 +6719,12 @@ breakText	Glyphs	Glifs
 	Delete the selected brushes?	Voleu suprimir els pinzells seleccionats?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Hi ha traços que fan servir un o més d’aquests pinzells. Voleu treure els pinzells d’aquests traços i suprimir els pinzells?
 	Remove Strokes	Elimina els traços
+	Place Brush Art	Col·loca l’art del pinzell
+	Replace Brush Art	Substitueix l’art del pinzell
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
+	Apply to Strokes	Aplica als traços
+	Leave Strokes	Deixa els traços
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` no té art (només en tenen els pinzells de dispersió, artístics i de motiu)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Eines d’organització
 	Arrange in Grid…	Organitza en quadrícula…
@@ -6904,8 +6977,38 @@ breakText	Glyphs	Glifs
 @plural	{n} line cut|{n} lines cut	{n} línia tallada|{n} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
 
+# Learn panel
+	Learn	Aprèn
+	Explore tutorials	Explora els tutorials
+	For you	Per a vós
+	Skills	Habilitats
+	Get started	Primers passos
+	Quick skill guide	Guia ràpida d’habilitats
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorials pràctics breus de les eines essencials, agrupats per habilitat. Trieu una habilitat per veure’n els tutorials.
+	List Tutorials	Llista els tutorials
+	Show Tutorial	Mostra el tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats
 	Deferred Effects	Efectes ajornats
 @msg	no plug-in effect is deferred	no hi ha cap efecte de complement ajornat
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	S’ha obert amb {n} efecte de complement ajornat. Efecte › Actualitza els efectes ajornats l’executa.|S’ha obert amb {n} efectes de complement ajornats. Efecte › Actualitza els efectes ajornats els executa.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Eines de tall
+	Stencil Bridges…	Ponts de plantilla…
+	Stencil Bridges	Ponts de plantilla
+	Shortest Crossing	Travessia més curta
+	Direction	Direcció
+@msg	The selected art has no islands to bridge	La il·lustració seleccionada no té illes per unir
+@msg	No bridge of this width fits across the selected art	Cap pont d’aquesta amplada no cap a la il·lustració seleccionada
+@msg	Some islands could not be joined to the area around the art	Algunes illes no s’han pogut unir a l’àrea que envolta la il·lustració
+@msg	`width` must be from {lo} to {hi} pt	`width` ha d’estar entre {lo} i {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` ha de ser un nombre enter d’1 a {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Caixa i línies de pelat…
+	Weed Box and Lines	Caixa i línies de pelat
+	Margin	Marge
+	Box	Caixa
+	Swatch	Mostra

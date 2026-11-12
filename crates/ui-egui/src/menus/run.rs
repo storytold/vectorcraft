@@ -114,6 +114,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::workspaces::run_command(app, id, p))
         .or_else(|| crate::edit_toolbar::command(app, id, p))
         .or_else(|| crate::custom_toolbars::command(app, id, p))
+        .or_else(|| crate::panels::learn::command(app, id, p))
     {
         return Some(r);
     }
@@ -155,10 +156,21 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.openWith" => io::open_with(app, p),
         // Saves write through the app (save panel, download); with no path known the panel and the
         // format's options dialog ask first.
-        "file.save" => io::save(app, SaveMode::Save, p, true),
-        "file.saveAs" => io::save(app, SaveMode::SaveAs, p, true),
-        "file.saveCopy" => io::save(app, SaveMode::Copy, p, true),
-        "file.saveAsTemplate" => io::save(app, SaveMode::Template, p, true),
+        // A confined request sees the document's own file, and the folder a save suggests, only
+        // inside its read roots.
+        "file.save" | "file.saveAs" | "file.saveCopy" | "file.saveAsTemplate" => {
+            let mode = match id {
+                "file.save" => SaveMode::Save,
+                "file.saveAs" => SaveMode::SaveAs,
+                "file.saveCopy" => SaveMode::Copy,
+                _ => SaveMode::Template,
+            };
+            let saved = if mode == SaveMode::Save { io::save_current(app, p) } else { io::save(app, mode, p, true) };
+            saved.map(|mut r| {
+                vectorcraft_engine::cmd::fileio::leave_out_unreadable_save_paths(&mut r, p.get("path").and_then(Value::as_str));
+                r
+            })
+        }
         "document.exportSelection" => {
             io::save_command_output(app, id, "png", if p.is_object() { p.clone() } else { json!({}) }).map(|p| json!({"path": p}))
         }

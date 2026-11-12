@@ -88,19 +88,17 @@ fn dynamic_text_refuses_bad_params_and_other_type() {
     assert!(err(s.execute("type.dynamicText", &json!({"on": 1}))).contains("on"));
     assert_eq!(undo_len(&s), before);
     assert!(!text(&s, id).dynamic_text);
-    // Point type alone: refused (area type takes Block, `typecmd::block_tests`).
     let point = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
-    s.execute("select.set", &json!({"ids": [point]})).unwrap();
-    assert!(err(s.execute("type.dynamicText", &json!({}))).contains("select type on a path or area type"));
     let empty = s.execute("shape.rectangle", &json!({"x": 300, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [empty]})).unwrap();
     assert!(s.execute("type.dynamicText", &json!({})).is_err());
-    // With point type selected too, only the type on a path changes.
+    // With point type selected too, both change in one undo step: the point type becomes area
+    // type with Block on (`typecmd::block_tests`).
     let before = undo_len(&s);
     s.execute("select.set", &json!({"ids": [point, id.0]})).unwrap();
     let r = s.execute("type.dynamicText", &json!({"on": true})).unwrap();
-    assert_eq!(r["ids"], json!([id.0]));
-    assert!(!text(&s, NodeId(point)).dynamic_text);
+    assert_eq!(r["ids"], json!([point, id.0]));
+    assert!(text(&s, NodeId(point)).dynamic_text && text(&s, id).dynamic_text);
     assert_eq!(undo_len(&s), before + 1);
 }
 
@@ -232,6 +230,26 @@ fn svg_export_writes_the_drawn_size() {
         .collect();
     assert!(sizes.iter().any(|v| (v - size).abs() < 1e-3), "{size} in {sizes:?}");
     assert!(!sizes.iter().any(|v| (v - 12.0).abs() < 1e-3), "the stored size is not written: {sizes:?}");
+}
+
+#[test]
+fn release_type_on_a_path_keeps_the_drawn_size() {
+    let mut s = session();
+    let id = on_line(&mut s, "Release");
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let size = 12.0 * fit(&s, id);
+    assert!(size > 24.0, "the text grows on the long line: {size}");
+    let r = s.execute("addon.type.releasePath", &json!({"ids": [id.0], "mode": "text"})).unwrap();
+    let released = NodeId(r["texts"][0].as_u64().unwrap());
+    let t = text(&s, released);
+    assert!(!t.dynamic_text, "point type does not keep Dynamic Text");
+    assert!((t.runs[0].style.size - size).abs() < 1e-9, "{} vs the drawn {size}", t.runs[0].style.size);
+    assert_eq!(fit(&s, released), 1.0);
+    // Type on a path without Dynamic Text keeps its stored size.
+    let plain = on_line(&mut s, "Plain");
+    let r = s.execute("addon.type.releasePath", &json!({"ids": [plain.0], "mode": "text"})).unwrap();
+    let t = text(&s, NodeId(r["texts"][0].as_u64().unwrap()));
+    assert!(!t.dynamic_text && t.runs[0].style.size == 12.0);
 }
 
 /// 12 pt point type at (100, 100), selected, with its layout bounds.

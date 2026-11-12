@@ -184,6 +184,20 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Window › Brush Libraries menu, built from the built-in library table, names each library.
+#[test]
+fn built_in_brush_library_names_are_in_complete_catalogs() {
+    let mut bad = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&str> =
+            vectorcraft_engine::cmd::brushlib::BUILTIN.iter().map(|b| b.name).filter(|l| lang.catalog().plain(l).is_none()).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 /// Preference choices and the marquee's E hint share the same translated labels.
 #[test]
 fn marquee_selection_labels_are_in_complete_catalogs() {
@@ -225,6 +239,28 @@ fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The titles of Document Info's Spot Color Objects, Pattern Objects and Gradient Objects
+/// categories, which the panel, its menu and the Objects category's counts show.
+#[test]
+fn document_info_object_category_titles_are_in_complete_catalogs() {
+    let mut session = vectorcraft_engine::Session::new();
+    session.execute("file.new", &serde_json::json!({"width": 100, "height": 100})).unwrap();
+    let info = session.execute("document.info", &serde_json::json!({})).unwrap();
+    let titles: Vec<&str> = info["sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| matches!(s["id"].as_str(), Some("spotColors" | "patterns" | "gradients")))
+        .filter_map(|s| s["title"].as_str())
+        .collect();
+    assert_eq!(titles, ["Spot Color Objects", "Pattern Objects", "Gradient Objects"]);
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for title in &titles {
+            assert!(lang.catalog().plain(title).is_some(), "{} is missing {title}", lang.code);
+        }
+    }
+}
+
 /// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
 /// own `antiAlias` row apart from the plain "Sharp" corner row.
 #[test]
@@ -235,6 +271,20 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
             assert!(cat.plain(label).is_some(), "{} is missing {label}", lang.code);
         }
         assert!(cat.contextual("antiAlias", "Sharp").is_some(), "{} is missing the antiAlias Sharp row", lang.code);
+    }
+}
+
+/// The Painted and Sketched graphic style library's name and its styles' names have a row in every
+/// bundled catalog.
+#[test]
+fn painted_and_sketched_style_names_are_in_every_catalog() {
+    let lib = vectorcraft_doc::style_libs::builtin_style_library("painted-sketched").expect("built in");
+    let labels: Vec<&str> = std::iter::once(lib.name.as_str()).chain(lib.styles.iter().map(|g| g.name.as_str())).collect();
+    assert_eq!(labels.len(), 8);
+    for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
+        for label in &labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
     }
 }
 

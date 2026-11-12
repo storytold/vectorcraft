@@ -42,6 +42,29 @@ pub(crate) fn touched<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
     (out, seen)
 }
 
+/// May a reply to the request being served name `path`, a file or folder the client did not give?
+/// Always without roots in force; with them, only inside the read roots ([`crate::file_access::check_read`]).
+pub(crate) fn shown(path: &str) -> bool {
+    crate::file_access::check_read(path).is_ok()
+}
+
+/// `path` as a reply to the request being served names it: whole when [`shown`], else its file name,
+/// after the last `/` or `\` whichever platform wrote it (empty for a path that ends in no name, such
+/// as `..` or a folder ending in a separator).
+pub(crate) fn shown_path(path: &str) -> std::borrow::Cow<'_, str> {
+    shown_link(path, None)
+}
+
+/// A link's `stored` path as a reply to the request being served names it: whole when the file it
+/// names (`resolved`, else `stored` itself) is [`shown`], else its file name as [`shown_path`] gives it.
+pub(crate) fn shown_link<'a>(stored: &'a str, resolved: Option<&str>) -> std::borrow::Cow<'a, str> {
+    if shown(resolved.unwrap_or(stored)) {
+        return std::borrow::Cow::Borrowed(stored);
+    }
+    let name = stored.rsplit(vectorcraft_doc::links::path_separators(stored)).next().unwrap_or_default();
+    std::borrow::Cow::Borrowed(if matches!(name, "." | "..") { "" } else { name })
+}
+
 /// `path` checked for writing against the automation roots in force.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn may_write(path: &str) -> Result<()> {
@@ -87,6 +110,31 @@ pub fn write_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write)
     vectorcraft_doc::cancel::check()?;
     may_write(path)?;
     vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| EngineError::Other(format!("{path}: {e}")))
+}
+
+/// The save commands' writer: preserves a filesystem location refusal as a typed error. Other
+/// writers keep their existing errors; an automation-root refusal is never reclassified.
+pub fn write_save_file(path: &str, bytes: &[u8]) -> Result<()> {
+    write_save_file_with(path, &mut |w| w.write_all(bytes))
+}
+
+/// [`write_save_file`] for a streamed save.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn write_save_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
+    vectorcraft_doc::cancel::check()?;
+    may_write(path)?;
+    vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| save_write_error(path, e))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn save_write_error(path: &str, error: std::io::Error) -> EngineError {
+    let reason = format!("{path}: {error}");
+    if vectorcraft_format::read_only_location(&error) { EngineError::ReadOnlyLocation(reason) } else { EngineError::Other(reason) }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn write_save_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
+    write_file_with(path, fill)
 }
 
 #[cfg(not(target_arch = "wasm32"))]

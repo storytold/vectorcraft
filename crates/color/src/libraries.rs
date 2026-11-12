@@ -73,6 +73,7 @@ pub const GRADIENT_LIBRARIES: &[BuiltinLibrary] = &[
     lib!("sky-gradients", "Sky Gradients", sky_gradients),
     lib!("neutral-gradients", "Neutral Gradients", neutral_gradients),
     lib!("organic-fades", "Organic Fades", organic_fades),
+    lib!("holographic", "Holographic", holographic),
     lib!("duotone-gradients", "Duotone Gradients", duotone_gradients),
     lib!("radial-glows", "Radial Glows", radial_glows),
 ];
@@ -531,6 +532,62 @@ fn organic_fades() -> (Vec<Swatch>, Vec<SwatchGroup>) {
     (s, vec![])
 }
 
+/// The stops of a [`holographic`] look: offset, opacity and midpoint toward the next stop.
+type Bands = [(f32, f32, f32)];
+
+/// Foil: six opaque linear bands, a narrow bright one among them, with off-center midpoints.
+const FOIL: &Bands = &[(0.0, 1.0, 0.37), (0.13, 1.0, 0.64), (0.34, 1.0, 0.28), (0.48, 1.0, 0.68), (0.71, 1.0, 0.42), (1.0, 1.0, 0.5)];
+
+/// Glow: five radial rings from a bright center out to a clear edge.
+const GLOW: &Bands = &[(0.0, 0.95, 0.4), (0.12, 1.0, 0.58), (0.31, 0.72, 0.34), (0.58, 0.3, 0.62), (1.0, 0.0, 0.5)];
+
+/// A [`holographic`] look: name, kind, stops and the OKLCH color of each stop in order.
+type Look = (&'static str, GradientKind, &'static Bands, Anchors);
+
+/// Iridescent looks mixed perceptually: linear foils of narrow pastel and pearl bands, and radial
+/// glows that fade out to a clear edge. Each color is one stop of [`FOIL`] or [`GLOW`] in order.
+fn holographic() -> (Vec<Swatch>, Vec<SwatchGroup>) {
+    use GradientKind::{Linear, Radial};
+    // Pale pearl, pastel and deep-violet OKLCH `(l, c, h°)` anchors.
+    const PEARL: (f64, f64, f64) = (0.97, 0.01, 90.0);
+    const SILVER: (f64, f64, f64) = (0.86, 0.015, 255.0);
+    const BLUSH: (f64, f64, f64) = (0.82, 0.055, 340.0);
+    const VIOLET: (f64, f64, f64) = (0.72, 0.1, 310.0);
+    const BLUE: (f64, f64, f64) = (0.73, 0.09, 255.0);
+    const CYAN: (f64, f64, f64) = (0.79, 0.09, 210.0);
+    const MINT: (f64, f64, f64) = (0.82, 0.08, 165.0);
+    const LIME: (f64, f64, f64) = (0.86, 0.085, 125.0);
+    const GOLD: (f64, f64, f64) = (0.89, 0.08, 85.0);
+    const AMBER: (f64, f64, f64) = (0.82, 0.1, 55.0);
+    const CORAL: (f64, f64, f64) = (0.78, 0.09, 25.0);
+    const DEEP_VIOLET: (f64, f64, f64) = (0.42, 0.04, 275.0);
+    let looks: [Look; 14] = [
+        ("Prism Veil", Linear, FOIL, &[SILVER, BLUSH, PEARL, CYAN, VIOLET, SILVER]),
+        ("Opal Ribbon", Linear, FOIL, &[PEARL, MINT, BLUSH, PEARL, BLUE, SILVER]),
+        ("Pearl Flash", Linear, FOIL, &[SILVER, VIOLET, PEARL, GOLD, CYAN, PEARL]),
+        ("Aurora Foil", Linear, FOIL, &[BLUE, MINT, PEARL, BLUSH, CYAN, SILVER]),
+        ("Iris Sheen", Linear, FOIL, &[BLUSH, VIOLET, PEARL, CYAN, MINT, SILVER]),
+        ("Frost Spectrum", Linear, FOIL, &[CYAN, BLUE, PEARL, MINT, BLUSH, SILVER]),
+        ("Silver Tide", Linear, FOIL, &[SILVER, CYAN, PEARL, VIOLET, BLUE, SILVER]),
+        ("Rose Quartz Gleam", Radial, GLOW, &[PEARL, BLUSH, CORAL, VIOLET, BLUSH]),
+        ("Moonstone Shift", Radial, GLOW, &[PEARL, CYAN, MINT, BLUE, SILVER]),
+        ("Violet Edge", Radial, GLOW, &[PEARL, VIOLET, BLUSH, BLUE, DEEP_VIOLET]),
+        ("Mint Halo", Radial, GLOW, &[PEARL, MINT, CYAN, LIME, MINT]),
+        ("Amber Corona", Radial, GLOW, &[PEARL, GOLD, AMBER, CORAL, AMBER]),
+        ("Polar Glint", Radial, GLOW, &[PEARL, CYAN, BLUE, VIOLET, BLUE]),
+        ("Pastel Orbit", Radial, GLOW, &[PEARL, BLUSH, MINT, CYAN, VIOLET]),
+    ];
+    let s = looks
+        .iter()
+        .map(|&(name, kind, bands, colors)| {
+            let stops: Vec<(f32, Color, f32, f32)> =
+                bands.iter().zip(colors).map(|(&(at, opacity, mid), &(l, c, h))| (at, oklch(l, c, h), opacity, mid)).collect();
+            gradient_with(name, kind, GradientMethod::Perceptual, &stops)
+        })
+        .collect();
+    (s, vec![])
+}
+
 /// The sequential scales of [`perceptual`]: name and anchors of rising lightness.
 const SEQUENTIAL: [(&str, Anchors); 5] = [
     ("Ember", &[(0.22, 0.10, 300.0), (0.55, 0.18, 30.0), (0.93, 0.15, 100.0)]),
@@ -709,8 +766,62 @@ mod tests {
     }
 
     #[test]
+    fn holographic_holds_seven_opaque_foils_and_seven_glows_to_a_clear_edge() {
+        let lib = builtin_library("holographic").unwrap();
+        let order: Vec<&str> = GRADIENT_LIBRARIES.iter().map(|b| b.name).collect();
+        assert_eq!(order.iter().position(|n| *n == "Holographic"), Some(4), "after Organic Fades: {order:?}");
+        assert!(lib.groups.is_empty());
+        assert_eq!(lib.len(), 14);
+        // No name another built-in gradient has, in any case.
+        let mut others = std::collections::HashSet::new();
+        for other in builtins().filter(|b| b.id != "holographic").map(|b| builtin_library(b.id).unwrap()) {
+            others.extend(other.iter().filter(|s| matches!(s.paint, Paint::Gradient(_))).map(|s| s.name.to_lowercase()));
+        }
+        assert!(lib.iter().all(|s| !others.contains(&s.name.to_lowercase())), "a name another library has");
+        let (mut foils, mut glows) = (0, 0);
+        for s in lib.iter() {
+            let Paint::Gradient(g) = &s.paint else { panic!("{} is a gradient", s.name) };
+            let (g, n) = (&g.gradient, &s.name);
+            assert_eq!(g.method, GradientMethod::Perceptual, "{n}");
+            let bands = match &g.kind {
+                GradientKind::Linear => {
+                    foils += 1;
+                    FOIL
+                }
+                GradientKind::Radial => {
+                    glows += 1;
+                    GLOW
+                }
+                kind => panic!("{n}: {kind:?}"),
+            };
+            // Every stop takes its band's offset, opacity and midpoint, and none is dropped.
+            let shape: Vec<(f32, f32, f32)> = g.stops.iter().map(|st| (st.offset, st.opacity, st.midpoint)).collect();
+            assert_eq!(shape, bands, "{n}");
+            assert!(g.stops.iter().all(|st| matches!(st.color, Color::Rgb { .. })), "{n}");
+        }
+        assert_eq!((foils, glows), (7, 7));
+        // Foils are opaque; a glow is clear at the edge.
+        assert!(FOIL.iter().all(|&(_, opacity, _)| opacity == 1.0));
+        assert_eq!(GLOW.last().map(|b| b.1), Some(0.0));
+        // Every segment's midpoint is off center and within the Gradient panel's 13 to 87%.
+        for bands in [FOIL, GLOW] {
+            assert!(bands[..bands.len() - 1].iter().all(|&(_, _, m)| (m - 0.5).abs() > 0.02 && (0.13..=0.87).contains(&m)));
+            assert!(bands.windows(2).all(|w| w[0].0 < w[1].0) && bands[0].0 == 0.0 && bands[bands.len() - 1].0 == 1.0);
+        }
+        // Sampled colors: Prism Veil's bright band is the pearl anchor, and Violet Edge ends in deep violet.
+        let stop = |name: &str, i: usize| match &lib.swatch(name).unwrap().paint {
+            Paint::Gradient(g) => g.gradient.stops[i].color,
+            _ => panic!("{name} is a gradient"),
+        };
+        assert_eq!(stop("Prism Veil", 2), oklch(0.97, 0.01, 90.0));
+        assert_eq!(stop("Violet Edge", 4), oklch(0.42, 0.04, 275.0));
+        let [l, ..] = to_oklab(&stop("Violet Edge", 4));
+        assert!(l < 0.5 && to_oklab(&stop("Prism Veil", 2))[0] > 0.95, "{l}");
+    }
+
+    #[test]
     fn the_other_libraries_keep_classic_mixing_and_centered_midpoints() {
-        for b in builtins().filter(|b| b.id != "organic-fades") {
+        for b in builtins().filter(|b| !["organic-fades", "holographic"].contains(&b.id)) {
             for s in builtin_library(b.id).unwrap().iter() {
                 if let Paint::Gradient(g) = &s.paint {
                     assert_eq!(g.gradient.method, GradientMethod::Classic, "{}", s.name);

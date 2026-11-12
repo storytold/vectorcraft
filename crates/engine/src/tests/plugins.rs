@@ -505,6 +505,30 @@ fn a_painted_group_effect_links_to_the_document_s_swatches() {
     assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (GREEN, WHITE), "the group's piece, green");
 }
 
+/// A painted effect on a group leaves the group's art as it is when a path in it has a linked
+/// opacity mask, which can't take the pieces as the path does: the mask still covers the path.
+#[test]
+fn a_painted_group_effect_leaves_art_with_a_linked_mask_as_it_is() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let m = rect(&mut s, 10.0, "#ffffff");
+    run(&mut s, "select.set", json!({"ids": [a.0, m.0]}));
+    run(&mut s, "transparency.makeOpacityMask", json!({}));
+    rect(&mut s, 100.0, "#0000ff");
+    run(&mut s, "select.all", json!({}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.maskedpaint", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "plugin.test.engine.maskedpaint"}));
+    let art = vectorcraft_render::effects::evaluate_container(Some(&s.doc().unwrap().doc), &node(&s, g)).unwrap();
+    let mut masked = vec![];
+    art.walk(&mut |c| masked.extend(c.extras().mask.as_ref().map(|k| (c.geometric_bounds(), k.art.geometric_bounds()))));
+    assert!(!masked.is_empty(), "the masked path");
+    for (path, mask) in masked {
+        assert_eq!(path, mask, "the mask covers the path");
+    }
+}
+
 /// The output of a painted effect that returns one green square linked to swatch `Leaf`.
 fn leaf_square() -> String {
     let mut leaf = solid("#00ff00");
@@ -1153,6 +1177,98 @@ fn deferred_stages_in_symbol_art_are_listed_and_refreshed() {
     assert_eq!(run(&mut s, "effect.deferredStatus", json!({}))["effects"], json!([]));
 }
 
+/// `effect.refreshDeferred` takes the id of an object in the art of a symbol, pattern, brush or
+/// opacity mask, as `effect.deferredStatus` lists it: one with a deferred stage is refreshed, and
+/// one without (or whose stage is gone) adds nothing to the counts. The id of art that is no
+/// longer in the document is an error.
+#[test]
+fn refresh_takes_objects_in_definition_art() {
+    let mut s = session();
+    const FX: &str = "plugin.test.engine.deferred.nested";
+    let out = json!({"objects": [{"path": square_at(110.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&tpl::manifest("test.engine.deferred.nested", "effect", "{}"), &out));
+    // A symbol whose art holds an object with the effect and one without.
+    let staged = rect(&mut s, 10.0, "#ff0000");
+    let plain = rect(&mut s, 30.0, "#ff0000");
+    run(&mut s, "effect.apply", json!({"ids": [staged.0], "effect": FX}));
+    run(&mut s, "select.set", json!({"ids": [staged.0, plain.0]}));
+    run(&mut s, "symbol.new", json!({"name": "Nested"}));
+    // A pattern, an art brush (its source deleted) and an opacity mask, none with a stage.
+    let tile = rect(&mut s, 50.0, "#00ff00");
+    run(&mut s, "select.set", json!({"ids": [tile.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Tile", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let bar = rect(&mut s, 70.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [bar.0]}));
+    run(&mut s, "brush.new", json!({"type": "art", "name": "Bar"}));
+    run(&mut s, "edit.clear", json!({"ids": [bar.0]}));
+    let masked = rect(&mut s, 90.0, "#ff0000");
+    let mask = rect(&mut s, 90.0, "#ffffff");
+    run(&mut s, "select.set", json!({"ids": [masked.0, mask.0]}));
+    run(&mut s, "transparency.makeOpacityMask", json!({}));
+    // A layer object with a stage that stays deferred, and one without.
+    let kept = rect(&mut s, 130.0, "#ff0000");
+    run(&mut s, "effect.apply", json!({"ids": [kept.0], "effect": FX}));
+    let bare = rect(&mut s, 150.0, "#ff0000");
+
+    // The ids of the objects of `art` that are not in the layers.
+    let nested = |s: &Session, art: &vectorcraft_doc::Node| {
+        let d = &s.doc().unwrap().doc;
+        let mut ids = Vec::new();
+        vectorcraft_doc::swatches::walk_with_masks(art, &mut |n| {
+            if d.node(n.id).is_none() {
+                ids.push(n.id.0);
+            }
+        });
+        ids
+    };
+    let d = s.doc().unwrap().doc.clone();
+    let in_symbol = nested(&s, &d.symbols[0].art);
+    let in_pattern = d.patterns.iter().flat_map(|p| p.art.iter().flat_map(|a| nested(&s, a))).collect::<Vec<_>>();
+    let brushes = vectorcraft_brush::library(&d);
+    let in_brush = brushes.iter().flat_map(|b| b.art().into_iter().flat_map(|a| nested(&s, a)).collect::<Vec<_>>()).collect::<Vec<_>>();
+    let in_mask = d.node(masked).and_then(|n| n.extras().mask.as_ref()).map(|m| nested(&s, &m.art)).unwrap_or_default();
+    for (what, ids) in [("symbol", &in_symbol), ("pattern", &in_pattern), ("brush", &in_brush), ("opacity mask", &in_mask)] {
+        assert!(!ids.is_empty(), "the {what} art has an object outside the layers");
+    }
+
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    fx.view(|| drawn(&s));
+    fx.first_view_done();
+    let listed = |s: &mut Session| {
+        run(s, "effect.deferredStatus", json!({}))["effects"].as_array().unwrap().iter().map(|e| e["objectId"].as_u64().unwrap()).collect::<Vec<_>>()
+    };
+    let deferred = listed(&mut s);
+    let [nested_staged, last] = deferred[..] else { panic!("two stages: {deferred:?}") };
+    assert!(in_symbol.contains(&nested_staged) && last == kept.0, "{deferred:?} {in_symbol:?}");
+    let Some(&nested_plain) = in_symbol.iter().find(|i| **i != nested_staged) else { panic!("{in_symbol:?}") };
+
+    // Objects without a stage, each on its own and together: nothing to refresh.
+    let none = json!({"refreshed": 0, "stillDeferred": 0, "failed": 0});
+    let mut plain_ids = vec![nested_plain, in_pattern[0], in_brush[0], in_mask[0], bare.0];
+    for id in &plain_ids {
+        assert_eq!(run(&mut s, "effect.refreshDeferred", json!({"id": id})), none, "object {id}");
+    }
+    assert_eq!(run(&mut s, "effect.refreshDeferred", json!({"ids": plain_ids})), none);
+    assert_eq!(listed(&mut s), [nested_staged, kept.0]);
+
+    // The staged object of the symbol's art, by its id, with the others.
+    step.store(0, std::sync::atomic::Ordering::Relaxed);
+    plain_ids.push(nested_staged);
+    assert_eq!(run(&mut s, "effect.refreshDeferred", json!({"ids": plain_ids})), json!({"refreshed": 1, "stillDeferred": 0, "failed": 0}));
+    assert_eq!(listed(&mut s), [kept.0]);
+    // Its stage is gone; the object is still there.
+    assert_eq!(run(&mut s, "effect.refreshDeferred", json!({"id": nested_staged})), none);
+
+    // Art no longer in the document, and an id of no object.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).patterns.clear();
+    assert!(s.execute("effect.refreshDeferred", &json!({"id": in_pattern[0]})).is_err(), "the pattern is gone");
+    assert!(s.execute("effect.refreshDeferred", &json!({"ids": [nested_plain, 999_999]})).is_err(), "not an object of the document");
+    assert_eq!(listed(&mut s), [kept.0]);
+}
+
 /// `CRAFT_PLUGIN_PAINTS_WASM=<folder>` saves a test live effect to try in the app
 /// (`stroke-width-test-effect.wasm`): it draws a triangle over the area 100,80–300,230 while its
 /// object's stroke is 5 pt wide, and hands the geometry back otherwise.
@@ -1338,6 +1454,92 @@ fn plugins_folder_set_again_after_clearing_installs_its_plugins() {
     run(&mut s, "prefs.set", json!({"key": "pluginsFolder", "value": ""}));
     run(&mut s, "prefs.set", folder);
     assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again when the folder is set again");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// Under automation read roots, `plugin.list` names the plug-in folder last loaded, its failed
+/// files and a plug-in's source file only inside them: a folder outside is `null`, and a file
+/// outside is named by its file name.
+#[test]
+fn plugin_list_leaves_out_paths_outside_the_read_root() {
+    use crate::file_access::{AutomationRoots, confine};
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let base = crate::tests_links::Folder::new("plugin-list-read-root");
+    let (inside, outside) = (base.0.join("in"), base.0.join("out"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let id = "test.engine.listroots";
+    let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+    std::fs::write(outside.join("hidden.wasm"), wat::parse_str(src).unwrap()).unwrap();
+    std::fs::write(outside.join("broken.wasm"), b"\0asm?").unwrap();
+    let folder = outside.to_string_lossy().to_string();
+    let mut s = session();
+    let r = run(&mut s, "plugin.reload", json!({"path": folder}));
+    assert_eq!(r["loaded"], json!([id]), "{r}");
+    let broken = outside.join("broken.wasm").to_string_lossy().to_string();
+    let source = outside.join("hidden.wasm").to_string_lossy().to_string();
+    let entry = |list: &Value| list["plugins"].as_array().unwrap().iter().find(|p| p["id"] == id).cloned().unwrap();
+
+    // The person sees the paths.
+    let person = run(&mut s, "plugin.list", json!({}));
+    assert_eq!((&person["folder"]["folder"], &person["folder"]["failed"][0]["file"]), (&json!(folder), &json!(broken)), "{person}");
+    assert_eq!(entry(&person)["source"], json!(source));
+
+    // The client sees their names.
+    let roots = AutomationRoots::new(&[&inside], &[]).unwrap();
+    let listed = confine(roots.as_ref(), || s.execute("plugin.list", &json!({}))).unwrap();
+    let report = &listed["folder"];
+    assert_eq!((&report["folder"], &report["loaded"], &report["failed"][0]["file"]), (&Value::Null, &json!([id]), &json!("broken.wasm")), "{listed}");
+    assert_eq!(entry(&listed)["source"], "hidden.wasm");
+    let info = confine(roots.as_ref(), || s.execute("plugin.info", &json!({"id": id}))).unwrap();
+    assert_eq!(info["source"], "hidden.wasm");
+    let outside_text = json!(folder).to_string();
+    for reply in [&listed, &info] {
+        assert!(!reply.to_string().contains(outside_text.trim_matches('"')), "no path outside the root: {reply}");
+    }
+
+    // A read root holding the folder shows it whole.
+    let wider = AutomationRoots::new(&[&outside], &[]).unwrap();
+    let listed = confine(wider.as_ref(), || s.execute("plugin.list", &json!({}))).unwrap();
+    assert_eq!(listed["folder"]["folder"], json!(folder), "{listed}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// Under automation read roots, a plug-in turned off for the next launch is listed with a file
+/// outside them named by its file name, and `plugin.setEnabled` turns it on by that name.
+#[test]
+fn disabled_plugins_name_files_outside_the_read_root_by_their_names() {
+    if !in_own_process("disabled_plugins_name_files_outside_the_read_root_by_their_names") {
+        return;
+    }
+    use crate::file_access::{AutomationRoots, confine};
+    let base = crate::tests_links::Folder::new("plugin-disabled-read-root");
+    let (inside, outside) = (base.0.join("in"), base.0.join("out"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let id = "test.engine.disabledroots";
+    let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+    let file = outside.join("off.wasm");
+    std::fs::write(&file, wat::parse_str(src).unwrap()).unwrap();
+    let file = file.to_string_lossy().to_string();
+    let mut s = session();
+    run(&mut s, "plugin.install", json!({"path": file}));
+    let roots = AutomationRoots::new(&[&inside], &[]).unwrap();
+    // The client turns it off by the source plugin.list shows.
+    let listed = confine(roots.as_ref(), || s.execute("plugin.list", &json!({}))).unwrap();
+    let source = listed["plugins"].as_array().unwrap().iter().find(|p| p["id"] == id).unwrap()["source"].clone();
+    assert_eq!(source, "off.wasm", "{listed}");
+    confine(roots.as_ref(), || s.execute("plugin.setEnabled", &json!({"file": source, "enabled": false}))).unwrap();
+    assert_eq!(run(&mut s, "plugin.safeMode", json!({}))["disabled"][0]["file"], json!(file), "the person sees the path");
+
+    let outside_text = json!(outside.to_string_lossy()).to_string();
+    for cmd in ["plugin.list", "plugin.safeMode"] {
+        let r = confine(roots.as_ref(), || s.execute(cmd, &json!({}))).unwrap();
+        assert_eq!(r["disabled"][0]["file"], "off.wasm", "{cmd}: {r}");
+        assert!(!r.to_string().contains(outside_text.trim_matches('"')), "{cmd}: no path outside the root: {r}");
+    }
+    let r = confine(roots.as_ref(), || s.execute("plugin.setEnabled", &json!({"file": "off.wasm", "enabled": true}))).unwrap();
+    assert_eq!((&r["changed"], &r["disabled"]), (&json!(true), &json!([])), "{r}");
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 

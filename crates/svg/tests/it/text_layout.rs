@@ -109,6 +109,60 @@ fn rich_text_writes_spacing_shift_and_scale() {
     assert_eq!(attr(tags[1], "y"), attr(tags[0], "y"));
 }
 
+/// The space before a line's first character (`kerningBefore`, #5111) moves the line's first
+/// `<tspan>` to where the character is drawn, left aligned or anchored at a centred line's centre.
+#[test]
+fn the_space_before_a_lines_first_character_moves_its_tspan() {
+    let before = CharStyle { kerning_before: 250.0, ..style(12.0) };
+    // 250/1000 em of 12 pt: 3 pt. The second paragraph's first character takes it too; the "O" after
+    // the first "H" is inside its line, so its value does nothing.
+    let runs = vec![run("HO", before.clone()), run("H\n", style(12.0)), run("H", before.clone()), run("O", style(12.0))];
+    let svg = export(&area_doc(runs, 200.0, Justify::Left), &ExportOptions::default());
+    // The first <tspan> on each baseline.
+    let mut starts: Vec<(f64, f64)> = vec![];
+    for t in tspans(&svg) {
+        let (x, y) = (attr(t, "x").unwrap(), attr(t, "y").unwrap());
+        if starts.last().is_none_or(|&(_, last)| last != y) {
+            starts.push((x, y));
+        }
+    }
+    assert_eq!(starts.iter().map(|s| s.0).collect::<Vec<_>>(), vec![3.0, 3.0], "{svg}");
+    // Centred, the line is 3 pt longer and the anchor sits at the middle of what a reader draws.
+    let svg = export(&area_doc(vec![run("H", before.clone()), run("OH", style(12.0))], 200.0, Justify::Center), &ExportOptions::default());
+    let x = tspans(&svg).iter().find_map(|t| attr(t, "x")).unwrap();
+    assert!((x - 101.5).abs() < 0.01, "{svg}");
+    // A justified line, which a reader's own advances place word by word, starts there too.
+    let words = vec![run("H", before.clone()), run("OH OH OH OH OH OH OH OH OH OH", style(12.0))];
+    let svg = export(&area_doc(words, 90.0, Justify::JustifyLeft), &ExportOptions::default());
+    assert_eq!(attr(tspans(&svg)[0], "x"), Some(3.0), "{svg}");
+}
+
+/// On a path, the space before the first character is its `dx` along the path. One before a
+/// character after a line break, which the `<textPath>` can't write, is kept as outlines.
+#[test]
+fn the_space_before_the_first_character_on_a_path_is_its_dx() {
+    let doc = |runs: Vec<TextRun>| {
+        let mut t = TextObject::point(Point::ZERO, "", style(12.0));
+        t.runs = runs;
+        let mut line = BezPath::new();
+        line.move_to((20.0, 100.0));
+        line.line_to((280.0, 100.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        vectorcraft_svg::export_full(&d, &ExportOptions::default(), None)
+    };
+    let before = CharStyle { kerning_before: 250.0, ..style(12.0) };
+    let out = doc(vec![run("HO", before.clone()), run("H", style(12.0))]);
+    let tags = tspans(&out.svg);
+    assert!(out.svg.contains("<textPath"), "{}", out.svg);
+    assert_eq!((attr(tags[0], "dx"), attr(tags[1], "dx")), (Some(3.0), None), "{}", out.svg);
+    let out = doc(vec![run("HO\n", style(12.0)), run("H", before)]);
+    assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("line break")), "{:?}", out.warnings);
+}
+
 /// Proportional Metrics (#966) is written as the `palt` feature, beside the character's own.
 #[test]
 fn proportional_metrics_write_palt() {
@@ -121,6 +175,19 @@ fn proportional_metrics_write_palt() {
     assert!(!tags[0].contains("palt"), "{}", tags[0]);
     assert!(tags[1].contains("font-feature-settings:&quot;palt&quot; 1"), "{}", tags[1]);
     assert!(tags[2].contains("dlig") && tags[2].contains("palt"), "{}", tags[2]);
+}
+
+/// A feature with a value (`salt=2`) is written as that value, `-tag` as 0, a plain tag as 1; a
+/// tag whose value is not a number is left out.
+#[test]
+fn feature_values_write_their_number() {
+    let valued = CharStyle { features: vec!["salt=2".into(), "-liga".into(), "ss01".into(), "swsh=12".into(), "salt=x".into()], ..style(12.0) };
+    let d = area_doc(vec![run("ab ", style(12.0)), run("cd", valued)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    let tags = tspans(&svg);
+    assert_eq!(tags.len(), 2, "{svg}");
+    assert!(tags[1].contains("font-feature-settings:&quot;salt&quot; 2, &quot;liga&quot; 0, &quot;ss01&quot; 1, &quot;swsh&quot; 12"), "{}", tags[1]);
+    assert!(!tags[1].contains("salt=x") && !tags[0].contains("salt"), "{svg}");
 }
 
 /// Character Direction: live text writes each run set Left to Right as a bidi embedding

@@ -1,5 +1,5 @@
 use super::envelope::{EnvelopeKind, H_DOWN, H_LEFT, H_RIGHT, H_UP, envelope_grid, mesh_at};
-use super::warp::{WarpStyle, flatten_subpath, resample, warp_point};
+use super::warp::{WarpNet, WarpStyle, flatten_subpath, resample, uses_net, warp_point};
 use super::{
     Affine, Anchor, Arc, Color, CubicBez, Deserialize, Node, ParamCurve, PathData, Point, Rect, Serialize, Shape, SubPath, Vec2, fifty, lerp_color,
     one,
@@ -1731,10 +1731,19 @@ pub(super) fn grid_eval(rows: usize, cols: usize, pts: &[Point], u: f64, v: f64)
 pub(super) fn surface_of<'a>(kind: &'a EnvelopeKind, src: Rect, frame: Affine) -> Box<dyn Fn(f64, f64) -> Point + 'a> {
     let flat = move |u: f64, v: f64| frame * Point::new(src.x0 + u * src.width(), src.y0 + v * src.height());
     match kind {
-        EnvelopeKind::Warp { style, bend, h: dh, v: dv, horizontal } => {
+        EnvelopeKind::Warp { style, bend, h: dh, v: dv, horizontal, version } => {
             let st = WarpStyle::from_id(style).unwrap_or(WarpStyle::Arc);
             let b = bend.clamp(-100.0, 100.0) / 100.0;
             let (dh, dv) = (dh.clamp(-100.0, 100.0) / 100.0, dv.clamp(-100.0, 100.0) / 100.0);
+            if uses_net(*version) {
+                let net = WarpNet::new(st, b, dh, dv, src.width(), src.height(), !*horizontal);
+                // Content with no width or no height takes the middle of the patch along that side.
+                let (flat_u, flat_v) = (src.width() <= 0.0, src.height() <= 0.0);
+                return Box::new(move |u: f64, v: f64| {
+                    let (u, v) = (if flat_u { 0.5 } else { u }, if flat_v { 0.5 } else { v });
+                    frame * (src.origin() + net.at(u, v).to_vec2())
+                });
+            }
             let c = src.center();
             let (hw, hh) = (src.width() / 2.0, src.height() / 2.0);
             let horizontal = *horizontal;

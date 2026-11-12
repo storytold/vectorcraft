@@ -364,6 +364,8 @@
 	Stair Step	Schodki
 	Gravity	Grawitacja
 	Type on a Path Options…	Opcje tekstu na ścieżce…
+	Center on Top	Wyśrodkuj na górze
+	Center on Bottom	Wyśrodkuj na dole
 	Threaded Text	Tekst wątkowy
 	Create	Utwórz
 	Release Selection	Uwolnij zaznaczenie
@@ -384,6 +386,10 @@
 	Arch	Sklepienie
 @msg	select point type or type on a path	zaznacz tekst punktowy lub tekst na ścieżce
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	nie można wyśrodkować na górze ani na dole tekstu na ścieżce otwartej lub złożonej: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	nie można wyśrodkować tekstu na ścieżce bez długości lub bez wysokości: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	nie można wyśrodkować na górze ani na dole tekstu na ścieżce w tekście wątkowym: {frames}
+@msg	select type on a closed path	zaznacz tekst na zamkniętej ścieżce
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
 	Show Hidden Characters	Pokaż ukryte znaki
@@ -455,6 +461,8 @@
 	Extrude & Bevel…	Wyciągnięcie i fazowanie…
 	3D (Classic)	3D (klasyczne)
 	Extrude & Bevel (Classic)…	Wyciągnięcie i fazowanie (klasyczne)…
+	Revolve (Classic)…	Obrót (klasyczny)…
+	Rotate (Classic)…	Obróć (klasyczny)…
 	Surface	Powierzchnia
 	Wireframe	Szkielet
 	No Shading	Bez cieniowania
@@ -768,6 +776,14 @@
 	Damp Paper	Wilgotny papier
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
+	Painted and Sketched	Malowane i szkicowane
+	Washed Blue	Rozmyty błękit
+	Bristle Ochre	Ochra pędzlem
+	Pastel Heather	Pastelowy wrzos
+	Charcoal Shade	Cień węglem
+	Ink Contour	Kontur tuszem
+	Wet Ink	Mokry tusz
+	Fine Pen	Cienkie pióro
 	Gradient Finishes	Wykończenia gradientowe
 	Shape Effects	Efekty kształtów
 	Blends and Transparency	Przejścia i przezroczystość
@@ -788,6 +804,7 @@
 	Sky Gradients	Gradienty nieba
 	Neutral Gradients	Gradienty neutralne
 	Organic Fades	Organiczne zanikania
+	Holographic	Holograficzne
 	Duotone Gradients	Gradienty dwutonowe
 	Radial Glows	Blaski promieniste
 	Save Swatch Library…	Zapisz bibliotekę próbek…
@@ -1330,6 +1347,7 @@ lighting	Light	Światło
 	Rotate View Tool	Narzędzie Obrót widoku
 	Trackpad Gesture to Rotate View	Obracaj widok gestem na gładziku
 	Hold a Tool Shortcut to Use the Tool Temporarily	Używaj narzędzia tymczasowo, przytrzymując jego skrót
+	Show Bounding Box While Moving and Drawing	Pokaż obwiednię podczas przesuwania i rysowania
 	Rounded Rectangle Tool	Narzędzie Zaokrąglony prostokąt
 	Scale Tool	Narzędzie Skalowanie
 	Scallop Tool	Narzędzie Ząbkowanie
@@ -1602,6 +1620,17 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Czcionka zaznaczonego znaku jest niedostępna.
 	No alternates for the selected character.	Brak alternatyw dla zaznaczonego znaku.
 	Double-click to replace	Kliknij dwukrotnie, aby zastąpić
+	Select one character with the Type tool first.	Najpierw zaznacz jeden znak narzędziem Tekst.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} to glif czcionki {font}, a nie czcionki zaznaczonego tekstu ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} należy do znaku {base} (U+{base_code}) {place}; Twoje zaznaczenie to {sel} (U+{code}).
+	at the start of a word	na początku wyrazu
+	in the middle of a word	w środku wyrazu
+	at the end of a word	na końcu wyrazu
+	standing alone	gdy stoi osobno
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} nie jest alternatywą znaku {sel} (U+{code}) w takiej postaci, w jakiej stoi w swoim wyrazie.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Kliknij dwukrotnie, aby wstawić zamiast tego {base} (U+{code}): forma prezentacyjna się nie łączy, litera tak.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Wstawiono {base} (U+{code}) zamiast formy prezentacyjnej: czcionka łączy go z sąsiadami zależnie od pozycji.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Żadna funkcja OpenType nie rysuje tutaj tego glifu, więc zastępuje on glif znaku i może nie łączyć się z sąsiednimi znakami.
 	Double-click to insert	Kliknij dwukrotnie, aby wstawić
 	Entire Font	Cała czcionka
 	glyph {id}	glif {id}
@@ -1768,6 +1797,8 @@ digits	Malayalam	Malajalam
 	Save Image Trace Preset	Zapisz ustawienie obrysu obrazu
 	Delete Image Trace Preset	Usuń ustawienie obrysu obrazu
 	Method:	Metoda:
+	Pad	Przedłuż
+	Repeats	Liczba powtórzeń
 	Mode:	Tryb:
 	Noise	Szum
 	Create:	Utwórz:
@@ -1924,6 +1955,9 @@ digits	Malayalam	Malajalam
 	Right Indent	Wcięcie z prawej
 	Right-to-Left Paragraph Direction	Kierunek akapitu od prawej do lewej
 	Roman Hanging Punctuation	Wysunięta interpunkcja łacińska
+	Korean Line Break Anywhere	Koreański podział wiersza w dowolnym miejscu
+	East Asian Composition Settings	Ustawienia składu wschodnioazjatyckiego
+	Korean Composition Settings	Ustawienia składu koreańskiego
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
 	Single-line Composer	Kompozytor jednowierszowy
 	Toggle Line Composer	Przełącz kompozytor wierszy
@@ -3805,6 +3839,9 @@ theme	Appearance	Wygląd
 	Select All Unused	Zaznacz wszystkie nieużywane
 	Sort by Kind	Sortuj według rodzaju
 	Sort by Name	Sortuj według nazwy
+	Spot Color Objects	Obiekty z kolorami dodatkowymi
+	Pattern Objects	Obiekty ze wzorkami
+	Gradient Objects	Obiekty z gradientami
 	Spot Colors	Kolory dodatkowe
 	Swatch Options	Opcje próbki
 	Ungroup Color Group	Rozgrupuj grupę kolorów
@@ -4383,6 +4420,7 @@ imageTrace	Outline	Kontur
 @msg	`globalAdjust` must be an object	`globalAdjust` musi być obiektem
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musi wynosić 1, 3 lub 5
 @msg	`stops` must be an array	`stops` musi być tablicą
+@msg	`{key}` must be an array	`{key}` musi być tablicą
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musi być obiektem opcji SVG (patrz document.formats)
 @msg	`{_1}` is no save command	`{_1}` nie jest poleceniem zapisu
 @msg	`{area}` is no recovery area name	`{area}` nie jest nazwą obszaru odzyskiwania
@@ -4489,6 +4527,8 @@ imageTrace	Outline	Kontur
 @msg	the Smooth slider is not open	Suwak Wygładź nie jest otwarty
 @msg	the screen color sampler is already open	narzędzie do pobierania koloru z ekranu jest już otwarte
 @msg	this system has no screen color sampler	ten system nie ma narzędzia do pobierania koloru z ekranu
+@msg	the screen color sampler did not answer	narzędzie do pobierania koloru z ekranu nie odpowiedziało
+@msg	the screen color sampler failed	narzędzie do pobierania koloru z ekranu zgłosiło błąd
 @msg	bad colour `{hex}` (#rrggbb)	nieprawidłowy kolor `{hex}` (#rrggbb)
 @msg	bad page tree	nieprawidłowe drzewo stron
 @msg	bad shortcut	nieprawidłowy skrót
@@ -4518,6 +4558,7 @@ imageTrace	Outline	Kontur
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nie jest kolorem w rodzaju "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksymalnie {MAX_TABLE} kolorów
 @msg	command `{0}` is not available right now: {1}	polecenie `{0}` jest teraz niedostępne: {1}
+@msg	command `{id}` is not available right now	polecenie `{id}` jest teraz niedostępne
 @msg	compound paths can only contain paths	ścieżki złożone mogą zawierać tylko ścieżki
 @msg	compressed (RLE) bitmaps can't be read yet	skompresowanych bitmap (RLE) nie można jeszcze odczytać
 @msg	damaged	uszkodzony
@@ -4700,6 +4741,7 @@ imageTrace	Outline	Kontur
 @msg	not a valid plug-in module: {0}	nieprawidłowy moduł wtyczki: {0}
 @msg	not an EMF or WMF file	to nie jest plik EMF ani WMF
 @msg	not an HP-GL file	to nie jest plik HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` musi być tablicą od 1 do 255 kolorów #rrggbb
 @msg	not found	nie znaleziono
 @msg	not in pattern editing mode	nie jest w trybie edycji wzorka
 @msg	finish editing the pattern first	najpierw zakończ edycję wzorka
@@ -5878,7 +5920,9 @@ mark-style	Japanese	Japońskie
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometryczne linie pomocnicze
+	Optical Effects	Efekty optyczne
 	Geometric Patterns	Wzorki geometryczne
+	Grit Textures	Tekstury ziarniste
 	Ease In	Łagodny początek
 	Ease Out	Łagodny koniec
 	Ease In Out	Łagodny początek i koniec
@@ -5919,6 +5963,9 @@ axis	Y Axis	Oś Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` dotyczy wypełnień gradientem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musi mieć wartość true lub false
 @msg	`method` must be classic or perceptual	`method` musi mieć wartość classic lub perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` musi mieć wartość pad, repeat lub reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musi być liczbą całkowitą od 1 do {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` dotyczy gradientów liniowych, radialnych, stożkowych i rombowych
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Zainstalować „{name}”, wtyczkę, która prosi o duży budżet obliczeń?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Każde uruchomienie może trwać do {minutes} minut i wykonać {times} razy więcej pracy, niż mogą inne wtyczki. Działa w tle i można je anulować.
@@ -6155,8 +6202,24 @@ axis	Y Axis	Oś Y
 	Charge Wave	Fala ładunku
 	Spark Trail	Ślad iskier
 	Calligraphic Nibs	Stalówki kaligraficzne
+	Bristle Brushes	Pędzle włosiankowe
+	Fine Liner	Cienka linia
+	Pointed Flat	Szpiczasty płaski
+	Stubby Round	Krótki okrągły
+	Dry Scrub	Suche szorowanie
+	Soft Dome	Miękka kopuła
+	Filbert	Koci język
+	Angled Round	Skośny okrągły
+	Angled Flat	Skośny płaski
+	Fan Blender	Wachlarz do mieszania
+	Grass Fan	Wachlarz do trawy
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone
+	Dry Media	Techniki suche
+	Chalk Grain	Ziarno kredy
+	Graphite Pencil	Ołówek grafitowy
+	Wax Crayon	Kredka woskowa
+	Charcoal Dust	Pył węglowy
 	Save Brush Library…	Zapisz bibliotekę pędzli…
 @msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
 @msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)
@@ -6365,6 +6428,10 @@ anchor	Points:	Punkty:
 @msg	features lists at most {max} tags	features może zawierać najwyżej {max} znaczników
 @msg	unknown OpenType feature `{t}`	nieznana funkcja OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musi być liczbą większą od 0 i nie większą niż {max}
+@msg	{label} must be at most {max} characters	{label} może mieć najwyżej {max} znaków
+@msg	{label} must be one character	{label} musi być jednym znakiem
+@msg	at most {max} tab stops	najwyżej {max} tabulatorów
+@msg	unknown align `{other}`	nieznane wyrównanie `{other}`
 @msg	no character style `{name}`	Nie znaleziono stylu znakowego `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6527,6 +6594,12 @@ breakText	Glyphs	Glify
 	Delete the selected brushes?	Usunąć zaznaczone pędzle?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Obrysy używają co najmniej jednego z tych pędzli. Zdjąć pędzle z tych obrysów i usunąć pędzle?
 	Remove Strokes	Usuń obrysy
+	Place Brush Art	Umieść kompozycję pędzla
+	Replace Brush Art	Zastąp kompozycję pędzla
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Obrysy używają tego pędzla. Zastosować nową kompozycję do tych obrysów, czy pozostawić je bez zmian i dodać kopię pędzla z nową kompozycją?
+	Apply to Strokes	Zastosuj do obrysów
+	Leave Strokes	Pozostaw obrysy
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nie ma kompozycji (mają ją tylko pędzle rozproszone, artystyczne i wzorka)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Narzędzia układania
 	Arrange in Grid…	Ułóż w siatce…
@@ -6779,8 +6852,38 @@ breakText	Glyphs	Glify
 @plural	{n} line cut|{n} lines cut	{n} skrócony wiersz|{n} skrócone wiersze|{n} skróconych wierszy
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` muszą być numerami wierszy przechowywanych w konsoli, `first` przed `last`
 
+# Learn panel
+	Learn	Nauka
+	Explore tutorials	Przeglądaj samouczki
+	For you	Dla Ciebie
+	Skills	Umiejętności
+	Get started	Pierwsze kroki
+	Quick skill guide	Krótki przewodnik po umiejętnościach
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Krótkie praktyczne samouczki dotyczące podstawowych narzędzi, pogrupowane według umiejętności. Wybierz umiejętność, aby zobaczyć jej samouczki.
+	List Tutorials	Wyświetl samouczki
+	Show Tutorial	Pokaż samouczek
+@msg	missing `tutorial` (see learn.list)	brak `tutorial` (patrz learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	nieznany samouczek `{id}` (patrz learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Odśwież odroczone efekty
 	Deferred Effects	Odroczone efekty
 @msg	no plug-in effect is deferred	żaden efekt wtyczki nie jest odroczony
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otwarto z {n} odroczonym efektem wtyczki. Efekt › Odśwież odroczone efekty go uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Narzędzia do cięcia
+	Stencil Bridges…	Mostki szablonu…
+	Stencil Bridges	Mostki szablonu
+	Shortest Crossing	Najkrótsze przejście
+	Direction	Kierunek
+@msg	The selected art has no islands to bridge	Zaznaczona grafika nie ma wysp do połączenia
+@msg	No bridge of this width fits across the selected art	Żaden mostek o tej szerokości nie mieści się w zaznaczonej grafice
+@msg	Some islands could not be joined to the area around the art	Niektórych wysp nie udało się połączyć z obszarem wokół grafiki
+@msg	`width` must be from {lo} to {hi} pt	`width` musi mieścić się w zakresie od {lo} do {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musi być liczbą całkowitą od 1 do {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Ramka i linie do wybierania…
+	Weed Box and Lines	Ramka i linie do wybierania
+	Margin	Margines
+	Box	Ramka
+	Swatch	Próbka

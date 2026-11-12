@@ -852,6 +852,17 @@ font-technology	Variable	Μεταβλητές
 	The selected character's font is not available.	Η γραμματοσειρά του επιλεγμένου χαρακτήρα δεν είναι διαθέσιμη.
 	No alternates for the selected character.	Δεν υπάρχουν εναλλακτικοί για τον επιλεγμένο χαρακτήρα.
 	Double-click to replace	Διπλό κλικ για αντικατάσταση
+	Select one character with the Type tool first.	Επιλέξτε πρώτα έναν χαρακτήρα με το εργαλείο κειμένου.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	Ο γλύφος {glyph} ανήκει στη γραμματοσειρά {font}, όχι σε αυτήν του επιλεγμένου κειμένου ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	Ο γλύφος {glyph} ανήκει στο {base} (U+{base_code}) {place}· η επιλογή σας είναι {sel} (U+{code}).
+	at the start of a word	στην αρχή μιας λέξης
+	in the middle of a word	στη μέση μιας λέξης
+	at the end of a word	στο τέλος μιας λέξης
+	standing alone	όταν στέκεται μόνος
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	Ο γλύφος {glyph} δεν είναι εναλλακτικός του {sel} (U+{code}) όπως βρίσκεται στη λέξη του.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Διπλό κλικ για εισαγωγή του {base} (U+{code}): μια μορφή παρουσίασης δεν συνδέεται, το γράμμα συνδέεται.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Εισήχθη το {base} (U+{code}) αντί για μορφή παρουσίασης: η γραμματοσειρά το συνδέει με τους γείτονες ανάλογα με τη θέση.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Καμία λειτουργία OpenType δεν σχεδιάζει αυτόν τον γλύφο εδώ, οπότε αντικαθιστά τον γλύφο του χαρακτήρα και μπορεί να μην συνδέεται με τους γειτονικούς χαρακτήρες.
 	Double-click to insert	Διπλό κλικ για εισαγωγή
 	Double-click to rename	Διπλό κλικ για μετονομασία
 	Double-click to target the contents	Διπλό κλικ για επιλογή του περιεχομένου ως στόχου
@@ -1097,6 +1108,8 @@ font-technology	Variable	Μεταβλητές
 	Extrude & Bevel…	Εξώθηση και λοξότμηση…
 	3D (Classic)	3D (κλασικό)
 	Extrude & Bevel (Classic)…	Εξώθηση και λοξότμηση (κλασικό)…
+	Revolve (Classic)…	Περιστροφή γύρω από άξονα (κλασικό)…
+	Rotate (Classic)…	Περιστροφή (κλασικό)…
 	Surface	Επιφάνεια
 	Wireframe	Συρματόπλεγμα
 	No Shading	Χωρίς σκίαση
@@ -1374,6 +1387,14 @@ font-technology	Variable	Μεταβλητές
 	Hair Space	Πολύ λεπτό διάστημα
 	Hand Tool	Χέρι (Hand Tool)
 	Hand-Drawn	Σχεδιασμένο στο χέρι
+	Painted and Sketched	Ζωγραφισμένο και σκιτσαρισμένο
+	Washed Blue	Ξεπλυμένο μπλε
+	Bristle Ochre	Ώχρα με πινέλο
+	Pastel Heather	Παστέλ ρείκι
+	Charcoal Shade	Σκιά με κάρβουνο
+	Ink Contour	Περίγραμμα με μελάνι
+	Wet Ink	Υγρό μελάνι
+	Fine Pen	Λεπτή πένα
 	Handles	Λαβές
 	Hard Light	Έντονο φως
 	Hard Mix	Έντονη ανάμειξη
@@ -1755,6 +1776,8 @@ font-technology	Variable	Μεταβλητές
 	Message:	Μήνυμα:
 	Metadata:	Μεταδεδομένα:
 	Method:	Μέθοδος:
+	Pad	Συνέχιση
+	Repeats	Επαναλήψεις
 	Millimeters	Χιλιοστά
 	Minimize	Ελαχιστοποίηση
 	Mode:	Λειτουργία:
@@ -1842,6 +1865,7 @@ font-technology	Variable	Μεταβλητές
 	Options…	Επιλογές…
 	Ordinals	Τακτικοί αριθμοί
 	Organic Fades	Οργανικές διαβαθμίσεις
+	Holographic	Ολογραφικά
 	Orientation	Προσανατολισμός
 	Orientation:	Προσανατολισμός:
 	Original	Πρωτότυπο
@@ -1953,10 +1977,14 @@ font-technology	Variable	Μεταβλητές
 	Right:	Δεξιά:
 	Rise…	Ανύψωση…
 	Roman Hanging Punctuation	Κρεμαστή στίξη όρθιας γραφής
+	Korean Line Break Anywhere	Αλλαγή γραμμής κορεατικών οπουδήποτε
+	East Asian Composition Settings	Ρυθμίσεις σύνθεσης ανατολικής Ασίας
+	Korean Composition Settings	Ρυθμίσεις κορεατικής σύνθεσης
 	Rotate	Περιστροφή
 	Rotate View Tool	Εργαλείο περιστροφής προβολής (Rotate View Tool)
 	Trackpad Gesture to Rotate View	Περιστροφή προβολής με χειρονομία στην επιφάνεια αφής
 	Hold a Tool Shortcut to Use the Tool Temporarily	Προσωρινή χρήση εργαλείου κρατώντας πατημένη τη συντόμευσή του
+	Show Bounding Box While Moving and Drawing	Εμφάνιση πλαισίου οριοθέτησης κατά τη μετακίνηση και τη σχεδίαση
 	Rotate…	Περιστροφή…
 	Rotation	Περιστροφή
 	Rows:	Γραμμές:
@@ -2374,6 +2402,7 @@ axis	Both	Και τα δύο
 @msg	`globalAdjust` must be an object	Το `globalAdjust` πρέπει να είναι αντικείμενο
 @msg	`sampleSize` must be 1, 3 or 5	Το `sampleSize` πρέπει να είναι 1, 3 ή 5
 @msg	`stops` must be an array	Το `stops` πρέπει να είναι πίνακας
+@msg	`{key}` must be an array	Το `{key}` πρέπει να είναι πίνακας
 @msg	`svg` must be an object of SVG options (see document.formats)	Το `svg` πρέπει να είναι αντικείμενο επιλογών SVG (δείτε document.formats)
 @msg	`{_1}` is no save command	Το `{_1}` δεν είναι εντολή αποθήκευσης
 @msg	`{area}` is no recovery area name	Το `{area}` δεν είναι όνομα περιοχής ανάκτησης
@@ -3080,6 +3109,10 @@ theme	Appearance	Εμφάνιση
 	Arch	Αψίδα
 @msg	select point type or type on a path	επιλέξτε κείμενο σημείου ή κείμενο σε διαδρομή
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	το κείμενο σε διαδρομή μέσα σε συνδεδεμένο κείμενο δεν μπορεί να χρησιμοποιήσει δυναμικό κείμενο: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	κείμενο σε ανοιχτή ή σύνθετη διαδρομή δεν μπορεί να κεντραριστεί επάνω ή κάτω: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	κείμενο σε διαδρομή χωρίς μήκος ή χωρίς ύψος δεν μπορεί να κεντραριστεί: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	το κείμενο σε διαδρομή μέσα σε συνδεδεμένο κείμενο δεν μπορεί να κεντραριστεί επάνω ή κάτω: {frames}
+@msg	select type on a closed path	επιλέξτε κείμενο σε κλειστή διαδρομή
 	Optimize for fast web view	Βελτιστοποίηση για γρήγορη προβολή στον ιστό
 	Options for Selection…	Επιλογές για την επιλογή…
 	or more spaces with a tab	ή περισσότερα διαστήματα με στηλοθέτη
@@ -3823,6 +3856,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Split Into Grid…	Διαίρεση σε πλέγμα…
 	Split Path	Διαίρεση διαδρομής
 	spot	πλακάτο
+	Spot Color Objects	Αντικείμενα με χρώματα spot
+	Pattern Objects	Αντικείμενα με μοτίβα
+	Gradient Objects	Αντικείμενα με ντεγκραντέ
 	Spot Colors	Πλακάτα χρώματα
 	Spot Colors…	Πλακάτα χρώματα…
 	Stacked Bar Graph Tool	Στοιβαγμένο ραβδόγραμμα (Stacked Bar Graph Tool)
@@ -4052,6 +4088,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Type on a Path	Κείμενο σε διαδρομή
 	Type on a Path Options	Επιλογές κειμένου σε διαδρομή
 	Type on a Path Options…	Επιλογές κειμένου σε διαδρομή…
+	Center on Top	Κεντράρισμα επάνω
+	Center on Bottom	Κεντράρισμα κάτω
 	Type on a Path Tool	Κείμενο σε διαδρομή (Type on a Path Tool)
 	Type Orientation	Προσανατολισμός κειμένου
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Το κείμενο διατηρείται ως κείμενο και κάθε περίγραμμα γίνεται γραμμή με το πάχος και τις παύλες του.
@@ -4341,6 +4379,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: το `{h}` δεν είναι έγκυρο χρώμα, όπως το "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: επιτρέπονται το πολύ {MAX_TABLE} χρώματα
 @msg	command `{0}` is not available right now: {1}	η εντολή `{0}` δεν είναι διαθέσιμη αυτήν τη στιγμή: {1}
+@msg	command `{id}` is not available right now	η εντολή `{id}` δεν είναι διαθέσιμη αυτήν τη στιγμή
 @msg	compound paths can only contain paths	οι σύνθετες διαδρομές μπορούν να περιέχουν μόνο διαδρομές
 @msg	compressed (RLE) bitmaps can't be read yet	τα συμπιεσμένα (RLE) bitmap δεν μπορούν ακόμη να διαβαστούν
 @msg	damaged	κατεστραμμένο
@@ -4522,6 +4561,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	not a valid plug-in module: {0}	δεν είναι έγκυρη μονάδα προσθέτου: {0}
 @msg	not an EMF or WMF file	δεν είναι αρχείο EMF ή WMF
 @msg	not an HP-GL file	δεν είναι αρχείο HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	το `pens` πρέπει να είναι πίνακας 1 έως 255 χρωμάτων #rrggbb
 @msg	not found	δεν βρέθηκε
 @msg	not in pattern editing mode	δεν βρίσκεστε σε λειτουργία επεξεργασίας μοτίβου
 @msg	finish editing the pattern first	ολοκληρώστε πρώτα την επεξεργασία του μοτίβου
@@ -5822,6 +5862,8 @@ effect	Points	Σημεία
 @msg	the screen color sampler is already open	η δειγματοληψία χρώματος από την οθόνη είναι ήδη ανοιχτή
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	αυτό είναι αρχείο PostScript (ένα .ai αποθηκευμένο σε παλαιότερη μορφή ή χωρίς συμβατότητα PDF, ή αρχείο EPS), όχι PDF: οι εντολές Αρχείο › Άνοιγμα και Αρχείο › Τοποθέτηση το διαβάζουν ως EPS
 @msg	this system has no screen color sampler	αυτό το σύστημα δεν έχει δειγματοληψία χρώματος από την οθόνη
+@msg	the screen color sampler did not answer	η δειγματοληψία χρώματος από την οθόνη δεν απάντησε
+@msg	the screen color sampler failed	η δειγματοληψία χρώματος από την οθόνη απέτυχε
 @msg	the image can't be read as a texture	η εικόνα δεν μπορεί να διαβαστεί ως υφή
 
 # User Interface › Accent Color
@@ -5975,7 +6017,9 @@ effect	Points	Σημεία
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Γεωμετρικοί οδηγοί
+	Optical Effects	Οπτικά εφέ
 	Geometric Patterns	Γεωμετρικά μοτίβα
+	Grit Textures	Κοκκώδεις υφές
 	Ease In	Ομαλή αρχή
 	Ease Out	Ομαλό τέλος
 	Ease In Out	Ομαλή αρχή και τέλος
@@ -6016,6 +6060,9 @@ axis	Y Axis	Άξονας Y
 @msg	`dither` applies to gradient fills (paint.setFill)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (paint.setFill)
 @msg	`dither` must be true or false	Το `dither` πρέπει να είναι true ή false
 @msg	`method` must be classic or perceptual	Το `method` πρέπει να είναι classic ή perceptual
+@msg	`spread` must be pad, repeat or reflect	Το `spread` πρέπει να είναι pad, repeat ή reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	Το `repeats` πρέπει να είναι ακέραιος από 1 έως {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	Το `spread` ισχύει για γραμμικά, ακτινικά, κωνικά και ρομβοειδή ντεγκραντέ
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Να εγκατασταθεί το «{name}», που ζητά μεγάλο υπολογιστικό προϋπολογισμό;
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Κάθε εκτέλεση μπορεί να διαρκέσει έως {minutes} λεπτά και να κάνει {times} φορές τη δουλειά που επιτρέπεται στα άλλα πρόσθετα. Εκτελείται στο παρασκήνιο και μπορείτε να την ακυρώσετε.
@@ -6252,8 +6299,24 @@ axis	Y Axis	Άξονας Y
 	Charge Wave	Κύμα φόρτισης
 	Spark Trail	Ίχνος σπινθήρων
 	Calligraphic Nibs	Καλλιγραφικές πένες
+	Bristle Brushes	Πινέλα με τρίχες
+	Fine Liner	Λεπτή γραμμή
+	Pointed Flat	Μυτερό πλακέ
+	Stubby Round	Κοντό στρογγυλό
+	Dry Scrub	Ξηρό τρίψιμο
+	Soft Dome	Μαλακός θόλος
+	Filbert	Γλώσσα γάτας
+	Angled Round	Λοξό στρογγυλό
+	Angled Flat	Λοξό πλακέ
+	Fan Blender	Βεντάλια ανάμειξης
+	Grass Fan	Βεντάλια για γρασίδι
 	Pattern Borders	Περιθώρια μοτίβου
 	Scatter Shapes	Σχήματα διασποράς
+	Dry Media	Ξηρά μέσα
+	Chalk Grain	Κόκκος κιμωλίας
+	Graphite Pencil	Μολύβι γραφίτη
+	Wax Crayon	Κηρομπογιά
+	Charcoal Dust	Σκόνη κάρβουνου
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
@@ -6461,6 +6524,10 @@ anchor	Points:	Σημεία:
 @msg	features lists at most {max} tags	Το features περιέχει έως {max} ετικέτες
 @msg	unknown OpenType feature `{t}`	άγνωστο χαρακτηριστικό OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	Το {label} πρέπει να είναι αριθμός μεγαλύτερος από 0 και έως {max}
+@msg	{label} must be at most {max} characters	Το {label} πρέπει να έχει έως {max} χαρακτήρες
+@msg	{label} must be one character	Το {label} πρέπει να είναι ένας χαρακτήρας
+@msg	at most {max} tab stops	έως {max} στάσεις στηλοθέτη
+@msg	unknown align `{other}`	άγνωστη στοίχιση `{other}`
 @msg	no character style `{name}`	Δεν βρέθηκε το στυλ χαρακτήρων `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6623,6 +6690,12 @@ breakText	Glyphs	Γλύφοι
 	Delete the selected brushes?	Να διαγραφούν τα επιλεγμένα πινέλα;
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Περιγράμματα χρησιμοποιούν ένα ή περισσότερα από αυτά τα πινέλα. Να αφαιρεθούν τα πινέλα από αυτά τα περιγράμματα και να διαγραφούν τα πινέλα;
 	Remove Strokes	Αφαίρεση περιγραμμάτων
+	Place Brush Art	Τοποθέτηση σχεδίου πινέλου
+	Replace Brush Art	Αντικατάσταση σχεδίου πινέλου
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Περιγράμματα χρησιμοποιούν αυτό το πινέλο. Να εφαρμοστεί το νέο σχέδιο σε αυτά τα περιγράμματα ή να μείνουν ως έχουν και να προστεθεί αντίγραφο του πινέλου με το νέο σχέδιο;
+	Apply to Strokes	Εφαρμογή στα περιγράμματα
+	Leave Strokes	Διατήρηση περιγραμμάτων
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` δεν έχει σχέδιο (έχουν μόνο τα πινέλα διασποράς, σχεδίου και μοτίβου)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Εργαλεία διάταξης
 	Arrange in Grid…	Διάταξη σε πλέγμα…
@@ -6875,8 +6948,38 @@ breakText	Glyphs	Γλύφοι
 @plural	{n} line cut|{n} lines cut	{n} γραμμή περικόπηκε|{n} γραμμές περικόπηκαν
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	Τα `first` και `last` πρέπει να είναι αριθμοί γραμμών που κρατά η κονσόλα, το `first` πριν από το `last`
 
+# Learn panel
+	Learn	Εκμάθηση
+	Explore tutorials	Εξερεύνηση οδηγών εκμάθησης
+	For you	Για εσάς
+	Skills	Δεξιότητες
+	Get started	Πρώτα βήματα
+	Quick skill guide	Γρήγορος οδηγός δεξιοτήτων
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Σύντομοι πρακτικοί οδηγοί για τα βασικά εργαλεία, ομαδοποιημένοι ανά δεξιότητα. Επιλέξτε μια δεξιότητα για να δείτε τους οδηγούς της.
+	List Tutorials	Λίστα οδηγών εκμάθησης
+	Show Tutorial	Εμφάνιση οδηγού εκμάθησης
+@msg	missing `tutorial` (see learn.list)	λείπει το `tutorial` (δείτε learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	άγνωστος οδηγός εκμάθησης `{id}` (δείτε learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή
 	Deferred Effects	Εφέ σε αναμονή
 @msg	no plug-in effect is deferred	κανένα εφέ προσθέτου δεν είναι σε αναμονή
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Άνοιξε με {n} εφέ προσθέτου σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή το εκτελεί.|Άνοιξε με {n} εφέ προσθέτων σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή τα εκτελεί.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Εργαλεία κοπής
+	Stencil Bridges…	Γέφυρες στένσιλ…
+	Stencil Bridges	Γέφυρες στένσιλ
+	Shortest Crossing	Συντομότερη διέλευση
+	Direction	Κατεύθυνση
+@msg	The selected art has no islands to bridge	Το επιλεγμένο γραφικό δεν έχει νησίδες για γεφύρωση
+@msg	No bridge of this width fits across the selected art	Καμία γέφυρα αυτού του πλάτους δεν χωράει στο επιλεγμένο γραφικό
+@msg	Some islands could not be joined to the area around the art	Ορισμένες νησίδες δεν ήταν δυνατό να συνδεθούν με την περιοχή γύρω από το γραφικό
+@msg	`width` must be from {lo} to {hi} pt	Το `width` πρέπει να είναι από {lo} έως {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	Το `count` πρέπει να είναι ακέραιος από 1 έως {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Πλαίσιο και γραμμές αφαίρεσης περισσευμάτων…
+	Weed Box and Lines	Πλαίσιο και γραμμές αφαίρεσης περισσευμάτων
+	Margin	Περιθώριο
+	Box	Πλαίσιο
+	Swatch	Δείγμα χρώματος

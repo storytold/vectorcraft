@@ -107,6 +107,27 @@ fn control_saves_take_the_native_save_options() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A save without a path writes the document's own file in the write root: `app.save` and
+/// `file.save` leave its path out of the reply, since it is outside the read root, and keep a path
+/// the client gives.
+#[test]
+fn control_saves_leave_out_the_documents_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("save-own");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let own = s(base.join("out/doc.vectorcraft"));
+    app.run("file.saveAs", json!({"path": own})).unwrap();
+    for (method, params) in [("app.save", json!({})), ("engine.execute", json!({"command": "file.save", "params": {}}))] {
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        let r = request(&mut app, &tx, method, params);
+        assert_eq!(r["ok"], true, "{method}: {r}");
+        assert!(r["result"].get("path").is_none() && !r.to_string().contains(&s(base.join("out"))), "{method}: {r}");
+        assert_eq!(app.session.active().map(|d| d.is_dirty()), Some(false), "{method}: saved");
+    }
+    let r = request(&mut app, &tx, "app.save", json!({"path": own}));
+    assert_eq!(r["result"]["path"], json!(own), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// With Background Save and Background Export on, `app.save` and `app.export` with `wait: true`
 /// (MCP's `save_file` in the app) reply with the write root's refusal, and write a file inside it
 /// before they reply. Without `wait` the refusal reaches only the status bar.
@@ -543,6 +564,50 @@ fn ui_inspect_keeps_text_that_only_looks_like_a_library_id() {
     assert_eq!(r["result"]["scriptReport"]["log"], json!([text]), "{r}");
     assert_eq!(r["result"]["ui"]["palette_query"], json!(query), "{r}");
     assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/d.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect`'s `scriptReport` names a file the person's script wrote outside the read root, and
+/// the included file a failed run stopped in (also in its error line), by its file name; the person
+/// sees the paths.
+#[test]
+fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-script-report");
+    let (kept, hidden) = (s(base.join("in/kept.svg")), s(base.join("outside/hidden.svg")));
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let source = format!(
+        "vc.run('document.export', {{path: {kept}, format: 'svg'}}); vc.run('document.export', {{path: {hidden}, format: 'svg'}});",
+        kept = json!(kept),
+        hidden = json!(hidden)
+    );
+    let finish = |app: &mut VectorcraftApp, params: Value| {
+        app.session.execute("script.run", &params).unwrap();
+        for _ in 0..10_000 {
+            if app.session.script_pump().is_some() {
+                break;
+            }
+        }
+    };
+    finish(&mut app, json!({"source": source, "name": "t.js"}));
+    let ctx = egui::Context::default();
+    let outside = json!(s(base.join("outside"))).to_string();
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["scriptReport"]["written"], json!([kept, hidden]), "{person}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["written"], json!([kept, "hidden.svg"]), "{r}");
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    assert_eq!(app.session.script_report().unwrap()["written"], json!([kept, hidden]), "the report is not changed");
+
+    // A run that fails in a file it includes.
+    std::fs::write(base.join("outside/run.jsx"), "#include \"bad.jsxinc\"\n").unwrap();
+    std::fs::write(base.join("outside/bad.jsxinc"), "\nthrow new Error('stopped here');\n").unwrap();
+    finish(&mut app, json!({"path": s(base.join("outside/run.jsx"))}));
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["scriptReport"]["file"], json!(s(base.join("outside/bad.jsxinc"))), "{person}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["file"], "bad.jsxinc", "{r}");
+    assert!(r["result"]["scriptReport"]["console"].to_string().contains("bad.jsxinc:2:"), "{r}");
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
     let _ = std::fs::remove_dir_all(base);
 }
 

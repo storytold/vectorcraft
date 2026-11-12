@@ -434,6 +434,25 @@ fn symbols_nested_too_deep_are_refused_and_not_drawn() {
 }
 
 #[test]
+fn a_solid_in_a_transparent_gradient_keeps_its_graphic() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let d = document();
+    let mut stop = GradientStop::new(1.0, red());
+    stop.opacity = 0.25;
+    let gradient = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, red()), stop]));
+    // Under a colored light the faces are drawn opaque and masked by the gradient's transparency.
+    let mut n = object(EXTRUDE, json!({"shade": true, "lights": [{"color": "#ff8080"}], "graphics": [{"symbol": "Mark"}]}));
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.paint = Paint::Gradient(Box::new(gradient));
+    }
+    let art = solid_art_in(Some(&d), &n).unwrap();
+    let mut masked = false;
+    art.walk(&mut |c| masked |= c.extras().mask.is_some());
+    assert!(masked);
+    assert_eq!(graphics_in(&art).len(), 1);
+}
+
+#[test]
 fn a_cap_with_a_hole_keeps_the_hole_out_of_the_graphic() {
     let d = document();
     let outer = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();

@@ -344,7 +344,7 @@ const HANDLE_REACH: f32 = 8.0;
 /// committed as one undo step when it is released. Returns whether the handles took the pointer.
 pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
     let ctx = ui.ctx().clone();
-    let xf = &crate::canvas::Xf::new(rect, app.view().unwrap_or(&crate::state::View::default()));
+    let xf = &crate::canvas::Xf::at(rect, app.view().unwrap_or(&crate::state::View::default()), app.canvas_ui_zoom);
     let pointer = ui.input(|i| i.pointer.interact_pos());
     if let Some(drag) = ctx.data(|m| m.get_temp::<HandleDrag>(handle_drag_id())) {
         let down = ui.input(|i| i.pointer.primary_down());

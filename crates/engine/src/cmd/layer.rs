@@ -15,7 +15,7 @@ use vectorcraft_geom::{Affine, Rect};
 
 use super::{
     CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, checked_id, checked_ids_param, cmd, color_value, f64_or, has_doc,
-    has_selection, id_param, ids_param, index, ok, str_param, switch_or,
+    has_selection, ids_param, index, object_param, ok, str_param, switch_or,
 };
 use crate::EngineError;
 
@@ -128,7 +128,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Artboard",
             ["Window", "Artboards"],
             None,
-            "{x?, y?, width?, height?, name?, color?: color (its background color, as artboard.setProps takes it, #rrggbbaa and #rgba refused; default: none), guideLabel?: name | \"#rrggbb\" | null (its guide label, as artboard.setProps takes it; default: none), showCenterMark?: bool, showCrossHairs?: bool, showVideoSafeAreas?: bool (as artboard.setProps takes them; default false), videoRulerPixelAspectRatio?: number 0.1–10 (as artboard.setProps takes it; default 1), side?: \"left\"|\"right\"|\"top\"|\"bottom\" (the size of artboard `beside`, 20 pt from that side of it; refused with x, y, width or height), beside?: n (the artboard `side` places it by; default the last)} (default place: right of the last)",
+            "{x?, y?, width?, height? (each more than 0 and at most 3,999,856 pt, as file.new takes them), name?, color?: color (its background color, as artboard.setProps takes it, #rrggbbaa and #rgba refused; default: none), guideLabel?: name | \"#rrggbb\" | null (its guide label, as artboard.setProps takes it; default: none), showCenterMark?: bool, showCrossHairs?: bool, showVideoSafeAreas?: bool (as artboard.setProps takes them; default false), videoRulerPixelAspectRatio?: number 0.1–10 (as artboard.setProps takes it; default 1), side?: \"left\"|\"right\"|\"top\"|\"bottom\" (the size of artboard `beside`, 20 pt from that side of it; refused with x, y, width or height), beside?: n (the artboard `side` places it by; default the last)} (default place: right of the last)",
             has_doc,
             artboard_new
         ),
@@ -426,7 +426,7 @@ fn paste_remembers_layers(s: &mut Session, p: &Value) -> Result<Value> {
 /// The Layers panel's target circle.
 fn target(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.target";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     if !st.doc.is_editable(id) {
@@ -594,7 +594,7 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_current(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.setCurrent";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc_mut()?;
     let layer = st.doc.layer_containing(id).ok_or(EngineError::NoNode(id))?;
     st.active_layer = Some(layer);
@@ -700,7 +700,7 @@ fn in_isolation(doc: &Document, isolation: Option<NodeId>, id: NodeId) -> bool {
 /// The selection column: select a row's art.
 fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.selectAll";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let add = switch_or(p, "add", false, C)?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
@@ -747,9 +747,12 @@ enum Place {
 /// Drag rows in the Layers panel.
 fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.move";
-    let mut ids = ids_param(p, "ids", C)?.or_else(|| id_param(p, "id").map(|i| vec![i])).ok_or_else(|| bad(C, "missing ids"))?;
+    let mut ids = match ids_param(p, "ids", C)? {
+        Some(ids) => ids,
+        None => vec![object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing ids"))?],
+    };
     ids.truncate(MAX_ROWS);
-    let target = id_param(p, "target").ok_or_else(|| bad(C, "missing target"))?;
+    let target = object_param(p, "target", C)?.ok_or_else(|| bad(C, "missing target"))?;
     let place = match str_param(p, "place").unwrap_or("inside") {
         "above" => Place::Above,
         "below" => Place::Below,
@@ -831,8 +834,8 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "node.move";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let parent = id_param(p, "parent");
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+    let parent = object_param(p, "parent", C)?;
     let index = p.get("index").and_then(Value::as_u64).map_or(usize::MAX, index);
     let d = &s.doc()?.doc;
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
@@ -923,6 +926,9 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
     let guide_label = artboard_guide_label(p, "artboard.new")?.flatten();
     check_switches(p, &["showCenterMark", "showCrossHairs", "showVideoSafeAreas"], "artboard.new")?;
     check_numbers(p, &["x", "y", "width", "height"], "artboard.new")?;
+    if ["width", "height"].iter().filter_map(|k| p.get(*k).and_then(Value::as_f64)).any(|side| !super::newdoc::side_in_range(side)) {
+        return Err(super::newdoc::side_error("artboard.new", d0.units));
+    }
     let r = match artboard_side(p, "artboard.new")? {
         Some(side) => {
             if ["x", "y", "width", "height"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
@@ -938,6 +944,10 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
         None if p.get("beside").is_some_and(|v| !v.is_null()) => return Err(bad("artboard.new", "`beside` needs `side`")),
         None => rect_from(p, def),
     };
+    // A size taken from another artboard (`side`, or width or height left out) keeps to the limit too.
+    if !super::newdoc::side_in_range(r.width()) || !super::newdoc::side_in_range(r.height()) {
+        return Err(super::newdoc::side_error("artboard.new", d0.units));
+    }
     let given = artboard_str(p, "name", "artboard.new")?.map(str::trim).filter(|n| !n.is_empty());
     let (show_center_mark, show_cross_hairs) = (bool_or(p, "showCenterMark", false), bool_or(p, "showCrossHairs", false));
     let show_video_safe_areas = bool_or(p, "showVideoSafeAreas", false);

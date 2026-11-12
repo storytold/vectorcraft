@@ -105,7 +105,7 @@ fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     for (i, r) in docs.iter().zip(&rects) {
         let v = app.views[*i];
         let shown = if *i == 2 { canvas } else { view_rects(&app, *r, ctx.pixels_per_point()).1 };
-        assert!(v.fitted && (v.zoom - fit_zoom(shown, artboard, 0.0)).abs() < 1e-9, "document {i} fits its pane: {v:?}");
+        assert!(v.fitted && (v.zoom - fit_zoom(shown, artboard, 0.0, 1.0)).abs() < 1e-9, "document {i} fits its pane: {v:?}");
         assert_eq!(v.center, artboard.center());
     }
     assert_eq!(app.canvas.panes.shown.len(), 2, "the other two documents are rendered for their panes");
@@ -113,6 +113,29 @@ fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     assert_eq!(inspected["tiled"], json!(true));
     let active: Vec<bool> = inspected["panes"].as_array().unwrap().iter().map(|p| p["active"].as_bool().unwrap()).collect();
     assert_eq!(active, [false, false, true]);
+}
+
+/// With the interface zoomed by Preferences › User Interface › UI Scaling, each tiled document
+/// fits its pane with 30 interface points to spare: its zoom is the zoom that fits it in an
+/// unscaled interface times the UI Scaling.
+#[test]
+fn tiled_documents_fit_their_panes_at_every_ui_scaling() {
+    for ui_zoom in [0.75_f32, 1.5, 2.0] {
+        let mut app = app_with(3);
+        let ctx = egui::Context::default();
+        ctx.set_zoom_factor(ui_zoom);
+        let size = vec2(1200.0, 800.0) / ui_zoom;
+        frame_in(&mut app, &ctx, vec![], size);
+        app.run("window.arrange.tile", json!({})).unwrap();
+        frame_in(&mut app, &ctx, vec![], size);
+        let (docs, rects) = panes(&app);
+        for (i, r) in docs.iter().zip(&rects).filter(|(i, _)| **i != 2) {
+            let shown = view_rects(&app, *r, ctx.pixels_per_point()).1;
+            let unscaled = ((f64::from(shown.width()) - 60.0) / 400.0).min((f64::from(shown.height()) - 60.0) / 300.0);
+            let v = app.views[*i];
+            assert!(v.fitted && (v.zoom - unscaled * f64::from(ui_zoom)).abs() < 1e-9, "UI Scaling {ui_zoom}×: document {i} fits its pane: {v:?}");
+        }
+    }
 }
 
 #[test]
@@ -281,7 +304,7 @@ fn opening_a_document_while_tiled_fits_each_document_to_its_new_pane() {
     let pane = panes(&app).1[0];
     let rect = view_rects(&app, pane, ctx.pixels_per_point()).1;
     let v = app.views[0];
-    assert!((v.zoom - fit_zoom(rect, Rect::new(0.0, 0.0, 400.0, 300.0), 0.0)).abs() < 1e-9, "fitted to its new pane: {v:?}");
+    assert!((v.zoom - fit_zoom(rect, Rect::new(0.0, 0.0, 400.0, 300.0), 0.0, 1.0)).abs() < 1e-9, "fitted to its new pane: {v:?}");
     assert_ne!(v.zoom, side_by_side, "the pane changed size");
 }
 
@@ -315,7 +338,7 @@ fn a_resized_window_fits_the_tiled_documents_again_unless_one_was_zoomed() {
     let (_, rects) = panes(&app);
     for i in [0, 2] {
         let area = if i == 2 { app.canvas_rect.unwrap() } else { view_rects(&app, rects[i], ctx.pixels_per_point()).1 };
-        assert!((app.views[i].zoom - fit_zoom(area, artboard, 0.0)).abs() < 1e-9, "document {i} fits its smaller pane: {:?}", app.views[i]);
+        assert!((app.views[i].zoom - fit_zoom(area, artboard, 0.0, 1.0)).abs() < 1e-9, "document {i} fits its smaller pane: {:?}", app.views[i]);
     }
     assert_eq!(app.views[1].zoom, zoomed.zoom, "the zoomed document keeps its zoom");
 }
