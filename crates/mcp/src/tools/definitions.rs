@@ -259,7 +259,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "radius1": num("Star outer radius"),
                     "radius2": num("Star inner radius"),
                     "points": {"type": "integer", "minimum": 3, "description": "Star points (default 5)"},
-                    "rotation": num("Rotation in degrees clockwise (polygon/star; 0: a corner or point straight up)"),
+                    "rotation": num("Rotation in degrees clockwise about the centre (rectangle/ellipse: 0 upright; polygon/star: 0 a corner or point straight up)"),
                     "x1": num("Line start x"),
                     "y1": num("Line start y"),
                     "x2": num("Line end x"),

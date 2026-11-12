@@ -2607,6 +2607,8 @@ digits	Malayalam	Malayalam
 	Range:	Bereich:
 	Raster Effects	Rastereffekte
 	Raster File Format:	Pixelbild-Dateiformat:
+	Include Placed Images	Platzierte Bilder einschließen
+	Include Fill Hatches	Füllschraffuren einschließen
 	Raster Sample Size:	Aufnahmebereich in Pixelbildern:
 	Raster/Vector Balance:	Pixelbild-Vektor-Abgleich:
 	Rasterize	In Pixelbild umwandeln
@@ -2788,6 +2790,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Schrift ersetzen
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersetzen Sie sie durch eine andere Datei oder ignorieren Sie sie: Ihre Bilder zeigen weiterhin die mit dem Dokument gespeicherte Vorschau.
 	Replace Spine	Achse ersetzen
+	Create Spine	Achse erstellen
+	Create Spine:	Achse erstellen:
+	Always	Immer
+	Never	Nie
 	Replace Symbol	Symbol ersetzen
 	Reset Transformation	Transformation zurücksetzen
 	Replace With Font	Durch Schrift ersetzen
@@ -5669,6 +5675,8 @@ axis	Y Axis	Y-Achse
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}“ anstelle des Plug-ins mit derselben ID installieren?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Diese Datei ist nicht das Plug-in, das vorher mit dieser ID installiert war. Sie erhält die Einstellungen und den Cache, die für diese ID gespeichert sind.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Eine Automatisierung hat angefordert, dieses Plug-in zu installieren. Um es zu installieren, wählen Sie selbst „Objekt › Plug-ins › Plug-in installieren…“.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Eine Automatisierung hat angefordert, dieses Plug-in zu installieren. Um es zu installieren, wählen Sie selbst „Objekt › Plug-ins › Plug-in installieren…“.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ ist ein anderes Modul als das Plug-in mit der ID {_1} und würde die dafür gespeicherten Einstellungen und den Cache erhalten: Installieren Sie es mit `replace: true`, sobald der Benutzer zustimmt
 	File SHA-256: {hash}	Datei-SHA-256: {hash}
 	Read the objects it is given	Die Objekte lesen, die es erhält
@@ -5731,6 +5739,12 @@ axis	Y Axis	Y-Achse
 @msg	command {name}: `label` must be 1-64 printable characters	Befehl {name}: `label` muss 1-64 druckbare Zeichen haben
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	Befehl {name}: Verwenden Sie eine ID aus 1-{MAX_COMMAND_ID} Zeichen aus a-z 0-9 _, die mit einem Buchstaben beginnt
 @msg	command {name}: {e}	Befehl {name}: {e}
+@msg	manifest: {e}	Manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	Manifest: {e} (Zeile {line}, Spalte {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` muss eine Liste von Befehlen sein, jeder mit `id` und `label`
+@msg	command {name} must be an object with an `id` and a `label`	der Befehl {name} muss ein Objekt mit `id` und `label` sein
+@msg	missing field `{key}`	fehlendes Feld `{key}`
+@msg	duplicate field `{key}`	doppeltes Feld `{key}`
 @msg	only a filter or a live effect declares `commands`	nur ein Filter oder ein Live-Effekt deklariert `commands`
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	das Modul hat nicht den SHA-256-Wert aus `hash`: Es wurde nichts installiert
