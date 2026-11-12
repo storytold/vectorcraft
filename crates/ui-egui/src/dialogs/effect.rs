@@ -879,6 +879,13 @@ fn command(d: &Dialog) -> (&'static str, Value) {
         p["item"] = item.unwrap_or(Value::Null);
         p["params"] = params;
         let id = d.str("__effect");
+        // Each target keeps the map its own Warp draws with: the dialog's `version` is the first
+        // target's.
+        if super::warp_effect::is_warp(&id)
+            && let Some(Value::Object(m)) = p.get_mut("params")
+        {
+            m.remove("version");
+        }
         // The displayed style comes from the first target. Preserve other targets' Warp IDs
         // unless the user deliberately chooses Style, including after a preview rollback.
         if super::warp_effect::is_warp(&id) && d.bool("__warp_style_changed") {

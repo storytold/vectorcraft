@@ -13,9 +13,14 @@ const WARP_NUMBERS: &[&str] = &["bend", "h", "v", "horizontalDistortion", "verti
 
 fn warp_kind(p: &Value, cmd: &str, cur: Option<&EnvelopeKind>) -> Result<EnvelopeKind> {
     check_numbers(p, WARP_NUMBERS, cmd)?;
-    let (mut style, mut bend, mut h, mut v, mut horizontal) = ("arc".to_string(), 50.0, 0.0, 0.0, true);
-    if let Some(EnvelopeKind::Warp { style: s0, bend: b0, h: h0, v: v0, horizontal: z0 }) = cur {
-        (style, bend, h, v, horizontal) = (s0.clone(), *b0, *h0, *v0, *z0);
+    // A new warp takes its style's Bézier net; an edited one keeps the map it has unless `version`
+    // names one.
+    let (mut style, mut bend, mut h, mut v, mut horizontal, mut version) = ("arc".to_string(), 50.0, 0.0, 0.0, true, live::WARP_NET);
+    if let Some(EnvelopeKind::Warp { style: s0, bend: b0, h: h0, v: v0, horizontal: z0, version: n0 }) = cur {
+        (style, bend, h, v, horizontal, version) = (s0.clone(), *b0, *h0, *v0, *z0, *n0);
+    }
+    if let Some(n) = p.get("version") {
+        version = live::warp_version(n).ok_or_else(|| bad(cmd, format!("`version` must be 0 or {}", live::WARP_NET)))?;
     }
     if let Some(s) = text_param(p, "style", cmd)? {
         let s = s.strip_prefix("warp.").unwrap_or(s);
@@ -32,7 +37,7 @@ fn warp_kind(p: &Value, cmd: &str, cur: Option<&EnvelopeKind>) -> Result<Envelop
         Some(o) => o == "horizontal",
         None => given,
     };
-    Ok(EnvelopeKind::Warp { style, bend, h, v, horizontal })
+    Ok(EnvelopeKind::Warp { style, bend, h, v, horizontal, version })
 }
 
 /// The options and fidelity new envelopes get (Envelope Options with no envelope selected).
@@ -206,8 +211,8 @@ pub(super) fn env_info(s: &mut Session, _: &Value) -> Result<Value> {
         return Ok(envelope_options_json(json!({ "id": null }), &options, fidelity));
     };
     let v = match &**kind {
-        EnvelopeKind::Warp { style, bend, h, v, horizontal } => {
-            json!({"type": "warp", "style": style, "bend": bend, "h": h, "v": v, "horizontal": horizontal})
+        EnvelopeKind::Warp { style, bend, h, v, horizontal, version } => {
+            json!({"type": "warp", "style": style, "bend": bend, "h": h, "v": v, "horizontal": horizontal, "version": version})
         }
         EnvelopeKind::Mesh { rows, cols, .. } => json!({"type": "mesh", "rows": rows, "cols": cols}),
         EnvelopeKind::TopObject { .. } => json!({"type": "topObject"}),

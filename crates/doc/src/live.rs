@@ -65,7 +65,7 @@ pub use expand::{
 #[cfg(test)]
 use mesh::grid_eval;
 pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPiece, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
-pub use warp::{WarpStyle, fit_piece, map_nonlinear, map_nonlinear_within, pieces, warp_point};
+pub use warp::{WARP_NET, WarpNet, WarpStyle, fit_piece, map_nonlinear, map_nonlinear_within, pieces, uses_net, warp_point, warp_version};
 
 #[cfg(test)]
 mod tests {
@@ -131,6 +131,200 @@ mod tests {
         let (nx, ny) = warp_point(WarpStyle::Arc, 0.5, 0.0, 0.0, 1.0, 0.5, 0.25);
         let (r0, a) = (4.0 / PI, 0.5 / (4.0 / PI));
         assert!((nx - (r0 - 0.25) * a.sin()).abs() < 1e-12 && (ny - (r0 - (r0 - 0.25) * a.cos())).abs() < 1e-12);
+    }
+
+    /// Each warp style's Bézier net, at points worked out by a separate implementation of the same
+    /// nets: (style, bend %, horizontal and vertical distortion %, vertical, box w × h, (u, v)) →
+    /// the point in the box (origin at its top left, y down).
+    #[test]
+    fn warp_nets_bend_each_style_as_its_own_patch() {
+        #[rustfmt::skip]
+        let samples = [
+            ("arc", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, -31.1605665, 30.1243045),
+            ("arc", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 170.241998, 58.8743443),
+            ("arc", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 50.6087118, 47.6275948),
+            ("arcLower", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 18.8784581, 35.5028749),
+            ("arcLower", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 164.486168, 119.348666),
+            ("arcLower", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 38.1073767, 36.0911629),
+            ("arcUpper", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 17.3830689, 17.1599587),
+            ("arcUpper", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.498463, 86.7390371),
+            ("arcUpper", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 46.1081993, 36.0252855),
+            ("arch", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 16.261527, 11.6570838),
+            ("arch", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 164.984631, 57.3903712),
+            ("arch", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 49.2508226, 36.2064484),
+            ("bulge", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 16.261527, 22.6628335),
+            ("bulge", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 164.984631, 116.087703),
+            ("bulge", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 42.965576, 36.2064484),
+            ("shellLower", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 10.6489723, 25.9914004),
+            ("shellLower", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 208.565464, 99.4817585),
+            ("shellLower", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 41.043987, 36.1302767),
+            ("shellUpper", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, -21.8346746, 41.6042708),
+            ("shellUpper", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.791499, 90.3680631),
+            ("shellUpper", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 42.9282896, 36.1475509),
+            ("flag", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 20.0, 55.92),
+            ("flag", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.0, 55.44),
+            ("flag", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 58.098, 35.91),
+            ("wave", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 20.0, 40.8864),
+            ("wave", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.0, 83.7792),
+            ("wave", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 42.33, 35.91),
+            ("fish", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 20.0, 19.632),
+            ("fish", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.0, 62.352),
+            ("fish", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 44.994, 35.91),
+            ("rise", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 20.0, 146.64),
+            ("rise", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.0, 102.48),
+            ("rise", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 118.686, 35.91),
+            ("fisheye", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 9.1136, 27.2784),
+            ("fisheye", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 166.2208, 94.1472),
+            ("fisheye", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 47.514, 35.7048),
+            ("inflate", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, -0.16, 27.84),
+            ("inflate", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 166.48, 97.68),
+            ("inflate", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 45.75, 36.54),
+            ("squeeze", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 40.16, 27.84),
+            ("squeeze", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 153.52, 97.68),
+            ("squeeze", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 45.75, 36.0),
+            ("twist", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 32.2472, 27.9588),
+            ("twist", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 149.1136, 89.2224),
+            ("twist", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 45.56325, 33.8769),
+        ];
+        for (style, bend, dh, dv, vertical, w, h, u, v, x, y) in samples {
+            let Some(st) = WarpStyle::from_id(style) else { panic!("{style}") };
+            let p = WarpNet::new(st, bend / 100.0, dh / 100.0, dv / 100.0, w, h, vertical).at(u, v);
+            assert!(p.distance(Point::new(x, y)) < 1e-6, "{style} {bend} {dh} {dv} {vertical} ({u}, {v}): {p:?} vs ({x}, {y})");
+        }
+    }
+
+    /// Arc's edges are concentric circles: at 100 % on a 200 × 100 box the bottom edge is the half
+    /// circle through the bottom corners about the bottom's middle, and the top edge the one 100
+    /// further out. One cubic for a half circle strays up to 1.84 % of the radius from the circle.
+    #[test]
+    fn warp_net_arc_edges_are_concentric_circles() {
+        let net = WarpNet::new(WarpStyle::Arc, 1.0, 0.0, 0.0, 200.0, 100.0, false);
+        let center = Point::new(100.0, 100.0);
+        for i in 0..=20 {
+            let u = f64::from(i) / 20.0;
+            for (v, r) in [(0.0, 200.0), (1.0, 100.0)] {
+                let d = net.at(u, v).distance(center);
+                assert!((d - r).abs() < 0.0184 * r, "u {u}, v {v}: {d} from the center, not {r}");
+                // Its ends and middle lie on the circle.
+                if i % 10 == 0 {
+                    assert!((d - r).abs() < 1e-9, "u {u}, v {v}: {d} from the center, not {r}");
+                }
+            }
+        }
+        // Bend 0 leaves the box as it is.
+        for st in [WarpStyle::Arc, WarpStyle::ShellLower, WarpStyle::Bulge, WarpStyle::Twist] {
+            let flat = WarpNet::new(st, 0.0, 0.0, 0.0, 200.0, 100.0, false);
+            assert!(flat.at(0.3, 0.7).distance(Point::new(60.0, 70.0)) < 1e-9, "{st:?}");
+        }
+    }
+
+    /// The horizontal distortion scales each column of the net about its middle (narrowing the left
+    /// side for a positive value), then the vertical one each row (narrowing the top).
+    #[test]
+    fn warp_net_distortion_scales_the_columns_then_the_rows() {
+        let corners = |dh: f64, dv: f64| {
+            let net = WarpNet::new(WarpStyle::Arc, 0.0, dh, dv, 200.0, 100.0, false);
+            [net.at(0.0, 0.0), net.at(1.0, 0.0), net.at(0.0, 1.0), net.at(1.0, 1.0)]
+        };
+        let near = |got: [Point; 4], want: [(f64, f64); 4]| got.iter().zip(want).all(|(p, (x, y))| p.distance(Point::new(x, y)) < 1e-9);
+        assert!(near(corners(0.5, 0.0), [(0.0, 25.0), (200.0, -25.0), (0.0, 75.0), (200.0, 125.0)]), "{:?}", corners(0.5, 0.0));
+        assert!(near(corners(0.0, 0.5), [(50.0, 0.0), (150.0, 0.0), (-50.0, 100.0), (250.0, 100.0)]), "{:?}", corners(0.0, 0.5));
+        // Both coordinates scale: after the columns the top row runs from (0, 15) to (200, -15), and
+        // it then scales by 1.4 about its middle, (100, 0).
+        assert!(near(corners(0.3, -0.4), [(-40.0, 21.0), (240.0, -21.0), (40.0, 91.0), (160.0, 109.0)]), "{:?}", corners(0.3, -0.4));
+    }
+
+    /// Numbers no warp can take still give a finite net: a bend or distortion that isn't a number
+    /// counts as 0, and out of range as its limit; a size that isn't a number as 0.
+    #[test]
+    fn warp_net_takes_any_numbers() {
+        for st in [WarpStyle::Arc, WarpStyle::ShellUpper, WarpStyle::Wave, WarpStyle::Inflate, WarpStyle::Twist] {
+            for (b, dh, w, h) in
+                [(f64::NAN, 0.2, 10.0, 10.0), (5.0, f64::INFINITY, 10.0, 0.0), (-1e300, -3.0, f64::NAN, 1e-300), (1e-300, 0.0, 0.0, 0.0)]
+            {
+                for vertical in [false, true] {
+                    let p = WarpNet::new(st, b, dh, dh, w, h, vertical).at(0.3, 0.6);
+                    assert!(p.x.is_finite() && p.y.is_finite(), "{st:?} {b} {dh} {w} {h}: {p:?}");
+                }
+            }
+        }
+        let clamped = WarpNet::new(WarpStyle::Flag, 7.0, 0.0, 0.0, 200.0, 100.0, false);
+        assert_eq!(clamped, WarpNet::new(WarpStyle::Flag, 1.0, 0.0, 0.0, 200.0, 100.0, false));
+    }
+
+    /// A box near the largest finite size still warps: Flag on a 1e308 × 100 box moves points only
+    /// up and down, as on a 1 × 1e-306 one scaled up, and on a 1e308 × 1e-300 box keeps the box's
+    /// height. Fisheye at 100 % on a 1.7e308 square, whose net goes past the largest finite number,
+    /// gives finite points inside the box and past it, and the unit square's points scaled up where
+    /// those are finite. Fisheye moves y by the height alone, so on boxes of the largest finite
+    /// width and a height of 1e-300 or 100 every y is the unit square's times the height, also
+    /// where x goes past the largest finite number.
+    #[test]
+    fn warp_net_bends_a_huge_box_without_overflowing() {
+        let w = 1e308;
+        let flag = WarpNet::new(WarpStyle::Flag, 0.5, 0.0, 0.0, w, 100.0, false);
+        let small = WarpNet::new(WarpStyle::Flag, 0.5, 0.0, 0.0, 1.0, 100.0 / w, false);
+        for (u, v) in [(0.0, 0.0), (0.3, 0.6), (0.9, 1.0), (1.0, 0.5)] {
+            let (p, q) = (flag.at(u, v), small.at(u, v));
+            assert!(p.is_finite(), "({u}, {v}): {p:?}");
+            assert!((p.x - u * w).abs() <= 1e-12 * w, "({u}, {v}): {p:?}");
+            assert!((p.y - q.y * w).abs() <= 1e-9 * p.y.abs().max(1.0), "({u}, {v}): {p:?} against {q:?}");
+        }
+        let thin = WarpNet::new(WarpStyle::Flag, 0.5, 0.0, 0.0, w, 1e-300, false);
+        assert_eq!(thin.at(0.0, 1.0), Point::new(0.0, 1e-300));
+        let fisheye = WarpNet::new(WarpStyle::Fisheye, 1.0, 0.0, 0.0, 1.7e308, 1.7e308, false);
+        for (u, v) in [(0.1, 0.1), (0.8, 0.3), (1.5, 0.5), (3.0, 3.0)] {
+            let p = fisheye.at(u, v);
+            assert!(p.is_finite(), "({u}, {v}): {p:?}");
+        }
+        let unit = WarpNet::new(WarpStyle::Fisheye, 1.0, 0.0, 0.0, 1.0, 1.0, false);
+        let near = |a: f64, b: f64| (a - b).abs() <= 1e-12 * b.abs().max(f64::MIN_POSITIVE);
+        let (p, q) = (fisheye.at(0.1, 0.1), unit.at(0.1, 0.1));
+        assert!(near(p.x, q.x * 1.7e308) && near(p.y, q.y * 1.7e308), "{p:?} against {q:?}");
+        // The bottom of a box with a subnormal height stays exactly at that height: the net is
+        // built on the box halved, and the height's lowest bit but one is set.
+        let low = f64::MIN_POSITIVE / 4.0 + f64::from_bits(2);
+        let sub = WarpNet::new(WarpStyle::Fisheye, 1.0, 0.0, 0.0, f64::MAX, low, false).at(0.0, 1.0);
+        assert_eq!(sub.y, low, "{sub:?}");
+        for h in [1e-300, 100.0] {
+            let tall = WarpNet::new(WarpStyle::Fisheye, 1.0, 0.0, 0.0, f64::MAX, h, false);
+            for (u, v) in [(0.1, 0.1), (0.9, 0.4), (0.5, 0.8)] {
+                let (p, q) = (tall.at(u, v), unit.at(u, v));
+                assert!(p.is_finite() && near(p.y, q.y * h), "h {h}, ({u}, {v}): {p:?} against {q:?}");
+            }
+        }
+    }
+
+    /// Content with no width or no height takes the middle of a warp envelope's patch along that
+    /// side: under Arc a vertical line stays vertical, under Bulge a horizontal line stays straight.
+    #[test]
+    fn warp_envelopes_bend_flat_content_as_the_middle_of_the_patch() {
+        let warp = |style: &str| EnvelopeKind::Warp { style: style.into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
+        let arc = warp("arc");
+        let map = envelope_mapper(&arc, Rect::new(100.0, 0.0, 100.0, 100.0));
+        for y in [0.0, 30.0, 100.0] {
+            let p = map(Point::new(100.0, y));
+            assert!((p.x - 100.0).abs() <= 1e-9, "{y}: {p:?}");
+        }
+        let bulge = warp("bulge");
+        let map = envelope_mapper(&bulge, Rect::new(0.0, 50.0, 200.0, 50.0));
+        for x in [0.0, 70.0, 200.0] {
+            let p = map(Point::new(x, 50.0));
+            assert!((p.y - 50.0).abs() <= 1e-9, "{x}: {p:?}");
+        }
+    }
+
+    /// A warp envelope's map version: none in a file reads as 0 (the earlier map), 0 is written
+    /// as none, so files keep their bytes, and the nets' version is written.
+    #[test]
+    fn warp_envelopes_write_their_map_version_only_when_it_has_one() {
+        let old: EnvelopeKind = serde_json::from_str(r#"{"type":"warp","style":"arc","bend":20}"#).unwrap();
+        assert!(matches!(old, EnvelopeKind::Warp { version: 0, .. }), "{old:?}");
+        assert!(!serde_json::to_string(&old).unwrap().contains("version"));
+        let new = EnvelopeKind::Warp { style: "arc".into(), bend: 20.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
+        let text = serde_json::to_string(&new).unwrap();
+        assert!(text.contains(r#""version":1"#), "{text}");
+        assert_eq!(serde_json::from_str::<EnvelopeKind>(&text).unwrap(), new);
     }
     use vectorcraft_geom::shapes;
 
@@ -537,7 +731,7 @@ mod tests {
     #[test]
     fn an_envelope_maps_from_its_box_with_its_margins() {
         let rect = Node::path(NodeId(2), vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 20.0, 110.0, 70.0)), crate::Appearance::default_art());
-        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true };
+        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
         let content = [Arc::new(rect)];
         let src = |content: &[Arc<Node>], frame: Affine, options: EnvelopeOptions| EnvelopeMap::new(content, &kind, frame, options).unwrap().src();
         // Top, bottom, left and right.

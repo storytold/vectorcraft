@@ -28,7 +28,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | Rasterize | Rasterize… (as a live effect) | 1/1 | — |
 | Stylize | Drop Shadow, Feather, Inner Glow, Outer Glow, Round Corners, Scribble | 6/6 | Scribble Options' Settings presets |
 | SVG Filters | Apply SVG Filter… and the filter list | 1/1 | The submenu lists the document's own filters: VectorCraft ships no default filters. A filter that is the object's last effect is written to SVG as a `<filter>` element; otherwise SVG export draws the object as an image. A filter on a turned or skewed object in an imported SVG is left out with a warning |
-| Warp | Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower, Shell Upper, Flag, Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist | 15/15 | warp point editing in envelopes; Arc is a circular arc in the object's own proportions (#1578) |
+| Warp | Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower, Shell Upper, Flag, Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist | 15/15 | warp point editing in envelopes; each style bends the bounds as one Bézier patch (`version` 1), so Arc's edges are cubic curves close to concentric arcs; warps saved without a version keep the earlier map, where Arc is a circular arc in the object's own proportions (#1578) |
 
 Document Raster Effects Settings exists. When the 64 million pixel cap on an effect image lowers
 its resolution, PDF export warns once per object with the requested and the lowest achieved ppi

@@ -192,8 +192,14 @@ fn round(h: &str, width: f64) -> StrokeLayer {
     StrokeLayer { cap: LineCap::Round, join: LineJoin::Round, ..stroke(h, width) }
 }
 
-/// Live effect `id` with `params` (the others keep the effect's defaults).
-fn fx(id: &str, params: Value) -> Effect {
+/// Live effect `id` with `params` (the others keep the effect's defaults). A Warp draws with its
+/// style's Bézier net, as a new Warp does.
+fn fx(id: &str, mut params: Value) -> Effect {
+    if id.starts_with("warp.")
+        && let Value::Object(m) = &mut params
+    {
+        m.entry("version").or_insert(json!(crate::live::WARP_NET));
+    }
     Effect { id: id.into(), params, visible: true }
 }
 
@@ -550,6 +556,24 @@ mod tests {
         assert_eq!(status.name, "Status Effects");
         let status_names: Vec<&str> = status.styles.iter().map(|g| g.name.as_str()).collect();
         assert_eq!(status_names, ["Poison Tint", "Freeze Edge", "Burn Aura", "Stun Pulse", "Stealth Fade", "Shield Buff"]);
+    }
+
+    /// The built-in styles' Warps draw with the map a new Warp takes.
+    #[test]
+    fn builtin_warp_styles_take_the_nets_map() {
+        let mut warps = 0;
+        for b in STYLE_LIBRARIES {
+            let lib = builtin_style_library(b.id).unwrap();
+            for g in &lib.styles {
+                let mut effects: Vec<&Effect> = g.appearance.effects.iter().collect();
+                effects.extend(g.appearance.items.iter().flat_map(|i| i.effects()));
+                for e in effects.into_iter().filter(|e| e.id.starts_with("warp.")) {
+                    assert_eq!(e.params["version"], json!(crate::live::WARP_NET), "{} › {}: {}", b.id, g.name, e.id);
+                    warps += 1;
+                }
+            }
+        }
+        assert!(warps >= 3, "{warps}");
     }
 
     #[test]

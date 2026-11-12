@@ -286,17 +286,18 @@ fn symbols_bend_with_the_envelope() {
     let e = arch(&mut s, 60.0, json!({}));
     let pts = anchors(&evaluated(&s, e));
     assert!(pts.iter().any(|p| p.y < 90.0), "the symbol's art rose in the middle");
-    // Editing the symbol redraws the envelope (the renderer's cache follows the symbol's art).
+    // Editing the symbol redraws the envelope (the renderer's cache follows the symbol's art). The
+    // arch lifts the middle of the 100..200 box by about 51, so (200, 120) is inside it.
     let mut r = vectorcraft_render::Renderer::new();
     let region = Rect::new(0.0, 0.0, 400.0, 300.0);
-    assert!(r.render_region(&s.doc().unwrap().doc, region, 1.0, true).pixel(200, 150)[1] < 60);
+    assert!(r.render_region(&s.doc().unwrap().doc, region, 1.0, true).pixel(200, 120)[1] < 60);
     s.edit("edit symbol", |d, _| {
         let art = Node::path(NodeId(0), shapes::rectangle(Rect::new(-10.0, -10.0, -8.0, -8.0)), Default::default());
         d.symbols[0].art = Arc::new(art);
         Ok(())
     })
     .unwrap();
-    assert!(r.render_region(&s.doc().unwrap().doc, region, 1.0, true).pixel(200, 150)[1] > 200);
+    assert!(r.render_region(&s.doc().unwrap().doc, region, 1.0, true).pixel(200, 120)[1] > 200);
 }
 
 fn strokes(nodes: &[Node]) -> usize {

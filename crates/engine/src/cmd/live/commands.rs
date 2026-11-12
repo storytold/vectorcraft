@@ -136,7 +136,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Warp…",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+Shift+W"),
-            "{ids?, style?: arc|arcLower|arcUpper|arch|bulge|shellLower|shellUpper|flag|wave|fish|rise|fisheye|inflate|squeeze|twist (arc), bend?: % -100..100 (50), h?: horizontal distortion % -100..100 (0), v?: vertical distortion % (0), horizontal?: bool (true) | orientation?: horizontal|vertical, horizontalDistortion?: as h, verticalDistortion?: as v} envelope the selected objects with a warp (Envelope Options from object.envelope.options with nothing selected; type maps from its glyph outline bounds) → {id}",
+            "{ids?, style?: arc|arcLower|arcUpper|arch|bulge|shellLower|shellUpper|flag|wave|fish|rise|fisheye|inflate|squeeze|twist (arc), bend?: % -100..100 (50), h?: horizontal distortion % -100..100 (0), v?: vertical distortion % (0), horizontal?: bool (true) | orientation?: horizontal|vertical, horizontalDistortion?: as h, verticalDistortion?: as v, version?: 0|1 (1: each style bends the bounds as one Bézier patch; 0: VectorCraft's earlier map)} envelope the selected objects with a warp (Envelope Options from object.envelope.options with nothing selected; type maps from its glyph outline bounds) → {id}",
             has_selection,
             env_make_warp
         ),
@@ -163,7 +163,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset with Warp…",
             ["Object", "Envelope Distort"],
             None,
-            "{style?, bend?, h?, v?, horizontal? | orientation? (as makeWithWarp; unset: the envelope's current warp, else arc 50 %), horizontalDistortion?: as h, verticalDistortion?: as v} make the selected envelopes warp envelopes, keeping their content",
+            "{style?, bend?, h?, v?, horizontal? | orientation? (as makeWithWarp; unset: the envelope's current warp, else arc 50 %), horizontalDistortion?: as h, verticalDistortion?: as v, version?: as makeWithWarp (unset: a warp envelope's own, else 1)} make the selected envelopes warp envelopes, keeping their content",
             has_envelope,
             env_reset_warp
         ),
@@ -181,7 +181,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Info",
             [],
             None,
-            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
+            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, version (a warp's map: 1, each style as one Bézier patch; 0, the earlier map), rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
             has_doc,
             env_info
         ),
@@ -199,7 +199,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Options…",
             ["Object", "Envelope Distort"],
             None,
-            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance; on an envelope with boundsMargin, distortAppearance also switches the content between the box with the margins and its geometric box), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
+            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance; on an envelope with boundsMargin, distortAppearance also switches the content between the box with the margins and its geometric box), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical, version?: 0|1 (warp envelopes' map, as makeWithWarp)} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
             has_doc,
             env_options
         ),

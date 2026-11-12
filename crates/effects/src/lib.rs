@@ -94,7 +94,7 @@ pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;
 pub use trap::TRAP;
 pub use vectorcraft_three_d::Mesh;
-pub use warp::{WarpStyle, warp_point};
+pub use warp::{WARP_NET, WarpNet, WarpStyle, map_version, warp_point, warp_version};
 
 mod catalog;
 mod geometry;

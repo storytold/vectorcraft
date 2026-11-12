@@ -209,6 +209,57 @@ fn warp_arc_bends_the_top_edge() {
     assert!(b.x0 < -1.0 || b.x1 > 101.0, "{b:?}");
 }
 
+/// A Warp of `version` 1 bends its bounds as its style's Bézier net; one without a version, as
+/// saved before the version existed, draws as it always did. Flag at 60 % on a 200 × 100 box: the
+/// net moves the top edge up to 6 × 0.6 × 100 × max u(1 - u)(1 - 2u) = 34.64 out, the earlier map
+/// moves it 0.6 × 25 = 15.
+#[test]
+fn a_warp_draws_with_the_map_its_version_names() {
+    let rect = shapes::rectangle(Rect::new(10.0, 20.0, 210.0, 120.0));
+    // u(1 - u)(1 - 2u) peaks at √3 / 18.
+    let peak = 360.0 * 3f64.sqrt() / 18.0;
+    for (version, out) in [(json!(1), peak), (json!(null), 15.0), (json!(0), 15.0)] {
+        let b = run("warp.flag", json!({"bend": 60, "version": version}), &rect).bounds().unwrap();
+        assert!(close(b.y0, 20.0 - out, 0.1) && close(b.y1, 120.0 + out, 0.1), "version {version}: {b:?}");
+        assert!(close(b.x0, 10.0, 1e-9) && close(b.x1, 210.0, 1e-9), "version {version}: {b:?}");
+    }
+}
+
+/// A straight line has a box with no width or no height, and the net bends it as the middle of
+/// the patch along that side: under Arc a vertical line stays vertical, and under Bulge, Fisheye,
+/// Inflate and Squeeze a horizontal line stays straight.
+#[test]
+fn a_warp_bends_a_flat_box_as_the_middle_of_its_patch() {
+    let anchors = |p: &PathData| p.subpaths.iter().flat_map(|s| s.anchors.clone()).collect::<Vec<_>>();
+    let vertical = shapes::line(Point::new(100.0, 0.0), Point::new(100.0, 100.0));
+    let out = run("warp.arc", json!({"bend": 50, "version": 1}), &vertical);
+    assert!(anchors(&out).iter().all(|a| close(a.p.x, 100.0, 1e-9) && close(a.h_in.x, 100.0, 1e-9) && close(a.h_out.x, 100.0, 1e-9)), "{out:?}");
+    let horizontal = shapes::line(Point::new(0.0, 50.0), Point::new(200.0, 50.0));
+    for style in ["bulge", "fisheye", "inflate", "squeeze"] {
+        let out = run(&format!("warp.{style}"), json!({"bend": 50, "version": 1}), &horizontal);
+        assert!(
+            anchors(&out).iter().all(|a| close(a.p.y, 50.0, 1e-9) && close(a.h_in.y, 50.0, 1e-9) && close(a.h_out.y, 50.0, 1e-9)),
+            "{style}: {out:?}"
+        );
+    }
+}
+
+/// A new Warp takes the nets' version unless one is given, and the catalog's defaults carry none,
+/// so a saved warp's params don't gain one.
+#[test]
+fn new_warps_take_the_nets_version() {
+    for (s, _) in WARP_STYLES {
+        let id = format!("warp.{s}");
+        let Some(e) = crate::new_effect(&id, &json!({"bend": 20})) else { panic!("{id}") };
+        assert_eq!(e.params["version"], json!(crate::WARP_NET), "{id}");
+        let Some(e) = crate::new_effect(&id, &json!({"version": 0})) else { panic!("{id}") };
+        assert_eq!(e.params["version"], json!(0), "{id}");
+        assert!(crate::merged_params(&id, &json!({"bend": 20})).get("version").is_none(), "{id}");
+    }
+    let Some(e) = crate::new_effect("distort.twist", &json!({})) else { panic!("twist") };
+    assert!(e.params.get("version").is_none());
+}
+
 #[test]
 fn transform_copies_and_move() {
     let out = run("distort.transform", json!({"moveH": 20, "copies": 3}), &square());
