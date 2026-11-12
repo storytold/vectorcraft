@@ -251,6 +251,7 @@ font-technology	Variable	Variabla
 	Asset Export Settings	Inställningar för resursexport
 	Assets	Resurser
 	Assign	Tilldela
+	Assign Profile	Tilldela profil
 	Assign Profile…	Tilldela profil…
 	Assign:	Tilldela:
 	Attach to Active Plane	Koppla till aktivt plan
@@ -3801,6 +3802,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	Arbets-CMYK
 	Working CMYK (don't tag)	Arbets-CMYK (tagga inte)
+	Working RGB (don't tag)	Arbets-RGB (tagga inte)
 	Workspace	Arbetslayout
 	Workspace {i}	Arbetslayout {i}
 	Wrinkle Tool	Skrynkelverktyg

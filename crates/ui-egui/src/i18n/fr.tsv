@@ -263,6 +263,7 @@ font-technology	Variable	Variables
 	Asset Export Settings	Paramètres d’exportation de ressources
 	Assets	Ressources
 	Assign	Attribuer
+	Assign Profile	Attribuer un profil
 	Assign Profile…	Attribuer un profil…
 	Assign:	Attribuer :
 	Attach to Active Plane	Associer au plan actif
@@ -3871,6 +3872,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMJN de travail
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
+	Working RGB (don't tag)	RVB de travail (sans balise)
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
 	Wrinkle Tool	Outil Fronces
@@ -4230,6 +4232,7 @@ axis	Both	Les deux
 @msg	`{key}` must be a number, not {v}	`{key}` doit être un nombre, pas {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} doit être un temps Unix en secondes (un entier) ou null
 @msg	`{key}` must be a string	`{key}` doit être une chaîne
+@msg	`{key}` must be a profile name or null	`{key}` doit être un nom de profil ou null
 @msg	`{key}` must be a whole number	`{key}` doit être un nombre entier
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` doit être un nombre entier compris entre {min} et {max} (reçu : {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` doit être compris entre {min} et {max} (reçu : {x})

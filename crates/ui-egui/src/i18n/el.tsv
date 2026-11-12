@@ -240,6 +240,7 @@ font-technology	Variable	Μεταβλητές
 	Asset Export Settings	Ρυθμίσεις εξαγωγής στοιχείων
 	Assets	Στοιχεία
 	Assign	Αντιστοίχιση
+	Assign Profile	Ανάθεση προφίλ
 	Assign Profile…	Ανάθεση προφίλ…
 	Assign:	Αντιστοίχιση:
 	Attach to Active Plane	Προσάρτηση στο ενεργό επίπεδο
@@ -2383,6 +2384,7 @@ axis	Both	Και τα δύο
 @msg	`{key}` must be a number, not {v}	Το `{key}` πρέπει να είναι αριθμός, όχι {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key}: πρέπει να είναι χρόνος Unix σε δευτερόλεπτα (ακέραιος) ή null
 @msg	`{key}` must be a string	Το `{key}` πρέπει να είναι συμβολοσειρά
+@msg	`{key}` must be a profile name or null	Το `{key}` πρέπει να είναι όνομα προφίλ ή null
 @msg	`{key}` must be a whole number	Το `{key}` πρέπει να είναι ακέραιος αριθμός
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	Το `{key}` πρέπει να είναι ακέραιος από {min} έως {max} (δόθηκε {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	Το `{key}` πρέπει να είναι μεταξύ {min} και {max} (δόθηκε {x})
@@ -4164,6 +4166,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Width Profiles	Προφίλ πλάτους
 	Width Tool	Πλάτος (Width Tool)
 	Working CMYK (don't tag)	Χώρος εργασίας CMYK (χωρίς ετικέτα)
+	Working RGB (don't tag)	Χώρος εργασίας RGB (χωρίς ετικέτα)
 	Workspace {i}	Χώρος εργασίας {i}
 	Wrinkle Tool	Πτυχώσεις (Wrinkle Tool)
 	Write Layers	Εγγραφή επιπέδων

@@ -179,6 +179,7 @@ digits	Malayalam	말라얄람어
 	PDF Presets…	PDF 프리셋…
 	Perspective Grid Presets…	원근 격자 프리셋…
 	Color Settings…	색상 설정…
+	Assign Profile	프로파일 지정
 	Assign Profile…	프로파일 지정…
 	Keyboard Shortcuts…	키보드 단축키…
 	Preferences…	환경 설정…
@@ -3935,6 +3936,7 @@ file-filter	Templates	템플릿
 	Weight	두께
 	Windows	Windows
 	Working CMYK (don't tag)	작업용 CMYK (태그 안 함)
+	Working RGB (don't tag)	작업용 RGB (태그 안 함)
 	Workspace {i}	작업 영역 {i}
 	Yellow	노랑
 	[Normal Character Style]	[기본 문자 스타일]
@@ -4396,6 +4398,7 @@ theme	Appearance	외관
 @msg	`{key}` must be a #rrggbb color	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a #rrggbb colour	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a string	`{key}`은(는) 문자열이어야 합니다
+@msg	`{key}` must be a profile name or null	`{key}`은(는) 프로파일 이름 또는 null이어야 합니다
 @msg	`{key}` must be a whole number	`{key}`은(는) 정수여야 합니다
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`은(는) {min}에서 {max} 사이의 정수여야 합니다({x} 입력됨)
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`은(는) {min}에서 {max} 사이여야 합니다({x} 입력됨)

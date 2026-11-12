@@ -400,6 +400,7 @@ antiAlias	Sharp	Nítid
 	Asset Export Settings	Configuració d’exportació de recursos
 	Assets	Recursos
 	Assign	Assigna
+	Assign Profile	Assigna el perfil
 	Assign Profile…	Assigna el perfil…
 	Assign:	Assigna:
 	Attach	Adjunta
@@ -4920,6 +4921,7 @@ digits	Malayalam	Malaiàlam
 	Words Longer Than:	Paraules més llargues de:
 	Working CMYK	CMYK de treball
 	Working CMYK (don't tag)	CMYK de treball (sense etiquetar)
+	Working RGB (don't tag)	RGB de treball (sense etiquetar)
 	Working RGB	RGB de treball
 	Workspace	Espai de treball
 	Workspace {i}	Espai de treball {i}
@@ -5078,6 +5080,7 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0
 @msg	`{key}` must be a number, not {v}	`{key}` ha de ser un nombre, no {v}
 @msg	`{key}` must be a string	`{key}` ha de ser una cadena
+@msg	`{key}` must be a profile name or null	`{key}` ha de ser un nom de perfil o null
 @msg	`{key}` must be a whole number	`{key}` ha de ser un nombre enter
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` ha de ser un nombre enter entre {min} i {max} (rebut {x})
 @msg	`{key}` must be an array of these names: {_1}	`{key}` ha de ser una matriu d’aquests noms: {_1}

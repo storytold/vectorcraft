@@ -255,6 +255,7 @@ antiAlias	Sharp	Nítido
 	Asset Export Settings	Configurações de Exportação de Ativos
 	Assets	Ativos
 	Assign	Atribuir
+	Assign Profile	Atribuir Perfil
 	Assign Profile…	Atribuir Perfil…
 	Assign:	Atribuir:
 	Attach to Active Plane	Anexar ao Plano Ativo
@@ -3789,6 +3790,7 @@ axis	Both	Ambos
 @msg	`{key}` must be a number, not {v}	`{key}` deve ser um número, não {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} deve ser um tempo Unix em segundos (um inteiro) ou null
 @msg	`{key}` must be a string	`{key}` deve ser uma string
+@msg	`{key}` must be a profile name or null	`{key}` deve ser um nome de perfil ou null
 @msg	`{key}` must be a whole number	`{key}` deve ser um número inteiro
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` deve ser um número inteiro entre {min} e {max} (recebido {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` deve estar entre {min} e {max} (recebido {x})
@@ -5114,6 +5116,7 @@ axis	Both	Ambos
 	Weight	Espessura
 	Windows	Windows
 	Working CMYK (don't tag)	CMYK de Trabalho (não marcar)
+	Working RGB (don't tag)	RGB de Trabalho (não marcar)
 	Workspace {i}	Espaço de Trabalho {i}
 	Yellow	Amarelo
 	[Normal Character Style]	[Estilo de Caractere Normal]

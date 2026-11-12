@@ -118,6 +118,7 @@
 	PDF Presets…	Přednastavení PDF…
 	Perspective Grid Presets…	Přednastavení perspektivní mřížky…
 	Color Settings…	Nastavení barev…
+	Assign Profile	Přiřadit profil
 	Assign Profile…	Přiřadit profil…
 	Keyboard Shortcuts…	Klávesové zkratky…
 # Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
@@ -2072,6 +2073,7 @@ digits	Malayalam	Malajálamské
 	Simulate Paper	Simulovat papír
 	Use Black Point Compensation	Použít kompenzaci černého bodu
 	Working CMYK (don't tag)	Pracovní CMYK (neoznačovat)
+	Working RGB (don't tag)	Pracovní RGB (neoznačovat)
 	{name} (spot)	{name} (přímá)
 	Add to Profiles…	Přidat do profilů…
 	Align Stroke to Center	Zarovnat tah na střed
@@ -4550,6 +4552,7 @@ imageTrace	Outline	Obrys
 @msg	`{key}` must be a number, not {v}	`{key}` musí být číslo, ne {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} musí být unixový čas v sekundách (celé číslo) nebo null
 @msg	`{key}` must be a string	`{key}` musí být řetězec
+@msg	`{key}` must be a profile name or null	`{key}` musí být název profilu nebo null
 @msg	`{key}` must be a whole number	`{key}` musí být celé číslo
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` musí být celé číslo mezi {min} a {max} (zadáno {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musí být mezi {min} a {max} (zadáno {x})

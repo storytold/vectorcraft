@@ -126,6 +126,7 @@
 	PDF Presets…	PDF-esiasetukset…
 	Perspective Grid Presets…	Perspektiiviruudukon esiasetukset…
 	Color Settings…	Väriasetukset…
+	Assign Profile	Määritä profiili
 	Assign Profile…	Määritä profiili…
 	Keyboard Shortcuts…	Pikanäppäimet…
 	Import Shortcut Set	Tuo pikanäppäinjoukko
@@ -2033,6 +2034,7 @@ digits	Malayalam	Malajalam
 	Simulate Paper	Simuloi paperia
 	Use Black Point Compensation	Käytä mustan pisteen kompensointia
 	Working CMYK (don't tag)	Työ-CMYK (ei tunnistetta)
+	Working RGB (don't tag)	Työ-RGB (ei tunnistetta)
 	{name} (spot)	{name} (spottiväri)
 	Add to Profiles…	Lisää profiileihin…
 	Align Stroke to Center	Tasaa viiva keskelle
@@ -4464,6 +4466,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`{key}` must be a number, not {v}	`{key}` on oltava luku, ei {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} on oltava Unix-aika sekunteina (kokonaisluku) tai null
 @msg	`{key}` must be a string	`{key}` on oltava merkkijono
+@msg	`{key}` must be a profile name or null	`{key}` on oltava profiilin nimi tai null
 @msg	`{key}` must be a whole number	`{key}` on oltava kokonaisluku
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` on oltava kokonaisluku väliltä {min}–{max} (saatiin {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` on oltava väliltä {min}–{max} (saatiin {x})

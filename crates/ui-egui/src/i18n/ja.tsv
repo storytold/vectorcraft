@@ -186,6 +186,7 @@ digits	Malayalam	マラヤーラム数字
 	PDF Presets…	PDF プリセット…
 	Perspective Grid Presets…	遠近グリッドプリセット…
 	Color Settings…	カラー設定…
+	Assign Profile	プロファイルの指定
 	Assign Profile…	プロファイルの指定…
 	Keyboard Shortcuts…	キーボードショートカット…
 	Preferences…	環境設定…
@@ -3947,6 +3948,7 @@ file-filter	Templates	テンプレート
 	Weight	線幅
 	Windows	Windows
 	Working CMYK (don't tag)	作業用 CMYK (タグなし)
+	Working RGB (don't tag)	作業用 RGB (タグなし)
 	Workspace {i}	ワークスペース {i}
 	Yellow	イエロー
 	[Normal Character Style]	[標準文字スタイル]
@@ -4469,6 +4471,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{key}` must be a #rrggbb color	`{key}` は #rrggbb 形式のカラーにしてください
 @msg	`{key}` must be a #rrggbb colour	`{key}` は #rrggbb 形式のカラーにしてください
 @msg	`{key}` must be a string	`{key}` は文字列にしてください
+@msg	`{key}` must be a profile name or null	`{key}` はプロファイル名または null にしてください
 @msg	`{key}` must be a whole number	`{key}` は整数にしてください
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` は {min} から {max} までの整数にしてください (指定値: {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` は {min} から {max} までの値にしてください (指定値: {x})

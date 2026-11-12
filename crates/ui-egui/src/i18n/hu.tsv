@@ -360,6 +360,7 @@ font-technology	Variable	Változó
 	Asset Export Settings	Elemexportálási beállítások
 	Assets	Elemek
 	Assign	Hozzárendelés
+	Assign Profile	Profil hozzárendelése
 	Assign Profile…	Profil hozzárendelése…
 	Assign:	Hozzárendelés:
 	Attach to Active Plane	Csatolás az aktív síkhoz
@@ -4614,6 +4615,7 @@ mark-style	Japanese	Japán
 	Windows	Windows
 	Working CMYK	Munka-CMYK
 	Working CMYK (don't tag)	Munka-CMYK (címke nélkül)
+	Working RGB (don't tag)	Munka-RGB (címke nélkül)
 	Working RGB	Munka-RGB
 	Workspace	Munkaterület
 	Workspace {i}	Munkaterület {i}
@@ -4751,6 +4753,7 @@ imageTrace	Outline	Körvonal
 @msg	`{key}` must be a number, not {v}	`{key}`: szám kell, ez nem az: {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key}: Unix-idő kell másodpercben (egész szám) vagy null
 @msg	`{key}` must be a string	`{key}`: szöveg kell
+@msg	`{key}` must be a profile name or null	`{key}`: profilnév vagy null kell
 @msg	`{key}` must be a whole number	`{key}`: egész szám kell
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`: {min} és {max} közötti egész szám kell (kapott érték: {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`: {min} és {max} közötti érték kell (kapott érték: {x})
