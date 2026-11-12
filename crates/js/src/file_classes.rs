@@ -31,6 +31,8 @@ pub(crate) struct Classes {
     folder_proto: ObjId,
     host: ObjId,
     current: Value,
+    /// The count of [`reset_current`] calls: a file is open only in the run that opened it.
+    run: f64,
 }
 
 impl Classes {
@@ -43,6 +45,7 @@ impl Classes {
 const PATH: &str = "__vcPath";
 const ERROR: &str = "__vcError";
 const HANDLE: &str = "__vcHandle";
+const RUN: &str = "__vcRun";
 const ENCODING: &str = "__vcEncoding";
 const LINE_FEED: &str = "__vcLineFeed";
 
@@ -132,12 +135,13 @@ fn parsed(i: &mut Interp, this: &Value, what: &str, name: &str) -> JsResult<Valu
 fn instance(i: &mut Interp, proto: ObjId, fs: Value) -> JsResult<Value> {
     let line_feed = host_value(i, "lineFeed")?;
     i.rooted(&[fs.clone(), line_feed.clone()], |i| {
-        i.reserve_heap(OBJECT_BYTES + 5 * PROP_BYTES)?;
+        i.reserve_heap(OBJECT_BYTES + 6 * PROP_BYTES)?;
         let o = i.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
         i.rooted(&[Value::Object(o)], |i| {
             set_slot(i, o, PATH, fs.clone())?;
             set_slot(i, o, ERROR, Value::str(""))?;
             set_slot(i, o, HANDLE, Value::Number(-1.0))?;
+            set_slot(i, o, RUN, Value::Number(-1.0))?;
             set_slot(i, o, ENCODING, Value::str(""))?;
             set_slot(i, o, LINE_FEED, line_feed.clone())?;
             Ok(Value::Object(o))
@@ -189,8 +193,7 @@ fn text_result(i: &mut Interp, o: ObjId, r: Value, failed: Value) -> JsResult<Va
 
 /// The id of the object's open file, or `None` after setting `error` when it has none.
 fn opened(i: &mut Interp, o: ObjId) -> JsResult<Option<Value>> {
-    let h = slot(i, o, HANDLE)?;
-    if matches!(h, Value::Number(n) if n >= 0.0) {
+    if let Some(h) = is_open(i, o)? {
         return Ok(Some(h));
     }
     let m = message(i, "notOpen")?;
@@ -198,9 +201,11 @@ fn opened(i: &mut Interp, o: ObjId) -> JsResult<Option<Value>> {
     Ok(None)
 }
 
+/// The id of the object's open file, when this run opened it.
 fn is_open(i: &Interp, o: ObjId) -> JsResult<Option<Value>> {
     let h = slot(i, o, HANDLE)?;
-    Ok(matches!(h, Value::Number(n) if n >= 0.0).then_some(h))
+    let this_run = matches!(slot(i, o, RUN)?, Value::Number(n) if n == classes(i)?.run);
+    Ok((this_run && matches!(h, Value::Number(n) if n >= 0.0)).then_some(h))
 }
 
 /// Closes the object's open file, if it has one.
@@ -528,6 +533,8 @@ fn open(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value>
         return Ok(Value::Bool(false));
     }
     set_slot(i, o, HANDLE, id)?;
+    let run = classes(i)?.run;
+    set_slot(i, o, RUN, Value::Number(run))?;
     Ok(Value::Bool(true))
 }
 
@@ -759,6 +766,18 @@ fn folder_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     Ok(())
 }
 
+/// Sets `Folder.current` back to the host's `current`, when the realm has `File` and `Folder`, and
+/// begins a new run, in which the files earlier runs opened are not open.
+pub(crate) fn reset_current(i: &mut Interp) -> JsResult<()> {
+    let Some(c) = i.files.as_mut() else { return Ok(()) };
+    c.run += 1.0;
+    let start = host(i, "current", &[])?;
+    if let Some(c) = i.files.as_mut() {
+        c.current = start;
+    }
+    Ok(())
+}
+
 /// Adds `File` and `Folder` to the global object, their work done by the host functions in
 /// `items` ([`crate::Realm::define_file_classes`]).
 pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResult<()> {
@@ -768,7 +787,7 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
         i.reserve_heap(2 * OBJECT_BYTES)?;
         let file_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
         let folder_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
-        i.files = Some(Classes { file_proto, folder_proto, host: host_obj, current: Value::str("") });
+        i.files = Some(Classes { file_proto, folder_proto, host: host_obj, current: Value::str(""), run: 0.0 });
         let start = host(i, "current", &[])?;
         if let Some(c) = i.files.as_mut() {
             c.current = start;

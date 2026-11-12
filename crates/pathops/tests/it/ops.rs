@@ -479,6 +479,42 @@ fn simplify_keeps_a_closed_subpath_that_refits_to_one_curve() {
     assert!(max_deviation(&long, &s) <= 0.1 + 1e-6, "{s:?}");
 }
 
+/// An S curve closed by a straight edge of 20,000 anchors, whose curve shows only when it is split in
+/// four, keeps its outline within the tolerance. With corner anchors on the edge, only the curve is
+/// split. With smooth anchors whose handles lie along the edge, four pieces of every segment pass the
+/// limit on pieces: the loop stays as it is, or with straight lines follows lines between samples.
+#[test]
+fn simplify_keeps_a_flat_loop_with_many_anchors_on_its_edge() {
+    let n = 20_000;
+    let step = 100.0 / f64::from(n);
+    let curve_anchors = vec![
+        Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 3.0)),
+        Anchor::with_handles(Point::new(100.0, 0.0), Point::new(0.0, -3.0), Point::new(100.0, 0.0)),
+    ];
+    let curve = PathData::single(SubPath::new(curve_anchors.clone(), false));
+    for smooth_edge in [false, true] {
+        let mut anchors = curve_anchors.clone();
+        anchors.extend((1..n).map(|i| {
+            let p = Point::new(100.0 - f64::from(i) * step, 0.0);
+            if smooth_edge {
+                Anchor::with_handles(p, Point::new(p.x + step / 3.0, 0.0), Point::new(p.x - step / 3.0, 0.0))
+            } else {
+                Anchor::corner(p)
+            }
+        }));
+        let path = PathData::single(SubPath::new(anchors, true));
+        for straight_lines in [false, true] {
+            let s = simplify_with(&path, &SimplifyOptions { tolerance: 4.0, straight_lines, ..Default::default() });
+            let at = format!("smooth edge {smooth_edge}, straight lines {straight_lines}");
+            assert_eq!(s.subpaths.len(), 1, "{at}");
+            let sp = &s.subpaths[0];
+            assert!(sp.closed && sp.area().abs() > 1.0, "{at}: area {}", sp.area());
+            assert!(max_deviation(&curve, &s) <= 4.0 + 1e-6, "{at}: {}", max_deviation(&curve, &s));
+            assert!(!straight_lines || (0..sp.segment_count()).all(|i| sp.segment_is_line(i)), "{at}: a curve is left");
+        }
+    }
+}
+
 /// The Simplify slider's levels: 1 pt at 50, doubled for every 10 levels down and halved for every
 /// 10 up; Auto-Simplify takes the lowest level whose tolerance is at most 1/400 of the size, and
 /// level 100 for a size under 12.5 pt.
