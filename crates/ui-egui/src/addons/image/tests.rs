@@ -56,6 +56,26 @@ fn set(app: &mut VectorcraftApp, key: &str, v: serde_json::Value) {
     crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), key.into(), v);
 }
 
+/// Properties' Quick Actions and the Control bar offer Remove Background for a selected image, and
+/// the Control bar's button removes it at once (no dialog) with the defaults, as one step.
+#[test]
+fn properties_and_the_control_bar_remove_the_background_at_once() {
+    use crate::tests_removeanchors::{at, click_control, control_frame, has, properties_frame};
+    let mut app = app();
+    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let n = steps(&app);
+    assert!(has(&properties_frame(&mut app, 280.0), "Remove Background"), "Properties offers it");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    click_control(&mut app, &ctx, at(&bar, "Remove Background"));
+    assert!(app.ui.dialog.is_none(), "it runs at once");
+    assert_eq!(steps(&app), n + 1, "one undo step");
+    // The defaults (tolerance and softness 10): the white goes, the near-white ring fades.
+    let [corner, ring, block] = alphas(&app);
+    assert!(corner == 0 && ring > 0 && ring < 255 && block == 255, "{:?}", alphas(&app));
+}
+
 /// Object › Plug-ins › Image Tools › Remove Background… opens the command dialog on Edge Color
 /// with Preview off. With Preview on the canvas shows the result for the values in the dialog,
 /// each change worked out again from the image as it was; Cancel puts the image back with no step

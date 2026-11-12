@@ -11,7 +11,9 @@ use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
 use serde_json::{Value, json};
-use vectorcraft_brush::{self as brush, ArtBrush, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation};
+use vectorcraft_brush::{
+    self as brush, ArtBrush, Bristle, BristleShape, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation,
+};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, PatternDef, Symbol};
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, SubPath, shapes};
@@ -169,6 +171,7 @@ pub struct BuiltinBrushLibrary {
 pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "art-ribbons", name: "Art Ribbons", make: art_ribbons },
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
+    BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
@@ -288,6 +291,31 @@ fn calligraphic_nibs() -> BrushLibrary {
         pressure,
     ];
     built("Calligraphic Nibs", Document::new(100.0, 100.0), brushes)
+}
+
+/// A bristle brush: `shape`, then size (pt), bristle length, density, thickness, paint opacity
+/// and stiffness (%).
+fn bristle(name: &str, shape: BristleShape, [size, length, density, thickness, opacity, stiffness]: [f64; 6]) -> Brush {
+    Brush { name: name.into(), kind: BrushKind::Bristle(Bristle { shape, size, length, density, thickness, opacity, stiffness }) }
+}
+
+/// Bristle Brushes: one bristle brush for each tip shape, from a fine liner to wide fans for
+/// blending and texture.
+fn bristle_brushes() -> BrushLibrary {
+    use BristleShape::*;
+    let brushes = vec![
+        bristle("Fine Liner", RoundPoint, [2.0, 140.0, 30.0, 30.0, 90.0, 75.0]),
+        bristle("Pointed Flat", FlatPoint, [5.0, 120.0, 55.0, 35.0, 80.0, 60.0]),
+        bristle("Stubby Round", RoundBlunt, [8.0, 60.0, 70.0, 50.0, 85.0, 80.0]),
+        bristle("Dry Scrub", FlatBlunt, [10.0, 40.0, 25.0, 60.0, 60.0, 95.0]),
+        bristle("Soft Dome", RoundCurve, [12.0, 160.0, 85.0, 20.0, 45.0, 25.0]),
+        bristle("Filbert", FlatCurve, [9.0, 110.0, 65.0, 40.0, 70.0, 45.0]),
+        bristle("Angled Round", RoundAngle, [7.0, 130.0, 50.0, 35.0, 75.0, 55.0]),
+        bristle("Angled Flat", FlatAngle, [11.0, 100.0, 60.0, 45.0, 80.0, 65.0]),
+        bristle("Fan Blender", RoundFan, [16.0, 220.0, 40.0, 15.0, 35.0, 20.0]),
+        bristle("Grass Fan", FlatFan, [20.0, 260.0, 15.0, 25.0, 65.0, 35.0]),
+    ];
+    built("Bristle Brushes", Document::new(100.0, 100.0), brushes)
 }
 
 fn border(name: &str, side: Node, corner: Option<Node>, fit: PatternFit) -> Brush {
