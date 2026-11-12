@@ -860,6 +860,7 @@ digits	Malayalam	말라얄람어
 	Spectrum Gradients	스펙트럼 그레이디언트
 	Sky Gradients	하늘 그레이디언트
 	Neutral Gradients	중간색 그레이디언트
+	Organic Fades	유기적 페이드
 	Duotone Gradients	듀오톤 그레이디언트
 	Radial Glows	방사형 광선
 	Save Swatch Library…	견본 라이브러리 저장…
@@ -871,6 +872,7 @@ digits	Malayalam	말라얄람어
 	Search Commands…	명령 검색…
 	VectorCraft Help…	VectorCraft 도움말…
 	Preview	미리 보기
+	Preview:	미리 보기:
 	Show Edges	가장자리 표시
 	Show Corner Widget	모퉁이 위젯 표시
 	Show Template	템플릿 표시
@@ -1457,6 +1459,14 @@ antiAlias	Sharp	날카롭게
 	Disable Auto Add/Delete	자동 추가/삭제 사용 안 함
 	Disable Opacity Mask	불투명 마스크 사용 안 함
 	Discard	삭제
+	Preserve	보존
+	TIFF (Black & White)	TIFF (흑백)
+	TIFF (8-bit Color)	TIFF (8비트 색상)
+	High Resolution	고해상도
+	Medium Resolution	중간 해상도
+	Low Resolution	저해상도
+	Language Level 2	언어 수준 2
+	Language Level 3	언어 수준 3
 	Discard Empty Type	빈 문자 삭제
 	Discard Recovered Documents	복구된 문서 삭제
 	Discard White Overprint in Output	출력에서 흰색 오버프린트 삭제
@@ -6439,6 +6449,11 @@ breakText	Glyphs	글리프
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	가져오기 플러그인은 `extensions`를 1~{MAX_EXTENSIONS}개 선언합니다
 @msg	only an exporter or an importer declares `extensions`	`extensions`는 내보내기 또는 가져오기 플러그인만 선언합니다
 @msg	an importer always gets an import's budget: leave `budget` out	가져오기 플러그인은 항상 가져오기 예산을 받습니다: `budget`을 생략하세요
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	문제 해결 정보 복사
+@msg	Copied the troubleshooting info	문제 해결 정보를 복사했습니다
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	지난 VectorCraft 세션이 닫히기 전에 응답을 멈췄습니다. 도움말 › 문제 해결 정보 복사로 버그 보고용 세부 정보를 복사할 수 있습니다
 
 # Safe Mode
 	Safe Mode…	안전 모드…

@@ -3103,6 +3103,7 @@ diagnostics	ui	felület
 	Press keys…	Nyomd le a billentyűket…
 	Pressure	Nyomás
 	Preview	Előnézet
+	Preview:	Előnézet:
 	Preview All Layers	Összes réteg előnézetben
 	Preview in Browser	Előnézet böngészőben
 	Preview in Browser needs the desktop app (the web downloads files instead)	Az Előnézet böngészőben az asztali alkalmazásban érhető el (a webes változat helyette letölti a fájlokat)
@@ -3181,6 +3182,7 @@ mark-style	Japanese	Japán
 	Radial Blur	Körkörös elmosás
 	Radial Blur…	Körkörös elmosás…
 	Radial Glows	Körkörös ragyogások
+	Organic Fades	Organikus áttűnések
 	Radial Gradient	Körkörös színátmenet
 	Conic Gradient	Kúpos színátmenet
 	Diamond Gradient	Rombusz színátmenet
@@ -6841,6 +6843,11 @@ breakText	Glyphs	Glifák
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	az importáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
 @msg	only an exporter or an importer declares `extensions`	csak exportáló vagy importáló bővítmény adhat meg `extensions` értéket
 @msg	an importer always gets an import's budget: leave `budget` out	az importáló bővítmény mindig egy importálás keretét kapja: hagyja el a `budget` kulcsot
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Hibaelhárítási adatok másolása
+@msg	Copied the troubleshooting info	Hibaelhárítási adatok másolva
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	A VectorCraft legutóbbi munkamenete nem válaszolt, mielőtt bezárult. A Súgó › Hibaelhárítási adatok másolása kimásolja a részleteket egy hibajelentéshez
 
 # Safe Mode
 	Safe Mode…	Csökkentett mód…

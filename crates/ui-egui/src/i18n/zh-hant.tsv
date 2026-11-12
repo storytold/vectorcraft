@@ -791,6 +791,14 @@ font-technology	Variable	可變
 	Disable Auto Add/Delete	停用自動增加/刪除
 	Disable Opacity Mask	停用不透明度遮色片
 	Discard	捨棄
+	Preserve	保留
+	TIFF (Black & White)	TIFF (黑白)
+	TIFF (8-bit Color)	TIFF (8 位元色彩)
+	High Resolution	高解析度
+	Medium Resolution	中解析度
+	Low Resolution	低解析度
+	Language Level 2	語言層級 2
+	Language Level 3	語言層級 3
 	Discard Empty Type	捨棄空白文字
 	Discard Recovered Documents	捨棄已復原的文件
 	Discard White Overprint in Output	輸出時捨棄白色疊印
@@ -3353,6 +3361,7 @@ file-filter	Templates	範本
 	Options for Selection…	選取範圍的選項…
 	Options:	選項：
 	Options…	選項…
+	Organic Fades	自然漸隱
 	or more spaces with a tab	個以上的空格取代為定位字元
 	Order:	順序：
 	Ordinals	序數字
@@ -3547,6 +3556,7 @@ diagnostics	ui	介面
 	Presets:	預設集：
 	Press 	按下 
 	Preview	預覽
+	Preview:	預覽：
 	Preview All Layers	預覽所有圖層
 	Preview in Browser	在瀏覽器中預覽
 	Preview in Browser needs the desktop app (the web downloads files instead)	在瀏覽器中預覽需要桌面版應用程式 (網頁版會改為下載檔案)
@@ -6496,6 +6506,11 @@ breakText	Glyphs	字符
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	匯入增效模組宣告 1 到 {MAX_EXTENSIONS} 個 `extensions`
 @msg	only an exporter or an importer declares `extensions`	只有匯出或匯入增效模組才宣告 `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	匯入增效模組一律取得匯入的預算：請勿指定 `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	複製疑難排解資訊
+@msg	Copied the troubleshooting info	已複製疑難排解資訊
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	上次的 VectorCraft 工作階段在關閉前停止回應。說明 › 複製疑難排解資訊 可複製用於錯誤回報的詳細資料
 
 # Safe Mode
 	Safe Mode…	安全模式…

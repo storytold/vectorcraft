@@ -2261,6 +2261,7 @@ file-filter	Templates	模板
 	Options	选项
 	Options:	选项：
 	Options…	选项…
+	Organic Fades	自然渐隐
 	or more spaces with a tab	或多个空格加一个制表符
 	Order:	顺序：
 	Ordinals	序数字
@@ -2453,6 +2454,7 @@ diagnostics	ui	界面
 	Presets:	预设：
 	Press 	按 
 	Preview	预览
+	Preview:	预览：
 	Preview in Browser	在浏览器中预览
 	Preview in Browser needs the desktop app (the web downloads files instead)	在浏览器中预览需要桌面版应用程序 (网页版会改为下载文件)
 	Preview Mode	预览模式
@@ -6698,6 +6700,11 @@ breakText	Glyphs	字形
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	导入增效工具声明 1 到 {MAX_EXTENSIONS} 个 `extensions`
 @msg	only an exporter or an importer declares `extensions`	只有导出或导入增效工具才声明 `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	导入增效工具始终获得导入的预算：请省略 `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	复制故障排除信息
+@msg	Copied the troubleshooting info	已复制故障排除信息
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	上次的 VectorCraft 会话在关闭前停止了响应。帮助 › 复制故障排除信息 可复制用于错误报告的详细信息
 
 # Safe Mode
 	Safe Mode…	安全模式…

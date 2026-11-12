@@ -2389,6 +2389,7 @@ file-filter	Templates	Шаблоны
 	Options for Selection…	Параметры выделения…
 	Options:	Параметры:
 	Options…	Параметры…
+	Organic Fades	Органические затухания
 	or more spaces with a tab	или больше пробелов на табуляцию
 	Order:	Порядок:
 	Ordinals	Порядковые числительные
@@ -2582,6 +2583,7 @@ diagnostics	ui	интерфейс
 	Presets:	Наборы:
 	Press 	Нажмите 
 	Preview	Просмотр
+	Preview:	Просмотр:
 	Preview All Layers	Просмотреть все слои
 	Preview in Browser	Просмотреть в браузере
 	Preview in Browser needs the desktop app (the web downloads files instead)	Просмотр в браузере требует настольного приложения (web-версия скачивает файлы)
@@ -6946,6 +6948,11 @@ shape	Open	Открытый
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	модуль импорта объявляет от 1 до {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	`extensions` объявляет только модуль экспорта или импорта
 @msg	an importer always gets an import's budget: leave `budget` out	модуль импорта всегда получает бюджет импорта: не указывайте `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копировать сведения для устранения неполадок
+@msg	Copied the troubleshooting info	Сведения для устранения неполадок скопированы
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Последний сеанс VectorCraft перестал отвечать перед закрытием. Справка › Копировать сведения для устранения неполадок копирует подробности для отчёта об ошибке
 
 # Safe Mode
 	Safe Mode…	Безопасный режим…

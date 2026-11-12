@@ -524,6 +524,7 @@
 	Gaussian Blur…	Rozmycie gaussowskie…
 	View	Widok
 	Preview	Podgląd
+	Preview:	Podgląd:
 	Overprint Preview	Podgląd nadruku
 	Pixel Preview	Podgląd pikseli
 	Trim View	Widok przycięty
@@ -790,6 +791,7 @@
 	Spectrum Gradients	Gradienty widma
 	Sky Gradients	Gradienty nieba
 	Neutral Gradients	Gradienty neutralne
+	Organic Fades	Organiczne zanikania
 	Duotone Gradients	Gradienty dwutonowe
 	Radial Glows	Blaski promieniste
 	Save Swatch Library…	Zapisz bibliotekę próbek…
@@ -6713,6 +6715,11 @@ breakText	Glyphs	Glify
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	wtyczka importu deklaruje od 1 do {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje tylko wtyczka eksportu lub importu
 @msg	an importer always gets an import's budget: leave `budget` out	wtyczka importu zawsze dostaje budżet importu: pomiń `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiuj informacje diagnostyczne
+@msg	Copied the troubleshooting info	Skopiowano informacje diagnostyczne
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Ostatnia sesja VectorCraft przestała odpowiadać przed zamknięciem. Pomoc › Kopiuj informacje diagnostyczne kopiuje szczegóły do zgłoszenia błędu
 
 # Safe Mode
 	Safe Mode…	Tryb awaryjny…

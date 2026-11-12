@@ -556,6 +556,7 @@
 	Gaussian Blur…	Gaussovo zamućenje…
 	View	Prikaz
 	Preview	Pregled
+	Preview:	Pregled:
 	Overprint Preview	Pregled pretiska
 	Pixel Preview	Pregled piksela
 	Trim View	Prikaz obrezivanja
@@ -834,6 +835,7 @@
 	Spectrum Gradients	Gradijenti spektra
 	Sky Gradients	Gradijenti neba
 	Neutral Gradients	Neutralni gradijenti
+	Organic Fades	Organski prelazi
 	Duotone Gradients	Duoton gradijenti
 	Radial Glows	Radijalni sjajevi
 	Save Swatch Library…	Sačuvaj biblioteku uzoraka boja…
@@ -6618,6 +6620,11 @@ shape	Open	Otvoren
 	Open With	Otvori pomoću
 	No importer plug-ins installed	Nisu instalirani dodaci za uvoz
 	Read files you open in its format and make documents from them	Čitati datoteke koje otvarate u njegovom formatu i od njih praviti dokumente
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiraj informacije za rješavanje problema
+@msg	Copied the troubleshooting info	Informacije za rješavanje problema kopirane
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Posljednja sesija VectorCrafta prestala je odgovarati prije zatvaranja. Pomoć › Kopiraj informacije za rješavanje problema kopira detalje za prijavu greške
 
 # Safe Mode
 	Safe Mode…	Sigurni način rada…

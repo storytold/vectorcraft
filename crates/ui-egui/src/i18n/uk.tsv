@@ -823,6 +823,14 @@ font-technology	Variable	Варіативні
 	Disable Auto Add/Delete	Вимкнути авто-додавання/видалення
 	Disable Opacity Mask	Вимкнути маску непрозорості
 	Discard	Відкинути
+	Preserve	Зберігати
+	TIFF (Black & White)	TIFF (чорно-білий)
+	TIFF (8-bit Color)	TIFF (8-бітний колір)
+	High Resolution	Висока роздільна здатність
+	Medium Resolution	Середня роздільна здатність
+	Low Resolution	Низька роздільна здатність
+	Language Level 2	Рівень мови 2
+	Language Level 3	Рівень мови 3
 	Discard Empty Type	Видалити порожній текст
 	Discard Recovered Documents	Відкинути відновлені документи
 	Discard White Overprint in Output	Скасувати накладення білого під час виведення
@@ -2386,6 +2394,7 @@ file-filter	Templates	Шаблони
 	Options for Selection…	Параметри виділення…
 	Options:	Параметри:
 	Options…	Параметри…
+	Organic Fades	Органічні згасання
 	or more spaces with a tab	або більше прогалин на табуляцію
 	Order:	Порядок:
 	Ordinals	Порядкові числівники
@@ -2579,6 +2588,7 @@ diagnostics	ui	інтерфейс
 	Presets:	Набори:
 	Press 	Натисніть 
 	Preview	Перегляд
+	Preview:	Перегляд:
 	Preview All Layers	Переглянути всі шари
 	Preview in Browser	Переглянути у браузері
 	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
@@ -6458,6 +6468,11 @@ breakText	Glyphs	Гліфи
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	модуль імпорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
 @msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копіювати відомості для усунення несправностей
+@msg	Copied the troubleshooting info	Відомості для усунення несправностей скопійовано
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Останній сеанс VectorCraft перестав відповідати перед закриттям. Довідка › Копіювати відомості для усунення несправностей копіює подробиці для звіту про помилку
 
 # Safe Mode
 	Safe Mode…	Безпечний режим…

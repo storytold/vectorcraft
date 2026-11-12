@@ -520,6 +520,7 @@
 	Gaussian Blur…	Gaussisk sløring…
 	View	Vis
 	Preview	Forhåndsvisning
+	Preview:	Forhåndsvisning:
 	Overprint Preview	Overprint-forhåndsvisning
 	Pixel Preview	Pixel-forhåndsvisning
 	Trim View	Beskåret visning
@@ -780,6 +781,7 @@
 	Spectrum Gradients	Spektrumgradienter
 	Sky Gradients	Himmelgradienter
 	Neutral Gradients	Neutrale gradienter
+	Organic Fades	Organiske toninger
 	Duotone Gradients	Duotonegradienter
 	Radial Glows	Radiale gløder
 	Save Swatch Library…	Gem bibliotek med farveprøver…
@@ -6581,6 +6583,11 @@ breakText	Glyphs	Glyffer
 	Open With	Åbn med
 	No importer plug-ins installed	Ingen import-plug-ins installeret
 	Read files you open in its format and make documents from them	Læse filer, du åbner i dens format, og lave dokumenter ud fra dem
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiér fejlfindingsoplysninger
+@msg	Copied the troubleshooting info	Kopierede fejlfindingsoplysningerne
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Den seneste VectorCraft-session holdt op med at svare, før den blev lukket. Hjælp › Kopiér fejlfindingsoplysninger kopierer detaljerne til en fejlrapport
 
 # Safe Mode
 	Safe Mode…	Sikker tilstand…

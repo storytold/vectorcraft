@@ -565,6 +565,7 @@
 	Gaussian Blur…	Gaussovské rozostření…
 	View	Zobrazení
 	Preview	Náhled
+	Preview:	Náhled:
 	Overprint Preview	Náhled přetisků
 	Pixel Preview	Náhled obrazových bodů
 	Trim View	Oříznuté zobrazení
@@ -843,6 +844,7 @@
 	Spectrum Gradients	Spektrální přechody
 	Sky Gradients	Přechody oblohy
 	Neutral Gradients	Neutrální přechody
+	Organic Fades	Organické přechody
 	Duotone Gradients	Dvoutónové přechody
 	Radial Glows	Kruhové záře
 	Save Swatch Library…	Uložit knihovnu vzorníku…
@@ -6857,6 +6859,11 @@ breakText	Glyphs	Glyfy
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	importní zásuvný modul deklaruje 1 až {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje jen exportní nebo importní zásuvný modul
 @msg	an importer always gets an import's budget: leave `budget` out	importní zásuvný modul dostává vždy rozpočet importu: vynechte `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopírovat informace pro řešení potíží
+@msg	Copied the troubleshooting info	Informace pro řešení potíží zkopírovány
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Poslední relace VectorCraftu přestala odpovídat, než se zavřela. Nápověda › Kopírovat informace pro řešení potíží zkopíruje podrobnosti pro hlášení chyby
 
 # Safe Mode
 	Safe Mode…	Nouzový režim…

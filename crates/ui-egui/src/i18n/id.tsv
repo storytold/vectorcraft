@@ -520,6 +520,7 @@
 	Gaussian Blur…	Kabur Gaussian…
 	View	Tampilan
 	Preview	Pratinjau
+	Preview:	Pratinjau:
 	Overprint Preview	Pratinjau overprint
 	Pixel Preview	Pratinjau piksel
 	Trim View	Tampilan terpangkas
@@ -780,6 +781,7 @@
 	Spectrum Gradients	Gradien spektrum
 	Sky Gradients	Gradien langit
 	Neutral Gradients	Gradien netral
+	Organic Fades	Pudar organik
 	Duotone Gradients	Gradien duotone
 	Radial Glows	Pendar radial
 	Save Swatch Library…	Simpan pustaka sampel warna…
@@ -6581,6 +6583,11 @@ breakText	Glyphs	Glif
 	Open With	Buka Dengan
 	No importer plug-ins installed	Tidak ada plug-in impor yang terinstal
 	Read files you open in its format and make documents from them	Membaca file yang Anda buka dalam formatnya dan membuat dokumen darinya
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Salin info pemecahan masalah
+@msg	Copied the troubleshooting info	Berhasil menyalin info pemecahan masalah
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Sesi terakhir VectorCraft berhenti merespons sebelum ditutup. Bantuan › Salin info pemecahan masalah menyalin detailnya untuk laporan bug
 
 # Safe Mode
 	Safe Mode…	Mode aman…
