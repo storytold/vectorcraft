@@ -476,6 +476,7 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_plugin_store(&mut session);
                 // File › Scripts lists the scripts of the Scripts folder next to the preferences.
                 prefs_dir::attach_scripts_dir(&mut session);
+                prefs_dir::attach_new_doc_profiles(&mut session);
                 let mut app = VectorcraftApp::new(session, services(cc.winit_window().cloned(), cc.egui_ctx.clone()));
                 app.set_startup_update_check(true);
                 load_prefs(&mut app, saved);
