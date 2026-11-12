@@ -264,6 +264,11 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase, keep:
             let Some(rest) = budget.checked_sub(1) else { return false };
             *budget = rest;
             cuts += 1;
+            // The output limit is met as it grows, not after the subpath: its entries can be millions.
+            // (A closed subpath gives back one dot or dash at most, so this is no tighter than the check after it.)
+            if out.spans.len() + out.dots.len() + dashes.len() > MAX_DASHES as usize {
+                return false;
+            }
             s = end;
             ph.ix = (ph.ix + 1) % pat.len();
             ph.rem = pat[ph.ix] * k;
