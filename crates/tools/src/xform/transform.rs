@@ -143,7 +143,15 @@ impl TransformTool {
                 let d1 = p - o;
                 let ratio = |a: f64, b: f64| if a.abs() > 1e-6 { b / a } else { 1.0 };
                 let (mut sx, mut sy) = (ratio(d0.x, d1.x), ratio(d0.y, d1.y));
-                if shift {
+                // Shift: a drag within 22.5° of an axis scales along that axis alone, a diagonal
+                // one uniformly (#6324).
+                let moved = p - start;
+                let angle = moved.y.abs().atan2(moved.x.abs()).to_degrees();
+                if shift && moved.hypot() > 1e-9 && angle <= 22.5 {
+                    sy = 1.0;
+                } else if shift && moved.hypot() > 1e-9 && angle >= 67.5 {
+                    sx = 1.0;
+                } else if shift {
                     let l2 = d0.hypot2();
                     let k = if l2 > 1e-12 { d1.dot(d0) / l2 } else { 1.0 };
                     sx = k;
@@ -448,6 +456,27 @@ mod tests {
         let (m, _) = t.matrix_for(Point::new(150.0, 150.0), Point::new(200.0, 200.0), Point::new(250.0, 240.0), true, Rect::ZERO);
         let c = m.as_coeffs();
         assert!((c[0] - c[3]).abs() < 1e-9 && c[0] > 1.0);
+    }
+
+    /// A Shift-drag along one axis scales along that axis alone, and a diagonal one scales
+    /// uniformly (#6324): the drag's own direction decides, within 22.5° of an axis.
+    #[test]
+    fn scale_shift_follows_the_drag_direction() {
+        let t = TransformTool::new(TransformKind::Scale);
+        let o = Point::new(100.0, 100.0);
+        let scales = |p: Point| {
+            let c = t.matrix_for(o, Point::new(150.0, 140.0), p, true, Rect::ZERO).0.as_coeffs();
+            (c[0], c[3])
+        };
+        // Sideways, a little off the level: width only.
+        let (sx, sy) = scales(Point::new(200.0, 145.0));
+        assert!((sx - 2.0).abs() < 1e-9 && (sy - 1.0).abs() < 1e-9, "{sx} {sy}");
+        // Up or down: height only.
+        let (sx, sy) = scales(Point::new(148.0, 180.0));
+        assert!((sx - 1.0).abs() < 1e-9 && (sy - 2.0).abs() < 1e-9, "{sx} {sy}");
+        // Diagonal: both, by the same factor.
+        let (sx, sy) = scales(Point::new(200.0, 180.0));
+        assert!((sx - sy).abs() < 1e-9 && sx > 1.0, "{sx} {sy}");
     }
 
     #[test]
