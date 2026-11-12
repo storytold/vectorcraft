@@ -2399,7 +2399,9 @@ each of the others, whose hidden or locked objects are left as they are; when th
 other group takes its objects at that level, keeping its own ids in order. Whenever the document is put back (Undo,
 Redo, a cancelled drag or scrub), the matches it no longer has leave the Global Edit, which ends when fewer than two
 are left. An edit that would take any match past the canvas fails with the coordinates-out-of-range error and changes
-nothing. Nothing of it is saved.
+nothing. Nothing of it is saved. Before Global Edit starts, while one object that `select.globalEdit` accepts is
+selected with the Selection tool, the canvas highlights the other objects a start would take with the current Global
+Edit Options (none while a drag is in progress, or when there are none).
 
 `select.globalEditExclude {id}` leaves the match `id` out of the Global Edit, as a Shift-click on a highlighted match
 (or on an object inside it) with the Selection tool does: it is no longer highlighted, and later edits leave it as it
