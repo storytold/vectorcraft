@@ -238,6 +238,20 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Painted and Sketched graphic style library's name and its styles' names have a row in every
+/// bundled catalog.
+#[test]
+fn painted_and_sketched_style_names_are_in_every_catalog() {
+    let lib = vectorcraft_doc::style_libs::builtin_style_library("painted-sketched").expect("built in");
+    let labels: Vec<&str> = std::iter::once(lib.name.as_str()).chain(lib.styles.iter().map(|g| g.name.as_str())).collect();
+    assert_eq!(labels.len(), 8);
+    for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
+        for label in &labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Each language counts with its own plural rule: the form a count picks (`one`, then `few`, then
 /// `other`/`many`).
 #[test]
