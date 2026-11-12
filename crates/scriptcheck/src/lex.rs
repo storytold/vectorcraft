@@ -8,6 +8,10 @@
 //! level and the levels of XML literals and their code are kept on stacks capped at the nesting
 //! limit.
 
+use std::cmp::Ordering;
+
+use unicode_properties::{GeneralCategory as G, UnicodeGeneralCategory};
+
 use crate::catalog;
 use crate::report::{TOO_DEEP, UNTERMINATED_COMMENT, UNTERMINATED_REGEXP, UNTERMINATED_STRING, UNTERMINATED_TEMPLATE};
 
@@ -130,13 +134,102 @@ fn is_blank(c: char) -> bool {
     !is_break(c) && (c.is_whitespace() || c == '\u{feff}')
 }
 
-fn ident_start(c: char) -> bool {
-    c == '$' || c == '_' || c.is_ascii_alphabetic() || (!c.is_ascii() && c.is_alphabetic())
+/// A character a name may start with: a Unicode `ID_Start` character, `$` or `_` (the Names and
+/// Keywords clause of current ECMA-262 editions). `ID_Start` is the letters (categories Lu, Ll, Lt,
+/// Lm, Lo and Nl) and `Other_ID_Start`, less `Pattern_Syntax` and `Pattern_White_Space` (Unicode
+/// Standard Annex #31). The categories come from Unicode 17.0.
+pub(crate) fn ident_start(c: char) -> bool {
+    match c {
+        '$' | '_' => true,
+        _ if c.is_ascii() => c.is_ascii_alphabetic(),
+        _ if is_other_id_start(c) => true,
+        _ => {
+            matches!(
+                c.general_category(),
+                G::UppercaseLetter | G::LowercaseLetter | G::TitlecaseLetter | G::ModifierLetter | G::OtherLetter | G::LetterNumber
+            ) && !is_pattern_syntax(c)
+        }
+    }
 }
 
-/// A character a name may hold after its first.
+/// A character a name may hold after its first: a Unicode `ID_Continue` character or `$`.
+/// `ID_Continue` adds to `ID_Start` the decimal digits (Nd), combining marks (Mn, Mc), connector
+/// punctuation (Pc, which holds `_`) and `Other_ID_Continue` (which holds the zero width non-joiner
+/// and joiner), less `Pattern_Syntax` and `Pattern_White_Space`.
 pub(crate) fn ident_part(c: char) -> bool {
-    ident_start(c) || c.is_ascii_digit() || (!c.is_ascii() && c.is_alphanumeric())
+    match c {
+        '0'..='9' => true,
+        _ if ident_start(c) => true,
+        _ if c.is_ascii() => false,
+        _ if is_other_id_continue(c) => true,
+        _ => matches!(c.general_category(), G::NonspacingMark | G::SpacingMark | G::DecimalNumber | G::ConnectorPunctuation) && !is_pattern_syntax(c),
+    }
+}
+
+/// The character the `\uXXXX` escape at the start of `s` stands for: `None` when `s` doesn't start
+/// with `\u` and four hexadecimal digits, or when they give a lone surrogate.
+pub(crate) fn escaped(s: &str) -> Option<char> {
+    s.strip_prefix("\\u")?
+        .get(..4)
+        .filter(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()))
+        .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+        .and_then(char::from_u32)
+}
+
+/// `Other_ID_Start` (Unicode PropList 17.0): characters kept in `ID_Start` though their category is
+/// not a letter.
+fn is_other_id_start(c: char) -> bool {
+    matches!(c, '\u{1885}' | '\u{1886}' | '\u{2118}' | '\u{212E}' | '\u{309B}' | '\u{309C}')
+}
+
+/// `Other_ID_Continue` (Unicode PropList 17.0): characters kept in `ID_Continue` though their
+/// category is not a letter, mark, digit or connector.
+fn is_other_id_continue(c: char) -> bool {
+    matches!(c, '\u{B7}' | '\u{387}' | '\u{1369}'..='\u{1371}' | '\u{19DA}' | '\u{200C}' | '\u{200D}' | '\u{30FB}' | '\u{FF65}')
+}
+
+/// Non-ASCII `Pattern_Syntax` ranges (Unicode PropList). Unicode does not change this set, and no
+/// identifier character belongs to it. `Pattern_White_Space` outside ASCII (U+0085, U+200E, U+200F,
+/// U+2028 and U+2029) holds no letter, mark, digit or connector, so the category checks leave it out.
+const PATTERN_SYNTAX: [(char, char); 23] = [
+    ('\u{A1}', '\u{A7}'),
+    ('\u{A9}', '\u{A9}'),
+    ('\u{AB}', '\u{AC}'),
+    ('\u{AE}', '\u{AE}'),
+    ('\u{B0}', '\u{B1}'),
+    ('\u{B6}', '\u{B6}'),
+    ('\u{BB}', '\u{BB}'),
+    ('\u{BF}', '\u{BF}'),
+    ('\u{D7}', '\u{D7}'),
+    ('\u{F7}', '\u{F7}'),
+    ('\u{2010}', '\u{2027}'),
+    ('\u{2030}', '\u{203E}'),
+    ('\u{2041}', '\u{2053}'),
+    ('\u{2055}', '\u{205E}'),
+    ('\u{2190}', '\u{245F}'),
+    ('\u{2500}', '\u{2775}'),
+    ('\u{2794}', '\u{2BFF}'),
+    ('\u{2E00}', '\u{2E7F}'),
+    ('\u{3001}', '\u{3003}'),
+    ('\u{3008}', '\u{3020}'),
+    ('\u{3030}', '\u{3030}'),
+    ('\u{FD3E}', '\u{FD3F}'),
+    ('\u{FE45}', '\u{FE46}'),
+];
+
+/// Whether a non-ASCII character is `Pattern_Syntax`.
+fn is_pattern_syntax(c: char) -> bool {
+    PATTERN_SYNTAX
+        .binary_search_by(|&(lo, hi)| {
+            if hi < c {
+                Ordering::Less
+            } else if lo > c {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        })
+        .is_ok()
 }
 
 /// After `<`, the start of an XML literal: a name, `>` (a list), `!` (a comment or CDATA), `?` (a
@@ -300,20 +393,13 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    /// The rest of a name (its first character included): letters, digits, `$`, `_` and `\u`
-    /// escapes.
+    /// The rest of a name (its first character included): the characters [`ident_part`] allows,
+    /// written out or as `\uXXXX` escapes. An escape for any other character, or one without four
+    /// hexadecimal digits, ends the name.
     fn name(&mut self) {
         loop {
             match self.peek() {
-                Some('\\') if self.peek_at(1) == Some('u') => {
-                    self.skip(2);
-                    for _ in 0..4 {
-                        match self.peek() {
-                            Some(h) if h.is_ascii_hexdigit() => self.bump(h),
-                            _ => break,
-                        }
-                    }
-                }
+                Some('\\') if escaped(self.rest()).is_some_and(ident_part) => self.skip(6),
                 Some(c) if ident_part(c) => self.bump(c),
                 _ => break,
             }
@@ -820,7 +906,7 @@ impl<'s> Iterator for Lexer<'s> {
             self.close_level();
             self.bump('}');
             return Some(self.markup_token(start, line, T::XmlMore, stmt, expr));
-        } else if ident_start(c) || (c == '\\' && self.peek_at(1) == Some('u')) {
+        } else if ident_start(c) || (c == '\\' && escaped(self.rest()).is_some_and(ident_start)) {
             self.name();
             T::Ident
         } else if c.is_ascii_digit() || (c == '.' && self.peek_at(1).is_some_and(|d| d.is_ascii_digit())) {

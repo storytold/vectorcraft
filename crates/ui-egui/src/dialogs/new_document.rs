@@ -8,7 +8,7 @@
 //!
 //! Fields: `file.new`'s params (`preset`, `name`, `width`, `height` (pt), `units`, `artboards`,
 //! `artboardLayout`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi`,
-//! `previewMode`), plus `category` (the tab), `advanced` (Advanced Options open), `bleedLinked` and
+//! `previewMode`, `alignNewObjectsToPixelGrid`), plus `category` (the tab), `advanced` (Advanced Options open), `bleedLinked` and
 //! `presetName` (Save Preset's name). Setting `preset` fills the fields from that preset; changing
 //! any of them afterwards makes the settings custom.
 
@@ -29,7 +29,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec { inputs: |_| &["presetName"], ..
 pub(super) const MORE_SPEC: DialogSpec = SPEC;
 
 /// The fields `file.new` takes.
-const PARAMS: [&str; 12] = [
+const PARAMS: [&str; 13] = [
     "preset",
     "name",
     "width",
@@ -42,6 +42,7 @@ const PARAMS: [&str; 12] = [
     "colorMode",
     "rasterEffectsPpi",
     "previewMode",
+    "alignNewObjectsToPixelGrid",
 ];
 /// The preset the fields were last filled from, as `apply` set them; a Recent or Saved card keeps
 /// its own units here, which the units chosen in Preset Details don't change.
@@ -694,7 +695,8 @@ fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(Value, Strin
     }
 }
 
-/// The collapsible Advanced Options: Color Mode, Raster Effects and Preview Mode.
+/// The collapsible Advanced Options: Color Mode, Raster Effects, Preview Mode and Align New Objects
+/// to Pixel Grid.
 fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
     let open = d.bool("advanced");
     if widgets::section_toggle(ui, tl!("Advanced Options"), open) {
@@ -713,6 +715,25 @@ fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
         ("previewMode", tl!("Preview Mode"), &previews),
     ] {
         widgets::label_row(ui, name, label, |ui| choice(ui, d, key, options, field));
+    }
+    wrapping_check(ui, d, "alignNewObjectsToPixelGrid", tl!("Align New Objects to Pixel Grid"));
+}
+
+/// A checkbox for the boolean field `key` whose `label` (already translated) wraps within the
+/// column; a click on the box or the label toggles the field.
+fn wrapping_check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
+    let t = Tokens::get(ui.ctx());
+    let on = d.bool(key);
+    let toggled = ui
+        .horizontal_top(|ui| {
+            let boxed = widgets::check_box(ui, label, on, true);
+            let text = egui::RichText::new(label).font(egui::FontId::proportional(12.5)).color(t.text);
+            let clicked = ui.add(egui::Label::new(text).wrap().sense(egui::Sense::click())).clicked();
+            boxed || clicked
+        })
+        .inner;
+    if toggled {
+        d.fields.insert(key.into(), json!(!on));
     }
 }
 
@@ -1431,6 +1452,60 @@ mod tests {
         );
         assert_eq!(kind(&h), super::KIND, "New Document stays open");
         assert!(h.state().session.documents().is_empty());
+    }
+
+    /// Advanced Options › Align New Objects to Pixel Grid is checked for a Web preset and unchecked
+    /// for Letter; the checkbox changes it and makes the settings custom, Save Preset keeps it, and
+    /// Create makes the document with it.
+    #[test]
+    fn align_new_objects_checkbox_follows_the_preset_and_reaches_the_document() {
+        const KEY: &str = "alignNewObjectsToPixelGrid";
+        const LABEL: &str = "Align New Objects to Pixel Grid";
+        let mut h = big();
+        assert_eq!((field(h.state(), "preset"), field(h.state(), KEY)), (json!("Letter"), json!(false)));
+        set(h.state_mut(), "category", json!("Web"));
+        set(h.state_mut(), "preset", json!("Web 1920×1080"));
+        set(h.state_mut(), "advanced", json!(true));
+        h.run_steps(3);
+        assert_eq!(field(h.state(), KEY), json!(true));
+        h.get_by_role_and_label(egui::accesskit::Role::CheckBox, LABEL).click();
+        h.run_steps(3);
+        assert_eq!((field(h.state(), "preset"), field(h.state(), KEY)), (json!(""), json!(false)), "custom settings");
+        set(h.state_mut(), "category", json!("Print"));
+        set(h.state_mut(), "preset", json!("Letter"));
+        h.run_steps(3);
+        assert_eq!(field(h.state(), KEY), json!(false));
+        h.get_by_role_and_label(egui::accesskit::Role::Label, LABEL).click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), KEY), json!(true), "a click on the label toggles it too");
+        h.get_by_label("Save Preset").click();
+        h.run_steps(4);
+        set(h.state_mut(), "presetName", json!("Pixel Letter"));
+        h.run_steps(2);
+        h.get_by_label("Save").click();
+        h.run_steps(3);
+        let saved = h.state().session.prefs.new_doc_presets.iter().find(|p| p.name == "Pixel Letter").expect("saved");
+        assert!(saved.align_new_objects_to_pixel_grid);
+        assert_eq!((field(h.state(), "preset"), field(h.state(), KEY)), (json!("Pixel Letter"), json!(true)));
+        h.get_by_label("Create").click();
+        h.run_steps(3);
+        assert!(h.state().ui.dialog.is_none());
+        assert!(h.state().session.active().unwrap().doc.setup.align_new_objects_to_pixel_grid);
+    }
+
+    /// A long translation of Align New Objects to Pixel Grid wraps inside the Preset Details column.
+    #[test]
+    fn align_new_objects_label_wraps_inside_the_details_column() {
+        const LABEL: &str = "Στοίχιση νέων αντικειμένων στο πλέγμα εικονοστοιχείων";
+        crate::i18n::set_current(crate::i18n::Lang::from_code("el").unwrap());
+        let mut h = big();
+        set(h.state_mut(), "advanced", json!(true));
+        h.run_steps(3);
+        let boxed = h.get_by_role_and_label(egui::accesskit::Role::CheckBox, LABEL).rect();
+        let text = h.get_by_role_and_label(egui::accesskit::Role::Label, LABEL).rect();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(text.right() <= boxed.left() + super::DETAILS + 0.5, "{boxed:?} {text:?}");
+        assert!(text.height() > boxed.height(), "the label takes two lines: {text:?}");
     }
 
     /// In a small window the pop-up stays on screen, and its button stays in view under rows that scroll.

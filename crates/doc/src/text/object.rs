@@ -1,6 +1,6 @@
 use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
-use super::para_style::ParaStyle;
+use super::para_style::{JustificationOptions, ParaStyle};
 use super::runs::{RubySpan, TextKind, TextRun, TypeAntiAlias, move_anchors, reverse_from_end};
 use super::tabs_lists::{ListCounts, ParaList};
 use super::{Affine, PathData, Point, Rect, TextObject, TextStyleScale, Vec2};
@@ -89,6 +89,7 @@ impl TextObject {
             path_effect: PathEffect::default(),
             path_align: PathAlign::default(),
             path_spacing: 0.0,
+            dynamic_text: false,
             wrap: Vec::new(),
             optical_margin: false,
             anti_alias: TypeAntiAlias::Sharp,
@@ -168,6 +169,19 @@ impl TextObject {
     /// Attributes of paragraph `i` (the last paragraph's past the end).
     pub fn para_at(&self, i: usize) -> &ParaStyle {
         self.paras.get(i).or(self.paras.last()).unwrap_or(&self.para)
+    }
+    /// The Justification… options the layout sets `para` with: its own, except that with Dynamic
+    /// Text's Block on area type ([`Self::dynamic_text`]) the Desired word spacing is the word gap
+    /// ([`AreaOptions::block_gaps`]), and Minimum and Maximum move out to it when it lies outside
+    /// them. The paragraph keeps its own values, which apply again when Block is off.
+    pub fn layout_justification(&self, para: &ParaStyle) -> JustificationOptions {
+        let mut j = para.justification.clone();
+        if self.dynamic_text && matches!(self.kind, TextKind::Area { .. }) {
+            let gap = self.area.block_gaps().0;
+            let [min, _, max] = j.word_spacing;
+            j.word_spacing = [min.min(gap), gap, max.max(gap)];
+        }
+        j
     }
     /// Every paragraph's attributes, one per paragraph.
     pub fn paragraph_styles(&self) -> Vec<ParaStyle> {

@@ -137,7 +137,7 @@ fn paintable(doc: &Document) -> Vec<NodeId> {
         if matches!(n.kind, NodeKind::Compound { .. }) {
             compounds.push(n.id);
             out.push(n.id);
-        } else if !n.is_container() {
+        } else if !n.is_container() && !n.is_ruler_guide() {
             out.push(n.id);
         }
     });

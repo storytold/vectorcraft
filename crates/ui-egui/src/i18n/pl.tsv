@@ -121,6 +121,7 @@
 	PDF Presets…	Ustawienia PDF…
 	Perspective Grid Presets…	Ustawienia siatki perspektywy…
 	Color Settings…	Ustawienia kolorów…
+	Assign Profile	Przypisz profil
 	Assign Profile…	Przypisz profil…
 	Keyboard Shortcuts…	Skróty klawiaturowe…
 	Preferences…	Preferencje…
@@ -166,6 +167,15 @@
 	Expand…	Rozszerz…
 	Expand Appearance	Rozszerz wygląd
 	Crop Image	Kadruj obraz
+	Image Tools	Narzędzia obrazu
+	Remove Background…	Usuń tło…
+	Remove Background	Usuń tło
+	Background	Tło
+	Edge Color	Kolor krawędzi
+	Picked Colors	Wybrane kolory
+	Corner Color	Kolor narożników
+	Contiguous	Ciągły
+	Each Channel	Każdy kanał
 	Edit Path	Edytuj ścieżkę
 	Mask	Maska
 	Rasterize…	Rasteryzuj…
@@ -365,6 +375,11 @@
 	Smart Punctuation…	Inteligentna interpunkcja…
 	Create Outlines	Utwórz kontury
 	Optical Margin Alignment	Optyczne wyrównanie marginesów
+	Dynamic Text	Tekst dynamiczny
+	Dynamic Text Presets	Ustawienia predefiniowane tekstu dynamicznego
+	Arch	Sklepienie
+@msg	select point type or type on a path	zaznacz tekst punktowy lub tekst na ścieżce
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
 	Show Hidden Characters	Pokaż ukryte znaki
@@ -509,6 +524,7 @@
 	Gaussian Blur…	Rozmycie gaussowskie…
 	View	Widok
 	Preview	Podgląd
+	Preview:	Podgląd:
 	Overprint Preview	Podgląd nadruku
 	Pixel Preview	Podgląd pikseli
 	Trim View	Widok przycięty
@@ -737,6 +753,15 @@
 	Stun Pulse	Ogłuszenie
 	Stealth Fade	Ukrycie
 	Shield Buff	Tarcza
+	Textures	Tekstury
+	Fine Grain	Drobne ziarno
+	Canvas Weave	Splot płótna
+	Burlap Sack	Worek jutowy
+	Cracked Glaze	Spękana glazura
+	Mosaic Floor	Mozaikowa posadzka
+	Quilted Squares	Pikowane kwadraty
+	Leaded Glass	Witraż ołowiany
+	Damp Paper	Wilgotny papier
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
 	Gradient Finishes	Wykończenia gradientowe
@@ -758,6 +783,7 @@
 	Spectrum Gradients	Gradienty widma
 	Sky Gradients	Gradienty nieba
 	Neutral Gradients	Gradienty neutralne
+	Organic Fades	Organiczne zanikania
 	Duotone Gradients	Gradienty dwutonowe
 	Radial Glows	Blaski promieniste
 	Save Swatch Library…	Zapisz bibliotekę próbek…
@@ -817,6 +843,13 @@
 	Dock Panel	Zadokuj panel
 	Dock to Top	Zadokuj u góry
 	Dock to Bottom	Zadokuj u dołu
+	Control Bar Options	Opcje paska sterowania
+	Tool Options	Opcje narzędzia
+	Object Options	Opcje obiektu
+	Image Options	Opcje obrazu
+	Vertical Alignment	Wyrównanie w pionie
+	Align and Distribute	Wyrównaj i rozmieść
+	Document Options	Opcje dokumentu
 	Dock Control Bar	Zadokuj pasek sterowania
 	Float Tool Group	Odepnij grupę narzędzi
 	Services	Usługi
@@ -1100,6 +1133,8 @@ lighting	Light	Światło
 	Toolbar: Single/Double Column	Pasek narzędzi: jedna/dwie kolumny
 	Toolbar: Add Tool	Pasek narzędzi: dodaj narzędzie
 	Toolbar: Remove Tool	Pasek narzędzi: usuń narzędzie
+	Add Tool…	Dodaj narzędzie…
+	Remove Tool	Usuń narzędzie
 	Toolbar: Reset	Pasek narzędzi: resetuj
 	Two Point Perspective Preset 1	Ustawienie perspektywy dwupunktowej 1
 	Two Point Perspective Preset 2	Ustawienie perspektywy dwupunktowej 2
@@ -1460,6 +1495,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Linia bazowa łacińska
 	Select a text object to edit its character attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty znaków.
 	Show Options	Pokaż opcje
+	Show Recent Colors	Pokaż ostatnie kolory
 	Color Panel Options	Opcje panelu Kolor
 	Small Caps	Kapitaliki
 	Small Caps (on the roadmap)	Kapitaliki (w planach)
@@ -1488,6 +1524,8 @@ digits	Malayalam	Malajalam
 	Scale at Center	Skaluj od środka
 	Up/Down:	W górę/w dół:
 	Left/Right:	W lewo/w prawo:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko w górę/w dół
+	Tate-chu-yoko Left/Right	Tate-chu-yoko w lewo/w prawo
 	Underline	Podkreślenie
 	Vertical Scale %	Skala pionowa %
 	Axis	Oś
@@ -1590,6 +1628,8 @@ digits	Malayalam	Malajalam
 	No gradient swatches	Brak próbek gradientów
 	Points: clicks add free points	Punkty: kliknięcia dodają wolne punkty
 	Radial Gradient	Gradient promienisty
+	Conic Gradient	Gradient stożkowy
+	Diamond Gradient	Gradient rombowy
 	Reset to White, Black	Resetuj do bieli i czerni
 	Reverse Gradient	Odwróć gradient
 	Save to Swatches	Zapisz w próbkach
@@ -1966,6 +2006,7 @@ digits	Malayalam	Malajalam
 	Simulate Paper	Symuluj papier
 	Use Black Point Compensation	Użyj kompensacji punktu czerni
 	Working CMYK (don't tag)	Roboczy CMYK (bez znacznika)
+	Working RGB (don't tag)	Roboczy RGB (bez znacznika)
 	{name} (spot)	{name} (dodatkowy)
 	Add to Profiles…	Dodaj do profili…
 	Align Stroke to Center	Wyrównaj obrys do środka
@@ -2798,6 +2839,7 @@ antiAlias	Sharp	Ostre
 	General › Thumbnails	Ogólne › Miniatury
 	Grayscale images	Obrazy w skali szarości
 	Include non-printing layers	Uwzględnij warstwy niedrukowane
+	Write pages longer than 200 in at full size in points	Zapisuj strony dłuższe niż 200 in w pełnym rozmiarze, w punktach
 	Left:	Lewy:
 	Mark as trapped	Oznacz jako z zalewkami
 	Marks and Bleeds	Znaczniki i spady
@@ -4329,6 +4371,8 @@ imageTrace	Outline	Kontur
 @msg	`groupColors` must be an array	`groupColors` musi być tablicą
 @msg	`library` is a library id or name (see {list})	`library` to identyfikator lub nazwa biblioteki (patrz {list})
 @msg	`mode` applies to freeform gradients	`mode` dotyczy gradientów dowolnych
+@msg	a negative `aspect` applies to conic gradients	ujemny `aspect` dotyczy gradientów stożkowych
+@msg	`focal` applies to radial gradients	`focal` dotyczy gradientów radialnych
 @msg	`preserve` must be an object	`preserve` musi być obiektem
 @msg	`globalAdjust` must be an object	`globalAdjust` musi być obiektem
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musi wynosić 1, 3 lub 5
@@ -4346,6 +4390,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a number, not {v}	`{key}` musi być liczbą, nie {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} musi być czasem Unix w sekundach (liczbą całkowitą) lub null
 @msg	`{key}` must be a string	`{key}` musi być ciągiem znaków
+@msg	`{key}` must be a profile name or null	`{key}` musi być nazwą profilu lub null
 @msg	`{key}` must be a whole number	`{key}` musi być liczbą całkowitą
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` musi być liczbą całkowitą od {min} do {max} (podano {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musi mieścić się w zakresie od {min} do {max} (podano {x})
@@ -4498,6 +4543,7 @@ imageTrace	Outline	Kontur
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	strona obszaru kompozycji {n} ma {size}, czyli więcej niż limit strony PDF wynoszący 14 400 pt (200 in): jest zapisywana z UserUnit {unit}, więc aplikacje ignorujące UserUnit pokazują ją tyle razy mniejszą
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	strona obszaru kompozycji {n} ma {size}, czyli więcej niż limit strony PDF wynoszący 14 400 pt (200 in): strony {label} są zapisywane bez UserUnit, w punktach, a aplikacje przestrzegające limitu przycinają stronę do 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 nie ma UserUnit, którego strona dłuższa niż 14 400 pt (200 in) potrzebuje, aby zachować rozmiar: plik jest zapisywany jako PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 nie ma UserUnit, którego strona dłuższa niż 14 400 pt (200 in) potrzebuje, aby zmieścić się w limicie strony PDF/A-2 wynoszącym 14 400 jednostek: plik jest zapisywany jako PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	strona obszaru kompozycji {n} ma {size} i jest za długa i za wąska dla boków strony PDF od 3 do 14 400 jednostek: jest zapisywana z UserUnit {unit}, która utrzymuje krótszy bok na co najmniej 3 jednostkach, a aplikacje przestrzegające limitu przycinają dłuższy bok do 14 400 jednostek
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	pliki {label} mieszczą liczby rzeczywiste do {max}, a strona obszaru kompozycji {n} o długości {side} pt wymaga większych: wybierz PDF 1.6 lub nowszy bez standardu PDF/X albo mniejszy obszar kompozycji
 @msg	invalid image data for `{0}`	nieprawidłowe dane obrazu dla `{0}`
@@ -4647,6 +4693,7 @@ imageTrace	Outline	Kontur
 @msg	not a stored central record	to nie jest zapisany rekord centralny
 @msg	not a valid plug-in module: {0}	nieprawidłowy moduł wtyczki: {0}
 @msg	not an EMF or WMF file	to nie jest plik EMF ani WMF
+@msg	not an HP-GL file	to nie jest plik HP-GL
 @msg	not found	nie znaleziono
 @msg	not in pattern editing mode	nie jest w trybie edycji wzorka
 @msg	finish editing the pattern first	najpierw zakończ edycję wzorka
@@ -4727,6 +4774,14 @@ imageTrace	Outline	Kontur
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ten obrys utworzyłby ponad {max} punktów kontrolnych, więcej niż dokument może płynnie wyświetlić: zwiększ Szum, zmniejsz Ścieżki lub Kolory albo wybierz ustawienie o niższej wierności
 @msg	select an envelope	zaznacz kopertę
 @msg	select an image	zaznacz obraz
+@msg	`background` must be edges, corners or colors	`background` musi mieć wartość edges, corners lub colors
+@msg	`match` must be distance or channels	`match` musi mieć wartość distance lub channels
+@msg	`{key}` must be from 0 to 100	`{key}` musi mieścić się w zakresie od 0 do 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` musi zawierać od 1 do 16 kolorów, każdy szesnastkowo (#rrggbb lub #rgb) albo jako black, white, red, green lub blue
+@msg	the linked image shows its preview: embed or relink it first	połączony obraz pokazuje podgląd: najpierw go osadź lub połącz ponownie
+@msg	a CMYK image has no transparency to set	obraz CMYK nie ma przezroczystości, którą można ustawić
+@msg	every pixel matches the background: no image would be left	każdy piksel pasuje do tła: nie zostałby żaden obraz
+@msg	an image of {w} × {h} pixels is too large to change	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go zmienić
 @msg	select an object in perspective	zaznacz obiekt w perspektywie
 @msg	select artwork (or a colour group) to recolor	zaznacz kompozycję (lub grupę kolorów), aby zmienić kolory
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Zmiana kolorów zakończona; bez zmian: {locked} i {hidden}
@@ -4833,7 +4888,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	nieznany format
 @msg	unknown format `{f}` (Save writes {_1})	nieznany format `{f}` (zapis tworzy {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	nieznany tryb dowolny `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	nieznane wyróżnienie `{h}`
 @msg	unknown option `{path}.{k}`	nieznana opcja `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
@@ -5033,6 +5088,8 @@ imageTrace	Outline	Kontur
 @msg	invalid object id {value}: expected a non-negative integer	nieprawidłowy identyfikator obiektu {value}: oczekiwano nieujemnej liczby całkowitej
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} w `{key}` to {value}, a nie identyfikator obiektu (nieujemna liczba całkowita)
 @msg	no such object id {value}	brak obiektu o identyfikatorze {value}
+@msg	id {value} is a ruler guide, not an object	identyfikator {value} należy do linii pomocniczej, a nie do obiektu
+@msg	a ruler guide goes only directly in a layer or sublayer	linia pomocnicza może się znajdować tylko bezpośrednio w warstwie lub podwarstwie
 @msg	id {value} is a layer, not an object	identyfikator {value} oznacza warstwę, a nie obiekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	identyfikator {value} oznacza warstwę, a nie obiekt; warstwy przenosi się za pomocą layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	nie przyznano dostępu automatyzacji do systemu plików: brak uprawnień do odczytu: {path}
@@ -5062,7 +5119,13 @@ imageTrace	Outline	Kontur
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	plik HEIC lub HEIF zawiera rodzaj obrazu, którego nie można odczytać
 @msg	HEIC and HEIF images can't be opened in this build	obrazów HEIC i HEIF nie można otworzyć w tej wersji
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD jest zbyt duży, aby go odczytać ({_1} × {_2} pikseli)
-@msg	zipped 32-bit PSD image data with prediction can't be read	nie można odczytać spakowanych 32-bitowych danych obrazu PSD z predykcją
+@msg	zipped 1-bit PSD image data with prediction can't be read	nie można odczytać spakowanych 1-bitowych danych obrazu PSD z predykcją
+@msg	the PSD file's layer data uses an unknown compression ({m})	dane warstw pliku PSD używają nieznanej kompresji ({m})
+@msg	the PSD file's layer records are damaged	rekordy warstw pliku PSD są uszkodzone
+@msg	the PSD file's layer groups are nested too deeply	grupy warstw pliku PSD są zagnieżdżone zbyt głęboko
+@msg	a layer of the PSD file is too large to read	warstwa pliku PSD jest zbyt duża, aby ją odczytać
+@msg	the PSD file's layers take more memory to read than allowed	odczytanie warstw pliku PSD wymaga więcej pamięci, niż jest dozwolone
+@msg	the layers can't be read ({e}): the file opened as its merged image	nie można odczytać warstw ({e}): plik otwarto jako jego scalony obraz
 @msg	{depth}-bit PSD files in this colour mode can't be read	nie można odczytać {depth}-bitowych plików PSD w tym trybie koloru
 @msg	the PSD file is cut short	plik PSD jest ucięty
 @msg	the PSD file's header is damaged	nagłówek pliku PSD jest uszkodzony
@@ -5543,6 +5606,11 @@ mark-style	Japanese	Japońskie
 	Softness	Miękkość
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
+	Shadows	Cienie
+	Distance from Object	Odległość od obiektu
+	Shadow Bounds	Granice cienia
+	Behind Object	Za obiektem
+	Below Object	Pod obiektem
 	3D Lighting Preset	Ustawienie oświetlenia 3D
 	Standard	Standardowe
 	Diffuse	Rozproszone
@@ -5621,7 +5689,7 @@ mark-style	Japanese	Japońskie
 @msg	span must be "object" or "selection", got {v}	span musi mieć wartość "object" lub "selection", a nie {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umieszcza `gradient`, a nie próbkę
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umieszcza gradient: podaj `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" umieszcza gradient liniowy lub radialny, a nie dowolny
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" umieszcza gradient liniowy, radialny, stożkowy lub rombowy, a nie dowolny
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umieszcza sam gradient: pomiń `start` i `end` (one już umieszczają go we współrzędnych dokumentu)
 	Make Image Dynamic	Uczyń obraz dynamicznym
 	Import Data Sets…	Importuj zestawy danych…
@@ -5908,6 +5976,11 @@ axis	Y Axis	Oś Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` wymaga uprawnienia `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budżet pamięci (obiekt {_1} wymaga {size} bajtów danych wejściowych, pozostało {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budżet obiektów (ponad {MAX_OBJECTS} obiektów tylko do odczytu)
+@msg	instruction budget	budżet instrukcji
+@msg	time budget	budżet czasu
+@msg	memory budget (the selection is too large to hand over)	budżet pamięci (zaznaczenie jest zbyt duże, aby je przekazać)
+@msg	output size ({what} is {len} bytes, limit {max})	rozmiar wyjścia ({what} ma {len} bajtów, limit {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	nie można usunąć uprawnienia wtyczki z magazynu wtyczek
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	uprawnienie `{shown}` jest zarezerwowane dla późniejszego API wtyczek; ten host go nie przyznaje
 @msg	unknown permission `{shown}`	nieznane uprawnienie `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}” prosi o uprawnienia {asked}: musi je zatwierdzić osoba w aplikacji desktopowej albo przekaż `grant` w sesji uruchomionej z --allow-plugin-grants
@@ -5944,6 +6017,16 @@ axis	Y Axis	Oś Y
 @msg	message must be text	message musi być tekstem
 @msg	allowContinue must be true or false	allowContinue musi mieć wartość true lub false
 @msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
+	Insert Menu Item…	Wstaw polecenie menu…
+	Insert Menu Item	Wstaw polecenie menu
+	Menu Item:	Polecenie menu:
+	No menu item matches.	Żadne polecenie menu nie pasuje.
+	Several menu items match. Choose one from the list.	Pasuje kilka poleceń menu. Wybierz jedno z listy.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Polecenia otwierające okno dialogowe oraz polecenia menu Plik, Okno i Pomoc nie są wyświetlane.
+@msg	command must be text	command musi być tekstem
+@msg	no menu item that can be inserted runs this command	żadne polecenie menu, które można wstawić, nie uruchamia tego polecenia
+@msg	the action already has 10,000 steps	operacja ma już 10 000 kroków
+@msg	the action set would be larger than 8 MiB	zestaw operacji byłby większy niż 8 MiB
 	Playback Options	Opcje odtwarzania
 	Accelerated	Przyspieszone
 	Step by Step	Krok po kroku
@@ -5982,6 +6065,12 @@ axis	Y Axis	Oś Y
 	Crosshair	Celownik
 	Checkpoint	Punkt kontrolny
 	Inventory Icons	Ikony ekwipunku
+	Skill Icons	Ikony umiejętności
+	Attack	Atak
+	Defend	Obrona
+	Heal	Leczenie
+	Buff	Wzmocnienie
+	Ult	Ult
 	Sword	Miecz
 	Shield	Tarcza
 	Potion	Mikstura
@@ -6046,6 +6135,11 @@ axis	Y Axis	Oś Y
 	Dash Trail	Ślad kreskowany
 	Speed Line	Linia prędkości
 	Game Trails	Ślady gry
+	Energy Beams	Wiązki energii
+	Laser Bolt	Pocisk laserowy
+	Plasma Arc	Łuk plazmowy
+	Charge Wave	Fala ładunku
+	Spark Trail	Ślad iskier
 	Calligraphic Nibs	Stalówki kaligraficzne
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone
@@ -6244,9 +6338,12 @@ anchor	Points:	Punkty:
 @msg	{label} must be a number	{label} musi być liczbą
 @msg	{label} must be a number of at least 0.1	{label} musi być liczbą co najmniej 0,1
 	Advanced Character Formats	Zaawansowane formaty znaków
+	Basic Paragraph Formats	Podstawowe formaty akapitu
+	Composition	Skład
 	Horizontal Scale	Skala pozioma
 	Vertical Scale	Skala pionowa
 @msg	{label} must be a number from {min} to {max}	{label} musi być liczbą od {min} do {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} musi być liczbą całkowitą od {min} do {max}
 	Character Color	Kolor znaków
 	OpenType Features	Funkcje OpenType
 	Stylistic Sets	Zestawy stylistyczne
@@ -6611,6 +6708,11 @@ breakText	Glyphs	Glify
 @msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje tylko wtyczka eksportu lub importu
 @msg	an importer always gets an import's budget: leave `budget` out	wtyczka importu zawsze dostaje budżet importu: pomiń `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiuj informacje diagnostyczne
+@msg	Copied the troubleshooting info	Skopiowano informacje diagnostyczne
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Ostatnia sesja VectorCraft przestała odpowiadać przed zamknięciem. Pomoc › Kopiuj informacje diagnostyczne kopiuje szczegóły do zgłoszenia błędu
+
 # Safe Mode
 	Safe Mode…	Tryb awaryjny…
 	Safe Mode	Tryb awaryjny
@@ -6631,6 +6733,8 @@ breakText	Glyphs	Glify
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Wyrównaj do siatki pikseli
+	Align New Objects to Pixel Grid	Wyrównaj nowe obiekty do siatki pikseli
+	Not Aligned to Pixel Grid	Niewyrównane do siatki pikseli
 @msg	only paths and compound paths can be aligned to the pixel grid	do siatki pikseli można wyrównać tylko ścieżki i ścieżki złożone
 @msg	side is left or right, not `{s}`	side to left lub right, a nie `{s}`
 	Ignore All	Ignoruj wszystko

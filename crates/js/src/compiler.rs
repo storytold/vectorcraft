@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 use crate::ast::{
     AssignOp, Ast, BinaryOp, Expr, ExprId, ForInTarget, ForInit, FunctionId, FunctionKind, LogicalOp, PropertyValue, Stmt, StmtId, UnaryOp, UpdateOp,
-    VarDecl,
+    VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 use crate::bytecode::{Code, CodeKind, Handler, Op, Source, fallthrough_effect, verify};
 use crate::error::{SyntaxError, TOO_DEEP};
@@ -276,7 +276,14 @@ impl<'a> FnCompiler<'a> {
                     }
                     work.extend(block.iter().rev());
                 }
-                Stmt::Expr(_) | Stmt::Empty | Stmt::Continue(_) | Stmt::Break(_) | Stmt::Return(_) | Stmt::Throw(_) | Stmt::Debugger => {}
+                Stmt::Expr(_)
+                | Stmt::Empty
+                | Stmt::Continue(_)
+                | Stmt::Break(_)
+                | Stmt::Return(_)
+                | Stmt::Throw(_)
+                | Stmt::Debugger
+                | Stmt::DefaultXmlNamespace(_) => {}
             }
         }
         Ok(out)
@@ -348,6 +355,11 @@ impl<'a> FnCompiler<'a> {
                 Ok(())
             }
             Stmt::Try { block, handler, finalizer } => self.try_stmt(block, handler.as_ref(), finalizer.as_deref()),
+            Stmt::DefaultXmlNamespace(e) => {
+                self.expr(*e)?;
+                self.emit(Op::SetDefaultNamespace);
+                Ok(())
+            }
         }
     }
 
@@ -467,14 +479,14 @@ impl<'a> FnCompiler<'a> {
                 }
                 self.jump(Op::Jump, head);
             }
-            Some(Stmt::ForIn { target, object, body }) => return self.for_in(target, *object, *body, labels),
+            Some(Stmt::ForIn { target, object, body, each }) => return self.for_in(target, *object, *body, labels, *each),
             _ => return internal("not a loop"),
         }
         self.bind(brk);
         Ok(())
     }
 
-    fn for_in(&mut self, target: &ForInTarget, object: ExprId, body: StmtId, labels: Vec<String>) -> CResult<()> {
+    fn for_in(&mut self, target: &ForInTarget, object: ExprId, body: StmtId, labels: Vec<String>, each: bool) -> CResult<()> {
         if let ForInTarget::Var(d) = target {
             self.var_decls(std::slice::from_ref(d))?;
         }
@@ -485,6 +497,9 @@ impl<'a> FnCompiler<'a> {
         let brk = self.new_label();
         self.bind(head);
         self.jump(Op::ForInNext, brk);
+        if each {
+            self.emit(Op::ForEachValue);
+        }
         match target {
             ForInTarget::Var(d) => {
                 let n = self.var_name(&d.name.name);
@@ -827,7 +842,80 @@ impl<'a> FnCompiler<'a> {
                 }
             }
             Expr::Paren(inner) => self.expr(*inner)?,
+            Expr::XmlLiteral { parts, list } => self.xml_literal(parts, *list)?,
+            Expr::XmlName { attribute, qualifier, name } => self.xml_name(*attribute, *qualifier, name)?,
+            Expr::XmlScopeName(name) => {
+                self.expr(*name)?;
+                self.at(self.ast.expr_span(id).start);
+                self.emit(Op::XmlScopeGet);
+            }
+            Expr::XmlDescendants { .. } | Expr::XmlFilter { .. } => self.chain(id)?,
         }
+        Ok(())
+    }
+
+    fn xml_literal(&mut self, parts: &[XmlPart], list: bool) -> CResult<()> {
+        for part in parts {
+            match part {
+                XmlPart::Text(units) => {
+                    let i = self.string(units);
+                    self.emit(Op::String(i));
+                }
+                XmlPart::Content(e) | XmlPart::Attribute(e) | XmlPart::Name(e) | XmlPart::Attributes(e) => {
+                    self.expr(*e)?;
+                    self.emit(Op::XmlEscape(match part {
+                        XmlPart::Content(_) => 0,
+                        XmlPart::Attribute(_) => 1,
+                        XmlPart::Name(_) => 2,
+                        _ => 3,
+                    }));
+                }
+            }
+        }
+        self.emit(Op::XmlLiteral { parts: len_u32(parts.len()), list });
+        Ok(())
+    }
+
+    fn xml_name(&mut self, attribute: bool, qualifier: Option<XmlQualifier>, name: &XmlNamePart) -> CResult<()> {
+        match qualifier {
+            Some(XmlQualifier::Any) => self.emit(Op::Null),
+            Some(XmlQualifier::Expr(e)) => self.expr(e)?,
+            None => {}
+        }
+        match name {
+            XmlNamePart::Ident(n) => {
+                let i = self.string(&n.encode_utf16().collect::<Vec<u16>>());
+                self.emit(Op::String(i));
+            }
+            XmlNamePart::Star => {
+                let i = self.string(&[u16::from(b'*')]);
+                self.emit(Op::String(i));
+            }
+            XmlNamePart::Computed(e) => self.expr(*e)?,
+        }
+        self.emit(Op::XmlMakeName { attribute, qualified: qualifier.is_some() });
+        Ok(())
+    }
+
+    /// `object.(predicate)` with the object already on the stack: each item is tested with itself
+    /// as the innermost scope, in list order.
+    fn xml_filter(&mut self, predicate: ExprId) -> CResult<()> {
+        self.emit(Op::XmlFilterStart);
+        let head = self.new_label();
+        let done = self.new_label();
+        self.bind(head);
+        let depth = self.depth;
+        self.jump(Op::XmlFilterNext, done);
+        self.emit(Op::PushWith);
+        self.env_depth += 1;
+        self.expr(predicate)?;
+        self.emit(Op::PopEnv);
+        self.env_depth -= 1;
+        self.emit(Op::XmlFilterTest);
+        self.jump(Op::Jump, head);
+        self.bind(done);
+        self.depth = depth;
+        self.emit(Op::XmlFilterEnd);
         Ok(())
     }
 
@@ -869,7 +957,9 @@ impl<'a> FnCompiler<'a> {
         let mut cur = id;
         loop {
             match self.ast.expr(cur) {
-                Some(Expr::Member { object, .. } | Expr::Index { object, .. }) => {
+                Some(
+                    Expr::Member { object, .. } | Expr::Index { object, .. } | Expr::XmlDescendants { object, .. } | Expr::XmlFilter { object, .. },
+                ) => {
                     suffixes.push(cur);
                     cur = self.ast.unparenthesized(*object);
                 }
@@ -909,6 +999,15 @@ impl<'a> FnCompiler<'a> {
                     self.expr(*index)?;
                     self.at(span.start);
                     self.emit(if next_is_call { Op::GetIndexThis } else { Op::GetIndex });
+                }
+                Some(Expr::XmlDescendants { name, .. }) => {
+                    self.expr(*name)?;
+                    self.at(span.start);
+                    self.emit(Op::XmlDescendants);
+                }
+                Some(Expr::XmlFilter { predicate, .. }) => {
+                    self.at(span.start);
+                    self.xml_filter(*predicate)?;
                 }
                 Some(Expr::Call { args, .. }) => {
                     let innermost = j + 1 == count;
@@ -1163,9 +1262,15 @@ impl<'a> FnCompiler<'a> {
         for &(i, label) in &self.patches {
             let Some(target) = resolve(&self.labels, label) else { return internal("jump to an unplaced label") };
             match self.ops.get_mut(i) {
-                Some(Op::Jump(t) | Op::JumpIfFalse(t) | Op::JumpIfTrue(t) | Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) | Op::ForInNext(t)) => {
-                    *t = target
-                }
+                Some(
+                    Op::Jump(t)
+                    | Op::JumpIfFalse(t)
+                    | Op::JumpIfTrue(t)
+                    | Op::JumpIfFalseKeep(t)
+                    | Op::JumpIfTrueKeep(t)
+                    | Op::ForInNext(t)
+                    | Op::XmlFilterNext(t),
+                ) => *t = target,
                 _ => return internal("patching an instruction that is not a jump"),
             }
         }

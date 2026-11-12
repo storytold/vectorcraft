@@ -44,18 +44,20 @@ pub fn glyph_art(document: &[u8], gid: u32, upem: f64, fill: Color, stroke: Opti
     // usvg resolves `context-fill` and `context-stroke` only for markers.
     let svg = svg.replace("context-fill", &hex(fill)).replace("context-stroke", &stroke.map_or_else(|| "none".into(), hex));
     let (doc, _) = crate::import::import(&svg, &ImportOptions::default(), crate::MAX_NODES).ok()?;
+    // A layer's art, its ruler guides left out.
+    let art_of = |l: &Node| l.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).cloned().collect::<Vec<_>>();
     let mut art = if whole {
-        Node::group(NodeId(0), doc.layers.iter().map(|l| Arc::new(Node::group(NodeId(0), l.children().cloned().unwrap_or_default()))).collect())
+        Node::group(NodeId(0), doc.layers.iter().map(|l| Arc::new(Node::group(NodeId(0), art_of(l)))).collect())
     } else {
         // The glyph, top-level, is a layer when a `<g>`, else an object named after its id.
         let named = |n: &Node| n.name.as_deref() == Some(id.as_str());
         match doc.layers.iter().find(|l| named(l)) {
-            Some(layer) => Node::group(NodeId(0), layer.children().cloned().unwrap_or_default()),
+            Some(layer) => Node::group(NodeId(0), art_of(layer)),
             None => {
                 let mut found = None;
                 for layer in &doc.layers {
                     layer.walk(&mut |n| {
-                        if found.is_none() && named(n) {
+                        if found.is_none() && !n.is_ruler_guide() && named(n) {
                             found = Some(n.clone());
                         }
                     });
@@ -199,7 +201,7 @@ fn own_art(n: &Node, doc: &Document) -> Option<Node> {
         im.pixels = Some(Arc::new(blob.clone()));
     }
     if let Some(children) = n.children_mut() {
-        *children = children.iter().filter_map(|c| own_art(c, doc).map(Arc::new)).collect();
+        *children = children.iter().filter(|c| !c.is_ruler_guide()).filter_map(|c| own_art(c, doc).map(Arc::new)).collect();
     }
     Some(n)
 }

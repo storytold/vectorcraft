@@ -145,16 +145,14 @@ fn apply_transform_moving_guides(
                 }
                 None if copy => {
                     let guide_copies = if with_guides {
-                        let copies: Vec<_> = sel.guides.iter().filter_map(|&i| d.guides.get(i).cloned()).collect();
+                        let copies: Vec<_> = sel.guides.iter().filter_map(|&i| d.ruler_guide(i)).collect();
                         (!copies.is_empty()).then_some(copies)
                     } else {
                         None
                     };
                     let new_ids = duplicate_in(d, sel, &ids, Affine::IDENTITY)?;
                     if let Some(copies) = guide_copies {
-                        let first = d.guides.len();
-                        d.guides.extend(copies);
-                        sel.guides = (first..d.guides.len()).collect();
+                        sel.guides = copies.iter().map(|g| d.add_ruler_guide(g)).collect();
                     }
                     new_ids
                 }
@@ -177,9 +175,7 @@ fn apply_transform_moving_guides(
             }
             if with_guides && (delta.x != 0.0 || delta.y != 0.0) {
                 for i in sel.guides.clone() {
-                    if let Some(g) = d.guides.get_mut(i) {
-                        *g = g.moved(delta);
-                    }
+                    d.edit_ruler_guide(i, |g| *g = g.moved(delta));
                 }
             }
             Ok(targets)
@@ -224,10 +220,8 @@ pub(crate) fn preview_copies(s: &mut Session, roots: &[NodeId], with_guides: boo
     let ids = duplicate_in(Arc::make_mut(&mut doc), &mut selection, roots, Affine::IDENTITY)?;
     if has_guide_copies {
         let d = Arc::make_mut(&mut doc);
-        let first = d.guides.len();
-        let copies: Vec<_> = st.selection.guides.iter().filter_map(|&i| d.guides.get(i).cloned()).collect();
-        d.guides.extend(copies);
-        selection.guides = (first..d.guides.len()).collect();
+        let copies: Vec<_> = st.selection.guides.iter().filter_map(|&i| d.ruler_guide(i)).collect();
+        selection.guides = copies.iter().map(|g| d.add_ruler_guide(g)).collect();
     }
     let k = Arc::new(crate::PreviewCopies { from: it.doc.clone(), roots: roots.to_vec(), doc, selection, ids });
     it.copies = Some(k.clone());

@@ -180,6 +180,15 @@ fn a_bad_range_keeps_export_as_open() {
     assert!(written.borrow().is_empty());
 }
 
+/// An emptied Range field shows an example of the artboard numbers it takes, as Save As's does.
+#[test]
+fn an_empty_export_as_range_shows_an_example() {
+    let (mut app, _) = app(2);
+    app.run("file.exportAs", json!({"useArtboards": true, "range": ""})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    assert!(text.lines().any(|l| l == "1-3, 5"), "{text}");
+}
+
 #[test]
 fn svg_continues_in_svg_options_and_pdf_art_is_written_directly() {
     let (mut app, written) = app(2);

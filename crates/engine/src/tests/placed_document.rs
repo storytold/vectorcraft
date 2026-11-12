@@ -1060,6 +1060,30 @@ fn link_info_gives_the_artboards_size_not_pixels() {
     );
 }
 
+/// A confined caller's Link Info of a placed document whose file is outside its read roots has no
+/// `link`, `path` or `location`, and keeps the file's name.
+#[test]
+fn link_info_leaves_out_a_placed_documents_path_outside_the_read_roots() {
+    let away = Folder::new("placed-lrr-away");
+    let home = Folder::new("placed-lrr-home");
+    let src = away.file("logo.vectorcraft");
+    source(&src, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[]).unwrap().unwrap();
+    let i = crate::file_access::confine(Some(&roots), || s.execute("links.info", &json!({"id": id.0}))).unwrap();
+    assert!(!i.to_string().contains("placed-lrr-away"), "{i}");
+    assert_eq!(
+        (i["fileName"].as_str(), i["document"].as_bool(), i["status"].as_str()),
+        (Some("logo.vectorcraft"), Some(true), Some("missing")),
+        "{i}"
+    );
+    let l = crate::file_access::confine(Some(&roots), || s.execute("links.list", &json!({}))).unwrap();
+    assert!(!l.to_string().contains("placed-lrr-away") && l["links"][0]["name"] == "logo.vectorcraft", "{l}");
+    let i = s.execute("links.info", &json!({"id": id.0})).unwrap();
+    assert_eq!((&i["link"], &i["path"]), (&json!(src), &json!(src)), "unconfined: {i}");
+}
+
 /// Save As reads its defaults from the catalog; using them must retain current editable links.
 #[test]
 fn native_save_catalog_defaults_keep_placed_documents_editable() {

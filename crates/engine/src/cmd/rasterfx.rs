@@ -263,7 +263,7 @@ fn retain_effects(n: &mut Node, members: bool, keep: &dyn Fn(&Effect) -> bool) {
         it.effects_mut().retain(keep);
     }
     if members {
-        for c in n.children_mut().into_iter().flatten() {
+        for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
             retain_effects(Arc::make_mut(c), true, keep);
         }
     }
@@ -367,7 +367,9 @@ pub(crate) fn replace_with_image(mut v: Node, image: Node) -> Node {
     v.appearance = Default::default();
     v.set_clips(false);
     if let Some(ch) = v.children_mut() {
-        *ch = vec![Arc::new(image)];
+        // Its ruler guides stay above the image.
+        let guides = ch.split_off(Node::guide_run_start(ch));
+        *ch = std::iter::once(Arc::new(image)).chain(guides).collect();
     }
     v
 }
