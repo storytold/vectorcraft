@@ -347,6 +347,15 @@ pub(crate) fn adding_fonts() -> std::sync::MutexGuard<'static, ()> {
     FONTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// Whether the tests that run every command with `{}` run command `id`. `plugin.clearCache` is
+/// left out: without an id it empties the cache of every plug-in installed in the process, which
+/// includes the caches that the plug-in storage tests check while they run.
+/// `tests/plugin_clear_cache.rs` runs it with `{}` in a test binary of its own.
+#[cfg(test)]
+pub(crate) fn runs_with_empty_params(id: &str) -> bool {
+    id != "plugin.clearCache"
+}
+
 #[cfg(test)]
 use tests::{
     adjust as tests_adjust, clip as tests_clip, colormgmt as tests_colormgmt, expand as tests_expand, large_edits as tests_large_edits,
