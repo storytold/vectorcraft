@@ -18,6 +18,7 @@ pub mod blend_options;
 mod brush_art_options;
 pub mod brush_delete;
 pub mod brush_options;
+pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod color_balance;
@@ -322,8 +323,10 @@ registry! {
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
     Confirm: [confirm::KIND] => confirm::SPEC,
     BrushDelete: [brush_delete::KIND] => brush_delete::SPEC,
+    BrushReplaceArt: [brush_replace_art::KIND] => brush_replace_art::SPEC,
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
+    ReplaceFiles: [confirm::REPLACE_FILES] => confirm::REPLACE_FILES_SPEC,
     ResetPreferences: [confirm::RESET_PREFS] => confirm::RESET_PREFS_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
@@ -943,6 +946,9 @@ mod tests_eps;
 
 #[cfg(test)]
 mod tests_metafile;
+
+#[cfg(test)]
+mod tests_hpgl;
 
 #[cfg(test)]
 mod tests_tiff_bmp_tga;

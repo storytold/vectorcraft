@@ -108,6 +108,27 @@ fn control_saves_take_the_native_save_options() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A save without a path writes the document's own file in the write root: `app.save` and
+/// `file.save` leave its path out of the reply, since it is outside the read root, and keep a path
+/// the client gives.
+#[test]
+fn control_saves_leave_out_the_documents_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("save-own");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let own = s(base.join("out/doc.vectorcraft"));
+    app.run("file.saveAs", json!({"path": own})).unwrap();
+    for (method, params) in [("app.save", json!({})), ("engine.execute", json!({"command": "file.save", "params": {}}))] {
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        let r = request(&mut app, &tx, method, params);
+        assert_eq!(r["ok"], true, "{method}: {r}");
+        assert!(r["result"].get("path").is_none() && !r.to_string().contains(&s(base.join("out"))), "{method}: {r}");
+        assert_eq!(app.session.active().map(|d| d.is_dirty()), Some(false), "{method}: saved");
+    }
+    let r = request(&mut app, &tx, "app.save", json!({"path": own}));
+    assert_eq!(r["result"]["path"], json!(own), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// With Background Save and Background Export on, `app.save` and `app.export` with `wait: true`
 /// (MCP's `save_file` in the app) reply with the write root's refusal, and write a file inside it
 /// before they reply. Without `wait` the refusal reaches only the status bar.
