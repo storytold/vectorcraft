@@ -269,6 +269,24 @@ fn no_break_keeps_marked_characters_on_one_line() {
     assert!(breaks.iter().all(|b| b.end != 3), "no break between the marked characters: {breaks:?}");
 }
 
+/// A soft hyphen inside a No Break run is not a place a line may break, so the word is measured
+/// across it, as wide as [`break_line`] keeps it.
+#[test]
+fn word_width_measures_across_a_soft_hyphen_inside_a_no_break_run() {
+    let mut glyphs = synthetic_glyphs(&[(0, 1, 10.0, 'A'), (1, 2, 0.0, '\u{00ad}'), (3, 1, 10.0, 'B'), (4, 1, 10.0, 'C')]);
+    // The hyphen a soft hyphen adds comes from the face, scaled to well under 10 pt.
+    for g in &mut glyphs {
+        g.sx = 0.001;
+    }
+    let plain = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!(plain < 30.0, "without the mark the word ends at the soft hyphen: {plain}");
+    for g in &mut glyphs {
+        g.no_break = true;
+    }
+    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!((marked - 30.0).abs() < 1e-9, "the marked run is measured whole: {marked}");
+}
+
 /// Synthetic full-width characters `text`, each 10 pt wide on a 10 pt em.
 fn full_width(text: &str) -> Vec<SGlyph> {
     let specs: Vec<(usize, usize, f64, char)> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 10.0, ch)).collect();

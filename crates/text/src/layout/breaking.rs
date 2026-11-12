@@ -265,7 +265,7 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
         if gl.is_space() && (end == start || !splits_no_break(g, end)) {
             return set(w, trailing, ink);
         }
-        if gl.is_soft_hyphen() {
+        if gl.is_soft_hyphen() && kinsoku_allows(g, end, kinsoku) && !splits_no_break(g, end + 1) {
             return w + hyphen_glyph(gl).adv;
         }
         w += gl.adv;
