@@ -44,7 +44,7 @@ Tamil gaps.
 | Toolbar | கருவிப் பட்டை |
 | Spot colour | புள்ளி நிறம் |
 | Mask | முகமூடி |
-| Pattern | வடிவம் in the reused rows, வடிவமாதிரி in the new ones: to be settled in review |
+| Pattern / Patterns | வடிவமாதிரி / வடிவமாதிரிகள் (வடிவம் is Shape); Dash Pattern கீற்று வடிவமாதிரி |
 
 ## Fonts
 

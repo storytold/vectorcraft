@@ -711,7 +711,7 @@ antiAlias	Sharp	கூர்மையான
 	Cancel Export	ஏற்றுமதியை ரத்துசெய்
 	Cancel Image Trace	படக் கண்டறிதலை ரத்துசெய்
 	Cancel Key Object	முக்கியப் பொருளை ரத்துசெய்
-	Cancel Pattern Editing	வடிவத் திருத்தத்தை ரத்துசெய்
+	Cancel Pattern Editing	வடிவமாதிரித் திருத்தத்தை ரத்துசெய்
 	Cancel Plug-in Run	செருகுநிரல் இயக்கத்தை ரத்துசெய்
 	Canvas	கேன்வாஸ்
 	Canvas Color	கேன்வாஸ் நிறம்
@@ -1170,7 +1170,7 @@ antiAlias	Sharp	கூர்மையான
 	Dash 3	கோடு 3
 	Dash 4	கோடு 4
 	Dash 5	கோடு 5
-	Dash Pattern	கோட்டு வடிவம்
+	Dash Pattern	கீற்று வடிவமாதிரி
 	Dash:	கோடு:
 	Dashed	கோடுகளாலான
 	Dashed Line	கோடிட்ட வரி
@@ -1243,7 +1243,7 @@ antiAlias	Sharp	கூர்மையான
 	Delete Light	ஒளியை நீக்கு
 	Delete Mesh Point	வலைப் புள்ளியை நீக்கு
 	Delete Paragraph Style	பத்தி பாணியை நீக்கு
-	Delete Pattern	வடிவத்தை நீக்கு
+	Delete Pattern	வடிவமாதிரியை நீக்கு
 	Delete PDF Preset	PDF முன்னமைவை நீக்கு
 	Delete Perspective Grid Preset	முன்னோக்குக் கட்ட முன்னமைவை நீக்கு
 	Delete Point	புள்ளியை நீக்கு
@@ -1347,7 +1347,7 @@ antiAlias	Sharp	கூர்மையான
 	Distort & Transform	சிதைத்து உருமாற்று
 	Distort Appearance	தோற்றத்தைச் சிதைக்கவும்
 	Distort Linear Gradients	நேரியல் சாய்வுகளைச் சிதைக்கவும்
-	Distort Pattern Fills	வடிவ நிரப்புகளைச் சிதைக்கவும்
+	Distort Pattern Fills	வடிவமாதிரி நிரப்புகளைச் சிதைக்கவும்
 	Distortion	சிதைவு
 	Distribute	சமமாகப் பகிர்
 	Distribute Evenly	சமமாகப் பரப்பு
@@ -1404,7 +1404,7 @@ antiAlias	Sharp	கூர்மையான
 	Don't Save	சேமிக்க வேண்டாம்
 	Don't Show Center	மையத்தைக் காட்ட வேண்டாம்
 	Done	முடிந்தது
-	Done Editing Pattern	வடிவத் திருத்தம் முடிந்தது
+	Done Editing Pattern	வடிவமாதிரித் திருத்தம் முடிந்தது
 	Dot	புள்ளி
 	Dot Color from Art	ஓவியத்திலிருந்து புள்ளி நிறம்
 	Dot Gain 15%	புள்ளிப் பெருக்கம் 15%
@@ -1539,7 +1539,7 @@ antiAlias	Sharp	கூர்மையான
 	Edit Original	மூலத்தைத் திருத்து
 	Edit Parametric Shape	அளவுரு சார்ந்த வடிவத்தைத் திருத்து
 	Edit Path	பாதையைத் திருத்து
-	Edit Pattern	வடிவத்தைத் திருத்து
+	Edit Pattern	வடிவமாதிரியைத் திருத்து
 	Edit PDF Preset	PDF முன்னமைவைத் திருத்து
 	Edit Perspective Grid	முன்னோக்குக் கட்டத்தைத் திருத்து
 	Edit Print Preset	அச்சு முன்னமைவைத் திருத்து
@@ -1685,7 +1685,7 @@ antiAlias	Sharp	கூர்மையான
 	Expand Shaper Group	Shaper குழுவை விரிவாக்கு
 	Expand:	விரிவாக்கு:
 	Expand…	விரிவாக்கு…
-	Expanded Patterns	விரிவாக்கப்பட்ட வடிவங்கள்
+	Expanded Patterns	விரிவாக்கப்பட்ட வடிவமாதிரிகள்
 	Export	ஏற்றுமதி செய்
 	Export {count} Selected	{count} தேர்ந்தவற்றை ஏற்றுமதி செய்
 	Export All Open Documents	திறந்துள்ள அனைத்து ஆவணங்களையும் ஏற்றுமதி செய்
@@ -2109,8 +2109,8 @@ antiAlias	Sharp	கூர்மையான
 	Half Arrow (left)	அரை அம்புக்குறி (இடது)
 	Half Arrow (right)	அரை அம்புக்குறி (வலது)
 	Half Circle	அரை வட்டம்
-	Halftone Pattern	அரைவண்ணக் கோலம்
-	Halftone Pattern…	அரைத்தொனி வடிவம்…
+	Halftone Pattern	அரைத்தொனி வடிவமாதிரி
+	Halftone Pattern…	அரைத்தொனி வடிவமாதிரி…
 	Halo	ஒளிவட்டம்
 	Hand	கை
 	Hand Tool	கைக் கருவி
@@ -2588,7 +2588,7 @@ antiAlias	Sharp	கூர்மையான
 	List Folder	கோப்புறையைப் பட்டியலிடு
 	List Graphic Styles	வரைகலை பாணிகளைப் பட்டியலிடு
 	List Keyboard Shortcuts	விசைப்பலகை குறுக்குவழிகளைப் பட்டியலிடு
-	List Patterns	வடிவங்களைப் பட்டியலிடு
+	List Patterns	வடிவமாதிரிகளைப் பட்டியலிடு
 	List Plug-ins	செருகுநிரல்களைப் பட்டியலிடு
 	List Preferences	விருப்பத்தேர்வுகளைப் பட்டியலிடு
 	List Slices	துண்டுகளைப் பட்டியலிடு
@@ -2680,7 +2680,7 @@ antiAlias	Sharp	கூர்மையான
 	Make Live Paint	நேரடி வண்ணத்தை உருவாக்கு
 	Make Mask	முகமூடியை உருவாக்கு
 	Make Opacity Mask	ஒளிபுகாநிலை முகமூடியை உருவாக்கு
-	Make Pattern	வடிவத்தை உருவாக்கு
+	Make Pattern	வடிவமாதிரியை உருவாக்கு
 	Make Pixel Perfect	பிக்சல் துல்லியமாக்கு
 	Make Sides Equal	பக்கங்களை சமமாக்கு
 	Make Slice	துண்டை உருவாக்கு
@@ -2932,7 +2932,7 @@ antiAlias	Sharp	கூர்மையான
 	New Opacity Masks Are Inverted	புதிய ஒளிபுகாநிலை முகமூடிகள் தலைகீழாக்கப்படும்
 	New Paragraph Style	புதிய பத்தி பாணி
 	New Paragraph Style…	புதிய பத்தி பாணி…
-	New Pattern Brush from Selection	தேர்விலிருந்து புதிய வடிவத் தூரிகை
+	New Pattern Brush from Selection	தேர்விலிருந்து புதிய வடிவமாதிரித் தூரிகை
 	New PDF Preset	புதிய PDF முன்னமைவு
 	New Print Preset	புதிய அச்சு முன்னமைவு
 	New Scatter Brush from Selection	தேர்விலிருந்து புதிய சிதறல் தூரிகை
@@ -3127,7 +3127,7 @@ antiAlias	Sharp	கூர்மையான
 	Open a document to draw parametric shapes.	அளவுரு வடிவங்களை வரைய ஓர் ஆவணத்தைத் திறக்கவும்.
 	Open a document to draw with the Smart Pen.	திறன்மிகு பேனாவால் வரைய ஓர் ஆவணத்தைத் திறக்கவும்.
 	Open a document to edit its anchor points.	நங்கூரப் புள்ளிகளைத் திருத்த ஓர் ஆவணத்தைத் திறக்கவும்.
-	Open a document to edit its patterns.	அதன் வடிவங்களைத் திருத்த ஓர் ஆவணத்தைத் திறக்கவும்.
+	Open a document to edit its patterns.	அதன் வடிவமாதிரிகளைத் திருத்த ஓர் ஆவணத்தைத் திறக்கவும்.
 	Open a document to navigate it.	அதில் வழிசெல்ல ஓர் ஆவணத்தைத் திறக்கவும்.
 	Open a document to preview its flattening.	அதன் தட்டையாக்கலை முன்காட்சி காண ஓர் ஆவணத்தைத் திறக்கவும்.
 	Open a document to preview its pages	அதன் பக்கங்களை முன்காட்சி காண ஓர் ஆவணத்தைத் திறக்கவும்
@@ -3327,12 +3327,12 @@ antiAlias	Sharp	கூர்மையான
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	பாதைகள்: {paths}    நங்கூரங்கள்: {anchors}    நிறங்கள்: {colors}
 	Pattern	வடிவமாதிரி
 	Pattern Borders	வடிவமாதிரி எல்லைகள்
-	Pattern Brush	வடிவத் தூரிகை
-	Pattern Brush Options	வடிவத் தூரிகை விருப்பங்கள்
-	Pattern Editing	வடிவத் திருத்தம்
-	Pattern Options	வடிவ விருப்பங்கள்
-	Pattern options are available in pattern editing mode.	வடிவ விருப்பங்கள் வடிவத் திருத்தப் பயன்முறையில் கிடைக்கும்.
-	Pattern Swatches	வடிவ வண்ண மாதிரிகள்
+	Pattern Brush	வடிவமாதிரித் தூரிகை
+	Pattern Brush Options	வடிவமாதிரித் தூரிகை விருப்பங்கள்
+	Pattern Editing	வடிவமாதிரித் திருத்தம்
+	Pattern Options	வடிவமாதிரி விருப்பங்கள்
+	Pattern options are available in pattern editing mode.	வடிவமாதிரி விருப்பங்கள் வடிவமாதிரித் திருத்தப் பயன்முறையில் கிடைக்கும்.
+	Pattern Swatches	வடிவமாதிரி வண்ண மாதிரிகள்
 	Pattern Type	வடிவமாதிரி வகை
 	Patterns	வடிவமாதிரிகள்
 	Pause For	இடைநிறுத்தம்
@@ -3799,7 +3799,7 @@ antiAlias	Sharp	கூர்மையான
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	கோடுகள் இந்தத் தூரிகையைப் பயன்படுத்துகின்றன. புதிய ஓவியத்தை அந்தக் கோடுகளுக்குப் பயன்படுத்தவா, அல்லது அவற்றை அப்படியே விட்டுவிட்டு, புதிய ஓவியத்துடன் தூரிகையின் நகலைச் சேர்க்கவா?
 	Apply to Strokes	கோடுகளுக்குப் பயன்படுத்து
 	Leave Strokes	கோடுகளை அப்படியே விடு
-@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` இல் ஓவியம் இல்லை (சிதறல், ஓவிய மற்றும் வடிவத் தூரிகைகளில் மட்டுமே ஓவியம் உண்டு)
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` இல் ஓவியம் இல்லை (சிதறல், ஓவிய மற்றும் வடிவமாதிரித் தூரிகைகளில் மட்டுமே ஓவியம் உண்டு)
 	Remove the shortcut	குறுக்குவழியை அகற்று
 	Remove Threading	இணைப்பை அகற்று
 	Remove White Overprint	வெள்ளை மேல்அச்சை அகற்று
@@ -4243,10 +4243,10 @@ antiAlias	Sharp	கூர்மையான
 	Select Anchors	நங்கூரங்களைத் தேர்ந்தெடு
 	Select Appearance Item	தோற்ற உருப்படியைத் தேர்ந்தெடு
 	Select Art	ஓவியத்தைத் தேர்ந்தெடு
-	Select art and choose Object › Pattern › Make.	ஓவியத்தைத் தேர்ந்தெடுத்து பொருள் › வடிவம் › உருவாக்கு என்பதைத் தேர்வு செய்யவும்.
+	Select art and choose Object › Pattern › Make.	ஓவியத்தைத் தேர்ந்தெடுத்து பொருள் › வடிவமாதிரி › உருவாக்கு என்பதைத் தேர்வு செய்யவும்.
 	Select art and click New Symbol to make one.	ஓவியத்தைத் தேர்ந்தெடுத்து ஒன்றை உருவாக்க புதிய சின்னம் என்பதைச் சொடுக்கவும்.
 	Select art and use New Brush to make one.	ஓவியத்தைத் தேர்ந்தெடுத்து ஒன்றை உருவாக்க புதிய தூரிகையைப் பயன்படுத்தவும்.
-	Select art to make a scatter, art or pattern brush.	சிதறல், ஓவிய அல்லது வடிவத் தூரிகையை உருவாக்க ஓவியத்தைத் தேர்ந்தெடுக்கவும்.
+	Select art to make a scatter, art or pattern brush.	சிதறல், ஓவிய அல்லது வடிவமாதிரித் தூரிகையை உருவாக்க ஓவியத்தைத் தேர்ந்தெடுக்கவும்.
 	Select artwork to apply effects	விளைவுகளைப் பயன்படுத்த ஓவியத்தைத் தேர்ந்தெடுக்கவும்
 	Select Bound Object	இணைக்கப்பட்ட பொருளைத் தேர்ந்தெடு
 	Select by Artboards	ஆர்ட்போர்டுகளின்படி தேர்ந்தெடு
@@ -4470,7 +4470,7 @@ antiAlias	Sharp	கூர்மையான
 	Show Original Path	அசல் பாதையைக் காட்டு
 	Show Package	தொகுப்பைக் காட்டு
 	Show Panel	பலகத்தைக் காட்டு
-	Show Pattern Swatches	வடிவ வண்ண மாதிரிகளைக் காட்டு
+	Show Pattern Swatches	வடிவமாதிரி வண்ண மாதிரிகளைக் காட்டு
 	Show Perspective Grid	முன்னோக்குக் கட்டத்தைக் காட்டு
 	Show Pixel Grid (Above 600% Zoom)	பிக்சல் கட்டத்தைக் காட்டு (600% பெரிதாக்கலுக்கு மேல்)
 	Show Presets	முன்னமைவுகளைக் காட்டு
@@ -5045,9 +5045,9 @@ antiAlias	Sharp	கூர்மையான
 	Transform Objects	பொருட்களை உருமாற்று
 	Transform options	உருமாற்ற விருப்பங்கள்
 	Transform Panel	உருமாற்றப் பலகம்
-	Transform Pattern Only	வடிவத்தை மட்டும் உருமாற்று
-	Transform Pattern Tiles	வடிவ ஓடுகளை உருமாற்று
-	Transform Patterns	வடிவங்களை உருமாற்று
+	Transform Pattern Only	வடிவமாதிரியை மட்டும் உருமாற்று
+	Transform Pattern Tiles	வடிவமாதிரி ஓடுகளை உருமாற்று
+	Transform Patterns	வடிவமாதிரிகளை உருமாற்று
 	Transform Tools	உருமாற்றக் கருவிகள்
 	Transform…	உருமாற்று…
 	Transforms	உருமாற்றங்கள்
@@ -5723,7 +5723,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	`{name}` is built in and stays	`{name}` உள்ளமைந்தது, அது நீக்கப்படாது
 @msg	`{name}` is no recovery entry name	`{name}` ஒரு மீட்பு உள்ளீட்டின் பெயர் அல்ல
 @msg	`{name}` isn't a colour swatch	`{name}` ஒரு வண்ண மாதிரி அல்ல
-@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` தன் சொந்த வகை வண்ணத்தை மட்டுமே ஏற்கும் (நிறம், சாய்வு அல்லது வடிவம்)
+@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` தன் சொந்த வகை வண்ணத்தை மட்டுமே ஏற்கும் (நிறம், சாய்வு அல்லது வடிவமாதிரி)
 @msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: குறைந்தபட்சம் விரும்பியதை விடவும், விரும்பியது அதிகபட்சத்தை விடவும் அதிகமாக இருக்கக் கூடாது
 @msg	`{other}` doesn't trace an image	`{other}` படத்தைக் கண்டறியாது
 @msg	`{path}` must be a bool or an object of bools	`{path}` ஒரு bool ஆக அல்லது bool-களின் பொருளாக இருக்க வேண்டும்
@@ -6028,8 +6028,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	a page's placement is not finite	ஒரு பக்கத்தின் நிலை வரம்புக்கு உட்பட்டதல்ல
 @msg	a path has too many points	ஒரு பாதையில் அதிக புள்ளிகள் உள்ளன
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	கூட்டுப் பாதை, கலப்பு, உறை, மீள்செய்கை அல்லது பின்னிப்பிணைப்புக் குழுவுக்குள் உள்ள பாதை பொருட்களை ஏற்க முடியாது
-@msg	a pattern layer doesn't end what it starts	ஒரு வடிவ அடுக்கு தான் தொடங்கியதை முடிக்கவில்லை
-@msg	a pattern layer's colors hold something else	ஒரு வடிவ அடுக்கின் நிறங்களில் வேறு ஏதோ உள்ளது
+@msg	a pattern layer doesn't end what it starts	ஒரு வடிவமாதிரி அடுக்கு தான் தொடங்கியதை முடிக்கவில்லை
+@msg	a pattern layer's colors hold something else	ஒரு வடிவமாதிரி அடுக்கின் நிறங்களில் வேறு ஏதோ உள்ளது
 @msg	a pattern named `{n}` exists	`{n}` என்ற பெயரில் ஒரு வடிவமாதிரி ஏற்கனவே உள்ளது
 @msg	a PDF presets file with over {_1} presets	{_1} க்கும் மேற்பட்ட முன்னமைவுகள் கொண்ட PDF முன்னமைவுக் கோப்பு
 @msg	a plug-in with id {_1} is already installed	{_1} என்ற id கொண்ட செருகுநிரல் ஏற்கெனவே நிறுவப்பட்டுள்ளது
@@ -6059,7 +6059,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	a stream's length isn't a number	ஓட்டத்தின் நீளம் ஓர் எண் அல்ல
 @msg	a style named `{name}` already exists	`{name}` என்ற பெயரில் ஒரு பாணி ஏற்கெனவே உள்ளது
 @msg	a style named `{to}` already exists	`{to}` என்ற பெயரில் ஒரு பாணி ஏற்கெனவே உள்ளது
-@msg	a swatch needs a colour, gradient or pattern	வண்ண மாதிரிக்கு ஒரு நிறம், சாய்வு அல்லது வடிவம் தேவை
+@msg	a swatch needs a colour, gradient or pattern	வண்ண மாதிரிக்கு ஒரு நிறம், சாய்வு அல்லது வடிவமாதிரி தேவை
 @msg	a swatch or color group named `{n}` exists	`{n}` என்ற பெயரில் ஒரு வண்ண மாதிரி அல்லது வண்ணக் குழு உள்ளது
 @msg	a symbol can't hold an instance of itself	ஒரு சின்னம் தன்னுடைய சொந்த நிகழ்வைக் கொண்டிருக்க முடியாது
 @msg	a symbol named `{n}` already exists	`{n}` என்ற பெயரில் ஒரு சின்னம் ஏற்கனவே உள்ளது
@@ -6080,7 +6080,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)	aiVersion {v}: "pdf" (PDF-இணக்கமானது, இயல்புநிலை) அல்லது "7" (பழைய .ai, பதிப்பு 7)
 @msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 பழைய .ai கோப்புகளை எழுதும், .ait வார்ப்புருக்களை அல்ல
 @msg	All colors are within the CMYK gamut	அனைத்து நிறங்களும் CMYK நிற வரம்புக்குள் உள்ளன
-@msg	already editing a pattern	ஏற்கனவே ஒரு வடிவத்தைத் திருத்துகிறது
+@msg	already editing a pattern	ஏற்கனவே ஒரு வடிவமாதிரியைத் திருத்துகிறது
 @msg	already editing an opacity mask	ஏற்கெனவே ஒரு ஒளிபுகாநிலை முகமூடி திருத்தப்படுகிறது
 @msg	already editing another object's opacity mask	ஏற்கெனவே வேறொரு பொருளின் ஒளிபுகாநிலை முகமூடி திருத்தப்படுகிறது
 @msg	already in pattern editing mode	ஏற்கனவே வடிவமாதிரித் திருத்தப் பயன்முறையில் உள்ளது
@@ -6474,7 +6474,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	fidelity must be 0..100	fidelity 0..100 வரம்பில் இருக்க வேண்டும்
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	கோப்புப் பதிப்பு {0} இந்த VectorCraft ஆதரிப்பதை விடப் புதியது ({VERSION})
 @msg	files must be {name, dataBase64}	files என்பது {name, dataBase64} ஆக இருக்க வேண்டும்
-@msg	finish editing the pattern first	முதலில் வடிவத் திருத்தத்தை முடிக்கவும்
+@msg	finish editing the pattern first	முதலில் வடிவமாதிரித் திருத்தத்தை முடிக்கவும்
 @msg	First measured segment no longer exists	முதல் அளவிடப்பட்ட பகுதி இனி இல்லை
 @msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit என்பது none|autoHeight|shrinkText|block ஆக இருக்க வேண்டும், கிடைத்தது {id}
 @msg	Flare click coordinates must be finite numbers	ஒளிக்கீற்றுச் சொடுக்கு ஆயத்தொலைவுகள் வரம்புக்குட்பட்ட எண்களாக இருக்க வேண்டும்
@@ -6989,9 +6989,9 @@ antiAlias	Sharp	கூர்மையான
 @msg	No paragraph breaks to remove	அகற்ற பத்தி முறிவுகள் எதுவும் இல்லை
 @msg	no parent layer	தாய் அடுக்கு இல்லை
 @msg	no Pathfinder operation applied yet	இதுவரை எந்த வழிகாட்டி செயல்பாடும் பயன்படுத்தப்படவில்லை
-@msg	no pattern `{name}`	`{name}` என்ற வடிவம் இல்லை
+@msg	no pattern `{name}`	`{name}` என்ற வடிவமாதிரி இல்லை
 @msg	no pattern named `{choice}`	`{choice}` என்ற பெயரில் வடிவமாதிரி இல்லை
-@msg	no pattern swatch `{name}`	`{name}` என்ற வடிவ வண்ண மாதிரி இல்லை
+@msg	no pattern swatch `{name}`	`{name}` என்ற வடிவமாதிரி வண்ண மாதிரி இல்லை
 @msg	no PDF preset named `{n}`	`{n}` என்ற PDF முன்னமைவு இல்லை
 @msg	no perspective grid preset named `{b}` (see perspective.presets.list)	`{b}` என்ற முன்னோக்குக் கட்ட முன்னமைவு இல்லை (perspective.presets.list ஐப் பார்க்கவும்)
 @msg	no perspective grid preset named `{n}`	`{n}` என்ற முன்னோக்குக் கட்ட முன்னமைவு இல்லை
@@ -7164,7 +7164,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	not area type (text in a frame) outside perspective	முன்னோக்குக்கு வெளியே உள்ள பரப்பு உரை (சட்டகத்தில் உள்ள உரை) அல்ல
 @msg	not editing an opacity mask	ஒளிபுகாநிலை முகமூடி எதுவும் திருத்தப்படவில்லை
 @msg	not found	கிடைக்கவில்லை
-@msg	not in pattern editing mode	வடிவத் திருத்தப் பயன்முறையில் இல்லை
+@msg	not in pattern editing mode	வடிவமாதிரித் திருத்தப் பயன்முறையில் இல்லை
 @msg	not JSON: {e}	JSON அல்ல: {e}
 @msg	not type on a path outside perspective	முன்னோக்குக்கு வெளியே உள்ள பாதையில் உரை அல்ல
 @msg	nothing encoded	எதுவும் குறியாக்கம் செய்யப்படவில்லை
@@ -7232,7 +7232,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	only groups, layers, type and images have a Contents (Characters) row	குழுக்கள், அடுக்குகள், உரை மற்றும் படங்களுக்கு மட்டுமே உள்ளடக்கம் (எழுத்துகள்) வரிசை உண்டு
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	உலாவியில் http, https மற்றும் mailto URL-கள் மட்டுமே திறக்கப்படும், “{url}” அல்ல
 @msg	only interior mesh lines can be deleted	உட்புற வலைக் கோடுகளை மட்டுமே நீக்க முடியும்
-@msg	only solid colours can be added (not gradients or patterns)	திட நிறங்களை மட்டுமே சேர்க்க முடியும் (சாய்வுகளையோ வடிவங்களையோ அல்ல)
+@msg	only solid colours can be added (not gradients or patterns)	திட நிறங்களை மட்டுமே சேர்க்க முடியும் (சாய்வுகளையோ வடிவமாதிரிகளையோ அல்ல)
 @msg	only solid-colour swatches can be spot colours	திட நிற வண்ண மாதிரிகள் மட்டுமே புள்ளி நிறங்களாக இருக்க முடியும்
 @msg	only this Affinity file's embedded preview could be read; use File › Open to see it with its warning	இந்த Affinity கோப்பின் உட்பொதிக்கப்பட்ட முன்காட்சியை மட்டுமே படிக்க முடிந்தது; அதன் எச்சரிக்கையுடன் அதைக் காண கோப்பு › திற என்பதைப் பயன்படுத்தவும்
 @msg	only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first	இந்த Affinity கோப்பின் உட்பொதிக்கப்பட்ட முன்காட்சியை மட்டுமே படிக்க முடிந்தது: அதன் எச்சரிக்கையுடன் அதைப் பார்க்க கோப்பு › திற ஐப் பயன்படுத்தவும், அல்லது முதலில் Affinity இலிருந்து SVG அல்லது PDF ஆக ஏற்றுமதி செய்யவும்
@@ -7269,7 +7269,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	page {page}: `{file}` has {n} {artboards}	பக்கம் {page}: `{file}` இல் {n} {artboards} உள்ளன
 @msg	page {page}: `{name}` has {n} {pages}	பக்கம் {page}: `{name}` இல் {n} {pages} உள்ளன
 @msg	page art conflicts with image data for {key}	{key} க்கான படத் தரவுடன் பக்க ஓவியம் முரண்படுகிறது
-@msg	page art conflicts with pattern {name}	{name} வடிவத்துடன் பக்க ஓவியம் முரண்படுகிறது
+@msg	page art conflicts with pattern {name}	{name} வடிவமாதிரியுடன் பக்க ஓவியம் முரண்படுகிறது
 @msg	page art conflicts with swatch {name}	{name} வண்ண மாதிரியுடன் பக்க ஓவியம் முரண்படுகிறது
 @msg	page art is missing image data for {key}	பக்க ஓவியத்தில் {key}-க்கான படத் தரவு இல்லை
 @msg	page art is missing pattern {name}	பக்க ஓவியத்தில் {name} வடிவமாதிரி இல்லை
@@ -7298,8 +7298,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	paths contain invalid coordinates	பாதைகளில் தவறான ஆயத்தொலைவுகள் உள்ளன
 @msg	paths must be strings	paths உரைகளாக இருக்க வேண்டும்
 @msg	paths: give at least one file	paths: குறைந்தது ஒரு கோப்பைக் கொடுக்கவும்
-@msg	pattern missing	வடிவம் இல்லை
-@msg	patterns nested too deeply are filled with mid-grey	மிக ஆழமாக உள்ளமைக்கப்பட்ட வடிவங்கள் நடுத்தர சாம்பலால் நிரப்பப்படும்
+@msg	pattern missing	வடிவமாதிரி இல்லை
+@msg	patterns nested too deeply are filled with mid-grey	மிக ஆழமாக உள்ளமைக்கப்பட்ட வடிவமாதிரிகள் நடுத்தர சாம்பலால் நிரப்பப்படும்
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} தளங்களில் {bits}-பிட் பிக்சல்கள் கொண்ட PCX கோப்புகளைப் படிக்க முடியாது
 @msg	PDF content is incomplete or exceeds the reader's limits; no document was imported	PDF உள்ளடக்கம் முழுமையற்றதாக உள்ளது அல்லது படிப்பானின் வரம்புகளை மீறுகிறது; எந்த ஆவணமும் இறக்குமதி செய்யப்படவில்லை
 @msg	PDF flattener: {e}	PDF தட்டையாக்கி: {e}
@@ -7311,7 +7311,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	pdfs `{m}`: single or multiple	pdfs `{m}`: single அல்லது multiple ஆக இருக்க வேண்டும்
 @msg	percent must be above 0 and at most 6400, not {p}	percent 0 ஐ விட அதிகமாகவும் அதிகபட்சம் 6400 ஆகவும் இருக்க வேண்டும், {p} அல்ல
 @msg	Persistent libraries not found: {files}	நிலையான நூலகங்கள் கிடைக்கவில்லை: {files}
-@msg	pick a colour, gradient or pattern to save as a swatch	வண்ண மாதிரியாகச் சேமிக்க ஒரு நிறம், சாய்வு அல்லது வடிவத்தைத் தேர்ந்தெடுக்கவும்
+@msg	pick a colour, gradient or pattern to save as a swatch	வண்ண மாதிரியாகச் சேமிக்க ஒரு நிறம், சாய்வு அல்லது வடிவமாதிரியைத் தேர்ந்தெடுக்கவும்
 @msg	pickColorFrom is "artwork" or "swatches", not {v}	pickColorFrom என்பது "artwork" அல்லது "swatches", {v} அல்ல
 @msg	pins and moved must be non-empty lists of the same length	pins, moved இரண்டும் ஒரே நீளமுள்ள, காலியல்லாத பட்டியல்களாக இருக்க வேண்டும்
 @msg	pins must be [[x,y]…]	pins ஆனது [[x,y]…] ஆக இருக்க வேண்டும்
@@ -7651,7 +7651,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	the document has no artboard	ஆவணத்தில் ஆர்ட்போர்டு இல்லை
 @msg	the document has no artboards	ஆவணத்தில் ஆர்ட்போர்டுகள் இல்லை
 @msg	the document has no brushes to save	ஆவணத்தில் சேமிக்க தூரிகைகள் இல்லை
-@msg	the document has no patterns	ஆவணத்தில் வடிவங்கள் இல்லை
+@msg	the document has no patterns	ஆவணத்தில் வடிவமாதிரிகள் இல்லை
 @msg	the document has no slices	ஆவணத்தில் துண்டுகள் இல்லை
 @msg	the document has no symbols	ஆவணத்தில் சின்னங்கள் இல்லை
 @msg	the document has no symbols to save	ஆவணத்தில் சேமிக்கச் சின்னங்கள் எதுவும் இல்லை
@@ -7825,8 +7825,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	the selection has no gradient fill	தேர்வில் சாய்வு நிரப்பு இல்லை
 @msg	the selection has no gradient stroke	தேர்வில் சாய்வுக் கோடு இல்லை
 @msg	the selection has no graphic style	தேர்வுக்கு வரைகலை பாணி இல்லை
-@msg	the selection has no pattern fill	தேர்வில் வடிவ நிரப்பு இல்லை
-@msg	the selection has no pattern stroke	தேர்வில் வடிவக் கோடு இல்லை
+@msg	the selection has no pattern fill	தேர்வில் வடிவமாதிரி நிரப்பு இல்லை
+@msg	the selection has no pattern stroke	தேர்வில் வடிவமாதிரிக் கோடு இல்லை
 @msg	the selection has no URL (or they differ)	தேர்வுக்கு URL இல்லை (அல்லது அவை வேறுபடுகின்றன)
 @msg	the selection isn't in perspective	தேர்வு முன்னோக்கில் இல்லை
 @msg	the shape is not an editable original shape of that Shaper Group	அந்த வடிவம் அந்த Shaper குழுவின் திருத்தக்கூடிய அசல் வடிவம் அல்ல
