@@ -1319,6 +1319,26 @@ fn a_zip_bomb_stops_at_the_inflate_limit() {
     assert_eq!(read(&file, limits), Err(Error::Limit("inflated size")));
 }
 
+/// What a compressed stream inflates before it fails counts toward the inflate limit, so that
+/// streams failing at their checksum can't each inflate up to the limit.
+#[test]
+fn bytes_inflated_by_a_failing_stream_count_toward_the_limit() {
+    let failing = || {
+        let mut cmpr = synth::cmpr(&[chunk(b"junk", vec![0; 600 << 10])]);
+        if let synth::Node::Chunk(_, body) = &mut cmpr {
+            // The last byte of the first block's zlib stream is part of its checksum.
+            let first = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
+            body[4 + 16 + first - 1] ^= 0xff;
+        }
+        cmpr
+    };
+    let file = synth::riff(1100, &[chunk(b"vrsn", 1100u16.to_le_bytes().to_vec()), failing(), failing()]);
+    let one =
+        read(&synth::riff(1100, &[chunk(b"vrsn", 1100u16.to_le_bytes().to_vec()), failing()]), Limits { inflated: 1 << 20, ..Limits::default() });
+    assert!(one.is_ok_and(|d| d.warnings == vec![Warning::Damaged]));
+    assert_eq!(read(&file, Limits { inflated: 1 << 20, ..Limits::default() }), Err(Error::Limit("inflated size")));
+}
+
 #[test]
 fn a_million_empty_chunks_stop_at_the_chunk_limit() {
     let kids: Vec<_> = (0..5000).map(|_| chunk(b"junk", vec![])).collect();

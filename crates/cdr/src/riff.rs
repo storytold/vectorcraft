@@ -378,6 +378,10 @@ impl<'a> Index<'a> {
         let got = match reader.take((left as u64).saturating_add(1)).read_to_end(&mut self.inflated) {
             Ok(n) => n,
             Err(_) => {
+                // What a stream inflated before it failed counts toward the limit too, so that
+                // streams that fail late can't inflate past it again and again.
+                let produced = self.inflated.len().saturating_sub(at);
+                self.left.set(left.saturating_sub(produced));
                 self.inflated.truncate(at);
                 return Err(Error::Damaged("compressed block"));
             }
