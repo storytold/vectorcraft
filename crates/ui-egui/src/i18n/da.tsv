@@ -248,6 +248,10 @@
 	Blend Options…	Blandingsindstillinger…
 	Expand	Udvid
 	Replace Spine	Erstat rygrad
+	Create Spine	Opret rygrad
+	Create Spine:	Opret rygrad:
+	Always	Altid
+	Never	Aldrig
 	Reverse Spine	Omvend rygrad
 	Reverse Front to Back	Omvend fortil og bagtil
 	Envelope Distort	Kuvertforvrængning
@@ -2194,6 +2198,8 @@ digits	Malayalam	Malayalam
 	Export Selected Art Only	Eksportér kun markeret grafik
 	Number of Colors:	Antal farver:
 	Raster File Format:	Rasterfilformat:
+	Include Placed Images	Medtag placerede billeder
+	Include Fill Hatches	Medtag skraveringer af udfyldninger
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Ægte farve kræver version 2004 eller senere: den nærmeste af 256 farver skrives.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst bliver til omrids, og konturer, som en CAD-linje ikke kan tegne, bliver til udfyldte figurer.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst forbliver tekst, og hver kontur er en linje med sin linjevægt og streger.
@@ -5907,6 +5913,7 @@ axis	Y Axis	Y-akse
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installér »{name}« i stedet for det plug-in, der har samme id?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Denne fil er ikke det plug-in, der før var installeret med dette id. Den får de indstillinger og den cache, der er gemt for dette id.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	En automatisering bad om at installere dette plug-in. Vælg selv Objekt › Plug-ins › Installér plug-in… for at installere det.
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Læse de objekter, den får
 	Change, add and delete objects in the document	Ændre, tilføje og slette objekter i dokumentet

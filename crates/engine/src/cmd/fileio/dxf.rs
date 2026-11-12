@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Export DXF",
         [],
         None,
-        "{path?, dxfPreset?: custom (default)|cnc (CNC / CAM: version 2000, the oldest version that has both lightweight polylines and lineweights; unit mm, scale 1; colors 256, all 2000 holds; preserve editability and alterPaths false, so strokes stay center lines; outlineText true, so type is paths; rasterFormat png; the options given override it), version?: R12|R13|R14|2000|2004|2007|2010|2013|2018 (default), unit?: mm (default; any unit name: pt, in, cm…), scale?: 1 (drawing units per unit), scaleLineweights?: false, colors?: 8|16|256|true (default; true colour needs 2004+, else 256), rasterFormat?: png (default)|jpeg (placed images, written next to the file), preserve?: appearance (default: type as outlines; strokes a CAD line can't draw as filled outlines; brush art)|editability (type as text; every stroke a line with its lineweight and dashes), alterPaths?: false (strokes a CAD line can't draw as their filled outlines, with editability too; also strokes wider than 2.11 mm, and every stroke in R13 and R14), outlineText?: false, selectedOnly?: false (the selected objects, in their layers), artboard?: 0 (the origin is its bottom-left corner), useArtboards?: true (one drawing per chosen artboard, artboards?/range?, holding the art over it: {stem}-{artboard}.dxf) | false (the origin at the art's bounds)} → {path, bytes, warnings, files?, linked?: [image files]}; no path → {dataBase64, …, linked?: [{name, dataBase64}]}. Layers become DXF layers (hidden: off; locked; non-printing: not plotted); paths become polylines and splines, fills their outlines (which laser and cutter software reads) and solid hatches. Same as document.export {format: dxf}. A key DXF doesn't take is refused",
+        "{path?, dxfPreset?: custom (default)|cnc (CNC / CAM: version 2000, the oldest version that has both lightweight polylines and lineweights; unit mm, scale 1; colors 256, all 2000 holds; preserve editability and alterPaths false, so strokes stay center lines; outlineText true, so type is paths; includeImages and includeHatches false, so fills are their outlines and no image files are written; rasterFormat png; the options given override it), version?: R12|R13|R14|2000|2004|2007|2010|2013|2018 (default), unit?: mm (default; any unit name: pt, in, cm…), scale?: 1 (drawing units per unit), scaleLineweights?: false, colors?: 8|16|256|true (default; true colour needs 2004+, else 256), rasterFormat?: png (default)|jpeg (placed images, written next to the file), includeImages?: true (false: placed images and their files are left out), includeHatches?: true (false: fills are their outlines, without solid hatches), preserve?: appearance (default: type as outlines; strokes a CAD line can't draw as filled outlines; brush art)|editability (type as text; every stroke a line with its lineweight and dashes), alterPaths?: false (strokes a CAD line can't draw as their filled outlines, with editability too; also strokes wider than 2.11 mm, and every stroke in R13 and R14), outlineText?: false, selectedOnly?: false (the selected objects, in their layers), artboard?: 0 (the origin is its bottom-left corner), useArtboards?: true (one drawing per chosen artboard, artboards?/range?, holding the art over it: {stem}-{artboard}.dxf) | false (the origin at the art's bounds)} → {path, bytes, warnings, files?, linked?: [image files]}; no path → {dataBase64, …, linked?: [{name, dataBase64}]}. Layers become DXF layers (hidden: off; locked; non-printing: not plotted); paths become polylines and splines, fills their outlines (which laser and cutter software reads) and solid hatches. Same as document.export {format: dxf}. A key DXF doesn't take is refused",
         has_doc,
         export_dxf
     )]
@@ -37,7 +37,7 @@ pub(crate) const OPTIONS: &[FormatOption] = &[
         name: "dxfPreset",
         ty: "string",
         default: "\"custom\"",
-        description: "custom, or cnc (CNC / CAM: version 2000, mm, 256 colors, editability, type as outlines, PNG images); the options given override it",
+        description: "custom, or cnc (CNC / CAM: version 2000, mm, 256 colors, editability, type as outlines, no images, no fill hatches); the options given override it",
     },
     FormatOption { name: "version", ty: "string", default: "\"2018\"", description: "R12, R13, R14, 2000, 2004, 2007, 2010, 2013 or 2018" },
     FormatOption {
@@ -59,6 +59,18 @@ pub(crate) const OPTIONS: &[FormatOption] = &[
         ty: "string",
         default: "\"png\"",
         description: "png or jpeg: the files placed images are written to, next to the drawing",
+    },
+    FormatOption {
+        name: "includeImages",
+        ty: "boolean",
+        default: "true",
+        description: "placed images are written, linked to their files; false leaves them and their files out",
+    },
+    FormatOption {
+        name: "includeHatches",
+        ty: "boolean",
+        default: "true",
+        description: "filled areas get a solid hatch after their outlines; false writes the outlines alone",
     },
     FormatOption {
         name: "preserve",
@@ -133,6 +145,8 @@ struct Params {
     scale_lineweights: Option<bool>,
     colors: Option<Value>,
     raster_format: Option<String>,
+    include_images: Option<bool>,
+    include_hatches: Option<bool>,
     preserve: Option<String>,
     alter_paths: Option<bool>,
     outline_text: Option<bool>,
@@ -176,6 +190,8 @@ fn parse(p: &Value) -> Result<(DxfOptions, ArtboardPick)> {
         scale_lineweights: q.scale_lineweights.unwrap_or(d.scale_lineweights),
         colors: choice("colors", q.colors.as_ref().map(text), ColorDepth::from_id, d.colors, "8, 16, 256 or true")?,
         raster: choice("rasterFormat", q.raster_format, RasterFormat::from_id, d.raster, "png or jpeg")?,
+        include_images: q.include_images.unwrap_or(d.include_images),
+        include_hatches: q.include_hatches.unwrap_or(d.include_hatches),
         preserve: choice("preserve", q.preserve, Preserve::from_id, d.preserve, "appearance or editability")?,
         alter_paths: q.alter_paths.unwrap_or(d.alter_paths),
         outline_text: q.outline_text.unwrap_or(d.outline_text),

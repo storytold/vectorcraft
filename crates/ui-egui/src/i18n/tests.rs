@@ -2027,6 +2027,38 @@ fn plugin_limit_errors_are_translated() {
     }
 }
 
+/// A manifest whose `commands` value has the wrong shape is refused with an error that every
+/// language of [`COMPLETE_MESSAGES`] translates whole, the command's name and the place in the
+/// manifest included.
+#[test]
+fn wrongly_shaped_plugin_commands_errors_are_translated() {
+    let many: Vec<String> = (0..=32).map(|i| format!(r#"{{"id":"c{i}","label":"C"}}"#)).collect();
+    let commands = [
+        r#"{"id":"x"}"#.to_string(),
+        r#""x""#.to_string(),
+        "[1]".to_string(),
+        r#"[{"id":1,"label":"A"}]"#.to_string(),
+        r#"[{"id":"x","label":true}]"#.to_string(),
+        r#"[{"label":"B"}]"#.to_string(),
+        r#"[{"id":"x"}]"#.to_string(),
+        r#"[{"id":"x","id":"y","label":"A"}]"#.to_string(),
+        format!("[{}]", many.join(",")),
+    ];
+    let english = ["must", "list", "missing", "field", "duplicate", "object", "line", "column", "each", "with", "invalid", "expected"];
+    for value in &commands {
+        let manifest = format!(r#"{{"id":"a","name":"x","kind":"filter","commands":{value}}}"#);
+        let e = vectorcraft_plugins::manifest::Manifest::parse(manifest.as_bytes()).unwrap_err().to_string();
+        let numbers: Vec<&str> = e.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).collect();
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            // Backticked names stay in English; the words around them are translated.
+            let words: String = shown.split('`').step_by(2).collect();
+            assert!(words.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {e} -> {shown}");
+            assert!(numbers.iter().all(|n| shown.contains(n)), "{code}: {e} -> {shown}");
+        }
+    }
+}
+
 /// The warnings of an Image Trace with keepColors, which the status bar shows and the scan above
 /// doesn't read, are translated in each language of [`COMPLETE_MESSAGES`], with the colors kept.
 #[test]
