@@ -579,6 +579,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "symbol.replace",
     "symbol.selectInstances",
     "symbol.setCurrent",
+    "symbol.sortByName",
     "symbol.spray",
     "symbol.unused",
     "symbol.update",
