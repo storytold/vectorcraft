@@ -1679,3 +1679,164 @@ fn the_frame_a_release_leaves_alone_has_the_bounds_of_the_whole_story() {
     let cached = t.cached_bounds.unwrap();
     assert!((cached.y0 - bounds.y0).abs() < 1e-6 && (cached.y1 - bounds.y1).abs() < 1e-6, "{cached:?} {bounds:?}");
 }
+
+/// Twelve paragraphs that wrap, threaded through three frames, the first two of which end inside
+/// a paragraph; the last frame's paragraphs are indented 10 pt. → the session and the frames.
+fn split_story() -> (Session, [u64; 3]) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 900, "height": 1000})).unwrap();
+    let words = "aaa bbb ccc ddd eee fff ggg hhh iii jjj ".repeat(3);
+    let story = (1..=12).map(|i| format!("p{i} {}", words.trim_end())).collect::<Vec<_>>().join("\n");
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 50}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("text.thread.add", &json!({"from": a, "rect": [300, 10, 150, 50]})).unwrap()["id"].as_u64().unwrap();
+    let c = s.execute("text.thread.add", &json!({"from": b, "rect": [600, 10, 250, 950]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setFormat", &json!({"ids": [c], "leftIndent": 10})).unwrap();
+    for id in [b, c] {
+        assert!(text_of(&s.doc().unwrap().doc, NodeId(id)).unwrap().first_para_continues, "frame {id} starts inside a paragraph");
+    }
+    (s, [a, b, c])
+}
+
+/// Each frame's text, paragraph styles and whether it continues a paragraph.
+fn frames_of(s: &Session, frames: &[u64]) -> Vec<(String, Vec<vectorcraft_doc::ParaStyle>, bool)> {
+    frames
+        .iter()
+        .map(|id| {
+            let t = text_of(&s.doc().unwrap().doc, NodeId(*id)).unwrap();
+            (t.plain_text(), t.paragraph_styles(), t.first_para_continues)
+        })
+        .collect()
+}
+
+/// One entry for each paragraph of the story: a paragraph split between frames by its piece in the
+/// later frame. Each takes indents of its own, wide enough to move text between the frames.
+fn indent_entries(s: &Session, frames: &[u64]) -> Vec<Value> {
+    let mut out = vec![];
+    for (k, id) in frames.iter().enumerate() {
+        let t = text_of(&s.doc().unwrap().doc, NodeId(*id)).unwrap();
+        let next_continues = frames.get(k + 1).is_some_and(|n| text_of(&s.doc().unwrap().doc, NodeId(*n)).unwrap().first_para_continues);
+        let plain = t.plain_text();
+        let pieces: Vec<&str> = plain.split('\n').collect();
+        let mut start = 0;
+        for (i, piece) in pieces.iter().enumerate() {
+            if i + 1 < pieces.len() || !next_continues {
+                let n = out.len() as f64;
+                out.push(json!({"id": id, "start": start, "leftIndent": 20.0 + n, "firstLineIndent": 15.0 - n}));
+            }
+            start += piece.len() + 1;
+        }
+    }
+    out
+}
+
+/// `paragraphIndents` sets each paragraph of a threaded story as one `text.setFormat` command for
+/// each paragraph would, the story's last paragraph first, with a paragraph split between frames
+/// set once; the story flows again once, and Undo and Redo take the whole change as one step.
+#[test]
+fn paragraph_indents_flow_a_threaded_story_once_as_one_command_per_paragraph_would() {
+    let (mut one, frames) = split_story();
+    let (mut each, _) = split_story();
+    let entries = indent_entries(&one, &frames);
+    assert_eq!(entries.len(), 12, "one entry for each paragraph of the story: {entries:?}");
+    let commands: Vec<Value> = entries
+        .iter()
+        .rev()
+        .map(|e| {
+            json!({"command": "text.setFormat", "params": {
+                "ids": [e["id"]], "start": e["start"], "end": e["start"], "leftIndent": e["leftIndent"], "firstLineIndent": e["firstLineIndent"]
+            }})
+        })
+        .collect();
+    each.execute("command.batch", &json!({"label": "Left Indent", "commands": commands})).unwrap();
+    let start = frames_of(&one, &frames);
+    let undo = one.doc().unwrap().history.undo.len();
+    let copied = COPIED.with(std::cell::Cell::get);
+    let r = one.execute("text.setFormat", &json!({"paragraphIndents": entries})).unwrap();
+    assert_eq!(COPIED.with(std::cell::Cell::get), copied + 1, "the story flows again once");
+    // The first frame holds only the start of the paragraph that runs on into the second.
+    assert_eq!(r, json!({"ids": frames[1..]}));
+    assert_eq!(one.doc().unwrap().history.undo.len(), undo + 1);
+    let set = frames_of(&one, &frames);
+    assert_ne!(set, start);
+    assert_eq!(set, frames_of(&each, &frames));
+    one.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(frames_of(&one, &frames), start);
+    one.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(frames_of(&one, &frames), set);
+}
+
+/// Thousands of paragraphs of a threaded story are set by one edit, which flows the story again
+/// once.
+#[test]
+fn paragraph_indents_over_thousands_of_paragraphs_flow_the_story_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 900, "height": 1000})).unwrap();
+    let story = vec!["x"; 5000].join("\n");
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 300}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("text.thread.add", &json!({"from": a, "rect": [300, 10, 150, 300]})).unwrap()["id"].as_u64().unwrap();
+    let entries: Vec<Value> = [a, b]
+        .into_iter()
+        .flat_map(|id| {
+            let t = text_of(&s.doc().unwrap().doc, NodeId(id)).unwrap();
+            let count = t.paragraph_count();
+            (0..count).map(move |i| json!({"id": id, "start": 2 * i, "leftIndent": (i % 7) as f64}))
+        })
+        .collect();
+    assert!(entries.len() >= 5000, "{}", entries.len());
+    let (undo, copied) = (s.doc().unwrap().history.undo.len(), COPIED.with(std::cell::Cell::get));
+    s.execute("text.setFormat", &json!({"paragraphIndents": entries})).unwrap();
+    assert_eq!((s.doc().unwrap().history.undo.len(), COPIED.with(std::cell::Cell::get)), (undo + 1, copied + 1));
+    let t = text_of(&s.doc().unwrap().doc, NodeId(a)).unwrap();
+    assert_eq!((t.para_at(0).left_indent, t.para_at(1).left_indent, t.para_at(8).left_indent), (0.0, 1.0, 1.0));
+}
+
+/// `paragraphIndents` that would change no paragraph leaves the document and its history alone, and
+/// a bad one is refused before anything changes.
+#[test]
+fn paragraph_indents_check_every_entry_and_skip_a_change_that_changes_nothing() {
+    let (mut s, [a, b, c]) = split_story();
+    let start = frames_of(&s, &[a, b, c]);
+    let undo = s.doc().unwrap().history.undo.len();
+    let copied = COPIED.with(std::cell::Cell::get);
+    let r =
+        s.execute("text.setFormat", &json!({"paragraphIndents": [{"id": a, "start": 0, "leftIndent": 0}, {"id": c, "start": 0, "leftIndent": 10}]}));
+    assert_eq!(r.unwrap(), json!({"ids": [a, c]}));
+    assert_eq!((s.doc().unwrap().history.undo.len(), COPIED.with(std::cell::Cell::get)), (undo, copied), "nothing to change");
+    let paragraph = text(&s, c).find('\n').unwrap() + 1;
+    let rect = s.execute("shape.rectangle", &json!({"x": 10, "y": 900, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    let ok = json!({"id": c, "start": paragraph, "leftIndent": 30});
+    for bad in [
+        json!({"paragraphIndents": []}),
+        json!({"paragraphIndents": {"id": a, "start": 0, "leftIndent": 30}}),
+        json!({"paragraphIndents": [ok, {"id": a, "start": 0, "leftIndent": 30}], "ids": [a]}),
+        json!({"paragraphIndents": [ok, {"id": a, "start": 0, "leftIndent": 30}], "leftIndent": 5}),
+        json!({"paragraphIndents": [ok, 3]}),
+        json!({"paragraphIndents": [ok, {"id": a, "start": 0}]}),
+        json!({"paragraphIndents": [ok, {"id": a, "start": 0, "leftIndent": "30"}]}),
+        json!({"paragraphIndents": [ok, {"id": a, "start": 0, "leftIndent": 1300}]}),
+        json!({"paragraphIndents": [ok, {"id": a, "start": 0, "firstLineIndent": -1297}]}),
+        json!({"paragraphIndents": [ok, {"id": a, "start": 0, "leftIndent": 30, "spaceBefore": 4}]}),
+        json!({"paragraphIndents": [ok, {"id": "a", "start": 0, "leftIndent": 30}]}),
+        json!({"paragraphIndents": [ok, {"id": rect, "start": 0, "leftIndent": 30}]}),
+        json!({"paragraphIndents": [ok, {"id": 999_999, "start": 0, "leftIndent": 30}]}),
+        json!({"paragraphIndents": [ok, {"id": a, "leftIndent": 30}]}),
+        json!({"paragraphIndents": [ok, {"id": a, "start": -1, "leftIndent": 30}]}),
+        json!({"paragraphIndents": [ok, {"id": a, "start": 1, "leftIndent": 30}]}),
+        json!({"paragraphIndents": [ok, {"id": c, "start": paragraph, "leftIndent": 31}]}),
+        json!({"paragraphIndents": [ok, {"id": c, "start": paragraph, "leftIndent": 30, "firstLineIndent": 0}]}),
+        json!({"paragraphIndents": vec![ok.clone(); crate::cmd::panelcmds::MAX_PARAGRAPH_INDENTS + 1]}),
+    ] {
+        assert!(s.execute("text.setFormat", &bad).is_err(), "{bad}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{bad}");
+        assert_eq!(frames_of(&s, &[a, b, c]), start, "{bad}");
+    }
+    // The same entry twice is one change.
+    s.execute("text.setFormat", &json!({"paragraphIndents": [ok, ok]})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(text_of(&s.doc().unwrap().doc, NodeId(c)).unwrap().para_at(1).left_indent, 30.0);
+}

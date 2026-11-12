@@ -852,7 +852,8 @@ fn sorting_measures_a_closed_path_by_its_nearest_point() {
 fn sorting_stops_at_its_budget_and_keeps_every_path() {
     let d = doc_with(|d| (0..600).map(|i| stroked(d, line((1.0 + (i % 100) as f64, 10.0), (1.0 + (i % 100) as f64, 20.0)), Color::BLACK)).collect());
     let out = plot(&d, &HpglOptions { sort: true, ..opts(&d) });
-    assert!(out.warnings.iter().any(|w| w == UNSORTED), "{:?}", out.warnings);
+    assert_eq!(out.setting_notes, [UNSORTED]);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     assert_eq!(text(&out).matches("PD").count(), 600);
 }
 
@@ -944,18 +945,18 @@ fn inside_first_orders_each_pens_paths() {
 }
 
 /// Finding which of 100 nested rings lie inside which is past the budget: they are drawn in
-/// paint order, with a warning.
+/// paint order, with a note on the option.
 #[test]
 fn inside_first_past_its_budget_draws_in_paint_order() {
     let d = doc_with(|d| (0..100).map(|i| stroked(d, rect(1.0 + 0.4 * f64::from(i), 10.0, 199.0, 90.0), Color::BLACK)).collect());
     let out = plot(&d, &HpglOptions { inside_first: true, ..opts(&d) });
-    assert_eq!(out.warnings, [UNNESTED]);
+    assert_eq!(out.setting_notes, [UNNESTED]);
     let l = lefts(&out);
     assert_eq!(l.len(), 100);
     assert!(l.windows(2).all(|w| w[0] <= w[1]), "{l:?}");
-    // With `sort` too, the budget is spent before sorting starts: paint order, with both warnings.
+    // With `sort` too, the budget is spent before sorting starts: paint order, with both notes.
     let out = plot(&d, &HpglOptions { sort: true, inside_first: true, ..opts(&d) });
-    assert_eq!(out.warnings, [UNNESTED, UNSORTED]);
+    assert_eq!(out.setting_notes, [UNNESTED, UNSORTED]);
     assert_eq!(lefts(&out), l);
 }
 
@@ -969,7 +970,7 @@ fn inside_first_past_its_sorting_budget_keeps_the_rings_last() {
         v
     });
     let out = plot(&d, &HpglOptions { sort: true, inside_first: true, ..opts(&d) });
-    assert_eq!(out.warnings, [UNSORTED_INSIDE]);
+    assert_eq!(out.setting_notes, [UNSORTED_INSIDE]);
     let l = lefts(&out);
     assert_eq!(l.len(), 602);
     assert_eq!(l.get(600..), Some(&[plu(0.7), plu(0.5)][..]));
