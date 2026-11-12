@@ -3443,12 +3443,21 @@ the fill or stroke paints, and SVG, PDF, EPS and the other vector exports write 
 holds inline graphics, those effects are drawn and exported only when the type has a geometry effect or perspective
 of its own.
 An image's own fills and strokes draw only when they carry a visible Convert to Shape or Outline Object effect: Convert
-to Shape sizes its shape from the image's box, Outline Object gives the image's frame, the effects after it reshape
-that shape, and the effects before it are left out. Its Contents row stands for the image; `appearance.addFill` and
-`appearance.addStroke` put a new item right below that row, so it paints under the image. SVG, PDF, EPS and the other
-vector exports write those items as paths, and `effect.expandAppearance` turns them into objects in a group with the
-image.
-Use Preview Bounds measures an image by its frame.
+to Shape sizes its shape from the image's box, Outline Object gives the outline of the image's opaque area, the
+effects after it reshape that shape, and the effects before it are left out. The opaque area is the pixels whose alpha
+is at least 50%. Its outline is traced as Image Trace's Black and White mode traces at threshold 128 (Paths and
+Corners at their defaults, no area left out as noise): the edge follows anti-aliased edges to a fraction of a pixel
+and is fitted with curves. Outline Object gives the image's frame when the image has no transparency (a format
+without alpha, or every pixel at least half opaque), when its pixels can't be read, when the outline would take more
+than 100,000 anchor points, and when the image has more than 64 megapixels or its decoded pixels take more than 256 MB
+(a 16-bit image of more than 32 megapixels). An image with no pixel at least half opaque gives nothing to paint. An
+image of more than 4 megapixels is traced with its alpha averaged down to 4 megapixels; an averaged pixel that covers a
+pixel at least half opaque counts as at least half opaque, so opaque lines thinner than the reduction stay in the outline. The
+outline is traced the first time it is needed and kept while the image's pixels are loaded. These are VectorCraft's
+own rules. The image's Contents row stands for the image; `appearance.addFill` and `appearance.addStroke` put a new
+item right below that row, so it paints under the image. SVG, PDF, EPS and the other vector exports write those items
+as paths, and `effect.expandAppearance` turns them into objects in a group with the image.
+Use Preview Bounds measures an image by its frame and the shapes its own fills and strokes paint.
 
 ```json
 {"name":"run_command","arguments":{"command":"appearance.addFill","params":{"ids":[7]}}}

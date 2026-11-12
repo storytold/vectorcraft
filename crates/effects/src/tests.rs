@@ -4,6 +4,7 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod imageoutline;
 mod scale;
 mod transformfx;
 

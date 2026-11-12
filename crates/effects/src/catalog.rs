@@ -294,7 +294,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "path.outlineObject",
             "Outline Object",
             PATH,
-            "{} type is drawn, exported and expanded as its glyph outlines and stays editable, and the effects after it reshape those outlines; paths and images do not change",
+            "{} type is drawn, exported and expanded as its glyph outlines and stays editable, and the effects after it reshape those outlines; paths and images do not change. On an image's own fill or stroke it gives the outline of the image's pixels that are at least half opaque, or the image's frame when it has no transparency",
             json!({}),
         ),
         g(
