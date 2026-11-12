@@ -96,6 +96,7 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Simplified Chinese | `zh-hans` | partial (messages in English) | 85% |
 | Spanish | `es` | full | 100% |
 | Hindi | `hi` | catalog complete; machine-assisted draft, native review pending | complete under the scanner |
+| Tamil | `ta` | catalog complete; AI-assisted, native review pending | complete under the scanner |
 | Arabic | `ar` | none (no right-to-left interface) | 0% |
 | French | `fr` | full | 100% |
 | Portuguese (Brazil) | `pt-br` | full | 100% |
@@ -223,6 +224,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 | 2026-11-03 | minor | UI: Window → Help Bar toggles the tool-help strip separately from the status bar and saves visibility with workspaces. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
+| 2026-11-12 | minor | Tamil (`ta`): 8,458-row catalog (5,194 rows from the craft-i18n Tamil catalogs, the rest AI-assisted), one/other plurals, desktop Tamil font fallback, optional `Taml` craft-fonts face and a web startup font; all 81 translation tests pass; native review pending; scores and estimates unchanged |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | Progress log row for the Type Tools add-on's Release Type on a Path (#5532); headline numbers unchanged. |
 | 2026-11-03 | minor | Progress log row for the Type Tools add-on's Text Tweaker (#4924); headline numbers unchanged. |

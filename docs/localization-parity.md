@@ -30,6 +30,7 @@ Chinese by `imachus`). Only Georgian is recorded as reviewed by a native speaker
 | Simplified Chinese (Mandarin) | `zh-hans` | 5,102 rows, 791 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | all | CJK UI font from craft-fonts (BIZ UDPGothic) when embedded, else a system font; IME with marked text at the caret; vertical type partial ([type-parity.md](type-parity.md)) | no | full | — (review) |
 | Spanish | `es` | 4,009 / 4,020 (99.7%) | all (604 messages) | Latin | no | full | — (review) |
 | Hindi | `hi` | 7,877 rows (2026-11-06): 2,537 `@msg`, 45 `@msgplural`, 38 `@plural`; no gaps in the untranslated report | menus, dialogs, tooltips and scanned messages; contributor-approved loanword terminology; agent wording pass | UI and document text shape with HarfRust; installed desktop Devanagari fallback, or a `Deva` craft-fonts face; web font still needed | contributor terminology review; wider proofread welcome | complete catalog, machine-assisted draft | native review, layout and web font |
+| Tamil | `ta` | 8,458 rows (2026-11-12): 2,760 `@msg`, 47 `@msgplural`, 41 `@plural`; no gaps in the untranslated report | menus, dialogs, tooltips and scanned messages; 5,194 rows from the craft-i18n Tamil catalogs, the rest AI-assisted ([notes](localization-ta.md)) | installed desktop Tamil fallback, or a `Taml` craft-fonts face; Noto Sans Tamil fetched at startup on the web | partial (craft-i18n rows) | complete catalog, AI-assisted | native review |
 | Arabic | `ar` | 0 | none | document text: bidi layout and Paragraph Direction; interface: no right-to-left layout, no Arabic shaping in egui | no | none | 25–40 |
 | French | `fr` | 4,020 / 4,020 (100%) | all | Latin | no | full | — (review) |
 | Portuguese | `pt-br` | 6,106 catalog entries (counted 2026-10-31 on `main` at `d26dd933a`): menus, `tl!` literals and messages complete when counted; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
@@ -68,7 +69,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Indonesian | `id` | 5,531 rows, 788 of them `@msg` (counted 2026-10-28): menus and `tl!` literals complete when counted; its messages are partial; one plural form | full |
 | Catalan | `ca` | 5,626 rows, 881 of them `@msg` (counted 2026-10-28): menus, `tl!` literals and messages complete when counted; one/other plurals; every `ca-*` locale resolves here | full; AI-drafted, native review welcome |
 
-Twenty-seven non-English catalogs in all (registry count, 2026-11-06). Illustrator, as its public documentation lists, ships around two dozen
+Twenty-eight non-English catalogs in all (registry count, 2026-11-12). Illustrator, as its public documentation lists, ships around two dozen
 interface languages (including Polish, Dutch, Turkish, the Nordic languages, Hungarian, and Middle East
 editions with Arabic and Hebrew); it doesn't ship Hindi, Indonesian or Vietnamese.
 
@@ -97,6 +98,7 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-12 | minor | Tamil (`ta`): 8,458-row catalog (5,194 rows from the craft-i18n Tamil catalogs, the rest AI-assisted), one/other plurals, desktop Tamil font fallback, optional `Taml` craft-fonts face and a web startup font; native review pending; scores and estimates unchanged |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-10-30 | minor | Bosnian (`bs`, Latin, Ijekavian): complete catalog of 5,841 rows, every `bs-*` locale, one/few/other plurals; AI-assisted, not yet native-reviewed |
 | 2026-10-29 | minor | Vietnamese text: letters with two marks (Ể, Ứ, Ự) attach in precomposed, decomposed and keyboard forms, and a font lacking the marks falls back for the whole letter (#4491); scores unchanged |

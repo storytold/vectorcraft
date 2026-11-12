@@ -97,7 +97,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 28] = [
+pub static LANGUAGES: [LangInfo; 29] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Hindi shares the integer zero/one rule with French. Desktop UI fonts are loaded lazily
     // from installed faces by ui_fonts; the web needs a Devanagari font in its font set.
@@ -106,6 +106,17 @@ pub static LANGUAGES: [LangInfo; 28] = [
         name: "हिन्दी",
         source: include_str!("i18n/hi.tsv"),
         plural: plural_french,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
+    // Tamil: `one` for 1, `other` for everything else (CLDR). Every `ta-*` locale (`ta-IN`,
+    // `ta-LK`, `ta-SG`, `ta-MY`) resolves here. Desktop UI fonts are loaded lazily from installed
+    // faces by ui_fonts; builds with craft-fonts embed Noto Sans Tamil.
+    LangInfo {
+        code: "ta",
+        name: "தமிழ்",
+        source: include_str!("i18n/ta.tsv"),
+        plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
     },

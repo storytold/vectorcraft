@@ -113,6 +113,9 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | Print production: CMYK and spot colour, bleed and marks, PDF/X out, separations preview | yes | PDF/X-1a/3/4, presets, marks and bleed, ICC output intent, Separations Preview, Print with PostScript output | 0 |
 | Exchange files with Illustrator users: open their `.ai`/EPS/PDF, hand back a file they can open | partial (doesn't block alpha) | `.ai`, EPS and PDF open as editable art, but real files can get the wrong layer structure (#951); Save As `.ai` is PDF-compatible with an editing copy of the art (layers, groups, paths, colors, gradients, patterns, images, transparency, opacity masks, clipping, type as text and symbols, with live effects kept only on paths, compound paths and groups that qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports ([file-format-parity.md](file-format-parity.md)), other objects' effects other than geometry effects left out, and live objects written as their art; #868), or legacy version 7, which keeps layers, groups and type as text, one artboard per file, and waits for users' testing. EPS legacy mesh corners, vector opacity masks and raster print-page comparison now preserve editable art under synthetic regressions. This is the beta main-format gap ([gaps.md](gaps.md) G9) | 10–20 (for beta) |
 
+Tamil interface (2026-11-12): complete catalog, one/other plurals and Tamil fonts (desktop fallback,
+optional craft-fonts face, web startup font); native wording review remains. [Notes](localization-ta.md).
+
 Hindi interface follow-up (2026-11-06): the catalog and zero/one plural rule are implemented;
 native wording review, layout checks and a web Devanagari font remain. [Notes](localization-hi.md).
 
@@ -216,6 +219,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-11-07 | minor | M2: with the Pen or Curvature tool, Edit › Copy and Cut take the anchors and segments a Cmd/Ctrl-lent Direct Selection picked, not the whole path (#6123); estimates unchanged |
 | 2026-11-07 | minor | Control bar › Snapping includes the existing Snap to Glyph and Alignment Guides toggles (#6164); scores and estimates unchanged. |
 | 2026-11-06 | minor | M2: a shape just drawn moves by its centre point (Show Center) and turns from the rotate zone just outside a bounding-box corner with its tool still active, as the Selection tool's gestures do (#5477); estimates unchanged. |
+| 2026-11-12 | minor | Tamil (`ta`): 8,458-row catalog (5,194 rows from the craft-i18n Tamil catalogs, the rest AI-assisted), one/other plurals, desktop Tamil font fallback, optional `Taml` craft-fonts face and a web startup font; all 81 translation tests pass; native review pending; scores and estimates unchanged |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset; Recent and Saved cards keep their own units; scores and estimates unchanged. |
 | 2026-11-03 | minor | M7: the OpenType panel offers the selected font's available Stylistic Sets with custom or numbered names; estimates unchanged. |
