@@ -28,6 +28,7 @@ const ARG_COORDS: u32 = 30;
 const ARG_TRANSFORMS: u32 = 100;
 const ARG_STYLE: u32 = 200;
 const ARG_NAME: u32 = 1000;
+const ARG_LENS: u32 = 8000;
 const ARG_CONTAINER: u32 = 8005;
 const ARG_POLYGON: u32 = 11000;
 const ARG_GUIDE: u32 = 16000;
@@ -447,6 +448,10 @@ impl<'a, 'b> Ctx<'a, 'b> {
             return self.inline_object(&loda, outer);
         }
         let geometry = self.geometry(&loda)?;
+        // A lens or transparency (R47) is not applied: the shape shows opaque.
+        if loda.arg(ARG_LENS).is_some() {
+            push(self.warn, Warning::Lenses);
+        }
         // A transform that is there but can't be read is damage; the shape stays where it is.
         let matrix = match own_chunk(ix, list, &[b"trfd"]) {
             None => Matrix::IDENTITY,

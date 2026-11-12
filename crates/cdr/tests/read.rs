@@ -1264,6 +1264,22 @@ fn a_missing_or_repeating_clipped_group_keeps_the_container() {
     assert_eq!(d.warnings, vec![Warning::TooDeep]);
 }
 
+/// An object with a lens or transparency (argument 8000) comes in opaque, with the lenses
+/// warning; one without the argument gives no warning.
+#[test]
+fn lenses_and_transparency_are_named_in_the_warnings() {
+    for (version, lens) in [(1000, [1u8, 0, 0, 0].to_vec()), (1200, [5, 0, 0, 0].to_vec()), (1500, [0x14, 5, 0, 0, 0x75, 0, 0, 0, 5].to_vec())] {
+        let v = V(version);
+        let plain = clip_rect(v, 10.0, &[], [0.0, 0.0]);
+        let d = read(&clip_drawing(version, vec![], vec![plain]), Limits::default()).unwrap();
+        assert!(d.warnings.is_empty(), "{version}: {:?}", d.warnings);
+        let see_through = clip_rect(v, 10.0, &[(8000, lens)], [0.0, 0.0]);
+        let d = read(&clip_drawing(version, vec![], vec![see_through]), Limits::default()).unwrap();
+        assert_eq!(shapes(&d.pages[0].layers[0].objects).len(), 1, "{version}");
+        assert_eq!(d.warnings, vec![Warning::Lenses], "{version}");
+    }
+}
+
 #[test]
 fn linked_groups_are_left_out_with_a_warning() {
     let v = V(1100);

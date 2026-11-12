@@ -24,6 +24,7 @@ const UNKNOWN_COLORS: &str = "colors in CDR color models VectorCraft doesn't rea
 const SPOT_LOOKS: &str = "CDR library colors that the drawing stores only by number were opened as black spot colors";
 const ARROWHEADS: &str = "CDR outline arrowheads were left out";
 const ENVELOPES: &str = "CDR envelopes were not applied, and the shapes under them keep their outlines";
+const LENSES: &str = "CDR lenses and object transparency were not applied, and the objects they are on show opaque";
 const TOO_DEEP: &str = "parts of the drawing nested too deeply, or past the import limits, were left out";
 const DAMAGED: &str = "damaged parts of the drawing were left out";
 const PAGES_CUT: &str = "CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard";
@@ -37,6 +38,7 @@ fn note(w: Warning) -> &'static str {
         Warning::SpotLooks => SPOT_LOOKS,
         Warning::Arrowheads => ARROWHEADS,
         Warning::Envelopes => ENVELOPES,
+        Warning::Lenses => LENSES,
         Warning::TooDeep => TOO_DEEP,
         Warning::Damaged => DAMAGED,
     }

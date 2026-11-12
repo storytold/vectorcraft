@@ -25,7 +25,8 @@ with each object's transform. It does not write `.cdr` files.
 | Styles (`LIST stlt`, versions 7 to 15) that objects name | the fill and outline of an object that has none of its own |
 
 Text, bitmaps, linked groups (blends, contours, brush strokes), B-spline curves, fountain,
-pattern, texture and PostScript fills and outline arrowheads are not read; the drawing's
+pattern, texture and PostScript fills, outline arrowheads, lenses and object transparency are not
+read; the drawing's
 `warnings` name each kind it held. Drawings of versions after 27 are refused, and so are packages
 that are encrypted, ZIP64 archives or split across files.
 

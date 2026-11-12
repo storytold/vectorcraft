@@ -6849,7 +6849,8 @@ fills and outlines keep their colors, widths, caps, joins and dashes, and an obj
 takes its style's. A library color that the drawing stores with its
 name and values (version 13 and later) becomes a spot swatch with its tint, and one stored only by its number opens as
 a black spot color. Text, bitmaps, blends, contours, brush strokes, other objects the reader doesn't read yet,
-fountain, pattern, texture and PostScript fills, and outline arrowheads are left out. The `warnings` of
+fountain, pattern, texture and PostScript fills, and outline arrowheads are left out, and lenses and object
+transparency are not applied. The `warnings` of
 `document.open` name each of these kinds the drawing had, and say when damaged parts or parts past the import limits
 were left out. Drawings of versions after 27 are refused with a message, and so are packages that are
 encrypted, ZIP64 archives or split across files. VectorCraft doesn't write `.cdr` files.

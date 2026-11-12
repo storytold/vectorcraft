@@ -175,6 +175,8 @@ pub enum Warning {
     Arrowheads,
     /// Envelopes, which are not applied: the shapes under them keep their outlines.
     Envelopes,
+    /// Lenses and object transparency, which are not applied: the objects show opaque.
+    Lenses,
     /// Content nested deeper, or past the counts, that a read takes.
     TooDeep,
     /// Chunks or records that end early or don't parse.

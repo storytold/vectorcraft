@@ -439,6 +439,17 @@ fn containers_open_as_clipping_groups() {
     assert!(children[1..].iter().all(|n| matches!(n.kind, NodeKind::Path { clipping: false, .. })));
 }
 
+/// An object with a lens or transparency opens opaque, and the warnings say so.
+#[test]
+fn lenses_and_transparency_are_named_in_the_warnings() {
+    let v = V(1200);
+    let args = vec![(30, v.rect(10.0, 10.0, 0.0)), (8000, vec![5, 0, 0, 0])];
+    let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 1, &args, None)])]);
+    let (doc, warnings) = super::cdr::import(&synth::riff(1200, &[chunk(b"vrsn", 1200u16.to_le_bytes().to_vec()), page])).unwrap();
+    assert_eq!(paths(&doc).len(), 1);
+    assert_eq!(warnings, ["CDR lenses and object transparency were not applied, and the objects they are on show opaque"]);
+}
+
 #[test]
 fn other_versions_and_damaged_drawings_say_why() {
     let mut s = Session::new();
