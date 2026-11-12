@@ -365,7 +365,7 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Hiding {
         let path = &id["loaded/".len()..];
         // Either separator: a path saved on another platform counts as a path here too.
         let name = path.rsplit(['/', '\\']).find(|part| !part.is_empty()).unwrap_or(path).to_string();
-        if name != path && !readable(path) {
+        if name != path && (written_elsewhere(path) || !readable(path)) {
             hidden.push((id, name));
         } else {
             taken.insert(id.clone());
@@ -397,6 +397,14 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Hiding {
     // The longest first, so that an id that begins another one does not replace part of it.
     hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
     Hiding { hidden, readable: readable_ids }
+}
+
+/// Is `path`, under a read root, written as an absolute path of another platform: outside Windows, one
+/// that starts with a drive (`C:`) or a `\`? The file access check would read it as a name in the
+/// working folder.
+fn written_elsewhere(path: &str) -> bool {
+    let foreign = path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    !cfg!(windows) && foreign && vectorcraft_engine::file_access::current().is_some()
 }
 
 /// What a reply hides ([`hide_library_ids`]).

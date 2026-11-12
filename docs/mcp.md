@@ -141,7 +141,8 @@ the suite) keep the agent to the folders you give it:
   roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
   Color Guide's `ui.color_guide_limit`, a closed panel's key in `ui.docking_hidden` and the `library` and `panel`
   params of a recorded action's steps in `ui.action_sets`, also when its panel is closed. A path written with
-  either separator counts as a path, also one saved on another platform. When another hidden library has the same
+  either separator counts as a path, also one saved on another platform, and outside Windows a path that starts
+  with a drive (`C:`) or a `\` counts as outside the roots. When another hidden library has the same
   file name, the libraries take `loaded/<file name>`,
   `loaded/<file name> (2)`, `(3)` and so on: first the libraries loaded in the session (swatch, graphic style,
   symbol and brush libraries, each kind in the order it was loaded), then the library panels in their order, the
