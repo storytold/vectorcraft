@@ -800,6 +800,63 @@ fn the_distribute_buttons_space_the_selected_artboards() {
     assert_eq!(app.session.journal.len(), ran, "one artboard: the Distribute buttons are off");
 }
 
+/// Whether the widget at `rect` in the last frame takes clicks (an enabled button).
+fn clickable(ctx: &egui::Context, rect: egui::Rect) -> bool {
+    ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).any(|w| w.rect == rect && w.sense.senses_click()))
+}
+
+/// With Align to Selection chosen, two selected artboards are the ends of the distribution
+/// already, so the Distribute buttons are off; with Align to Artboard and the active artboard
+/// selected, the spacing places the second from it, and they are on.
+#[test]
+fn the_distribute_buttons_need_three_artboards_without_a_spacing() {
+    let mut app = selected_artboards();
+    // Making an artboard active selects it alone, so the selection is set after.
+    crate::panels::artboards::select(&mut app, 1);
+    app.session.set_tool_option("selected", &json!([1, 2]));
+    let ctx = egui::Context::default();
+    let (left, space) = distribute_buttons(&mut app, &ctx);
+    assert!(!clickable(&ctx, left) && !clickable(&ctx, space), "Align to Selection: off for two artboards");
+    app.ui.align_to = AlignTo::Artboard;
+    let (left, space) = distribute_buttons(&mut app, &ctx);
+    assert!(clickable(&ctx, left) && clickable(&ctx, space), "Align to Artboard: on for two artboards");
+    app.ui.align_spacing = 20.0;
+    click(&ctx, &mut app, space.center(), show);
+    assert_eq!(artboard_corners(&app), [(0.0, 0.0), (150.0, 40.0), (230.0, 10.0)], "a gap of 20: {}", app.ui.status);
+}
+
+/// With Align to Artboard chosen, the spacing is measured from the active artboard, which is
+/// always one of the selected ones: selecting artboards 0 and 2 makes artboard 0 active, and
+/// Horizontal Distribute Space with 20 keeps it in place.
+#[test]
+fn the_artboard_spacing_is_measured_from_a_selected_artboard() {
+    let mut app = selected_artboards();
+    app.session.set_tool_option("selected", &json!([0, 2]));
+    assert_eq!((app.session.tool_options()["active"].clone(), artboards_selected(&app)), (json!(0), 2));
+    app.ui.align_to = AlignTo::Artboard;
+    app.ui.align_spacing = 20.0;
+    let ctx = egui::Context::default();
+    let (_, space) = distribute_buttons(&mut app, &ctx);
+    click(&ctx, &mut app, space.center(), show);
+    assert_eq!(last_sent(&app), ("artboard.distributeSpacing".to_string(), json!("artboard"), Some(json!(20.0))));
+    assert_eq!(artboard_corners(&app), [(0.0, 0.0), (150.0, 40.0), (120.0, 10.0)], "a gap of 20 after artboard 0: {}", app.ui.status);
+}
+
+/// With the Artboard tool chosen, the Distribute Spacing value can be negative, as
+/// `artboard.distributeSpacing` takes it: the artboards then overlap. With another tool its
+/// lowest value is 0.
+#[test]
+fn the_artboard_spacing_can_be_negative() {
+    let mut app = selected_artboards();
+    assert_eq!(spacing_min(&app), f64::NEG_INFINITY);
+    app.ui.align_to = AlignTo::Artboard;
+    app.ui.align_spacing = -10.0;
+    run_button(&mut app, Button::Spacing("horizontal")).unwrap();
+    assert_eq!(artboard_corners(&app), [(60.0, 0.0), (150.0, 40.0), (200.0, 10.0)], "10 pt overlaps: {}", app.ui.status);
+    app.select_tool("selection");
+    assert_eq!(spacing_min(&app), 0.0);
+}
+
 /// A button's shortcut entry is enabled by, and runs, the artboard command with the Artboard tool
 /// chosen and the object command with another tool.
 #[test]
