@@ -537,6 +537,10 @@ pub struct UiState {
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
+    /// The notes of the last open that gave any, with the status text that names the first of
+    /// them: hovering that text lists them when there are several. Not saved.
+    #[serde(skip)]
+    pub status_notes: Option<(String, Vec<String>)>,
     pub palette_open: bool,
     pub palette_query: String,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
@@ -656,6 +660,11 @@ pub struct UiState {
     /// [`crate::panels::color::deserialize_hide_options`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_hide_options")]
     pub color_hide_options: bool,
+    /// Color panel: Show Recent Colors, which draws its Recent Colors row while the options show
+    /// (`ui.colorPanel`, [`crate::panels::color::deserialize_show_recent_colors`]). The list of
+    /// recent colors keeps filling while the row is hidden.
+    #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
+    pub color_show_recent_colors: bool,
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default)]
     pub svg_options: Value,
@@ -1065,6 +1074,7 @@ impl Default for UiState {
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             status: String::new(),
             replace_font_warning: None,
+            status_notes: None,
             palette_open: false,
             palette_query: String::new(),
             screen_mode: 0,
@@ -1099,6 +1109,7 @@ impl Default for UiState {
             align_spacing: 0.0,
             color_mode: None,
             color_hide_options: false,
+            color_show_recent_colors: true,
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,

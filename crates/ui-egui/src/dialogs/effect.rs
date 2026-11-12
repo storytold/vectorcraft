@@ -391,6 +391,12 @@ pub(super) fn own_choices(effect: &str, key: &str, cmyk: bool) -> Option<Vec<(&'
     let c3 = |s: &'static str| crate::i18n::tr_ctx(crate::i18n::current(), "3d", s);
     Some(match (effect, key) {
         (vectorcraft_effects::REVOLVE, "edge") => vec![(tl!("Left"), "left"), (tl!("Right"), "right")],
+        (
+            vectorcraft_effects::REVOLVE | vectorcraft_effects::EXTRUDE | vectorcraft_effects::INFLATE | vectorcraft_effects::ROTATE,
+            "shadowPosition",
+        ) => {
+            vec![(tl!("Behind Object"), "behind"), (tl!("Below Object"), "below")]
+        }
         (vectorcraft_effects::CLASSIC_EXTRUDE, "surface") => {
             vec![(tl!("Wireframe"), "wireframe"), (tl!("No Shading"), "none"), (tl!("Diffuse"), "diffuse"), (tl!("Plastic"), "plastic")]
         }

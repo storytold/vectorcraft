@@ -123,7 +123,7 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     // shows while the key is down, where its handles take that press.
     let held = super::drag::mods(p.ctx().input(|i| i.modifiers), false);
     let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
-    let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && !app.session.tool_busy()))
+    let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && (!app.session.tool_busy() || resizing)))
         && (resizing || !app.session.tool_transforming() || moved.is_some())
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
