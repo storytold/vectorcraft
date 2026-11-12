@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients, wedges around the center for conic ones, nested squares for diamond ones) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255; a gradient that repeats or reflects gets the same whole number of them in each run, at least one, so a run starts on an object's edge)} one undo step; a dimension whose art an option changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked → {ids}",
+            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients, wedges around the center for conic ones, nested squares for diamond ones) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255; a gradient that repeats or reflects gets the same whole number of them in each run, at least one, so a run starts on an object's edge; one that needs more than 256 runs across the box stays a gradient)} one undo step; a dimension whose art an option changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked → {ids}",
             has_selection,
             expand
         ),
@@ -476,8 +476,9 @@ fn gradient_art(d: &mut Document, l: &Node, path: &PathData, bounds: Rect, f: &F
         let m = GradientMesh::for_path_with(path, FREEFORM_MESH, FREEFORM_MESH, &*gradient_sampler(g, bounds, d.color_mode.model()))?;
         vec![Node::new(d.alloc_id(), NodeKind::Mesh(m))]
     } else {
-        // A gradient that repeats or reflects expands as its stops repeated over the box.
-        let (g, runs) = padded_on(g, bounds);
+        // A gradient that repeats or reflects expands as its stops repeated over the box (and
+        // stays a gradient when the box needs more runs than are written).
+        let (g, runs) = padded_on(g, bounds)?;
         let g = &*g;
         let frame = Frame::new(g, bounds);
         match to {
@@ -1241,26 +1242,32 @@ pub(crate) fn gradient_sampler(g: &GradientPaint, bounds: Rect, doc_model: Model
     Box::new(move |p| g.gradient.sample_keep_model(spread(geom.param_at(g.gradient.kind, p)) as f32))
 }
 
+/// For stops repeated by [`padded_on`]: where along the vector (0 to 1) their first run starts and
+/// how many runs lie evenly from there to 1.
+type Runs = Option<(f64, usize)>;
+
 /// `g` placed on box `bounds` as a gradient that pads past its ends: a linear, radial or diamond
 /// gradient that repeats or reflects with its stops repeated as many times as the box needs
 /// ([`vectorcraft_color::Gradient::padded_over`]), a conic one with its stops repeated around the
 /// turn ([`vectorcraft_color::Gradient::unrolled`]); others as they are. With it, for the repeated
 /// stops, where along the vector (0 to 1) their first run starts and how many runs lie evenly from
-/// there to 1.
-fn padded_on(g: &GradientPaint, bounds: Rect) -> (std::borrow::Cow<'_, GradientPaint>, Option<(f64, usize)>) {
+/// there to 1. `None` when the box needs more runs than are written
+/// ([`vectorcraft_color::Padded::capped`]): the gradient stays.
+fn padded_on(g: &GradientPaint, bounds: Rect) -> Option<(std::borrow::Cow<'_, GradientPaint>, Runs)> {
     use std::borrow::Cow;
     if !g.gradient.is_spread() {
-        return (Cow::Borrowed(g), None);
+        return Some((Cow::Borrowed(g), None));
     }
     let geom = g.resolve(bounds);
     match g.gradient.padded_over(&geom, bounds) {
+        Some(p) if p.capped => None,
         Some(p) => {
             let runs = Some((p.first, p.runs));
-            (Cow::Owned(GradientPaint { gradient: p.gradient, geom: Some(p.geom), angle: p.geom.angle_deg(), ..g.clone() }), runs)
+            Some((Cow::Owned(GradientPaint { gradient: p.gradient, geom: Some(p.geom), angle: p.geom.angle_deg(), ..g.clone() }), runs))
         }
         None => {
             let runs = Some((0.0, g.gradient.repeat_count() as usize));
-            (Cow::Owned(GradientPaint { gradient: g.gradient.unrolled().into_owned(), geom: Some(geom), ..g.clone() }), runs)
+            Some((Cow::Owned(GradientPaint { gradient: g.gradient.unrolled().into_owned(), geom: Some(geom), ..g.clone() }), runs))
         }
     }
 }

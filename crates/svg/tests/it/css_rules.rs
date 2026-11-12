@@ -359,6 +359,13 @@ fn spread_gradients_give_repeating_css_gradients() {
         css(GradientKind::Linear, GradientSpread::Reflect, across).as_deref(),
         Some("repeating-linear-gradient(90deg, #ffffff 0%, #000000 25%, #000000 25%, #ffffff 50%)")
     );
+    // A period that is not a whole hundredth of the box keeps four decimals, so it does not drift
+    // across the box.
+    let short = GradientGeom { end: Point::new(10.3452, 30.0), ..across };
+    assert_eq!(
+        css(GradientKind::Linear, GradientSpread::Repeat, short).as_deref(),
+        Some("repeating-linear-gradient(90deg, #ffffff 0%, #000000 2.5863%)")
+    );
     let ring = GradientGeom { start: Point::new(40.0, 30.0), end: Point::new(80.0, 30.0), aspect: 1.0, focal: None };
     assert_eq!(
         css(GradientKind::Radial, GradientSpread::Reflect, ring).as_deref(),

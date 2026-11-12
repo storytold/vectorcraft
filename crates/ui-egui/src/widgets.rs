@@ -759,6 +759,39 @@ mod gradient_chip_tests {
         }
     }
 
+    /// A gradient that repeats or reflects as many times as a chip has cells (8 on a 24-point chip)
+    /// still shows its runs: the grid gets more cells than runs, so its points do not all sample
+    /// the same place in a run.
+    #[test]
+    fn a_chip_repeated_once_a_cell_is_not_one_color() {
+        for spread in [vectorcraft_color::GradientSpread::Repeat, vectorcraft_color::GradientSpread::Reflect] {
+            let mut gp = paint(GradientKind::Linear, 0.0);
+            gp.gradient.spread = spread;
+            gp.gradient.repeats = 8;
+            let (cols, rows) = chips::chip_grid(&gp.gradient, 24.0, 24.0);
+            assert!(cols > 8 && rows > 8, "{spread:?}: {cols} x {rows}");
+            let chip = gradient_chip_colors(&gp, 24.0, 24.0, cols, rows);
+            let row: std::collections::HashSet<Color32> = chip.iter().take(cols + 1).copied().collect();
+            assert!(row.len() > 2, "{spread:?}: {row:?}");
+        }
+        // A gradient that pads keeps a cell about every 3 points.
+        assert_eq!(chips::chip_grid(&Gradient::default(), 24.0, 24.0), (8, 8));
+        // Many runs give a small chip at most a cell a point.
+        let mut many = paint(GradientKind::Linear, 0.0).gradient;
+        many.spread = vectorcraft_color::GradientSpread::Repeat;
+        many.repeats = 100;
+        assert_eq!(chips::chip_grid(&many, 24.0, 12.0), (24, 12));
+        assert_eq!(chips::chip_grid(&many, 400.0, 400.0), (128, 128));
+        // A count that matches a chip's points still shows its runs.
+        let mut gp = paint(GradientKind::Linear, 0.0);
+        gp.gradient.spread = vectorcraft_color::GradientSpread::Repeat;
+        gp.gradient.repeats = 23;
+        let (cols, rows) = chips::chip_grid(&gp.gradient, 23.0, 23.0);
+        let chip = gradient_chip_colors(&gp, 23.0, 23.0, cols, rows);
+        let row: std::collections::HashSet<Color32> = chip.iter().take(cols + 1).copied().collect();
+        assert!(row.len() > 2, "{cols}: {row:?}");
+    }
+
     #[test]
     fn radial_chip_runs_from_the_centre_out() {
         let colors = gradient_chip_colors(&paint(GradientKind::Radial, 0.0), 20.0, 20.0, 4, 4);

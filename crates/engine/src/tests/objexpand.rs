@@ -508,6 +508,26 @@ fn a_spread_gradient_expands_into_whole_bands_for_each_run() {
     }
 }
 
+/// A gradient that repeats across a box in more runs than are written (700 runs of 0.2 pt) is not
+/// expanded into its first runs and a flat last color: the fill stays a gradient, and the rest of
+/// the object (its stroke) still expands.
+#[test]
+fn a_spread_gradient_with_more_runs_than_written_stays_a_gradient() {
+    for to in [json!({"steps": 240}), json!({"gradient": "mesh"})] {
+        let mut s = session();
+        let gr = json!({"kind": "linear", "spread": "repeat", "repeats": 100, "start": [30, 100], "end": [50, 100],
+            "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]});
+        gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gr, true);
+        let before = render(&s);
+        run(&mut s, "object.expand", to.clone());
+        let after = render(&s);
+        assert!(mean_diff(&before, &after) < 2.0, "{to}: {}", mean_diff(&before, &after));
+        let mut gradients = 0;
+        s.doc().unwrap().doc.walk(|n| gradients += usize::from(matches!(n.appearance.fill_paint(), Paint::Gradient(_))));
+        assert_eq!(gradients, 1, "{to}");
+    }
+}
+
 #[test]
 fn the_mesh_option_makes_a_mesh_that_paints_the_gradient() {
     for gradient in [

@@ -582,9 +582,12 @@ impl Rules<'_> {
             }
             _ => (unrolled, geom, ""),
         };
+        // A repeating gradient's period is the span from its first stop to its last, repeated
+        // across the box: its positions get four decimals, so the period stays in place there.
+        let decimals = if repeating.is_empty() { 2 } else { 4 };
         let stops = |pos: &dyn Fn(f32) -> f64| {
             let stops: Vec<String> =
-                gradient.expanded().map(|(t, c, o, _)| format!("{} {}%", color_css(&c, o * opacity), fmt_num(pos(t) * 100.0, 2))).collect();
+                gradient.expanded().map(|(t, c, o, _)| format!("{} {}%", color_css(&c, o * opacity), fmt_num(pos(t) * 100.0, decimals))).collect();
             stops.join(", ")
         };
         match g.gradient.kind {
