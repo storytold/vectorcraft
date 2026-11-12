@@ -217,7 +217,16 @@ capability model proposed for PhotoCraft plug-ins
   https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/security/security-considerations-for-browser-ui.md
   gives for dialog boxes), so a click, Enter or Space, or a press begun before then, installs nothing. The half second
   starts over for every new question, even one that reads the same, and when the window gets the focus back. Cancel
-  and Escape work at once.
+  and Escape work at once. A module that would take the place of the installed plug-in with its id asks in the same
+  dialog.
+- **An install that automation asked for is not approved in its dialog.** When a control request, MCP, injected input,
+  or a file dialog that one of them opened (even when the person picks the file there) leads to the approval dialog, its
+  OK stays disabled, a confirm is refused even after the half second, and the dialog says that automation asked for the
+  install. `ui.installPlugin` returns `{pending: "pluginInstall", approval: "personMustStartInstall"}`. Cancel still
+  closes it. To install the plug-in, the person chooses Object › Plug-ins › Install Plug-in… and picks the file, or
+  opens it with File › Open or drops it on the window: the module is inspected again and the new question waits its
+  half second. A request's `replace: true` does not skip asking about taking another module's place. A module that
+  needs no approval still installs at once from any request. This is VectorCraft's own rule.
 - `plugin.install` refuses the module, naming the permissions it needs, unless this module already has a recorded grant
   (`plugin.inspect`'s `needsApproval` tells it beforehand). A request's `grant` is refused too: `plugin.install` takes
   it only with the approval the dialog gives. A `vectorcraft-cli mcp` or `run` started with `--allow-plugin-grants`
@@ -262,14 +271,16 @@ capability model proposed for PhotoCraft plug-ins
   write the module to the `Plug-ins` folder, or can't remove the grant from `grants.json`, the folder keeps the module
   it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
   removed and the module already stored can't be read back or written back, the new module stays in the folder, and
-  the grant does not count for the rest of the session. The grant also does not count when the folder held no module
-  for that id. A
+  the grant stops counting. The grant also stops counting when the folder held no module for that id. A
   `grants.json` larger than 1 MiB, or one that is not a JSON list, grants nothing: the new module stays in the folder,
   and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
   removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
-  permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant does not count for
-  the rest of the session, or until the plug-in is granted again, including for the next load, which tries the removal
-  again. In Safe Mode, and for
+  permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant stops counting,
+  including for the next load, which tries the removal again. A grant that stops counting in either of these cases
+  does not count for any session in the same process that uses the same `Plug-ins` folder, by any path to it, until
+  `grants.json` can be written for that plug-in, as when the plug-in is granted again. Another process on the same
+  folder, for example `vectorcraft-cli` beside the app, still reads `grants.json` as it is written. A grant for the
+  same id kept in another `Plug-ins` folder counts. In Safe Mode, and for
   a stored module that the user disabled,
   VectorCraft does not read the module, and `grants.json` keeps the grant for its id. The Additional Plug-ins Folder
   and `plugin.reload` do not change the `Plug-ins` folder: when they leave a module that lists no permissions under an

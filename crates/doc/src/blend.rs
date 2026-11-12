@@ -1052,11 +1052,27 @@ fn pinned(spec: &BlendSpec, keys: usize, n: usize) -> Option<Vec<usize>> {
 ///   its handles) moved onto the key's centre, so moving a key moves its end of the spine;
 /// - a spine from Replace Spine: its first subpath, `None` for the anchors (the keys spread
 ///   evenly along it by arc length).
+///
+/// `None` for a blend made without a spine ([`BlendSpec::no_spine`]).
 pub fn blend_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Option<Vec<usize>>)> {
+    if spec.no_spine {
+        return None;
+    }
+    layout_spine(keys, spec)
+}
+
+/// The spine `spec` stores, unless the blend was made without one.
+fn stored_spine(spec: &BlendSpec) -> Option<&PathData> {
+    spec.spine.as_ref().filter(|_| !spec.no_spine)
+}
+
+/// [`blend_spine`] for placing the steps: a blend made without a spine still places them on the
+/// straight lines between its key centers.
+fn layout_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Option<Vec<usize>>)> {
     if keys.len() < 2 {
         return None;
     }
-    let Some(stored) = &spec.spine else {
+    let Some(stored) = stored_spine(spec) else {
         let centers: Vec<Point> = keys.iter().map(|k| center_of(k)).collect();
         return Some((PathData::single(SubPath::polyline(&centers, false)), Some((0..keys.len()).collect())));
     };
@@ -1127,10 +1143,10 @@ impl Rail {
     /// `None` when nothing moves: no stored spine and the steps keep the page's orientation.
     fn new(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<Self> {
         let rotate = spec.orientation == BlendOrientation::AlignToPath;
-        if spec.spine.is_none() && !rotate {
+        if stored_spine(spec).is_none() && !rotate {
             return None;
         }
-        let (path, anchors) = blend_spine(keys, spec)?;
+        let (path, anchors) = layout_spine(keys, spec)?;
         let spine = Spine::new(&path)?;
         let total = spine.length();
         let k = keys.len();
@@ -1192,10 +1208,10 @@ impl Rail {
 /// spine it is moved to, and so does its own centre, which it turns about. `None` when nothing
 /// moves.
 pub(crate) fn rail_reach(keys: &[Arc<Node>], spec: &BlendSpec, symbols: Option<&crate::SymbolBoxes>) -> Option<Rect> {
-    if spec.spine.is_none() && spec.orientation != BlendOrientation::AlignToPath {
+    if stored_spine(spec).is_none() && spec.orientation != BlendOrientation::AlignToPath {
         return None;
     }
-    let spine = blend_spine(keys, spec)?.0.bounds()?;
+    let spine = layout_spine(keys, spec)?.0.bounds()?;
     let radius = keys
         .iter()
         .filter_map(|k| {
@@ -1404,7 +1420,9 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
         for j in 1..=n {
             // Even position of the step, then where the easing puts its shape and its colours.
             let u = j as f64 / (n + 1) as f64;
-            let (t, tc) = (if rail.is_some() { spec.ease.apply(u) } else { u }, spec.color_position(u));
+            // Easing needs a spine: a blend made without one keeps its steps evenly spaced.
+            let eased = rail.is_some() && !spec.no_spine;
+            let (t, tc) = (if eased { spec.ease.apply(u) } else { u }, spec.color_position(u));
             let mut s = lerp.at_eased(t, tc);
             if let Some(r) = &rail {
                 r.place(&mut s, i, t);

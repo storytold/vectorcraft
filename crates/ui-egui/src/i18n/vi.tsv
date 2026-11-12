@@ -2981,6 +2981,8 @@ mark-style	Japanese	Kiểu Nhật
 	Range:	Phạm vi:
 	Raster Effects	Hiệu ứng raster
 	Raster File Format:	Định dạng tệp raster:
+	Include Placed Images	Bao gồm ảnh đã đặt
+	Include Fill Hatches	Bao gồm mẫu gạch của vùng tô
 	Raster Sample Size:	Kích thước mẫu raster:
 	Raster/Vector Balance:	Cân bằng raster/vector:
 	Rasterize	Raster hóa
@@ -3138,6 +3140,10 @@ mark-style	Japanese	Kiểu Nhật
 	Replace Font	Thay thế phông chữ
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Thay thế bằng tệp khác hoặc bỏ qua: ảnh của nó vẫn hiển thị bản xem trước đã lưu cùng tài liệu.
 	Replace Spine	Thay thế trục
+	Create Spine	Tạo trục
+	Create Spine:	Tạo trục:
+	Always	Luôn luôn
+	Never	Không bao giờ
 	Replace Symbol	Thay thế ký hiệu
 	Reset Transformation	Đặt lại biến đổi
 	Replace With Font	Thay thế bằng phông chữ
@@ -5693,6 +5699,8 @@ axis	Y Axis	Trục Y
 	Version: {version}	Phiên bản: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Cài đặt “{name}” thay cho plug-in có cùng ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tệp này không phải là plug-in đã cài đặt trước đây với ID này. Tệp sẽ nhận cài đặt và bộ nhớ đệm được lưu cho ID đó.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Một tác vụ tự động đã yêu cầu cài đặt plug-in này. Để cài đặt, hãy tự mình chọn lệnh Đối tượng › Plug-in › Cài đặt plug-in… trong menu.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Một tác vụ tự động đã yêu cầu cài đặt plug-in này. Để cài đặt, hãy tự mình chọn lệnh Đối tượng › Plug-in › Cài đặt plug-in… trong menu.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” là mô-đun khác với plug-in có ID {_1} và sẽ nhận cài đặt và bộ nhớ đệm được lưu cho plug-in đó: hãy cài đặt với `replace: true` khi người dùng đồng ý
 	File SHA-256: {hash}	SHA-256 của tệp: {hash}
 	Read the objects it is given	Đọc các đối tượng được trao cho nó
@@ -5755,6 +5763,12 @@ axis	Y Axis	Trục Y
 @msg	command {name}: `label` must be 1-64 printable characters	lệnh {name}: `label` phải có 1-64 ký tự in được
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	lệnh {name}: hãy dùng id gồm 1-{MAX_COMMAND_ID} ký tự từ a-z 0-9 _ và bắt đầu bằng một chữ cái
 @msg	command {name}: {e}	lệnh {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (dòng {line}, cột {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` phải là một danh sách lệnh, mỗi lệnh có `id` và `label`
+@msg	command {name} must be an object with an `id` and a `label`	lệnh {name} phải là một đối tượng có `id` và `label`
+@msg	missing field `{key}`	thiếu trường `{key}`
+@msg	duplicate field `{key}`	trường `{key}` bị lặp
 @msg	only a filter or a live effect declares `commands`	chỉ bộ lọc hoặc hiệu ứng trực tiếp mới khai báo `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	mô-đun không có SHA-256 mà `hash` cho biết: không có gì được cài đặt

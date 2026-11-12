@@ -2683,6 +2683,8 @@ digits	Malayalam	Malayalam
 	Range:	Intervallo:
 	Raster Effects	Effetti raster
 	Raster File Format:	Formato file raster:
+	Include Placed Images	Includi immagini inserite
+	Include Fill Hatches	Includi tratteggi dei riempimenti
 	Raster Sample Size:	Dimensione campione raster:
 	Raster/Vector Balance:	Bilanciamento raster/vettoriale:
 	Rasterize	Rasterizza
@@ -2864,6 +2866,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Sostituisci font
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Sostituiscilo con un altro file oppure ignoralo: le sue immagini continueranno a mostrare l'anteprima salvata con il documento.
 	Replace Spine	Sostituisci dorsale
+	Create Spine	Crea dorsale
+	Create Spine:	Crea dorsale:
+	Always	Sempre
+	Never	Mai
 	Replace Symbol	Sostituisci simbolo
 	Reset Transformation	Reimposta trasformazione
 	Replace With Font	Sostituisci con font
@@ -5712,6 +5718,8 @@ axis	Y Axis	Asse Y
 	Version: {version}	Versione: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installare “{name}” al posto del plug-in con lo stesso ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Questo file non è il plug-in installato prima con questo ID. Riceve le impostazioni e la cache conservate per quell’ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Un’automazione ha chiesto di installare questo plug-in. Per installarlo, scegli Oggetto › Plug-in › Installa plug-in… di persona.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Un’automazione ha chiesto di installare questo plug-in. Per installarlo, scegli Oggetto › Plug-in › Installa plug-in… di persona.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” è un modulo diverso dal plug-in con ID {_1} e riceverebbe le impostazioni e la cache conservate per esso: installalo con `replace: true` quando l’utente acconsente
 	File SHA-256: {hash}	SHA-256 del file: {hash}
 	Read the objects it is given	Leggere gli oggetti che riceve
@@ -5774,6 +5782,12 @@ axis	Y Axis	Asse Y
 @msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` deve avere 1-64 caratteri stampabili
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: usa un id di 1-{MAX_COMMAND_ID} caratteri tra a-z 0-9 _ che inizi con una lettera
 @msg	command {name}: {e}	comando {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (riga {line}, colonna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` deve essere un elenco di comandi, ciascuno con `id` e `label`
+@msg	command {name} must be an object with an `id` and a `label`	il comando {name} deve essere un oggetto con `id` e `label`
+@msg	missing field `{key}`	campo `{key}` mancante
+@msg	duplicate field `{key}`	campo `{key}` duplicato
 @msg	only a filter or a live effect declares `commands`	solo un filtro o un effetto dinamico dichiara `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	il modulo non ha lo SHA-256 indicato da `hash`: non è stato installato nulla

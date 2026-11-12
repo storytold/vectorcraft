@@ -220,6 +220,10 @@
 	Blend Options…	გადასვლის პარამეტრები…
 	Expand	გაშლა
 	Replace Spine	ხერხემლის ჩანაცვლება
+	Create Spine	ხერხემლის შექმნა
+	Create Spine:	ხერხემლის შექმნა:
+	Always	ყოველთვის
+	Never	არასოდეს
 	Reverse Spine	ხერხემლის შებრუნება
 	Reverse Front to Back	რიგის შებრუნება წინიდან უკან
 	Envelope Distort	გარსით დეფორმაცია
@@ -2117,6 +2121,8 @@ digits	Malayalam	მალაიალამური
 	Export Selected Art Only	მხოლოდ მონიშნული ნახატის ექსპორტირება
 	Number of Colors:	ფერების რაოდენობა:
 	Raster File Format:	რასტრული ფაილის ფორმატი:
+	Include Placed Images	განთავსებული გამოსახულებების ჩართვა
+	Include Fill Hatches	შევსებების დაშტრიხვის ჩართვა
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	სრულ ფერს სჭირდება 2004 ან უფრო ახალი ვერსია: იწერება 256 ფერიდან უახლოესი.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	ტექსტი კონტურებად იქცევა, ხოლო ის კონტურები, რომლებსაც CAD-ხაზი ვერ ხატავს, შევსებულ ფიგურებად.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	ტექსტი ტექსტად რჩება, ყოველი კონტური კი ხაზია თავისი სისქითა და ტირეებით.
@@ -6038,6 +6044,8 @@ axis	Y Axis	Y ღერძი
 	Version: {version}	ვერსია: {version}
 	Install “{name}” in place of the plug-in with the same ID?	დავაყენოთ „{name}“ იმავე ID-ის მქონე პლაგინის ნაცვლად?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	ეს ფაილი არ არის ამ ID-ით ადრე დაყენებული პლაგინი. ის მიიღებს ამ ID-სთვის შენახულ პარამეტრებს და ქეშს.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	ავტომატიზაციამ ამ პლაგინის დაყენება მოითხოვა. მის დასაყენებლად აირჩიეთ ობიექტი › პლაგინები › პლაგინის დაყენება… თავად.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	ავტომატიზაციამ ამ პლაგინის დაყენება მოითხოვა. მის დასაყენებლად აირჩიეთ ობიექტი › პლაგინები › პლაგინის დაყენება… თავად.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ სხვა მოდულია, ვიდრე პლაგინი ID-ით {_1}, და მიიღებდა მისთვის შენახულ პარამეტრებს და ქეშს: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `replace: true` პარამეტრით
 	File SHA-256: {hash}	ფაილის SHA-256: {hash}
 	Read the objects it is given	მიღებული ობიექტების წაკითხვა
@@ -6100,6 +6108,12 @@ axis	Y Axis	Y ღერძი
 @msg	command {name}: `label` must be 1-64 printable characters	ბრძანება {name}: `label` უნდა შედგებოდეს 1-64 დასაბეჭდი სიმბოლოსგან
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ბრძანება {name}: გამოიყენეთ 1-{MAX_COMMAND_ID} სიმბოლოიანი id a-z 0-9 _ სიმბოლოებიდან, რომელიც ასოთი იწყება
 @msg	command {name}: {e}	ბრძანება {name}: {e}
+@msg	manifest: {e}	მანიფესტი: {e}
+@msg	manifest: {e} at line {line} column {column}	მანიფესტი: {e} (სტრიქონი {line}, სვეტი {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` უნდა იყოს ბრძანებების სია, თითოეული `id`-ით და `label`-ით
+@msg	command {name} must be an object with an `id` and a `label`	ბრძანება {name} უნდა იყოს ობიექტი `id`-ით და `label`-ით
+@msg	missing field `{key}`	აკლია ველი `{key}`
+@msg	duplicate field `{key}`	ველი `{key}` ორჯერაა
 @msg	only a filter or a live effect declares `commands`	`commands`-ს მხოლოდ ფილტრი ან ცოცხალი ეფექტი აცხადებს
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	მოდულს არ აქვს `hash`-ში მითითებული SHA-256: არაფერი დაყენებულა
