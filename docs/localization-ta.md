@@ -54,7 +54,9 @@ Tamil gaps.
 - Builds whose craft-fonts checkout has Noto Sans Tamil (craft-fonts#21; the revision the
   workflows pin predates it) add its `Taml` face at the end of every UI family.
 - Web: Noto Sans Tamil is a `startup` face in `crates/text/web-fonts.txt`, fetched before the app
-  starts; a craft-fonts checkout without it leaves it out with a warning.
+  starts; a craft-fonts checkout without it leaves it out with a warning. The revision the workflows
+  pin predates it, so until the pin moves (a separate pull request) the web build has no Tamil font
+  and Tamil text shows missing-glyph boxes there.
 
 ## Verification
 

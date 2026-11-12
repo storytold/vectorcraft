@@ -1,5 +1,6 @@
 # Development
 
+> **Last updated:** 2026-11-12 · **Change:** Tamil catalog and one/other plurals; desktop Tamil font fallback, optional craft-fonts `Taml` face and a web startup font once the craft-fonts pin has Noto Sans Tamil.
 > **Last updated:** 2026-11-06 · **Change:** Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending.
 > **Last updated:** 2026-11-01 · **Change:** Linux: Automatic Linux Display Server opens the window through XWayland when a pen is attached on a Wayland session, so the pen draws (#4967); `VECTORCRAFT_NATIVE_WAYLAND=1` keeps Wayland.
 > **Last updated:** 2026-10-31 · **Change:** files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance`.
@@ -168,8 +169,9 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   or fetches, and no craft-fonts faces are registered when the optional input is absent.
 - UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first, then
   Noto Sans Georgian for the Georgian interface), after the UI fonts and before the installed fonts
-  `ui_fonts.rs` discovers for other scripts. On the web, Noto Sans Georgian and Noto Sans Tamil are
-  fetched at startup and reach the UI through `ui_fonts.rs`.
+  `ui_fonts.rs` discovers for other scripts. On the web, Noto Sans Georgian is fetched at startup, and
+  so is Noto Sans Tamil when the checkout has it (the pinned revision predates it); they reach the
+  UI through `ui_fonts.rs`.
 - Tests that need Japanese or Georgian glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
