@@ -4,6 +4,7 @@
 
 mod conic;
 mod dash_align;
+mod diamond;
 mod golden;
 mod gradient_alpha;
 mod gradient_text;

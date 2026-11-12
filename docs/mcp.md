@@ -462,7 +462,7 @@ so a bad one draws nothing. The object and its styling are one `command.batch`, 
 it can't read, a swatch the document lacks) fails the call and leaves the document as it was. The reply adds `name`, `opacity` and `effects` (each `effect.apply` result)
 when given; `paint` lists the stroke options applied.
 A gradient given to several objects fits each one's own bounds; `paint.setFill` / `paint.setStroke` with
-`span: "selection"` place a linear, radial or conic gradient once on the union of the targets' bounds instead, so one
+`span: "selection"` place a linear, radial, conic or diamond gradient once on the union of the targets' bounds instead, so one
 ramp runs across them.
 `paint.setFill` without `item` on a grayscale or 1-bit image sets the color the image is drawn in: each pixel takes
 the color as far as the pixel is dark, and white pixels are transparent. `none` removes the color. An image with an
@@ -1085,20 +1085,44 @@ another form gives a warning:
 {"name":"run_command","arguments":{"command":"paint.setFill","params":{"gradient":{"kind":"conic","start":[150,150],"end":[200,150],"aspect":-100}}}}
 ```
 
-Dither (the Gradient panel's box) draws a linear, radial or conic gradient fill with fine noise that hides banding;
-SVG and PDF exports write such a fill as an image at the Document Raster Effects resolution. It applies to fills
-(`stroke: true` is refused):
+A diamond gradient (`kind: "diamond"`) runs its stops from the center (the start) out to a square with a corner at
+the end of the vector, a diamond on the page while the vector is level; `aspect` stretches the square across the
+vector into a rhombus. Fitted to an object, it is centered on the object's box, and the edge of its square runs
+through the box's farthest corner; at an angle of 0 or 90 degrees the edges run through all four corners. Its
+annotator draws the square with the aspect dot and center ring of a radial gradient; a `focal` or a negative
+`aspect` given for a diamond gradient is an error. Dither and Method apply as they do to a linear gradient, and the
+canvas draws it as pixels, out to the miters, caps and arrowheads of a stroke. PDF, SVG, EPS and legacy `.ai` files
+have no diamond gradient: one of opaque stops is written as four linear gradients, one for each quarter of the
+square, clipped to the shape (PDF as axial shadings). In PDF and SVG, one with translucent stops, a dithered fill or
+a square with no area is an image, and so is a Perceptual one, except in PDF when its stops are spot colors that the
+Method paragraph below describes. SVG writes one on type characters as a radial gradient through the square's
+corners. PDF import reads a function-based shading (type 1) whose color is the same along each square about the
+origin of its space, with corners on its axes, as a diamond gradient. CSS writes a radial gradient through the
+square's corners. A swatch library saved as CSS gets four `linear-gradient` layers, one for each quarter of the box,
+which make a value for the `background` property but not for `background-image`; a swatch whose angle is not a
+multiple of 90 degrees gets a circular `radial-gradient` instead, and, as for a radial swatch, the aspect is not
+written. The `.ai` editing data holds a radial gradient through the corners with the same stops. Object › Expand
+turns it into nested squares (`steps`) or a mesh of rings around the center. A document export that writes it in
+another form gives a warning:
+
+```json
+{"name":"run_command","arguments":{"command":"paint.setFill","params":{"gradient":{"kind":"diamond","start":[150,150],"end":[200,150],"aspect":60}}}}
+```
+
+Dither (the Gradient panel's box) draws a linear, radial, conic or diamond gradient fill with fine noise that hides
+banding; SVG and PDF exports write such a fill as an image at the Document Raster Effects resolution. It applies to
+fills (`stroke: true` is refused):
 
 ```json
 {"name":"run_command","arguments":{"command":"paint.editGradient","params":{"dither":true}}}
 ```
 
 Method (the Gradient panel's menu): `classic` (the default) mixes the colours between stops in display RGB,
-`perceptual` mixes a linear, radial or conic gradient's colors in OKLab so the steps look even. SVG exports write a
-Perceptual gradient as an image at the Document Raster Effects resolution (a dithered Perceptual fill with its noise).
-PDF exports write it the same way, except for a linear, radial or conic gradient with spot color stops whose other stops
-are all paper white or written in CMYK or gray, that is not a dithered fill and whose curve does not have too many
-stops. An export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a
+`perceptual` mixes a linear, radial, conic or diamond gradient's colors in OKLab so the steps look even. SVG exports
+write a Perceptual gradient as an image at the Document Raster Effects resolution (a dithered Perceptual fill with
+its noise). PDF exports write it the same way, except for a linear, radial, conic or diamond gradient with spot color
+stops whose other stops are all paper white or written in CMYK or gray, that is not a dithered fill and whose curve
+does not have too many stops (a diamond as four such shadings). An export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a
 CMYK document unless the export converts colors to an RGB destination profile. PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK
 or gray inks as a DeviceN shading.
 `paint.setFill`/`paint.setStroke` take it in `gradient` too:

@@ -2613,6 +2613,7 @@ digits	Malayalam	Malayálam
 	Radial Glows	Resplandores radiales
 	Radial Gradient	Degradado radial
 	Conic Gradient	Degradado cónico
+	Diamond Gradient	Degradado de rombo
 	Radius 1	Radio 1
 	Radius 2	Radio 2
 	Radius1	Radio1
@@ -4715,7 +4716,7 @@ axis	Both	Ambos
 @msg	unknown format	formato desconocido
 @msg	unknown format `{f}` (Save writes {_1})	formato desconocido `{f}` (Guardar escribe {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modo de forma libre desconocido `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo de degradado desconocido `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipo de degradado desconocido `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	resaltado desconocido `{h}`
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
@@ -5739,7 +5740,7 @@ mark-style	Japanese	Japonesas
 @msg	span must be "object" or "selection", got {v}	span debe ser "object" o "selection", no {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" coloca un `gradient`, no una muestra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" coloca un degradado: indique `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" coloca un degradado lineal, radial o cónico, no uno de forma libre
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" coloca un degradado lineal, radial, cónico o de rombo, no uno de forma libre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" coloca el propio degradado: omita `start` y `end` (ya lo colocan en coordenadas del documento)
 	Make Image Dynamic	Hacer imagen dinámica
 	Import Data Sets…	Importar conjuntos de datos…

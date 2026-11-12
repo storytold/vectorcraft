@@ -2688,6 +2688,7 @@ mark-style	Japanese	日本式
 	Radar Graph Tool	レーダーチャートツール
 	Radial Gradient	円形グラデーション
 	Conic Gradient	円錐グラデーション
+	Diamond Gradient	ひし形グラデーション
 	Random	ランダム
 	Randomize Colors	カラーをランダム化
 	Randomly change color order	カラーの順序をランダムに変更
@@ -4364,7 +4365,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	stop {i} needs `offset`	分岐点 {i} には `offset` が必要です
 @msg	stop {i} needs a valid `color`	分岐点 {i} には有効な `color` が必要です
 @msg	stop {i}: `{k}` must be a number	分岐点 {i}: `{k}` には数値を指定してください
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	`{k}` は不明なグラデーションの種類です (linear、radial、conic、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	`{k}` は不明なグラデーションの種類です (linear、radial、conic、diamond、freeform)
 @msg	the art could not be sampled	アートをサンプリングできませんでした
 @msg	the art is too light for any dots	アートが明るすぎて網点を生成できません
 @msg	the document has no symbols	ドキュメントにシンボルがありません
@@ -5453,7 +5454,7 @@ lighting	Light	ライト
 @msg	span must be "object" or "selection", got {v}	span は "object" または "selection" で指定してください ({v} は指定できません)
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" は `gradient` を配置します。スウォッチは配置できません
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" はグラデーションを配置します: `gradient` を指定してください
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" は線形、円形または円錐グラデーションを配置します。フリーグラデーションは配置できません
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" は線形、円形、円錐またはひし形グラデーションを配置します。フリーグラデーションは配置できません
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" はグラデーション自体を配置します: `start` と `end` は省略してください (これらはすでにドキュメント座標で配置を指定します)
 	Make Image Dynamic	画像を動的にする
 	Import Data Sets…	データセットを読み込み…

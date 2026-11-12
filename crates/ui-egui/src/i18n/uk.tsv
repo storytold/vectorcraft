@@ -2639,6 +2639,7 @@ digits	Malayalam	Малаялам
 	Radial Glows	Радіальні світіння
 	Radial Gradient	Радіальний градієнт
 	Conic Gradient	Конічний градієнт
+	Diamond Gradient	Ромбоподібний градієнт
 	Radius 1	Радіус 1
 	Radius 2	Радіус 2
 	Radius1	Радіус1
@@ -4742,7 +4743,7 @@ axis	Both	Обидві
 @msg	unknown format	невідомий формат
 @msg	unknown format `{f}` (Save writes {_1})	невідомий формат `{f}` (збереження записує {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	невідомий режим довільної форми `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	невідоме виділення `{h}`
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
@@ -5390,7 +5391,7 @@ lighting	Light	Світло
 @msg	span must be "object" or "selection", got {v}	span має бути "object" або "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" розміщує `gradient`, а не зразок
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" розміщує градієнт: вкажіть `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний або конічний градієнт, а не довільний
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний, конічний або ромбоподібний градієнт, а не довільний
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам розміщує градієнт: приберіть `start` і `end` (вони вже задають його в координатах документа)
 	Make Image Dynamic	Зробити зображення динамічним
 	Import Data Sets…	Імпортувати набори даних…

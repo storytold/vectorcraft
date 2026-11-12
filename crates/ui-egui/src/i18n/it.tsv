@@ -2647,6 +2647,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Bagliori radiali
 	Radial Gradient	Sfumatura radiale
 	Conic Gradient	Sfumatura conica
+	Diamond Gradient	Sfumatura a rombo
 	Radius 1	Raggio 1
 	Radius 2	Raggio 2
 	Radius1	Raggio1
@@ -4758,7 +4759,7 @@ axis	Both	Entrambi
 @msg	unknown format	formato sconosciuto
 @msg	unknown format `{f}` (Save writes {_1})	formato sconosciuto `{f}` (Salva scrive {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modalità a forma libera sconosciuta `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo di sfumatura sconosciuto `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipo di sfumatura sconosciuto `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	evidenziazione sconosciuta `{h}`
 @msg	unknown option `{path}.{k}`	opzione sconosciuta `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	valore di sovrastampa sconosciuto `{o}` (preserve, simulate o discard)
@@ -5410,7 +5411,7 @@ lighting	Light	Luce
 @msg	span must be "object" or "selection", got {v}	span deve essere "object" o "selection", non {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiziona un `gradient`, non un campione
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiziona una sfumatura: indica `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" posiziona una sfumatura lineare, radiale o conica, non una sfumatura a forma libera
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" posiziona una sfumatura lineare, radiale, conica o a rombo, non una sfumatura a forma libera
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" posiziona la sfumatura stessa: ometti `start` e `end` (la posizionano già in coordinate del documento)
 	Make Image Dynamic	Rendi immagine dinamica
 	Import Data Sets…	Importa set di dati…

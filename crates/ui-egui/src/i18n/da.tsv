@@ -1602,6 +1602,7 @@ digits	Malayalam	Malayalam
 	Points: clicks add free points	Punkter: klik tilføjer frie punkter
 	Radial Gradient	Radial gradient
 	Conic Gradient	Konisk gradient
+	Diamond Gradient	Diamantgradient
 	Reset to White, Black	Nulstil til hvid, sort
 	Reverse Gradient	Omvend gradient
 	Save to Swatches	Gem i farveprøver
@@ -4633,7 +4634,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	ukendt format
 @msg	unknown format `{f}` (Save writes {_1})	ukendt format `{f}` (Gem skriver {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	ukendt freeform-tilstand `{m}` (punkter, linjer)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	ukendt gradienttype `{k}` (lineær, radial, konisk, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ukendt gradienttype `{k}` (lineær, radial, konisk, diamant, freeform)
 @msg	unknown highlight `{h}`	ukendt fremhævning `{h}`
 @msg	unknown option `{path}.{k}`	ukendt indstilling `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (bevar, simulér eller forkast)
@@ -5397,7 +5398,7 @@ mark-style	Japanese	Japansk
 @msg	span must be "object" or "selection", got {v}	span skal være "object" eller "selection", fik {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerer en `gradient`, ikke en farveprøve
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerer en overgang: angiv `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" placerer en lineær, radial eller konisk overgang, ikke en fri
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" placerer en lineær, radial, konisk eller diamantformet overgang, ikke en fri
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerer overgangen selv: udelad `start` og `end` (de placerer den allerede i dokumentkoordinater)
 	Make Image Dynamic	Gør billede dynamisk
 	Import Data Sets…	Importér datasæt…

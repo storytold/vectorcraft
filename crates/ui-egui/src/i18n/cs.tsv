@@ -1691,6 +1691,7 @@ digits	Malayalam	Malajálamské
 	Points: clicks add free points	Body: kliknutím přidáte volné body
 	Radial Gradient	Kruhový přechod
 	Conic Gradient	Kuželový přechod
+	Diamond Gradient	Kosočtverečný přechod
 	Reset to White, Black	Obnovit na bílou a černou
 	Reverse Gradient	Obrátit přechod
 	Save to Swatches	Uložit do vzorníku
@@ -5023,7 +5024,7 @@ imageTrace	Outline	Obrys
 @msg	unknown format	neznámý formát
 @msg	unknown format `{f}` (Save writes {_1})	neznámý formát `{f}` (Uložit zapisuje {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	neznámý režim volného přechodu `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	neznámý druh přechodu `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	neznámý druh přechodu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	neznámé zvýraznění `{h}`
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
@@ -5797,7 +5798,7 @@ mark-style	Japanese	Japonské
 @msg	span must be "object" or "selection", got {v}	span musí být "object" nebo "selection", ne {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umísťuje `gradient`, ne vzorník
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umísťuje přechod: zadejte `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" umísťuje lineární, radiální nebo kuželový přechod, ne volný přechod
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" umísťuje lineární, radiální, kuželový nebo kosočtverečný přechod, ne volný přechod
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umísťuje samotný přechod: vynechte `start` a `end` (ty ho už umísťují v souřadnicích dokumentu)
 	Make Image Dynamic	Nastavit obraz jako dynamický
 	Import Data Sets…	Importovat sady dat…

@@ -1667,6 +1667,7 @@ digits	Malayalam	Malajalam
 	Points: clicks add free points	Tačke: klikovi dodaju slobodne tačke
 	Radial Gradient	Radijalni gradijent
 	Conic Gradient	Konusni gradijent
+	Diamond Gradient	Rombni gradijent
 	Reset to White, Black	Vrati na bijelu, crnu
 	Reverse Gradient	Obrni gradijent
 	Save to Swatches	Sačuvaj u uzorke boja
@@ -4936,7 +4937,7 @@ imageTrace	Outline	Obris
 @msg	unknown format	nepoznat format
 @msg	unknown format `{f}` (Save writes {_1})	nepoznat format `{f}` (Sačuvaj zapisuje {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	nepoznat način slobodnog oblika `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	nepoznata vrsta gradijenta `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	nepoznata vrsta gradijenta `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	nepoznato isticanje `{h}`
 @msg	unknown option `{path}.{k}`	nepoznata opcija `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nepoznati pretisci `{o}` (preserve, simulate ili discard)
@@ -5662,7 +5663,7 @@ mark-style	Japanese	Japanski
 @msg	span must be "object" or "selection", got {v}	span mora biti "object" ili "selection", dobiveno {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" postavlja `gradient`, a ne uzorak boje
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" postavlja gradijent: navedite `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" postavlja linearni, radijalni ili konusni gradijent, a ne gradijent slobodnog oblika
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" postavlja linearni, radijalni, konusni ili rombni gradijent, a ne gradijent slobodnog oblika
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" postavlja sam gradijent: izostavite `start` i `end` (oni ga već postavljaju u koordinatama dokumenta)
 	Make Image Dynamic	Učini sliku dinamičkom
 	Import Data Sets…	Uvezi skupove podataka…

@@ -186,6 +186,55 @@ fn css_writes_conic_gradient_swatches() {
     assert!(text.contains("--back: conic-gradient(from 0deg, #000000 0%, #ffffff 80%);"), "{text}");
 }
 
+/// A diamond gradient swatch (CSS has none) is four layered linear gradients, one a quarter of the
+/// box running from the center out to its corner, for the `background` shorthand.
+#[test]
+fn css_writes_diamond_gradient_swatches_as_four_corner_layers() {
+    let lib = SwatchLibrary {
+        name: "x".into(),
+        swatches: vec![Swatch {
+            name: "Gem".into(),
+            paint: Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Diamond, ..Gradient::default() }))),
+            global: false,
+            spot: false,
+        }],
+        groups: vec![],
+    };
+    let text = written(&lib, PaletteFormat::Css);
+    // Diagonal angles, not `to <corner>`: on a box that isn't square, `to <corner>` would turn
+    // each layer's lines to run through the quarter's other two corners.
+    let layer = |corner: &str, deg: u32| format!("linear-gradient({deg}deg, #ffffff 0%, #000000 100%) {corner} / 50% 50% no-repeat");
+    let want =
+        format!("--gem: {}, {}, {}, {};", layer("top left", 315), layer("top right", 45), layer("bottom right", 135), layer("bottom left", 225));
+    assert!(text.contains(&want), "{text}");
+    // CSS's gradient line for a diagonal angle on a quarter box w × h is (w + h) / √2 long and
+    // starts at the quarter's corner at the box's center: the level at a point x, y from the
+    // center is (|x| + |y|) / (w + h), the level the diamond fitted to the whole box has there.
+    let (w, h) = (100.0f64, 50.0f64);
+    let length = (w + h) / std::f64::consts::SQRT_2;
+    let fit = crate::GradientGeom::fit(GradientKind::Diamond, kurbo::Rect::new(-w, -h, w, h), 0.0);
+    for (x, y) in [(0.0, -50.0), (-100.0, 0.0), (-30.0, -20.0), (-100.0, -50.0)] {
+        // The top-left quarter's layer runs toward (-1, -1).
+        let css = (-x - y) / std::f64::consts::SQRT_2 / length;
+        let model = fit.param_at(GradientKind::Diamond, kurbo::Point::new(x, y));
+        assert!((css - model).abs() < 1e-9, "({x}, {y}): {css} vs {model}");
+    }
+    // Turned a quarter or a half turn, it is the same diamond; turned 30 degrees, a circle stands
+    // in for it.
+    let turned = |angle: f64| {
+        let mut gp = GradientPaint::new(Gradient { kind: GradientKind::Diamond, ..Gradient::default() });
+        gp.angle = angle;
+        let lib = SwatchLibrary {
+            name: "x".into(),
+            swatches: vec![Swatch { name: "Gem".into(), paint: Paint::Gradient(Box::new(gp)), global: false, spot: false }],
+            groups: vec![],
+        };
+        written(&lib, PaletteFormat::Css)
+    };
+    assert!(turned(90.0).contains(&want) && turned(-180.0).contains(&want), "{}", turned(90.0));
+    assert!(turned(30.0).contains("--gem: radial-gradient(circle, #ffffff 0%, #000000 100%);"), "{}", turned(30.0));
+}
+
 #[test]
 fn css_preserves_fractional_gradient_stop_positions() {
     for kind in [GradientKind::Linear, GradientKind::Radial] {
