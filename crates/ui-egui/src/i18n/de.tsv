@@ -4734,6 +4734,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
 @msg	unknown panel `{raw}`	unbekanntes Bedienfeld `{raw}`
+@msg	panels can't be shown in Presentation Mode	im Präsentationsmodus können keine Bedienfelder angezeigt werden
 @msg	unknown preference `{key}`	unbekannte Voreinstellung `{key}`
 @msg	Preferences imported.	Voreinstellungen importiert.
 @msg	not a preferences file: {e}	keine Voreinstellungsdatei: {e}

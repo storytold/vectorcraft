@@ -5017,6 +5017,7 @@ imageTrace	Outline	Ääriviiva
 @msg	unknown option `{path}.{k}`	tuntematon asetus `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	tuntematon päällepainatusten käsittely `{o}` (preserve, simulate tai discard)
 @msg	unknown panel `{raw}`	tuntematon paneeli `{raw}`
+@msg	panels can't be shown in Presentation Mode	paneeleja ei voi näyttää esitystilassa
 @msg	unknown preference `{key}`	tuntematon asetus `{key}`
 @msg	Preferences imported.	Asetukset tuotiin.
 @msg	not a preferences file: {e}	ei ole asetustiedosto: {e}

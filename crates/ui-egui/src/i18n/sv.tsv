@@ -4704,6 +4704,7 @@ axis	Both	Båda
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	okänd panel `{raw}`
+@msg	panels can't be shown in Presentation Mode	paneler kan inte visas i presentationsläge
 @msg	unknown preference `{key}`	okänd inställning `{key}`
 @msg	Preferences imported.	Inställningarna har importerats.
 @msg	not a preferences file: {e}	inte en inställningsfil: {e}

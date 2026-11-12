@@ -4756,6 +4756,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown option `{path}.{k}`	άγνωστη επιλογή `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	άγνωστη επιλογή υπερεκτύπωσης `{o}` (preserve, simulate ή discard)
 @msg	unknown panel `{raw}`	άγνωστος πίνακας `{raw}`
+@msg	panels can't be shown in Presentation Mode	τα πλαίσια δεν μπορούν να εμφανιστούν στη λειτουργία παρουσίασης
 @msg	unknown preference `{key}`	άγνωστη προτίμηση `{key}`
 @msg	Preferences imported.	Οι προτιμήσεις εισήχθησαν.
 @msg	not a preferences file: {e}	δεν είναι αρχείο προτιμήσεων: {e}

@@ -4584,6 +4584,7 @@ imageTrace	Outline	轮廓
 @msg	give only one of onto, below and above	onto、below 和 above 只能给出一个
 @msg	column must be true or a number from 1	column 必须是 true 或从 1 开始的数字
 @msg	unknown panel `{raw}`	未知面板 `{raw}`
+@msg	panels can't be shown in Presentation Mode	演示模式下无法显示面板
 @msg	x and y must both be numbers	x 和 y 都必须是数字
 @msg	Downloaded {what}	已下载 {what}
 @msg	Imported {what}: {_1}	已导入 {what}：{_1}

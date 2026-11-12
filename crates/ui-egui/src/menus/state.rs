@@ -96,7 +96,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.learn" => crate::panels::learn::visible(&app.ui),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
-            normalize_panel(panel).is_some_and(|id| crate::panel_docking::showing(&app.ui, id))
+            normalize_panel(panel).is_some_and(|id| crate::panel_docking::visible(&app.ui, id))
         }
         "window.collapseDock" => crate::panel_docking::dock_collapsed(&app.ui),
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),

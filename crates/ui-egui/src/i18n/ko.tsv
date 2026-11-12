@@ -4816,6 +4816,7 @@ theme	Appearance	외관
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
 @msg	column must be true or a number from 1	column은 true이거나 1 이상의 숫자여야 합니다
 @msg	unknown panel `{raw}`	알 수 없는 패널 `{raw}`
+@msg	panels can't be shown in Presentation Mode	프레젠테이션 모드에서는 패널을 표시할 수 없습니다
 @msg	x and y must both be numbers	x와 y는 모두 숫자여야 합니다
 @msg	Downloaded {what}	{what}을(를) 다운로드했습니다
 @msg	Imported {what}: {_1}	{what}을(를) 가져왔습니다: {_1}

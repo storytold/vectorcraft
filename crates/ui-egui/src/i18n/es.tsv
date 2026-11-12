@@ -4809,6 +4809,7 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panel desconocido `{raw}`
+@msg	panels can't be shown in Presentation Mode	los paneles no se pueden mostrar en el modo de presentación
 @msg	unknown preference `{key}`	preferencia desconocida `{key}`
 @msg	Preferences imported.	Preferencias importadas.
 @msg	not a preferences file: {e}	no es un archivo de preferencias: {e}

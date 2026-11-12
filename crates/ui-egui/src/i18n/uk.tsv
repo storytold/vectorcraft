@@ -4844,6 +4844,7 @@ axis	Both	Обидві
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
 @msg	unknown panel `{raw}`	невідома панель `{raw}`
+@msg	panels can't be shown in Presentation Mode	у режимі презентації панелі показати не можна
 @msg	unknown preference `{key}`	невідоме налаштування `{key}`
 @msg	Preferences imported.	Налаштування імпортовано.
 @msg	not a preferences file: {e}	не є файлом налаштувань: {e}

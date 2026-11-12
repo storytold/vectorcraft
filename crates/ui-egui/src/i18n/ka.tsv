@@ -4551,6 +4551,7 @@ font-technology	Variable	ცვლადი
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
 @msg	unknown panel `{raw}`	უცნობი პანელი `{raw}`
+@msg	panels can't be shown in Presentation Mode	პრეზენტაციის რეჟიმში პანელების ჩვენება შეუძლებელია
 @msg	unknown preference `{key}`	უცნობი პარამეტრი `{key}`
 @msg	Preferences imported.	პარამეტრები იმპორტირებულია.
 @msg	not a preferences file: {e}	ეს არ არის პარამეტრების ფაილი: {e}

@@ -5622,6 +5622,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown option `{path}.{k}`	ismeretlen beállítás: `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
 @msg	unknown panel `{raw}`	ismeretlen panel: `{raw}`
+@msg	panels can't be shown in Presentation Mode	bemutató módban a panelek nem jeleníthetők meg
 @msg	unknown preference `{key}`	ismeretlen beállítás: `{key}`
 @msg	Preferences imported.	A beállítások importálva.
 @msg	not a preferences file: {e}	nem beállításfájl: {e}

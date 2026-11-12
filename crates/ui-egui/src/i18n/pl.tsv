@@ -4943,6 +4943,7 @@ imageTrace	Outline	Kontur
 @msg	unknown option `{path}.{k}`	nieznana opcja `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
 @msg	unknown panel `{raw}`	nieznany panel `{raw}`
+@msg	panels can't be shown in Presentation Mode	w trybie prezentacji nie można wyświetlić paneli
 @msg	unknown preference `{key}`	nieznana preferencja `{key}`
 @msg	Preferences imported.	Zaimportowano preferencje.
 @msg	not a preferences file: {e}	to nie jest plik preferencji: {e}
