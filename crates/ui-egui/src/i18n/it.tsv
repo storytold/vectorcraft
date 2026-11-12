@@ -6425,6 +6425,7 @@ breakText	Glyphs	Glifi
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Allinea alla griglia pixel
+	Not Aligned to Pixel Grid	Non allineato alla griglia pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	solo i tracciati e i tracciati composti possono essere allineati alla griglia pixel
 @msg	side is left or right, not `{s}`	side è left o right, non `{s}`
 	Ignore All	Ignora tutto

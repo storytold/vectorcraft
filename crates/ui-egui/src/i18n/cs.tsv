@@ -6804,6 +6804,7 @@ breakText	Glyphs	Glyfy
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Zarovnat na mřížku obrazových bodů
+	Not Aligned to Pixel Grid	Nezarovnané na mřížku obrazových bodů
 @msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty
 @msg	side is left or right, not `{s}`	side je left nebo right, ne `{s}`
 	Ignore All	Ignorovat vše

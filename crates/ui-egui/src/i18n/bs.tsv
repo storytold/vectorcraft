@@ -6581,6 +6581,7 @@ shape	Open	Otvoren
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Poravnaj s mrežom piksela
+	Not Aligned to Pixel Grid	Nije poravnato s mrežom piksela
 @msg	side is left or right, not `{s}`	side je left ili right, a ne `{s}`
 	Edit Custom Dictionary	Uredi prilagođeni rječnik
 	Entry:	Unos:

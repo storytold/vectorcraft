@@ -6839,6 +6839,7 @@ breakText	Glyphs	Merkit
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Tasaa pikseliruudukkoon
+	Not Aligned to Pixel Grid	Ei tasattu pikseliruudukkoon
 @msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon
 @msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`
 	Ignore All	Ohita kaikki

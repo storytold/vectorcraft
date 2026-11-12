@@ -6490,6 +6490,7 @@ breakText	Glyphs	字形
 
 # Align to Pixel Grid
 	Align to Pixel Grid	ピクセルグリッドに整合
+	Not Aligned to Pixel Grid	ピクセルグリッドに未整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
 @msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）
 	Ignore All	すべて無視

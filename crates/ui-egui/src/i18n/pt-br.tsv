@@ -6877,6 +6877,7 @@ swatch	Yellow Green	Verde-amarelado
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinhar à Grade de Pixels
+	Not Aligned to Pixel Grid	Não Alinhado à Grade de Pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	somente caminhos e caminhos compostos podem ser alinhados à grade de pixels
 @msg	side is left or right, not `{s}`	side é left ou right, não `{s}`
 	Ignore All	Ignorar Tudo
