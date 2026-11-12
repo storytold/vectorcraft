@@ -51,8 +51,8 @@ Tamil gaps.
 - Desktop: Tamil falls back to an installed Tamil face, trying Nirmala UI, Tamil Sangam MN,
   Tamil MN, Noto Sans Tamil, Noto Sans Tamil UI, Lohit Tamil and Latha first
   (`crates/text/src/fontdb/names.rs`).
-- Builds with craft-fonts (pinned at `c1db6d1a8ed772191241c3d185e2104be84d8691`, the first
-  revision with Noto Sans Tamil) add its `Taml` face at the end of every UI family.
+- Builds whose craft-fonts checkout has Noto Sans Tamil (craft-fonts#21; the revision the
+  workflows pin predates it) add its `Taml` face at the end of every UI family.
 - Web: Noto Sans Tamil is a `startup` face in `crates/text/web-fonts.txt`, fetched before the app
   starts; a craft-fonts checkout without it leaves it out with a warning.
 
