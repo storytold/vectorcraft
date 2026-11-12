@@ -5774,13 +5774,23 @@ They also write the `copyrightNotice` as `dc:rights`, the `copyrightUrl` as `xmp
 `copyrightStatus` as `xmpRights:Marked` (`True` for copyrighted, `False` for public domain, none for unknown) to the
 XMP packet.
 A PDF, `.ai` or `.ait` opened from its pages or its editing copy (`document.open`,
-`file.newFromTemplate`, `file.revert`; not one restored from the document it carries) opens with the `author`,
-`description`, `keywords`, `copyrightStatus`, `copyrightNotice`, `copyrightUrl`, `created` and `modified` that its XMP
-packet (`dc:creator`, `dc:description`, `dc:subject` or `pdf:Keywords`, `xmpRights:Marked`, `dc:rights`,
-`xmpRights:WebStatement`, `xmp:CreateDate`, `xmp:ModifyDate`) and its document information dictionary (`Author`,
-`Subject`, `Keywords`, `CreationDate`, `ModDate`) give, the XMP packet's value where both give one. A value that
-`file.info` would refuse is left out, and the title is set as for any other open (the file name, or a new untitled
-name for a template).
+`file.newFromTemplate`, `file.revert`; not one restored from the document it carries) opens with the `title`,
+`author`, `description`, `keywords`, `copyrightStatus`, `copyrightNotice`, `copyrightUrl`, `created` and `modified`
+that its XMP packet (`dc:title`, `dc:creator`, `dc:description`, `dc:subject` or `pdf:Keywords`, `xmpRights:Marked`,
+`dc:rights`, `xmpRights:WebStatement`, `xmp:CreateDate`, `xmp:ModifyDate`) and its document information dictionary
+(`Title`, `Author`, `Subject`, `Keywords`, `CreationDate`, `ModDate`) give, the XMP packet's value where both give
+one (for `dc:title` and `dc:description`, the `x-default` language item first). An SVG opens with the `title` of its
+root `<title>` element (not a shape's or group's). A title is read with its white space made single spaces and
+without control characters, at most 65,536 characters, as `file.info` takes one. A value that `file.info` would
+refuse is left out. A file that gives no title, a blank one or the `Untitled-N` name New gives leaves File Info with
+the document's name as its title, and a template opens with a new untitled name.
+The title a file gave is File Info's alone: the document's name, which is what its tab shows until it has a file and
+what Save As and the default export names start from, stays the file's name with its extension (`box.svg`), or the
+title a native file holds. File Info's `title` is the one the file gave, else the document's name. It is saved with the
+document (a native file, and the editing data of an SVG, PDF, `.ai` or EPS that carries it), and the files an export
+writes carry it (PDF `Title` and XMP `dc:title`, SVG `<title>` and Dublin Core, PNG text, EPS and `.ai` `%%Title`),
+where the document has one. Changing the `title` with `file.info` sets the document's name, as it always did, and drops
+the title the file gave.
 `document.inspect` (`inspect_document`) and the `document.open` (`open_file`) reply report the File Info title as
 `fileInfoTitle`. Their `title` is the document's tab name, which comes from the file name once the document is saved
 to or opened from a file (with ` [Converted]` or ` [Recovered]` where that applies).
