@@ -108,6 +108,7 @@
 	32 bit	32 bits
 	32 bits/pixel	32 bits/píxel
 	3D and Materials	3D i materials
+	Dark	Fosc
 	Plane	Pla
 	Extrude	Extrusió
 	Revolve	Revolució
@@ -495,8 +496,6 @@ arrowhead	Target	Diana
 	Water	Aigua
 	Earth	Terra
 	Air	Aire
-	Light	Llum
-	Dark	Foscor
 	Sword	Espasa
 	Shield	Escut
 	Potion	Poció
