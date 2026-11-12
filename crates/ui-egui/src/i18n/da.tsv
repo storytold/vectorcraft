@@ -1823,6 +1823,9 @@ digits	Malayalam	Malayalam
 	Right Indent	Højre indrykning
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
 	Roman Hanging Punctuation	Romersk hængende tegnsætning
+	Korean Line Break Anywhere	Koreansk linjeskift hvor som helst
+	East Asian Composition Settings	Indstillinger for østasiatisk komposition
+	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
 	Single-line Composer	Enlinjesætter
 	Toggle Line Composer	Skift linjesætter

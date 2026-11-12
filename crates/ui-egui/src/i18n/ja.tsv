@@ -2946,6 +2946,9 @@ mark-style	Japanese	日本式
 	Right Plane	右面
 	Right:	右:
 	Roman Hanging Punctuation	欧文ぶら下がり
+	Korean Line Break Anywhere	韓国語の任意位置での改行
+	East Asian Composition Settings	東アジア言語の組版設定
+	Korean Composition Settings	韓国語の組版設定
 	Rotate	回転
 	Rotate Tool	回転ツール
 	Rotate View Tool	回転ビューツール

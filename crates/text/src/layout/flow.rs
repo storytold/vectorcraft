@@ -10,6 +10,7 @@ use super::{
     ListMarker, Mojikumi, ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose,
     fit_line, hyphen_glyph, is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
+use crate::shape::keep_korean_words;
 
 /// Does paragraph `para` push characters in (Kinsoku Shori Type Push In First or Push Out First,
 /// with kinsoku on)?
@@ -224,6 +225,10 @@ fn prepare_paragraph<'a, 'text>(
     let mut sg = cx.shape_para(pr.clone(), bidi.as_ref());
     // Thai, Lao, Khmer and Myanmar break lines between words, not at spaces.
     mark_word_ends(text.get(pr.clone()).unwrap_or_default(), pr.start, &mut sg);
+    // Korean breaks between words, unless Korean Line Break Anywhere lets it break between syllables.
+    if !para.korean_line_break_anywhere {
+        keep_korean_words(&mut sg);
+    }
     // Japanese composition: consecutive punctuation shares one half-em space.
     let mut compressed = if para.mojikumi == Mojikumi::LineEndHalf { compress_punctuation(&mut sg) } else { vec![] };
     // …and a quarter em between Japanese and Latin text.
