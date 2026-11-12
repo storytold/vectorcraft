@@ -1643,6 +1643,7 @@ mod tests {
             assert_eq!(origin.ch, '\u{0628}');
             assert!(origin.position().is_some());
             let ctx = egui::Context::default();
+            set_pstate(&ctx, "gl-font", Some((ALIASED_JOINING_FAMILY.to_string(), "Regular".to_string())));
             let cells = inks(&tall_shapes(&ctx, &mut app));
             double_click_in(&ctx, &mut app, cells[at].0.center(), TALL);
             let state = app.session.active().unwrap();
