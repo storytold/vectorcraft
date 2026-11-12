@@ -69,6 +69,25 @@ fn find<'a>(bar: &'a MenuBar, command: &str) -> &'a native_menu::Item {
     bar.items().into_iter().find(|it| it.command == Some(command)).unwrap_or_else(|| panic!("no {command} item"))
 }
 
+/// Is the font or plug-in that an item runs `command` with `params` for gone from the process-wide
+/// font database or plug-in registry? A test running alongside can remove a composite font or a
+/// plug-in, and the menus then drop its item.
+fn source_gone(command: Option<&str>, params: &Value) -> bool {
+    use vectorcraft_plugins::{PREFIX, effect, export, registry};
+    let field = |key| params.get(key).and_then(Value::as_str);
+    let plugin_gone = |id: Option<&str>| id.is_some_and(|id| registry::get(id).is_none());
+    match command {
+        Some("text.setStyle") => field("font").is_some_and(|f| !vectorcraft_text::FontDb::global().menu_family_list_now().iter().any(|x| x == f)),
+        Some("plugin.dialog") => plugin_gone(field("id")),
+        Some("file.openWith") => plugin_gone(field("importer").and_then(export::plugin_id)),
+        Some("effect.apply" | "effect.dialog") => plugin_gone(field("effect").and_then(effect::plugin_id)),
+        Some(c) if vectorcraft_engine::cmd::plugin::is_command_id(c) => {
+            plugin_gone(c.strip_prefix(PREFIX).and_then(|rest| rest.rsplit_once('.')).map(|(id, _)| id))
+        }
+        _ => false,
+    }
+}
+
 #[test]
 fn vectorcraft_gets_a_mac_app_menu() {
     let bar = bar(&app(true));
@@ -722,9 +741,13 @@ fn the_menu_bar_is_inert_while_a_file_dialog_is_open() {
     m.frame(vec![]);
     m.frame(vec![]);
     assert!(!m.app.file_dialog_open());
-    // Every row from before is back as it was (tests running alongside may add plug-in rows).
+    // Every row from before is back as it was. Tests running alongside may add rows, and may
+    // remove the composite font or plug-in a row is for.
     let after = rows(&m.fake.last());
-    assert!(rows(&before).iter().all(|r| after.contains(r)), "the menus are as before");
+    for r in rows(&before) {
+        let listed = after.iter().any(|a| (a.0, &a.1) == (r.0, &r.1));
+        assert!(after.contains(&r) || (!listed && source_gone(r.0, &r.1)), "{r:?} is not as before");
+    }
     m.fake.report(native_menu::Event::Click(rulers.1));
     m.frame(vec![]);
     assert_eq!(m.app.ui.view.rulers, !rulers.0);
