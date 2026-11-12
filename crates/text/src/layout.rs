@@ -241,7 +241,7 @@ impl Ctx<'_> {
     /// Layout on or Fractional Widths off, whole-point advances.
     fn finish_shaping<'s>(&self, v: &mut [SGlyph], style: impl Fn(&SGlyph) -> &'s CharStyle) {
         if self.vertical {
-            tate_chu_yoko(v, |g| {
+            tate_chu_yoko(v, self.system_layout || !self.fractional_widths, |g| {
                 let st = style(g);
                 TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right }
             });
@@ -318,6 +318,8 @@ impl Ctx<'_> {
         tab.dx = 0.0;
         tab.dy = 0.0;
         tab.kern_shift = 0.0;
+        tab.aki_shift = 0.0;
+        tab.aki = 0.0;
         tab.tcy = None;
         tab.vpal = None;
         let left = para.laid_out_left_indent();
@@ -617,6 +619,8 @@ impl Ctx<'_> {
         k.dx = 0.0;
         k.dy = 0.0;
         k.kern_shift = 0.0;
+        k.aki_shift = 0.0;
+        k.aki = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
@@ -674,6 +678,8 @@ mod emit_kashida_mark_last {
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -736,6 +742,8 @@ mod emit_kashida_mark_last {
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,

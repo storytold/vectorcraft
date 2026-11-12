@@ -163,6 +163,34 @@ fn the_space_before_the_first_character_on_a_path_is_its_dx() {
     assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("line break")), "{:?}", out.warnings);
 }
 
+/// Insert Aki: each character the layout moves by its Aki starts a `<tspan>` where the character is
+/// drawn, so a reader draws the text where the canvas does, with fewer `<tspan>`s asked for too.
+/// On a path the type is outlined.
+#[test]
+fn insert_aki_places_each_moved_character() {
+    // 250/1000 em of 12 pt before the O (3 pt) and 500/1000 after it (6 pt), then a run with Aki
+    // after every character, and a second line.
+    let spaced = CharStyle { aki_left: 250.0, aki_right: 500.0, ..style(12.0) };
+    let runs = vec![run("H", style(12.0)), run("O", spaced), run("H ", style(12.0)), run("OHO\nHO", CharStyle { aki_right: 500.0, ..style(12.0) })];
+    let d = area_doc(runs, 200.0, Justify::Left);
+    assert_drawn_in_place(&d);
+    let plain = tspans(&export(&area_doc(vec![run("HOH OHO\nHO", style(12.0))], 200.0, Justify::Left), &ExportOptions::default())).len();
+    let fewer = tspans(&export(&d, &ExportOptions { fewer_tspans: true, ..Default::default() })).len();
+    assert!(fewer > plain, "each moved character is placed with fewer tspans too: {plain} {fewer}");
+    let mut t = TextObject::point(Point::ZERO, "", style(12.0));
+    t.runs = vec![run("HO", CharStyle { aki_left: 250.0, ..style(12.0) })];
+    let mut line = BezPath::new();
+    line.move_to((20.0, 100.0));
+    line.line_to((280.0, 100.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = vectorcraft_svg::export_full(&d, &ExportOptions::default(), None);
+    assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("Insert Aki")), "{:?}", out.warnings);
+}
+
 /// Proportional Metrics (#966) is written as the `palt` feature, beside the character's own.
 #[test]
 fn proportional_metrics_write_palt() {

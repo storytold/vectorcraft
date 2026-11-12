@@ -395,6 +395,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
         json!({"baseline_shift": 1296.1}),
         json!({"tcyUpDown": 1296.1}),
         json!({"tcyLeftRight": -1296.1}),
+        json!({"akiLeft": -0.1}),
+        json!({"akiRight": 1000.1}),
     ] {
         let key = attrs.as_object().unwrap().keys().next().unwrap();
         for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
@@ -416,7 +418,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
             "size": 1296.0, "leading": 5000.0,
             "h_scale": 1.0, "v_scale": 10000.0,
             "baseline_shift": -1296.0,
-            "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0
+            "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0,
+            "akiLeft": 0.0, "akiRight": 1000.0
         }}),
     )
     .unwrap();
