@@ -616,6 +616,7 @@ fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
             }
             stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
             g.angle = g.angle.rem_euclid(360.0);
+            g.gradient.repeats = g.gradient.repeat_count();
             let conic = g.gradient.kind == vectorcraft_color::GradientKind::Conic;
             let no_focal = conic || g.gradient.kind == vectorcraft_color::GradientKind::Diamond;
             if let Some(geom) = &mut g.geom {

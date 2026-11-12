@@ -897,6 +897,17 @@ font-technology	Variable	Variables
 	The selected character's font is not available.	La police du caractère sélectionné n’est pas disponible.
 	No alternates for the selected character.	Aucune variante pour le caractère sélectionné.
 	Double-click to replace	Double-cliquez pour remplacer
+	Select one character with the Type tool first.	Sélectionnez d’abord un caractère avec l’outil Texte.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} est un glyphe de {font}, et non de la police du texte sélectionné ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} appartient à {base} (U+{base_code}) {place} ; votre sélection est {sel} (U+{code}).
+	at the start of a word	au début d’un mot
+	in the middle of a word	au milieu d’un mot
+	at the end of a word	à la fin d’un mot
+	standing alone	isolé
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} n’est pas une variante de {sel} (U+{code}) tel qu’il se trouve dans son mot.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Double-cliquez pour insérer {base} (U+{code}) à la place : une forme de présentation ne se lie pas, la lettre si.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) a été inséré à la place d’une forme de présentation : la police le lie à ses voisins selon la position.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Aucune fonction OpenType ne dessine ce glyphe ici : il remplace le glyphe du caractère et peut ne pas se lier aux caractères voisins.
 	Double-click to insert	Double-cliquez pour insérer
 	Double-click to rename	Double-cliquez pour renommer
 	Double-click to target the contents	Double-cliquez pour cibler le contenu
@@ -1988,6 +1999,8 @@ font-technology	Variable	Variables
 	Metallic Gradients	Dégradés métalliques
 	Meters	Mètres
 	Method:	Méthode :
+	Pad	Prolonger
+	Repeats	Répétitions
 	Millimeters	Millimètres
 	Minify	Minifier
 	Minimal	Minimal
@@ -2352,6 +2365,10 @@ font-technology	Variable	Variables
 	Arch	Voûte
 @msg	select point type or type on a path	sélectionnez du texte de point ou du texte curviligne
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	le texte curviligne d’un texte lié ne peut pas utiliser le texte dynamique : {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	un texte curviligne sur un tracé ouvert ou un tracé transparent ne peut pas être centré en haut ou en bas : {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	un texte curviligne sur un tracé sans longueur ou sans hauteur ne peut pas être centré : {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	le texte curviligne d’un texte lié ne peut pas être centré en haut ou en bas : {frames}
+@msg	select type on a closed path	sélectionnez un texte curviligne sur un tracé fermé
 	Optimize for fast web view	Optimiser pour un affichage web rapide
 	Optimized	Optimisé
 	Options	Options
@@ -3406,6 +3423,9 @@ digits	Malayalam	Malayalam
 	Split Path	Scinder le tracé
 	spot	ton direct
 	Spot Color	Ton direct
+	Spot Color Objects	Objets avec tons directs
+	Pattern Objects	Objets avec motifs
+	Gradient Objects	Objets avec dégradés
 	Spot Colors	Tons directs
 	Spot Colors…	Tons directs…
 	Spread:	Étendue :
@@ -3714,6 +3734,8 @@ digits	Malayalam	Malayalam
 	Type on a Path	Texte curviligne
 	Type on a Path Options	Options de texte curviligne
 	Type on a Path Options…	Options de texte curviligne…
+	Center on Top	Centrer en haut
+	Center on Bottom	Centrer en bas
 	Type on a Path Tool	Outil Texte curviligne
 	Type Orientation	Orientation du texte
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Le texte reste du texte, et chaque contour devient une ligne avec son épaisseur et ses tirets.
@@ -4361,6 +4383,8 @@ axis	Both	Les deux
 @msg	the Smooth slider is not open	le curseur Lisser n’est pas ouvert
 @msg	the screen color sampler is already open	l’outil de prélèvement de couleur à l’écran est déjà ouvert
 @msg	this system has no screen color sampler	ce système n’a pas d’outil de prélèvement de couleur à l’écran
+@msg	the screen color sampler did not answer	l’outil de prélèvement de couleur à l’écran n’a pas répondu
+@msg	the screen color sampler failed	l’outil de prélèvement de couleur à l’écran a échoué
 @msg	bad colour `{hex}` (#rrggbb)	couleur non valide `{hex}` (#rrggbb)
 @msg	bad page tree	arborescence des pages non valide
 @msg	bad shortcut	raccourci non valide
@@ -4390,6 +4414,7 @@ axis	Both	Les deux
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what} : `{h}` n’est pas une couleur comme "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what} : {MAX_TABLE} couleurs au maximum
 @msg	command `{0}` is not available right now: {1}	la commande `{0}` n’est pas disponible pour le moment : {1}
+@msg	command `{id}` is not available right now	la commande `{id}` n’est pas disponible pour le moment
 @msg	compound paths can only contain paths	les tracés transparents ne peuvent contenir que des tracés
 @msg	compressed (RLE) bitmaps can't be read yet	les images bitmap compressées (RLE) ne peuvent pas encore être lues
 @msg	damaged	endommagé
@@ -6035,6 +6060,7 @@ theme	Appearance	Apparence
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Repères géométriques
+	Optical Effects	Effets optiques
 	Geometric Patterns	Motifs géométriques
 	Grit Textures	Textures granuleuses
 	Ease In	Accélération progressive
@@ -6077,6 +6103,9 @@ axis	Y Axis	Axe Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` s’applique aux fonds en dégradé (paint.setFill)
 @msg	`dither` must be true or false	`dither` doit valoir true ou false
 @msg	`method` must be classic or perceptual	`method` doit être classic ou perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` doit être pad, repeat ou reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` doit être un nombre entier de 1 à {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’applique aux dégradés linéaires, radiaux, coniques et en losange
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installer « {name} », qui demande un budget de calcul important ?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Chaque exécution peut durer jusqu’à {minutes} minutes et faire {times} fois le travail permis aux autres modules externes. Elle s’exécute en arrière-plan, et vous pouvez l’annuler.
@@ -6430,6 +6459,11 @@ axis	Y Axis	Axe Y
 	Grass Fan	Éventail à herbe
 	Pattern Borders	Bordures de motif
 	Scatter Shapes	Formes de dispersion
+	Dry Media	Techniques sèches
+	Chalk Grain	Grain de craie
+	Graphite Pencil	Crayon graphite
+	Wax Crayon	Craie grasse
+	Charcoal Dust	Poussière de fusain
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)
@@ -7090,3 +7124,8 @@ breakText	Glyphs	Glyphes
 @msg	Some islands could not be joined to the area around the art	Certains îlots n’ont pas pu être reliés à la zone autour de l’illustration
 @msg	`width` must be from {lo} to {hi} pt	`width` doit être compris entre {lo} et {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` doit être un nombre entier compris entre 1 et {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Cadre et lignes d’échenillage…
+	Weed Box and Lines	Cadre et lignes d’échenillage
+	Margin	Marge
+	Box	Cadre
+	Swatch	Nuance
