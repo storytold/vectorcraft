@@ -5699,6 +5699,12 @@ axis	Y Axis	Y축
 @msg	command {name}: `label` must be 1-64 printable characters	명령 {name}: `label`은 인쇄 가능한 문자 1-64자여야 합니다
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	명령 {name}: a-z 0-9 _로 이루어지고 문자로 시작하는 1-{MAX_COMMAND_ID}자 ID를 사용하세요
 @msg	command {name}: {e}	명령 {name}: {e}
+@msg	manifest: {e}	매니페스트: {e}
+@msg	manifest: {e} at line {line} column {column}	매니페스트: {e} ({line}행 {column}열)
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands`는 각각 `id`와 `label`이 있는 명령 목록이어야 합니다
+@msg	command {name} must be an object with an `id` and a `label`	명령 {name}은(는) `id`와 `label`이 있는 객체여야 합니다
+@msg	missing field `{key}`	`{key}` 필드가 없습니다
+@msg	duplicate field `{key}`	`{key}` 필드가 중복되었습니다
 @msg	only a filter or a live effect declares `commands`	필터나 라이브 효과만 `commands`를 선언합니다
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	모듈의 SHA-256이 `hash`에 지정된 값과 다릅니다. 아무것도 설치되지 않았습니다

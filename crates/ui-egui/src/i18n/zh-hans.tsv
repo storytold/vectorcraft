@@ -5959,6 +5959,12 @@ axis	Y Axis	Y 轴
 @msg	command {name}: `label` must be 1-64 printable characters	命令 {name}：`label` 必须是 1-64 个可打印字符
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	命令 {name}：请使用由 a-z 0-9 _ 组成、以字母开头的 1-{MAX_COMMAND_ID} 个字符的 ID
 @msg	command {name}: {e}	命令 {name}：{e}
+@msg	manifest: {e}	清单：{e}
+@msg	manifest: {e} at line {line} column {column}	清单：{e}（第 {line} 行，第 {column} 列）
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` 必须是命令列表，每个命令都有 `id` 和 `label`
+@msg	command {name} must be an object with an `id` and a `label`	命令 {name} 必须是包含 `id` 和 `label` 的对象
+@msg	missing field `{key}`	缺少字段 `{key}`
+@msg	duplicate field `{key}`	字段 `{key}` 重复
 @msg	only a filter or a live effect declares `commands`	只有滤镜或实时效果才能声明 `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}：{e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模块的 SHA-256 与 `hash` 给出的不符：未安装任何内容

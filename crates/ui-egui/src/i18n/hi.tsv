@@ -5419,6 +5419,11 @@ antiAlias	Sharp	शार्प
 @msg	command {name}: `label` must be 1-64 printable characters	कमांड {name}: `label` में 1-64 प्रिंट करने योग्य वर्ण होने चाहिए
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	कमांड {name}: a-z 0-9 _ के 1-{MAX_COMMAND_ID} वर्णों वाली ऐसी id इस्तेमाल करें जो अक्षर से शुरू हो
 @msg	command {name}: {e}	कमांड {name}: {e}
+@msg	manifest: {e} at line {line} column {column}	प्रकटन: {e} (लाइन {line}, कॉलम {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` कमांड की एक सूची होनी चाहिए, हर एक में `id` और `label` हो
+@msg	command {name} must be an object with an `id` and a `label`	कमांड {name} एक ऑब्जेक्ट होना चाहिए जिसमें `id` और `label` हों
+@msg	missing field `{key}`	फ़ील्ड `{key}` नहीं है
+@msg	duplicate field `{key}`	फ़ील्ड `{key}` दो बार है
 @msg	only a filter or a live effect declares `commands`	केवल फ़िल्टर या लाइव इफ़ेक्ट ही `commands` घोषित करता है
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	मॉड्यूल का SHA-256 वह नहीं है जो `hash` बताता है: कुछ भी इंस्टॉल नहीं हुआ

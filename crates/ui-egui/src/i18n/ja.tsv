@@ -5803,6 +5803,12 @@ axis	Y Axis	Y 軸
 @msg	command {name}: `label` must be 1-64 printable characters	コマンド {name}: `label` は印刷可能な 1-64 文字にしてください
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	コマンド {name}: a-z 0-9 _ からなり英字で始まる 1-{MAX_COMMAND_ID} 文字の ID を使用してください
 @msg	command {name}: {e}	コマンド {name}: {e}
+@msg	manifest: {e}	マニフェスト: {e}
+@msg	manifest: {e} at line {line} column {column}	マニフェスト: {e} ({line} 行目、{column} 列目)
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` は、それぞれ `id` と `label` を持つコマンドのリストにしてください
+@msg	command {name} must be an object with an `id` and a `label`	コマンド {name} は `id` と `label` を持つオブジェクトにしてください
+@msg	missing field `{key}`	フィールド `{key}` がありません
+@msg	duplicate field `{key}`	フィールド `{key}` が重複しています
 @msg	only a filter or a live effect declares `commands`	`commands` を宣言できるのはフィルターかライブ効果だけです
 @msg	“{name}” › {label}: {e}	「{name}」 › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	モジュールの SHA-256 が `hash` の値と一致しません。何もインストールされませんでした

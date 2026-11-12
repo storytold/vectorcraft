@@ -6077,6 +6077,12 @@ axis	Y Axis	Y ekseni
 @msg	command {name}: `label` must be 1-64 printable characters	{name} komutu: `label` 1-64 yazdırılabilir karakter olmalıdır
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} komutu: a-z 0-9 _ karakterlerinden oluşan ve harfle başlayan 1-{MAX_COMMAND_ID} karakterlik bir kimlik kullanın
 @msg	command {name}: {e}	{name} komutu: {e}
+@msg	manifest: {e}	bildirim: {e}
+@msg	manifest: {e} at line {line} column {column}	bildirim: {e} (satır {line}, sütun {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands`, her biri `id` ve `label` içeren bir komut listesi olmalıdır
+@msg	command {name} must be an object with an `id` and a `label`	{name} komutu `id` ve `label` içeren bir nesne olmalıdır
+@msg	missing field `{key}`	`{key}` alanı eksik
+@msg	duplicate field `{key}`	`{key}` alanı yinelenmiş
 @msg	only a filter or a live effect declares `commands`	`commands` yalnızca bir filtre veya canlı efekt tarafından bildirilir
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modül `hash` içinde verilen SHA-256 değerine sahip değil: hiçbir şey yüklenmedi

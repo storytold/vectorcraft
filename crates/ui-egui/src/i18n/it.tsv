@@ -5738,6 +5738,12 @@ axis	Y Axis	Asse Y
 @msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` deve avere 1-64 caratteri stampabili
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: usa un id di 1-{MAX_COMMAND_ID} caratteri tra a-z 0-9 _ che inizi con una lettera
 @msg	command {name}: {e}	comando {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (riga {line}, colonna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` deve essere un elenco di comandi, ciascuno con `id` e `label`
+@msg	command {name} must be an object with an `id` and a `label`	il comando {name} deve essere un oggetto con `id` e `label`
+@msg	missing field `{key}`	campo `{key}` mancante
+@msg	duplicate field `{key}`	campo `{key}` duplicato
 @msg	only a filter or a live effect declares `commands`	solo un filtro o un effetto dinamico dichiara `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	il modulo non ha lo SHA-256 indicato da `hash`: non è stato installato nulla
