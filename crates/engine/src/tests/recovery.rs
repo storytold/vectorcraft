@@ -958,6 +958,54 @@ fn a_copy_left_behind_is_not_offered_by_its_own_app() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A copy left in an area the session had to leave is not another app's to offer, restore or
+/// discard while the session runs, even after the app that locked that area let it go: an entry in
+/// the session's new area says it keeps it. Once the copy is written again in the new area, the
+/// entry goes; after a crash before that, the copy is offered.
+#[cfg(unix)]
+#[test]
+fn a_copy_left_behind_is_not_offered_by_another_app_while_its_app_runs() {
+    use cmd::recovery::Lock;
+    let dir = std::env::temp_dir().join(format!("vc-recovery-leftother-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let left_behind = |area: &str| dir.join(area).join("Untitled-1-1.vectorcraft");
+    let leave = |a: &mut Session, area: &str| {
+        std::fs::remove_file(dir.join(area).join(".lock")).unwrap();
+        let Ok(Lock::Held(other)) = FolderStore::new(&dir).lock(area) else { panic!("the other app locks the area") };
+        cmd::recovery::heartbeat(a);
+        drop(other);
+        a.recovery.own_area().unwrap().to_string()
+    };
+    let (mut a, area) = saved_in(&dir);
+    let mine = leave(&mut a, &area);
+    assert_ne!(mine, area);
+    assert!(dir.join(&mine).join(format!("keeps-{area}")).is_file());
+    // Removed meanwhile: the next heartbeat writes it again.
+    std::fs::remove_file(dir.join(&mine).join(format!("keeps-{area}"))).unwrap();
+    cmd::recovery::heartbeat(&mut a);
+    assert!(dir.join(&mine).join(format!("keeps-{area}")).is_file());
+    let mut b = other_app(&dir);
+    assert!(offered(&mut b).is_empty());
+    assert_eq!(restored(b.execute("file.recovery.restore", &json!({})).unwrap()), 0);
+    assert!(b.execute("file.recovery.discard", &json!({})).unwrap()["discarded"].as_array().unwrap().is_empty());
+    assert!(b.execute("file.recovery.discard", &json!({"file": format!("{area}/Untitled-1-1")})).is_err());
+    assert!(left_behind(&area).is_file());
+    // Written again in the new area: the copy left behind and the entry go.
+    a.execute("file.recovery.save", &json!({})).unwrap();
+    assert!(!left_behind(&area).exists());
+    assert!(!dir.join(&mine).join(format!("keeps-{area}")).exists());
+    assert!(offered(&mut b).is_empty());
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+    // A crash before the copy is written again: the copy left behind is offered.
+    let (mut a, area) = saved_in(&dir);
+    leave(&mut a, &area);
+    drop(a);
+    assert_eq!(offered(&mut other_app(&dir)).len(), 1);
+    assert!(left_behind(&area).is_file());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A complex document (Data Recovery off for those) gets no new copy after the session left its
 /// area: it keeps the copy it left there, and the heartbeat asks for it only once.
 #[cfg(unix)]
