@@ -450,9 +450,10 @@ fn sent_paths(v: &Value, out: &mut Vec<(String, String)>) {
         if !unreadable_path_like(s) {
             return;
         }
+        // A URL that names another host as the path after its scheme (`//host/share/…`).
         let path = match file_url_path(s) {
             Some(Some(path)) => path,
-            Some(None) => return,
+            Some(None) => percent_decoded(&s[5..]),
             None => s.to_string(),
         };
         let Some(name) = path.rsplit(['/', '\\']).find(|part| !part.is_empty()).filter(|name| *name != path) else { return };
