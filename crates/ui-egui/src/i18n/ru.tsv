@@ -2853,6 +2853,10 @@ digits	Malayalam	Малаялам
 	Replace Font	Заменить шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замените его другим файлом или игнорируйте: его изображения продолжат показывать предварительный просмотр, сохранённый с документом.
 	Replace Spine	Заменить остов
+	Create Spine	Создать остов
+	Create Spine:	Создать остов:
+	Always	Всегда
+	Never	Никогда
 	Replace Symbol	Заменить символ
 	Reset Transformation	Сбросить трансформацию
 	Replace With Font	Заменить шрифтом

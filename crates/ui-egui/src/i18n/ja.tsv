@@ -290,6 +290,10 @@ digits	Malayalam	マラヤーラム数字
 	Blend Options…	ブレンドオプション…
 	Expand	拡張
 	Replace Spine	スパインを置き換え
+	Create Spine	スパインを作成
+	Create Spine:	スパインを作成:
+	Always	常に
+	Never	しない
 	Reverse Spine	スパインを反転
 	Reverse Front to Back	前後を反転
 	Envelope Distort	エンベロープ

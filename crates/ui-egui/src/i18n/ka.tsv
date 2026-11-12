@@ -220,6 +220,10 @@
 	Blend Options…	გადასვლის პარამეტრები…
 	Expand	გაშლა
 	Replace Spine	ხერხემლის ჩანაცვლება
+	Create Spine	ხერხემლის შექმნა
+	Create Spine:	ხერხემლის შექმნა:
+	Always	ყოველთვის
+	Never	არასოდეს
 	Reverse Spine	ხერხემლის შებრუნება
 	Reverse Front to Back	რიგის შებრუნება წინიდან უკან
 	Envelope Distort	გარსით დეფორმაცია
