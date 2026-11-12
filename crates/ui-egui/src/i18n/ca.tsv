@@ -1573,6 +1573,8 @@ antiAlias	Sharp	Nítid
 	Extrude & Bevel…	Extrudeix i bisella…
 	3D (Classic)	3D (clàssic)
 	Extrude & Bevel (Classic)…	Extrudeix i bisella (clàssic)…
+	Revolve (Classic)…	Revoluciona (clàssic)…
+	Rotate (Classic)…	Gira (clàssic)…
 	Surface	Superfície
 	Wireframe	Filferro
 	No Shading	Sense ombra
@@ -1882,6 +1884,7 @@ digits	Malayalam	Malaiàlam
 	Gridline every	Línia de quadrícula cada
 	Gridline every:	Línia de quadrícula cada:
 	Grids In Back	Quadrícules al darrere
+	Grit Textures	Textures granulades
 	Group	Agrupa
 	Group Selection	Selecció de grup
 	Group Selection Tool	Eina de selecció de grup
@@ -1906,6 +1909,14 @@ digits	Malayalam	Malaiàlam
 	Hand	Mà
 	Hand Tool	Eina de mà
 	Hand-Drawn	Dibuixat a mà
+	Painted and Sketched	Pintat i esbossat
+	Washed Blue	Blau rentat
+	Bristle Ochre	Ocre de cerres
+	Pastel Heather	Bruc pastel
+	Charcoal Shade	Ombra de carbó
+	Ink Contour	Contorn de tinta
+	Wet Ink	Tinta humida
+	Fine Pen	Ploma fina
 	Handles	Nanses
 	Hard	Dur
 	Hard Light	Llum dura
@@ -5082,6 +5093,7 @@ digits	Malayalam	Malaiàlam
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` ha de ser 1, 3 o 5
 @msg	`select` must be true or false	`select` ha de ser true o false
 @msg	`stops` must be an array	`stops` ha de ser una matriu
+@msg	`{key}` must be an array	`{key}` ha de ser una matriu
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` ha de ser un objecte d’opcions SVG (vegeu document.formats)
 @msg	`to` must be "corner" or "smooth"	`to` ha de ser "corner" o "smooth"
 @msg	`{_1}` has no brushes to apply	`{_1}` no té pinzells per aplicar
@@ -6483,6 +6495,10 @@ anchor	Points:	Punts:
 @msg	features lists at most {max} tags	features admet com a màxim {max} etiquetes
 @msg	unknown OpenType feature `{t}`	funció OpenType desconeguda `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} ha de ser un nombre superior a 0 i com a màxim {max}
+@msg	{label} must be at most {max} characters	{label} ha de tenir com a màxim {max} caràcters
+@msg	{label} must be one character	{label} ha de ser un sol caràcter
+@msg	at most {max} tab stops	com a màxim {max} tabulacions
+@msg	unknown align `{other}`	alineació desconeguda `{other}`
 @msg	no character style `{name}`	No s'ha trobat l'estil de caràcter `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6653,6 +6669,12 @@ breakText	Glyphs	Glifs
 	Delete the selected brushes?	Voleu suprimir els pinzells seleccionats?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Hi ha traços que fan servir un o més d’aquests pinzells. Voleu treure els pinzells d’aquests traços i suprimir els pinzells?
 	Remove Strokes	Elimina els traços
+	Place Brush Art	Col·loca l’art del pinzell
+	Replace Brush Art	Substitueix l’art del pinzell
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
+	Apply to Strokes	Aplica als traços
+	Leave Strokes	Deixa els traços
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` no té art (només en tenen els pinzells de dispersió, artístics i de motiu)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Eines d’organització
 	Arrange in Grid…	Organitza en quadrícula…
@@ -6904,6 +6926,19 @@ breakText	Glyphs	Glifs
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} línia anterior descartada|{n} línies anteriors descartades
 @plural	{n} line cut|{n} lines cut	{n} línia tallada|{n} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
+
+# Learn panel
+	Learn	Aprèn
+	Explore tutorials	Explora els tutorials
+	For you	Per a vós
+	Skills	Habilitats
+	Get started	Primers passos
+	Quick skill guide	Guia ràpida d’habilitats
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorials pràctics breus de les eines essencials, agrupats per habilitat. Trieu una habilitat per veure’n els tutorials.
+	List Tutorials	Llista els tutorials
+	Show Tutorial	Mostra el tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats

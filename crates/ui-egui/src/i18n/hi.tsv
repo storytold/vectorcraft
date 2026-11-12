@@ -1745,6 +1745,8 @@ antiAlias	Sharp	शार्प
 	Extrude & Bevel…	एक्सट्रूडेड और बेवेल…
 	3D (Classic)	3D (क्लासिक)
 	Extrude & Bevel (Classic)…	एक्सट्रूडेड और बेवेल (क्लासिक)…
+	Revolve (Classic)…	रिवॉल्व (क्लासिक)…
+	Rotate (Classic)…	घुमाव (क्लासिक)…
 	Surface	सतह
 	Wireframe	वायरफ़्रेम
 	No Shading	कोई शेडिंग नहीं
@@ -2073,6 +2075,7 @@ antiAlias	Sharp	शार्प
 	Gridline every	ग्रिडलाइन हर
 	Gridline every:	ग्रिडलाइन हर:
 	Grids In Back	ग्रिड में वापस
+	Grit Textures	दानेदार टेक्सचर
 	Group	समूह
 	Group Overlapping Objects	समूह ओवरलैपिंग ऑब्जेक्ट
 	Group Selection	समूह सिलेक्शन
@@ -2100,6 +2103,14 @@ antiAlias	Sharp	शार्प
 	Hand	हैंड
 	Hand Tool	हैंड टूल
 	Hand-Drawn	हाथ-ड्रन
+	Painted and Sketched	पेंट और स्केच
+	Washed Blue	धुला नीला
+	Bristle Ochre	ब्रश गेरू
+	Pastel Heather	पेस्टल बैंगनी
+	Charcoal Shade	चारकोल छाया
+	Ink Contour	स्याही रूपरेखा
+	Wet Ink	गीली स्याही
+	Fine Pen	बारीक पेन
 	Handles	हैंडल्स
 	Hard	कठोर
 	Hard Light	हार्ड लाइट
@@ -3770,6 +3781,12 @@ antiAlias	Sharp	शार्प
 	Remove Selected Assets	सिलेक्टेड परिसंपत्तियों को हटा दें
 	Remove Selected Entry	सिलेक्टेड प्रविष्टि निकालें
 	Remove Strokes	स्ट्रोक हटाएँ
+	Place Brush Art	ब्रश आर्टवर्क रखें
+	Replace Brush Art	ब्रश आर्टवर्क बदलें
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	स्ट्रोक्स इस ब्रश का उपयोग कर रहे हैं। नया आर्टवर्क उन स्ट्रोक्स पर लागू करें, या उन्हें जैसा है वैसा छोड़कर नए आर्टवर्क वाले ब्रश की एक कॉपी जोड़ें?
+	Apply to Strokes	स्ट्रोक्स पर लागू करें
+	Leave Strokes	स्ट्रोक्स जैसे हैं वैसे छोड़ें
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` में कोई आर्टवर्क नहीं है (आर्टवर्क केवल स्कैटर, आर्ट और पैटर्न ब्रश में होता है)
 	Remove the shortcut	शॉर्टकट निकालें
 	Remove Threading	थ्रेडिंग निकालें
 	Remove White Overprint	व्हाइट ओवरप्रिंट निकालें
@@ -5546,6 +5563,9 @@ antiAlias	Sharp	शार्प
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} डॉक्यूमेंट के {n} आर्टबोर्ड में से 1 रखता है: फ़ाइल एक के साथ फिर से खुलती है। उन्हें रखने के लिए संरक्षित संपादन क्षमताओं को चालू करें।
 @msg	{label} must be a number	{label} एक नंबर होना चाहिए
 @msg	{label} must be a number above 0 and at most {max}	{label} 0 से ऊपर और सबसे {max} पर होना चाहिए
+@msg	{label} must be at most {max} characters	{label} में अधिकतम {max} वर्ण होने चाहिए
+@msg	{label} must be one character	{label} एक वर्ण होना चाहिए
+@msg	at most {max} tab stops	अधिकतम {max} टैब स्टॉप
 @msg	{label} must be a number at most {max}	{label} सबसे {max} पर एक नंबर होना चाहिए
 @msg	{label} must be a number from -1296 to 1296	{label} को -1296 से 1296 के बीच की संख्या होना चाहिए
 @msg	{label} must be a number from {min} to {max}	{label} को {min} से {max} तक एक नंबर होना चाहिए
@@ -5901,6 +5921,7 @@ antiAlias	Sharp	शार्प
 @msg	`status` must be linked, embedded, missing or modified, or a list of them	`status` को लिंक, एम्बेडेड, लापता या संशोधित किया जाना चाहिए, या उनमें से एक सूची
 @msg	`stop` must be a stop index	`stop` एक स्टॉप इंडेक्स होना चाहिए
 @msg	`stops` must be an array	`stops` एक सारणी होना चाहिए
+@msg	`{key}` must be an array	`{key}` एक सारणी होना चाहिए
 @msg	`story` styles the whole story: give no `start` or `end`	`story` पूरी स्टोरी को स्टाइल करता है: `start` या `end` न दें
 @msg	`story` takes the whole story: give no `start` or `end`	`story` पूरी स्टोरी लेता है: `start` या `end` न दें
 @msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode` स्ट्रोक पर लागू होता है (stroke: true)
@@ -8357,6 +8378,19 @@ theme	Appearance	अपीयरेंस
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} पुरानी पंक्ति हटाई गई|{n} पुरानी पंक्तियाँ हटाई गईं
 @plural	{n} line cut|{n} lines cut	{n} पंक्ति काटी गई|{n} पंक्तियाँ काटी गईं
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में
+
+# Learn panel
+	Learn	सीखें
+	Explore tutorials	ट्यूटोरियल देखें
+	For you	आपके लिए
+	Skills	कौशल
+	Get started	शुरू करें
+	Quick skill guide	त्वरित कौशल गाइड
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	आवश्यक टूल के लिए छोटे व्यावहारिक ट्यूटोरियल, कौशल के अनुसार समूहित। किसी कौशल के ट्यूटोरियल देखने के लिए उसे चुनें।
+	List Tutorials	ट्यूटोरियल की सूची
+	Show Tutorial	ट्यूटोरियल दिखाएँ
+@msg	missing `tutorial` (see learn.list)	लापता `tutorial` (learn.list देखें)
+@msg	unknown tutorial `{id}` (see learn.list)	अज्ञात ट्यूटोरियल `{id}` (learn.list देखें)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	स्थगित इफ़ेक्ट्स रिफ्रेश करें

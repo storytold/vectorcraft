@@ -292,6 +292,200 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
     }
 }
 
+/// Commands whose menu item opens a slider or a dialog before anything changes: the sliders of
+/// Smooth and Simplify, Offset Path, the Object › Transform dialogs, Average, Split Into Grid,
+/// Vector Halftone, Rearrange All Artboards, Pathfinder Options, Arrange in Grid, Divide into
+/// Dashes, Find Nearest Swatch, and four "…" items whose menu entry gives params.
+const MENU_DIALOG_COMMANDS: [&str; 22] = [
+    "object.path.smooth",
+    "object.path.simplify",
+    "object.path.offsetPath",
+    "object.move",
+    "object.rotate",
+    "object.scale",
+    "object.reflect",
+    "object.shear",
+    "object.transformEach",
+    "path.average",
+    "path.averageJoin",
+    "object.path.splitIntoGrid",
+    "object.vectorHalftone",
+    "artboard.rearrange",
+    "object.pathfinder.options",
+    "addon.arrange.grid",
+    crate::addons::pathtools::dashes::COMMAND,
+    crate::addons::color::nearest::COMMAND,
+    "object.path.cleanUp",
+    "object.mesh.create",
+    "type.smartPunctuation",
+    "edit.findReplace",
+];
+
+/// F pressed without a modifier.
+fn press_f() -> Vec<egui::Event> {
+    vec![
+        egui::Event::Key { key: Key::F, physical_key: Some(Key::F), pressed: true, repeat: false, modifiers: Modifiers::NONE },
+        egui::Event::Text("f".into()),
+    ]
+}
+
+/// An app with a selected rectangle where `id` has the shortcut `shortcut` and F runs nothing else.
+fn app_with_shortcut(id: &str, shortcut: &str) -> VectorcraftApp {
+    let mut app = app_with_a_selected_rectangle();
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.screenMode", "");
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, id, shortcut);
+    app.ui.status.clear();
+    app
+}
+
+fn undo_len(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// A command given a key without a modifier runs what its menu item runs, as it does on a chord:
+/// its slider or dialog opens and nothing changes until it is confirmed.
+#[test]
+fn a_single_key_shortcut_opens_the_dialog_its_menu_item_opens() {
+    let chord = vec![
+        egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
+        egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
+    ];
+    let mut failures = vec![];
+    for id in MENU_DIALOG_COMMANDS {
+        let mut opened = |shortcut: &str, events: Vec<egui::Event>| {
+            let mut app = app_with_shortcut(id, shortcut);
+            let before = undo_len(&app);
+            frame(&mut app, events);
+            crate::shortcut_editor::sync(&crate::state::UiState::default());
+            if undo_len(&app) != before {
+                failures.push(format!("{id} on {shortcut} changed the document: {}", app.ui.status));
+            }
+            app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.get("__command").cloned()))
+        };
+        let by_key = opened("F", press_f());
+        let by_chord = opened("Cmd+Alt+Shift+F9", chord.clone());
+        if by_key.is_none() || by_key != by_chord {
+            failures.push(format!("{id}: F opens {by_key:?}, the chord {by_chord:?}"));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// Smooth on F opens its slider on a jagged path without smoothing it; confirming the slider keeps
+/// the smoothed path as one undo step.
+#[test]
+fn smooth_on_a_single_key_waits_for_its_slider() {
+    let mut app = app_with_shortcut("object.path.smooth", "F");
+    app.session.execute("edit.clear", &json!({})).unwrap();
+    let anchors: Vec<_> =
+        (0..=60).map(|i| json!({"x": 20 + i * 5, "y": 150.0 + 40.0 * (f64::from(i) / 10.0).sin() + f64::from(i % 2) * 3.0})).collect();
+    app.session.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let before = undo_len(&app);
+    frame(&mut app, press_f());
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+    assert_eq!(open_dialog(&app).as_deref(), Some(crate::dialogs::smooth_slider::KIND), "{}", app.ui.status);
+    assert_eq!(undo_len(&app), before, "the path is not smoothed yet");
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(undo_len(&app), before + 1, "the slider's result is one undo step");
+}
+
+/// A command without a dialog still runs at once on a key without a modifier: Group given F, and
+/// Swap Fill and Stroke on its default Shift+X.
+#[test]
+fn a_single_key_shortcut_without_a_dialog_runs_at_once() {
+    let mut app = app_with_shortcut("object.group", "F");
+    let before = undo_len(&app);
+    frame(&mut app, press_f());
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+    assert_eq!((open_dialog(&app), undo_len(&app)), (None, before + 1), "F groups: {}", app.ui.status);
+    let mut app = app_with_a_selected_rectangle();
+    let before = undo_len(&app);
+    frame(
+        &mut app,
+        vec![
+            egui::Event::ModifiersChanged(Modifiers::SHIFT),
+            egui::Event::Key { key: Key::X, physical_key: Some(Key::X), pressed: true, repeat: false, modifiers: Modifiers::SHIFT },
+            egui::Event::Text("X".into()),
+        ],
+    );
+    assert_eq!((open_dialog(&app), undo_len(&app)), (None, before + 1), "Shift+X swaps fill and stroke: {}", app.ui.status);
+}
+
+/// With no document open, a command's key without a modifier reports what the same command
+/// reports on a chord.
+#[test]
+fn a_single_key_shortcut_reports_what_its_chord_reports() {
+    let status = |shortcut: &str, events: Vec<egui::Event>| {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.screenMode", "");
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "paint.default", shortcut);
+        app.ui.status.clear();
+        frame(&mut app, events);
+        crate::shortcut_editor::sync(&crate::state::UiState::default());
+        (open_dialog(&app), app.ui.status.clone())
+    };
+    let by_key = status("F", press_f());
+    let by_chord = status(
+        "Cmd+Alt+Shift+F9",
+        vec![
+            egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
+            egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
+        ],
+    );
+    assert_eq!(by_key, by_chord);
+    assert!(!by_key.1.is_empty(), "the chord reports something: {by_chord:?}");
+}
+
+/// Holding a key without a modifier that opens a dialog types nothing into the dialog: neither the
+/// key's character nor its repeats reach the field that takes the keyboard.
+#[test]
+fn holding_a_single_key_that_opens_a_dialog_types_nothing_into_it() {
+    // Move on F: the dialog and the text of the field with the keyboard after the press, eight
+    // more frames with F held down (repeating) or not, and the release, which comes in the same
+    // frame as a last repeat.
+    let hold = |repeats: bool| {
+        let mut app = app_with_shortcut("object.move", "F");
+        let held = HeldKey::new(Key::F, Modifiers::NONE);
+        held.frame(&mut app, press_f());
+        for _ in 0..8 {
+            held.frame(&mut app, if repeats { press_f() } else { vec![] });
+        }
+        let release = egui::Event::Key { key: Key::F, physical_key: Some(Key::F), pressed: false, repeat: false, modifiers: Modifiers::NONE };
+        held.frame(&mut app, if repeats { [press_f(), vec![release]].concat() } else { vec![release] });
+        let field = held.ctx.memory(|m| m.focused()).and_then(|id| held.ctx.data_mut(|d| d.get_temp::<String>(id)));
+        crate::shortcut_editor::sync(&crate::state::UiState::default());
+        (open_dialog(&app), field, app.ui.status.clone())
+    };
+    let let_go = hold(false);
+    assert_eq!(let_go.0.as_deref(), Some("move"), "{}", let_go.2);
+    assert!(let_go.1.is_some(), "its first field has the keyboard");
+    assert_eq!(hold(true), let_go, "the held F typed nothing into Move");
+}
+
+/// A key that opens a dialog stops the keys after it in the same frame: G, given Group, does not
+/// group the selection behind Move's dialog. The same holds for chords.
+#[test]
+fn keys_after_one_that_opens_a_dialog_in_the_same_frame_run_nothing() {
+    let mods = cmd() | Modifiers::ALT | Modifiers::SHIFT;
+    let chord = |key: Key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: mods };
+    let single = |key: Key, text: &str| {
+        [egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE }, egui::Event::Text(text.into())]
+    };
+    let runs = [
+        ("F", "G", [single(Key::F, "f"), single(Key::G, "g")].concat()),
+        ("Cmd+Alt+Shift+F9", "Cmd+Alt+Shift+F10", vec![egui::Event::ModifiersChanged(mods), chord(Key::F9), chord(Key::F10)]),
+    ];
+    for (move_key, group_key, events) in runs {
+        let mut app = app_with_shortcut("object.move", move_key);
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "object.group", group_key);
+        let before = undo_len(&app);
+        frame(&mut app, events);
+        crate::shortcut_editor::sync(&crate::state::UiState::default());
+        assert_eq!((open_dialog(&app).as_deref(), undo_len(&app)), (Some("move"), before), "{move_key} then {group_key}: {}", app.ui.status);
+    }
+}
+
 /// #2094: Cmd+Shift+O is Type › Create Outlines (not File › Open's Cmd+O, not the Artboard
 /// tool's Shift+O), with the Selection tool or while the Type tool edits the text.
 #[test]

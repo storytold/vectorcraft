@@ -41,7 +41,9 @@ pub(crate) enum T {
     /// end or the next `{`.
     XmlMore,
     Punct,
-    /// A character no token starts with, or `#` and a name away from the start of a line.
+    /// A character no token starts with, or a private name: `#` and a name away from the start of a
+    /// line, or at its start where the name starts with an escape, or inside braces where the name
+    /// is not a directive's.
     Other,
 }
 
@@ -166,14 +168,33 @@ pub(crate) fn ident_part(c: char) -> bool {
     }
 }
 
-/// The character the `\uXXXX` escape at the start of `s` stands for: `None` when `s` doesn't start
-/// with `\u` and four hexadecimal digits, or when they give a lone surrogate.
-pub(crate) fn escaped(s: &str) -> Option<char> {
-    s.strip_prefix("\\u")?
-        .get(..4)
-        .filter(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()))
-        .and_then(|hex| u32::from_str_radix(hex, 16).ok())
-        .and_then(char::from_u32)
+/// The character the escape at the start of `s` stands for and the escape's length in bytes: `\u`
+/// and four hexadecimal digits, or `\u{…}` with one or more hexadecimal digits of a value up to
+/// U+10FFFF, leading zeros allowed (ECMA-262, UnicodeEscapeSequence and CodePoint). `None` when `s`
+/// starts with neither, or when the escape gives a lone surrogate.
+pub(crate) fn escape(s: &str) -> Option<(char, usize)> {
+    let rest = s.strip_prefix("\\u")?;
+    let Some(braced) = rest.strip_prefix('{') else {
+        let c = rest
+            .get(..4)
+            .filter(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()))
+            .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+            .and_then(char::from_u32)?;
+        return Some((c, 6));
+    };
+    // The value stops growing past U+10FFFF, so any number of digits is read once and never
+    // overflows.
+    let mut value: u32 = 0;
+    for (i, b) in braced.bytes().enumerate() {
+        match b {
+            b'}' if i > 0 => return char::from_u32(value).map(|c| (c, i + 4)),
+            _ => {
+                let digit = char::from(b).to_digit(16)?;
+                value = (value * 16 + digit).min(0x11_0000);
+            }
+        }
+    }
+    None
 }
 
 /// `Other_ID_Start` (Unicode PropList 17.0): characters kept in `ID_Start` though their category is
@@ -394,16 +415,64 @@ impl<'s> Lexer<'s> {
     }
 
     /// The rest of a name (its first character included): the characters [`ident_part`] allows,
-    /// written out or as `\uXXXX` escapes. An escape for any other character, or one without four
-    /// hexadecimal digits, ends the name.
+    /// written out or as `\uXXXX` or `\u{…}` escapes ([`escape`]). An escape for any other
+    /// character, or a malformed one, ends the name. Each character of an escape is a step.
     fn name(&mut self) {
         loop {
             match self.peek() {
-                Some('\\') if escaped(self.rest()).is_some_and(ident_part) => self.skip(6),
+                Some('\\') => match escape(self.rest()) {
+                    Some((c, len)) if ident_part(c) => {
+                        self.pos += len;
+                        self.steps += len;
+                    }
+                    _ => break,
+                },
                 Some(c) if ident_part(c) => self.bump(c),
                 _ => break,
             }
         }
+    }
+
+    /// A name starts right after the `#` here: its first character written out, or an escape for a
+    /// character a name may start with.
+    fn private_name_follows(&self) -> bool {
+        let after = self.rest().get(1..).unwrap_or_default();
+        match after.chars().next() {
+            Some('\\') => escape(after).is_some_and(|(c, _)| ident_start(c)),
+            Some(c) => ident_start(c),
+            None => false,
+        }
+    }
+
+    /// The `#` at the start of this line starts a private name, not a preprocessor line: the name
+    /// starts with an escape, which no directive's name holds, or [`Lexer::private_line`] holds for
+    /// it.
+    fn private_at_line_start(&self) -> bool {
+        if !self.private_name_follows() {
+            return false;
+        }
+        let after = self.rest().get(1..).unwrap_or_default();
+        after.starts_with('\\') || self.private_line(after)
+    }
+
+    /// A line that starts with `#` and then `rest` is a private name here, not a preprocessor line:
+    /// the line is inside braces or in the code of an XML literal, and the name `rest` starts with
+    /// is not a directive's. The name runs over every character a name may hold, written out or as
+    /// an escape, so `#include$size` is not `#include`.
+    pub fn private_line(&self, rest: &str) -> bool {
+        let in_code = !self.braces.is_empty() || self.deeper_braces > 0 || !self.xml.is_empty();
+        let mut end = 0;
+        while let Some(more) = rest.get(end..) {
+            let len = match more.chars().next() {
+                Some('\\') => escape(more).filter(|&(c, _)| ident_part(c)).map(|(_, len)| len),
+                Some(c) if ident_part(c) => Some(c.len_utf8()),
+                _ => None,
+            };
+            let Some(len) = len else { break };
+            end += len;
+        }
+        let name = rest.get(..end).unwrap_or_default();
+        in_code && !catalog::DIRECTIVES.iter().any(|d| d.eq_ignore_ascii_case(name))
     }
 
     fn digits(&mut self, ok: fn(char) -> bool) {
@@ -871,10 +940,10 @@ impl<'s> Iterator for Lexer<'s> {
         } else if self.starts("/*") {
             problem = self.block_comment();
             T::Comment
-        } else if c == '#' && self.line_start {
+        } else if c == '#' && self.line_start && !self.private_at_line_start() {
             self.until_line_break();
             T::Directive
-        } else if c == '#' && self.peek_at(1).is_some_and(ident_start) {
+        } else if c == '#' && self.private_name_follows() {
             self.bump('#');
             self.name();
             T::Other
@@ -906,7 +975,7 @@ impl<'s> Iterator for Lexer<'s> {
             self.close_level();
             self.bump('}');
             return Some(self.markup_token(start, line, T::XmlMore, stmt, expr));
-        } else if ident_start(c) || (c == '\\' && escaped(self.rest()).is_some_and(ident_start)) {
+        } else if ident_start(c) || (c == '\\' && escape(self.rest()).is_some_and(|(c, _)| ident_start(c))) {
             self.name();
             T::Ident
         } else if c.is_ascii_digit() || (c == '.' && self.peek_at(1).is_some_and(|d| d.is_ascii_digit())) {

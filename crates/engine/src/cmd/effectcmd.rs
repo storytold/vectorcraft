@@ -78,7 +78,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "3D Lighting Preset",
             [],
             None,
-            "{index: int, preset: standard|diffuse|topLeft|right, item?: appearance item index|null (omitted: the active item, else the object's), ids?|id?: [..], target?: object|contents, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} replace an applied 3D effect's light rig and ambient with an original lighting preset; preserve shading, geometry and view; all targets must have a 3D effect at index other than Extrude & Bevel (Classic), which has no lighting presets; one undo step → {ids}",
+            "{index: int, preset: standard|diffuse|topLeft|right, item?: appearance item index|null (omitted: the active item, else the object's), ids?|id?: [..], target?: object|contents, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} replace an applied 3D effect's light rig and ambient with an original lighting preset; preserve shading, geometry and view; all targets must have a 3D effect at index other than Extrude & Bevel (Classic), Revolve (Classic) or Rotate (Classic), which have no lighting presets; one undo step → {ids}",
             has_doc,
             lighting_preset
         ),
@@ -123,7 +123,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Refresh Deferred Effects",
             ["Effect"],
             None,
-            "{ids?: [object id] (objects of the document; `id` names one; default: every object with a deferred stage)} run the deferred live-effect plug-in stages of those objects again (effect.deferredStatus), sharing a fresh 2,000 ms budget; a stage that gives a result is drawn with it; not an undo step. Enabled when a stage is deferred → {refreshed, stillDeferred (left out for want of time again, or not reached because the object, or a group or layer holding it, is hidden, or with a part of its input too small for the refresh's drawing), failed (timed out, failed or has no plug-in)}",
+            "{ids?|id?: [object id] (objects of the document, also in the art of a symbol, pattern, brush or opacity mask; an object without a deferred stage adds nothing; an id of no object is an error; `id` names one; default: every object with a deferred stage)} run the deferred live-effect plug-in stages of those objects again (effect.deferredStatus), sharing a fresh 2,000 ms budget; a stage that gives a result is drawn with it; not an undo step. Enabled when a stage is deferred → {refreshed, stillDeferred (left out for want of time again, or not reached because the object, or a group or layer holding it, is hidden, or with a part of its input too small for the refresh's drawing), failed (timed out, failed or has no plug-in)}",
             has_deferred,
             refresh_deferred
         ),
@@ -150,16 +150,27 @@ fn stage_objects(d: &Document, fx: &vectorcraft_plugins::deferred::Deferrals) ->
             None => rest.push(object),
         }
     }
-    if rest.is_empty() {
+    for (id, n) in definition_objects(d, &rest) {
+        out.entry(id).or_insert((n, false));
+    }
+    out
+}
+
+/// The objects of `ids` found in the art `d` draws from outside its layers: the art of its
+/// symbols, patterns and brushes, and opacity masks (in that art or in the layers).
+fn definition_objects(d: &Document, ids: &[u64]) -> std::collections::HashMap<u64, Arc<Node>> {
+    let mut out = std::collections::HashMap::new();
+    if ids.is_empty() {
         return out;
     }
+    let ids: std::collections::HashSet<u64> = ids.iter().copied().collect();
     let brushes = vectorcraft_brush::library(d);
     let symbols = d.symbols.iter().map(|s| &*s.art);
     let patterns = d.patterns.iter().flat_map(|p| p.art.iter().map(|a| &**a));
     let layers = d.layers.iter().map(|a| &**a);
     let mut look = |n: &Node| {
-        if rest.contains(&n.id.0) {
-            out.entry(n.id.0).or_insert_with(|| (Arc::new(n.clone()), false));
+        if ids.contains(&n.id.0) {
+            out.entry(n.id.0).or_insert_with(|| Arc::new(n.clone()));
         }
     };
     for a in symbols.chain(patterns).chain(brushes.iter().flat_map(|b| b.art())).chain(layers) {
@@ -231,10 +242,19 @@ fn refresh_deferred(s: &mut Session, p: &Value) -> Result<Value> {
     let (doc, fx) = (st.doc.clone(), st.plugin_effects.clone());
     let ids = super::named_ids(p)?;
     let objects = prune(&doc, &fx);
-    if let Some(id) = ids.iter().flatten().find(|id| doc.node(**id).is_none() && !objects.contains_key(&id.0)) {
-        return Err(EngineError::NoNode(*id));
+    // An object of the art drawn outside the layers is valid whether or not it has a stage.
+    let elsewhere: Vec<u64> = ids.iter().flatten().filter(|id| doc.node(**id).is_none() && !objects.contains_key(&id.0)).map(|id| id.0).collect();
+    let found = definition_objects(&doc, &elsewhere);
+    if let Some(id) = elsewhere.iter().find(|id| !found.contains_key(id)) {
+        return Err(EngineError::NoNode(NodeId(*id)));
     }
-    let ids: Option<Vec<u64>> = ids.map(|ids| ids.iter().map(|id| id.0).collect());
+    // Only the objects with a stage have anything to refresh.
+    let ids: Option<Vec<u64>> = ids.map(|ids| {
+        let mut ids: Vec<u64> = ids.iter().map(|id| id.0).filter(|id| objects.contains_key(id)).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    });
     let counts = fx.refresh(ids.as_deref(), |targets| {
         let mut renderer = vectorcraft_render::Renderer::new();
         let mut whole = Vec::new();
@@ -656,12 +676,10 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
         if !effect.is_some_and(|e| effects::is_three_d(&e.id)) {
             return Err(bad(C, format!("object {} needs a 3D effect at index {index}", id.0)));
         }
-        // Extrude & Bevel (Classic) has no lighting presets; its lights are set in its own options.
-        if effect.is_some_and(|e| e.id == effects::CLASSIC_EXTRUDE) {
-            return Err(bad(
-                C,
-                format!("object {}: Extrude & Bevel (Classic) at index {index} has no lighting presets; set its lights with effect.setParams", id.0),
-            ));
+        // The classic 3D effects have no lighting presets; their lights are set in their own options.
+        if let Some(e) = effect.filter(|e| effects::is_classic_three_d(&e.id)) {
+            let name = effects::effect_info(&e.id).map_or("This effect", |info| info.label.trim_end_matches('…'));
+            return Err(bad(C, format!("object {}: {name} at index {index} has no lighting presets; set its lights with effect.setParams", id.0)));
         }
     }
     let mut options = p.clone();

@@ -1119,6 +1119,8 @@ font-technology	Variable	Променливи
 	Extrude & Bevel…	Избутване и фасетка…
 	3D (Classic)	3D (класически)
 	Extrude & Bevel (Classic)…	Избутване и фасетка (класически)…
+	Revolve (Classic)…	Завъртане (класическо)…
+	Rotate (Classic)…	Ротация (класическа)…
 	Surface	Повърхност
 	Wireframe	Телена рамка
 	No Shading	Без засенчване
@@ -1399,6 +1401,14 @@ font-technology	Variable	Променливи
 	Hair Space	Тънък интервал
 	Hand Tool	Инструмент „Ръка“
 	Hand-Drawn	Ръчно рисувани
+	Painted and Sketched	Рисувани и скицирани
+	Washed Blue	Размито синьо
+	Bristle Ochre	Охра с четка
+	Pastel Heather	Пастелен пирен
+	Charcoal Shade	Сянка с въглен
+	Ink Contour	Мастилен контур
+	Wet Ink	Мокро мастило
+	Fine Pen	Фино перо
 	Handles	Дръжки
 	Hard Light	Твърда светлина
 	Hard Mix	Твърдо смесване
@@ -5845,6 +5855,7 @@ theme	Appearance	Външен вид
 	Ruby	Руби
 	Geometric Guides	Геометрични водачи
 	Geometric Patterns	Геометрични мостри
+	Grit Textures	Зърнести текстури
 	Ease In	Плавно начало
 	Ease Out	Плавен край
 	Ease In Out	Плавно начало и край
@@ -6388,6 +6399,12 @@ breakText	Glyphs	Глифи
 	Delete the selected brushes?	Да се изтрият избраните четки?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Щрихи използват една или повече от тези четки. Да се премахнат ли четките от тези щрихи и да се изтрият четките?
 	Remove Strokes	Премахване на щрихи
+	Place Brush Art	Поставяне на графика на четка
+	Replace Brush Art	Замяна на графика на четка
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Щрихи използват тази четка. Да се приложи ли новата графика към тези щрихи, или те да останат както са и да се добави копие на четката с новата графика?
+	Apply to Strokes	Прилагане към щрихите
+	Leave Strokes	Оставяне на щрихите
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` няма графика (имат я само разпръснатите и артистичните четки и четките с мостра)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Инструменти за подреждане
 	Arrange in Grid…	Подреждане в мрежа…
@@ -6621,6 +6638,19 @@ breakText	Glyphs	Глифи
 @plural	{n} host call|{n} host calls	{n} извикване към хоста|{n} извиквания към хоста
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} по-ранен ред премахнат|{n} по-ранни реда премахнати
 @plural	{n} line cut|{n} lines cut	{n} ред съкратен|{n} реда съкратени
+
+# Learn panel
+	Learn	Обучение
+	Explore tutorials	Разгледайте уроците
+	For you	За вас
+	Skills	Умения
+	Get started	Първи стъпки
+	Quick skill guide	Бързо ръководство за умения
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Кратки практически уроци за основните инструменти, групирани по умения. Изберете умение, за да видите уроците му.
+	List Tutorials	Извеждане на уроци
+	Show Tutorial	Показване на урок
+@msg	missing `tutorial` (see learn.list)	липсва `tutorial` (вижте learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	непознат урок `{id}` (вижте learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновяване на отложените ефекти
