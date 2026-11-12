@@ -2360,6 +2360,10 @@ font-technology	Variable	Variables
 	Arch	Bóveda
 @msg	select point type or type on a path	seleccione texto de punto o texto en trazado
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el texto en trazado de un texto enlazado no puede usar texto dinámico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	el texto en un trazado abierto o compuesto no se puede centrar arriba o abajo: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	el texto en un trazado sin longitud o sin altura no se puede centrar: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	el texto en trazado de un texto enlazado no se puede centrar arriba o abajo: {frames}
+@msg	select type on a closed path	seleccione texto en un trazado cerrado
 	Optimize for fast web view	Optimizar para vista web rápida
 	Optimized	Optimizado
 	Options	Opciones
@@ -3723,6 +3727,8 @@ digits	Malayalam	Malayálam
 	Type on a Path	Texto en trazado
 	Type on a Path Options	Opciones de texto en trazado
 	Type on a Path Options…	Opciones de texto en trazado…
+	Center on Top	Centrar arriba
+	Center on Bottom	Centrar abajo
 	Type on a Path Tool	Herramienta Texto en trazado
 	Type Orientation	Orientación del texto
 	Type stays text, and every stroke is a line with its lineweight and dashes.	El texto sigue siendo texto, y cada trazo es una línea con su grosor y guiones.
@@ -5982,6 +5988,7 @@ mark-style	Japanese	Japonesas
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guías geométricas
+	Optical Effects	Efectos ópticos
 	Geometric Patterns	Motivos geométricos
 	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
@@ -6273,6 +6280,11 @@ axis	Y Axis	Eje Y
 	Grass Fan	Abanico de hierba
 	Pattern Borders	Bordes de motivo
 	Scatter Shapes	Formas de dispersión
+	Dry Media	Técnicas secas
+	Chalk Grain	Grano de tiza
+	Graphite Pencil	Lápiz de grafito
+	Wax Crayon	Cera de colores
+	Charcoal Dust	Polvo de carboncillo
 	Save Brush Library…	Guardar biblioteca de pinceles…
 @msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

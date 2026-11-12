@@ -212,6 +212,20 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Window › Brush Libraries menu, built from the built-in library table, names each library.
+#[test]
+fn built_in_brush_library_names_are_in_complete_catalogs() {
+    let mut bad = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&str> =
+            vectorcraft_engine::cmd::brushlib::BUILTIN.iter().map(|b| b.name).filter(|l| lang.catalog().plain(l).is_none()).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 /// Preference choices and the marquee's E hint share the same translated labels.
 #[test]
 fn marquee_selection_labels_are_in_complete_catalogs() {

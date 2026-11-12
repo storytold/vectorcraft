@@ -183,6 +183,16 @@ fn a_picked_folder_inside_other_apps_folders_is_refused() {
     assert!(p.error().is_some_and(|e| e.ends_with("is not a folder")), "{p:?}");
     let p = search(&root, "missing", Limits::default(), 1, &[]);
     assert!(p.error().is_some_and(|e| e.starts_with(&root.join("missing").display().to_string())), "{p:?}");
+    // Each failure has the same reason without the folder's path.
+    let briefs = [
+        ("missing", "the folder can't be read"),
+        ("file.ttf", "the path isn't a folder"),
+        ("refused", "VectorCraft doesn't search other apps' or the system's folders"),
+        ("Users/Public/x", "VectorCraft doesn't search the Shared or Public folder in Users"),
+    ];
+    for (picked, why) in briefs {
+        assert_eq!(search(&root, picked, Limits::default(), 1, &[]).failure(), Some(why), "{picked}");
+    }
 }
 
 #[test]
@@ -362,7 +372,7 @@ fn a_picked_folder_that_cant_be_listed_fails_the_search() {
     let p = search(&root, "locked", Limits::default(), 2, &["y.ttf"]);
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
     if enforced {
-        assert!(matches!(&p.end, Some(End::Failed(e)) if e.contains("locked")), "{p:?}");
+        assert!(matches!(&p.end, Some(End::Failed(e, "the folder can't be listed")) if e.contains("locked")), "{p:?}");
     } else {
         assert_eq!(found(&root, &p), ["locked/y.ttf"]);
     }
