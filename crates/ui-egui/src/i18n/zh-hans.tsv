@@ -2258,6 +2258,10 @@ file-filter	Templates	模板
 	Arch	拱形
 @msg	select point type or type on a path	请选择点文字或路径文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	开放路径或复合路径上的路径文字无法在顶部或底部居中：{open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	路径没有长度或没有高度时，其路径文字无法居中：{flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	串接文本中的路径文字无法在顶部或底部居中：{frames}
+@msg	select type on a closed path	请选择闭合路径上的路径文字
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
 	Options	选项
@@ -3589,6 +3593,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Type on a Path	路径文字
 	Type on a Path Options	路径文字选项
 	Type on a Path Options…	路径文字选项…
+	Center on Top	在顶部居中
+	Center on Bottom	在底部居中
 	Type on a Path Tool	路径文字工具
 	Type Orientation	文字方向
 	Type stays text, and every stroke is a line with its lineweight and dashes.	文字维持为文字，每个描边都是带有线宽与虚线的线条。
@@ -5877,6 +5883,7 @@ lighting	Light	光源
 	Ruby…	注音…
 	Ruby	注音
 	Geometric Guides	几何参考线
+	Optical Effects	光学效果
 	Geometric Patterns	几何图案
 	Grit Textures	颗粒纹理
 	Ease In	缓入
@@ -6169,6 +6176,11 @@ axis	Y Axis	Y 轴
 	Grass Fan	画草扇形笔
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状
+	Dry Media	干性画材
+	Chalk Grain	粉笔颗粒
+	Graphite Pencil	石墨铅笔
+	Wax Crayon	蜡笔
+	Charcoal Dust	炭粉
 	Save Brush Library…	保存画笔库…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
 @msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）

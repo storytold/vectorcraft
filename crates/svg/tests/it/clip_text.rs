@@ -184,6 +184,20 @@ fn a_use_of_a_text_in_a_clip_path_clips_where_the_use_places_it() {
 }
 
 #[test]
+fn a_use_of_a_text_in_a_clip_path_passes_its_properties_on_to_the_text() {
+    let d = open(
+        r##"<defs><text id="t" x="0" y="0">HI</text></defs>
+        <clipPath id="c" font-weight="bold"><use href="#t" x="20" y="150" font-size="100"/></clipPath>
+        <rect width="400" height="300" clip-path="url(#c)"/>"##,
+    );
+    let (clip, _) = clip_group(&top(&d)[0]);
+    let NodeKind::Text(t) = &clip.kind else { panic!("{:?}", clip.kind) };
+    assert!(near(t.runs[0].style.size, 100.0, 1e-9), "{}", t.runs[0].style.size);
+    assert_eq!(t.runs[0].style.font_style, "Bold");
+    assert!(clip_bounds(clip).height() > 50.0, "{:?}", clip_bounds(clip));
+}
+
+#[test]
 fn a_clip_path_on_a_use_of_a_text_is_in_the_use_s_user_space() {
     // The text's transform moves its glyphs to x 200…; the `<use>`'s clip keeps x < 250 of its own
     // user space, which the text's transform doesn't move.

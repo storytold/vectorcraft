@@ -434,6 +434,11 @@ antiAlias	Sharp	शार्प
 	Plasma Arc	प्लाज़्मा चाप
 	Charge Wave	चार्ज तरंग
 	Spark Trail	चिंगारी पथ
+	Dry Media	सूखे माध्यम
+	Chalk Grain	चॉक के दाने
+	Graphite Pencil	ग्रेफाइट पेंसिल
+	Wax Crayon	मोम क्रेयॉन
+	Charcoal Dust	चारकोल धूल
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -3183,12 +3188,17 @@ antiAlias	Sharp	शार्प
 	Opens network connections	नेटवर्क कनेक्शन ओपन करें
 	OpenType Features	ओपन टाइप सुविधाएँ
 	Optical	ऑप्टिकल
+	Optical Effects	ऑप्टिकल इफ़ेक्ट्स
 	Optical Margin Alignment	ऑप्टिकल मार्जिन संरेखण
 	Dynamic Text	डायनैमिक टेक्स्ट
 	Dynamic Text Presets	डायनैमिक टेक्स्ट प्रीसेट
 	Arch	मेहराब
 @msg	select point type or type on a path	पॉइंट टाइप या पाथ पर टाइप चुनें
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	थ्रेडेड टेक्स्ट में पाथ पर टाइप डायनैमिक टेक्स्ट का उपयोग नहीं कर सकता: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	खुले पाथ या कंपाउंड पाथ पर टाइप को ऊपर या नीचे केंद्रित नहीं किया जा सकता: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	बिना लंबाई या बिना ऊँचाई वाले पाथ पर टाइप केंद्रित नहीं किया जा सकता: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	थ्रेडेड टेक्स्ट में पाथ पर टाइप को ऊपर या नीचे केंद्रित नहीं किया जा सकता: {frames}
+@msg	select type on a closed path	बंद पाथ पर टाइप चुनें
 	Optimize for fast web view	तेजी से वेब दृश्य के लिए ऑप्टिमाइज़
 	Optimized	ऑप्टिमाइज़्ड
 	Options	ऑप्शन्स
@@ -5106,6 +5116,8 @@ antiAlias	Sharp	शार्प
 	Type on a Path	पाथ पर टाइप
 	Type on a Path Options	पाथ पर टाइप ऑप्शन्स
 	Type on a Path Options…	पाथ पर टाइप ऑप्शन्स…
+	Center on Top	ऊपर केंद्रित करें
+	Center on Bottom	नीचे केंद्रित करें
 	Type on a Path Tool	पाथ पर टाइप टूल
 	Type Optimized	टाइप ऑप्टिमाइज़
 	Type Orientation	प्रकार अभिविन्यास

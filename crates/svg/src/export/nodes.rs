@@ -121,6 +121,21 @@ impl Reuse {
     }
 }
 
+/// Are `children` the pieces of a raster mesh warp ([`vectorcraft_doc::live::mesh_warp_image`]):
+/// more than one, each a clip group of a triangle and one and the same image?
+fn image_pieces(children: &[std::sync::Arc<Node>]) -> bool {
+    let mut first: Option<(&str, u32, u32)> = None;
+    children.len() > 1
+        && children.iter().all(|c| {
+            let NodeKind::Group { children, clip: true } = &c.kind else { return false };
+            let [clip, im] = children.as_slice() else { return false };
+            let (NodeKind::Path { path, .. }, NodeKind::Image(im)) = (&clip.kind, &im.kind) else { return false };
+            let triangle = path.subpaths.len() == 1 && path.anchor_count() == 3;
+            let image = (im.key.as_str(), im.width, im.height);
+            triangle && *first.get_or_insert(image) == image
+        })
+}
+
 /// Art about to be written moved by `m.inverse()` (a symbol instance's): map what the canvas
 /// leaves on the page by `m` first, so it stays there. That is every pattern paint's placement
 /// and the art of unlinked opacity masks.
@@ -678,6 +693,10 @@ impl Writer<'_> {
         match &n.kind {
             NodeKind::Layer { template: true, .. } => {}
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
+                // The pieces a Warp effect cuts an image into share its pixels, as an envelope's do.
+                if image_pieces(children) {
+                    self.share_images(n);
+                }
                 let id = self.id_attr(n);
                 let a = self.attrs(&self.group_props(n));
                 self.line(&format!("<g{id}{a}>"));

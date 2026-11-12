@@ -730,7 +730,7 @@ fn a_refused_export_into_a_presets_folder_outside_the_read_root_names_it_by_its_
     let settings = json!({"formats": [{"format": "png"}], "folder": parent});
     s.execute("document.exportPresets.save", &json!({"name": "Parent", "settings": settings})).unwrap();
     let e = confine(confined.as_ref(), || s.execute("document.exportForScreens", &json!({"exportPreset": "Parent"}))).unwrap_err().to_string();
-    let root = inside.display().to_string();
+    let root = crate::cmd::findfiles::plain(inside.canonicalize().unwrap()).display().to_string();
     let name = tmp.0.file_name().unwrap().to_string_lossy().into_owned();
     assert!(e.contains(&format!("root {root}: {name}")), "{e}");
 }

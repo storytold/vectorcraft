@@ -1193,6 +1193,59 @@ fn variable_font_settings_are_warned_as_left_out() {
     assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
 }
 
+/// Standard Vertical Roman Alignment is written as `Tv` and Tate-chu-yoko in horizontal type as a
+/// Kumi block recorded for later use, `TY` (§15.3.4), each where it changes: the marks read back
+/// on the same characters, a block is closed before its text object ends, and type with neither
+/// mark has neither operator.
+#[test]
+fn vertical_roman_and_tate_chu_yoko_are_written_and_read_back() {
+    use vectorcraft_doc::{TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let roman = vectorcraft_doc::CharStyle { standard_vertical_roman: true, ..plain.clone() };
+    let tcy = vectorcraft_doc::CharStyle { tate_chu_yoko: true, ..plain.clone() };
+    let both = vectorcraft_doc::CharStyle { tate_chu_yoko: true, standard_vertical_roman: true, ..plain.clone() };
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut marked = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "A", plain.clone());
+    for (text, st) in [("12", &tcy), ("b", &roman), ("c", &both), ("34", &tcy)] {
+        marked.runs.push(TextRun::new(text, st.clone()));
+    }
+    let next = TextObject::point(vectorcraft_geom::Point::new(20.0, 80.0), "D", plain.clone());
+    for t in [marked, next] {
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == TYPE || w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert_eq!((text.matches("1 TY\n").count(), text.matches("0 TY\n").count()), (2, 2), "{text}");
+    assert_eq!((text.matches("1 Tv\n").count(), text.matches("0 Tv\n").count()), (1, 1), "{text}");
+    // The last block ends before its text object does.
+    assert!(text.contains("(34) Tx\n0 TY\nTO\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let flags = |t: &TextObject| -> Vec<(String, bool, bool)> {
+        let mut out: Vec<(String, bool, bool)> = vec![];
+        for r in &t.runs {
+            let key = (r.style.tate_chu_yoko, r.style.standard_vertical_roman);
+            match out.last_mut() {
+                Some(last) if (last.1, last.2) == key => last.0.push_str(&r.text),
+                _ => out.push((r.text.clone(), key.0, key.1)),
+            }
+        }
+        out
+    };
+    let s = |x: &str| x.to_string();
+    assert_eq!(
+        flags(&read[0].1),
+        [(s("A"), false, false), (s("12"), true, false), (s("b"), false, true), (s("c"), true, true), (s("34"), true, false)]
+    );
+    assert_eq!(flags(&read[1].1), [(s("D"), false, false)]);
+
+    // Type with neither mark has neither operator.
+    let text = String::from_utf8(write(&typed()).bytes).unwrap();
+    assert!(!text.contains(" Tv\n") && !text.contains(" TY\n"), "{text}");
+}
+
 /// A legacy `.ai` text path holds the path and where the type starts on it, and no Align to Path
 /// or end bracket: type on a path with either is written as text, with the warning that they are
 /// left out. An end bracket at the end of an open path, or once around a closed one, is kept. A

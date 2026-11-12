@@ -253,7 +253,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     }
     let mut inspected = json!({
         "scriptRunning": app.session.script_running(),
-        "scriptReport": app.session.script_report(),
+        "scriptReport": app.session.shown_script_report(),
         "tool": app.session.tool_id(),
         "toolOptions": app.session.tool_options(),
         "ui": ui,

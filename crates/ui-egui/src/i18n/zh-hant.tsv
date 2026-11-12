@@ -3359,6 +3359,10 @@ file-filter	Templates	範本
 	Arch	拱形
 @msg	select point type or type on a path	請選取點狀文字或路徑文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串連文字中的路徑文字無法使用動態文字：{frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	開放路徑或複合路徑上的路徑文字無法在頂端或底端置中：{open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	路徑沒有長度或沒有高度時，其路徑文字無法置中：{flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	串連文字中的路徑文字無法在頂端或底端置中：{frames}
+@msg	select type on a closed path	請選取封閉路徑上的路徑文字
 	Optimize for fast web view	最佳化以便快速網頁檢視
 	Optimized	最佳化
 	Options	選項
@@ -4735,6 +4739,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Type on a Path	路徑文字
 	Type on a Path Options	路徑文字選項
 	Type on a Path Options…	路徑文字選項…
+	Center on Top	在頂端置中
+	Center on Bottom	在底端置中
 	Type on a Path Tool	路徑文字工具
 	Type Orientation	文字方向
 	Type stays text, and every stroke is a line with its lineweight and dashes.	文字維持為文字，每個筆畫都是帶有線寬與虛線的線條。
@@ -5681,6 +5687,7 @@ lighting	Light	光源
 	Ruby…	注音…
 	Ruby	注音
 	Geometric Guides	幾何參考線
+	Optical Effects	光學效果
 	Geometric Patterns	幾何圖樣
 	Grit Textures	顆粒紋理
 	Ease In	緩入
@@ -5974,6 +5981,11 @@ axis	Y Axis	Y 軸
 	Grass Fan	畫草扇形筆
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
+	Dry Media	乾性畫材
+	Chalk Grain	粉筆顆粒
+	Graphite Pencil	石墨鉛筆
+	Wax Crayon	蠟筆
+	Charcoal Dust	炭粉
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
