@@ -22,6 +22,9 @@ pub(crate) use source::{resolve, resolve_for};
 
 pub(crate) mod shadow;
 
+pub(crate) mod wireframe;
+pub use wireframe::three_d_wireframe_in;
+
 pub const EXTRUDE: &str = "threeD.extrude";
 pub const INFLATE: &str = "threeD.inflate";
 pub const ROTATE: &str = "threeD.rotate";

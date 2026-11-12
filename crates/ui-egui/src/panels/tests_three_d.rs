@@ -401,6 +401,32 @@ fn a_mixed_revolve_cap_shows_a_dash() {
     assert_eq!(undo_len(&app), history);
 }
 
+/// Quick Actions › Expand as Wireframes shows for every object type, and turns the selected 3D
+/// object into a group of stroked edges in one undo step.
+#[test]
+fn expand_as_wireframes_replaces_the_object_with_its_edges() {
+    for kind in ["extrude", "inflate", "revolve", "plane"] {
+        let mut app = app();
+        set_type(&mut app, kind).unwrap();
+        let text = painted_text(&mut app, show);
+        assert!(text.contains("Quick Actions") && text.contains("Expand as Wireframes"), "{kind}: {text}");
+        let id = app.session.active().unwrap().selection.objects[0];
+        let history = undo_len(&app);
+        super::expand_as_wireframes(&mut app).unwrap();
+        assert_eq!(undo_len(&app), history + 1, "{kind}");
+        let st = app.session.active().unwrap();
+        assert!(matches!(st.doc.node(id).unwrap().kind, vectorcraft_doc::NodeKind::Group { .. }), "{kind}");
+        assert_eq!(st.selection.objects, vec![id], "{kind}");
+        // The group has no 3D effect: the panel offers the object types again.
+        assert!(target(&app).is_none(), "{kind}");
+    }
+    // Without a 3D effect in the selection, nothing changes.
+    let mut app = app();
+    let history = undo_len(&app);
+    assert!(super::expand_as_wireframes(&mut app).is_err());
+    assert_eq!(undo_len(&app), history);
+}
+
 #[test]
 fn changed_settings_lists_only_new_values() {
     let before = json!({"depth": 50.0, "cap": true, "bevel": "none"});

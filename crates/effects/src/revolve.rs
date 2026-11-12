@@ -455,6 +455,55 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
     Ok(out)
 }
 
+/// The outline of every face [`revolve_art`] draws for `n` (its symbol instances, blends and clipping
+/// groups already resolved), in document coordinates: with the effect on the object, the surface in
+/// its top visible fill (else its stroke); with it on fills and strokes, one surface for each of
+/// them, reshaped by the geometry effects after each one's Revolve; on a group or layer, one for
+/// each member, about one shared axis.
+pub(crate) fn revolve_face_paths(n: &Node) -> Result<Vec<PathData>, String> {
+    let faces = |path: &PathData, b: Rect, options: Revolve| -> Result<Vec<PathData>, String> {
+        Ok(vectorcraft_three_d::revolve(path, b, options)?.iter().map(vectorcraft_three_d::Face::path).collect())
+    };
+    if is_container(n) {
+        let index =
+            n.appearance.effects.iter().position(|e| e.visible && e.id == REVOLVE).ok_or("a 3D effect on a group's fill or stroke draws nothing")?;
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let mut shapes = members(n, "Revolve")?;
+        reshape_members(n, n.appearance.effects.get(..index).unwrap_or_default(), &mut shapes);
+        let b = union_bounds(&shapes).ok_or("Revolve requires a group holding a shape with at least two anchors")?;
+        let options = shared_options(&shapes, revolve_options(&merged_params(REVOLVE, &fx.params)))?;
+        let mut out = vec![];
+        for s in shapes.iter().filter(|s| surface_item(&s.items).is_some()) {
+            out.extend(faces(&s.path, b, options)?);
+        }
+        return Ok(out);
+    }
+    let (path, _) = object_profile(n, "Revolve")?;
+    let ctx = GeomContext::of(n);
+    if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && e.id == REVOLVE) {
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
+        if surface_item(&solid_paints(n)).is_none() {
+            return Err("the revolved object has no fill or stroke".into());
+        }
+        let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
+        return faces(&path, b, revolve_options(&merged_params(REVOLVE, &fx.params)));
+    }
+    let path = geometry(&path, &n.appearance.effects, &ctx);
+    let mut out = vec![];
+    for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
+        if let Some(index) = item.effects().iter().position(|e| e.visible && e.id == REVOLVE)
+            && let Some(fx) = item.effects().get(index)
+        {
+            let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
+            let b = p.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
+            let surface = faces(&p, b, revolve_options(&merged_params(REVOLVE, &fx.params)))?;
+            out.extend(crate::solids::wireframe::reshaped(surface, item.effects().get(index + 1..).unwrap_or_default(), &ctx));
+        }
+    }
+    Ok(out)
+}
+
 /// [`revolve_meshes`] of group or layer `n`: one mesh for each member, about one shared axis.
 fn group_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::SolidMesh>, String> {
     let index = n
