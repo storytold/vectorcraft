@@ -4,6 +4,7 @@ pub mod actionset;
 mod addons;
 mod apiref;
 pub(crate) mod appearance;
+pub mod arrowheads;
 mod artboardalign;
 mod assets;
 mod attributes;
@@ -298,6 +299,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         // Split out of `paint` (M3.8); kept next to it so lists in registry order (the command
         // palette, `engine.commands`) show them where they always were.
         v.extend(stroke::specs());
+        v.extend(arrowheads::specs());
         v.extend(appearance::specs());
         v.extend(style::specs());
         v.extend(swatch::specs());

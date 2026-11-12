@@ -236,7 +236,8 @@ fn lcm(a: usize, b: usize) -> usize {
     a.checked_div(x).map_or(0, |q| q * b)
 }
 
-/// Interpolate width profiles (none is uniform) at every position either has a width point.
+/// Interpolate width profiles (none is uniform) at every position either has a width point,
+/// keeping their discontinuous points (a position where either steps gives two points).
 fn lerp_profile(x: Option<&WidthProfile>, y: Option<&WidthProfile>, t: f64) -> Option<WidthProfile> {
     if x.is_none() && y.is_none() {
         return None;
@@ -245,22 +246,45 @@ fn lerp_profile(x: Option<&WidthProfile>, y: Option<&WidthProfile>, t: f64) -> O
     let (x, y) = (x.unwrap_or(&uniform), y.unwrap_or(&uniform));
     let mut at: Vec<f64> = x.points.iter().chain(&y.points).map(|p| p.0).filter(|p| p.is_finite()).collect();
     at.sort_by(f64::total_cmp);
-    at.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
-    let points = at
-        .into_iter()
-        .map(|p| {
-            let ((l1, r1), (l2, r2)) = (x.at(p), y.at(p));
-            (p, lerp_f64(l1, l2, t), lerp_f64(r1, r2, t))
-        })
-        .collect();
+    // Within the distance `around` reads a discontinuous point at, so a point near one keeps it.
+    at.dedup_by(|a, b| (*a - *b).abs() <= 1e-7);
+    // Each profile is a smooth curve through its own points: samples between the positions keep
+    // both curves' shapes where the other profile's points and steps change the tangents. Two
+    // profiles with points at the same positions need none (so a preset on both keys stays it).
+    let same_positions = x.points.len() == y.points.len() && x.points.iter().zip(&y.points).all(|(p, q)| (p.0 - q.0).abs() <= 1e-7);
+    let per_span = if same_positions { 1 } else { (4096 / at.len().max(1)).clamp(1, 8) };
+    let mut points = Vec::with_capacity(at.len() * per_span + 2);
+    let mix = |p: f64, (l1, r1): (f64, f64), (l2, r2): (f64, f64)| (p, lerp_f64(l1, l2, t), lerp_f64(r1, r2, t));
+    for (k, &p) in at.iter().enumerate() {
+        let ((xb, xa), (yb, ya)) = (x.around(p), y.around(p));
+        points.push(mix(p, xb, yb));
+        // A discontinuous point ends the curve on each side even where both widths match.
+        if steps_at(x, p) || steps_at(y, p) {
+            points.push(mix(p, xa, ya));
+        }
+        if let Some(&q) = at.get(k + 1) {
+            for j in 1..per_span {
+                let f = p + (q - p) * j as f64 / per_span as f64;
+                points.push(mix(f, x.at(f), y.at(f)));
+            }
+        }
+    }
     Some(WidthProfile { points })
+}
+
+/// Whether width profile `w` has a discontinuous point at `p` (two points there, within `1e-7`,
+/// as [`WidthProfile::around`] reads them).
+fn steps_at(w: &WidthProfile, p: f64) -> bool {
+    let i = w.points.partition_point(|q| q.0 < p - 1e-7);
+    w.points.get(i..).unwrap_or_default().iter().take_while(|q| q.0 <= p + 1e-7).count() > 1
 }
 
 /// The positions along the stroke where either of two pen recordings has a sample, in order.
 fn sample_positions(x: Option<&[(f64, f64)]>, y: Option<&[(f64, f64)]>) -> Vec<f64> {
     let mut at: Vec<f64> = x.unwrap_or_default().iter().chain(y.unwrap_or_default()).map(|p| p.0).filter(|p| p.is_finite()).collect();
     at.sort_by(f64::total_cmp);
-    at.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    // Within the distance `step_after` reads a step at, so a sample near a step keeps the step.
+    at.dedup_by(|a, b| (*a - *b).abs() <= 1e-9);
     if at.is_empty() {
         at = vec![0.0, 1.0];
     }
@@ -487,6 +511,161 @@ fn reverse_closed(sp: &mut SubPath) {
     sp.anchors.rotate_right(1);
 }
 
+/// How a key's subpaths were turned for its blend, so that its stroke's profiles, pen
+/// recordings and arrowheads turn with it: position `u` along the turned subpath is position
+/// `start + u` (`start - u` when `reversed`) along the key's own, wrapping round a closed one.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Orient {
+    start: f64,
+    reversed: bool,
+    closed: bool,
+}
+
+impl Orient {
+    fn of(sp: &SubPath) -> Self {
+        Self { closed: sp.closed, ..Self::default() }
+    }
+
+    /// The subpath now starts at the fraction `f` of its length.
+    fn rotate(&mut self, f: f64) {
+        self.start += if self.reversed { -f } else { f };
+    }
+
+    /// The subpath now runs the other way.
+    fn reverse(&mut self) {
+        self.start += if self.reversed { -1.0 } else { 1.0 };
+        self.reversed = !self.reversed;
+    }
+
+    /// As [`start_at`] turns `sp` (call it before).
+    fn start_at(&mut self, sp: &SubPath, i: usize) {
+        let n = sp.anchors.len();
+        if i >= n {
+            return;
+        }
+        if sp.closed {
+            self.rotate(arc_fraction(sp, i));
+        } else if i + 1 == n && n > 1 {
+            self.reverse();
+        }
+    }
+
+    /// Where a closed subpath now starts, as a fraction of its length; 0 for an open one.
+    fn seam(&self) -> f64 {
+        let s = if self.closed { self.start.rem_euclid(1.0) } else { 0.0 };
+        if s > 1e-9 && s < 1.0 - 1e-9 { s } else { 0.0 }
+    }
+
+    fn is_identity(&self) -> bool {
+        !self.reversed && self.seam() == 0.0
+    }
+
+    /// Whether two subpaths were turned alike, so one stroke along both turns the same way.
+    fn same_turn(&self, o: &Self) -> bool {
+        self.reversed == o.reversed && (self.seam() - o.seam()).abs() < 1e-9
+    }
+}
+
+/// How far along `sp` its anchor `i` sits, as a fraction of its length.
+fn arc_fraction(sp: &SubPath, i: usize) -> f64 {
+    let pos = sp.anchor_arc_positions();
+    match (pos.get(i), pos.last()) {
+        (Some(&at), Some(&total)) if total.is_finite() && total > 1e-12 => (at / total).clamp(0.0, 1.0),
+        _ => 0.0,
+    }
+}
+
+/// Samples (position, value) along a key's subpath, read along the subpath turned as `o` says.
+/// A closed subpath starting elsewhere starts the samples there too: the ones before it move
+/// past the seam (`wrap` applied), which keeps any step the seam makes, and a value between
+/// samples is read with `at`. A reversed subpath then reads them backwards (`flip` applied).
+fn reoriented<V: Copy>(points: &[(f64, V)], o: Orient, at: impl Fn(f64) -> V, wrap: impl Fn(V) -> V, flip: impl Fn(V) -> V) -> Vec<(f64, V)> {
+    let s = o.seam();
+    let mut out = points.to_vec();
+    if s > 0.0
+        && let (Some(&(_, first)), Some(&(_, last))) = (points.first(), points.last())
+    {
+        let i = points.partition_point(|q| q.0 < s - 1e-9);
+        let j = points.partition_point(|q| q.0 <= s + 1e-9).max(i);
+        let (before, after) = match points.get(i..j) {
+            Some([p, .., q]) => (p.1, q.1),
+            Some([p]) => (p.1, p.1),
+            _ => (at(s), at(s)),
+        };
+        out = Vec::with_capacity(points.len() + 4);
+        out.push((0.0, after));
+        out.extend(points.get(j..).unwrap_or_default().iter().map(|&(t, v)| (t - s, v)));
+        out.push((1.0 - s, last));
+        out.push((1.0 - s, wrap(first)));
+        out.extend(points.get(..i).unwrap_or_default().iter().map(|&(t, v)| (t + 1.0 - s, wrap(v))));
+        out.push((1.0, wrap(before)));
+    }
+    if o.reversed {
+        out = out.into_iter().rev().map(|(t, v)| (1.0 - t, flip(v))).collect();
+    }
+    out
+}
+
+/// A key's stroke read along its subpath turned as `o` says: its width profile (whose sides swap
+/// when reversed), pen pressure, tilt, bearing and rotation, and on a reversed open path its
+/// arrowheads.
+fn reorient_stroke(s: &mut StrokeLayer, o: Orient) {
+    if o.is_identity() {
+        return;
+    }
+    let same = |v: f64| v;
+    if let Some(p) = &mut s.profile {
+        let mut pts: Vec<(f64, (f64, f64))> = p.points.iter().map(|&(t, l, r)| (t, (l, r))).collect();
+        // A width profile is a smooth curve through its points: where the new start splits a span,
+        // samples of that span keep its curve once its ends become ends of the profile.
+        let seam = o.seam();
+        let i = p.points.partition_point(|q| q.0 < seam);
+        if seam > 0.0
+            && let (Some(a), Some(b)) = (i.checked_sub(1).and_then(|j| p.points.get(j)), p.points.get(i))
+            && seam - a.0 > 1e-9
+            && b.0 - seam > 1e-9
+        {
+            const SAMPLES: usize = 32;
+            let (a, b) = (a.0, b.0);
+            let extra: Vec<(f64, (f64, f64))> =
+                (1..SAMPLES).map(|k| a + (b - a) * k as f64 / SAMPLES as f64).filter(|f| (f - seam).abs() > 1e-9).map(|f| (f, p.at(f))).collect();
+            pts.splice(i..i, extra);
+        }
+        let out = reoriented(&pts, o, |f| p.at(f), |v| v, |(l, r)| (r, l));
+        p.points = out.into_iter().map(|(t, (l, r))| (t, l, r)).collect();
+    }
+    for p in [&mut s.pressure, &mut s.tilt].into_iter().flatten() {
+        let out = reoriented(&p.points, o, |f| p.at(f), same, same);
+        p.points = out;
+    }
+    for p in [&mut s.bearing, &mut s.rotation].into_iter().flatten() {
+        // The samples moved past the seam carry the whole turns the recording makes along the
+        // stroke, so the angle does not jump by them there.
+        let turns = match (p.points.first(), p.points.last()) {
+            (Some(a), Some(b)) if (b.1 - a.1).is_finite() => ((b.1 - a.1) / 360.0).round() * 360.0,
+            _ => 0.0,
+        };
+        let out = reoriented(&p.points, o, |f| p.unwrapped_at(f), |v| v + turns, same);
+        p.points = out;
+    }
+    if o.reversed && !o.closed {
+        std::mem::swap(&mut s.start_arrow, &mut s.end_arrow);
+        s.arrow_scale = (s.arrow_scale.1, s.arrow_scale.0);
+    }
+}
+
+/// `n` with every stroke read along its subpaths turned as `o` says.
+fn reorient_strokes(n: &mut Node, o: Orient) {
+    if o.is_identity() {
+        return;
+    }
+    for it in n.appearance.items.iter_mut() {
+        if let AppearanceItem::Stroke(s) = it {
+            reorient_stroke(s, o);
+        }
+    }
+}
+
 /// Anchor positions of a subpath relative to its box, scaled to unit size.
 fn normalised(sp: &SubPath) -> Vec<Vec2> {
     let pts = sp.anchors.iter().map(|a| a.p);
@@ -524,6 +703,8 @@ fn best_rotation(a: &SubPath, b: &SubPath) -> usize {
 pub struct PathPair {
     a: Vec<SubPath>,
     b: Vec<SubPath>,
+    /// How each path's subpaths were turned, where all of them turned alike (else unturned).
+    orient: (Orient, Orient),
 }
 
 impl PathPair {
@@ -535,6 +716,7 @@ impl PathPair {
         let cb = b.bounds().map(|r| r.center()).unwrap_or_default();
         let degenerate = |like: &SubPath, c: Point| SubPath::new(vec![Anchor::corner(c); like.anchors.len().max(1)], like.closed);
         let (mut va, mut vb) = (Vec::with_capacity(n), Vec::with_capacity(n));
+        let mut orient = (Orient::default(), Orient::default());
         for i in 0..n {
             let (mut sa, mut sb) = match (a.subpaths.get(i), b.subpaths.get(i)) {
                 (Some(x), Some(y)) => (x.clone(), y.clone()),
@@ -542,17 +724,21 @@ impl PathPair {
                 (None, Some(y)) => (degenerate(y, ca), y.clone()),
                 (None, None) => continue,
             };
+            let (mut oa, mut ob) = (Orient::of(&sa), Orient::of(&sb));
             let explicit = i == 0 && (starts.0.is_some() || starts.1.is_some());
             if explicit {
                 if let Some(s) = starts.0 {
+                    oa.start_at(&sa, s);
                     start_at(&mut sa, s);
                 }
                 if let Some(s) = starts.1 {
+                    ob.start_at(&sb, s);
                     start_at(&mut sb, s);
                 }
             }
             let closed = sa.closed && sb.closed && sa.anchors.len() > 2 && sb.anchors.len() > 2;
             if closed && (sa.area() * sb.area()) < 0.0 {
+                ob.reverse();
                 reverse_closed(&mut sb);
             }
             let m = sa.anchors.len().max(sb.anchors.len());
@@ -560,12 +746,26 @@ impl PathPair {
             grow(&mut sb, m);
             if closed && !explicit {
                 let r = best_rotation(&sa, &sb);
+                if r != 0 {
+                    ob.rotate(arc_fraction(&sb, r));
+                }
                 sb.anchors.rotate_left(r);
+            }
+            // One stroke runs along every subpath of a key, each reading it by its own length, so
+            // it turns only when all of the key's subpaths turned alike.
+            if i == 0 {
+                orient = (oa, ob);
+            }
+            if i < a.subpaths.len() && !orient.0.same_turn(&oa) {
+                orient.0 = Orient::default();
+            }
+            if i < b.subpaths.len() && !orient.1.same_turn(&ob) {
+                orient.1 = Orient::default();
             }
             va.push(sa);
             vb.push(sb);
         }
-        Self { a: va, b: vb }
+        Self { a: va, b: vb, orient }
     }
 
     /// The path at `t` (0 = `a`, 1 = `b`).
@@ -680,7 +880,12 @@ impl Lerp {
                 _ => Shape::Other,
             },
         };
-        Self { a: a.clone(), b: b.clone(), shape }
+        let (mut a, mut b) = (a.clone(), b.clone());
+        if let Shape::Path { pair, .. } = &shape {
+            reorient_strokes(&mut a, pair.orient.0);
+            reorient_strokes(&mut b, pair.orient.1);
+        }
+        Self { a, b, shape }
     }
 
     /// The object at `t` (0 = `a`, 1 = `b`), with id 0.
@@ -1597,6 +1802,7 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::appearance::Arrowhead;
     use vectorcraft_geom::{Rect, shapes};
 
     #[test]
@@ -1907,6 +2113,89 @@ mod tests {
         let none = lerp_appearance(&plain, &plain, 0.5);
         let s = none.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
         assert!(s.pressure.is_none() && s.tilt.is_none() && s.bearing.is_none() && s.rotation.is_none());
+    }
+
+    #[test]
+    fn a_point_near_the_other_keys_step_keeps_the_step() {
+        let flat = PressureProfile { points: vec![(0.0, 0.0), (0.4999995, 0.0), (1.0, 0.0)] };
+        let stepped = PressureProfile { points: vec![(0.0, 0.0), (0.5, 0.0), (0.5, 1.0), (1.0, 1.0)] };
+        let p = lerp_pressure(Some(&flat), Some(&stepped), 1.0).unwrap_or_default();
+        assert!((p.at(0.75) - 1.0).abs() < 1e-9, "{p:?}");
+        let narrow = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.4999995, 1.0, 1.0), (1.0, 1.0, 1.0)] };
+        let stepped = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5, 0.0, 0.0), (1.0, 0.0, 0.0)] };
+        let w = lerp_profile(Some(&narrow), Some(&stepped), 1.0).unwrap_or_default();
+        assert!(w.at(0.75).0.abs() < 1e-9, "{w:?}");
+        // The other key's step doesn't reshape a smooth profile's curve.
+        let early = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.25, 1.0, 1.0), (0.25, 0.5, 0.5), (1.0, 0.5, 0.5)] };
+        let w = lerp_profile(Some(&WidthProfile::lens()), Some(&early), 0.0).unwrap_or_default();
+        for u in [0.1, 0.125, 0.2, 0.3, 0.4] {
+            let (got, want) = (w.at(u).0, WidthProfile::lens().at(u).0);
+            assert!((got - want).abs() < 5e-3, "at {u}: {got} for {want}: {w:?}");
+        }
+        let lens = WidthProfile::lens();
+        assert_eq!(lerp_profile(Some(&lens), Some(&lens), 0.5).and_then(|p| p.preset_id()), Some("lens"));
+    }
+
+    #[test]
+    fn stroke_profiles_turn_with_a_key_path_started_elsewhere() {
+        let keyed = |path: PathData, edit: &dyn Fn(&mut StrokeLayer)| {
+            let mut ap = Appearance::default();
+            ap.set_stroke(Paint::solid(Color::BLACK));
+            if let Some(s) = ap.stroke_mut() {
+                edit(s);
+            }
+            Node::path(NodeId(1), path, ap)
+        };
+        let stroke = |n: &Node| n.appearance.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
+        let pressure = |s: &StrokeLayer, f: f64| s.pressure.as_ref().map_or(PressureProfile::MID, |p| p.at(f));
+        // An open key clicked at its last anchor runs the other way, and so do its pressure, its
+        // width profile (whose sides swap) and its arrowheads.
+        let line = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 10.0, 0.0)], false));
+        let light = keyed(line(0.0), &|s| s.pressure = Some(PressureProfile { points: vec![(0.0, 0.0), (1.0, 0.0)] }));
+        let ramp = keyed(line(100.0), &|s| {
+            s.pressure = Some(PressureProfile { points: vec![(0.0, 1.0), (1.0, 0.0)] });
+            s.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 0.0), (1.0, 0.0, 0.0)] });
+            s.start_arrow = Some(Arrowhead::Triangle);
+            s.arrow_scale = (200.0, 100.0);
+        });
+        let blend = Lerp::new(&light, &ramp, (None, Some(1)));
+        let s = stroke(&blend.at(0.25));
+        assert!(pressure(&s, 0.0).abs() < 1e-9 && (pressure(&s, 1.0) - 0.25).abs() < 1e-9, "{:?}", s.pressure);
+        let s = stroke(&blend.at(1.0));
+        assert_eq!(s.profile.as_ref().map(|p| p.at(1.0)), Some((0.0, 1.0)), "{:?}", s.profile);
+        assert_eq!((s.start_arrow, s.end_arrow, s.arrow_scale), (None, Some(Arrowhead::Triangle), (100.0, 200.0)));
+        // A key whose other subpaths keep their direction keeps its one stroke as it is.
+        let two = |x: f64| {
+            let sub = |y: f64| SubPath::polyline(&[Point::new(x, y), Point::new(x + 10.0, y)], false);
+            PathData::new(vec![sub(0.0), sub(20.0)])
+        };
+        let ramps = keyed(two(100.0), &|s| s.pressure = Some(PressureProfile { points: vec![(0.0, 1.0), (1.0, 0.0)] }));
+        let s = stroke(&Lerp::new(&keyed(two(0.0), &|_| {}), &ramps, (None, Some(1))).at(1.0));
+        assert!((pressure(&s, 0.0) - 1.0).abs() < 1e-9, "{:?}", s.pressure);
+        // A closed key started half way round starts its recordings there too, keeping the step
+        // where its own start was and the whole turn its rotation makes.
+        let square = |x: f64| shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0));
+        let plain = keyed(square(0.0), &|_| {});
+        let turning = keyed(square(100.0), &|s| {
+            s.pressure = Some(PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] });
+            s.rotation = Some(AngleProfile { points: vec![(0.0, 0.0), (1.0, 360.0)] });
+            s.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] });
+        });
+        let blend = Lerp::new(&plain, &turning, (Some(0), Some(2)));
+        let s = stroke(&blend.at(1.0));
+        assert!((pressure(&s, 0.25) - 0.75).abs() < 1e-9 && (pressure(&s, 0.75) - 0.25).abs() < 1e-9, "{:?}", s.pressure);
+        let width = s.profile.as_ref().map_or((1.0, 1.0), |p| p.at(0.75));
+        assert!((width.0 - 0.75).abs() < 1e-6 && (width.1 - 0.75).abs() < 1e-6, "the width steps where the key started: {:?}", s.profile);
+        // A width curve split by the new start keeps its shape.
+        let lensed = keyed(square(100.0), &|s| s.profile = Some(WidthProfile::lens()));
+        let s = stroke(&Lerp::new(&plain, &lensed, (Some(0), Some(1))).at(1.0));
+        for u in [0.05, 0.125, 0.2, 0.6, 0.7, 0.74, 0.76, 0.8, 0.875, 0.95] {
+            let (got, want) = (s.profile.as_ref().map_or(1.0, |p| p.at(u).0), WidthProfile::lens().at((u + 0.25) % 1.0).0);
+            assert!((got - want).abs() < 2e-3, "at {u}: {got} for {want}: {:?}", s.profile);
+        }
+        let rot = |t: f64, f: f64| stroke(&blend.at(t)).rotation.as_ref().map_or(0.0, |p| p.unwrapped_at(f));
+        assert!((vectorcraft_geom::normalize_deg(rot(1.0, 0.25)) + 90.0).abs() < 1e-6, "{:?}", s.rotation);
+        assert!((rot(0.5, 0.499) - rot(0.5, 0.501)).abs() < 1.0, "no jump where the key started: {:?}", stroke(&blend.at(0.5)).rotation);
     }
 
     #[test]

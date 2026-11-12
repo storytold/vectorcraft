@@ -446,6 +446,60 @@ fn loading_the_working_rgb_profile_again_takes_effect_at_once() {
     assert!(redrawn, "the canvas redraws");
 }
 
+/// Loading a new file of the CMYK profile View → Proof Setup targets, or removing that profile,
+/// gives the documents new revisions, as a working space's new file does; loading or removing
+/// another profile does not.
+#[test]
+fn loading_or_removing_the_proof_profile_redraws() {
+    let _g = settings();
+    // A built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
+    let renamed = |builtin: &str, name: &str| {
+        let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+        let mut bytes = cms::icc_bytes(builtin).unwrap().to_vec();
+        let (from, to) = (utf16(builtin), utf16(&format!("{name:<width$}", width = builtin.len())));
+        let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+        bytes[at..at + to.len()].copy_from_slice(&to);
+        bytes
+    };
+    let dir = fresh_dir("reload-proof-cmyk");
+    std::fs::create_dir_all(&dir).unwrap();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    let load = |s: &mut Session, name: &str| {
+        let path = dir.join(format!("{}.icc", name.len()));
+        std::fs::write(&path, renamed(cms::GENERIC_CMYK, name)).unwrap();
+        let r = s.execute("color.loadProfile", &json!({"path": path.to_str().unwrap()})).unwrap();
+        assert_eq!(r["name"], name);
+        s.doc().unwrap().revision
+    };
+    let (proofed, other) = ("Reload Proof CMYK", "Reload Other CMYK 2");
+    let _view = ProofReset([proofed, other]);
+    let mut s = session();
+    load(&mut s, proofed);
+    load(&mut s, other);
+    exec(&mut s, "view.proofSetup", json!({"target": format!("cmyk:{proofed}"), "proof": true}));
+    let revision = s.doc().unwrap().revision;
+    assert_eq!(load(&mut s, other), revision, "another profile's file");
+    let reloaded = load(&mut s, proofed);
+    assert!(reloaded > revision, "the proof profile's file");
+    exec(&mut s, "color.removeProfile", json!({"name": other}));
+    assert_eq!(s.doc().unwrap().revision, reloaded, "another profile removed");
+    exec(&mut s, "color.removeProfile", json!({"name": proofed}));
+    assert!(s.doc().unwrap().revision > reloaded, "the proof profile removed");
+}
+
+/// Sets the default proof view and unregisters the profiles when dropped, also after a failed
+/// assertion.
+struct ProofReset([&'static str; 2]);
+
+impl Drop for ProofReset {
+    fn drop(&mut self) {
+        vectorcraft_render::proof::set_view(Default::default());
+        for name in self.0 {
+            cms::unregister_icc(name);
+        }
+    }
+}
+
 /// A folder of its own for the test `tag`, empty.
 fn fresh_dir(tag: &str) -> std::path::PathBuf {
     let dir = vectorcraft_testkit::temp_dir(&format!("color-settings-{tag}"));

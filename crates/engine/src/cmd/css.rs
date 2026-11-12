@@ -8,7 +8,7 @@ use vectorcraft_doc::NodeId;
 use vectorcraft_svg::{CssOptions, CssSheet, css_rules};
 
 use super::fileio::{default_name, encode_with_warnings, isolated, write_file};
-use super::{CommandSpec, Result, Session, bad, cmd, has_doc, str_param, targets};
+use super::{CommandSpec, Result, Session, bad, cmd, has_doc, named_ids, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -21,13 +21,13 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             selection
         ),
-        cmd!(query "css.generate", "Generate CSS", [], None, "{…options as css.selection} css.selection of every object in the document", has_doc, generate),
+        cmd!(query "css.generate", "Generate CSS", [], None, "{…options as css.selection} css.selection of every object in the document; ids and id are not used, and a malformed one is an error", has_doc, generate),
         cmd!(
             "css.export",
             "Export CSS",
             [],
             None,
-            "{path?, scope?: selection|all (default selection; ids? picks the objects), …options as css.selection, id?: object id (default: the selection)} write the CSS (css.selection, or css.generate for all) to path and, with rasterize, each picture its rules refer to next to it (PNG of what the object draws, with the clips, masks and effects of the groups and layers that hold it, 1 px per point) → {path, bytes, rules: n, images: [path…], warnings}; no path → {data: the CSS, name: <document>.css, rules, images: [{name, dataBase64}], warnings}; warnings are css.selection's and the pictures' as document.export gives them (an image that couldn't be decoded, type in the fallback font or that doesn't fit its frame), each once",
+            "{path?: string, scope?: selection|all (default selection when left out; ids? picks the objects), …options as css.selection, id?: object id (default: the selection)} a path or scope given as anything but a string, null included, is an error, and so is a malformed ids or id with scope all, which does not use them; write the CSS (css.selection, or css.generate for all) to path and, with rasterize, each picture its rules refer to next to it (PNG of what the object draws, with the clips, masks and effects of the groups and layers that hold it, 1 px per point) → {path, bytes, rules: n, images: [path…], warnings}; no path → {data: the CSS, name: <document>.css, rules, images: [{name, dataBase64}], warnings}; warnings are css.selection's and the pictures' as document.export gives them (an image that couldn't be decoded, type in the fallback font or that doesn't fit its frame), each once",
             has_doc,
             export
         ),
@@ -77,16 +77,34 @@ fn selection(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(result(&sheet(s, p, ids, "css.selection")?))
 }
 
+/// Checks the form of the `ids` or `id` that `p` gives a command that exports every object and does
+/// not use them: a malformed one is an error, as it is for the selection.
+fn unused_ids(p: &Value) -> Result<()> {
+    named_ids(p).map(|_| ())
+}
+
 fn generate(s: &mut Session, p: &Value) -> Result<Value> {
+    unused_ids(p)?;
     let ids = everything(s)?;
     Ok(result(&sheet(s, p, ids, "css.generate")?))
 }
 
+/// The string `p` gives for `key`, or `None` when `p` leaves it out. Any value given that is not a
+/// string, null included, is an error: "`{key}` must be a string".
+fn given_text<'a>(p: &'a Value, key: &str, cmd: &str) -> Result<Option<&'a str>> {
+    p.get(key).map(|v| v.as_str().ok_or_else(|| bad(cmd, format!("`{key}` must be a string")))).transpose()
+}
+
 fn export(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "css.export";
-    let ids = match str_param(p, "scope").unwrap_or("selection") {
+    let scope = given_text(p, "scope", C)?;
+    let path = given_text(p, "path", C)?;
+    let ids = match scope.unwrap_or("selection") {
         "selection" => targets(s, p)?,
-        "all" => everything(s)?,
+        "all" => {
+            unused_ids(p)?;
+            everything(s)?
+        }
         other => return Err(bad(C, format!("scope must be selection or all (got {other})"))),
     };
     let sheet = sheet(s, p, ids, C)?;
@@ -115,7 +133,7 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let n = sheet.rules.len();
-    match str_param(p, "path") {
+    match path {
         Some(path) => {
             write_file(path, css.as_bytes())?;
             let folder = std::path::Path::new(path).parent();
