@@ -189,6 +189,111 @@ fn with_strokes(kind: &NodeKind) -> Option<NodeKind> {
     Some(kind)
 }
 
+/// How far, in points, the sides of two boxes may lie apart and still count as the same side: the
+/// glyphs' box (from type's ink) and the box of what type paints (from its outlines) measure one
+/// outline two ways, and where they meet they differ by rounding only ([`painted_margin`],
+/// [`same_box`]).
+const PAINTED_SLACK: f64 = 1e-4;
+
+/// The box of what the pieces of type's outlines `outlines` ([`vectorcraft_effects::outline_text`])
+/// paint as an envelope with Distort Appearance bends them: each piece baked as the envelope bakes
+/// it ([`vectorcraft_effects::bake_type_appearance`]: geometry effects on its fills and strokes
+/// applied, so a stroke a Transform effect moves counts where it is moved to), measured by its
+/// visual bounds. Those are exact for miter joins (a tip counts where the miter limit keeps it) and
+/// round joins, and an upper bound for bevel joins, miters the limit cuts, width profiles and
+/// square-capped dashes; a contour of zero length, which paints nothing, doesn't count. Effects on
+/// the type object itself are left out: VectorCraft applies them after the envelope bends the type.
+/// `None` when nothing in it has bounds.
+fn painted_outlines(outlines: &Node) -> Option<Rect> {
+    outlines.children().into_iter().flatten().fold(None, |acc, piece| {
+        let baked = vectorcraft_effects::bake_type_appearance(None, piece);
+        vectorcraft_geom::union_opt(acc, baked.as_ref().unwrap_or(piece).visual_bounds())
+    })
+}
+
+/// The box of `content` an envelope of type with Distort Appearance may map from in a file besides
+/// [`half_stroked_box`]: what it paints, type by its outlines ([`painted_outlines`]), groups by
+/// their members grown by as far as their own strokes paint along a side, other objects by their
+/// bounds with strokes. `None` when nothing in it has bounds.
+fn painted_box(content: &[Arc<Node>]) -> Option<Rect> {
+    fn walk(n: &Arc<Node>, acc: Option<Rect>) -> Option<Rect> {
+        match &n.kind {
+            NodeKind::Text(_) => vectorcraft_geom::union_opt(acc, vectorcraft_effects::outline_text(n).as_ref().and_then(painted_outlines)),
+            NodeKind::Group { children, clip: false } => {
+                let along = n.appearance.painted_strokes().map(|s| s.side_reach(true)).fold(0.0, f64::max);
+                let members = children.iter().fold(None, |acc, c| walk(c, acc));
+                let grown = |r: Rect| if along.is_finite() && along > 0.0 { r.inflate(along, along) } else { r };
+                vectorcraft_geom::union_opt(acc, members.map(grown))
+            }
+            _ => vectorcraft_geom::union_opt(acc, envelope_content_boxes(std::slice::from_ref(n), Affine::IDENTITY).map(|(stroked, _)| stroked)),
+        }
+    }
+    content.iter().fold(None, |acc, c| walk(c, acc))
+}
+
+/// The bounds margin of `painted`, the box of what contents with geometric box `plain` paint, a side
+/// within [`PAINTED_SLACK`] of the geometric box's counting as that side. `None` where it lies
+/// inside the geometric box on a side, where it is that box, and for margins that don't fit.
+fn painted_margin(painted: Rect, plain: Rect) -> Option<[f32; 4]> {
+    let side = |p: f64, g: f64| if (p - g).abs() <= PAINTED_SLACK { g } else { p };
+    let painted = Rect::new(side(painted.x0, plain.x0), side(painted.y0, plain.y0), side(painted.x1, plain.x1), side(painted.y1, plain.y1));
+    let margin = envelope_stroke_margin(painted, plain)?;
+    (margin.iter().all(|m| *m >= 0.0) && margin.iter().any(|m| *m > 0.0)).then_some(margin)
+}
+
+/// Do bounds margins `a` and `b` give contents with geometric box `plain` the same box, each side
+/// within [`PAINTED_SLACK`]?
+fn same_box(a: [f32; 4], b: [f32; 4], plain: Rect) -> bool {
+    let sizes = [plain.height(), plain.height(), plain.width(), plain.width()];
+    a.iter().zip(b).zip(sizes).all(|((a, b), size)| (f64::from(*a) - f64::from(b)).abs() * size <= PAINTED_SLACK)
+}
+
+/// What the contents of an envelope of type paint ([`painted_box`]): their geometric box and the
+/// bounds margin of what they paint from it.
+#[derive(Clone, Copy)]
+struct Painted {
+    plain: Rect,
+    margin: [f32; 4],
+}
+
+/// [`Painted`] for envelope `kind` with Distort Appearance; `None` without it, and where
+/// [`painted_margin`] gives none.
+fn painted_of(kind: &NodeKind) -> Option<Painted> {
+    let NodeKind::Envelope { content, options, .. } = kind else { return None };
+    if !options.distort_appearance {
+        return None;
+    }
+    let (_, plain) = envelope_content_boxes(content, Affine::IDENTITY)?;
+    Some(Painted { plain, margin: painted_margin(painted_box(content)?, plain)? })
+}
+
+/// Envelope `kind` mapping from what its contents paint (`painted`, [`painted_of`]), for an
+/// envelope with Distort Appearance where that box is neither the one it maps from already nor its
+/// contents' glyphs grown by half their strokes' weight ([`with_strokes`]); `None` otherwise.
+fn as_painted(kind: &NodeKind, painted: &Painted) -> Option<NodeKind> {
+    let NodeKind::Envelope { options, .. } = kind else { return None };
+    let half = match with_strokes(kind) {
+        Some(NodeKind::Envelope { options, .. }) => Some(options.bounds_margin),
+        _ => None,
+    };
+    let Painted { plain, margin } = *painted;
+    if !options.distort_appearance || same_box(margin, options.bounds_margin, plain) || half.is_some_and(|h| same_box(margin, h, plain)) {
+        return None;
+    }
+    let mut kind = kind.clone();
+    if let NodeKind::Envelope { options, .. } = &mut kind {
+        options.bounds_margin = margin;
+    }
+    Some(kind)
+}
+
+/// A way an envelope of type is tried: a kind, or a kind mapping from what its type paints
+/// ([`as_painted`]), worked out when its turn comes.
+enum Way {
+    As(NodeKind),
+    Painted(NodeKind),
+}
+
 /// The kind of `envelope`, a mesh or a top object in Edit Contents, with its grid moved onto
 /// `drawn`, the drawn art the file saves for it, where what it draws is as large as that art (within
 /// [`MOVED_SLACK`]) but lies elsewhere (further than that): moved by as far as the drawn art's box
@@ -592,7 +697,8 @@ impl WarpedType {
     /// for it ([`live_on_saved_grid`]), which opens in its place where it does: its type stays
     /// editable in that shape, and the warp's style and bend are lost. With Distort Appearance, each
     /// is also checked mapping from its type's glyphs grown by half their strokes' weight
-    /// ([`with_strokes`]). In Edit Contents, a mesh or top object whose grid draws the type
+    /// ([`with_strokes`]) and, after all of those, from what its type paints where that is another
+    /// box ([`as_painted`]). In Edit Contents, a mesh or top object whose grid draws the type
     /// elsewhere than its drawn art is checked last moved onto that art ([`moved_onto`]). Each
     /// check uses one of the import's checks and, for an envelope that shows, adds to what the page
     /// check allows ([`drawn_alike`]). Elsewhere, and where the type is set in a font that isn't
@@ -659,17 +765,16 @@ impl WarpedType {
         // With Distort Appearance, a file's envelope may map its type from its glyphs grown by half
         // their strokes' weight or from the glyphs alone, and for type the size the file saves for
         // that box is often out of date (not the size of the type there now): each is checked.
-        let kinds: Vec<NodeKind> = live(&obj, before, inner)
-            .into_iter()
-            .chain(on_grid)
-            .flat_map(|k| {
-                let stroked = with_strokes(&k);
-                std::iter::once(k).chain(stroked)
-            })
-            .collect();
+        // After all of those, each is checked mapping from what its type paints, where that box is
+        // another: it is measured only when such a check comes and one is left.
+        let kinds: Vec<NodeKind> = live(&obj, before, inner).into_iter().chain(on_grid).collect();
         if kinds.is_empty() {
             return Err(TypeKept::Read);
         }
+        let mut ways: Vec<Way> = kinds.iter().flat_map(|k| std::iter::once(Way::As(k.clone())).chain(with_strokes(k).map(Way::As))).collect();
+        ways.extend(kinds.into_iter().map(Way::Painted));
+        // What the type paints, measured once: the kinds share their contents.
+        let mut painted: Option<Option<Painted>> = None;
         let (id, layer) = (doc.alloc_id(), doc.alloc_id());
         let mut plain = art.clone();
         (plain.visible, plain.opacity) = (true, 1.0);
@@ -677,9 +782,9 @@ impl WarpedType {
         let mut alike = None;
         // In Edit Contents, a grid that draws the type elsewhere than its drawn art is tried again
         // moved onto that art ([`moved_onto`]), after every other way.
-        let (mut tries, mut moved, mut again, mut i) = (kinds.into_iter(), vec![], false, 0);
+        let (mut tries, mut moved, mut again, mut i) = (ways.into_iter(), vec![], false, 0);
         loop {
-            let Some(kind) = tries.next() else {
+            let Some(way) = tries.next() else {
                 if again || moved.is_empty() {
                     break;
                 }
@@ -692,6 +797,13 @@ impl WarpedType {
             if self.checks == 0 || (i > 0 && self.checks <= waiting + self.looks.len()) {
                 return Err(TypeKept::Budget);
             }
+            let kind = match way {
+                Way::As(kind) => kind,
+                Way::Painted(base) => match painted.get_or_insert_with(|| painted_of(&base)).as_ref().and_then(|p| as_painted(&base, p)) {
+                    Some(kind) => kind,
+                    None => continue,
+                },
+            };
             self.checks -= 1;
             i += 1;
             let mut envelope = art.clone();
@@ -704,7 +816,7 @@ impl WarpedType {
                 break;
             }
             if !again && let Some(kind) = moved_onto(&live_one, &plain) {
-                moved.push(kind);
+                moved.push(Way::As(kind));
             }
         }
         let envelope = alike.ok_or(TypeKept::Differs)?;
@@ -866,7 +978,7 @@ fn alike_within(live: &Node, drawn: &Node, reach: Option<Rect>, layer: NodeId, s
 mod tests {
     use super::*;
     use vectorcraft_color::{Color, Paint};
-    use vectorcraft_doc::{AppearanceItem, CharStyle, LineJoin, StrokeLayer, TextObject};
+    use vectorcraft_doc::{AppearanceItem, CharStyle, LineCap, LineJoin, StrokeLayer, TextObject};
 
     /// An envelope of `content` with Distort Appearance, on a flat one-patch mesh.
     fn envelope_of(content: Vec<Arc<Node>>) -> NodeKind {
@@ -947,5 +1059,193 @@ mod tests {
         let content = vec![Arc::new(group)];
         let (_, glyphs) = envelope_content_boxes(&content, Affine::IDENTITY).unwrap();
         assert_eq!(stroked_margin(content), envelope_stroke_margin(glyphs.inflate(2.0, 2.0), glyphs));
+    }
+
+    /// Is the font type takes by default installed? Type that must draw as itself is tested only
+    /// where it is: the tests below measure its glyphs.
+    fn default_font() -> bool {
+        vectorcraft_text::FontDb::global().has_family(&CharStyle::default().font_family)
+    }
+
+    /// The bounds margin of the candidate mapping from what `content` paints, for an envelope of it,
+    /// type measured by its glyphs as the import measures it; `None` where there is none.
+    fn painted_candidate(content: Vec<Arc<Node>>) -> Option<[f32; 4]> {
+        vectorcraft_text::register_envelope_ink();
+        let kind = envelope_of(content);
+        match as_painted(&kind, &painted_of(&kind)?) {
+            Some(NodeKind::Envelope { options, .. }) => Some(options.bounds_margin),
+            _ => None,
+        }
+    }
+
+    /// The box contents with geometric box `plain` map from with bounds margin `m`.
+    fn box_of(m: [f32; 4], plain: Rect) -> Rect {
+        let [top, bottom, left, right] = m.map(f64::from);
+        Rect::new(
+            plain.x0 - left * plain.width(),
+            plain.y0 - top * plain.height(),
+            plain.x1 + right * plain.width(),
+            plain.y1 + bottom * plain.height(),
+        )
+    }
+
+    /// Are the sides of `a` and `b` within `tol` of each other?
+    fn close(a: Rect, b: Rect, tol: f64) -> bool {
+        [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|d| d.abs() <= tol)
+    }
+
+    /// The geometric box of `content`, type measured by its glyphs as the import measures it.
+    fn glyphs_of(content: &[Arc<Node>]) -> (Rect, Rect) {
+        vectorcraft_text::register_envelope_ink();
+        envelope_content_boxes(content, Affine::IDENTITY).unwrap()
+    }
+
+    /// What the type in `content` paints, measured apart from the import's own measure: each piece
+    /// of its outlines filled, and outlined by kurbo's stroker with each of its strokes' weight,
+    /// join and miter limit.
+    fn stroked_by_kurbo(content: &[Arc<Node>]) -> Rect {
+        use kurbo::Shape;
+        let mut out: Option<Rect> = None;
+        for n in content {
+            let outlines = vectorcraft_effects::outline_text(n).unwrap();
+            for piece in outlines.children().unwrap() {
+                let bp = piece.stroke_path().unwrap();
+                out = vectorcraft_geom::union_opt(out, Some(bp.bounding_box()));
+                for s in piece.appearance.painted_strokes() {
+                    let join = match s.join {
+                        LineJoin::Miter => kurbo::Join::Miter,
+                        LineJoin::Round => kurbo::Join::Round,
+                        LineJoin::Bevel => kurbo::Join::Bevel,
+                    };
+                    let stroke = kurbo::Stroke::new(s.width).with_join(join).with_miter_limit(s.miter_limit);
+                    let outline = kurbo::stroke(bp.iter(), &stroke, &kurbo::StrokeOpts::default(), 1e-4);
+                    out = vectorcraft_geom::union_opt(out, Some(outline.bounding_box()));
+                }
+            }
+        }
+        out.unwrap()
+    }
+
+    /// Type with Distort Appearance and a stroke with miter joins on its appearance is also tried
+    /// mapped from what that stroke paints: past half its weight where a miter tip pokes out at a
+    /// sharp corner (the feet of the A's), though not as far as its bounds with strokes, which allow
+    /// for a miter as long as the limit lets one be at every corner.
+    #[test]
+    fn mitred_type_is_also_tried_mapped_from_what_its_stroke_paints_miter_tips_included() {
+        if !default_font() {
+            return;
+        }
+        let mut text = type_node(1, CharStyle::default());
+        let mut appearance = (*text.appearance).clone();
+        appearance.items.push(AppearanceItem::Stroke(mitred()));
+        text.appearance = appearance.into();
+        let content = vec![Arc::new(text)];
+        let (with, glyphs) = glyphs_of(&content);
+        let (half, painted) = (glyphs.inflate(2.0, 2.0), stroked_by_kurbo(&content));
+        assert!(painted.x0 < half.x0 - 0.5 && painted.x1 > half.x1 + 0.5, "{painted:?} {half:?}");
+        assert!(painted.width() < with.width() - 0.5, "{painted:?} {with:?}");
+        let from = box_of(painted_candidate(content).unwrap(), glyphs);
+        assert!(close(from, painted, 0.01), "{from:?} {painted:?}");
+    }
+
+    /// Type stroked by its characters with miter joins is also tried mapped from what those strokes
+    /// paint, turned and stretched as well as upright.
+    #[test]
+    fn type_with_a_mitred_character_stroke_is_also_tried_mapped_from_what_it_paints() {
+        if !default_font() {
+            return;
+        }
+        let style = CharStyle { stroke: Paint::solid(Color::BLACK), stroke_width: 4.0, stroke_join: LineJoin::Miter, ..CharStyle::default() };
+        for xf in [
+            Affine::IDENTITY,
+            Affine::rotate(std::f64::consts::FRAC_PI_4),
+            Affine::scale_non_uniform(std::f64::consts::SQRT_2, std::f64::consts::FRAC_1_SQRT_2),
+        ] {
+            let mut text = type_node(1, style.clone());
+            if let NodeKind::Text(t) = &mut text.kind {
+                t.xf = xf * t.xf;
+            }
+            let content = vec![Arc::new(text)];
+            let (_, glyphs) = glyphs_of(&content);
+            let painted = stroked_by_kurbo(&content);
+            let from = box_of(painted_candidate(content).unwrap(), glyphs);
+            assert!(close(from, painted, 0.01), "{xf:?}: {from:?} {painted:?}");
+        }
+    }
+
+    /// A stroke that a Transform effect moves paints where it is moved to: type filled over its
+    /// glyphs with a round 4 point stroke moved 10 points down is also tried mapped from its glyphs
+    /// grown by 2 points on the left and right and 12 at the bottom, and not at the top.
+    #[test]
+    fn a_stroke_moved_by_a_transform_effect_counts_where_it_paints() {
+        if !default_font() {
+            return;
+        }
+        let mut text = type_node(1, CharStyle::default());
+        let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 4.0);
+        (stroke.join, stroke.cap) = (LineJoin::Round, LineCap::Round);
+        stroke.effects.push(Effect { id: "distort.transform".into(), params: serde_json::json!({ "moveV": 10.0 }), visible: true });
+        let mut appearance = (*text.appearance).clone();
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        text.appearance = appearance.into();
+        let content = vec![Arc::new(text)];
+        let (_, glyphs) = glyphs_of(&content);
+        let painted = Rect::new(glyphs.x0 - 2.0, glyphs.y0, glyphs.x1 + 2.0, glyphs.y1 + 12.0);
+        let from = box_of(painted_candidate(content).unwrap(), glyphs);
+        assert!(close(from, painted, 0.01), "{from:?} {painted:?}");
+    }
+
+    /// Type whose round-joined stroke paints half its weight past its glyphs everywhere is not tried
+    /// a second time mapped from what it paints: that is the box of its glyphs grown by half the
+    /// weight, already tried.
+    #[test]
+    fn round_joined_type_is_not_tried_twice_for_the_same_box() {
+        if !default_font() {
+            return;
+        }
+        let style = CharStyle { stroke: Paint::solid(Color::BLACK), stroke_width: 4.0, stroke_join: LineJoin::Round, ..CharStyle::default() };
+        let content = vec![Arc::new(type_node(1, style))];
+        vectorcraft_text::register_envelope_ink();
+        assert!(with_strokes(&envelope_of(content.clone())).is_some());
+        assert_eq!(painted_candidate(content), None);
+    }
+
+    /// A contour of zero length paints nothing, so it isn't part of what type's outlines paint: a
+    /// filled square with a round 2 point stroke and such a contour 5 points above it paints the
+    /// square grown by 1 point.
+    #[test]
+    fn a_contour_of_zero_length_paints_nothing() {
+        let mut bp = BezPath::new();
+        bp.move_to((10.0, 10.0));
+        bp.line_to((20.0, 10.0));
+        bp.line_to((20.0, 20.0));
+        bp.line_to((10.0, 20.0));
+        bp.close_path();
+        bp.move_to((15.0, 5.0));
+        bp.line_to((15.0, 5.0));
+        bp.close_path();
+        let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+        (stroke.join, stroke.cap) = (LineJoin::Round, LineCap::Round);
+        let mut appearance = Appearance::default();
+        appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))));
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        let piece = Node::path(NodeId(1), PathData::from_bezpath(&bp), appearance);
+        let outlines = Node::group(NodeId(2), vec![Arc::new(piece)]);
+        assert_eq!(painted_outlines(&outlines), Some(Rect::new(9.0, 9.0, 21.0, 21.0)));
+    }
+
+    /// A side of what contents paint within a ten-thousandth of a point of their geometric box's is
+    /// that side, inside it or out: the two boxes measure the same outline two ways. Further inside,
+    /// there is no box; further out, it counts.
+    #[test]
+    fn a_side_within_the_slack_of_the_geometric_box_is_that_side() {
+        let plain = Rect::new(10.0, 20.0, 110.0, 70.0);
+        let painted = Rect::new(8.0, 20.0 + 1e-9, 112.0, 72.0);
+        assert_eq!(painted_margin(painted, plain), Some([0.0, 0.04, 0.02, 0.02]));
+        assert_eq!(painted_margin(Rect::new(8.0, 20.001, 112.0, 72.0), plain), None);
+        assert_eq!(painted_margin(plain, plain), None);
+        let half = [0.04_f32, 0.04, 0.02, 0.02];
+        assert!(same_box(half, [0.04 + 1e-7, 0.04, 0.02, 0.02], plain));
+        assert!(!same_box(half, [0.041, 0.04, 0.02, 0.02], plain));
     }
 }
