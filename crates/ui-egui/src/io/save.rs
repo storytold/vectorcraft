@@ -395,7 +395,8 @@ pub(super) fn view_file(app: &mut VectorcraftApp, path: &str) {
 }
 
 /// "Saved <path>", with the first of the result's warnings and how many there are; hovering the
-/// message lists them all ([`show_with_notes`]).
+/// message lists up to 30 of them, fewer when the window is small, with how many were left out
+/// ([`show_with_notes`]).
 pub(crate) fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
     show_with_notes(app, saved_status(path, r), notes_of(r));
 }
