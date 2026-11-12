@@ -199,7 +199,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done (2026-11-06):** an EPS page that paints its gradients as rows of abutting one-colour strips imports them as linear gradients, so the seams between strips no longer show and an Illustrator EPS drawn that way keeps its layers instead of opening as its page. This narrows G9; scores and estimates unchanged.
 - **Done (2026-10-30):** from an audit of a user's `.ai`/EPS files: All Caps and Small Caps; placed files at their box's corner; pages cropped to the art; gradient mesh corners with handle weights of 0 and the transparency written after a mesh, a masked mesh and a blend; a layer's state block with the stroke style; type on a path spaced as the file lays it out (the distance from the path under Align to Path is measured from the top of each character's em box, half the height of the top of its H or the bottom of its font's bounding box, and the fit under Gravity does not reproduce the file's layout); EPS10 legacy-format type; a PDF of some artboards compared on the artboard its page shows. Comparison limits remain unchanged. This narrows G9; scores and estimates unchanged.
 
-- **Save-back update (2026-10-26):** ordinary EPS Save retains page margins and the whole editable document; source-loss confirmation remains. Import fidelity gaps and estimates below are unchanged.
+- **Save-back update (2026-10-26):** ordinary EPS Save retains page margins and the whole editable document; source-loss confirmation remains. Import fidelity gaps and estimates below are unchanged. Since 2026-11-12 Save keeps the page margins only with Use Artboards checked; unchecked, the default, the bounding box fits the visible art.
 
 - **Done (2026-10-16):** EPS legacy mesh corners and vector opacity masks retained; winding-declared compound member groups keep shared paint. Raster print-page minification no longer causes a false editing-data fallback; comparison limits remain unchanged. Synthetic regressions cover damage and missing artwork. This narrows G9; scores and estimates unchanged.
 
@@ -646,11 +646,12 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Direct Selection of a path, compound path or type inside a dynamic instance also takes opacity and blend
   (`transparency.set`) and a gradient or pattern fill or stroke (`paint.setFill` / `paint.setStroke`,
   Eyedropper), for that instance only;
-  graphic style libraries (Window › Graphic Style Libraries; eight original libraries generated in code, including
-  Game HUD with Health Fill, Mana Glow, Damage Flash, Quest Outline, Coin Shine and Boss Alert, and Status Effects
-  with Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade and Shield Buff; User Defined; Other
-  Library…; `graphicStyle.libraries`, `graphicStyle.addFromLibrary`).
-- **Missing:** more built-in brush libraries beyond the seven shipped (and further graphic-style libraries beyond the eight shipped, and further symbol libraries beyond Basic
+  graphic style libraries (Window › Graphic Style Libraries; nine original libraries generated in code, including
+  Game HUD with Health Fill, Mana Glow, Damage Flash, Quest Outline, Coin Shine and Boss Alert, Status Effects
+  with Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade and Shield Buff, and Textures with Fine Grain,
+  Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper, painted with
+  the texture effects; User Defined; Other Library…; `graphicStyle.libraries`, `graphicStyle.addFromLibrary`).
+- **Missing:** more built-in brush libraries beyond the seven shipped (and further graphic-style libraries beyond the nine shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
   Global Edit of groups holding type or images, rotated copies as matches and highlighting matches before the
   start; 9-slice guides outside the symbol's art (a dragged guide stops at the art's edge).
@@ -1096,4 +1097,4 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 2026-10-28 behavior correction: Flare ray rotation follows vertical travel at one degree per document point, independent of pointer event count. Shift freezes the current orientation; Space also freezes rotation on the first update. This is the chosen application interaction rate. Scores and estimates unchanged.
 ## EPS Save evidence (2026-10-26)
-Ordinary Save and Save As keep EPS as EPS, with the chosen page frame, transparent margins and the complete editable VectorCraft document. Existing import-loss confirmation and transparency warnings remain; the Save TIFF preview is capped at 1024 pixels, while Export retains 2048. See [file-format-parity.md](file-format-parity.md#eps-save-and-source-protection) for limits and regression evidence. This narrows G9 save-back workflow coverage; native Illustrator editing-data fidelity, parity scores and hour estimates are unchanged.
+Ordinary Save and Save As keep EPS as EPS, with the chosen page frame, transparent margins and the complete editable VectorCraft document. Existing import-loss confirmation and transparency warnings remain; the Save TIFF preview is capped at 1024 pixels, while Export retains 2048. See [file-format-parity.md](file-format-parity.md#eps-save-and-source-protection) for limits and regression evidence. This narrows G9 save-back workflow coverage; native Illustrator editing-data fidelity, parity scores and hour estimates are unchanged. Since 2026-11-12 the EPS Options of Save As show Use Artboards, unchecked by default: unchecked, the bounding box fits the visible art; checked, Save keeps the chosen page frame and margins described here.

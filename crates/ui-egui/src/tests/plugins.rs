@@ -395,6 +395,133 @@ fn a_press_on_the_install_approval_from_before_ok_took_input_approves_nothing() 
     h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
+/// A press of another button after OK took input doesn't let a primary press from before it
+/// approve when that press is let go of.
+#[test]
+fn a_later_press_on_the_install_approval_keeps_an_early_press_from_approving() {
+    use egui_kittest::kittest::Queryable;
+    let id = "test.ui.approval.held.two";
+    let mut h = window(app());
+    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Two", r#"["doc.read"]"#))});
+    h.state_mut().run("ui.installPlugin", module).unwrap();
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    let pos = h.get_by_label("OK").rect().center();
+    let button = |button, pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: Default::default() };
+    // The primary button goes down away from any widget and moves over OK.
+    let away = egui::pos2(2.0, 2.0);
+    h.input_mut().events.extend([
+        egui::Event::PointerMoved(away),
+        egui::Event::PointerButton { pos: away, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
+    ]);
+    at(&mut h, 10.1);
+    h.input_mut().events.push(egui::Event::PointerMoved(pos));
+    at(&mut h, 10.2);
+    at(&mut h, 10.5);
+    assert!(ok_enabled(&h));
+    h.input_mut().events.push(button(egui::PointerButton::Secondary, true));
+    at(&mut h, 10.55);
+    h.input_mut().events.push(button(egui::PointerButton::Primary, false));
+    at(&mut h, 10.6);
+    assert!(waiting(h.state(), id), "the primary press began before OK took input");
+    h.input_mut().events.push(button(egui::PointerButton::Secondary, false));
+    at(&mut h, 10.65);
+    click_ok(&mut h, 10.8);
+    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// A press on the OK of one question that is still held when another question takes its place
+/// doesn't approve the new one when it is let go of.
+#[test]
+fn a_press_held_from_the_question_before_approves_nothing() {
+    use egui_kittest::kittest::Queryable;
+    let (a, b) = ("test.ui.approval.carried.a", "test.ui.approval.carried.b");
+    let module = |id: &str| json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Carried", r#"["doc.read"]"#))});
+    let mut h = window(app());
+    h.state_mut().run("ui.installPlugin", module(a)).unwrap();
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    at(&mut h, 10.6);
+    assert!(ok_enabled(&h));
+    let pos = h.get_by_label("OK").rect().center();
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    h.input_mut().events.extend([egui::Event::PointerMoved(pos), button(true)]);
+    at(&mut h, 10.65);
+    // While the button is down, a request closes the question and asks about another module.
+    dialogs::cancel(h.state_mut());
+    h.state_mut().run("ui.installPlugin", module(b)).unwrap();
+    at(&mut h, 10.7);
+    at(&mut h, 11.0);
+    at(&mut h, 11.2);
+    assert!(ok_enabled(&h));
+    h.input_mut().events.push(button(false));
+    at(&mut h, 11.25);
+    assert!(waiting(h.state(), b) && vectorcraft_plugins::registry::get(a).is_none(), "the press began on the question before");
+    click_ok(&mut h, 11.4);
+    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    assert!(vectorcraft_plugins::registry::get(b).is_some());
+    h.state_mut().run("plugin.remove", json!({"id": b})).unwrap();
+}
+
+/// Enter or Space held down while OK is disabled doesn't approve through its key repeat once OK
+/// has the keyboard focus; a new press after it is let go of does.
+#[test]
+fn a_key_held_on_the_install_approval_from_before_ok_took_input_approves_nothing() {
+    use egui_kittest::kittest::Queryable;
+    for (n, key) in [egui::Key::Enter, egui::Key::Space].into_iter().enumerate() {
+        let id = format!("test.ui.approval.key.{n}");
+        let mut h = window(app());
+        let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(&id, "Key", r#"["doc.read"]"#))});
+        h.state_mut().run("ui.installPlugin", module).unwrap();
+        at(&mut h, 10.0);
+        at(&mut h, 10.0);
+        let event = |pressed, repeat| egui::Event::Key { key, physical_key: Some(key), pressed, repeat, modifiers: Default::default() };
+        h.input_mut().events.push(event(true, false));
+        at(&mut h, 10.1);
+        at(&mut h, 10.6);
+        assert!(ok_enabled(&h));
+        h.get_by_label("OK").focus();
+        at(&mut h, 10.65);
+        h.input_mut().events.push(event(true, true));
+        at(&mut h, 10.7);
+        assert!(waiting(h.state(), &id), "{key:?}: the key went down before OK took input");
+        h.input_mut().events.push(event(false, false));
+        at(&mut h, 10.75);
+        h.get_by_label("OK").focus();
+        at(&mut h, 10.8);
+        h.key_press(key);
+        at(&mut h, 10.85);
+        assert!(h.state().ui.dialog.is_none(), "{key:?}: {}", h.state().ui.status);
+        h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+    }
+}
+
+/// The wait starts over when the window loses the focus and gets it back between two frames.
+#[test]
+fn the_install_approval_waits_again_when_the_focus_leaves_and_comes_back_between_frames() {
+    let id = "test.ui.approval.blink";
+    let mut h = window(app());
+    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Blink", r#"["doc.read"]"#))});
+    h.state_mut().run("ui.installPlugin", module).unwrap();
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    at(&mut h, 10.6);
+    assert!(ok_enabled(&h));
+    h.input_mut().events.extend([egui::Event::WindowFocused(false), egui::Event::WindowFocused(true)]);
+    at(&mut h, 10.7);
+    assert!(!ok_enabled(&h), "the focus left since the frame before");
+    click_ok(&mut h, 10.8);
+    assert!(waiting(h.state(), id));
+    at(&mut h, 11.19);
+    assert!(!ok_enabled(&h));
+    at(&mut h, 11.2);
+    assert!(ok_enabled(&h), "back in front, it waits again");
+    click_ok(&mut h, 11.3);
+    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+}
+
 /// A module with other bytes than the one installed with its id asks before taking its place: in
 /// the ordinary confirm when it needs nothing that only a person can approve, and in the approval
 /// dialog, with its id and file hash, when it also asks for a heavy budget.

@@ -562,6 +562,58 @@ fn bad_xml_text_is_a_catchable_syntax_error() {
 }
 
 #[test]
+fn an_xml_declaration_is_checked_against_its_grammar() {
+    for s in [
+        "<?xml version=\"1.0\"?><a/>",
+        "<?xml version='1.1'?><a/>",
+        "<?xml version = \"1.0\" encoding=\"UTF-8\"?><a/>",
+        "<?xml version=\"1.0\" encoding='ISO-8859-1' standalone=\"yes\" ?><a/>",
+        "<?xml\tversion=\"1.10\"\nstandalone='no'?>\n<a/>",
+        "<?xml version=\"1.0\" encoding=\"x-Mac_1.2\"?><a/>",
+        "  <?xml version=\"1.0\"?><a/>",
+    ] {
+        truth(&format!("new XML({s:?}).localName() === 'a'"));
+        truth(&format!("var l = new XMLList({s:?}); l.length() === 1 && l[0].localName() === 'a'"));
+    }
+    for s in [
+        "<?xml ?><a/>",
+        "<?xml encoding=\"UTF-8\"?><a/>",
+        "<?xml standalone=\"yes\"?><a/>",
+        "<?xml version=\"2.0\"?><a/>",
+        "<?xml version=\"1.\"?><a/>",
+        "<?xml version=\"1.x\"?><a/>",
+        "<?xml version=\" 1.0\"?><a/>",
+        "<?xml version=\"1.0'?><a/>",
+        "<?xml version=1.0?><a/>",
+        "<?xml version\"1.0\"?><a/>",
+        "<?xml Version=\"1.0\"?><a/>",
+        "<?xml version=\"1.0\"encoding=\"UTF-8\"?><a/>",
+        "<?xml version=\"1.0\" encoding=\"8bit\"?><a/>",
+        "<?xml version=\"1.0\" encoding=\"UTF 8\"?><a/>",
+        "<?xml version=\"1.0\" encoding=\"\"?><a/>",
+        "<?xml version=\"1.0\" standalone=\"maybe\"?><a/>",
+        "<?xml version=\"1.0\" standalone=\"YES\"?><a/>",
+        "<?xml version=\"1.0\" standalone=\"yes\" encoding=\"UTF-8\"?><a/>",
+        "<?xml version=\"1.0\" version=\"1.0\"?><a/>",
+        "<?xml version=\"1.0\" encoding=\"a\" encoding=\"b\"?><a/>",
+        "<?xml version=\"1.0\" other=\"x\"?><a/>",
+        "<?xml version=\"1.0\" ? ><a/>",
+    ] {
+        assert_eq!(thrown_name(&format!("new XML({s:?})")), "SyntaxError", "{s}");
+        assert_eq!(thrown_name(&format!("new XMLList({s:?})")), "SyntaxError", "{s}");
+    }
+    let message = |s: &str| string(&format!("try {{ new XML({s}); 'no error' }} catch (e) {{ e.message }}"));
+    assert_eq!(message("'<?xml version=\"1.0\" junk?><a/>'"), "invalid XML declaration");
+    assert_eq!(message("'<?xml version=\"1.0\"'"), "unterminated XML declaration");
+    assert_eq!(message("'<?xml version=\"1.0\"' + String.fromCharCode(1) + '?><a/>'"), "invalid character in XML text");
+    assert_eq!(message("'<?xml version=\"1.0\" encoding=\"' + String.fromCharCode(0xD800) + '\"?><a/>'"), "invalid character in XML text");
+    assert_eq!(message("'<a/><?xml version=\"1.0\"?>'"), "'xml' cannot name a processing instruction");
+    truth(
+        "XML.ignoreProcessingInstructions = false; var x = new XML('<a><?xml-stylesheet href=\"s\"?></a>'); x.children()[0].nodeKind() === 'processing-instruction'",
+    );
+}
+
+#[test]
 fn unpaired_surrogates_are_rejected_in_xml_text() {
     let lone = "String.fromCharCode(0xD800)";
     let low = "String.fromCharCode(0xDC00)";
@@ -748,6 +800,46 @@ fn namespace_lookups_take_fuel_for_each_ancestor_they_climb() {
         let (s, d) = (fuel_of(shallow, action), fuel_of(deep, action));
         assert!(d >= s + 149, "{action}: {s} one level down, {d} 150 levels down");
     }
+}
+
+#[test]
+fn xml_text_takes_fuel_for_every_run_it_scans() {
+    // `pad` is white space and `name` is name characters, each one unit long in the short run and
+    // 16,384 units long in the long run.
+    let setup = |doublings: u32, text: &str| {
+        format!("var pad = ' ', name = 'n'; for (var i = 0; i < {doublings}; i++) {{ pad += pad; name += name; }} var s = {text};")
+    };
+    let action = "try { new XML(s) } catch (e) {}";
+    let mut flat = Vec::new();
+    for text in [
+        "'<?xml version=\"1.0\"' + pad + '?><a/>'",
+        "pad + '<?xml version=\"1.0\"?><a/>'",
+        "'<?xml version=\"1.0\"' + pad",
+        "'<?xml version=\"1.0\" junk' + pad + '?><a/>'",
+        "'<a' + name + '/>'",
+        "'<a' + name + String.fromCharCode(0xD800) + '/>'",
+        "'<a' + pad + '/>'",
+        "'<a' + pad + 'b=\"1\"/>'",
+        "'<a b' + pad + '=\"1\"/>'",
+        "'<a b=' + pad + '\"1\"/>'",
+        "'<a' + pad",
+        "'<a b=\"' + pad",
+        "'<a b=\"' + pad + '<\"/>'",
+        "'<a></a' + name + '>'",
+        "'<a></a' + pad + '>'",
+        "'<a>' + pad + ']]></a>'",
+        "'<a><![CDATA[' + pad",
+        "'<a><!--' + pad",
+        "'<a><!--' + pad + '-- x'",
+        "'<a><?p' + pad",
+    ] {
+        let short = fuel_of(&setup(0, text), action);
+        let long = fuel_of(&setup(14, text), action);
+        if long < short + 900 {
+            flat.push(format!("{text}: {short} short, {long} long"));
+        }
+    }
+    assert!(flat.is_empty(), "{flat:#?}");
 }
 
 #[test]

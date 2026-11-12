@@ -109,6 +109,40 @@ fn unlinked(g: &Gradient) -> Gradient {
     g
 }
 
+/// Give each saved preset in `saved` a name no built-in preset or earlier saved one has (any case):
+/// a clash becomes the first free "<name> N", N from 2. Returns the renames as (old, new).
+pub(crate) fn rename_clashing_presets(saved: &mut [GradientPreset]) -> Vec<(String, String)> {
+    if saved.is_empty() {
+        return vec![];
+    }
+    let builtin: std::collections::HashSet<String> = builtin_presets().map(|e| e.name.to_ascii_lowercase()).collect();
+    let mut taken: std::collections::HashSet<String> =
+        builtin.iter().cloned().chain(saved.iter().map(|p| p.name.trim().to_ascii_lowercase())).collect();
+    let mut kept = std::collections::HashSet::new();
+    // The next suffix to try for each name, so many presets with one name take linear time.
+    let mut next: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    let mut renamed = vec![];
+    for p in saved {
+        let key = p.name.trim().to_ascii_lowercase();
+        if !builtin.contains(&key) && kept.insert(key.clone()) {
+            continue;
+        }
+        let base = p.name.trim();
+        let n = next.entry(key).or_insert(2);
+        let name = loop {
+            let candidate = format!("{base} {n}");
+            *n += 1;
+            if !taken.contains(&candidate.to_ascii_lowercase()) {
+                break candidate;
+            }
+        };
+        taken.insert(name.to_ascii_lowercase());
+        kept.insert(name.to_ascii_lowercase());
+        renamed.push((std::mem::replace(&mut p.name, name.clone()), name));
+    }
+    renamed
+}
+
 impl Session {
     /// The Gradient panel's presets: the built-in ones by library, then the saved ones.
     pub fn gradient_presets(&self) -> Vec<GradientPresetEntry> {

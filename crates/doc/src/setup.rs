@@ -314,6 +314,13 @@ pub struct DocSetup {
     /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
     #[serde(default, rename = "systemLayout", skip_serializing_if = "crate::skip::is_default")]
     pub system_layout: bool,
+    /// Align New Objects to Pixel Grid (New Document › Advanced Options, Transform panel menu):
+    /// paths and compound paths drawn from then on are pixel-aligned. Objects already in the
+    /// document, and objects pasted, duplicated or placed, keep their own setting. Off by default
+    /// and for documents from before it, and saved only when on.
+    /// <https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/pixel-preview-mode-for-web-graphics.html>
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub align_new_objects_to_pixel_grid: bool,
 }
 
 impl Default for DocSetup {
@@ -337,6 +344,7 @@ impl Default for DocSetup {
             export_text: ExportText::Editable,
             background: Background::Transparent,
             system_layout: false,
+            align_new_objects_to_pixel_grid: false,
         }
     }
 }

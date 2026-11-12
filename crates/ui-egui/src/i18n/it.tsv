@@ -262,6 +262,7 @@ font-technology	Variable	Variabili
 	Asset Export Settings	Impostazioni esportazione risorse
 	Assets	Risorse
 	Assign	Assegna
+	Assign Profile	Assegna profilo
 	Assign Profile…	Assegna profilo…
 	Assign:	Assegna:
 	Attach to Active Plane	Associa al piano attivo
@@ -828,6 +829,14 @@ font-technology	Variable	Variabili
 	Disable Auto Add/Delete	Disattiva aggiunta/eliminazione automatica
 	Disable Opacity Mask	Disattiva maschera di opacità
 	Discard	Scarta
+	Preserve	Mantieni
+	TIFF (Black & White)	TIFF (bianco e nero)
+	TIFF (8-bit Color)	TIFF (colore a 8 bit)
+	High Resolution	Alta risoluzione
+	Medium Resolution	Media risoluzione
+	Low Resolution	Bassa risoluzione
+	Language Level 2	Livello di linguaggio 2
+	Language Level 3	Livello di linguaggio 3
 	Discard Empty Type	Scarta testo vuoto
 	Discard Recovered Documents	Scarta documenti recuperati
 	Discard White Overprint in Output	Scarta sovrastampa del bianco nell'output
@@ -2375,6 +2384,9 @@ file-filter	Templates	Modelli
 	Optical	Ottica
 	Optical Margin Alignment	Allineamento ottico dei margini
 	Dynamic Text	Testo dinamico
+	Dynamic Text Presets	Predefiniti testo dinamico
+	Arch	Volta
+@msg	select point type or type on a path	seleziona testo per punti o testo su tracciato
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	il testo su tracciato in un testo concatenato non può usare il testo dinamico: {frames}
 	Optimize for fast web view	Ottimizza per visualizzazione web veloce
 	Optimized	Ottimizzato
@@ -2382,6 +2394,7 @@ file-filter	Templates	Modelli
 	Options for Selection…	Opzioni per la selezione…
 	Options:	Opzioni:
 	Options…	Opzioni…
+	Organic Fades	Dissolvenze organiche
 	or more spaces with a tab	o più spazi con una tabulazione
 	Order:	Ordine:
 	Ordinals	Ordinali
@@ -2575,6 +2588,7 @@ diagnostics	ui	interfaccia
 	Presets:	Preset:
 	Press 	Premi 
 	Preview	Anteprima
+	Preview:	Anteprima:
 	Preview All Layers	Anteprima di tutti i livelli
 	Preview in Browser	Anteprima nel browser
 	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (la versione web scarica invece i file)
@@ -2656,6 +2670,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Bagliori radiali
 	Radial Gradient	Sfumatura radiale
 	Conic Gradient	Sfumatura conica
+	Diamond Gradient	Sfumatura a rombo
 	Radius 1	Raggio 1
 	Radius 2	Raggio 2
 	Radius1	Raggio1
@@ -3213,6 +3228,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Stordimento
 	Stealth Fade	Furtività
 	Shield Buff	Scudo
+	Textures	Texture
+	Fine Grain	Grana fine
+	Canvas Weave	Trama di tela
+	Burlap Sack	Sacco di iuta
+	Cracked Glaze	Smalto craquelé
+	Mosaic Floor	Pavimento a mosaico
+	Quilted Squares	Quadrati trapuntati
+	Leaded Glass	Vetro piombato
+	Damp Paper	Carta umida
 	Shape	Forma
 	Shape Builder	Generatore forme
 	Shape Builder Regions	Aree del Generatore forme
@@ -3918,6 +3942,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMYK di lavoro
 	Working CMYK (don't tag)	CMYK di lavoro (senza tag)
+	Working RGB (don't tag)	RGB di lavoro (senza tag)
 	Workspace	Area di lavoro
 	Workspace {i}	Area di lavoro {i}
 	Wrinkle Tool	Strumento Grinza
@@ -4284,6 +4309,7 @@ axis	Both	Entrambi
 @msg	`{key}` must be a number, not {v}	`{key}` deve essere un numero, non {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} deve essere un tempo Unix in secondi (un intero) o null
 @msg	`{key}` must be a string	`{key}` deve essere una stringa
+@msg	`{key}` must be a profile name or null	`{key}` deve essere un nome di profilo o null
 @msg	`{key}` must be a whole number	`{key}` deve essere un numero intero
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` deve essere un numero intero tra {min} e {max} (ricevuto {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` deve essere compreso tra {min} e {max} (ricevuto {x})
@@ -4779,7 +4805,7 @@ axis	Both	Entrambi
 @msg	unknown format	formato sconosciuto
 @msg	unknown format `{f}` (Save writes {_1})	formato sconosciuto `{f}` (Salva scrive {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modalità a forma libera sconosciuta `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo di sfumatura sconosciuto `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipo di sfumatura sconosciuto `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	evidenziazione sconosciuta `{h}`
 @msg	unknown option `{path}.{k}`	opzione sconosciuta `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	valore di sovrastampa sconosciuto `{o}` (preserve, simulate o discard)
@@ -5431,7 +5457,7 @@ lighting	Light	Luce
 @msg	span must be "object" or "selection", got {v}	span deve essere "object" o "selection", non {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiziona un `gradient`, non un campione
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiziona una sfumatura: indica `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" posiziona una sfumatura lineare, radiale o conica, non una sfumatura a forma libera
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" posiziona una sfumatura lineare, radiale, conica o a rombo, non una sfumatura a forma libera
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" posiziona la sfumatura stessa: ometti `start` e `end` (la posizionano già in coordinate del documento)
 	Make Image Dynamic	Rendi immagine dinamica
 	Import Data Sets…	Importa set di dati…
@@ -6460,6 +6486,11 @@ breakText	Glyphs	Glifi
 @msg	only an exporter or an importer declares `extensions`	solo un plug-in di esportazione o di importazione dichiara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un plug-in di importazione riceve sempre il budget di un’importazione: ometti `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copia informazioni per la risoluzione dei problemi
+@msg	Copied the troubleshooting info	Informazioni per la risoluzione dei problemi copiate
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	L’ultima sessione di VectorCraft ha smesso di rispondere prima di chiudersi. Aiuto › Copia informazioni per la risoluzione dei problemi copia i dettagli per una segnalazione di bug
+
 # Safe Mode
 	Safe Mode…	Modalità provvisoria…
 	Safe Mode	Modalità provvisoria
@@ -6480,6 +6511,7 @@ breakText	Glyphs	Glifi
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Allinea alla griglia pixel
+	Align New Objects to Pixel Grid	Allinea nuovi oggetti alla griglia pixel
 	Not Aligned to Pixel Grid	Non allineato alla griglia pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	solo i tracciati e i tracciati composti possono essere allineati alla griglia pixel
 @msg	side is left or right, not `{s}`	side è left o right, non `{s}`

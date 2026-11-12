@@ -207,6 +207,7 @@ antiAlias	Sharp	锐利
 	Asset Export Settings	资源导出设置
 	Assets	资源
 	Assign	指定
+	Assign Profile	指定配置文件
 	Assign Profile…	指定配置文件…
 	Assign:	指定：
 	Attach to Active Plane	附加到活动平面
@@ -2243,12 +2244,16 @@ file-filter	Templates	模板
 	Optical	视觉
 	Optical Margin Alignment	视觉边界对齐
 	Dynamic Text	动态文本
+	Dynamic Text Presets	动态文本预设
+	Arch	拱形
+@msg	select point type or type on a path	请选择点文字或路径文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
 	Options	选项
 	Options:	选项：
 	Options…	选项…
+	Organic Fades	自然渐隐
 	or more spaces with a tab	或多个空格加一个制表符
 	Order:	顺序：
 	Ordinals	序数字
@@ -2441,6 +2446,7 @@ diagnostics	ui	界面
 	Presets:	预设：
 	Press 	按 
 	Preview	预览
+	Preview:	预览：
 	Preview in Browser	在浏览器中预览
 	Preview in Browser needs the desktop app (the web downloads files instead)	在浏览器中预览需要桌面版应用程序 (网页版会改为下载文件)
 	Preview Mode	预览模式
@@ -2524,6 +2530,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Radial Glows	径向光晕
 	Radial Gradient	径向渐变
 	Conic Gradient	圆锥渐变
+	Diamond Gradient	菱形渐变
 	Radius 1	半径 1
 	Radius 2	半径 2
 	Radius1	半径1
@@ -3043,6 +3050,15 @@ digits	Malayalam	马拉雅拉姆数字
 	Stun Pulse	眩晕
 	Stealth Fade	隐身
 	Shield Buff	护盾
+	Textures	纹理
+	Fine Grain	细颗粒
+	Canvas Weave	帆布纹
+	Burlap Sack	麻布袋
+	Cracked Glaze	裂纹釉
+	Mosaic Floor	马赛克地面
+	Quilted Squares	绗缝方格
+	Leaded Glass	铅条玻璃
+	Damp Paper	湿纸
 	Shape	形状
 	Shape Builder	形状生成器
 	Shape Builder Regions	形状生成器区域
@@ -3762,6 +3778,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Windows	Windows
 	Working CMYK	工作 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加标签)
+	Working RGB (don't tag)	工作 RGB (不加标签)
 	Workspace	工作区
 	Workspace {i}	工作区 {i}
 	Wrinkle Tool	褶皱工具
@@ -4091,7 +4108,7 @@ imageTrace	Outline	轮廓
 @msg	stop {i} needs `offset`	色标 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色标 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色标 {i}：`{k}` 必须是数字
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的渐变类型 `{k}` (linear、radial、conic、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	未知的渐变类型 `{k}` (linear、radial、conic、diamond、freeform)
 @msg	the art could not be sampled	无法对图稿取样
 @msg	the art is too light for any dots	图稿太浅，无法生成任何网点
 @msg	the document has no symbols	文档中没有符号
@@ -4183,6 +4200,7 @@ imageTrace	Outline	轮廓
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` 必须是 `auto` 或语言代码，例如 `en` 或 `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` 必须是 #rrggbb 颜色
 @msg	`{key}` must be a string	`{key}` 必须是字符串
+@msg	`{key}` must be a profile name or null	`{key}` 必须是配置文件名称或 null
 @msg	`{key}` must be a whole number	`{key}` 必须是整数
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` 必须是介于 {min} 和 {max} 之间的整数 (实际为 {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必须介于 {min} 和 {max} 之间 (实际为 {x})
@@ -4845,7 +4863,7 @@ imageTrace	Outline	轮廓
 @msg	span must be "object" or "selection", got {v}	span 必须是 "object" 或 "selection"，实际为 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而不是色板
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 放置渐变：请给出 `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置线性、径向或圆锥渐变，而不是任意形状渐变
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" 放置线性、径向、圆锥或菱形渐变，而不是任意形状渐变
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 自行放置渐变：请省略 `start` 和 `end` (它们已按文档坐标放置渐变)
 @msg	Batch: {count} processed	批处理：已处理 {count} 个
 @msg	Batch: {count} processed, {failed} failed	批处理：已处理 {count} 个，失败 {failed} 个
@@ -6680,6 +6698,11 @@ breakText	Glyphs	字形
 @msg	only an exporter or an importer declares `extensions`	只有导出或导入增效工具才声明 `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	导入增效工具始终获得导入的预算：请省略 `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	复制故障排除信息
+@msg	Copied the troubleshooting info	已复制故障排除信息
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	上次的 VectorCraft 会话在关闭前停止了响应。帮助 › 复制故障排除信息 可复制用于错误报告的详细信息
+
 # Safe Mode
 	Safe Mode…	安全模式…
 	Safe Mode	安全模式
@@ -6700,6 +6723,7 @@ breakText	Glyphs	字形
 
 # Align to Pixel Grid
 	Align to Pixel Grid	对齐像素网格
+	Align New Objects to Pixel Grid	将新对象对齐像素网格
 	Not Aligned to Pixel Grid	未对齐像素网格
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`
