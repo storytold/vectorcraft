@@ -807,6 +807,12 @@ fn structured_junk() {
         ("addon.type.releasePath", json!({"mode": "text", "keepOriginal": false, "id": 2})),
         ("addon.type.releasePath", json!({"mode": ["both"], "keepOriginal": "no", "ids": "all", "id": -1})),
         ("addon.type.releasePath", json!({"mode": "nope", "keepOriginal": 1e308, "ids": [1.5, null, "x"]})),
+        // Cutting Tools add-on: Stencil Bridges.
+        ("addon.cutting.bridges", json!({"width": 0.01, "count": 16, "direction": "shortest", "keepOriginal": true})),
+        ("addon.cutting.bridges", json!({"width": 1000, "count": 1, "direction": "horizontal", "keepOriginal": false})),
+        ("addon.cutting.bridges", json!({"width": "3 mm", "direction": "vertical"})),
+        ("addon.cutting.bridges", json!({"width": f64::MAX, "count": 1e308, "direction": ["vertical"], "keepOriginal": "no"})),
+        ("addon.cutting.bridges", json!({"width": -1, "count": -3, "direction": "diagonal", "keepOriginal": 1e308})),
         ("addon.cleanup.breakText", json!({"by": "glyphs", "ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, u64::MAX]})),
         ("addon.cleanup.breakText", json!({"by": ["lines"]})),
         ("addon.cleanup.breakText", json!({"by": "paragraphs"})),

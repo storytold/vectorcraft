@@ -6489,3 +6489,15 @@ breakText	Glyphs	글리프
 	Deferred Effects	보류된 효과
 @msg	no plug-in effect is deferred	보류된 플러그인 효과가 없습니다
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	플러그인 효과 {n}개를 보류하고 열었습니다. 효과 › 보류된 효과 새로 고침으로 실행합니다.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	커팅 도구
+	Stencil Bridges…	스텐실 브리지…
+	Stencil Bridges	스텐실 브리지
+	Shortest Crossing	최단 가로지르기
+	Direction	방향
+@msg	The selected art has no islands to bridge	선택한 아트워크에 연결할 섬이 없습니다
+@msg	No bridge of this width fits across the selected art	이 너비의 브리지가 선택한 아트워크에 들어가지 않습니다
+@msg	Some islands could not be joined to the area around the art	일부 섬을 아트워크 주변 영역에 연결할 수 없습니다
+@msg	`width` must be from {lo} to {hi} pt	`width`는 {lo}에서 {hi}pt 사이여야 합니다
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`는 1에서 {MAX_BRIDGES_PER_ISLAND} 사이의 정수여야 합니다

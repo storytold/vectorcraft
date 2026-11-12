@@ -6610,3 +6610,10 @@ breakText	Glyphs	Глифи
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновяване на отложените ефекти
 	Deferred Effects	Отложени ефекти
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Инструменти за рязане
+	Stencil Bridges…	Мостчета на шаблона…
+	Stencil Bridges	Мостчета на шаблона
+	Shortest Crossing	Най-късо пресичане
+	Direction	Посока

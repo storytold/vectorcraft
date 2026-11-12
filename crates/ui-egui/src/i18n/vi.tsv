@@ -6509,3 +6509,15 @@ breakText	Glyphs	Glyph
 	Deferred Effects	Hiệu ứng bị hoãn
 @msg	no plug-in effect is deferred	không có hiệu ứng plug-in nào bị hoãn
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Đã mở với {n} hiệu ứng plug-in bị hoãn. Hiệu ứng › Làm mới hiệu ứng bị hoãn sẽ chạy chúng.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Công cụ cắt
+	Stencil Bridges…	Cầu nối khuôn tô…
+	Stencil Bridges	Cầu nối khuôn tô
+	Shortest Crossing	Đường cắt ngắn nhất
+	Direction	Hướng
+@msg	The selected art has no islands to bridge	Hình vẽ đã chọn không có đảo nào cần nối
+@msg	No bridge of this width fits across the selected art	Không có cầu nối nào rộng như vậy vừa với hình vẽ đã chọn
+@msg	Some islands could not be joined to the area around the art	Không thể nối một số đảo với vùng xung quanh hình vẽ
+@msg	`width` must be from {lo} to {hi} pt	`width` phải từ {lo} đến {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` phải là số nguyên từ 1 đến {MAX_BRIDGES_PER_ISLAND}

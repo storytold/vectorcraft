@@ -5,6 +5,7 @@ mod arrange;
 mod cleanup;
 mod color;
 mod contour;
+mod cutting;
 mod document;
 mod image;
 mod pathtools;
@@ -23,6 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(cleanup::specs());
     v.extend(color::specs());
     v.extend(contour::specs());
+    v.extend(cutting::specs());
     v.extend(document::specs());
     v.extend(image::specs());
     v.extend(pathtools::specs());

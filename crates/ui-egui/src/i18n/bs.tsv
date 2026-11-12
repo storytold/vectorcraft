@@ -6661,3 +6661,10 @@ shape	Open	Otvoren
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte
 	Deferred Effects	Odgođeni efekti
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Alati za rezanje
+	Stencil Bridges…	Mostići šablona…
+	Stencil Bridges	Mostići šablona
+	Shortest Crossing	Najkraći prijelaz
+	Direction	Smjer

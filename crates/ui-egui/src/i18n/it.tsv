@@ -6528,3 +6528,15 @@ breakText	Glyphs	Glifi
 	Deferred Effects	Effetti rimandati
 @msg	no plug-in effect is deferred	nessun effetto plug-in è rimandato
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aperto con {n} effetto plug-in rimandato. Effetto › Aggiorna effetti rimandati lo esegue.|Aperto con {n} effetti plug-in rimandati. Effetto › Aggiorna effetti rimandati li esegue.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Strumenti di taglio
+	Stencil Bridges…	Ponti per stencil…
+	Stencil Bridges	Ponti per stencil
+	Shortest Crossing	Attraversamento più breve
+	Direction	Direzione
+@msg	The selected art has no islands to bridge	La grafica selezionata non ha isole da collegare
+@msg	No bridge of this width fits across the selected art	Nessun ponte di questa larghezza entra nella grafica selezionata
+@msg	Some islands could not be joined to the area around the art	Non è stato possibile collegare alcune isole all’area intorno alla grafica
+@msg	`width` must be from {lo} to {hi} pt	`width` deve essere compreso tra {lo} e {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve essere un numero intero compreso tra 1 e {MAX_BRIDGES_PER_ISLAND}
