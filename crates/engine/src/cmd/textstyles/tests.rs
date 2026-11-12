@@ -1105,7 +1105,7 @@ fn self_referencing_pattern_is_not_added_again() {
     let different = dst.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 30, "height": 30})).unwrap()["id"].clone();
     dst.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [different]})).unwrap();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert!(dst.doc().unwrap().doc.pattern("Dots 2").is_some());
     assert!(
         dst.doc().unwrap().doc.pattern("Dots 2").unwrap().art[0]
@@ -1116,7 +1116,7 @@ fn self_referencing_pattern_is_not_added_again() {
     );
     let before = dst.doc().unwrap().doc.clone();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert!(again.iter().all(|s| !s.added));
     assert_eq!(dst.doc().unwrap().doc, before);
 }
@@ -1148,13 +1148,13 @@ fn separate_self_referencing_patterns_are_not_added_again() {
         dst.execute("object.pattern.make", &json!({"name": format!("Dots{k}"), "edit": false, "ids": [different]})).unwrap();
     }
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     for k in 0..9 {
         assert!(dst.doc().unwrap().doc.pattern(&format!("Dots{k} 2")).is_some(), "{k}");
     }
     let before = dst.doc().unwrap().doc.clone();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert!(again.iter().all(|s| !s.added));
     assert_eq!(dst.doc().unwrap().doc.patterns.len(), before.patterns.len());
     assert_eq!(dst.doc().unwrap().doc, before);
@@ -1162,7 +1162,7 @@ fn separate_self_referencing_patterns_are_not_added_again() {
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
     target.patterns.retain(|p| !p.name.starts_with("Dots8"));
     let left = target.patterns.len();
-    let third = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    let third = super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert_eq!(dst.doc().unwrap().doc.patterns.len(), left + 1);
     assert!(third.iter().filter(|s| s.name != "Patterned8" && !s.name.starts_with("Patterned8 ")).all(|s| !s.added));
 }
@@ -1195,13 +1195,13 @@ fn a_long_loop_of_patterns_is_not_added_again() {
         dst.execute("object.pattern.make", &json!({"name": format!("Dots{k}"), "edit": false, "ids": [different]})).unwrap();
     }
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     for k in 0..9 {
         assert!(dst.doc().unwrap().doc.pattern(&format!("Dots{k} 2")).is_some(), "{k}");
     }
     let before = dst.doc().unwrap().doc.clone();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true).unwrap();
     assert!(again.iter().all(|s| !s.added));
     assert_eq!(dst.doc().unwrap().doc.patterns.len(), before.patterns.len());
     assert_eq!(dst.doc().unwrap().doc, before);
@@ -1336,7 +1336,8 @@ fn para_style_redefined_to_the_defaults_updates_its_paragraphs() {
 
 /// The same for character styles: Auto kerning and the Roman baseline alignment, which the
 /// run's JSON leaves out, are captured and reach the style's users. A glyph choice belongs to
-/// one character, so it is not a reusable style attribute.
+/// one character, and the space before a line's first character to where it stands (#5111), so
+/// neither is a reusable style attribute.
 #[test]
 fn char_style_redefined_to_the_defaults_updates_its_text() {
     use vectorcraft_doc::CharAlign;
@@ -1356,6 +1357,7 @@ fn char_style_redefined_to_the_defaults_updates_its_text() {
     assert_eq!((kerning(&s), aligns(&s)), ([None, None, Some(60.0)], [CharAlign::RomanBaseline; 3]));
     let mut reusable = settable::<CharStyle>();
     reusable.remove("glyphAlternate");
+    reusable.remove("kerningBefore");
     assert_eq!(defined(&s, 0), reusable, "Redefine captures every reusable attribute");
     s.execute("charStyle.new", &json!({"name": "Copy", "id": local})).unwrap();
     assert_eq!(defined(&s, 1), reusable, "New captures every reusable attribute");
@@ -1583,5 +1585,223 @@ fn para_style_range_capture_samples_start_paragraph() {
             s.execute("edit.redo", &json!({})).unwrap();
             assert_eq!(s.doc().unwrap().doc, after);
         }
+    }
+}
+
+fn paras(s: &Session, id: u64) -> Vec<ParaStyle> {
+    match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.paragraph_styles(),
+        _ => panic!("not text"),
+    }
+}
+
+/// `paraStyle.edit` renames a paragraph style and replaces its attributes in one undo step: every
+/// paragraph using it takes the new values, a paragraph's local override stays, and the saved file
+/// keeps the sparse definition.
+#[test]
+fn paragraph_style_options_edit_applies_to_users_and_is_one_saved_undo_step() {
+    use vectorcraft_doc::Composer;
+    let (mut s, id) = session_with_text("One\nTwo\nThree");
+    s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {"left_indent": 6.0, "composer": "everyLine", "tabs": [{"position": 36.0}]}}))
+        .unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Body", "id": id, "start": 0, "end": 7})).unwrap();
+    s.execute("text.setFormat", &json!({"id": id, "start": 4, "end": 4, "leftIndent": 20.0})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let attrs = json!({"left_indent": 12.0, "composer": "singleLine", "tabs": [{"position": 36.0}],
+        "hyphenation": {"words_longer_than": 8}, "justification": {"word_spacing": [70.0, 90.0, 120.0]}});
+    s.execute("paraStyle.edit", &json!({"name": "Body", "to": "Text", "attrs": attrs})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let p = paras(&s, id);
+    assert_eq!(
+        p.iter().map(|p| (p.style_name.as_deref(), p.left_indent, p.composer)).collect::<Vec<_>>(),
+        [(Some("Text"), 12.0, Composer::SingleLine), (Some("Text"), 20.0, Composer::SingleLine), (None, 0.0, Composer::EveryLine)]
+    );
+    assert_eq!(p[0].hyphenation.words_longer_than, 8);
+    assert_eq!(p[1].justification.word_spacing, [70.0, 90.0, 120.0]);
+    let def = s.doc().unwrap().doc.para_styles.iter().find(|d| d.name == "Text").unwrap().attrs.clone();
+    let mut keys: Vec<&str> = def.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    assert_eq!(keys, ["composer", "hyphenation", "justification", "left_indent", "tabs"]);
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(saved.para_styles.iter().find(|d| d.name == "Text").unwrap().attrs, def);
+    let changed = s.doc().unwrap().doc.clone();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, changed);
+    // The Normal style, an empty or a taken name and an unknown style are errors.
+    s.execute("paraStyle.new", &json!({"name": "Other"})).unwrap();
+    for (params, why) in [
+        (json!({"name": "Text", "to": " ", "attrs": {}}), "give the style a name"),
+        (json!({"name": "Text", "to": "Other", "attrs": {}}), "already exists"),
+        (json!({"name": "Missing", "to": "Missing", "attrs": {}}), "no style `Missing`"),
+        (json!({"name": NORMAL_PARA, "to": NORMAL_PARA, "attrs": {}}), "can't be edited"),
+    ] {
+        let error = s.execute("paraStyle.edit", &params).unwrap_err().to_string();
+        assert!(error.contains(why), "{params}: {error}");
+    }
+}
+
+/// A changed paragraph attribute outside the range `text.setFormat` keeps it to is an error for
+/// `paraStyle.edit`, `paraStyle.setAttrs` and `paraStyle.new`, with no change to the document; the
+/// ends of each range are accepted, and an out-of-range value the style already has can be kept.
+#[test]
+fn paragraph_style_attributes_are_checked_before_a_definition_changes() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {"left_indent": 6.0}})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (attrs, key) in [
+        (json!({"left_indent": -1296.1}), "left_indent"),
+        (json!({"right_indent": 1296.1}), "right_indent"),
+        (json!({"first_line_indent": 1e300}), "first_line_indent"),
+        (json!({"space_before": 1296.1}), "space_before"),
+        (json!({"space_after": -1296.1}), "space_after"),
+        (json!({"hyphenation": {"words_longer_than": 0}}), "hyphenation.words_longer_than"),
+        (json!({"hyphenation": {"words_longer_than": 4000000000_u64}}), "hyphenation.words_longer_than"),
+        (json!({"hyphenation": {"after_first": 16}}), "hyphenation.after_first"),
+        (json!({"hyphenation": {"before_last": 0}}), "hyphenation.before_last"),
+        (json!({"hyphenation": {"hyphen_limit": 26}}), "hyphenation.hyphen_limit"),
+        (json!({"hyphenation": {"zone": -1.0}}), "hyphenation.zone"),
+        (json!({"hyphenation": {"zone": 1296.1}}), "hyphenation.zone"),
+        (json!({"justification": {"word_spacing": [80.0, 100.0, 1000.1]}}), "justification.word_spacing"),
+        (json!({"justification": {"word_spacing": [120.0, 100.0, 133.0]}}), "justification.word_spacing"),
+        (json!({"justification": {"letter_spacing": [-100.1, 0.0, 0.0]}}), "justification.letter_spacing"),
+        (json!({"justification": {"letter_spacing": [0.0, 10.0, 5.0]}}), "justification.letter_spacing"),
+        (json!({"justification": {"glyph_scaling": [49.0, 100.0, 100.0]}}), "justification.glyph_scaling"),
+        (json!({"justification": {"auto_leading": 500.1}}), "justification.auto_leading"),
+        (json!({"tabs": [{"position": 100000.1}]}), "tabs.position"),
+        (json!({"tabs": [{"position": -1.0}]}), "tabs.position"),
+    ] {
+        for cmd in ["paraStyle.edit", "paraStyle.setAttrs", "paraStyle.new"] {
+            let params = match cmd {
+                "paraStyle.edit" => json!({"name": "Body", "to": "Body", "attrs": attrs}),
+                "paraStyle.new" => json!({"name": "Other", "attrs": attrs}),
+                _ => json!({"name": "Body", "attrs": attrs}),
+            };
+            let error = s.execute(cmd, &params).unwrap_err().to_string();
+            assert!(error.contains(&format!("`{key}`")), "{cmd} {attrs}: {error}");
+        }
+    }
+    // Malformed values are errors too.
+    for attrs in [json!({"hyphenation": {"words_longer_than": -1}}), json!({"justification": {"word_spacing": [1.0, 2.0]}}), json!({"tabs": 3})] {
+        assert!(s.execute("paraStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": attrs})).is_err(), "{attrs}");
+    }
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+
+    let ends = json!({
+        "left_indent": -1296.0, "right_indent": 1296.0, "first_line_indent": 0.0, "space_before": 1296.0, "space_after": -1296.0,
+        "hyphenation": {"words_longer_than": 25, "after_first": 1, "before_last": 15, "hyphen_limit": 0, "zone": 1296.0},
+        "justification": {"word_spacing": [0.0, 0.0, 1000.0], "letter_spacing": [-100.0, 0.0, 500.0], "glyph_scaling": [50.0, 100.0, 200.0], "auto_leading": 500.0},
+        "tabs": [{"position": 0.0}, {"position": 100000.0}]
+    });
+    s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": ends})).unwrap();
+    // A style that already holds a value out of range (one read from a file) can be renamed with it.
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.para_styles.iter_mut().find(|d| d.name == "Body").unwrap().attrs.insert("left_indent".into(), json!(2000.0));
+    s.execute("paraStyle.edit", &json!({"name": "Body", "to": "Renamed", "attrs": {"left_indent": 2000.0}})).unwrap();
+    assert!(s.doc().unwrap().doc.para_styles.iter().any(|d| d.name == "Renamed"));
+    // Such a Hyphenation, Justification or tab value is kept while another option of its group changes,
+    // and a changed option is still checked.
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let held = json!({
+        "hyphenation": {"words_longer_than": 40, "after_first": 2},
+        "justification": {"letter_spacing": [0.0, 0.0, 600.0], "auto_leading": 120.0},
+        "tabs": [{"position": 200000.0}]
+    });
+    let attrs = &mut doc.para_styles.iter_mut().find(|d| d.name == "Renamed").unwrap().attrs;
+    attrs.extend(held.as_object().unwrap().clone());
+    let edited = json!({
+        "hyphenation": {"words_longer_than": 40, "after_first": 3},
+        "justification": {"letter_spacing": [0.0, 0.0, 600.0], "auto_leading": 150.0},
+        "tabs": [{"position": 200000.0}, {"position": 72.0}]
+    });
+    s.execute("paraStyle.setAttrs", &json!({"name": "Renamed", "attrs": edited})).unwrap();
+    let def = |s: &Session| s.doc().unwrap().doc.para_styles.iter().find(|d| d.name == "Renamed").unwrap().attrs.clone();
+    assert_eq!(def(&s)["hyphenation"]["after_first"], json!(3));
+    assert_eq!(def(&s)["justification"]["auto_leading"], json!(150.0));
+    for (attrs, key) in [
+        (json!({"hyphenation": {"words_longer_than": 40, "after_first": 16}}), "hyphenation.after_first"),
+        (json!({"justification": {"auto_leading": 501.0}}), "justification.auto_leading"),
+        (json!({"tabs": [{"position": 200000.0}, {"position": 72.0}, {"position": 100001.0}]}), "tabs.position"),
+    ] {
+        let error = s.execute("paraStyle.setAttrs", &json!({"name": "Renamed", "attrs": attrs})).unwrap_err().to_string();
+        assert!(error.contains(&format!("`{key}`")), "{attrs}: {error}");
+    }
+}
+
+/// A paragraph style's changed tab stops are checked stop by stop: a stop the style holds is kept
+/// as it is, and a stop at a held position with another alignment is a changed stop. A changed
+/// stop's leader has at most eight characters and its Align On one character, a changed list has
+/// at most 256 stops (or as many as the style holds, here 300), and the stops are stored sorted by position,
+/// keeping the first of stops at one position.
+#[test]
+fn paragraph_style_tab_stops_are_checked_by_stop_and_sorted() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {}})).unwrap();
+    let def = |s: &Session| s.doc().unwrap().doc.para_styles.iter().find(|d| d.name == "Body").unwrap().attrs.clone();
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let held: Vec<Value> =
+        (0..300).map(|i| json!({"position": 200000.0 + f64::from(i), "align": "left", "leader": "123456789", "alignOn": "."})).collect();
+    doc.para_styles.iter_mut().find(|d| d.name == "Body").unwrap().attrs.insert("tabs".into(), Value::from(held.clone()));
+    let before = s.doc().unwrap().doc.clone();
+    let mut moved = held.clone();
+    moved[0]["align"] = json!("right");
+    for (stops, why) in [
+        (Value::from(moved), "`tabs.position`"),
+        (json!([{"position": 36.0, "leader": "123456789"}]), "`tabs.leader` must be at most 8 characters"),
+        (Value::from((0..301).map(|i| json!({"position": f64::from(i)})).collect::<Vec<_>>()), "at most 256 tab stops"),
+        (json!([{"position": 36.0, "alignOn": ",."}]), "expected a character"),
+    ] {
+        for cmd in ["paraStyle.edit", "paraStyle.setAttrs"] {
+            let params = match cmd {
+                "paraStyle.edit" => json!({"name": "Body", "to": "Body", "attrs": {"tabs": stops}}),
+                _ => json!({"name": "Body", "attrs": {"tabs": stops}}),
+            };
+            let error = s.execute(cmd, &params).unwrap_err().to_string();
+            assert!(error.contains(why), "{cmd}: {error}");
+        }
+    }
+    let many = Value::from((0..257).map(|i| json!({"position": f64::from(i)})).collect::<Vec<_>>());
+    let error = s.execute("paraStyle.new", &json!({"name": "Other", "attrs": {"tabs": many}})).unwrap_err().to_string();
+    assert!(error.contains("at most 256 tab stops"), "{error}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    // The held stops stay while one is dropped and another attribute changes.
+    s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": {"tabs": &held[1..], "left_indent": 4.0}})).unwrap();
+    assert_eq!(def(&s)["tabs"].as_array().map(Vec::len), Some(299));
+    let stops = json!([{"position": 72.0, "align": "right"}, {"position": 36.0}, {"position": 36.0000001, "align": "center"}, {"position": 0.0, "leader": "12345678"}]);
+    s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": {"tabs": stops}})).unwrap();
+    assert_eq!(
+        def(&s)["tabs"],
+        json!([{"position": 0.0, "align": "left", "leader": "12345678", "alignOn": "."}, {"position": 36.0, "align": "left", "alignOn": "."},
+            {"position": 72.0, "align": "right", "alignOn": "."}])
+    );
+    s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": {"tabs": []}})).unwrap();
+    assert_eq!(def(&s)["tabs"], json!([]), "an empty list stays set");
+}
+
+/// Load Paragraph Styles and Load All Styles skip a paragraph style whose indents, spacing,
+/// Hyphenation or Justification options or tab stops are out of the range `paraStyle.new` takes,
+/// and load the others with their stops.
+#[test]
+fn loading_skips_paragraph_styles_out_of_range() {
+    let file = [
+        ("Good", json!({"left_indent": 6.0, "tabs": [{"position": 36.0, "align": "decimal", "alignOn": ","}]})),
+        ("Indent", json!({"left_indent": 2000.0})),
+        ("Space", json!({"space_after": -1300.0})),
+        ("Hyphens", json!({"hyphenation": {"words_longer_than": 40}})),
+        ("Spacing", json!({"justification": {"word_spacing": [120.0, 100.0, 133.0]}})),
+        ("Leader", json!({"tabs": [{"position": 10.0, "leader": "123456789"}]})),
+    ];
+    let data = styles_file(&[], &file);
+    for cmd in ["paraStyle.load", "textStyle.loadAll"] {
+        let (mut s, _) = session_with_text("Title");
+        let r = s.execute(cmd, &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
+        let r = if cmd == "textStyle.loadAll" { r["paraStyles"].clone() } else { r };
+        assert_eq!(r, json!({"added": ["Good"], "existing": [], "skipped": ["Indent", "Space", "Hyphens", "Spacing", "Leader"]}), "{cmd}");
+        let good = super::style_attrs(&s.doc().unwrap().doc, true, "Good").unwrap();
+        assert_eq!(good["tabs"], json!([{"position": 36.0, "align": "decimal", "alignOn": ","}]), "{cmd}");
     }
 }

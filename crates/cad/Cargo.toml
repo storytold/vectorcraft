@@ -3,7 +3,7 @@ name = "vectorcraft-cad"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft CAD interchange: a hand-written ASCII DXF writer (R12 to 2018)"
+description = "VectorCraft CAD interchange: a hand-written ASCII DXF writer (R12 to 2018) and an HP-GL/2 plot file reader and writer"
 
 [lints]
 workspace = true

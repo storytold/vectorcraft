@@ -121,6 +121,21 @@ impl Reuse {
     }
 }
 
+/// Are `children` the pieces of a raster mesh warp ([`vectorcraft_doc::live::mesh_warp_image`]):
+/// more than one, each a clip group of a triangle and one and the same image?
+fn image_pieces(children: &[std::sync::Arc<Node>]) -> bool {
+    let mut first: Option<(&str, u32, u32)> = None;
+    children.len() > 1
+        && children.iter().all(|c| {
+            let NodeKind::Group { children, clip: true } = &c.kind else { return false };
+            let [clip, im] = children.as_slice() else { return false };
+            let (NodeKind::Path { path, .. }, NodeKind::Image(im)) = (&clip.kind, &im.kind) else { return false };
+            let triangle = path.subpaths.len() == 1 && path.anchor_count() == 3;
+            let image = (im.key.as_str(), im.width, im.height);
+            triangle && *first.get_or_insert(image) == image
+        })
+}
+
 /// Art about to be written moved by `m.inverse()` (a symbol instance's): map what the canvas
 /// leaves on the page by `m` first, so it stays there. That is every pattern paint's placement
 /// and the art of unlinked opacity masks.
@@ -226,7 +241,7 @@ impl Writer<'_> {
                     if let (Some(g), Some(b)) = (pixel_gradient(&f.paint, true), bounds) {
                         p.extend((f.opacity < 1.0).then(|| ("opacity", fmt_num(f.opacity as f64, 3))));
                         p.extend(blend);
-                        self.raster_paint(g, b, &[d.to_string()], rule, &p, "", true);
+                        self.raster_paint(g, b, b, &[d.to_string()], rule, &p, "", true);
                     } else {
                         self.fill_props(f, rule, bounds, &mut p);
                         p.extend(blend);
@@ -263,13 +278,19 @@ impl Writer<'_> {
                             let clip = self.path_d(&PathData::from_bezpath(&outline), self.xf);
                             p.extend(opacity);
                             p.extend(blend);
-                            self.raster_paint(g, b, &[clip], FillRule::NonZero, &p, &side, false);
+                            let reach =
+                                if outline.elements().is_empty() { b } else { b.union(vectorcraft_geom::kurbo::Shape::bounding_box(&outline)) };
+                            self.raster_paint(g, b, reach, &[clip], FillRule::NonZero, &p, &side, false);
                         }
                         (WrittenShape::Fill(outlines), Some((g, b))) if s.path_gradient().is_none() => {
                             let clip: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
                             p.extend(opacity);
                             p.extend(blend);
-                            self.raster_paint(g, b, &clip, FillRule::NonZero, &p, &side, false);
+                            let reach = outlines
+                                .iter()
+                                .filter(|o| !o.elements().is_empty())
+                                .fold(b, |r, o| r.union(vectorcraft_geom::kurbo::Shape::bounding_box(o)));
+                            self.raster_paint(g, b, reach, &clip, FillRule::NonZero, &p, &side, false);
                         }
                         (WrittenShape::Stroke { width }, _) => {
                             p.push(("fill", "none".into()));
@@ -633,6 +654,10 @@ impl Writer<'_> {
 
     /// An object, inside `<a>` when it links to a URL (Attributes panel).
     pub(super) fn node(&mut self, n: &Node) {
+        // Ruler guides are not written, not even as a link.
+        if n.is_ruler_guide() {
+            return;
+        }
         let layer = usize::from(n.is_layer());
         self.layer_nest += layer;
         match n.url().filter(|_| n.visible && !self.anonymous) {
@@ -668,6 +693,10 @@ impl Writer<'_> {
         match &n.kind {
             NodeKind::Layer { template: true, .. } => {}
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
+                // The pieces a Warp effect cuts an image into share its pixels, as an envelope's do.
+                if image_pieces(children) {
+                    self.share_images(n);
+                }
                 let id = self.id_attr(n);
                 let a = self.attrs(&self.group_props(n));
                 self.line(&format!("<g{id}{a}>"));
@@ -717,7 +746,7 @@ impl Writer<'_> {
                     self.line("</g>");
                 }
             }
-            NodeKind::Path { guide: true, .. } => {}
+            NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => {}
             NodeKind::Path { path, rule, .. } => {
                 if path.is_empty() {
                     return;

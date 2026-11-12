@@ -321,6 +321,149 @@ fn a_radial_gradient_becomes_concentric_ellipses() {
     assert!(f.opacity < 1.0 && f.opacity > 0.5, "the centre band is translucent: {}", f.opacity);
 }
 
+/// Three opaque stops sweeping once around the center.
+fn conic_stops() -> Value {
+    json!({"kind": "conic", "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 0.5, "color": "#ff00ff"}, {"offset": 1, "color": "#004080"}]})
+}
+
+#[test]
+fn a_conic_gradient_becomes_wedges_or_a_mesh_that_paint_it() {
+    // Objects: a wedge per step from the center, together painting what the canvas painted.
+    let mut s = session();
+    gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), conic_stops(), false);
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"steps": 180}));
+    let g = selected(&s);
+    let (_, wedges) = clip_parts(&g);
+    assert_eq!(wedges.len(), 180);
+    let first = wedges[0].path_data().unwrap().subpaths[0].anchors[0].p;
+    assert!(first.distance(vectorcraft_geom::Point::new(100.0, 100.0)) < 1e-9, "wedges start at the center: {first:?}");
+    let after = render(&s);
+    assert!(differing(&before, &after, 48) < 200, "{}", differing(&before, &after, 48));
+    assert!(mean_diff(&before, &after) < 2.0, "{}", mean_diff(&before, &after));
+    // Translucent stops: each wedge is just its share of the turn, ending where the next starts,
+    // so none doubles up (only the anti-aliased seams between them differ from the canvas).
+    let mut s = session();
+    let gr = json!({"kind": "conic", "stops": [{"offset": 0, "color": "#ff0000", "opacity": 0.5}, {"offset": 1, "color": "#0000ff"}]});
+    gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gr, false);
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"steps": 36}));
+    let g = selected(&s);
+    let (_, wedges) = clip_parts(&g);
+    let outline = |n: &Node| n.path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect::<Vec<_>>();
+    for pair in wedges.windows(2) {
+        let (a, b) = (outline(pair[0]), outline(pair[1]));
+        assert!(a.last().unwrap().distance(b[1]) < 1e-6, "{a:?} then {b:?}");
+    }
+    assert!(mean_diff(&before, &render(&s)) < 4.0, "{}", mean_diff(&before, &render(&s)));
+    // Mesh: columns around the center.
+    let mut s = session();
+    gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), conic_stops(), false);
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"gradient": "mesh"}));
+    let g = selected(&s);
+    let (_, content) = clip_parts(&g);
+    let NodeKind::Mesh(m) = &content[0].kind else { panic!("a mesh node: {:?}", content[0].kind) };
+    assert!(m.is_valid());
+    let after = render(&s);
+    assert!(differing(&before, &after, 48) < 200, "{}", differing(&before, &after, 48));
+    assert!(mean_diff(&before, &after) < 2.5, "{}", mean_diff(&before, &after));
+}
+
+/// A mirrored conic, and one whose extent ellipse is flat (as a file can hold it), expand as the
+/// canvas draws them.
+#[test]
+fn a_mirrored_or_flat_conic_expands_as_the_canvas_draws_it() {
+    for aspect in [-0.6, 0.0] {
+        for how in [json!({"steps": 180}), json!({"gradient": "mesh"})] {
+            let mut s = session();
+            let id = gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), conic_stops(), false);
+            let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+            let n = d.node_mut(id).unwrap();
+            let Paint::Gradient(mut g) = n.appearance.fill_paint().clone() else { panic!("a gradient fill") };
+            let (start, end) = (vectorcraft_geom::Point::new(90.0, 110.0), vectorcraft_geom::Point::new(130.0, 80.0));
+            g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect, focal: None });
+            n.appearance.set_fill(Paint::Gradient(g));
+            let before = render(&s);
+            run(&mut s, "object.expand", how.clone());
+            let after = render(&s);
+            assert!(differing(&before, &after, 48) < 200, "{aspect} {how}: {}", differing(&before, &after, 48));
+            assert!(mean_diff(&before, &after) < 2.5, "{aspect} {how}: {}", mean_diff(&before, &after));
+        }
+    }
+}
+
+/// Three opaque stops running from the center out to the square.
+fn diamond_stops() -> Value {
+    json!({"kind": "diamond", "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 0.5, "color": "#ff00ff"}, {"offset": 1, "color": "#004080"}]})
+}
+
+#[test]
+fn a_diamond_gradient_becomes_nested_squares_or_a_mesh_that_paint_it() {
+    // Objects: nested squares about the center, largest first, together painting what the
+    // canvas painted.
+    let mut s = session();
+    gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), diamond_stops(), false);
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"steps": 120}));
+    let g = selected(&s);
+    let (_, squares) = clip_parts(&g);
+    assert_eq!(squares.len(), 120);
+    let corners = |n: &Node| n.path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect::<Vec<_>>();
+    let (outer, inner) = (corners(squares[0]), corners(squares[119]));
+    assert_eq!((outer.len(), inner.len()), (4, 4));
+    let reach = |pts: &[vectorcraft_geom::Point]| pts.iter().map(|p| p.distance(vectorcraft_geom::Point::new(100.0, 100.0))).fold(0.0, f64::max);
+    assert!(reach(&outer) > reach(&inner) * 100.0, "largest first: {outer:?} then {inner:?}");
+    let after = render(&s);
+    assert!(differing(&before, &after, 48) < 200, "{}", differing(&before, &after, 48));
+    assert!(mean_diff(&before, &after) < 2.0, "{}", mean_diff(&before, &after));
+    // Translucent stops: each square is a ring with the next one cut out, so none doubles up.
+    let mut s = session();
+    let gr = json!({"kind": "diamond", "stops": [{"offset": 0, "color": "#ff0000", "opacity": 0.5}, {"offset": 1, "color": "#0000ff"}]});
+    gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gr, false);
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"steps": 60}));
+    let g = selected(&s);
+    let (_, squares) = clip_parts(&g);
+    assert!(squares[..59].iter().all(|n| n.path_data().unwrap().subpaths.len() == 2), "rings");
+    assert!(mean_diff(&before, &render(&s)) < 4.0, "{}", mean_diff(&before, &render(&s)));
+    // Mesh: rings of patches about the center.
+    let mut s = session();
+    gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), diamond_stops(), false);
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"gradient": "mesh"}));
+    let g = selected(&s);
+    let (_, content) = clip_parts(&g);
+    let NodeKind::Mesh(m) = &content[0].kind else { panic!("a mesh node: {:?}", content[0].kind) };
+    assert!(m.is_valid());
+    let after = render(&s);
+    assert!(differing(&before, &after, 48) < 200, "{}", differing(&before, &after, 48));
+    assert!(mean_diff(&before, &after) < 2.5, "{}", mean_diff(&before, &after));
+}
+
+/// A turned, squashed diamond, and one whose square is flat (as a file can hold it), expand as
+/// the canvas draws them.
+#[test]
+fn a_turned_or_flat_diamond_expands_as_the_canvas_draws_it() {
+    for aspect in [0.6, 0.0] {
+        for how in [json!({"steps": 120}), json!({"gradient": "mesh"})] {
+            let mut s = session();
+            let id = gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), diamond_stops(), false);
+            let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+            let n = d.node_mut(id).unwrap();
+            let Paint::Gradient(mut g) = n.appearance.fill_paint().clone() else { panic!("a gradient fill") };
+            let (start, end) = (vectorcraft_geom::Point::new(90.0, 110.0), vectorcraft_geom::Point::new(130.0, 80.0));
+            g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect, focal: None });
+            n.appearance.set_fill(Paint::Gradient(g));
+            let before = render(&s);
+            run(&mut s, "object.expand", how.clone());
+            let after = render(&s);
+            assert!(differing(&before, &after, 48) < 200, "{aspect} {how}: {}", differing(&before, &after, 48));
+            assert!(mean_diff(&before, &after) < 2.5, "{aspect} {how}: {}", mean_diff(&before, &after));
+        }
+    }
+}
+
 #[test]
 fn the_mesh_option_makes_a_mesh_that_paints_the_gradient() {
     for gradient in [

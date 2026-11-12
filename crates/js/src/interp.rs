@@ -9,7 +9,8 @@
 //! Before each instruction the interpreter takes one unit of fuel, checks the interrupt flag and,
 //! when the heap has grown past its threshold, collects garbage. Running out of fuel, the heap
 //! limit, the frame limit, the re-entry limit and the interrupt flag each end the run with an
-//! [`Abrupt::Limit`] that unwinds every frame without running catch or finally blocks.
+//! [`Abrupt::Limit`] that unwinds every frame without running catch or finally blocks. Source
+//! compiled during a run takes a unit of fuel for each code unit before it is parsed.
 //!
 //! Collection runs only between instructions. An operation that may run JavaScript in the middle
 //! keeps its operands on the operand stack until it is done, so everything it holds is reachable
@@ -26,6 +27,7 @@ use crate::heap::{
     ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, NativeKind, OBJECT_BYTES, OPEN, ObjId,
     Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, code_bytes, key, string_bytes,
 };
+use crate::string_builtins::flat_charged;
 use crate::value::{Str, Value, array_index, index_key, number_to_str, string_to_number, to_int32, to_uint32};
 use crate::{LimitKind, Limits, Options};
 
@@ -72,6 +74,12 @@ pub(crate) struct Intrinsics {
     pub(crate) error_protos: [ObjId; 7],
     pub(crate) eval: ObjId,
     pub(crate) throw_type_error: ObjId,
+    /// The `XML` constructor, which holds the XML settings.
+    pub(crate) xml_ctor: ObjId,
+    pub(crate) xml_proto: ObjId,
+    pub(crate) xml_list_proto: ObjId,
+    pub(crate) namespace_proto: ObjId,
+    pub(crate) qname_proto: ObjId,
 }
 
 impl Intrinsics {
@@ -89,6 +97,11 @@ impl Intrinsics {
             error_protos: [o; 7],
             eval: o,
             throw_type_error: o,
+            xml_ctor: o,
+            xml_proto: o,
+            xml_list_proto: o,
+            namespace_proto: o,
+            qname_proto: o,
         }
     }
 
@@ -117,6 +130,11 @@ impl Intrinsics {
             self.date_proto,
             self.eval,
             self.throw_type_error,
+            self.xml_ctor,
+            self.xml_proto,
+            self.xml_list_proto,
+            self.namespace_proto,
+            self.qname_proto,
         ];
         v.extend(self.error_protos);
         v
@@ -128,8 +146,8 @@ pub(crate) struct Frame {
     pub(crate) pc: usize,
     /// Where this frame's operands start on the operand stack.
     base: usize,
-    env: EnvId,
-    var_env: EnvId,
+    pub(crate) env: EnvId,
+    pub(crate) var_env: EnvId,
     /// `with` and catch environments entered and not yet left.
     env_depth: u32,
     this: Value,
@@ -164,6 +182,13 @@ pub(crate) struct Interp {
     pub(crate) throw_site: Option<ThrowSite>,
     /// The last exception a run did not catch.
     pub(crate) last_thrown: Value,
+    /// The last `Error` object thrown in this run, caught or not, or `null` (`$.error`).
+    pub(crate) last_error: Value,
+    /// An exception passed on rather than thrown again: one a `finally` block restores, or one
+    /// leaving a nested run. [`Interp::unwind`] does not make it [`Interp::last_error`] again.
+    pub(crate) passing: Value,
+    /// The locale `localize` and `Object.prototype.toString` read.
+    pub(crate) localization: Rc<crate::builtins::extensions::Localization>,
     /// The state of `Math.random`'s generator.
     pub(crate) random: u64,
     /// The objects `Array.prototype.join` and `toLocaleString` are joining, innermost last: a
@@ -175,10 +200,20 @@ pub(crate) struct Interp {
     pub(crate) held_bytes: usize,
     /// Why installing the built-ins failed; a realm with this set runs no script.
     pub(crate) install_error: Option<String>,
+    /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
+    pub(crate) files: Option<crate::file_classes::Classes>,
     /// The clock and time zone `Date` reads.
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
     pub(crate) held: Rc<HeldCount>,
+    /// Bytes of the copies [`Self::get_own_property`] made flattening the rope of a String
+    /// object, which the heap's total adds before the next limit check.
+    flattened: std::cell::Cell<usize>,
+    /// Fuel for the units those copies took and the rope nodes it read in place, which the next
+    /// step takes.
+    pub(crate) flattened_fuel: std::cell::Cell<u64>,
+    /// The global code's default XML namespace URI (ECMA-357 section 12.1).
+    pub(crate) xml_default_uri: Key,
     /// Set by the host to end the current slice of a resumable run at the next safe point.
     pub(crate) pause: Rc<std::cell::Cell<bool>>,
     /// The outermost loop of a resumable run is running ([`crate::Realm::advance`]).
@@ -205,6 +240,13 @@ pub(crate) struct Interp {
     /// runs. An entry whose slot no longer holds its exception belongs to a block that `break`,
     /// `continue` or `return` left, and [`Self::drop_left_finally_marks`] removes it.
     pub(crate) finally_marks: Vec<(ObjId, u32, usize)>,
+    /// Where the exceptions `finally` blocks are running for were raised, innermost last, each with
+    /// the stack slot that holds the exception while the block runs. The block's end throws the
+    /// exception on from that site. An entry whose slot is at or above the stack's length belongs to
+    /// a block that was left, and [`Self::drop_left_finally_sites`] removes it at each `Jump`, each
+    /// return and each collection. [`Self::unwind`] removes the entries at or above a handler's slot
+    /// before it adds one, so the slots rise and the list is never longer than the stack.
+    pub(crate) finally_sites: Vec<(ThrowSite, usize)>,
     /// The mark of the host error the last run ended with.
     pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
@@ -266,6 +308,12 @@ pub(crate) const MAX_APPLY_ARGS: usize = 1 << 16;
 /// The estimated bytes of a name's entries in the list and the set `for-in` builds.
 const KEY_ENTRY_BYTES: usize = 32;
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: the [`Interp::finally_sites`] entries that leaving a block or a frame has looked at.
+    pub(crate) static SITE_CHECKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// The estimated bytes of the index names `0` to `len - 1` while `for-in` lists them.
 fn index_keys_bytes(len: usize) -> usize {
     let mut total = 0usize;
@@ -280,13 +328,21 @@ fn index_keys_bytes(len: usize) -> usize {
     total
 }
 
-/// A seed for `Math.random` that differs from realm to realm, from the standard library's
-/// randomly keyed hasher; never zero.
+/// A seed for `Math.random` that differs from realm to realm and from run to run, from the OS
+/// random source (the browser's crypto on the web), or the standard library's randomly keyed
+/// hasher when that fails; never zero.
 fn random_seed() -> u64 {
+    random_seed_from(getrandom::u64())
+}
+
+/// [`random_seed`] from what the OS random source returned.
+pub(crate) fn random_seed_from(os: Result<u64, getrandom::Error>) -> u64 {
     use std::hash::{BuildHasher, Hasher};
-    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-    h.write_u64(0x9e37_79b9_7f4a_7c15);
-    h.finish() | 1
+    os.unwrap_or_else(|_| {
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u64(0x9e37_79b9_7f4a_7c15);
+        h.finish()
+    }) | 1
 }
 
 /// The estimated bytes of a binding or property named by `len` code units.
@@ -391,12 +447,19 @@ impl Interp {
             source_units: 0,
             throw_site: None,
             last_thrown: Value::Undefined,
+            last_error: Value::Null,
+            passing: Value::Undefined,
+            localization: Rc::default(),
             random: random_seed(),
             join_stack: Vec::new(),
             held_bytes: 0,
             install_error: None,
+            files: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
+            flattened: std::cell::Cell::new(0),
+            flattened_fuel: std::cell::Cell::new(0),
+            xml_default_uri: Rc::from(Vec::new()),
             pause: Rc::default(),
             in_slice: false,
             can_wait: Rc::default(),
@@ -408,6 +471,7 @@ impl Interp {
             error_tag: crate::realm::UNKNOWN_SOURCE,
             thrown_mark: None,
             finally_marks: Vec::new(),
+            finally_sites: Vec::new(),
             error_mark: None,
             strict_writes: false,
         };
@@ -453,11 +517,11 @@ impl Interp {
         Ok(())
     }
 
-    fn frame(&self) -> JsResult<&Frame> {
+    pub(crate) fn frame(&self) -> JsResult<&Frame> {
         self.frames.last().ok_or_else(|| Abrupt::Internal("no frame".into()))
     }
 
-    fn frame_mut(&mut self) -> JsResult<&mut Frame> {
+    pub(crate) fn frame_mut(&mut self) -> JsResult<&mut Frame> {
         self.frames.last_mut().ok_or_else(|| Abrupt::Internal("no frame".into()))
     }
 
@@ -465,7 +529,7 @@ impl Interp {
         self.frames.last().map_or(0, |f| f.base)
     }
 
-    fn pop(&mut self) -> JsResult<Value> {
+    pub(crate) fn pop(&mut self) -> JsResult<Value> {
         if self.stack.len() <= self.base() {
             return internal("operand stack underflow");
         }
@@ -473,7 +537,7 @@ impl Interp {
     }
 
     /// The value `n` places below the top (0 is the top).
-    fn peek(&self, n: usize) -> JsResult<Value> {
+    pub(crate) fn peek(&self, n: usize) -> JsResult<Value> {
         let len = self.stack.len();
         match len.checked_sub(n + 1).filter(|&i| i >= self.base()) {
             Some(i) => self.stack.get(i).cloned().ok_or_else(|| Abrupt::Internal("operand stack underflow".into())),
@@ -493,7 +557,7 @@ impl Interp {
     }
 
     /// Replaces the top `n` values with `v`.
-    fn replace(&mut self, n: usize, v: Value) -> JsResult<()> {
+    pub(crate) fn replace(&mut self, n: usize, v: Value) -> JsResult<()> {
         self.drop_n(n)?;
         self.push(v)
     }
@@ -514,6 +578,7 @@ impl Interp {
 
     fn tick(&mut self) -> JsResult<()> {
         self.use_fuel()?;
+        crate::regexp_vm::use_fuel_n(self, self.flattened_fuel.replace(0))?;
         self.settle_held();
         if self.heap.bytes > self.gc_threshold {
             self.collect_garbage();
@@ -540,10 +605,12 @@ impl Interp {
         Ok(())
     }
 
-    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total.
+    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total, and adds the
+    /// bytes of the ropes [`Self::get_own_property`] flattened.
     fn settle_held(&mut self) {
         let released = self.held.released.replace(0);
-        self.heap.bytes = self.heap.bytes.saturating_sub(released);
+        let flattened = self.flattened.replace(0);
+        self.heap.bytes = self.heap.bytes.saturating_sub(released).saturating_add(flattened);
     }
 
     /// Collects garbage now and sets when the next collection runs.
@@ -563,6 +630,22 @@ impl Interp {
         Ok(())
     }
 
+    /// Prepares for parsing `units` code units of source at run time: takes a unit of fuel for
+    /// each code unit and checks that the source text fits in the heap, before any of it is
+    /// flattened, parsed or compiled. Running out of fuel uses up what was left.
+    pub(crate) fn prepare_source(&mut self, units: usize) -> JsResult<()> {
+        let fuel = u64::try_from(units).unwrap_or(u64::MAX);
+        if fuel > self.fuel {
+            self.fuel = 0;
+            return Err(Abrupt::Limit(LimitKind::Fuel));
+        }
+        self.fuel -= fuel;
+        if self.interrupt.load(Ordering::Relaxed) {
+            return Err(Abrupt::Limit(LimitKind::Interrupted));
+        }
+        self.reserve_heap(string_bytes(units))
+    }
+
     /// Removes the [`Self::finally_marks`] entries of `finally` blocks that `break`, `continue` or
     /// `return` left: those whose stack slot no longer holds their exception.
     fn drop_left_finally_marks(&mut self) {
@@ -570,13 +653,30 @@ impl Interp {
         self.finally_marks.retain(|&(id, _, slot)| matches!(stack.get(slot), Some(Value::Object(o)) if *o == id));
     }
 
+    /// Removes the [`Self::finally_sites`] entries whose stack slot is at or above `len`: those of
+    /// `finally` blocks that were left. The slots rise along the list, so only its end is looked at.
+    fn drop_left_finally_sites(&mut self, len: usize) {
+        while let Some(&(_, slot)) = self.finally_sites.last() {
+            #[cfg(test)]
+            SITE_CHECKS.with(|c| c.set(c.get() + 1));
+            if slot < len {
+                break;
+            }
+            self.finally_sites.pop();
+        }
+    }
+
     pub(crate) fn collect_garbage(&mut self) {
         self.drop_left_finally_marks();
+        self.drop_left_finally_sites(self.stack.len());
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
         roots.values.push(&self.last_thrown);
+        roots.values.push(&self.last_error);
+        roots.values.push(&self.passing);
         roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
+        roots.codes.extend(self.finally_sites.iter().map(|((code, _), _)| &**code));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -587,10 +687,12 @@ impl Interp {
         }
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
+        roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
+        self.flattened.set(0);
         self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get());
     }
 
@@ -662,6 +764,13 @@ impl Interp {
     /// boundary frame. Returns the exception when no handler takes it before the boundary frame.
     fn unwind(&mut self, v: Value) -> JsResult<()> {
         self.note_site();
+        let passed = matches!((&v, std::mem::replace(&mut self.passing, Value::Undefined)), (Value::Object(a), Value::Object(b)) if *a == b);
+        if !passed
+            && let Value::Object(o) = v
+            && self.heap.object(o).is_some_and(|o| matches!(o.class, Class::Error))
+        {
+            self.last_error = v.clone();
+        }
         loop {
             let Some(frame) = self.frames.last_mut() else { return Err(Abrupt::Throw(v)) };
             if let Some(h) = frame.code.handler(frame.pc.saturating_sub(1)) {
@@ -680,19 +789,30 @@ impl Interp {
                 }
                 self.stack.truncate(target_len);
                 self.drop_left_finally_marks();
+                self.drop_left_finally_sites(target_len);
                 if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
                     self.finally_marks.push((*id, mark, target_len));
                 }
                 self.stack.push(v);
-                self.throw_site = None;
+                let site = self.throw_site.take();
+                if let (false, Some(site)) = (caught, site) {
+                    self.finally_sites.push((site, target_len));
+                }
                 return Ok(());
             }
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
             if frame.boundary {
+                self.passing = v.clone();
                 return Err(Abrupt::Throw(v));
             }
         }
+    }
+
+    /// Each running frame of script code, outermost first: its code, the index of its next
+    /// instruction, and whether it runs a function (not global or eval code).
+    pub(crate) fn script_frames(&self) -> impl Iterator<Item = (&Rc<Code>, usize, bool)> {
+        self.frames.iter().map(|f| (&f.code, f.pc, f.callee.is_some()))
     }
 
     fn abort_to_boundary(&mut self) {
@@ -707,6 +827,8 @@ impl Interp {
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
+        // A `return` in a finally block leaves the block, and the value takes its exception's slot.
+        self.drop_left_finally_sites(frame.base);
         let v = match frame.construct {
             Some(o) if !matches!(v, Value::Object(_)) => Value::Object(o),
             _ => v,
@@ -718,7 +840,7 @@ impl Interp {
         Ok(None)
     }
 
-    fn jump_to(&mut self, target: u32) -> JsResult<()> {
+    pub(crate) fn jump_to(&mut self, target: u32) -> JsResult<()> {
         self.frame_mut()?.pc = target as usize;
         Ok(())
     }
@@ -793,7 +915,11 @@ impl Interp {
             Op::New(n) => self.op_new(n),
             Op::Binary(b) => self.op_binary(b),
             Op::Neg | Op::Plus | Op::BitNot | Op::Not | Op::Typeof | Op::ToNumber => self.op_unary(op),
-            Op::Jump(t) => self.jump_to(t),
+            Op::Jump(t) => {
+                // `break` and `continue` leave a `finally` block by popping its exception and jumping.
+                self.drop_left_finally_sites(self.stack.len());
+                self.jump_to(t)
+            }
             Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => self.op_branch(t, matches!(op, Op::JumpIfTrue(_)), false),
             Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => self.op_branch(t, matches!(op, Op::JumpIfTrueKeep(_)), true),
             Op::Throw => {
@@ -825,6 +951,18 @@ impl Interp {
                 let v = self.frame()?.completion.clone();
                 self.push(v)
             }
+            Op::XmlMakeName { attribute, qualified } => self.op_xml_make_name(attribute, qualified),
+            Op::XmlDescendants => self.op_xml_descendants(),
+            Op::XmlEscape(kind) => self.op_xml_escape(kind),
+            Op::XmlLiteral { parts, list } => self.op_xml_literal(parts, list),
+            Op::XmlScopeGet => self.op_xml_scope_get(),
+            Op::XmlScopeRef => self.op_xml_scope_ref(),
+            Op::XmlFilterStart => self.op_xml_filter_start(),
+            Op::XmlFilterNext(t) => self.op_xml_filter_next(t),
+            Op::XmlFilterTest => self.op_xml_filter_test(),
+            Op::XmlFilterEnd => self.op_xml_filter_end(),
+            Op::ForEachValue(n) => self.op_for_each_value(n as usize),
+            Op::SetDefaultNamespace => self.op_set_default_namespace(),
             Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
         }
     }
@@ -882,11 +1020,17 @@ impl Interp {
         }
         if kind == 1.0 {
             let v = self.pop()?;
+            self.passing = v.clone();
             if let Value::Object(o) = v
                 && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, _)| id == o)
             {
                 self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
                 self.finally_marks.truncate(i);
+            }
+            let slot = self.stack.len();
+            if let Some(i) = self.finally_sites.iter().rposition(|&(_, s)| s == slot) {
+                self.throw_site = self.finally_sites.get(i).map(|(site, _)| site.clone());
+                self.finally_sites.truncate(i);
             }
             return Err(Abrupt::Throw(v));
         }
@@ -900,7 +1044,7 @@ impl Interp {
 
     // ---- variables ----
 
-    fn resolve(&self, name: &[u16]) -> JsResult<Resolved> {
+    fn resolve(&mut self, name: &[u16]) -> JsResult<Resolved> {
         let mut cur = Some(self.frame()?.env);
         while let Some(e) = cur {
             match self.heap.env(e) {
@@ -910,11 +1054,11 @@ impl Interp {
                     }
                     cur = *outer;
                 }
-                Some(Env::Obj { object, with_this, outer }) => {
-                    if self.has_property(*object, name)? {
-                        return Ok(Resolved::Obj { object: *object, with_this: *with_this });
+                Some(&Env::Obj { object, with_this, outer }) => {
+                    if self.scope_has(object, name)? {
+                        return Ok(Resolved::Obj { object, with_this });
                     }
-                    cur = *outer;
+                    cur = outer;
                 }
                 None => return internal("environment out of range"),
             }
@@ -944,7 +1088,7 @@ impl Interp {
         match r {
             Resolved::Decl(e) => Ok((self.binding_value(e, name)?, Value::Undefined)),
             Resolved::Obj { object, with_this } => {
-                let v = self.get_from(object, name, &Value::Object(object))?;
+                let v = self.get_value(&Value::Object(object), name)?;
                 Ok((v, if with_this { Value::Object(object) } else { Value::Undefined }))
             }
             Resolved::Unresolved => Err(self.not_defined(name)),
@@ -971,6 +1115,9 @@ impl Interp {
                     _ => Ok(()),
                 }
             }
+            Resolved::Obj { object, .. } if self.options.e4x && self.is_xml(&Value::Object(object)) => {
+                self.put_value(&Value::Object(object), name.clone(), v)
+            }
             Resolved::Obj { object, .. } => {
                 let throw = self.strict_writes();
                 self.put(object, name.clone(), v, throw)
@@ -985,6 +1132,13 @@ impl Interp {
 
     fn op_get_var(&mut self, n: u32, with_this: bool) -> JsResult<()> {
         let name = self.name(n)?;
+        if with_this
+            && self.options.e4x
+            && let Some((f, this)) = self.xml_scope_method(&name)?
+        {
+            self.push(f)?;
+            return self.push(this);
+        }
         let (v, this) = self.get_var(&name)?;
         self.push(v)?;
         if with_this { self.push(this) } else { Ok(()) }
@@ -1094,7 +1248,33 @@ impl Interp {
                 if let Some(i) = array_index(k)
                     && (i as usize) < s.len()
                 {
-                    let unit = s.flat().get(i as usize).copied().unwrap_or(0);
+                    let unit = if s.is_rope() {
+                        let owed = self.flattened_fuel.get();
+                        let flattened = self.flattened.get().saturating_add(string_bytes(s.len()));
+                        if self.heap.bytes.saturating_add(flattened) > self.limits.heap_bytes {
+                            // The copy does not fit without a collection, which needs `&mut self`:
+                            // the unit is read along the rope instead, a unit of fuel per node.
+                            let Some((unit, visited)) = s.unit_at(i as usize, self.fuel.saturating_sub(owed)) else {
+                                return Err(Abrupt::Limit(LimitKind::Fuel));
+                            };
+                            self.flattened_fuel.set(owed.saturating_add(visited));
+                            unit
+                        } else {
+                            // Flattening copies the units. The run ends here when the fuel for
+                            // the copy is not left; otherwise the next step takes it, and the
+                            // next limit check adds the copy's bytes.
+                            let fuel = owed.saturating_add((s.len() / crate::string_builtins::UNITS_PER_FUEL) as u64 + 1);
+                            if fuel > self.fuel {
+                                return Err(Abrupt::Limit(LimitKind::Fuel));
+                            }
+                            self.flattened_fuel.set(fuel);
+                            self.flattened.set(flattened);
+                            s.flat().get(i as usize).copied()
+                        }
+                    } else {
+                        s.flat().get(i as usize).copied()
+                    }
+                    .unwrap_or(0);
                     return Ok(Some(Prop::Data { value: Value::String(Str::from_units(vec![unit])), flags: ENUMERABLE }));
                 }
             }
@@ -1161,6 +1341,9 @@ impl Interp {
 
     /// `base[k]` for any value (GetValue, section 8.7.1).
     pub(crate) fn get_value(&mut self, base: &Value, k: &[u16]) -> JsResult<Value> {
+        if self.options.e4x && self.is_xml(base) {
+            return self.xml_get(base, &Value::String(Str::from_units(k.to_vec())));
+        }
         if let Value::String(s) = base {
             if is(k, "length") {
                 return Ok(Value::Number(s.len() as f64));
@@ -1168,7 +1351,7 @@ impl Interp {
             if let Some(i) = array_index(k)
                 && (i as usize) < s.len()
             {
-                let unit = s.flat().get(i as usize).copied().unwrap_or(0);
+                let unit = flat_charged(self, s)?.get(i as usize).copied().unwrap_or(0);
                 return Ok(Value::String(Str::from_units(vec![unit])));
             }
         }
@@ -1507,6 +1690,9 @@ impl Interp {
 
     /// PutValue on a property reference (section 8.7.2), whose base may be a primitive.
     fn put_value(&mut self, base: &Value, k: Key, v: Value) -> JsResult<()> {
+        if self.options.e4x && self.is_xml(base) {
+            return self.xml_put(base, &Value::String(Str::from_rc(k)), &v);
+        }
         let strict = self.strict();
         match base {
             Value::Object(o) => {
@@ -1535,6 +1721,11 @@ impl Interp {
     fn op_get_member(&mut self, n: u32, with_this: bool) -> JsResult<()> {
         let name = self.name(n)?;
         let base = self.peek(0)?;
+        if with_this && self.options.e4x && self.is_xml(&base) {
+            let (f, this) = self.xml_method(&base, &name)?;
+            self.replace(1, f)?;
+            return self.push(this);
+        }
         let v = self.get_value(&base, &name)?;
         self.replace(1, v)?;
         if with_this { self.push(base) } else { Ok(()) }
@@ -1563,6 +1754,9 @@ impl Interp {
     fn op_to_key(&mut self) -> JsResult<()> {
         let k = self.peek(0)?;
         let base = self.peek(1)?;
+        if self.is_xml_access(&base, &k) {
+            return Ok(());
+        }
         self.check_coercible(&base, &[])?;
         let name = self.to_key(&k)?;
         self.replace(1, Value::String(Str::from_rc(name)))
@@ -1571,6 +1765,16 @@ impl Interp {
     fn op_get_index(&mut self, with_this: bool) -> JsResult<()> {
         let k = self.peek(0)?;
         let base = self.peek(1)?;
+        if self.is_xml_access(&base, &k) {
+            if with_this {
+                let name = self.xml_method_key(&k)?;
+                let (f, this) = self.xml_method(&base, &name)?;
+                self.replace(2, f)?;
+                return self.push(this);
+            }
+            let v = self.xml_get(&base, &k)?;
+            return self.replace(2, v);
+        }
         self.check_coercible(&base, &[])?;
         let name = self.to_key(&k)?;
         let v = self.get_value(&base, &name)?;
@@ -1582,6 +1786,10 @@ impl Interp {
         let v = self.peek(0)?;
         let k = self.peek(1)?;
         let base = self.peek(2)?;
+        if self.is_xml_access(&base, &k) {
+            self.xml_put(&base, &k, &v)?;
+            return self.replace(3, v);
+        }
         let name = self.to_key(&k)?;
         self.put_value(&base, name, v.clone())?;
         self.replace(3, v)
@@ -1590,6 +1798,10 @@ impl Interp {
     fn op_delete_member(&mut self, n: u32) -> JsResult<()> {
         let name = self.name(n)?;
         let base = self.peek(0)?;
+        if self.options.e4x && self.is_xml(&base) {
+            let r = self.xml_delete(&base, &Value::String(Str::from_rc(name)))?;
+            return self.replace(1, Value::Bool(r));
+        }
         let o = self.to_object(&base)?;
         let strict = self.strict();
         let r = self.delete(o, &name, strict)?;
@@ -1599,6 +1811,10 @@ impl Interp {
     fn op_delete_index(&mut self) -> JsResult<()> {
         let k = self.peek(0)?;
         let base = self.peek(1)?;
+        if self.is_xml_access(&base, &k) {
+            let r = self.xml_delete(&base, &k)?;
+            return self.replace(2, Value::Bool(r));
+        }
         self.check_coercible(&base, &[])?;
         let name = self.to_key(&k)?;
         let o = self.to_object(&base)?;
@@ -1625,6 +1841,13 @@ impl Interp {
     fn op_inc_index(&mut self, prefix: bool, dec: bool) -> JsResult<()> {
         let k = self.peek(0)?;
         let base = self.peek(1)?;
+        if self.is_xml_access(&base, &k) {
+            let v = self.xml_get(&base, &k)?;
+            let old = self.to_number(&v)?;
+            let new = if dec { old - 1.0 } else { old + 1.0 };
+            self.xml_put(&base, &k, &Value::Number(new))?;
+            return self.replace(2, Value::Number(if prefix { new } else { old }));
+        }
         self.check_coercible(&base, &[])?;
         let name = self.to_key(&k)?;
         let r = self.inc_property(&base, name, prefix, dec)?;
@@ -1790,6 +2013,9 @@ impl Interp {
     /// For a String object, the heap budget for all its index names is checked before any is
     /// built. Each index name and each property visited takes a unit of fuel.
     fn enumerable_keys(&mut self, id: ObjId) -> JsResult<Vec<Key>> {
+        if self.options.e4x && self.is_xml(&Value::Object(id)) {
+            return self.xml_enumerate(id);
+        }
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut cur = Some(id);
@@ -1856,7 +2082,7 @@ impl Interp {
             state.pos += 1;
             let object = state.object;
             if let Some(o) = object
-                && self.has_property(o, &k)?
+                && self.scope_has(o, &k)?
             {
                 return self.push(Value::String(Str::from_rc(k)));
             }
@@ -2232,7 +2458,8 @@ impl Interp {
         };
         let strict = self.strict();
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
-        let units = s.flat();
+        self.prepare_source(s.len())?;
+        let units = self.flat_reserved(s)?;
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let frame = self.frame()?;
@@ -2365,6 +2592,7 @@ impl Interp {
             Value::Bool(_) => "boolean",
             Value::Number(_) => "number",
             Value::String(_) => "string",
+            Value::Object(_) if self.options.e4x && self.is_xml(v) => "xml",
             Value::Object(_) if self.is_callable(v) => "function",
             Value::Object(_) => "object",
         }
@@ -2396,7 +2624,7 @@ impl Interp {
             Value::Null => 0.0,
             Value::Bool(b) => f64::from(u8::from(*b)),
             Value::Number(n) => *n,
-            Value::String(s) => string_to_number(&s.flat()),
+            Value::String(s) => string_to_number(&flat_charged(self, s)?),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::Number)?;
                 return self.to_number(&p);
@@ -2430,17 +2658,26 @@ impl Interp {
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_key(&mut self, v: &Value) -> JsResult<Key> {
         match v {
-            Value::String(s) => {
-                let rope = s.is_rope();
-                let flat = s.flat();
-                if rope {
-                    self.heap.bytes += string_bytes(flat.len());
-                }
-                Ok(flat)
-            }
+            Value::String(s) => self.flat_reserved(s),
             Value::Number(n) if *n >= 0.0 && *n < 4_294_967_295.0 && n.fract() == 0.0 => Ok(index_key(*n as u32)),
-            _ => Ok(self.to_str(v)?.flat()),
+            _ => {
+                let s = self.to_str(v)?;
+                self.flat_reserved(&s)
+            }
         }
+    }
+
+    /// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that
+    /// copy's bytes are reserved and added to the heap first, without taking fuel. The rope stays
+    /// rooted while the copy is reserved; everything else the caller still needs must be
+    /// reachable from the roots.
+    fn flat_reserved(&mut self, s: &Str) -> JsResult<Key> {
+        if s.is_rope() {
+            let bytes = string_bytes(s.len());
+            self.rooted(&[Value::String(s.clone())], |i| i.reserve_heap(bytes))?;
+            self.heap.bytes = self.heap.bytes.saturating_add(bytes);
+        }
+        Ok(s.flat())
     }
 
     /// ToObject (section 9.9).
@@ -2526,6 +2763,9 @@ impl Interp {
             BinaryOp::StrictNotEq => Ok(Value::Bool(!strict_eq(a, b))),
             BinaryOp::Instanceof => self.instance_of(a, b).map(Value::Bool),
             BinaryOp::In => {
+                if self.options.e4x && self.is_xml(b) {
+                    return self.xml_has(b, a).map(Value::Bool);
+                }
                 let Value::Object(o) = b else { return Err(self.type_error("the right side of 'in' is not an object")) };
                 let k = self.to_key(a)?;
                 self.has_property(*o, &k).map(Value::Bool)
@@ -2537,6 +2777,9 @@ impl Interp {
     fn add(&mut self, a: &Value, b: &Value) -> JsResult<Value> {
         if let (Value::Number(x), Value::Number(y)) = (a, b) {
             return Ok(Value::Number(x + y));
+        }
+        if self.options.e4x && self.is_xml(a) && self.is_xml(b) {
+            return self.xml_concat(a, b);
         }
         let pa = self.to_primitive(a, Hint::Default)?;
         let pb = self.to_primitive(b, Hint::Default)?;
@@ -2559,7 +2802,11 @@ impl Interp {
             (self.to_primitive(x, Hint::Number)?, py)
         };
         if let (Value::String(a), Value::String(b)) = (&px, &py) {
-            return Ok(Some(*a.flat() < *b.flat()));
+            // Both stay rooted, so the first copy is still counted while the second is made.
+            return self.rooted(&[px.clone(), py.clone()], |i| {
+                let (a, b) = (flat_charged(i, a)?, flat_charged(i, b)?);
+                Ok(Some(*a < *b))
+            });
         }
         let nx = self.to_number(&px)?;
         let ny = self.to_number(&py)?;
@@ -2570,7 +2817,12 @@ impl Interp {
     }
 
     /// The abstract equality comparison (section 11.9.3).
-    fn loose_eq(&mut self, a: &Value, b: &Value) -> JsResult<bool> {
+    pub(crate) fn loose_eq(&mut self, a: &Value, b: &Value) -> JsResult<bool> {
+        if self.options.e4x
+            && let Some(r) = self.xml_loose_eq(a, b)?
+        {
+            return Ok(r);
+        }
         let (mut x, mut y) = (a.clone(), b.clone());
         loop {
             match (&x, &y) {
@@ -2579,7 +2831,9 @@ impl Interp {
                 | (Value::String(_), Value::String(_))
                 | (Value::Bool(_), Value::Bool(_))
                 | (Value::Object(_), Value::Object(_)) => return Ok(strict_eq(&x, &y)),
-                (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => return Ok(*n == string_to_number(&s.flat())),
+                (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => {
+                    return Ok(*n == string_to_number(&flat_charged(self, s)?));
+                }
                 (Value::Bool(v), _) => x = Value::Number(f64::from(u8::from(*v))),
                 (_, Value::Bool(v)) => y = Value::Number(f64::from(u8::from(*v))),
                 (Value::Number(_) | Value::String(_), Value::Object(_)) => y = self.to_primitive(&y, Hint::Default)?,

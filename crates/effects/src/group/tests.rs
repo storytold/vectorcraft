@@ -820,3 +820,112 @@ fn nested_compound_shapes_take_part_as_their_area() {
     assert!((area(&out[0]) - 50.0).abs() < 0.01);
     assert_eq!(out[0].appearance.fill_paint().color(), Some(Color::rgb(0.0, 1.0, 0.0)), "styled like the compound shape");
 }
+
+/// The ruler guides of a layer with a Pathfinder effect, a Transform effect that copies its art, or
+/// fills and strokes of its own take no part: they stay last in the layer, once and unchanged.
+#[test]
+fn a_layers_ruler_guides_stay_last_through_its_effects() {
+    use vectorcraft_doc::LayerColor;
+    let guide = |id, pos| Arc::new(Node::new(NodeId(id), NodeKind::RulerGuide { vertical: true, pos, artboard: None }));
+    let layer = |effect: &str, params: serde_json::Value| {
+        let mut l = Node::layer(NodeId(10), "Layer 1", LayerColor::Preset(0));
+        if let Some(ch) = l.children_mut() {
+            *ch = vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0)), guide(20, 3.0), guide(21, 8.0)];
+        }
+        l.appearance.effects.push(Effect { id: effect.into(), params, visible: true });
+        l
+    };
+    let tail = |n: &Node| {
+        let ch = n.children().unwrap();
+        assert_eq!(ch.iter().filter(|c| c.is_ruler_guide()).count(), 2, "each guide once");
+        ch.iter().rev().take(2).map(|c| c.kind.clone()).collect::<Vec<_>>()
+    };
+    let guides = vec![guide(21, 8.0).kind.clone(), guide(20, 3.0).kind.clone()];
+
+    let add = layer("pathfinder.add", serde_json::json!({}));
+    let out = pathfinder_children(None, &add, None).unwrap();
+    assert_eq!(out.len(), 3, "the united area, then the two guides");
+    assert!((area(&out[0]) - 150.0).abs() < 0.01);
+    assert!(out[1].is_ruler_guide() && out[2].is_ruler_guide());
+    assert_eq!(tail(&evaluate_container(None, &add).unwrap()), guides);
+
+    let copies = layer("distort.transform", serde_json::json!({"moveH": 30, "copies": 2}));
+    let art = evaluate_container(None, &copies).unwrap();
+    assert_eq!(tail(&art), guides);
+    assert_eq!(art.children().unwrap().len(), 5, "three groups of the art, then the two guides");
+    let mut art = copies.clone();
+    crate::reshape::reshape_leaves(&mut art, &copies.appearance.effects.iter().collect::<Vec<_>>(), &copies.appearance.effects, None);
+    assert_eq!(tail(&art), guides);
+    assert_eq!(art.children().unwrap().len(), 5, "reshaped as members too");
+
+    let mut painted = layer("distort.transform", serde_json::json!({"moveH": 30}));
+    painted.appearance.items = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).items;
+    assert_eq!(tail(&evaluate_container(None, &painted).unwrap()), guides);
+}
+
+/// The ruler guides of a sublayer in a layer with a Pathfinder effect, or a Transform effect that
+/// copies its art, stay on a layer of the evaluated art, once, hidden and locked as the sublayer is.
+#[test]
+fn a_sublayers_ruler_guides_survive_its_layers_effects() {
+    use vectorcraft_doc::LayerColor;
+    let layer = |effect: &str, params: serde_json::Value, shown: bool| {
+        let mut sub = Node::layer(NodeId(11), "Sub", LayerColor::Preset(1));
+        (sub.visible, sub.locked) = (shown, !shown);
+        if let Some(ch) = sub.children_mut() {
+            *ch = vec![
+                sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0)),
+                Arc::new(Node::new(NodeId(20), NodeKind::RulerGuide { vertical: true, pos: 3.0, artboard: None })),
+            ];
+        }
+        let mut l = Node::layer(NodeId(10), "Layer 1", LayerColor::Preset(0));
+        if let Some(ch) = l.children_mut() {
+            *ch = vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), Arc::new(sub)];
+        }
+        l.appearance.effects.push(Effect { id: effect.into(), params, visible: true });
+        l
+    };
+    // The guides found where ruler guides are looked for: directly in a layer or sublayer.
+    fn listed(n: &Node, out: &mut Vec<(NodeId, bool, bool)>) {
+        for c in n.children().into_iter().flatten() {
+            if c.is_ruler_guide() {
+                out.push((c.id, c.visible, c.locked));
+            } else if c.is_layer() {
+                listed(c, out);
+            }
+        }
+    }
+    for (effect, params) in [("pathfinder.add", serde_json::json!({})), ("distort.transform", serde_json::json!({"moveH": 30, "copies": 2}))] {
+        for shown in [true, false] {
+            let art = evaluate_container(None, &layer(effect, params.clone(), shown)).unwrap();
+            let mut found = vec![];
+            listed(&art, &mut found);
+            assert_eq!(found, [(NodeId(20), shown, !shown)], "{effect}: the sublayer's guide, once, on a layer");
+        }
+    }
+}
+
+/// A sublayer's ruler guide inside a hidden or locked group stays hidden or locked when its layer's
+/// Pathfinder effect moves it onto the layer, as the group made it.
+#[test]
+fn a_sublayers_ruler_guide_in_a_hidden_or_locked_group_stays_hidden_or_locked() {
+    use vectorcraft_doc::LayerColor;
+    for (hidden, locked) in [(true, false), (false, true), (false, false)] {
+        let mut sub = Node::layer(NodeId(11), "Sub", LayerColor::Preset(1));
+        if let Some(ch) = sub.children_mut() {
+            *ch = vec![
+                sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0)),
+                Arc::new(Node::new(NodeId(20), NodeKind::RulerGuide { vertical: true, pos: 3.0, artboard: None })),
+            ];
+        }
+        let mut group = Node::group(NodeId(12), vec![Arc::new(sub)]);
+        (group.visible, group.locked) = (!hidden, locked);
+        let mut l = Node::layer(NodeId(10), "Layer 1", LayerColor::Preset(0));
+        if let Some(ch) = l.children_mut() {
+            *ch = vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), Arc::new(group)];
+        }
+        l.appearance.effects.push(Effect { id: "pathfinder.add".into(), params: serde_json::json!({}), visible: true });
+        let art = evaluate_container(None, &l).unwrap();
+        let guides: Vec<_> = art.children().into_iter().flatten().filter(|c| c.is_ruler_guide()).map(|c| (c.id, c.visible, c.locked)).collect();
+        assert_eq!(guides, [(NodeId(20), !hidden, locked)], "hidden {hidden}, locked {locked}");
+    }
+}

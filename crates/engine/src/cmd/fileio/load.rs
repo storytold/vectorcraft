@@ -7,6 +7,7 @@ use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
 use vectorcraft_render::effects::pixel::LoadedTexture;
 
+use super::super::fileinfo::imported_title;
 use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
 use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, jxlread, psdread, read_file, readable_format_for_name};
@@ -63,6 +64,7 @@ impl Loaded {
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
 /// (what browsers, PDF and SVG viewers show).
+#[derive(Clone)]
 pub struct RasterImage {
     /// Content key for `Document::images` (identical files share one blob).
     pub key: String,
@@ -132,6 +134,17 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     }
     if clipboard::looks_like_svg(&String::from_utf8_lossy(&bytes[..bytes.len().min(4096)])) {
         return format("svg");
+    }
+    // HP-GL has no signature: a file that starts with plotter instructions, named as one or with an
+    // extension no other format (text, the formats VectorCraft names as unsupported, and the files
+    // File › Open takes in other ways included) reads.
+    let ext = super::extension(name);
+    let other = by_name.is_some_and(|f| f.id != "hpgl")
+        || super::TEXT_EXTS.contains(&ext.as_str())
+        || super::unsupported(&ext).is_some()
+        || super::opens_as_other(&ext);
+    if !other && vectorcraft_cad::hpgl::is_hpgl(bytes) {
+        return format("hpgl");
     }
     by_name
 }
@@ -305,10 +318,10 @@ pub(super) fn outlined_if_asked(mut doc: Document, warnings: Vec<String>, opts: 
     (doc, warnings)
 }
 
-/// Does `doc` hold no art: only layers, with nothing in them?
+/// Does `doc` hold no art: only layers, with nothing in them but ruler guides?
 fn draws_nothing(doc: &Document) -> bool {
     let mut art = false;
-    doc.walk(|n| art |= !n.is_layer());
+    doc.walk(|n| art |= !n.is_layer() && !n.is_ruler_guide());
     !art
 }
 
@@ -486,10 +499,24 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let (doc, warnings) = super::metafile::import(bytes)?;
             (doc, warnings, false)
         }
+        "hpgl" => {
+            let i = vectorcraft_cad::hpgl::import(bytes).map_err(err)?;
+            (i.document, i.warnings, false)
+        }
         "affinity" => {
             let i = super::affinity::import(&title, bytes)?;
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
+        }
+        // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
+        // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
+        "psd" | "psb" if opts.layers => {
+            let cms = vectorcraft_color::cms::active();
+            match super::psdlayers::import(bytes, opts.hidden_layers, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)) {
+                Ok(Some((doc, warnings))) => (doc, warnings, false),
+                Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
+                Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
+            }
         }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
@@ -524,6 +551,15 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
+    // The title the file gives itself (an SVG's `<title>`, a PDF's, `.ai`'s or `.ait`'s XMP `dc:title`
+    // or Info `Title`, which the readers put in File Info) is separate from the document's name.
+    // Restored File Info is preserved exactly; newly imported SVG candidates and a restored
+    // document's legacy name fallback are cleaned as imported text. The name stays the file's (#3626).
+    if !restored && matches!(format.id, "svg" | "svgz") {
+        doc.metadata.title = doc.metadata.title.as_deref().and_then(imported_title);
+    }
+    let held = restored.then_some(doc.title.as_str()).filter(|t| *t != title);
+    doc.metadata.title = doc.metadata.title.or_else(|| held.and_then(imported_title));
     // Imports are named after the file; a native document keeps its own title (the tab shows the
     // file name once it has a path).
     if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
@@ -652,6 +688,7 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     if template {
         doc.template = false;
         doc.title = s.next_untitled();
+        doc.metadata.title = None;
     }
     // A .ai (or .ait) another app wrote carries no open Layers rows we read: all of them start
     // closed, its top-level layers as its groups (#1475). Ours carry their own.
@@ -685,7 +722,7 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     st.import_losses = losses;
     st.links_from = read_from;
     let opened = &s.documents()[index];
-    let (title, file_info_title) = (opened.title(), opened.doc.title.clone());
+    let (title, file_info_title) = (opened.title(), opened.doc.info_title().to_string());
     Ok(super::merge(
         json!({ "index": index, "title": title, "fileInfoTitle": file_info_title, "format": format.id, "warnings": warnings, "restored": restored }),
         links.to_json(),

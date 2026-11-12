@@ -15,8 +15,8 @@ use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project
 
 use super::edit::{duplicate_in, outermost, refuse_symbol_part, selected_roots};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, id_param,
-    matrix_param, named_id, named_ids, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
+    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, matrix_param,
+    named_id, named_ids, number_or, object_param, ok, point_indices, point_param, str_param, switch_or, targets,
 };
 use crate::EngineError;
 
@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Liquify",
             [],
             None,
-            "{tool: warp|twirl|pucker|bloat|scallop|crystallize|wrinkle, points: [[x,y,pressure?]…] (the brush stroke; pen pressure 0..1, default 1), diameter?|width?, height? (pt, default 100), angle?, intensity? (0..1 or %), usePressure?: bool (each point's pressure is the intensity there), detail? (1..10), simplify?: 0..100, simplifyOn?: bool (default true; both for warp, twirl, pucker, bloat), rate? (twirl °), complexity? (0..15), horizontal?, vertical? (wrinkle, 0..1 or %), affectAnchors?, affectIn?, affectOut?: bool (scallop, crystallize, wrinkle; default true), ids?|id? (default: selection, else every path the brush touches)}",
+            "{tool: warp|twirl|pucker|bloat|scallop|crystallize|wrinkle, points: [[x,y,pressure?]…] (the brush stroke; pen pressure 0..1, default 1), diameter?|width?, height? (pt, default 100), angle? (deg clockwise: the brush's width axis from level), intensity? (0..1 or %), usePressure?: bool (each point's pressure is the intensity there), detail? (1..10), simplify?: 0..100, simplifyOn?: bool (default true; both for warp, twirl, pucker, bloat), rate? (twirl °, positive turns clockwise), complexity? (0..15), horizontal?, vertical? (wrinkle, 0..1 or %), affectAnchors?, affectIn?, affectOut?: bool (scallop, crystallize, wrinkle; default true), ids?|id? (default: selection, else every path the brush touches)}",
             has_doc,
             liquify
         ),
@@ -80,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Puppet Warp",
             [],
             None,
-            "{id?|ids? (default: selection), pins: [[x,y]…] (current pin positions), moved: [[x,y]…] (targets, same length), angles?: [deg|null…] (same length: the turn the art takes around each pin, as Alt-dragging around a pin does; null leaves it free), expand?: pt, rest?: bool, auto?: bool (as object.puppetWarp.pins reports; ignored)} as-rigid-as-possible mesh warp of anchors and handles. rest: true = the Puppet Warp tool's pins: `pins` are points on the shape the pins started from (object.puppetWarp.pins), each must be on its mesh, the warp replaces the previous one instead of adding to it, and the pins are kept with the document for Undo (an empty list removes them all, leaving the art as it is)",
+            "{id?|ids? (default: selection), pins: [[x,y]…] (current pin positions), moved: [[x,y]…] (targets, same length), angles?: [deg|null…] (same length: the turn the art takes around each pin, clockwise, as Alt-dragging around a pin does; null leaves it free), expand?: pt, rest?: bool, auto?: bool (as object.puppetWarp.pins reports; ignored)} as-rigid-as-possible mesh warp of anchors and handles. rest: true = the Puppet Warp tool's pins: `pins` are points on the shape the pins started from (object.puppetWarp.pins), each must be on its mesh, the warp replaces the previous one instead of adding to it, and the pins are kept with the document for Undo (an empty list removes them all, leaving the art as it is)",
             has_doc,
             puppet_warp
         ),
@@ -89,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Puppet Warp Pins",
             [],
             None,
-            "{id?|ids? (default: selection), expand?: pt} → {ids, pins, moved, angles, expand, rest: true, auto} the Puppet Warp pins on the art: pins = where each sits on the shape they started from, moved = where it is now, angles = the turn it holds (deg, null = free); auto: none placed yet (the tool's automatic pins: the centre and the end of each limb). Change moved/angles (or add/remove pins) and pass it back to object.puppetWarp",
+            "{id?|ids? (default: selection), expand?: pt} → {ids, pins, moved, angles, expand, rest: true, auto} the Puppet Warp pins on the art: pins = where each sits on the shape they started from, moved = where it is now, angles = the turn it holds (deg clockwise, null = free); auto: none placed yet (the tool's automatic pins: the centre and the end of each limb). Change moved/angles (or add/remove pins) and pass it back to object.puppetWarp",
             has_doc,
             puppet_pins
         ),
@@ -305,7 +305,7 @@ fn same_points(a: Option<&WidthProfile>, b: Option<&WidthProfile>) -> bool {
 
 fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.set";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let t = f64_req(p, "t", C)?.clamp(0.0, 1.0);
     let (left, right) = (f64_req(p, "left", C)?, f64_req(p, "right", C)?);
     if !(left.is_finite() && right.is_finite()) || left < 0.0 || right < 0.0 || left.max(right) > 1.0e5 {
@@ -362,7 +362,7 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.copy";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let t = f64_req(p, "t", C)?.clamp(0.0, 1.0);
     // When the profile comes out as it was (the copy replaces a side of a discontinuous point that has
     // its widths already), the document and its undo history stay as they are.
@@ -382,7 +382,7 @@ fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn width_point_remove(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.remove";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let indices = match (p.get("indices"), p.get("index")) {
         (Some(a), _) => point_indices(a),
         (None, Some(i)) => point_indices(&json!([i])),

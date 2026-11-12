@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use kurbo::{ParamCurve, Point, Rect, Shape as _};
-use vectorcraft_geom::{AnchorKind, FillRule, PathData, SubPath};
+use vectorcraft_geom::{Anchor, AnchorKind, FillRule, PathData, SubPath};
 use vectorcraft_pathops::*;
 
 const NZ: FillRule = FillRule::NonZero;
@@ -406,6 +406,113 @@ fn simplify_straight_lines_option() {
     assert!(!has_curves(&s));
     assert!(s.anchor_count() < 40);
     assert!(max_deviation(&c, &s) <= 1.0 + 1e-6);
+}
+
+/// A closed subpath whose refit is one curve stays a closed subpath that encloses an area, in a
+/// compound path and on its own, with curves and with Convert to Straight Lines.
+#[test]
+fn simplify_keeps_a_closed_subpath_that_refits_to_one_curve() {
+    let small = |cx: f64, cy: f64| circle(cx, cy, 2.0).subpaths.remove(0);
+    let square = rect(0.0, 0.0, 1000.0, 1000.0).subpaths.remove(0);
+    let compound = PathData::new(vec![square, small(500.0, 500.0)]);
+    let lone = PathData::single(small(0.0, 0.0));
+    // A straight edge and a curve that bows 2.25 pt from it.
+    let bow = PathData::single(SubPath::new(
+        vec![
+            Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 3.0), Point::new(0.0, 0.0)),
+            Anchor::with_handles(Point::new(100.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 3.0)),
+        ],
+        true,
+    ));
+    // A straight edge and an S curve whose midpoints all lie on that edge.
+    let s_curve = |h: f64, x: f64| {
+        PathData::single(SubPath::new(
+            vec![
+                Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, h)),
+                Anchor::with_handles(Point::new(100.0, 0.0), Point::new(x, -h), Point::new(100.0, 0.0)),
+            ],
+            true,
+        ))
+    };
+    let (s_low, s_high) = (s_curve(3.0, 0.0), s_curve(13.5, 100.0));
+    for straight_lines in [false, true] {
+        for tolerance in [4.0, 10.0, 32.0] {
+            let opts = SimplifyOptions { tolerance, straight_lines, ..Default::default() };
+            for path in [&compound, &lone, &bow, &s_low] {
+                let s = simplify_with(path, &opts);
+                assert_eq!(s.subpaths.len(), path.subpaths.len(), "{tolerance} pt, straight lines {straight_lines}: {s:?}");
+                assert!(s.subpaths.iter().all(|sp| sp.closed && sp.anchors.len() >= 2 && sp.area().abs() > 1.0), "{s:?}");
+                assert!(max_deviation(path, &s) <= tolerance + 1e-6, "{tolerance} pt: {}", max_deviation(path, &s));
+                let lines = s.subpaths.iter().all(|sp| (0..sp.segment_count()).all(|i| sp.segment_is_line(i)));
+                assert!(lines || !straight_lines, "{tolerance} pt: {s:?}");
+            }
+        }
+    }
+    // Lobes on both sides of the edge, 3.9 pt from it, stay within the tolerance.
+    for straight_lines in [false, true] {
+        let s = simplify_with(&s_high, &SimplifyOptions { tolerance: 4.0, straight_lines, ..Default::default() });
+        assert!(max_deviation(&s_high, &s) <= 4.0 + 1e-6, "straight lines {straight_lines}: {}", max_deviation(&s_high, &s));
+    }
+    // Curves whose handles lie on the line between their anchors become lines.
+    let thin = PathData::single(SubPath::new(
+        vec![
+            Anchor::with_handles(Point::new(0.0, 0.0), Point::new(20.0, 0.0), Point::new(30.0, 0.0)),
+            Anchor::with_handles(Point::new(100.0, 0.0), Point::new(70.0, 0.0), Point::new(80.0, 0.0)),
+        ],
+        true,
+    ));
+    let s = simplify_with(&thin, &SimplifyOptions { tolerance: 4.0, straight_lines: true, ..Default::default() });
+    assert!(s.subpaths.iter().all(|sp| (0..sp.segment_count()).all(|i| sp.segment_is_line(i))), "{s:?}");
+    // Anchors in line on a closed path are still removed.
+    let in_line = PathData::single(SubPath::new([0.0, 25.0, 50.0, 100.0].map(|x| Anchor::corner(Point::new(x, 0.0))).to_vec(), true));
+    let s = simplify_with(&in_line, &SimplifyOptions { tolerance: 4.0, ..Default::default() });
+    assert!(s.subpaths[0].anchors.len() < 4, "{s:?}");
+    let many = PathData::single(SubPath::new((0..5000).map(|i| Anchor::corner(Point::new(f64::from(i), 0.0))).collect(), true));
+    for tolerance in [4.0, f64::INFINITY, f64::NAN] {
+        for path in [&in_line, &thin, &many] {
+            simplify_with(path, &SimplifyOptions { tolerance, straight_lines: true, ..Default::default() });
+        }
+    }
+    // A long, thin rectangle keeps its corners.
+    let long = rect(0.0, 0.0, 1e9, 0.5);
+    let s = simplify_with(&long, &SimplifyOptions { tolerance: 0.1, straight_lines: true, ..Default::default() });
+    assert!(max_deviation(&long, &s) <= 0.1 + 1e-6, "{s:?}");
+}
+
+/// An S curve closed by a straight edge of 20,000 anchors, whose curve shows only when it is split in
+/// four, keeps its outline within the tolerance. With corner anchors on the edge, only the curve is
+/// split. With smooth anchors whose handles lie along the edge, four pieces of every segment pass the
+/// limit on pieces: the loop stays as it is, or with straight lines follows lines between samples.
+#[test]
+fn simplify_keeps_a_flat_loop_with_many_anchors_on_its_edge() {
+    let n = 20_000;
+    let step = 100.0 / f64::from(n);
+    let curve_anchors = vec![
+        Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 3.0)),
+        Anchor::with_handles(Point::new(100.0, 0.0), Point::new(0.0, -3.0), Point::new(100.0, 0.0)),
+    ];
+    let curve = PathData::single(SubPath::new(curve_anchors.clone(), false));
+    for smooth_edge in [false, true] {
+        let mut anchors = curve_anchors.clone();
+        anchors.extend((1..n).map(|i| {
+            let p = Point::new(100.0 - f64::from(i) * step, 0.0);
+            if smooth_edge {
+                Anchor::with_handles(p, Point::new(p.x + step / 3.0, 0.0), Point::new(p.x - step / 3.0, 0.0))
+            } else {
+                Anchor::corner(p)
+            }
+        }));
+        let path = PathData::single(SubPath::new(anchors, true));
+        for straight_lines in [false, true] {
+            let s = simplify_with(&path, &SimplifyOptions { tolerance: 4.0, straight_lines, ..Default::default() });
+            let at = format!("smooth edge {smooth_edge}, straight lines {straight_lines}");
+            assert_eq!(s.subpaths.len(), 1, "{at}");
+            let sp = &s.subpaths[0];
+            assert!(sp.closed && sp.area().abs() > 1.0, "{at}: area {}", sp.area());
+            assert!(max_deviation(&curve, &s) <= 4.0 + 1e-6, "{at}: {}", max_deviation(&curve, &s));
+            assert!(!straight_lines || (0..sp.segment_count()).all(|i| sp.segment_is_line(i)), "{at}: a curve is left");
+        }
+    }
 }
 
 /// The Simplify slider's levels: 1 pt at 50, doubled for every 10 levels down and halved for every

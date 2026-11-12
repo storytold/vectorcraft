@@ -123,6 +123,46 @@ fn presets_export_and_import_round_trip() {
     assert!(is_bad_params(Session::new().execute("pdf.preset.export", &json!({}))), "nothing saved to export");
 }
 
+/// `longPagesInPoints` is saved with a preset, comes back through a presets file and the
+/// preferences, shows in `document.pdfSettings`, and a 10 m page exported with it reopens at 10 m.
+/// A value that isn't a boolean is refused.
+#[test]
+fn long_pages_in_points_round_trips_through_presets_and_reopens_at_full_size() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 28_346.456_692_913_386, "height": 2_834.645_669_291_338_5})).unwrap();
+    s.execute("pdf.preset.save", &json!({"name": "Banner", "longPagesInPoints": true, "preserveEditing": false})).unwrap();
+    assert!(s.prefs.pdf_presets[0].settings.long_pages_in_points);
+    let back: crate::Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert_eq!(back.pdf_presets, s.prefs.pdf_presets);
+    let text = s.execute("pdf.preset.export", &json!({"names": ["Banner"]})).unwrap()["data"].as_str().unwrap().to_string();
+    let mut t = session();
+    t.execute("pdf.preset.import", &json!({"data": text})).unwrap();
+    assert_eq!(t.prefs.pdf_presets, s.prefs.pdf_presets);
+    let v = s.execute("document.pdfSettings", &json!({"longPagesInPoints": true})).unwrap();
+    assert_eq!((&v["settings"]["longPagesInPoints"], &v["changed"]), (&json!(true), &json!([{"option": "longPagesInPoints", "value": true}])), "{v}");
+    assert_eq!(s.execute("document.pdfSettings", &json!({})).unwrap()["settings"]["longPagesInPoints"], json!(false));
+    // The preset writes the page in points; the file reopens at 10 m.
+    let v = s.execute("document.exportPdf", &json!({"preset": "Banner"})).unwrap();
+    let bytes = pdf(&v);
+    assert!(!String::from_utf8_lossy(&bytes).contains("/UserUnit"));
+    assert!(
+        v["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|w| w.as_str().unwrap().ends_with("written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in")),
+        "{v}"
+    );
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "banner.pdf", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+    let rect = o.doc().unwrap().doc.artboards[0].rect;
+    assert!((rect.width() - 28_346.46).abs() < 0.01 && (rect.height() - 2_834.65).abs() < 0.01, "{rect:?}");
+    for bad in [json!("yes"), json!(1)] {
+        assert!(is_bad_params(s.execute("document.exportPdf", &json!({"longPagesInPoints": bad}))), "{bad}");
+        assert!(is_bad_params(s.execute("pdf.preset.save", &json!({"name": "Bad", "longPagesInPoints": bad}))), "{bad}");
+    }
+}
+
 #[test]
 fn saved_presets_persist_with_the_preferences() {
     let mut s = session();

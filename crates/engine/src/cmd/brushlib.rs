@@ -11,7 +11,9 @@ use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
 use serde_json::{Value, json};
-use vectorcraft_brush::{self as brush, ArtBrush, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation};
+use vectorcraft_brush::{
+    self as brush, ArtBrush, Bristle, BristleShape, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation,
+};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, PatternDef, Symbol};
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, SubPath, shapes};
@@ -21,7 +23,7 @@ use super::clipboard::Clipboard;
 use super::clipboard::resources::SwatchChoices;
 use super::patterncmds::add_pattern;
 use super::swatch::str_list;
-use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
+use super::swatchlib::{FileData, LibraryFile, LibraryInfo, concealed_library_id, concealed_library_ids, shown_id, shown_library_id, stem};
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 
 /// The extension of saved brush libraries: native documents.
@@ -169,9 +171,11 @@ pub struct BuiltinBrushLibrary {
 pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "art-ribbons", name: "Art Ribbons", make: art_ribbons },
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
+    BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
+    BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
 ];
 
 /// Built-in library `id`, made once.
@@ -287,6 +291,31 @@ fn calligraphic_nibs() -> BrushLibrary {
         pressure,
     ];
     built("Calligraphic Nibs", Document::new(100.0, 100.0), brushes)
+}
+
+/// A bristle brush: `shape`, then size (pt), bristle length, density, thickness, paint opacity
+/// and stiffness (%).
+fn bristle(name: &str, shape: BristleShape, [size, length, density, thickness, opacity, stiffness]: [f64; 6]) -> Brush {
+    Brush { name: name.into(), kind: BrushKind::Bristle(Bristle { shape, size, length, density, thickness, opacity, stiffness }) }
+}
+
+/// Bristle Brushes: one bristle brush for each tip shape, from a fine liner to wide fans for
+/// blending and texture.
+fn bristle_brushes() -> BrushLibrary {
+    use BristleShape::*;
+    let brushes = vec![
+        bristle("Fine Liner", RoundPoint, [2.0, 140.0, 30.0, 30.0, 90.0, 75.0]),
+        bristle("Pointed Flat", FlatPoint, [5.0, 120.0, 55.0, 35.0, 80.0, 60.0]),
+        bristle("Stubby Round", RoundBlunt, [8.0, 60.0, 70.0, 50.0, 85.0, 80.0]),
+        bristle("Dry Scrub", FlatBlunt, [10.0, 40.0, 25.0, 60.0, 60.0, 95.0]),
+        bristle("Soft Dome", RoundCurve, [12.0, 160.0, 85.0, 20.0, 45.0, 25.0]),
+        bristle("Filbert", FlatCurve, [9.0, 110.0, 65.0, 40.0, 70.0, 45.0]),
+        bristle("Angled Round", RoundAngle, [7.0, 130.0, 50.0, 35.0, 75.0, 55.0]),
+        bristle("Angled Flat", FlatAngle, [11.0, 100.0, 60.0, 45.0, 80.0, 65.0]),
+        bristle("Fan Blender", RoundFan, [16.0, 220.0, 40.0, 15.0, 35.0, 20.0]),
+        bristle("Grass Fan", FlatFan, [20.0, 260.0, 15.0, 25.0, 65.0, 35.0]),
+    ];
+    built("Bristle Brushes", Document::new(100.0, 100.0), brushes)
 }
 
 fn border(name: &str, side: Node, corner: Option<Node>, fit: PatternFit) -> Brush {
@@ -416,6 +445,35 @@ fn game_trails() -> BrushLibrary {
     built("Game Trails", Document::new(100.0, 100.0), brushes)
 }
 
+/// Energy Beams: art brushes for laser, plasma and charge strokes (original game VFX art).
+fn energy_beams() -> BrushLibrary {
+    let laser = {
+        let n = 32;
+        let half = |x: f64| 1.6 * (1.0 - (x / 100.0 - 0.5).abs() * 1.6).max(0.12);
+        let xs = |i: usize| 100.0 * i as f64 / n as f64;
+        let mut pts: Vec<Point> = (0..=n).map(xs).map(|x| Point::new(x, -half(x))).collect();
+        pts.extend((0..n).rev().map(xs).map(|x| Point::new(x, half(x))));
+        PathData::single(SubPath::polyline(&pts, true))
+    };
+    let plasma = band(100.0, 2.2, 48, |x| 4.0 * (x / 100.0 * std::f64::consts::PI).sin());
+    let charge = band(100.0, 1.6, 56, |x| 3.5 * (x / 100.0 * std::f64::consts::TAU).sin());
+    let spark = group(vec![
+        black(shapes::rounded_rectangle(Rect::new(0.0, -1.2, 10.0, 1.2), 0.8)),
+        black(shapes::rounded_rectangle(Rect::new(18.0, -0.9, 28.0, 0.9), 0.7)),
+        black(shapes::rounded_rectangle(Rect::new(36.0, -1.4, 48.0, 1.4), 0.9)),
+        black(shapes::rounded_rectangle(Rect::new(56.0, -0.8, 66.0, 0.8), 0.6)),
+        black(shapes::rounded_rectangle(Rect::new(74.0, -1.1, 86.0, 1.1), 0.8)),
+        black(shapes::rounded_rectangle(Rect::new(92.0, -0.7, 100.0, 0.7), 0.5)),
+    ]);
+    let brushes = vec![
+        art("Laser Bolt", black(laser), Colorization::Tints),
+        art("Plasma Arc", black(plasma), Colorization::Tints),
+        art("Charge Wave", black(charge), Colorization::Tints),
+        art("Spark Trail", spark, Colorization::Tints),
+    ];
+    built("Energy Beams", Document::new(100.0, 100.0), brushes)
+}
+
 // ---------- commands ----------
 
 fn builtin_info(b: &BuiltinBrushLibrary) -> LibraryInfo {
@@ -432,6 +490,9 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<BrushLibrary>
     if let Some(found) = s.brush_libraries.get(key) {
         return Some(found);
     }
+    if let Some(found) = concealed_library_id(s, key).and_then(|id| s.brush_libraries.get(&id)) {
+        return Some(found);
+    }
     if let Some(b) = BUILTIN.iter().find(|b| b.id == key) {
         return Some((builtin_info(b), builtin_library(key)?));
     }
@@ -446,20 +507,22 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     s.brush_libraries.rescan();
+    let concealed = concealed_library_ids(s, []);
     let libs: Vec<Value> = libraries(s)
         .into_iter()
         .map(|l| {
             let count = library(s, &l.id).map_or(0, |(_, lib)| lib.len());
-            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": s.brush_libraries.path(&l.id)})
+            let (id, path) = (shown_id(&concealed, &l.id), s.brush_libraries.shown_path(&l.id));
+            json!({"id": id, "name": l.name, "category": l.category, "count": count, "path": path})
         })
         .collect();
-    Ok(json!({ "libraries": libs, "userFolder": s.brush_libraries.user_dir() }))
+    Ok(json!({ "libraries": libs, "userFolder": s.brush_libraries.shown_user_dir() }))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
     let (info, lib) = library_param(s, p, "brush.library")?;
     let brushes: Vec<Value> = lib.brushes.iter().map(|b| json!({"name": b.name, "type": b.kind.type_id()})).collect();
-    Ok(json!({"id": info.id, "name": info.name, "category": info.category, "brushes": brushes}))
+    Ok(json!({"id": shown_library_id(s, &info.id), "name": info.name, "category": info.category, "brushes": brushes}))
 }
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
@@ -496,7 +559,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // nothing to apply is no edit, and a click that only applies brushes the document has is
     // named for that.
     let mut probe = (*st.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let doc_names: Vec<String> = picked.iter().map(|n| target(&imported.renamed, n)).collect();
     let paths = if apply { brush_targets(&st.doc, &roots(s, p)?) } else { vec![] };
     let paint = stroke_paint(s);
@@ -515,7 +578,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let (added, existing): (Vec<&String>, Vec<&String>) = doc_names.iter().partition(|n| !before.contains(*n));
     let applied: Vec<u64> = paths.iter().map(|id| id.0).collect();
-    Ok(json!({"library": info.id, "names": doc_names, "added": added, "existing": existing, "applied": applied}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "names": doc_names, "added": added, "existing": existing, "applied": applied}))
 }
 
 fn save(s: &mut Session, p: &Value) -> Result<Value> {
@@ -541,5 +604,5 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
         }
         BrushLibrary::from_document(&loaded.doc, &[], stem(file).to_string()).map_err(|e| bad(C, e))
     })?;
-    Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len()}))
 }

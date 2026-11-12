@@ -102,15 +102,15 @@ fn items_bounds(d: &Document, ids: &[NodeId], m: Measure) -> Vec<(NodeId, Rect)>
     ids.iter().filter_map(|id| Some((*id, m.of(d, *id)?))).collect()
 }
 
-/// Move each object of `moves` by its offset and each ruler guide of `guides` (index, position)
+/// Move each object of `moves` by its offset and each ruler guide of `guides` (id, position)
 /// to its position, as undo step `label`; pattern tiles move too when [`transform_patterns`] says
 /// so for `ids`. When every move is a rounding error (1e-9 pt or less on both axes), the document
 /// and its undo history stay as they are.
-fn apply_moves(s: &mut Session, label: &str, p: &Value, ids: &[NodeId], moves: &[(NodeId, Vec2)], guides: &[(usize, f64)]) -> Result<Value> {
+fn apply_moves(s: &mut Session, label: &str, p: &Value, ids: &[NodeId], moves: &[(NodeId, Vec2)], guides: &[(NodeId, f64)]) -> Result<Value> {
     let sc = Scaling { patterns: transform_patterns(s, p, ids)?, ..Scaling::default() };
-    let guides: Vec<(usize, f64)> = {
+    let guides: Vec<(NodeId, f64)> = {
         let d = &s.doc()?.doc;
-        guides.iter().copied().filter(|&(i, pos)| d.guides.get(i).is_some_and(|g| (g.pos - pos).abs() > 1e-9)).collect()
+        guides.iter().copied().filter(|&(i, pos)| d.ruler_guide(i).is_some_and(|g| (g.pos - pos).abs() > 1e-9)).collect()
     };
     if moves.iter().all(|(_, dv)| dv.x.abs() <= 1e-9 && dv.y.abs() <= 1e-9) && guides.is_empty() {
         return ok();
@@ -124,9 +124,7 @@ fn apply_moves(s: &mut Session, label: &str, p: &Value, ids: &[NodeId], moves: &
             super::pixelgrid::keep_compound_aligned(d, *id, sc);
         }
         for &(i, pos) in &guides {
-            if let Some(g) = d.guides.get_mut(i) {
-                g.pos = pos;
-            }
+            d.edit_ruler_guide(i, |g| g.pos = pos);
         }
         Ok(())
     })?;
@@ -143,7 +141,7 @@ fn align_to<'a>(s: &Session, p: &'a Value) -> Option<&'a str> {
 /// [`vectorcraft_doc::Selection::key_guide`]): its position, and whether it is vertical.
 fn key_guide(s: &Session, p: &Value) -> Option<(f64, bool)> {
     let st = s.doc().ok()?;
-    let g = st.doc.guides.get(st.selection.key_guide?)?;
+    let g = st.doc.ruler_guide(st.selection.key_guide?)?;
     (align_to(s, p) == Some("key")).then_some((g.pos, g.vertical))
 }
 
@@ -164,7 +162,7 @@ fn align_reference(s: &Session, p: &Value, ids: &[NodeId], m: Measure, own: Opti
 /// Bounds of the selected ruler guides (each guide is a zero-thickness line), for Align to
 /// Selection when no objects are selected.
 fn selected_guides_bounds(st: &crate::DocState) -> Option<Rect> {
-    st.selection.guides.iter().filter_map(|&i| st.doc.guides.get(i)).fold(None, |acc: Option<Rect>, g| {
+    st.selection.guides.iter().filter_map(|&i| st.doc.ruler_guide(i)).fold(None, |acc: Option<Rect>, g| {
         let r = if g.vertical { Rect::new(g.pos, 0.0, g.pos, 0.0) } else { Rect::new(0.0, g.pos, 0.0, g.pos) };
         Some(acc.map(|a| a.union(r)).unwrap_or(r))
     })
@@ -264,7 +262,7 @@ pub(super) fn align(s: &mut Session, p: &Value) -> Result<Value> {
 /// `v` names. Align to the key object (or key guide) moves them too, and the key guide stays put.
 /// Align to the artboard moves them (#3463). Align to the selection moves them when only guides are
 /// selected; with objects in the selection they stay put.
-fn guide_moves(s: &Session, p: &Value, r: Rect, h: Option<&str>, v: Option<&str>) -> Result<Vec<(usize, f64)>> {
+fn guide_moves(s: &Session, p: &Value, r: Rect, h: Option<&str>, v: Option<&str>) -> Result<Vec<(NodeId, f64)>> {
     let st = s.doc()?;
     let to = align_to(s, p);
     let move_guides = match to {
@@ -290,7 +288,7 @@ fn guide_moves(s: &Session, p: &Value, r: Rect, h: Option<&str>, v: Option<&str>
         .guides
         .iter()
         .filter(|&&i| !skip_key || Some(i) != st.selection.key_guide)
-        .filter_map(|&i| Some((i, at(st.doc.guides.get(i)?.vertical)?)))
+        .filter_map(|&i| Some((i, at(st.doc.ruler_guide(i)?.vertical)?)))
         .collect())
 }
 
@@ -361,7 +359,7 @@ pub(super) fn can_distribute(s: &Session) -> std::result::Result<(), String> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Spaced {
     Object(NodeId),
-    Guide(usize),
+    Guide(NodeId),
 }
 
 /// The selected objects `ids` with their bounds (measured by `m`), and the selected
@@ -371,7 +369,7 @@ fn spaced_items(s: &Session, ids: &[NodeId], m: Measure, horiz: bool) -> Result<
     let st = s.doc()?;
     let objects = items_bounds(&st.doc, ids, m).into_iter().map(|(id, r)| (Spaced::Object(id), r));
     let guides = st.selection.guides.iter().filter_map(|&i| {
-        let g = st.doc.guides.get(i).filter(|g| g.vertical == horiz)?;
+        let g = st.doc.ruler_guide(i).filter(|g| g.vertical == horiz)?;
         Some((Spaced::Guide(i), Rect::new(g.pos, g.pos, g.pos, g.pos)))
     });
     Ok(objects.chain(guides).collect())
@@ -404,7 +402,7 @@ fn apply_spaced(s: &mut Session, label: &str, p: &Value, ids: &[NodeId], horiz: 
     for &(it, delta) in deltas {
         match it {
             Spaced::Object(id) => moves.push((id, along(delta))),
-            Spaced::Guide(i) => guides.extend(d.guides.get(i).map(|g| (i, g.pos + delta))),
+            Spaced::Guide(i) => guides.extend(d.ruler_guide(i).map(|g| (i, g.pos + delta))),
         }
     }
     apply_moves(s, label, p, ids, &moves, &guides)

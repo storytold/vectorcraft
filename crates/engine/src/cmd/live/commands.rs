@@ -1,6 +1,6 @@
 use super::blend::{
-    blend_expand, blend_info, blend_make, blend_options, blend_release, blend_replace_spine, blend_reverse_spine, blend_reverse_stack,
-    spine_add_anchor, spine_convert_anchor, spine_move_anchor, spine_remove_anchor, spine_reshape_segment,
+    blend_create_spine, blend_expand, blend_info, blend_make, blend_options, blend_release, blend_replace_spine, blend_reverse_spine,
+    blend_reverse_stack, spine_add_anchor, spine_convert_anchor, spine_move_anchor, spine_remove_anchor, spine_reshape_segment,
 };
 use super::common::{has_blend, has_envelope, has_mesh};
 use super::envelope::{
@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Blend"],
             Some("Cmd+Alt+B"),
-            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100; 0: even)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name and transparency) instead of nesting → {id}",
+            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100; 0: even), createSpine?: auto|always|never (default: the mode object.blend.createSpine sets; never: a blend without a spine, which takes no easing)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name, transparency and whether it has a spine) instead of nesting → {id}",
             has_doc,
             blend_make
         ),
@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release",
             ["Object", "Blend"],
             Some("Cmd+Alt+Shift+B"),
-            "{} release the selected blends: the key objects come back and the spine stays as a path with no fill or stroke, below them; a blend with a name, opacity, blend mode, isolation, opacity mask or appearance of its own comes back as a group keeping them (and its knockout) → {ids (the keys), spines: [ids], groups: [ids]}",
+            "{} release the selected blends: the key objects come back and the spine (if the blend has one) stays as a path with no fill or stroke, below them; a blend with a name, opacity, blend mode, isolation, opacity mask or appearance of its own comes back as a group keeping them (and its knockout) → {ids (the keys), spines: [ids], groups: [ids]}",
             has_blend,
             blend_release
         ),
@@ -39,6 +39,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends; easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (omitted ones keep their value; out of range is an error); with no blend selected, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
             always,
             blend_options
+        ),
+        cmd!(
+            "object.blend.createSpine",
+            "Create Spine",
+            [],
+            None,
+            "{mode?: auto|always|never} the Blend panel's Create Spine: whether new blends get a spine (auto and always: the straight lines between the key centers, as before; never: no spine to show, edit, reverse or release, and no easing, until Replace Spine gives one); with no `mode`, reads it; blends already made keep theirs (a tool setting kept with the preferences, not an undo step) → {mode}",
+            always,
+            blend_create_spine
         ),
         cmd!(
             "object.blend.expand",
@@ -54,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Spine",
             ["Object", "Blend"],
             None,
-            "{} use the selected path as the spine of the selected blend (the path is consumed)",
+            "{} use the selected path as the spine of the selected blend (the path is consumed); a blend made without a spine gets this one",
             has_blend,
             blend_replace_spine
         ),
@@ -63,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reverse Spine",
             ["Object", "Blend"],
             None,
-            "{} reverse the order of the key objects along the spine",
+            "{} reverse the order of the key objects along the spine; an error when a selected blend has no spine",
             has_blend,
             blend_reverse_spine
         ),
@@ -72,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Info",
             [],
             None,
-            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct, keys?: [ids], starts?: [anchor|null], spine?: {anchors: [{x, y, in: [x, y], out: [x, y]}], closed, keyAnchors: [anchor each key sits on] | null (keys spread evenly: a spine from Replace Spine), explicit: false for the straight lines between the key centres}}",
+            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct, keys?: [ids], starts?: [anchor|null], hasSpine?: false for a blend made without a spine (no `spine` then), spine?: {anchors: [{x, y, in: [x, y], out: [x, y]}], closed, keyAnchors: [anchor each key sits on] | null (keys spread evenly: a spine from Replace Spine), explicit: false for the straight lines between the key centres}}",
             always,
             blend_info
         ),
@@ -136,7 +145,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Warp…",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+Shift+W"),
-            "{ids?, style?: arc|arcLower|arcUpper|arch|bulge|shellLower|shellUpper|flag|wave|fish|rise|fisheye|inflate|squeeze|twist (arc), bend?: % -100..100 (50), h?: horizontal distortion % -100..100 (0), v?: vertical distortion % (0), horizontal?: bool (true) | orientation?: horizontal|vertical, horizontalDistortion?: as h, verticalDistortion?: as v} envelope the selected objects with a warp (Envelope Options from object.envelope.options with nothing selected; type maps from its glyph outline bounds) → {id}",
+            "{ids?, style?: arc|arcLower|arcUpper|arch|bulge|shellLower|shellUpper|flag|wave|fish|rise|fisheye|inflate|squeeze|twist (arc), bend?: % -100..100 (50), h?: horizontal distortion % -100..100 (0), v?: vertical distortion % (0), horizontal?: bool (true) | orientation?: horizontal|vertical, horizontalDistortion?: as h, verticalDistortion?: as v, version?: 0|1 (1: each style bends the bounds as one Bézier patch; 0: VectorCraft's earlier map)} envelope the selected objects with a warp (Envelope Options from object.envelope.options with nothing selected; type maps from its glyph outline bounds) → {id}",
             has_selection,
             env_make_warp
         ),
@@ -163,7 +172,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset with Warp…",
             ["Object", "Envelope Distort"],
             None,
-            "{style?, bend?, h?, v?, horizontal? | orientation? (as makeWithWarp; unset: the envelope's current warp, else arc 50 %), horizontalDistortion?: as h, verticalDistortion?: as v} make the selected envelopes warp envelopes, keeping their content",
+            "{style?, bend?, h?, v?, horizontal? | orientation? (as makeWithWarp; unset: the envelope's current warp, else arc 50 %), horizontalDistortion?: as h, verticalDistortion?: as v, version?: as makeWithWarp (unset: a warp envelope's own, else 1)} make the selected envelopes warp envelopes, keeping their content",
             has_envelope,
             env_reset_warp
         ),
@@ -181,7 +190,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Info",
             [],
             None,
-            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
+            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, version (a warp's map: 1, each style as one Bézier patch; 0, the earlier map), rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
             has_doc,
             env_info
         ),
@@ -199,7 +208,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Options…",
             ["Object", "Envelope Distort"],
             None,
-            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance; on an envelope with boundsMargin, distortAppearance also switches the content between the box with the margins and its geometric box), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
+            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance; on an envelope with boundsMargin, distortAppearance also switches the content between the box with the margins and its geometric box), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical, version?: 0|1 (warp envelopes' map, as makeWithWarp)} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
             has_doc,
             env_options
         ),

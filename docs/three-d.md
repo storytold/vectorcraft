@@ -51,8 +51,9 @@ pages describe it.
   unavailable while a setting of a single light differs between the selected effects.
 - Each change is one undo step. Dragging a value or a slider previews it on the artboard and records one step
   when the pointer is released; a typed value is recorded when it is entered. Drawing the panel records nothing.
-- The Materials tab, shadows and ray-traced rendering are not built (see below). The rotation and light rings on
-  the artboard are part of the options dialog only.
+- The Lighting tab also holds the Shadows switch and its settings ([Shadows](#shadows)). The Materials tab and
+  ray-traced rendering are not built (see below). The rotation and light rings on the artboard are part of the
+  options dialog only.
 
 ## Extrude & Bevel
 
@@ -99,7 +100,12 @@ reply on the reference app's bug forum says that strokes "will be treated as out
 The rest is our reading:
 
 - When the fill and every stroke are opaque with Normal blending, the faces of all the solids are drawn in one
-  back-to-front order, and the caps turned toward the viewer are drawn last, the lower item's first. Otherwise
+  back-to-front order, and the caps turned toward the viewer are drawn last, the lower item's first. With caps on,
+  each side face of the fill's solid that is turned toward the viewer is drawn before every face of the same
+  shape's strokes, turned toward the viewer, whose bounds overlap it, so the stroke's walls cover the fill's walls
+  at concave corners. This applies to strokes on closed paths without dashes, a width profile or a brush, painted
+  with a solid color or a gradient without transparent stops; with other strokes, and without caps, the faces keep
+  their depth order. Otherwise
   each solid is drawn on its own with its opacity and blending, the lower item's first. With a light that is not
   white, each solid is also drawn on its own when one of them is a puffed, shaded Inflate surface in a solid color
   (drawn as one composite) or is painted with a gradient that has transparent stops (drawn with an opacity mask).
@@ -122,11 +128,12 @@ them all. The members stay editable: moving or editing one reshapes the solids. 
 - Each member's own geometry effects shape it first, then those of each group inside the 3D group that holds it,
   applied to that group's members together; the 3D group's geometry effects before the 3D effect reshape the
   members, and those after it bend the result as a whole. The members' other effects, and the group's own fills and
-  strokes, are not drawn. A member's opacity applies to its solids; its blending mode does not. An opacity mask on
+  strokes, are not drawn. A member's opacity and blending mode apply to its solids, and the blending mode of a group
+  inside the 3D group applies to the solids of that group's members together. An opacity mask on
   a member masks its solids, and one on a group inside the 3D group masks the solids of that group's members
   together. The mask stays where it is on the page; it does not turn with the solids. A disabled mask is ignored.
-- When a member, or a group inside the 3D group, has an opacity mask, each solid is drawn on its own, the backmost
-  member's first, as when a solid is transparent.
+- When a member, or a group inside the 3D group, has an opacity mask or a blending mode other than Normal, each
+  solid is drawn on its own, the backmost member's first, as when a solid is transparent.
 - When every solid is opaque, all members' faces are drawn in one back-to-front order; otherwise each solid is drawn
   on its own, the backmost member's first.
 - Hidden members and guides are left out. A group holding a live object other than a blend (an envelope, a mesh, a
@@ -134,7 +141,7 @@ them all. The members stay editable: moving or editing one reshapes the solids. 
 
 ## Clipping groups, blends and symbol instances
 
-Every 3D effect (Extrude & Bevel, Extrude & Bevel (Classic), Inflate, Rotate and Revolve) also applies to a clipping
+Every 3D effect (Extrude & Bevel, Extrude & Bevel (Classic), Inflate, Rotate, Rotate (Classic), Revolve and Revolve (Classic)) also applies to a clipping
 group, a blend or a symbol instance, alone or inside a group or layer. The help page says that effects apply to
 objects, groups or layers ([Apply and modify effects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/apply-and-modify-effects.html)),
 that a clipping mask hides everything outside its shape ([Clipping masks](https://helpx.adobe.com/illustrator/using/clipping-masks.html)),
@@ -241,6 +248,39 @@ the default light had (45° left of the eye and 45° up). Effects saved before (
 `lightAzimuth` and `lightElevation`; those are read as the Rotation, Height and side of the same direction, so the
 shading is exactly as before.
 
+## Shadows
+
+The public [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
+page lists shadow settings that apply while shadows are on: a Position behind or below the object, a Distance
+from Object from 0 to 100 % and Shadow Bounds from 10 to 400 %. The Lighting tab of Revolve, Extrude & Bevel,
+Inflate and Rotate has a **Shadows** switch with those three settings below it.
+
+| Option | |
+|---|---|
+| Shadows | Off by default. On, the first light casts a hard-edged shadow of the solid, drawn behind it. |
+| Position | **Behind Object** (the default): on a plane square to the view, behind the object. **Below Object**: on the floor under the object, square to its own vertical axis and turned with it. |
+| Distance from Object | 0–100 %, default 0 %: how far the plane is from the object, as a share of the object's largest size. |
+| Shadow Bounds | 10–400 %, default 100 %: how far the plane reaches. At 100 % it is a square four times the object's largest size across, about the foot of the object's center; the shadow is cut at its edges. |
+
+Our reading:
+
+- The shadow is one path, filled black at 50 % opacity with the nonzero rule: every face of every solid of the
+  object (its fill and its strokes, or the members of a group) projected along the first light onto the plane.
+  Art that is partly transparent casts its part at 50 % times its opacity, and art with a blending mode casts
+  its part in that mode, each as a path of its own. A member whose
+  opacity mask or blending mode applies to its solids casts its part in that mask and mode too. The color, the
+  opacity and how Distance and Bounds scale are our own.
+- No shadow is drawn while Shading is off (the Shadows settings are then unavailable), when the first light's
+  Intensity is 0 %, or when it does not reach the plane: a light behind the object casts none behind it, and a
+  light from under the floor casts none below it. A fill, stroke or group member at 0 % opacity casts none. With no X rotation the floor is seen edge-on, so a
+  shadow below draws nothing until the object is tilted (the default Off-Axis Front position shows it).
+- Softness is not applied to the shadow, and only the first light casts one.
+- A shadow is cast from at most 327,680 faces, the solids of one object together (our own limit). Past it, a
+  command is refused with "The 3D shadow is too complex; turn Shadows off or simplify the art", and a loaded
+  file draws the source path.
+- Canvas, SVG and PDF exports draw the shadow, the art's bounds take it in, and Expand Appearance keeps it as a
+  path below the faces. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow.
+
 ## Parameters (`effect.apply`, `effect.setParams`)
 
 `threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
@@ -248,7 +288,7 @@ shading is exactly as before.
 `threeD.inflate`: `depth`, `volume` (%), `bothSides`. All three take the view and lighting parameters Revolve
 uses: `rotationX`, `rotationY`, `rotationZ`, `perspectiveAngle` (degrees), `shade`, `lightColor` (`#rrggbb`, default `#ffffff`), `lightIntensity` (%), `lightRotation`,
 `lightHeight` (degrees), `lightSoftness` (%), `ambient` (%, to 200), `lightBehind`. Lengths are points and scale with the object (Scale Strokes & Effects).
-Commands validate the shape and the parameters before the document changes. All four also take `lights`: null (the default, use the earlier single-light fields), or an array of one to ten objects. Each object takes `color` (opaque `#rrggbb`, white), `intensity` (0..100%, 80), `rotation` (-180..180 degrees, 125.26), `height` (0..90 degrees, 30), `softness` (0..100%, 0), and `behind` (boolean, false). Omitted settings use those defaults. An explicit list replaces the earlier single light; `ambient` and `shade` remain shared. Set `lights` to null to return to the single-light fields. Invalid lists, counts, keys and values are rejected before editing; malformed loaded lists fall back to the earlier light safely.
+Commands validate the shape and the parameters before the document changes. All four also take `lights`: null (the default, use the earlier single-light fields), or an array of one to ten objects. Each object takes `color` (opaque `#rrggbb`, white), `intensity` (0..100%, 80), `rotation` (-180..180 degrees, 125.26), `height` (0..90 degrees, 30), `softness` (0..100%, 0), and `behind` (boolean, false). Omitted settings use those defaults. An explicit list replaces the earlier single light; `ambient` and `shade` remain shared. Set `lights` to null to return to the single-light fields. Invalid lists, counts, keys and values are rejected before editing; malformed loaded lists fall back to the earlier light safely. All four take `shadow` (boolean, false), `shadowPosition` (`behind` or `below`), `shadowDistance` (0..100%, 0) and `shadowBounds` (10..400%, 100) ([Shadows](#shadows)); values out of range are rejected before editing.
 
 ## What differs from the public documentation
 
@@ -257,9 +297,10 @@ and [Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effe
 pages, and the archived Extrude & Bevel option list (depth 0–2,000, cap on/off, bevel height, bevel extent in or
 out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 
-- **Materials** (base, Adobe Substance and graphics), **shadows**
+- **Materials** (base, Adobe Substance and graphics), soft shadows, shadows of lights after the first,
   and **ray-traced rendering** are not built: shading uses directional lights, in the paint of the fill or
-  stroke the solid is built for ([Fills and strokes](#fills-and-strokes)).
+  stroke the solid is built for ([Fills and strokes](#fills-and-strokes)), and the shadow is hard-edged
+  ([Shadows](#shadows)).
 - The bevel shapes and their names are our own; custom bevel paths are not supported.
 - Visibility is a painter's algorithm: faces of a closed solid turned away are left out, and the rest are drawn
   back to front, with a flat cap or flat back turned toward the viewer drawn after all of them. Concave solids
@@ -295,8 +336,11 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   outline crosses. An outline of tens of thousands of points that crosses nearly every cell (a comb of 4,000 teeth
   across the shape) is refused because the 3D surface is too complex; a closed path of 65,536 points round a
   circle builds.
-- **3D (Classic)**: Extrude & Bevel (Classic) is built, with its surface types and blend steps. Revolve (Classic),
-  Rotate (Classic), the track cube, map art, Turntable and 3D export are separate, unbuilt items.
+- **3D (Classic)**: Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) are built, with their surface
+  types and blend steps. Revolve (Classic) sweeps the surface Revolve sweeps, at 64 segments for a full turn, and draws
+  every face back to front, so it has no Draw Hidden Faces setting. Rotate (Classic) turns the plane Rotate turns, seen
+  from either side, with the No Shading and Diffuse surfaces only. The track cube, map art, Turntable and 3D export
+  are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 
