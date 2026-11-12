@@ -1452,6 +1452,34 @@ fn headless_backend_methods() {
     assert!(h.call("ui.resize", json!({})).is_err());
 }
 
+/// The headless key, pointer and screenshot calls refuse a value of the wrong type and change
+/// nothing; omitting it or giving null keeps its default.
+#[test]
+fn headless_methods_refuse_params_of_the_wrong_type() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 300, "height": 200}})).unwrap();
+    h.call("ui.tool.select", json!({"tool": "rectangle"})).unwrap();
+    let before = h.call("document.json", json!({})).unwrap();
+    let drag = |mods: Value| json!({"events": [{"kind": "down", "x": 10, "y": 10}, {"kind": "drag", "x": 60, "y": 60, "mods": mods}, {"kind": "up", "x": 60, "y": 60}]});
+    for (method, params, key) in [
+        ("ui.render", json!({"artboard": "0"}), "artboard"),
+        ("ui.render", json!({"scale": "2"}), "scale"),
+        ("ui.render", json!({"traceViews": 1}), "traceViews"),
+        ("ui.screenshot", json!({"data": "yes", "path": "x.png"}), "data"),
+        ("ui.key", json!({"key": "Delete", "shift": "true"}), "shift"),
+        ("ui.pointer", drag(json!({"shift": "yes"})), "mods"),
+        ("ui.pointer", json!({"mods": 1, "events": []}), "mods"),
+    ] {
+        let e = h.call(method, params.clone()).unwrap_err();
+        assert!(e.contains(&format!("`{key}`")), "{method} {params}: {e}");
+    }
+    assert_eq!(h.call("document.json", json!({})).unwrap(), before, "a refused call changes nothing");
+    let r = h.call("ui.render", json!({"artboard": null, "scale": null, "traceViews": null})).unwrap();
+    assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(300), Some(200)));
+    h.call("ui.pointer", drag(Value::Null)).unwrap();
+    assert_ne!(h.call("document.json", json!({})).unwrap(), before, "null mods keep the packet's");
+}
+
 // ---------- workflow tools ----------
 
 fn id_of(result: &Value) -> u64 {

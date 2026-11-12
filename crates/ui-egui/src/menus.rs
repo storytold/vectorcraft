@@ -75,7 +75,7 @@ pub(crate) use labels::lists_plugin;
 use labels::shows_a_name;
 pub use labels::{CONTEXT_LABELS, DYNAMIC_LABELS, display_label, dynamic_label, item_shortcut, menu_strings};
 pub use run::{check_params, run_ui_command};
-pub(crate) use run::{normalize_panel, opt_bool};
+pub(crate) use run::{normalize_panel, opt_bool, opt_index, opt_number};
 #[cfg(test)]
 use slots::RECENT_FONT_IDS;
 pub use state::{checked, enabled, plugin_revision, shortcut_of, shown_state};
