@@ -1,6 +1,7 @@
 //! Paragraph Style Options fields shared by editing and creating a paragraph style: General, Basic
 //! Paragraph Formats (alignment, indents and spacing), Tabs (the style's tab stops), Composition
-//! (composer and Roman Hanging Punctuation), Hyphenation and Justification.
+//! (composer and Roman Hanging Punctuation), Hyphenation, Justification and East Asian Composition
+//! Settings (Korean Line Break Anywhere).
 //!
 //! Each field is unset (empty, or a checkbox in its unset state) or set, and an unset field leaves
 //! its attribute out of the style. Distances are shown and typed in the General unit and kept in
@@ -23,7 +24,7 @@ use crate::state::Dialog;
 pub const KIND: &str = "paraStyleOptions";
 
 /// The section ids, in the order the section list shows them.
-pub(crate) const SECTIONS: [&str; 6] = ["general", "basic", "tabs", "composition", "hyphenation", "justification"];
+pub(crate) const SECTIONS: [&str; 7] = ["general", "basic", "tabs", "composition", "hyphenation", "justification", "eastAsian"];
 /// The alignments of a tab stop with the names the `tabs` field gives them, in the Tabs panel's
 /// order.
 const TAB_ALIGNS: [(TabAlign, &str); 4] =
@@ -104,6 +105,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "glyph_max",
             "auto_leading",
             "single_word",
+            "korean_line_break_anywhere",
             "tabs",
             "section",
         ]
@@ -232,7 +234,7 @@ pub(crate) fn fields_from_attrs(attrs: &Map<String, Value>, unit: Unit) -> Map<S
         fields.insert(key.into(), distance_field(attrs.get(key), unit));
     }
     fields.insert("composer".into(), attrs.get("composer").filter(|v| v.is_string()).cloned().unwrap_or(Value::Null));
-    for key in ["roman_hanging", "hyphenate"] {
+    for key in ["roman_hanging", "hyphenate", "korean_line_break_anywhere"] {
         fields.insert(key.into(), attrs.get(key).filter(|v| v.is_boolean()).cloned().unwrap_or(Value::Null));
     }
     let hyphenation = attrs.get("hyphenation");
@@ -375,6 +377,9 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
     let same = unchanged("tabs", "__resetTabs");
     let value = if same { None } else { tab_stops(d, &original, unit)? };
     keep_or(&mut attrs, "tabs", same, value);
+
+    let same = unchanged("korean_line_break_anywhere", "__resetEastAsian");
+    keep_or(&mut attrs, "korean_line_break_anywhere", same, switch("korean_line_break_anywhere"));
     Ok(attrs)
 }
 
@@ -554,9 +559,15 @@ fn reset_tabs(d: &mut Dialog) {
     d.fields.insert("__tabSel".into(), json!(0));
 }
 
+/// Reset Panel in East Asian Composition Settings: Korean Line Break Anywhere becomes unset.
+fn reset_east_asian(d: &mut Dialog) {
+    d.fields.insert("__resetEastAsian".into(), json!(true));
+    d.fields.insert("korean_line_break_anywhere".into(), Value::Null);
+}
+
 /// Whether the section `d` shows has a Reset Panel: every section but General.
 pub(crate) fn can_reset(d: &Dialog) -> bool {
-    ["basic", "tabs", "composition", "hyphenation", "justification"].contains(&d.str("section").as_str())
+    ["basic", "tabs", "composition", "hyphenation", "justification", "eastAsian"].contains(&d.str("section").as_str())
 }
 
 /// Reset Panel: clear the settings of the section `d` shows.
@@ -567,6 +578,7 @@ pub(crate) fn reset_section(d: &mut Dialog) {
         "composition" => reset_composition(d),
         "hyphenation" => reset_hyphenation(d),
         "justification" => reset_justification(d),
+        "eastAsian" => reset_east_asian(d),
         _ => {}
     }
 }
@@ -588,7 +600,15 @@ pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// The section list of Paragraph Style Options and New Paragraph Style.
 pub(crate) fn section_list(ui: &mut egui::Ui, d: &mut Dialog) {
     ui.vertical(|ui| {
-        let labels = [tl!("General"), tl!("Basic Paragraph Formats"), tl!("Tabs"), tl!("Composition"), tl!("Hyphenation"), tl!("Justification")];
+        let labels = [
+            tl!("General"),
+            tl!("Basic Paragraph Formats"),
+            tl!("Tabs"),
+            tl!("Composition"),
+            tl!("Hyphenation"),
+            tl!("Justification"),
+            tl!("East Asian Composition Settings"),
+        ];
         for (id, label) in SECTIONS.into_iter().zip(labels) {
             if ui.selectable_label(d.str("section") == id, label).clicked() {
                 d.fields.insert("section".into(), json!(id));
@@ -885,6 +905,14 @@ pub(crate) fn justification_body(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// East Asian Composition Settings: Korean Composition Settings › Korean Line Break Anywhere.
+pub(crate) fn east_asian_body(ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.strong(tl!("Korean Composition Settings"));
+    egui::Grid::new("paragraph-style-east-asian").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
+        switch(ui, d, "korean_line_break_anywhere", tl!("Korean Line Break Anywhere"), true);
+    });
+}
+
 /// The heading of a spacing column, for the accessible name of its field.
 fn column_name(column: &str) -> &'static str {
     match column {
@@ -916,6 +944,7 @@ pub(crate) fn section_body(ui: &mut egui::Ui, d: &mut Dialog) {
         "composition" => composition_body(ui, d),
         "hyphenation" => hyphenation_body(ui, d),
         "justification" => justification_body(ui, d),
+        "eastAsian" => east_asian_body(ui, d),
         _ => general_body(ui, d),
     }
 }

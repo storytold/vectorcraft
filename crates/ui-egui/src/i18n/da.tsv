@@ -366,6 +366,8 @@
 	Stair Step	Trappetrin
 	Gravity	Tyngdekraft
 	Type on a Path Options…	Indstillinger for tekst på kurve…
+	Center on Top	Centrer øverst
+	Center on Bottom	Centrer nederst
 	Threaded Text	Sammenkædet tekst
 	Create	Opret
 	Release Selection	Frigør markering
@@ -1823,6 +1825,9 @@ digits	Malayalam	Malayalam
 	Right Indent	Højre indrykning
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
 	Roman Hanging Punctuation	Romersk hængende tegnsætning
+	Korean Line Break Anywhere	Koreansk linjeskift hvor som helst
+	East Asian Composition Settings	Indstillinger for østasiatisk komposition
+	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
 	Single-line Composer	Enlinjesætter
 	Toggle Line Composer	Skift linjesætter
@@ -5870,6 +5875,7 @@ swatch	Bright Violet	Kraftig violet
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriske hjælpelinjer
+	Optical Effects	Optiske effekter
 	Geometric Patterns	Geometriske mønstre
 	Grit Textures	Kornede teksturer
 	Ease In	Langsom start
