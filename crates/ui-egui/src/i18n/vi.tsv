@@ -6472,6 +6472,7 @@ breakText	Glyphs	Glyph
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Căn theo lưới pixel
+	Align New Objects to Pixel Grid	Căn đối tượng mới theo lưới pixel
 	Not Aligned to Pixel Grid	Chưa căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`

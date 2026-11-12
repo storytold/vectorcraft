@@ -6452,6 +6452,7 @@ breakText	Glyphs	글리프
 
 # Align to Pixel Grid
 	Align to Pixel Grid	픽셀 격자에 정렬
+	Align New Objects to Pixel Grid	새 개체를 픽셀 격자에 정렬
 	Not Aligned to Pixel Grid	픽셀 격자에 정렬되지 않음
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
