@@ -110,7 +110,17 @@ private editing data. VectorCraft:
   Transform, Free Distort, Pucker & Bloat, Twist, Zig Zag and Gaussian Blur too). Styles with gradient or pattern fills,
   with fills, strokes or effects the reader doesn't read back, with a name another style has, with names over 1,024
   bytes and past 4,096 styles are left out with a warning. A panel with no style written opens with a new document's
-  styles, with a warning. No art style is written on a large canvas.
+  styles, with a warning. No art style is written on a large canvas. The Brushes panel's Calligraphic brushes, and its
+  Scatter and Art brushes with their art, are written in its order: Scatter and Art brushes in Tints or keeping their
+  art's colors, Art brushes that stretch their art along the path from left to right at 100% unflipped without
+  overlap, and art of paths and compound paths with points and groups with members, with one solid fill and one
+  plain stroke each. Other brushes,
+  Pattern and Bristle brushes among them, and brushes past the number or the art VectorCraft's reader reads are left
+  out with a warning; no brush is written on a large canvas. A path or compound path with a Calligraphic brush, or
+  with an Art brush in Tints whose art bends along the path, keeps the brush on its stroke; other brushed strokes are
+  written as their brush's art. A document that uses a new document's brushes writes none until a path keeps one on
+  its stroke; then the brushes are written, and the file opens without the new document's Pattern and Bristle brushes
+  and its Art brush with other options.
   Point type, area type (with its rows, columns,
   gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
   each, naming its story in the text document, with the characters, fonts, sizes, leading, tracking, baseline shift,
