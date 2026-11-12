@@ -67,6 +67,12 @@ impl Builder {
                     }
                 }
                 cd::Object::Group(kids) => stack.extend(kids),
+                cd::Object::Clip { container, objects } => {
+                    for c in container.fill.iter().chain(container.outline.iter().map(|o| &o.color)) {
+                        self.learn_spot(c);
+                    }
+                    stack.extend(objects);
+                }
             }
         }
     }
@@ -108,19 +114,28 @@ impl Builder {
         let mut out = Vec::with_capacity(objects.len());
         for o in objects.iter().rev() {
             match o {
-                cd::Object::Shape(s) => out.extend(self.shape(s, to_doc)),
+                cd::Object::Shape(s) => out.extend(self.shape(s, to_doc, false)),
                 cd::Object::Group(kids) => {
                     let children = self.objects_at(kids, to_doc, depth + 1);
                     if !children.is_empty() {
                         out.push(Arc::new(Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: false })));
                     }
                 }
+                // A clipping group whose clipping path keeps the container's paint: its fill
+                // behind the clipped objects and its outline over them.
+                cd::Object::Clip { container, objects } => {
+                    let Some(clip) = self.shape(container, to_doc, true) else { continue };
+                    let mut children = vec![clip];
+                    children.extend(self.objects_at(objects, to_doc, depth + 1));
+                    out.push(Arc::new(Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: true })));
+                }
             }
         }
         out
     }
 
-    fn shape(&mut self, s: &cd::Shape, to_doc: Affine) -> Option<Arc<Node>> {
+    /// Shape `s` placed by `to_doc`; as a clipping path when `clipping`.
+    fn shape(&mut self, s: &cd::Shape, to_doc: Affine, clipping: bool) -> Option<Arc<Node>> {
         let m = to_doc * affine(&s.matrix);
         let (path, live) = match &s.geometry {
             Geometry::Path(p) => (PathData::from_bezpath(&(m * bez(p))), None),
@@ -145,7 +160,7 @@ impl Builder {
         // A curve of several subpaths is filled with holes where they overlap: VectorCraft's own
         // choice of rule for it.
         let rule = FillRule::EvenOdd;
-        let mut n = Node::new(self.doc.alloc_id(), NodeKind::Path { path, rule, live: live.map(Box::new), clipping: false, guide: false });
+        let mut n = Node::new(self.doc.alloc_id(), NodeKind::Path { path, rule, live: live.map(Box::new), clipping, guide: false });
         n.appearance = Appearance { items, ..Appearance::default() }.into();
         Some(Arc::new(n))
     }

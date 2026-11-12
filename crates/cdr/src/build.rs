@@ -28,6 +28,7 @@ const ARG_COORDS: u32 = 30;
 const ARG_TRANSFORMS: u32 = 100;
 const ARG_STYLE: u32 = 200;
 const ARG_NAME: u32 = 1000;
+const ARG_CONTAINER: u32 = 8005;
 const ARG_POLYGON: u32 = 11000;
 const ARG_GUIDE: u32 = 16000;
 const ARG_PAGE_SIZE: u32 = 19130;
@@ -49,7 +50,14 @@ struct Ctx<'a, 'b> {
     /// The styles objects name in argument 200 (R45): `Err` when the file's style table doesn't
     /// parse.
     styles: Result<Styles, ()>,
+    /// The groups of `LIST clpt` that containers clip, by the id in their `spnd` chunk (R46).
+    clips: HashMap<u32, &'b Chunk>,
+    /// The clipped groups being read, innermost last.
+    open_clips: Vec<u32>,
 }
+
+/// The most clipped groups read one inside another: VectorCraft's own limit.
+const MAX_CLIP_DEPTH: usize = 64;
 
 pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) -> Result<Drawing, Error> {
     let root = ix.root().ok_or(Error::NotCdr)?;
@@ -82,7 +90,14 @@ pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) 
         fills: HashMap::new(),
         outlines: HashMap::new(),
         styles,
+        clips: HashMap::new(),
+        open_clips: Vec::new(),
     };
+    for g in found.clpt.iter().flat_map(|c| ix.children(c)).filter(|g| g.is_list(b"grp ")) {
+        if let Some(id) = ix.children(g).iter().find(|c| &c.id == b"spnd").and_then(|c| Rd::new(ix.data(c)).u32()) {
+            cx.clips.entry(id).or_insert(g);
+        }
+    }
     for c in &found.fills {
         if let Some(id) = Rd::new(ix.data(c)).u32() {
             cx.fill_chunks.entry(id).or_insert(ix.data(c));
@@ -138,11 +153,12 @@ struct Found<'i> {
     mcfg: Option<&'i Chunk>,
     guid: Option<&'i Chunk>,
     stlt: Option<&'i Chunk>,
+    clpt: Vec<&'i Chunk>,
     pages: Vec<&'i Chunk>,
 }
 
-/// Every fill, outline and page in file order, and the first `mcfg`, `guid` and `LIST stlt`;
-/// pages are not looked into.
+/// Every fill, outline, `LIST clpt` and page in file order, and the first `mcfg`, `guid` and
+/// `LIST stlt`; pages are not looked into.
 fn collect<'i>(ix: &'i Index, root: &'i Chunk, found: &mut Found<'i>) {
     let mut stack: Vec<&Chunk> = ix.children(root).iter().rev().collect();
     while let Some(c) = stack.pop() {
@@ -152,6 +168,7 @@ fn collect<'i>(ix: &'i Index, root: &'i Chunk, found: &mut Found<'i>) {
             b"mcfg" => found.mcfg = found.mcfg.or(Some(c)),
             b"guid" => found.guid = found.guid.or(Some(c)),
             _ if c.is_list(b"stlt") => found.stlt = found.stlt.or(Some(c)),
+            _ if c.is_list(b"clpt") => found.clpt.push(c),
             _ if c.is_list(b"page") => found.pages.push(c),
             _ => stack.extend(ix.children(c).iter().rev()),
         }
@@ -450,7 +467,34 @@ impl<'a, 'b> Ctx<'a, 'b> {
         };
         let fill = fill_id.and_then(|id| self.fill(id));
         let outline = outline_id.and_then(|id| self.outline(id));
-        Some(Object::Shape(Box::new(Shape { geometry, matrix, fill, outline })))
+        let shape = Box::new(Shape { geometry, matrix, fill, outline });
+        // A container clips the group its argument 8005 names (R46).
+        Some(match loda.arg(ARG_CONTAINER).and_then(id_of) {
+            Some(id) => self.clip(shape, id, guides),
+            None => Object::Shape(shape),
+        })
+    }
+
+    /// `container` and the objects of the clipped group `id`, which keep their own transforms.
+    /// A group that isn't there is damage; one already being read, or past the depth limit, is
+    /// left out with the limit warning. Either way the container stays, as a plain shape.
+    fn clip(&mut self, container: Box<Shape>, id: u32, guides: &mut Vec<Guideline>) -> Object {
+        let Some(&group) = self.clips.get(&id) else {
+            push(self.warn, Warning::Damaged);
+            return Object::Shape(container);
+        };
+        if self.open_clips.contains(&id) || self.open_clips.len() >= MAX_CLIP_DEPTH {
+            push(self.warn, Warning::TooDeep);
+            return Object::Shape(container);
+        }
+        self.open_clips.push(id);
+        let ix = self.ix;
+        let objects = self.objects(ix.children(group), guides);
+        self.open_clips.pop();
+        if objects.is_empty() {
+            return Object::Shape(container);
+        }
+        Object::Clip { container, objects }
     }
 
     /// The fill or outline record that style `id` names; a style table that doesn't parse is

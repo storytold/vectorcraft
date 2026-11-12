@@ -569,6 +569,25 @@ pub fn stlt(v: V, fills: &[(u32, u32)], outlines: &[(u32, u32)], styles: &[Style
     Node::Chunk(*b"LIST", [b"stlt".to_vec(), stlt_body(v, fills, outlines, styles, text)].concat())
 }
 
+/// A `LIST clpt` of clipped groups (R46): each a `LIST grp ` with its `spnd` id, then its objects.
+pub fn clpt(groups: Vec<(u32, Vec<Node>)>) -> Node {
+    let groups = groups
+        .into_iter()
+        .map(|(id, objects)| {
+            let mut kids = vec![chunk(b"spnd", id.to_le_bytes().to_vec())];
+            kids.extend(objects);
+            list(b"grp ", kids)
+        })
+        .collect();
+    list(b"clpt", groups)
+}
+
+/// The container argument (8005) naming clipped group `id` (R46), laid out as sample files lay it
+/// out.
+pub fn container(id: u32) -> (u32, Vec<u8>) {
+    (8005, [id, 1, 0, 1].iter().flat_map(|v| v.to_le_bytes()).collect())
+}
+
 /// A file of `version` holding `content` as the program of that version saves it: a RIFF file
 /// before 14, then a package (R25, R26).
 pub fn file_of(version: u16, content: Vec<Node>) -> Vec<u8> {

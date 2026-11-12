@@ -14,6 +14,10 @@ fn shapes(objects: &[Object]) -> Vec<&vectorcraft_cdr::model::Shape> {
         match o {
             Object::Shape(s) => out.push(&**s),
             Object::Group(kids) => stack.extend(kids.iter().rev()),
+            Object::Clip { container, objects } => {
+                out.push(&**container);
+                stack.extend(objects.iter().rev());
+            }
         }
     }
     out
@@ -1201,6 +1205,63 @@ fn a_style_table_that_does_not_parse_is_damage_when_an_object_needs_it() {
     assert_eq!(s.len(), 3);
     assert!(s[0].fill.is_none() && s[0].outline.is_none());
     assert_eq!(d.warnings, vec![Warning::Damaged]);
+}
+
+/// A drawing with fill 1 (red), whose `LIST clpt` holds `groups` and whose page holds `objects`.
+fn clip_drawing(version: u16, groups: Vec<(u32, Vec<synth::Node>)>, objects: Vec<synth::Node>) -> Vec<u8> {
+    let v = V(version);
+    let doc = list(
+        b"doc ",
+        vec![
+            synth::mcfg(v, 612.0, 792.0),
+            list(b"filt", vec![chunk(if version >= 700 { b"fild" } else { b"fill" }, v.fill(1, &synth::color(5, [0, 0, 255, 0])))]),
+            synth::clpt(groups),
+        ],
+    );
+    let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", objects)]);
+    synth::file_of(version, vec![doc, page])
+}
+
+fn clip_rect(v: V, w: f64, extra: &[(u32, Vec<u8>)], at: [f64; 2]) -> synth::Node {
+    let mut args = vec![(20, 1u32.to_le_bytes().to_vec()), (30, v.rect(w, w, 0.0))];
+    args.extend(extra.iter().cloned());
+    synth::object(v, 1, &args, Some([1.0, 0.0, 0.0, 1.0, at[0], at[1]]))
+}
+
+/// A container (argument 8005) clips the group of `LIST clpt` whose `spnd` id it names; the
+/// group's objects keep their own transforms, front to back.
+#[test]
+fn a_container_clips_the_group_it_names() {
+    for version in [700, 900, 1200, 1300, 1500, 1600, 2000] {
+        let v = V(version);
+        let contents = vec![clip_rect(v, 10.0, &[], [5.0, 6.0]), clip_rect(v, 20.0, &[], [-50.0, 0.0])];
+        let container = clip_rect(v, 40.0, &[synth::container(0x77)], [0.0, 0.0]);
+        let d = read(&clip_drawing(version, vec![(0x77, contents)], vec![container]), Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+        let objects = &d.pages[0].layers[0].objects;
+        let [Object::Clip { container, objects: clipped }] = objects.as_slice() else { panic!("{version}: {objects:?}") };
+        assert!(matches!(container.geometry, Geometry::Rect { w, .. } if (w - 40.0).abs() < 0.01), "{version}");
+        let s = shapes(clipped);
+        assert_eq!(s.len(), 2, "{version}");
+        assert!((s[0].matrix.0[4] - 5.0).abs() < 0.01 && (s[1].matrix.0[4] + 50.0).abs() < 0.01, "{version}: {:?}", s[0].matrix);
+        assert!(d.warnings.is_empty(), "{version}: {:?}", d.warnings);
+    }
+}
+
+/// A container whose group isn't there is damage, and one whose group holds a container naming
+/// it again is read once, with the limit warning; the containers stay as plain shapes.
+#[test]
+fn a_missing_or_repeating_clipped_group_keeps_the_container() {
+    let v = V(1100);
+    let missing = clip_rect(v, 40.0, &[synth::container(0x78)], [0.0, 0.0]);
+    let d = read(&clip_drawing(1100, vec![(0x77, vec![clip_rect(v, 10.0, &[], [0.0, 0.0])])], vec![missing]), Limits::default()).unwrap();
+    assert!(matches!(d.pages[0].layers[0].objects.as_slice(), [Object::Shape(_)]));
+    assert_eq!(d.warnings, vec![Warning::Damaged]);
+    let inner = clip_rect(v, 10.0, &[synth::container(0x77)], [0.0, 0.0]);
+    let outer = clip_rect(v, 40.0, &[synth::container(0x77)], [0.0, 0.0]);
+    let d = read(&clip_drawing(1100, vec![(0x77, vec![inner])], vec![outer]), Limits::default()).unwrap();
+    let [Object::Clip { objects: clipped, .. }] = d.pages[0].layers[0].objects.as_slice() else { panic!("{:?}", d.pages[0].layers[0].objects) };
+    assert!(matches!(clipped.as_slice(), [Object::Shape(_)]), "{clipped:?}");
+    assert_eq!(d.warnings, vec![Warning::TooDeep]);
 }
 
 #[test]

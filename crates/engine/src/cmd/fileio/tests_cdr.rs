@@ -410,6 +410,35 @@ fn fills_and_outlines_keep_their_colors_widths_caps_joins_and_dashes() {
     assert!(dash.pattern.len() == 2 && (dash.pattern[0] - 6.0).abs() < 0.01 && (dash.pattern[1] - 2.0).abs() < 0.01, "{:?}", dash.pattern);
 }
 
+/// A container and the group it clips open as a clipping group: the container's shape first, as
+/// the clipping path keeping its fill, then the clipped shapes.
+#[test]
+fn containers_open_as_clipping_groups() {
+    let v = V(1100);
+    let rect = |w: f64, extra: Vec<(u32, Vec<u8>)>| {
+        let mut args = vec![(20, 1u32.to_le_bytes().to_vec()), (30, v.rect(w, w, 0.0))];
+        args.extend(extra);
+        synth::object(v, 1, &args, None)
+    };
+    let doc = list(
+        b"doc ",
+        vec![
+            list(b"filt", vec![chunk(b"fild", v.fill(1, &synth::color(5, [0, 0, 255, 0])))]),
+            synth::clpt(vec![(5, vec![rect(10.0, vec![]), rect(20.0, vec![])])]),
+        ],
+    );
+    let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![rect(40.0, vec![synth::container(5)])])]);
+    let (doc, warnings) = super::cdr::import(&synth::riff(1100, &[chunk(b"vrsn", 1100u16.to_le_bytes().to_vec()), doc, page])).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let layer = doc.layers.last().and_then(|l| l.children()).unwrap();
+    let [group] = layer.as_slice() else { panic!("{layer:?}") };
+    let NodeKind::Group { children, clip: true } = &group.kind else { panic!("{:?}", group.kind) };
+    assert_eq!(children.len(), 3);
+    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
+    assert_eq!(children[0].appearance.items.len(), 1, "the container keeps its fill");
+    assert!(children[1..].iter().all(|n| matches!(n.kind, NodeKind::Path { clipping: false, .. })));
+}
+
 #[test]
 fn other_versions_and_damaged_drawings_say_why() {
     let mut s = Session::new();

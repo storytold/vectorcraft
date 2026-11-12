@@ -321,15 +321,24 @@ fn copy_cost(objects: &[cd::Object]) -> usize {
         n = n.saturating_add(1);
         match o {
             cd::Object::Group(kids) => stack.extend(kids),
-            cd::Object::Shape(s) => {
-                if let cd::Geometry::Path(p) = &s.geometry {
-                    n = p.subpaths.iter().fold(n, |n, sp| n.saturating_add(1 + sp.segments.len()));
-                }
-                n = n.saturating_add(s.outline.as_ref().map_or(0, |o| o.dashes.len()));
+            cd::Object::Shape(s) => n = n.saturating_add(shape_cost(s)),
+            cd::Object::Clip { container, objects } => {
+                n = n.saturating_add(shape_cost(container));
+                stack.extend(objects);
             }
         }
     }
     n
+}
+
+/// What one copy of shape `s` takes past the object itself: its path's subpaths and segments and
+/// its outline's dashes.
+fn shape_cost(s: &cd::Shape) -> usize {
+    let mut n: usize = 0;
+    if let cd::Geometry::Path(p) = &s.geometry {
+        n = p.subpaths.iter().fold(n, |n, sp| n.saturating_add(1 + sp.segments.len()));
+    }
+    n.saturating_add(s.outline.as_ref().map_or(0, |o| o.dashes.len()))
 }
 
 /// A layer of the document named `name` holding `kids` (bottom to top).
