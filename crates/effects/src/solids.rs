@@ -14,7 +14,7 @@ use vectorcraft_doc::color::Color;
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry};
 
-mod classic;
+pub(crate) mod classic;
 pub use classic::{CLASSIC_EXTRUDE, SHADING_COLORS, classic_extrude_options, classic_shading};
 
 mod source;
@@ -28,9 +28,9 @@ pub const ROTATE: &str = "threeD.rotate";
 /// The 3D effects this module draws (Revolve has its own).
 pub const SOLIDS: [&str; 4] = [EXTRUDE, INFLATE, ROTATE, CLASSIC_EXTRUDE];
 
-/// Is `id` one of the 3D and Materials effects (Revolve included)?
+/// Is `id` one of the 3D and Materials effects (Revolve and Revolve (Classic) included)?
 pub fn is_three_d(id: &str) -> bool {
-    id == crate::REVOLVE || SOLIDS.contains(&id)
+    crate::revolve::is_revolve(id) || SOLIDS.contains(&id)
 }
 
 /// The 3D and Materials panel's object types and the effect that draws each: (type, effect id).
@@ -417,7 +417,7 @@ pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
 
 /// [`validate_three_d`] with the symbols of `doc` ([`validate_solid_in`]).
 pub fn validate_three_d_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) -> Result<(), String> {
-    if id == crate::REVOLVE { crate::revolve::validate_revolve_in(doc, n, p) } else { validate_solid_in(doc, n, id, p) }
+    if crate::revolve::is_revolve(id) { crate::revolve::validate_in(doc, n, id, p) } else { validate_solid_in(doc, n, id, p) }
 }
 
 /// [`validate_three_d`] for an effect at `(item, index)`, index `index` of the effects of
@@ -436,7 +436,7 @@ pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Va
         Some(_) if is_container(n) || source::resolves(n) => {
             Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into())
         }
-        Some((item, index)) if id == crate::REVOLVE => crate::revolve::validate_item_revolve(n, p, item, index),
+        Some((item, index)) if crate::revolve::is_revolve(id) => crate::revolve::validate_item_of(n, id, p, item, index),
         Some((item, _)) => validate_solid_for(doc, n, id, p, Some(item)),
         None => validate_three_d_in(doc, n, id, p),
     }
@@ -446,7 +446,7 @@ pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Va
 /// build the art, for an edit that hides the effect: hidden, it draws nothing, so its object does
 /// not need to fit.
 pub fn validate_three_d_params(id: &str, p: &Value) -> Result<(), String> {
-    if id == crate::REVOLVE { crate::revolve::validate_revolve_params(p) } else { validate_solid_params(id, p) }
+    if crate::revolve::is_revolve(id) { crate::revolve::validate_params_of(id, p) } else { validate_solid_params(id, p) }
 }
 
 /// One surface: each facet a path shaded from `paint`, as a group with the paint's opacity and

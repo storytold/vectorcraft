@@ -663,7 +663,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Extrude & Bevel, Inflate and Rotate with Position presets ([three-d.md](three-d.md), #1407). Colored Inflate has automatic smooth vector lighting from shared membrane normals. White-light Inflate keeps its existing appearance. All four take one to ten colored directional lights, with neutral ambient applied once, a light list and independent previewing controls. Standard, Diffuse, Top Left and Right select original rigs, shared with commands; manual settings show Custom.
 - **Missing:** materials (base, Substance, graphics), shadows,
   ray-traced rendering, angular cut caps, exact visibility for intersecting and concave surfaces, the rest of 3D
-  Classic (Revolve, Rotate, Map Art), Turntable, textures, map art and shading in 3D export.
+  Classic (Rotate, Map Art), Turntable, textures, map art and shading in 3D export.
 - **Impact:** specialist; Materials is the one menu stub left.
 - **Estimate:** 25–45 h; plan in `plan/` before coding.
 

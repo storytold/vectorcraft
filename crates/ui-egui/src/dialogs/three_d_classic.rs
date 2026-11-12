@@ -1,11 +1,11 @@
-//! Extrude & Bevel (Classic)'s own controls in the compact 3D dialog: the extrude and bevel options
-//! on the Object tab, and the surface with its lights, highlight, blend steps and shading color on
-//! the Lighting tab. Position (presets, rotation, perspective) is the Rotation tab every 3D effect
-//! shares.
+//! The own controls of Extrude & Bevel (Classic) and Revolve (Classic) in the compact 3D dialog: the
+//! extrude and bevel options, or the revolve options, on the Object tab, and the surface with its
+//! lights, highlight, blend steps and shading color on the Lighting tab. Position (presets,
+//! rotation, perspective) is the Rotation tab every 3D effect shares.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
-use vectorcraft_effects::CLASSIC_EXTRUDE;
+use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE};
 
 use super::revolve::{c3, choice, heading, label, light_list, light_record, number, reset_dot, selected_light, store_selected, toggle};
 use crate::state::Dialog;
@@ -25,8 +25,23 @@ pub(super) fn object_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     });
 }
 
+/// Revolve (Classic)'s angle, cap and offset, and the edge of the profile's bounds the axis is at.
+pub(super) fn revolve_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
+    heading(ui, tl!("Object"));
+    number(ui, d, "angle", tl!("Angle"), (0.0, 360.0), "°", 1, None);
+    choice(ui, d, "cap", c3("Cap"), &[(json!(true), c3("Solid")), (json!(false), c3("Hollow"))]);
+    number(ui, d, "offset", tl!("Offset"), (0.0, 1000.0), "", 1, Some(unit));
+    let sides: Vec<(Value, &str)> = super::effect::own_choices(CLASSIC_REVOLVE, "edge", false)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(label, value)| (json!(value), label))
+        .collect();
+    choice(ui, d, "edge", tl!("Axis side"), &sides);
+}
+
 /// The surface, then for Diffuse and Plastic the lights, Ambient Light, the highlight (Plastic
-/// only), Blend Steps and Shading Color; Draw Hidden Faces last.
+/// only), Blend Steps and Shading Color; Draw Hidden Faces last, for Extrude & Bevel (Classic)
+/// (Revolve (Classic) draws every face).
 pub(super) fn surface_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     choice(ui, d, "surface", tl!("Surface"), &options("surface"));
     let surface = d.str("surface");
@@ -52,7 +67,9 @@ pub(super) fn surface_controls(ui: &mut egui::Ui, d: &mut Dialog) {
             shading_custom(ui, d);
         }
     });
-    toggle(ui, d, "drawHiddenFaces", tl!("Draw Hidden Faces"), false);
+    if d.str("__effect") == CLASSIC_EXTRUDE {
+        toggle(ui, d, "drawHiddenFaces", tl!("Draw Hidden Faces"), false);
+    }
 }
 
 /// The values of Extrude & Bevel (Classic)'s `key` as the dropdowns list them, (value, label).

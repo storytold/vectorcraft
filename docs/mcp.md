@@ -3078,8 +3078,8 @@ See [Revolve](revolve.md) for the scope and limitations.
 replaces the lighting rig and ambient of an existing Revolve, Extrude & Bevel, Inflate or Rotate
 effect. `item: null` addresses object-level effects; an item index addresses a fill/stroke's
 effects. All targets must have a 3D effect at `index`, otherwise nothing changes. Extrude & Bevel
-(Classic) has no lighting presets: a target with it at `index` is an error, nothing changes, and
-`effect.setParams` sets its lights. The operation is one undo step and preserves Shading, geometry, source paint and the view.
+(Classic) and Revolve (Classic) have no lighting presets: a target with either at `index` is an error, nothing
+changes, and `effect.setParams` sets its lights. The operation is one undo step and preserves Shading, geometry, source paint and the view.
 
 The four original rigs use one white front light at 80% intensity. Standard keeps the existing
 default; Diffuse uses 100% Softness and 35% Ambient Light, Top Left uses Rotation 135 and Height
@@ -3111,7 +3111,7 @@ art", and a loaded file draws the source path, as it does for a solid past its l
 documentation names the controls and their ranges
 ([3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)).
 The settings are saved in the native file; SVG and PDF exports draw the shadow, and `effect.expandAppearance` keeps
-it as a path. Extrude & Bevel (Classic) has no shadow. See [three-d.md](three-d.md#shadows).
+it as a path. Extrude & Bevel (Classic) and Revolve (Classic) have no shadow. See [three-d.md](three-d.md#shadows).
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"shadow":true,"shadowPosition":"below","shadowDistance":10,"shadowBounds":150}}}}
@@ -3185,6 +3185,28 @@ an unknown surface or shading color is refused with an error and the document is
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicExtrude","item":null,"params":{"depth":40,"bevel":"rounded","bevelHeight":6,"surface":"diffuse","blendSteps":64}}}}
+```
+
+## Revolve (Classic)
+
+`effect.apply {effect: "threeD.classicRevolve", params: {...}, ids?, item?}` is Effect › 3D and Materials ›
+3D (Classic) › Revolve (Classic)…. It sweeps the profile round a vertical axis as `threeD.revolve` does, at 64 segments
+for a full turn, and draws every face, back to front, with the classic surfaces. Parameters: `angle` (degrees,
+0..360, default 360), `cap` (true closes the profile's open ends, false leaves the surface hollow), `offset` (points,
+0..1000, default 0; the axis's distance from the profile, so a value above 0 makes a ring), `edge` (`left`, the
+default, or `right`: the edge of the profile's bounds the axis is at), `rotationX/Y/Z` and `perspectiveAngle` as
+above, and `surface`, the lights, `ambient`, `highlightIntensity`, `highlightSize`, `blendSteps`, `shadingColor` and
+`shadingCustom` as Extrude & Bevel (Classic) takes them. It has no `drawHiddenFaces`. The effect also goes on a group
+or layer, whose members turn about one shared axis, or on a fill or stroke. The public documentation describes the
+dialog ([Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html))
+and its Angle (0 to 360), Cap, Offset (0 to 1000) and Left Edge or Right Edge settings
+([Revolve options](https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=283));
+the defaults are VectorCraft's own. An unknown parameter (`segments` included), a number out of range, a flag that
+is not true or false, another `edge`, surface or shading color is refused with an error and the document is not
+changed.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicRevolve","item":null,"params":{"angle":270,"offset":10,"surface":"diffuse","blendSteps":64}}}}
 ```
 
 

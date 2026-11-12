@@ -104,8 +104,16 @@ const FLAGS: [&str; 4] = ["cap", "bevelInside", "lightBehind", "drawHiddenFaces"
 /// its parameters, numbers are in range, flags are true or false, and `surface`, `shadingColor` and
 /// `shadingCustom` name a surface, a shading color and a #rrggbb color.
 pub fn validate(p: &Value) -> Result<(), String> {
+    validate_classic(CLASSIC_EXTRUDE, p, &RANGES, &FLAGS)
+}
+
+/// Check the parameters `p` of classic 3D effect `id` (its defaults filled in): every key is one of
+/// its parameters, the numbers `ranges` lists, as (key, lowest, highest, whole numbers only), are in
+/// range, the `flags` are true or false, and `surface`, `shadingColor` and `shadingCustom` name a
+/// surface, a shading color and a #rrggbb color.
+pub(crate) fn validate_classic(id: &str, p: &Value, ranges: &[(&str, f64, f64, bool)], flags: &[&str]) -> Result<(), String> {
     let Some(map) = p.as_object() else { return Ok(()) };
-    let defaults = crate::default_params(CLASSIC_EXTRUDE).unwrap_or(Value::Null);
+    let defaults = crate::default_params(id).unwrap_or(Value::Null);
     let known: Vec<&str> = defaults.as_object().map(|m| m.keys().map(String::as_str).collect()).unwrap_or_default();
     for key in map.keys() {
         if !known.contains(&key.as_str()) {
@@ -113,7 +121,7 @@ pub fn validate(p: &Value) -> Result<(), String> {
             return Err(format!("unknown parameter `{key}`; the command takes: {keys}"));
         }
     }
-    for (key, min, max, whole) in RANGES {
+    for &(key, min, max, whole) in ranges {
         let Some(v) = map.get(key) else { continue };
         let Some(x) = v.as_f64() else { return Err(format!("`{key}` must be a number")) };
         if whole && (x.fract() != 0.0 || !(min..=max).contains(&x)) {
@@ -123,7 +131,7 @@ pub fn validate(p: &Value) -> Result<(), String> {
             return Err(format!("`{key}` must be between {min} and {max} (got {x})"));
         }
     }
-    for key in FLAGS {
+    for &key in flags {
         if map.get(key).is_some_and(|v| !v.is_boolean()) {
             return Err(format!("`{key}` must be true or false"));
         }
@@ -161,7 +169,7 @@ fn shaded(c: Color, tone: f64, spec: f64, shade: Option<Color>) -> Color {
 /// for each facet: the edges of the faces on Wireframe, else each face filled in its paint shaded by
 /// its tone and highlight. A gradient with transparent stops is shaded opaque and then masked by
 /// its own transparency, so the shading follows the gradient's coverage.
-pub(super) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32, blend: BlendMode, p: &Value) -> Node {
+pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32, blend: BlendMode, p: &Value) -> Node {
     let shading = classic_shading(p);
     let lights = lights(p);
     let shade = shading_color(p);
