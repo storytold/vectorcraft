@@ -645,6 +645,15 @@ antiAlias	Sharp	锐利
 	Created:	创建时间：
 	Crop	裁剪
 	Crop Image	裁剪图像
+	Image Tools	图像工具
+	Remove Background…	移除背景…
+	Remove Background	移除背景
+	Background	背景
+	Edge Color	边缘颜色
+	Picked Colors	选取的颜色
+	Corner Color	转角颜色
+	Contiguous	连续
+	Each Channel	每个通道
 	Edit Path	编辑路径
 	Mask	蒙版
 	Crop Marks	裁切标记
@@ -3094,6 +3103,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Modified	显示已修改
 	Show Note	显示注解
 	Show Options	显示选项
+	Show Recent Colors	显示最近使用的颜色
 	Show Original Path	显示原始路径
 	Open this dialog with these settings next time	下次以这些设置打开此对话框
 	Auto-Simplify	自动简化
@@ -3398,6 +3408,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Scale at Center	从中心缩放
 	Up/Down:	上/下：
 	Left/Right:	左/右：
+	Tate-chu-yoko Up/Down	纵中横上/下
+	Tate-chu-yoko Left/Right	纵中横左/右
 	Temperature	色温
 	Temperature/Tint…	色温/色调…
 	Template	模板
@@ -4349,6 +4361,7 @@ imageTrace	Outline	轮廓
 @msg	the image's pixels don't match its size	图像的像素与其尺寸不符
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
+@msg	not an HP-GL file	不是 HP-GL 文件
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
 @msg	damaged	已损坏
@@ -4365,6 +4378,7 @@ imageTrace	Outline	轮廓
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：{label} 页面不带 UserUnit，以点为单位写入，遵守上限的应用会将页面裁切为 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持尺寸：文件将以 PDF 1.6 写入
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持在 PDF/A-2 的 14,400 单位页面上限之内：文件将以 PDF 1.6 写入
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	画板 {n} 的页面为 {size}，对 PDF 3 至 14,400 单位的页面边长而言过长过窄：以 UserUnit {unit} 写入，使短边保持 3 单位以上，遵守上限的应用会把长边裁到 14,400 单位
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 文件的实数最大为 {max}，而画板 {n} 的页面长 {side} pt，需要更大的数：请选择不带 PDF/X 标准的 PDF 1.6 或更高版本，或使用更小的画板
 @msg	page {0} does not exist (the PDF has {1})	页面 {0} 不存在 (该 PDF 有 {1} 页)
@@ -4553,6 +4567,14 @@ imageTrace	Outline	轮廓
 @msg	no such view	没有此视图
 @msg	printing isn't available here	此处无法打印
 @msg	select an image	请选择一个图像
+@msg	`background` must be edges, corners or colors	`background` 必须为 edges、corners 或 colors
+@msg	`match` must be distance or channels	`match` 必须为 distance 或 channels
+@msg	`{key}` must be from 0 to 100	`{key}` 必须介于 0 到 100 之间
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` 必须列出 1 到 16 种颜色，每种写为十六进制（#rrggbb 或 #rgb）或 black、white、red、green、blue
+@msg	the linked image shows its preview: embed or relink it first	链接图像显示的是预览：请先嵌入或重新链接
+@msg	a CMYK image has no transparency to set	CMYK 图像没有可设置的透明度
+@msg	every pixel matches the background: no image would be left	每个像素都与背景匹配：不会留下任何图像
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的图像过大，无法更改
 @msg	the document has no artboards	文档没有画板
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知工具 `{t}`
@@ -5599,6 +5621,11 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+	Shadows	阴影
+	Distance from Object	与对象的距离
+	Shadow Bounds	阴影边界
+	Behind Object	对象后方
+	Below Object	对象下方
 	3D Lighting Preset	3D 光照预设
 	Standard	标准
 	Diffuse	漫射
@@ -5956,6 +5983,16 @@ axis	Y Axis	Y 轴
 @msg	message must be text	message 必须是文本
 @msg	allowContinue must be true or false	allowContinue 必须是 true 或 false
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
+	Insert Menu Item…	插入菜单项…
+	Insert Menu Item	插入菜单项
+	Menu Item:	菜单项：
+	No menu item matches.	没有匹配的菜单项。
+	Several menu items match. Choose one from the list.	有多个菜单项匹配。请从列表中选择一个。
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	未列出会打开对话框的项目，以及“文件”“窗口”和“帮助”菜单中的项目。
+@msg	command must be text	command 必须是文本
+@msg	no menu item that can be inserted runs this command	没有可插入的菜单项运行此命令
+@msg	the action already has 10,000 steps	该动作已有 10,000 个步骤
+@msg	the action set would be larger than 8 MiB	动作组将超过 8 MiB
 	Playback Options	播放选项
 	Accelerated	加速
 	Step by Step	逐步

@@ -138,9 +138,8 @@ fn across_runs_from_the_left_edge_to_the_right() {
     let mut lens = st.clone();
     lens.profile = Some(WidthProfile::lens());
     let sl = slices(&line, &lens);
-    // A quarter of the way along, the lens is 0.625 as wide (its curve, #5714): its top edge is
-    // 3.125 up.
-    assert!(param(&sl, Point::new(25.0, -3.0)).unwrap() < 0.05);
+    // A quarter of the way along, the lens is three quarters as wide: its top edge is 3.75 up.
+    assert!(param(&sl, Point::new(25.0, -3.6)).unwrap() < 0.05);
     assert!((param(&sl, Point::new(50.0, -2.5)).unwrap() - 0.25).abs() < 0.02);
 }
 

@@ -190,6 +190,9 @@ fn lock_disabled(_: &Path) -> Option<std::fs::File> {
 thread_local! {
     /// Tests: [`Session::put_back_plugin`] fails on this thread, as on a full volume.
     pub(crate) static PUT_BACK_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: [`Session::put_back_plugin`] writes the old module back on this thread and then
+    /// reports a failure, as when the last flush of a copy fails.
+    pub(crate) static PUT_BACK_FAILS_AFTER_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Tests: moving a plug-in's settings and cache back from `<folder>.removed` ([`move_back`])
     /// fails on this thread, as when another program holds a file in the folder.
     pub(crate) static MOVE_BACK_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -504,16 +507,21 @@ impl Session {
 
     /// Return the store's module for the plug-in `id` to `previous`, the bytes it held before a
     /// write ([`Session::stored_plugin_bytes`]): with `None`, the file is removed. → whether the
-    /// store now holds `previous`.
+    /// write reported success; a write that reports a failure may still have put `previous` back.
     pub(crate) fn put_back_plugin(&self, id: &str, previous: Option<&[u8]>) -> bool {
         #[cfg(test)]
         if PUT_BACK_FAILS.get() {
             return false;
         }
-        match previous {
+        let back = match previous {
             Some(bytes) => self.store_plugin(id, bytes),
             None => self.unstore_plugin(id),
+        };
+        #[cfg(test)]
+        if PUT_BACK_FAILS_AFTER_WRITE.get() {
+            return false;
         }
+        back
     }
 
     /// The file the plug-in `id` is stored in, spelled as [`Session::load_stored_plugins`] names it

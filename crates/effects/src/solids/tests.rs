@@ -180,6 +180,137 @@ fn the_front_caps_are_drawn_last_in_the_order_of_the_appearance() {
     }
 }
 
+/// A C, open to the right: two concave corners where its walls meet the walls of the notch.
+fn letter_c() -> BezPath {
+    let mut b = BezPath::new();
+    b.move_to((100.0, 100.0));
+    b.line_to((200.0, 100.0));
+    b.line_to((200.0, 130.0));
+    b.line_to((130.0, 130.0));
+    b.line_to((130.0, 170.0));
+    b.line_to((200.0, 170.0));
+    b.line_to((200.0, 200.0));
+    b.line_to((100.0, 200.0));
+    b.close_path();
+    b
+}
+
+/// The pairs (blue, red) of `walls`, by index, where the blue face is drawn first and the two
+/// faces' bounds overlap.
+fn red_after_blue(walls: &[&Node]) -> Vec<(usize, usize)> {
+    let bounds: Vec<Rect> = walls.iter().map(|f| f.path_data().and_then(PathData::bounds).unwrap()).collect();
+    let overlap = |a: &Rect, b: &Rect| a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    let mut out = vec![];
+    for (i, a) in walls.iter().enumerate() {
+        for (j, b) in walls.iter().enumerate().skip(i + 1) {
+            if blue(a) && !blue(b) && overlap(&bounds[i], &bounds[j]) {
+                out.push((i, j));
+            }
+        }
+    }
+    out
+}
+
+/// An opaque stroke's solid holds the fill's edge, so the fill's walls are drawn before every
+/// face of the stroke they overlap, and the stroke's walls cover them at the concave corners of a
+/// turned C, in Extrude & Bevel and Extrude & Bevel (Classic). The front caps stay last, the
+/// fill's below the stroke's.
+#[test]
+fn a_fills_walls_are_drawn_before_the_stroke_faces_over_them() {
+    let views = [json!({}), json!({"rotationX": -20, "rotationY": -40, "rotationZ": 0}), json!({"rotationX": 25, "rotationY": -55, "rotationZ": 10})];
+    for id in [EXTRUDE, CLASSIC_EXTRUDE] {
+        for view in &views {
+            let mut params = view.clone();
+            params["depth"] = json!(60);
+            let mut n = stroked(&letter_c());
+            n.appearance.effects.push(fx(id, params));
+            let art = solid_art(&n).unwrap();
+            let faces = faces(&art);
+            let [walls @ .., fill_cap, stroke_cap] = faces.as_slice() else { panic!("{id} {view}: the caps") };
+            assert!(!blue(fill_cap) && blue(stroke_cap), "{id} {view}: the caps last");
+            assert!(walls.iter().any(|f| !blue(f)) && walls.iter().any(|f| blue(f)), "{id} {view}: walls of both");
+            let wrong = red_after_blue(walls);
+            assert!(wrong.is_empty(), "{id} {view}: fill walls after the stroke faces over them: {wrong:?} of {}", walls.len());
+        }
+    }
+    // Strokes aligned inside or outside keep the fill's walls, in that order. A dashed stroke
+    // leaves the fill's walls in the gaps between its dashes, and they keep their depths.
+    use vectorcraft_doc::StrokeAlign;
+    for (dash, align) in [(true, StrokeAlign::Center), (false, StrokeAlign::Inside), (false, StrokeAlign::Outside)] {
+        let mut n = stroked(&letter_c());
+        if let Some(AppearanceItem::Stroke(s)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+            s.dash = dash.then(|| vectorcraft_doc::Dash { pattern: vec![12.0, 12.0], offset: 0.0, align_corners: false });
+            s.align = align;
+        }
+        n.appearance.effects.push(fx(EXTRUDE, views[1].clone()));
+        let art = solid_art(&n).unwrap();
+        let faces = faces(&art);
+        let [walls @ .., _, _] = faces.as_slice() else { panic!("{align:?}: the caps") };
+        assert!(walls.iter().any(|f| !blue(f)), "{align:?}: the fill's walls");
+        if !dash {
+            assert!(red_after_blue(walls).is_empty(), "{align:?}");
+        }
+    }
+}
+
+/// The order keeps depths except where a shape's fill wall turned toward the viewer overlaps a
+/// face of the same shape's stroke drawn before it: the wall then goes just before that face. A
+/// cap, a face turned away, another shape's stroke, a stroke face the wall does not overlap and an
+/// effect without caps keep the order of the depths.
+#[test]
+fn the_draw_order_moves_a_fill_wall_before_the_stroke_faces_it_overlaps() {
+    let at = |depth: f64, x: f64, member: usize, paints: Paints, side: bool, away: bool| Placed {
+        depth,
+        side,
+        away,
+        bounds: Rect::new(x, 0.0, x + 10.0, 10.0),
+        member,
+        paints,
+    };
+    // 0 the fill's wall; 1 the stroke's wall over it; 2 another shape's stroke over it; 3 a stroke
+    // wall elsewhere; 4 a stroke face turned away; 5 a fill cap; 6 the stroke's cap, nearer; 7 a
+    // fill wall at the stroke wall's depth.
+    let faces = [
+        at(5.0, 0.0, 0, Paints::Fill, true, false),
+        at(3.0, 5.0, 0, Paints::Stroke, true, false),
+        at(2.0, 5.0, 1, Paints::Stroke, true, false),
+        at(1.0, 50.0, 0, Paints::Stroke, true, false),
+        at(0.0, 0.0, 0, Paints::Stroke, true, true),
+        at(4.0, 0.0, 0, Paints::Fill, false, false),
+        at(6.0, 0.0, 0, Paints::Stroke, false, false),
+        at(3.0, 0.0, 0, Paints::Fill, true, false),
+    ];
+    assert_eq!(draw_order(&faces, true), [4, 3, 2, 0, 7, 1, 5, 6]);
+    assert_eq!(draw_order(&faces, false), [4, 3, 2, 1, 7, 5, 0, 6]);
+    // A shape with no stroke, and a stroke without a width, move nothing.
+    // Only a stroke whose solid hides the fill's whole edge counts: an opaque, plain stroke with a
+    // width on a closed shape.
+    let stroke = |f: &dyn Fn(&mut StrokeLayer)| {
+        let mut s = StrokeLayer::new(Paint::solid(BLUE), 6.0);
+        f(&mut s);
+        AppearanceItem::Stroke(s)
+    };
+    assert!(Paints::of(&stroke(&|_| {}), true) == Paints::Stroke);
+    assert!(Paints::of(&stroke(&|_| {}), false) == Paints::Other, "an open shape");
+    assert!(Paints::of(&stroke(&|s| s.width = 0.0), true) == Paints::Other, "no width");
+    let dash = vectorcraft_doc::Dash { pattern: vec![4.0, 4.0], offset: 0.0, align_corners: false };
+    assert!(Paints::of(&stroke(&|s| s.dash = Some(dash.clone())), true) == Paints::Other, "dashes");
+    assert!(Paints::of(&stroke(&|s| s.brush = Some("brush".into())), true) == Paints::Other);
+    assert!(Paints::of(&stroke(&|s| s.paint = Paint::None), true) == Paints::Other);
+    assert!(Paints::of(&stroke(&|s| s.paint = Paint::Pattern { pattern: "p".into(), xf: Affine::IDENTITY }), true) == Paints::Other, "a pattern");
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let gradient = |opacity: f32| {
+        let mut end = GradientStop::new(1.0, RED);
+        end.opacity = opacity;
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, BLUE), end]))))
+    };
+    assert!(Paints::of(&stroke(&|s| s.paint = gradient(1.0)), true) == Paints::Stroke, "an opaque gradient");
+    assert!(Paints::of(&stroke(&|s| s.paint = gradient(0.5)), true) == Paints::Other, "a gradient with a transparent stop");
+    let other = |p: Paints| if p == Paints::Stroke { Paints::Other } else { p };
+    let unstroked: Vec<Placed> = faces.iter().map(|f| at(f.depth, f.bounds.x0, f.member, other(f.paints), f.side, f.away)).collect();
+    assert_eq!(draw_order(&unstroked, true), draw_order(&faces, false));
+}
+
 /// A stroked open path builds a ribbon, the stroke's outline, not the area the path would enclose
 /// if it were closed: for an L of two 100 pt legs, a 6 pt band with butt ends and a mitered corner.
 #[test]

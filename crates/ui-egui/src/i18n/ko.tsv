@@ -224,6 +224,15 @@ digits	Malayalam	말라얄람어
 	Expand…	확장…
 	Expand Appearance	모양새 확장
 	Crop Image	이미지 자르기
+	Image Tools	이미지 도구
+	Remove Background…	배경 제거…
+	Remove Background	배경 제거
+	Background	배경
+	Edge Color	가장자리 색상
+	Picked Colors	선택한 색상
+	Corner Color	모퉁이 색상
+	Contiguous	인접
+	Each Channel	각 채널
 	Edit Path	패스 편집
 	Mask	마스크
 	Rasterize…	래스터화…
@@ -3073,6 +3082,7 @@ mark-style	Japanese	일본식
 	Show List View	목록 보기 표시
 	Show Note	메모 표시
 	Show Options	옵션 표시
+	Show Recent Colors	최근 색상 표시
 	Show Original Path	원래 패스 표시
 	Open this dialog with these settings next time	다음에 이 설정으로 이 대화상자 열기
 	Auto-Simplify	자동 단순화
@@ -3885,6 +3895,8 @@ file-filter	Templates	템플릿
 	Scale at Center	중심에서 크기 조정
 	Up/Down:	위/아래:
 	Left/Right:	왼쪽/오른쪽:
+	Tate-chu-yoko Up/Down	다테추요코 위/아래
+	Tate-chu-yoko Left/Right	다테추요코 왼쪽/오른쪽
 	Temperature	색온도
 	Template	템플릿
 	Templates	템플릿
@@ -4570,6 +4582,7 @@ theme	Appearance	외관
 @msg	the image's pixels don't match its size	이미지의 픽셀이 크기와 맞지 않습니다
 @msg	{bpp}-bit bitmaps can't be read	{bpp}비트 비트맵은 읽을 수 없습니다
 @msg	not an EMF or WMF file	EMF 또는 WMF 파일이 아닙니다
+@msg	not an HP-GL file	HP-GL 파일이 아닙니다
 @msg	its layers use {_1}, which aren't read yet	레이어에 {_1}이(가) 있으며, 아직 읽을 수 없습니다
 @msg	the EMF header is damaged	EMF 헤더가 손상되었습니다
 @msg	damaged	손상됨
@@ -4586,6 +4599,7 @@ theme	Appearance	외관
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: UserUnit {unit}(으)로 기록되므로 UserUnit을 무시하는 앱에서는 그 배수만큼 작게 표시됩니다
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: {label} 페이지는 UserUnit 없이 포인트 단위로 기록되며, 한도를 지키는 앱은 페이지를 200 in으로 자릅니다
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5에는 14,400 pt (200 in)보다 긴 페이지가 크기를 유지하는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4에는 14,400 pt (200 in)보다 긴 페이지가 PDF/A-2의 페이지 한도인 14,400 단위 안에 들어가는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	아트보드 {n}의 페이지는 {size}로, PDF 페이지 변 3에서 14,400 단위에 비해 너무 길고 좁습니다: 짧은 변을 3 단위 이상으로 유지하는 UserUnit {unit}로 기록되며, 한도를 지키는 앱은 긴 변을 14,400 단위로 자릅니다
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 파일은 실수를 최대 {max}까지 담는데 아트보드 {n}의 {side} pt 페이지에는 더 큰 값이 필요합니다: PDF/X 표준 없이 PDF 1.6 이상을 선택하거나 더 작은 아트보드를 사용하세요
 @msg	page {0} does not exist (the PDF has {1})	페이지 {0}이(가) 없습니다(PDF의 페이지 수: {1})
@@ -4780,6 +4794,14 @@ theme	Appearance	외관
 @msg	no such view	해당 보기가 없습니다
 @msg	printing isn't available here	여기서는 인쇄할 수 없습니다
 @msg	select an image	이미지를 선택하세요
+@msg	`background` must be edges, corners or colors	`background`는 edges, corners 또는 colors여야 합니다
+@msg	`match` must be distance or channels	`match`는 distance 또는 channels여야 합니다
+@msg	`{key}` must be from 0 to 100	`{key}`는 0에서 100 사이여야 합니다
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors`에는 16진수(#rrggbb 또는 #rgb)나 black, white, red, green, blue로 쓴 색상이 1~16개 있어야 합니다
+@msg	the linked image shows its preview: embed or relink it first	연결된 이미지가 미리 보기를 표시하고 있습니다: 먼저 포함하거나 다시 링크하세요
+@msg	a CMYK image has no transparency to set	CMYK 이미지에는 설정할 투명도가 없습니다
+@msg	every pixel matches the background: no image would be left	모든 픽셀이 배경과 일치합니다: 남는 이미지가 없습니다
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h}픽셀 이미지는 너무 커서 변경할 수 없습니다
 @msg	the document has no artboards	문서에 아트보드가 없습니다
 @msg	tool (a tool id) is required	도구(도구 id)가 필요합니다
 @msg	unknown tool `{t}`	알 수 없는 도구 `{t}`
@@ -5298,6 +5320,11 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	Shadows	그림자
+	Distance from Object	개체로부터의 거리
+	Shadow Bounds	그림자 범위
+	Behind Object	개체 뒤
+	Below Object	개체 아래
 	3D Lighting Preset	3D 조명 사전 설정
 	Standard	표준
 	Diffuse	확산
@@ -5696,6 +5723,16 @@ axis	Y Axis	Y축
 @msg	message must be text	message의 값은 텍스트여야 합니다
 @msg	allowContinue must be true or false	allowContinue의 값은 true 또는 false여야 합니다
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
+	Insert Menu Item…	메뉴 항목 삽입…
+	Insert Menu Item	메뉴 항목 삽입
+	Menu Item:	메뉴 항목:
+	No menu item matches.	일치하는 메뉴 항목이 없습니다.
+	Several menu items match. Choose one from the list.	여러 메뉴 항목이 일치합니다. 목록에서 하나를 선택하세요.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	대화 상자를 여는 항목과 파일, 윈도우, 도움말 메뉴의 항목은 표시되지 않습니다.
+@msg	command must be text	command의 값은 텍스트여야 합니다
+@msg	no menu item that can be inserted runs this command	이 명령을 실행하는 삽입 가능한 메뉴 항목이 없습니다
+@msg	the action already has 10,000 steps	액션에 이미 단계가 10,000개 있습니다
+@msg	the action set would be larger than 8 MiB	액션 세트가 8 MiB를 넘게 됩니다
 	Playback Options	재생 옵션
 	Accelerated	가속
 	Step by Step	단계별
