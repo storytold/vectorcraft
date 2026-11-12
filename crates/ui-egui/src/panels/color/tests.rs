@@ -676,6 +676,179 @@ fn show_recent_colors_comes_back_after_a_restart() {
     assert_eq!((app.ui.color_mode, app.ui.color_hide_options, app.ui.color_show_recent_colors), (None, false, false));
 }
 
+/// The fill's R, G and B from 0 to 1.
+fn fill_rgb(app: &VectorcraftApp) -> [f32; 3] {
+    working_rgb(&crate::panels::current_paints(app).0.color().expect("a solid fill"))
+}
+
+/// One frame of the panel at `time` with `events`; returns the rect of the cell right of the field
+/// of slider row `i` (None: the row has no cell).
+fn units_cell(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize, time: f64, events: Vec<egui::Event>) -> Option<Rect> {
+    let input = egui::RawInput { time: Some(time), events, ..Default::default() };
+    let mut rect = None;
+    let mut out = ctx.run_ui(input, |ui| {
+        show(app, ui);
+        rect = ctx.read_response(ui.scope_id().with("color-units").with(i)).map(|r| r.rect);
+    });
+    out.textures_delta.clear();
+    rect
+}
+
+/// The rect of the slider that screen readers name `label`, in a frame of `ctx` (`width`: the
+/// screen's width; None: the screen of the frame before).
+fn slider_rect(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str, width: Option<f32>) -> Rect {
+    ctx.enable_accesskit();
+    let screen_rect = width.map(|w| Rect::from_min_size(egui::Pos2::ZERO, vec2(w, 800.0)));
+    let mut nodes = vec![];
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    }
+    let slider = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Slider && n.label() == Some(label));
+    let b = slider.and_then(|(_, n)| n.bounds()).unwrap_or_else(|| panic!("no slider is named {label:?}"));
+    Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32))
+}
+
+/// Double-click the cell right of the field of slider row `i`, at `time` and a moment later.
+fn double_click_units(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize, time: f64) {
+    let run = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| units_cell(app, ctx, i, time, events);
+    let pos = run(app, time, vec![]).expect("the cell is drawn").center();
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    run(app, time + 0.05, vec![egui::Event::PointerMoved(pos), button(true)]);
+    run(app, time + 0.1, vec![button(false)]);
+    run(app, time + 0.15, vec![button(true)]);
+    run(app, time + 0.2, vec![button(false)]);
+    run(app, time + 0.25, vec![]);
+}
+
+/// In RGB mode a double-click right of an RGB field switches R, G and B between 0 to 255 and
+/// percent, as `ui.colorPanel {rgbPercent}` does. The color does not change; a typed percent and a
+/// slider click convert back to 0 to 255. Web Safe RGB and the hex field stay in 0 to 255. Only
+/// RGB rows have the cell, and Tab does not stop on it.
+#[test]
+fn rgb_percent_switches_the_rgb_fields_between_percent_and_0_to_255() {
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    use crate::widgets::accessibility_tests::{slider_value, tab_stops, tree};
+    let mut app = app();
+    let ctx = egui::Context::default();
+    app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
+    let texts = |app: &mut VectorcraftApp| frame_events(&ctx, app, vec![], show).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+    let has = |texts: &[String], all: &[&str]| all.iter().all(|s| texts.iter().any(|t| t == s));
+    assert!(has(&texts(&mut app), &["51", "102", "153"]));
+    assert_eq!(app.run("ui.colorPanel", json!({"rgbPercent": true})).unwrap()["rgbPercent"], true);
+    let shown = texts(&mut app);
+    assert!(has(&shown, &["20%", "40%", "60%", "336699"]), "{shown:?}");
+    assert_eq!(paints_hex(&app).0, "#336699", "the color does not change");
+    let v = |n: f64, text: &str| (Some(n), Some(0.0), Some(100.0), Some(text.to_string()));
+    let sliders = tree(|ui| show(&mut app, ui));
+    assert_eq!(slider_value(&sliders, "G"), v(40.0, "40%"));
+    // A typed percent sets the component: 50 % is 127.5 of 255.
+    let field = text_rect(&frame_events(&ctx, &mut app, vec![], show), "20%").center();
+    click(&ctx, &mut app, field, show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("50".into())], show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    let [r, g, b] = fill_rgb(&app);
+    assert!((r - 0.5).abs() < 1e-6 && (g - 0.4).abs() < 1e-6 && (b - 0.6).abs() < 1e-6, "{r} {g} {b}");
+    assert!(has(&texts(&mut app), &["50%", "40%", "60%"]));
+    // A click a third of the way along the B slider's bar picks 33 %, a whole percent.
+    let rgb_slider = slider_rect(&mut app, &ctx, "B", None);
+    let (bar_left, bar_w) = (rgb_slider.left() + 4.0, rgb_slider.width() - 8.0);
+    click(&ctx, &mut app, egui::pos2(bar_left + bar_w / 3.0, rgb_slider.center().y), show);
+    let p = fill_rgb(&app)[2] * 100.0;
+    assert!((p - 33.0).abs() < 1e-3, "{p}");
+    // The cells take no keyboard focus: Tab goes from field to slider without stopping on them.
+    let cells: Vec<_> = (0..3).filter_map(|i| units_cell(&mut app, &ctx, i, 5.0, vec![]).map(|_| i)).collect();
+    assert_eq!(cells, [0, 1, 2], "each RGB row has a cell");
+    let mut units = egui::Id::NULL;
+    let stops = tab_stops(&ctx, 24, |events| {
+        frame_events(&ctx, &mut app, events, |app, ui| {
+            show(app, ui);
+            units = ui.scope_id().with("color-units");
+        });
+    });
+    let cell_ids: Vec<egui::Id> = (0..3).map(|i| units.with(i)).collect();
+    assert!(stops.len() >= 6 && stops.iter().all(|s| !cell_ids.contains(s)), "{stops:?}");
+    app.run("paint.setFill", json!({"color": "#803366"})).unwrap();
+    assert!((fill_rgb(&app)[0] - 128.0 / 255.0).abs() < 1e-6);
+    // A double-click right of the G field switches back to 0 to 255, and another to percent.
+    double_click_units(&mut app, &ctx, 1, 10.0);
+    assert!(!app.ui.color_rgb_percent);
+    assert!(has(&texts(&mut app), &["128", "51", "102"]));
+    assert_eq!(paints_hex(&app).0, "#803366", "the color does not change");
+    double_click_units(&mut app, &ctx, 1, 20.0);
+    assert!(app.ui.color_rgb_percent);
+    assert!(has(&texts(&mut app), &["50%", "20%", "40%"]));
+    assert_eq!(app.run("ui.colorPanel", json!({})).unwrap()["rgbPercent"], true);
+    // RGB sliders are narrower by the cell and its spacing, in a narrow panel too.
+    let cell_room = 10.0 + ctx.global_style().spacing.item_spacing.x;
+    let rgb_w = slider_rect(&mut app, &ctx, "B", Some(400.0)).width();
+    let narrow_rgb = slider_rect(&mut app, &ctx, "B", Some(150.0)).width();
+    // Web Safe RGB shows 0 to 255. It has no cells, and its sliders keep the room the RGB cells
+    // take.
+    app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
+    app.run("ui.colorPanel", json!({"mode": "websafe"})).unwrap();
+    assert!(has(&texts(&mut app), &["51", "102", "153"]));
+    assert_eq!(units_cell(&mut app, &ctx, 1, 30.0, vec![]), None);
+    let web_w = slider_rect(&mut app, &ctx, "B", Some(400.0)).width();
+    assert!((web_w - rgb_w - cell_room).abs() < 0.5, "{web_w} {rgb_w}");
+    let narrow_web = slider_rect(&mut app, &ctx, "B", Some(150.0)).width();
+    assert!((narrow_web - narrow_rgb - cell_room).abs() < 0.5, "{narrow_web} {narrow_rgb}");
+    // HSB shows its own units, with no cells and sliders as wide as Web Safe RGB's.
+    app.run("ui.colorPanel", json!({"mode": "hsb"})).unwrap();
+    assert!(has(&texts(&mut app), &["210°", "67%", "60%"]));
+    assert_eq!(units_cell(&mut app, &ctx, 1, 31.0, vec![]), None);
+    assert!((slider_rect(&mut app, &ctx, "B", Some(400.0)).width() - web_w).abs() < 0.5);
+    assert!(app.ui.color_rgb_percent);
+}
+
+/// While a mixed selection disables the RGB rows, a double-click right of an RGB field does not
+/// switch the units, as the fields beside it take no input.
+#[test]
+fn rgb_percent_does_not_switch_while_the_rows_are_disabled() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    app.run("ui.colorPanel", json!({"mode": "rgb"})).unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 80, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    app.run("select.all", json!({})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    app.run("paint.setFill", json!({"color": "#00ff00", "ids": [b]})).unwrap();
+    units_cell(&mut app, &ctx, 1, 1.0, vec![]);
+    assert_eq!(crate::panels::mixed_paints(&app, &ctx), (true, false));
+    double_click_units(&mut app, &ctx, 1, 2.0);
+    assert!(!app.ui.color_rgb_percent);
+    // With one color the rows take input, and the same double-click switches the units.
+    app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
+    double_click_units(&mut app, &ctx, 1, 3.0);
+    assert!(app.ui.color_rgb_percent);
+}
+
+/// RGB in percent is kept with the UI state, which the app saves with its preferences. A saved
+/// state without it, or with a value that isn't true or false, reads as 0 to 255, and the rest of
+/// the state still loads. A value that isn't true or false in the command answers an error and
+/// changes nothing.
+#[test]
+fn rgb_percent_comes_back_after_a_restart() {
+    let mut app = app();
+    app.run("ui.colorPanel", json!({"rgbPercent": true})).unwrap();
+    let saved: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+    assert!(saved.color_rgb_percent);
+    assert_eq!(crate::control::inspect(&app, &egui::Context::default())["ui"]["color_rgb_percent"], true);
+    let old: crate::UiState = serde_json::from_value(json!({"place_link": false})).unwrap();
+    assert!(!old.color_rgb_percent, "a state saved before the setting existed shows 0 to 255");
+    for v in [json!(7), json!("percent"), json!({}), Value::Null] {
+        let ui: crate::UiState = serde_json::from_value(json!({"color_rgb_percent": v, "place_link": false})).unwrap();
+        assert_eq!((ui.color_rgb_percent, ui.place_link), (false, false), "{v}");
+    }
+    for v in [json!("yes"), json!(1), json!([])] {
+        let e = app.run("ui.colorPanel", json!({"mode": "cmyk", "rgbPercent": v})).unwrap_err();
+        assert_eq!(e, "`rgbPercent` must be true or false", "{v}");
+    }
+    assert_eq!((app.ui.color_mode, app.ui.color_rgb_percent), (None, true));
+    assert_eq!(app.run("ui.colorPanel", json!({"rgbPercent": false})).unwrap()["rgbPercent"], false);
+}
+
 /// `ui.colorPanel {mode}` picks a mode as the panel menu does: HSB shows an RGB fill as H, S and
 /// B, and CMYK converts it as one undo step.
 #[test]
@@ -684,7 +857,7 @@ fn ui_color_panel_picks_a_mode_as_the_menu_does() {
     let ctx = egui::Context::default();
     app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
     let r = app.run("ui.colorPanel", json!({"mode": "hsb"})).unwrap();
-    assert_eq!(r, json!({"mode": "hsb", "options": true, "recentColors": true, "shown": "hsb"}));
+    assert_eq!(r, json!({"mode": "hsb", "options": true, "recentColors": true, "rgbPercent": false, "shown": "hsb"}));
     assert_eq!(slider_labels(&mut app, &ctx), ["H", "S", "B"]);
     assert_eq!(crate::control::inspect(&app, &ctx)["ui"]["color_mode"], "hsb");
     assert_eq!(paints_hex(&app).0, "#336699", "HSB keeps the RGB color");
@@ -694,7 +867,10 @@ fn ui_color_panel_picks_a_mode_as_the_menu_does() {
     assert!(matches!(crate::panels::current_paints(&app).0.color(), Some(Color::Rgb { .. })), "undo restores it");
     assert_eq!(paints_hex(&app).0, "#336699");
     // `{}` reads the settings: CMYK stays picked, and the RGB fill shows in its own model.
-    assert_eq!(app.run("ui.colorPanel", json!({})).unwrap(), json!({"mode": "cmyk", "options": true, "recentColors": true, "shown": "rgb"}));
+    assert_eq!(
+        app.run("ui.colorPanel", json!({})).unwrap(),
+        json!({"mode": "cmyk", "options": true, "recentColors": true, "rgbPercent": false, "shown": "rgb"})
+    );
     // A tint of a global swatch shows Tint mode.
     app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 1, "y": 0, "k": 0}, "spot": true})).unwrap();
     app.run("paint.setFill", json!({"swatch": "Ink", "tint": 50})).unwrap();
