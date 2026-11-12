@@ -619,9 +619,13 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     } else {
         let path = geometry(&path, &n.appearance.effects, &ctx);
         remaining = crate::without_geometry(&remaining);
+        // The object's Transform effects, applied to the path above, transform the items' raster
+        // effects too.
+        let mut items: Vec<AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).cloned().collect();
+        crate::raster::follow_paints(&mut items, &n.appearance.effects);
         // Every item's shadow goes behind every item's art.
         let mut shadows = vec![];
-        for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
+        for item in &items {
             if let Some(index) = item.effects().iter().position(|e| e.visible && is_revolve(&e.id)) {
                 let fx = item.effects().get(index)?;
                 let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));

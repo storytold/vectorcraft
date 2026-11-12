@@ -440,6 +440,8 @@ fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
+    // The raster effects of its fills and strokes follow its Transform effects, as on the canvas.
+    crate::raster::follow_items(&mut m);
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
     Some((g, rule, ctx, m))
 }

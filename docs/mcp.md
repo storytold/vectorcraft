@@ -178,8 +178,8 @@ the suite) keep the agent to the folders you give it:
   (`ui.palette_query`), a script's report (`scriptReport`), a screenshot's reply and the error from an internal
   fault included, for the libraries hidden before the request ran and after it. The path is also matched with `%XX` escapes as a `file:`
   URL writes it, and on Windows in any case of its letters; a `file:` URL of an absolute path is shown as the file
-  name alone, without `file:` or its host. A hidden id or path stays only where it begins
-  another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with a hidden one stays. A reply also shows a path outside the
+  name alone, without `file:` or its host. A hidden id or path stays only where it lies inside
+  another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with or holds a hidden one stays. A reply also shows a path outside the
   read roots that the request sent by its file name, whether or not a library was loaded from it and whether the
   request succeeded or failed, so that the reply reads the same either way. The one exception is the `path`
   and `files` entries of a reply's result, a `command.batch` step's result included, that name the file the
@@ -1418,6 +1418,9 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   compensation go into `Color Settings.json` when they change, and are the active settings again at the next
   start, after the profiles above are registered (#6335). Saved settings that name a profile that is no longer
   there, or a damaged file, leave the defaults (logged), and the next change writes over the file.
+  `edit.assignProfile` tags the document only: colors show and convert through the profiles it assigns, and the
+  working spaces and the file stay as they are. The `workingCmyk` target of `view.proofSetup` simulates the working
+  CMYK space in such a document too.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
@@ -5030,6 +5033,12 @@ the Align To choice, and while there is a key object or a key guide they send th
 `spacing`. Edit › Keyboard Shortcuts lists them under Align, with no default shortcut, and
 `shortcuts.set {id, shortcut}` gives one a shortcut.
 
+With the Artboard tool chosen, the same buttons and UI commands, and the Control bar's Align and Distribute buttons,
+run `artboard.align`, `artboard.distribute` and `artboard.distributeSpacing` on the artboards the tool has selected.
+Align To then offers Align to Selection and Align to Artboard. Align to Artboard sends `to: "artboard"`, which keeps the
+tool's active artboard in place, and the Distribute buttons then send the Distribute Spacing value as `spacing`. Align
+to Selection sends `to: "selection"`. The Distribute buttons need two or more selected artboards.
+
 Edit › Keyboard Shortcuts and `shortcuts.list` leave out a command with no default shortcut when a key press cannot
 run it: no item of the menu bar runs it, it opens no dialog when run without params, and it is one of these:
 
@@ -5781,6 +5790,46 @@ every group as it is. The groups and their contents are VectorCraft's own.
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}
 ```
 
+### New Document profiles
+
+Each built-in category (Mobile, Web, Print, Film & Video, Art & Illustration, Branding, Social) has a New Document
+profile: a native document that holds the starting assets and settings of the documents made from that category's
+presets ([Create a custom new document profile](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/start-a-new-file/create-a-custom-new-document-profile.html)).
+`file.new` copies the profile's swatches, swatch groups, graphic styles, brushes, symbols, patterns, character and
+paragraph styles, composite fonts, SVG filters, graph designs, ruler origin and ruler mode, transparency grid, Document
+Setup options, assigned color profiles, Document Raster Effects Settings other than the resolution, and print settings
+into the new document. The preset's size, units, artboards, bleed, background, color mode, raster effects resolution
+and Align New Objects to Pixel Grid still apply. The profile's art, layers and artboards are not copied: the document
+starts with one empty layer. The grid comes from Preferences › Guides & Grid, as it does for every document. When the
+preset's color mode differs from the profile's, the profile's colors are converted as `file.documentColorMode`
+converts them.
+
+A built-in preset names its category's profile in `file.newPresets` (`profile`). Saved and Recent presets keep the
+profile of the preset they were made from. `file.new {profile: "Print"}` picks a profile for any settings, and
+`profile: null` starts with the defaults. A document made without a preset starts with the defaults.
+
+The profiles are `.vectorcraft` files named after their category in the `New Document Profiles` folder next to the
+preferences (VectorCraft's own place and form). A category without a file has the shipped profile, which holds the
+defaults. Runs without preferences (`VECTORCRAFT_NO_PREFS`) and the web build have no folder, so every document starts
+with the defaults.
+
+- `file.newProfiles` lists `{profiles: [{name, customized?, path?}], folder?}`. `customized` is true when the category
+  has a file. A request whose read roots leave out the folder gets neither `customized` nor `path`.
+- `file.newProfiles.edit {name}` opens the profile as a document and returns `document.open`'s result. A category
+  without a file gets the shipped profile written first. File › Save keeps the changes, and the next `file.new` reads
+  them.
+- `file.newProfiles.reset {name}` deletes the category's file, so the shipped profile applies again, and returns
+  `{name, reset}`. `reset` is false when there was no file. A copy of the profile that is open stays open.
+
+The profile is read on every `file.new`, so a replayed journal or a recorded action uses the profile as it is when it
+runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
+When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
+folder (whether or not the file exists), the document starts with the defaults and
+`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. In
+the New Document dialog, Manage Profiles lists the profiles with Edit and Reset buttons. Edit is available only when
+there is a profiles folder, and Reset only for a profile that has a file. An unknown profile name is an error that
+lists the names.
+
 ## Place
 
 `file.place` puts another file's art into the active document as one undo step without touching the clipboard:
@@ -5952,7 +6001,48 @@ artboard it names is locked. When no artboard changes, the command records no un
 `scaleArt` scales the art with each artboard and defaults to the Artboard tool's Scale Artwork with Artboard option.
 `patterns` and `lockedAndHidden` work as they do on `artboard.setProps`.
 
-When a call to `artboard.duplicate`, `artboard.copy`, `artboard.cut`, `artboard.rename` or `artboard.switchOrientation`
+Align and distribute artboards ([Align and distribute artboards](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/align-and-distribute-artboards.html)):
+three commands move whole artboards, by default those the Artboard tool has selected, else its active one. Each takes
+`index? | indices?`, `to?: "selection"|"artboard"`, `artboard?: n`, `moveArt?`, `patterns?` and `lockedAndHidden?`, and
+returns `{moved: [index…]}`.
+
+- `artboard.align {horizontal?: "left"|"center"|"right", vertical?: "top"|"center"|"bottom"}` moves each artboard until
+  the named edge or center is on that edge or center of the bounds of all the artboards named. One of the two
+  directions is needed, and both can be given.
+- `artboard.distribute {horizontal? | vertical?, spacing?}` spaces the named edges or centers evenly between the first
+  and the last artboard along the axis, which stay where they are. It needs three or more artboards.
+- `artboard.distributeSpacing {axis?: "horizontal"|"vertical", spacing?}` makes the gaps between the artboards along
+  the axis equal. The first and the last artboard stay where they are. It needs three or more artboards, and `axis`
+  defaults to `"horizontal"`.
+
+`to: "artboard"` aligns to artboard `artboard`, which stays where it is. `artboard` defaults to the Artboard tool's
+active artboard. For `artboard.align` it can be an artboard that is not being aligned. The two Distribute commands
+space the artboards as they do without it and then move them together so that artboard `artboard`, when it is one of
+them, stays where it is. With `to: "artboard"` and `spacing`, `artboard.distribute` places the edges or centers
+`spacing` points apart, outward from that artboard in their order, and `artboard.distributeSpacing` leaves a gap of
+`spacing` points between neighbors; two artboards are enough, a negative `spacing` overlaps them, and an `artboard`
+that is not one of the artboards distributed fails with `no such artboard`. Without `to: "artboard"`, `spacing` is not
+used. These rules for `to`, `artboard` and `spacing` are VectorCraft's own.
+
+When a call with `to: "artboard"` names no `artboard`, its journal entry records the active artboard it used as
+`activeArtboard`. A replay of the journal aligns to that artboard, and a recorded action leaves the value out and
+aligns to the artboard that is active when it plays. An `artboard` the call names stays in the action.
+
+`moveArt` moves the art fully inside each artboard with it and defaults to the Artboard tool's Move Artwork with
+Artboard option. `patterns` and `lockedAndHidden` work as they do on `artboard.move`. An artboard's own guides move
+with it. A locked artboard stays where it is: it still counts in the bounds and keeps its place in the order, and a
+call fails with `the artboard is locked` when every artboard it names is locked. That rule is VectorCraft's own. Each
+command is one undo step, and records none when no artboard moves (fewer artboards than it needs included). A direction,
+`to`, `axis`, `artboard`, `spacing` or switch with a value outside the ones listed is an error, and nothing changes.
+A `spacing` that would move an artboard past the edge of the canvas fails with
+`result would exceed the canvas (coordinates out of range)`, and nothing changes.
+
+```json
+{"name":"run_command","arguments":{"command":"artboard.distributeSpacing","params":{"indices":[0,1,2],"to":"artboard","artboard":0,"spacing":20}}}
+```
+
+When a call to `artboard.duplicate`, `artboard.copy`, `artboard.cut`, `artboard.rename`, `artboard.switchOrientation`,
+`artboard.align`, `artboard.distribute` or `artboard.distributeSpacing`
 names no artboard, its journal entry records the artboards it acted on as `selectedArtboards`. A replay of the journal
 acts on those artboards, and a recorded action leaves the value out and acts on the selection when it plays.
 

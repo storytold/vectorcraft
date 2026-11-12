@@ -721,3 +721,96 @@ fn align_to_glyph_bounds_toggles_point_and_area_text() {
     choose(&mut app, "Point Text");
     assert_eq!((prefs(&app), checked(&mut app)), ((false, true), vec!["Area Text".to_string()]));
 }
+
+/// Three artboards, 0 at (0, 0) 100 × 100, 1 at (150, 40) 60 × 80 and 2 at (400, 10) 100 × 50, with
+/// the Artboard tool chosen and all three selected, artboard 1 active.
+fn selected_artboards() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+    app.run("artboard.new", json!({"x": 400, "y": 10, "width": 100, "height": 50})).unwrap();
+    app.select_tool("artboard");
+    app.session.set_tool_option("selected", &json!([1, 0, 2]));
+    app
+}
+
+/// The top-left corner of each artboard.
+fn artboard_corners(app: &VectorcraftApp) -> Vec<(f64, f64)> {
+    app.session.active().unwrap().doc.artboards.iter().map(|a| (a.rect.x0, a.rect.y0)).collect()
+}
+
+/// The command the app ran last, with its `to` and `spacing`.
+fn last_sent(app: &VectorcraftApp) -> (String, Value, Option<Value>) {
+    let (id, p) = app.session.journal.last().unwrap();
+    (id.clone(), p["to"].clone(), p.get("spacing").cloned())
+}
+
+/// With the Artboard tool chosen, the Align Objects buttons align the selected artboards: to
+/// their bounds with Align to Selection, and to the active artboard, which stays in place, with
+/// Align to Artboard. Align to Key Object cannot be chosen.
+#[test]
+fn the_align_buttons_align_the_selected_artboards() {
+    let mut app = selected_artboards();
+    let ctx = egui::Context::default();
+    let steps = app.session.active().unwrap().history.undo.len();
+    let ([_, key, artboard], left) = panel_buttons(&mut app, &ctx);
+    click(&ctx, &mut app, left.center(), show);
+    assert_eq!(artboard_corners(&app), [(0.0, 0.0), (0.0, 40.0), (0.0, 10.0)], "{}", app.ui.status);
+    assert_eq!(last_sent(&app), ("artboard.align".to_string(), json!("selection"), None));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    click(&ctx, &mut app, key.center(), show);
+    assert!(app.ui.align_to == AlignTo::Selection && !has_key(&app), "Align to Key Object is off");
+    click(&ctx, &mut app, artboard.center(), show);
+    assert_eq!(app.ui.align_to, AlignTo::Artboard);
+    click(&ctx, &mut app, left.center(), show);
+    assert_eq!(artboard_corners(&app), [(150.0, 0.0), (150.0, 40.0), (150.0, 10.0)], "artboard 1 stays: {}", app.ui.status);
+    assert_eq!(last_sent(&app), ("artboard.align".to_string(), json!("artboard"), None));
+}
+
+/// With the Artboard tool chosen, the Distribute Objects and Distribute Spacing buttons space the
+/// selected artboards. With Align to Artboard they send the Distribute Spacing value and the
+/// active artboard stays in place. They are off for one artboard.
+#[test]
+fn the_distribute_buttons_space_the_selected_artboards() {
+    let mut app = selected_artboards();
+    let ctx = egui::Context::default();
+    let (left, space) = distribute_buttons(&mut app, &ctx);
+    click(&ctx, &mut app, left.center(), show);
+    assert_eq!(artboard_corners(&app), [(0.0, 0.0), (200.0, 40.0), (400.0, 10.0)], "{}", app.ui.status);
+    assert_eq!(last_sent(&app), ("artboard.distribute".to_string(), json!("selection"), None));
+    app.run("edit.undo", json!({})).unwrap();
+    click(&ctx, &mut app, space.center(), show);
+    assert_eq!(artboard_corners(&app), [(0.0, 0.0), (220.0, 40.0), (400.0, 10.0)], "gaps of 120: {}", app.ui.status);
+    app.run("edit.undo", json!({})).unwrap();
+    app.ui.align_to = AlignTo::Artboard;
+    app.ui.align_spacing = 20.0;
+    click(&ctx, &mut app, space.center(), show);
+    assert_eq!(artboard_corners(&app), [(30.0, 0.0), (150.0, 40.0), (230.0, 10.0)], "gaps of 20: {}", app.ui.status);
+    assert_eq!(last_sent(&app), ("artboard.distributeSpacing".to_string(), json!("artboard"), Some(json!(20.0))));
+    app.run("edit.undo", json!({})).unwrap();
+    click(&ctx, &mut app, left.center(), show);
+    assert_eq!(artboard_corners(&app), [(130.0, 0.0), (150.0, 40.0), (170.0, 10.0)], "left edges 20 apart: {}", app.ui.status);
+    app.run("edit.undo", json!({})).unwrap();
+    app.session.set_tool_option("selected", &json!([1]));
+    let ran = app.session.journal.len();
+    for button in [left, space] {
+        click(&ctx, &mut app, button.center(), show);
+    }
+    assert_eq!(app.session.journal.len(), ran, "one artboard: the Distribute buttons are off");
+}
+
+/// A button's shortcut entry is enabled by, and runs, the artboard command with the Artboard tool
+/// chosen and the object command with another tool.
+#[test]
+fn a_button_runs_the_artboard_command_only_with_the_artboard_tool() {
+    let mut app = selected_artboards();
+    let b = Button::Spacing("horizontal");
+    assert_eq!(b.command_now(&app), "artboard.distributeSpacing");
+    assert_eq!(artboards_selected(&app), 3);
+    app.select_tool("selection");
+    assert_eq!(b.command_now(&app), "object.distributeSpacing");
+    let before = artboard_corners(&app);
+    run_button(&mut app, Button::Align("horizontal", "left")).ok();
+    assert_eq!(artboard_corners(&app), before, "with the Selection tool the buttons leave the artboards alone");
+}
