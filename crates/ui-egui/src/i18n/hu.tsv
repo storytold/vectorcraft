@@ -6108,6 +6108,110 @@ axis	Y Axis	Y tengely
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	az élő effektus a dokumentum rajzolása közben fut, ezért nem lehet `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	az exportáló bővítmény mindig az exportálás keretét kapja: hagyd ki a `budget` kulcsot
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): egy személynek jóvá kell hagynia az asztali alkalmazásban, vagy add meg az `allowHeavy: true` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	a `name` 1-64 nyomtatható karakter legyen
+@msg	`version`, `description` or `author` is too long	a `version`, a `description` vagy az `author` túl hosszú
+@msg	`warnings` must be a list of strings	a `warnings` karakterláncok listája legyen
+@msg	`{k}` must be one of {_1}	`{k}`: ezek egyike kell: {_1}
+@msg	`{k}` must be {what}	`{k}`: {what} kell
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	az exportáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	csoporton kívül legfeljebb {MAX_UNGROUPED} paraméter lehet: a többinek adj meg `group` értéket
+@msg	can't encode the input	a bemenet nem kódolható
+@msg	expected {"dataBase64"}	várt formátum: {"dataBase64"}
+@msg	expected {"objects"}	várt formátum: {"objects"}
+@msg	export `{name}`: {e}	`{name}` modulexport: {e}
+@msg	extension {e} is listed twice	a(z) {e} kiterjesztés kétszer szerepel
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	{e} kiterjesztés: 1-16 kisbetűt és számjegyet használj, pont nélkül
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	érvénytelen azonosító: {_1}; 1-64 karaktert használj ezekből: A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	érvénytelen paraméternév: {k}
+@msg	manifest is not UTF-8	a leíró nem UTF-8 kódolású
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	a leíró túl hosszú (korlát: {MAX_MANIFEST_BYTES} bájt)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	a leíró mérete {_1} bájt (korlát: {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	a modul mérete {_1} bájt (korlát: {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	jóváhagyás szükséges: ezt kéri: {0}, amit a felhasználó a külön telepítéskor ad meg
+@msg	not JSON: {e}	nem JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	nem WebAssembly bináris (hiányzik a \0asm fejléc)
+@msg	parameter `{k}`: {what}	`{k}` paraméter: {what}
+@msg	parameter `{name}`: {what}	`{name}` paraméter: {what}
+@msg	plug-in parameters must be a JSON object	a bővítmény paraméterei JSON-objektumot alkossanak
+@msg	the module must export its linear memory as `memory`	a modulnak `memory` néven kell exportálnia a lineáris memóriáját
+@msg	the objects to change are no longer in the document	a módosítandó objektumok már nincsenek a dokumentumban
+@msg	the runtime panicked	a futtatókörnyezet összeomlott
+@msg	unexpected host trap	váratlan megszakítás (trap) a gazdaprogramban
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	a vc_abi_version {v} értéket adott vissza; ez a gazdaprogram a(z) {ABI_VERSION}. verziót valósítja meg
+@msg	vc_alloc returned 0 (out of memory)	a vc_alloc 0-t adott vissza (elfogyott a memória)
+@msg	vc_alloc returned a block outside memory	a vc_alloc a memórián kívüli blokkot adott vissza
+@msg	vc_run returned error code {packed}	a vc_run {packed} hibakódot adott vissza
+@msg	{_1} is not a file	nem fájl: {_1}
+@msg	{_1} is {_2} bytes (limit {_3})	{_1}: {_2} bájt (korlát: {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektum (korlát: {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what}: a memórián kívülre mutat
+@msg	`angle` must be a number	`angle`: szám kell
+@msg	`aspect` must be from 0.01 to 100	`aspect`: 0.01 és 100 közötti érték kell
+@msg	`cap` must be "butt", "round" or "square"	`cap`: "butt", "round" vagy "square" kell
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule`: "nonzero" vagy "evenodd" kell
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl`: legfeljebb {MAX_HELP_URL} bájtos https:// cím kell
+@msg	`help` must be 1-{MAX_HELP} printable characters	a `help` 1-{MAX_HELP} nyomtatható karakter legyen
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id`: 1-{MAX_EFFECT_ID} bájtos effektusazonosító kell
+@msg	`id` must be the id of an input object	`id`: egy bemeneti objektum azonosítója kell
+@msg	`join` must be "miter", "round" or "bevel"	`join`: "miter", "round" vagy "bevel" kell
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	a `label` és a `group` 1-{MAX_LABEL} nyomtatható karakter legyen
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	a `maxLength` 1-{MAX_TEXT} legyen, és az alapértelmezett érték ne legyen hosszabb
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	a `minItems` és a `maxItems` 0-{MAX_LIST} legyen, a `maxItems` legalább 1, és az alapértelmezett érték ennyi elemből álljon
+@msg	`name` must be a string	`name`: karakterlánc kell
+@msg	`opacity` must be a number	`opacity`: szám kell
+@msg	`type` must be "path" or "compound"	`type`: "path" vagy "compound" kell
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	a `unit` 1-{MAX_UNIT} nyomtatható karakter legyen
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	a `visibleWhen` 1-{MAX_CONDITION_VALUES} értéket adjon meg ehhez: `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	a `visibleWhen` ezt nevezi meg: `{other}`, de ez nem az ennél korábban megadott paraméterek egyike
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	a `visibleWhen` legfeljebb {MAX_CONDITIONS} paramétert nevezhet meg
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	a `visibleWhen` a(z) `{other}` értékeit veszi át, egy jelölőnégyzetét vagy egy választásét
+@msg	`visible` must be true or false	`visible`: true vagy false kell
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}`: {_1} és {_2} közötti szám kell
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}`: legfeljebb {MAX_ITEMS} elemű tömb kell
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	a szín alapértelmezett értéke színobjektum vagy hexadecimális karakterlánc legyen, például "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	színobjektum vagy hexadecimális karakterlánc, például "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	a szabad formájú színátmenet legfeljebb {MAX_ITEMS} pontot és vonalat tartalmaz
+@msg	a freeform gradient line names a point it doesn't have	a szabad formájú színátmenet egyik vonala olyan pontot nevez meg, amely nincs benne
+@msg	a gradient needs 1-{MAX_ITEMS} stops	a színátmenethez 1-{MAX_ITEMS} színátmenet-pont kell
+@msg	a list of numbers	számok listája
+@msg	a list of {min_items} to {max_items} numbers	{min_items}-{max_items} számból álló lista
+@msg	a new object needs a `path`	az új objektumhoz `path` kell
+@msg	a number	szám
+@msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
+@msg	a read-only object was left out	kimaradt egy írásvédett objektum
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {"id"} formában vagy úgy, ahogy megkapta
+@msg	a string	karakterlánc
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	a körvonalnak csak `paint`, `width`, `join`, `cap` és `miterLimit` kulcsa van
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	a körvonal formája {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} legyen
+@msg	an effect must be {"id", "params"?, "visible"?}	az effektus formája {"id", "params"?, "visible"?} legyen
+@msg	an effect on a fill returns only `fills`	a kitöltésen lévő effektus csak `fills` értéket ad vissza
+@msg	an effect on a stroke returns only `strokes`	a körvonalon lévő effektus csak `strokes` értéket ad vissza
+@msg	an object must be a JSON object	az objektum JSON-objektum legyen
+@msg	bad range	érvénytelen tartomány
+@msg	choices must be 1-64 non-empty, printable strings	a választási lehetőségek 1-64 nem üres, nyomtatható karakterlánc legyenek
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	tartományon kívüli koordináta (korlát: ±{MAX_COORD} pt)
+@msg	default is not one of the options	az alapértelmezett érték nem a lehetőségek egyike
+@msg	each piece needs a `path`	minden darabhoz `path` kell
+@msg	is listed twice	kétszer szerepel
+@msg	pattern transform out of range	tartományon kívüli mintázat-transzformáció
+@msg	read-only field '{field}' changed	megváltozott a(z) '{field}' írásvédett mező
+@msg	stops must be in order of `offset`	a színátmenet-pontok `offset` szerint rendezve legyenek
+@msg	the document has no pattern {pattern}	a dokumentumban nincs {pattern} mintázat
+@msg	the document has no swatch {n}	a dokumentumban nincs {n} színminta
+@msg	the output	a kimenet
+@msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
+@msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})
+@msg	true or false	true vagy false
+@msg	unknown key `{k}`; the keys here are {_1}	ismeretlen kulcs: `{k}`; az itt használható kulcsok: {_1}
+@msg	{_1} is listed twice	{_1} kétszer szerepel
+@msg	{_1} is not the id of an input object	{_1} nem egy bemeneti objektum azonosítója
+@msg	{_1} is read-only	{_1} írásvédett
+@msg	{what} must be from {lo} to {hi}	{what}: {lo} és {hi} közötti érték kell
+@msg	a color component	színösszetevő
+@msg	a plate	nyomólemez
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Telepíted a(z) „{name}” bővítményt, amely ezeket az engedélyeket kéri?
 	ID: {id}	Azonosító: {id}

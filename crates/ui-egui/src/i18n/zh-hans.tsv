@@ -5963,6 +5963,110 @@ axis	Y Axis	Y 轴
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` 必须是 1-64 个可打印字符
+@msg	`version`, `description` or `author` is too long	`version`、`description` 或 `author` 太长
+@msg	`warnings` must be a list of strings	`warnings` 必须是字符串列表
+@msg	`{k}` must be one of {_1}	`{k}` 必须是 {_1} 之一
+@msg	`{k}` must be {what}	`{k}` 必须是 {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	导出增效工具声明 1 到 {MAX_EXTENSIONS} 个 `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	组外最多 {MAX_UNGROUPED} 个参数：请为其余参数指定 `group`
+@msg	can't encode the input	无法编码输入
+@msg	expected {"dataBase64"}	应为 {"dataBase64"}
+@msg	expected {"objects"}	应为 {"objects"}
+@msg	export `{name}`: {e}	模块导出 `{name}`：{e}
+@msg	extension {e} is listed twice	扩展名 {e} 列出了两次
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	扩展名 {e}：请使用 1-16 个小写字母和数字，不带点
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	无效的 ID {_1}：请使用 1-64 个 A-Z a-z 0-9 . _ - 中的字符
+@msg	invalid parameter name {k}	无效的参数名称 {k}
+@msg	manifest is not UTF-8	清单不是 UTF-8 编码
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	清单太长（上限 {MAX_MANIFEST_BYTES} 字节）
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	清单为 {_1} 字节（上限 {MAX_MANIFEST_BYTES}）
+@msg	module is {_1} bytes (limit {_2})	模块为 {_1} 字节（上限 {_2}）
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要批准：它请求 {0}，用户单独安装它时授予这些权限
+@msg	not JSON: {e}	不是 JSON：{e}
+@msg	not a WebAssembly binary (missing \0asm header)	不是 WebAssembly 二进制文件（缺少 \0asm 头）
+@msg	parameter `{k}`: {what}	参数 `{k}`：{what}
+@msg	parameter `{name}`: {what}	参数 `{name}`：{what}
+@msg	plug-in parameters must be a JSON object	增效工具参数必须是 JSON 对象
+@msg	the module must export its linear memory as `memory`	模块必须将其线性内存导出为 `memory`
+@msg	the objects to change are no longer in the document	要更改的对象已不在文档中
+@msg	the runtime panicked	运行时崩溃
+@msg	unexpected host trap	宿主发生意外的 trap
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version 返回了 {v}；此宿主实现的是版本 {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc 返回了 0（内存不足）
+@msg	vc_alloc returned a block outside memory	vc_alloc 返回了内存之外的块
+@msg	vc_run returned error code {packed}	vc_run 返回了错误代码 {packed}
+@msg	{_1} is not a file	{_1} 不是文件
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} 为 {_2} 字节（上限 {_3}）
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} 个对象（上限 {MAX_OBJECTS}）
+@msg	{at}: {msg}	{at}：{msg}
+@msg	{what} points outside memory	{what} 指向内存之外
+@msg	`angle` must be a number	`angle` 必须是数字
+@msg	`aspect` must be from 0.01 to 100	`aspect` 必须在 0.01 到 100 之间
+@msg	`cap` must be "butt", "round" or "square"	`cap` 必须是 "butt"、"round" 或 "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` 必须是 "nonzero" 或 "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` 必须是不超过 {MAX_HELP_URL} 字节的 https:// 地址
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` 必须是 1-{MAX_HELP} 个可打印字符
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` 必须是 1-{MAX_EFFECT_ID} 字节的效果 ID
+@msg	`id` must be the id of an input object	`id` 必须是某个输入对象的 ID
+@msg	`join` must be "miter", "round" or "bevel"	`join` 必须是 "miter"、"round" 或 "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` 和 `group` 必须是 1-{MAX_LABEL} 个可打印字符
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` 必须是 1-{MAX_TEXT}，且默认值不能更长
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` 和 `maxItems` 必须是 0-{MAX_LIST}，`maxItems` 至少为 1，且默认值的项数在此范围内
+@msg	`name` must be a string	`name` 必须是字符串
+@msg	`opacity` must be a number	`opacity` 必须是数字
+@msg	`type` must be "path" or "compound"	`type` 必须是 "path" 或 "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 必须是 1-{MAX_UNIT} 个可打印字符
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` 必须为 `{other}` 列出 1 到 {MAX_CONDITION_VALUES} 个值
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` 指定了 `{other}`，但它不是在此参数之前声明的参数
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` 最多指定 {MAX_CONDITIONS} 个参数
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` 接受 `{other}` 的值，该参数须为复选框或选项
+@msg	`visible` must be true or false	`visible` 必须是 true 或 false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` 必须是 {_1} 到 {_2} 之间的数字
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` 必须是最多 {MAX_ITEMS} 项的数组
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	颜色默认值必须是颜色对象或 "#3a7bd5" 这样的十六进制字符串
+@msg	a color object or a hex string such as "#3a7bd5"	颜色对象或 "#3a7bd5" 这样的十六进制字符串
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	任意形状渐变最多包含 {MAX_ITEMS} 个点和线
+@msg	a freeform gradient line names a point it doesn't have	任意形状渐变的一条线指定了渐变中没有的点
+@msg	a gradient needs 1-{MAX_ITEMS} stops	渐变需要 1-{MAX_ITEMS} 个色标
+@msg	a list of numbers	数字列表
+@msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 个数字的列表
+@msg	a new object needs a `path`	新对象需要 `path`
+@msg	a number	数字
+@msg	a painted live effect returns only `objects`	绘制型实时效果只返回 `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	绘制型实时效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
+@msg	a read-only object was left out	漏掉了一个只读对象
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	漏掉了一个只读对象：请以单独的 {"id"} 或原样返回它
+@msg	a string	字符串
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	描边只有 `paint`、`width`、`join`、`cap` 和 `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	描边必须是 {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} 形式
+@msg	an effect must be {"id", "params"?, "visible"?}	效果必须是 {"id", "params"?, "visible"?} 形式
+@msg	an effect on a fill returns only `fills`	填色上的效果只返回 `fills`
+@msg	an effect on a stroke returns only `strokes`	描边上的效果只返回 `strokes`
+@msg	an object must be a JSON object	对象必须是 JSON 对象
+@msg	bad range	范围无效
+@msg	choices must be 1-64 non-empty, printable strings	选项必须是 1-64 个非空的可打印字符串
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	坐标超出范围（上限 ±{MAX_COORD} pt）
+@msg	default is not one of the options	默认值不是选项之一
+@msg	each piece needs a `path`	每个片段都需要 `path`
+@msg	is listed twice	列出了两次
+@msg	pattern transform out of range	图案变换超出范围
+@msg	read-only field '{field}' changed	只读字段 '{field}' 已更改
+@msg	stops must be in order of `offset`	色标必须按 `offset` 排序
+@msg	the document has no pattern {pattern}	文档中没有图案 {pattern}
+@msg	the document has no swatch {n}	文档中没有色板 {n}
+@msg	the output	输出
+@msg	the path has no anchor points	路径没有锚点
+@msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
+@msg	true or false	true 或 false
+@msg	unknown key `{k}`; the keys here are {_1}	未知键 `{k}`；此处可用的键：{_1}
+@msg	{_1} is listed twice	{_1} 列出了两次
+@msg	{_1} is not the id of an input object	{_1} 不是输入对象的 ID
+@msg	{_1} is read-only	{_1} 为只读
+@msg	{what} must be from {lo} to {hi}	{what} 必须在 {lo} 到 {hi} 之间
+@msg	a color component	颜色分量
+@msg	a plate	印版
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
 	ID: {id}	ID：{id}
