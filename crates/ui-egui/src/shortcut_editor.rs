@@ -374,12 +374,38 @@ pub(crate) struct Snapshot {
 /// a live-effect or filter plug-in installed later has its row, and one removed has none.
 pub(crate) fn snapshot() -> Arc<Snapshot> {
     static LAST: Mutex<Option<Arc<Snapshot>>> = Mutex::new(None);
-    let revision = menus::plugin_revision();
+    let mut revision = menus::plugin_revision();
     let last = LAST.lock().unwrap_or_else(|e| e.into_inner()).clone();
     if let Some(s) = last.filter(|s| s.revision == revision) {
         return s;
     }
+    // When a plug-in is installed or removed during the walk, the entries may not match
+    // `revision`, and the keymap cached for it would lack rows or hold extra ones. The menus are
+    // walked again at the new revision, and a snapshot that still doesn't match is not cached.
+    let mut s = build_snapshot(revision);
+    for _ in 0..8 {
+        let now = menus::plugin_revision();
+        if now == revision {
+            let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+            // A newer snapshot another thread stored meanwhile stays.
+            if last.as_ref().is_none_or(|l| l.revision <= revision) {
+                *last = Some(s.clone());
+            }
+            return s;
+        }
+        revision = now;
+        s = build_snapshot(revision);
+    }
+    s
+}
+
+/// The snapshot of the menus as they are now, under plug-in revision `revision`.
+fn build_snapshot(revision: u64) -> Arc<Snapshot> {
     // Built without the lock held: the Effect menu is walked anew.
+    #[cfg(test)]
+    if let Some(f) = tests::WHILE_WALKING.take() {
+        f();
+    }
     let effects: Arc<[EffectItem]> = build_effect_items().into();
     let filters: Arc<[FilterItem]> = build_filter_items().into();
     let (head, tail) = fixed_entries();
@@ -396,13 +422,7 @@ pub(crate) fn snapshot() -> Arc<Snapshot> {
         }))
         .chain(tail.iter().cloned())
         .collect();
-    let s = Arc::new(Snapshot { revision, effects, filters, entries });
-    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
-    // A newer snapshot another thread stored meanwhile stays.
-    if last.as_ref().is_none_or(|l| l.revision <= revision) {
-        *last = Some(s.clone());
-    }
-    s
+    Arc::new(Snapshot { revision, effects, filters, entries })
 }
 
 /// Every tool, command and panel the editor can give a shortcut; [`listed`] says which it lists.
@@ -1494,6 +1514,38 @@ mod tests {
             }
         }
         panic!("the installed plug-ins kept changing");
+    }
+
+    thread_local! {
+        /// Run by [`snapshot`] on this thread once, after it reads the plug-in revision and before
+        /// it walks the menus.
+        pub(super) static WHILE_WALKING: std::cell::Cell<Option<Box<dyn FnOnce()>>> = const { std::cell::Cell::new(None) };
+    }
+
+    /// A plug-in installed while the menus are walked doesn't leave a snapshot under the revision
+    /// read before the walk: the keymap built for that revision would then lack the plug-in's row.
+    #[test]
+    fn a_plugin_installed_while_the_menus_are_walked_gets_a_new_snapshot() {
+        use vectorcraft_plugins::wat as tpl;
+        let install = |id: &str| {
+            let manifest = format!(r#"{{"id":"{id}","name":"{id}","version":"1","kind":"filter","params":{{}}}}"#);
+            vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        };
+        let (before, during) = ("test.ui.walk-before", "test.ui.walk-during");
+        // A new revision, so the next snapshot walks the menus.
+        install(before);
+        WHILE_WALKING.set(Some(Box::new(move || {
+            // Another caller builds the snapshot and keymap of the revision read before the walk.
+            crate::keymap::template_for(&snapshot());
+            install(during);
+        })));
+        let s = snapshot();
+        let keys: Vec<&str> = s.entries.iter().map(|e| e.key.as_str()).collect();
+        let catalog = crate::keymap::template_for(&s).catalog().len();
+        vectorcraft_plugins::registry::remove(before);
+        vectorcraft_plugins::registry::remove(during);
+        assert!(keys.contains(&"plugin:test.ui.walk-during"), "the walk lists the plug-in");
+        assert_eq!(catalog, s.entries.len(), "the keymap of the snapshot's revision has every entry");
     }
 
     #[test]
