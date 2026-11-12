@@ -1956,6 +1956,10 @@ antiAlias	Sharp	Nítido
 	Arch	Abóbada
 @msg	select point type or type on a path	selecione texto de ponto ou texto em um caminho
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	o texto em um caminho de um texto encadeado não pode usar Texto Dinâmico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	o texto em um caminho aberto ou composto não pode ser centralizado em cima ou embaixo: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	o texto em um caminho sem comprimento ou sem altura não pode ser centralizado: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	o texto em um caminho de um texto encadeado não pode ser centralizado em cima ou embaixo: {frames}
+@msg	select type on a closed path	selecione texto em um caminho fechado
 	Optimize for fast web view	Otimizar para visualização rápida na web
 	Optimized	Otimizado
 	Options	Opções
@@ -2447,6 +2451,9 @@ digits	Malayalam	Malaiala
 	Rise…	Rise…
 	Roman Baseline	Linha de Base Romana
 	Roman Hanging Punctuation	Pontuação Pendurada Romana
+	Korean Line Break Anywhere	Quebra de Linha Coreana em Qualquer Lugar
+	East Asian Composition Settings	Configurações de Composição do Leste Asiático
+	Korean Composition Settings	Configurações de Composição Coreana
 	Rotate	Girar
 	Rotate Tool	Ferramenta Girar
 	Rotate View Tool	Ferramenta Girar Visualização
@@ -3065,6 +3072,8 @@ digits	Malayalam	Malaiala
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	O texto vira contornos, e os traços que uma linha CAD não pode desenhar viram formas preenchidas.
 	Type on a Path	Texto em um Caminho
 	Type on a Path Options…	Opções de Texto em um Caminho…
+	Center on Top	Centralizar em Cima
+	Center on Bottom	Centralizar em Baixo
 	Type on a Path Tool	Ferramenta Texto em um Caminho
 	Type stays text, and every stroke is a line with its lineweight and dashes.	O texto permanece texto, e todo traço é uma linha com sua espessura e tracejados.
 	Type:	Tipo:
@@ -5952,6 +5961,7 @@ mark-style	Japanese	Japonesas
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guias geométricas
+	Optical Effects	Efeitos ópticos
 	Geometric Patterns	Padrões geométricos
 	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave

@@ -15,7 +15,7 @@ use vectorcraft_geom::{Affine, Rect};
 
 use super::{
     CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, checked_id, checked_ids_param, cmd, color_value, f64_or, has_doc,
-    has_selection, id_param, ids_param, index, ok, str_param, switch_or,
+    has_selection, ids_param, index, object_param, ok, str_param, switch_or,
 };
 use crate::EngineError;
 
@@ -426,7 +426,7 @@ fn paste_remembers_layers(s: &mut Session, p: &Value) -> Result<Value> {
 /// The Layers panel's target circle.
 fn target(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.target";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     if !st.doc.is_editable(id) {
@@ -594,7 +594,7 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_current(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.setCurrent";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc_mut()?;
     let layer = st.doc.layer_containing(id).ok_or(EngineError::NoNode(id))?;
     st.active_layer = Some(layer);
@@ -700,7 +700,7 @@ fn in_isolation(doc: &Document, isolation: Option<NodeId>, id: NodeId) -> bool {
 /// The selection column: select a row's art.
 fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.selectAll";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let add = switch_or(p, "add", false, C)?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
@@ -747,9 +747,12 @@ enum Place {
 /// Drag rows in the Layers panel.
 fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.move";
-    let mut ids = ids_param(p, "ids", C)?.or_else(|| id_param(p, "id").map(|i| vec![i])).ok_or_else(|| bad(C, "missing ids"))?;
+    let mut ids = match ids_param(p, "ids", C)? {
+        Some(ids) => ids,
+        None => vec![object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing ids"))?],
+    };
     ids.truncate(MAX_ROWS);
-    let target = id_param(p, "target").ok_or_else(|| bad(C, "missing target"))?;
+    let target = object_param(p, "target", C)?.ok_or_else(|| bad(C, "missing target"))?;
     let place = match str_param(p, "place").unwrap_or("inside") {
         "above" => Place::Above,
         "below" => Place::Below,
@@ -831,8 +834,8 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "node.move";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let parent = id_param(p, "parent");
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+    let parent = object_param(p, "parent", C)?;
     let index = p.get("index").and_then(Value::as_u64).map_or(usize::MAX, index);
     let d = &s.doc()?.doc;
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;

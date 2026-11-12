@@ -2385,6 +2385,10 @@ file-filter	Templates	Шаблоны
 	Arch	Арка
 @msg	select point type or type on a path	выберите точечный текст или текст по контуру
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст по контуру в связанном тексте не может использовать динамический текст: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	нельзя центрировать вверху или внизу текст по незамкнутому или составному контуру: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	нельзя центрировать текст по контуру без длины или без высоты: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	нельзя центрировать вверху или внизу текст по контуру в связанном тексте: {frames}
+@msg	select type on a closed path	выделите текст по замкнутому контуру
 	Optimize for fast web view	Оптимизировать для быстрого просмотра в web
 	Optimized	Оптимизировано
 	Options	Параметры
@@ -2947,6 +2951,9 @@ digits	Malayalam	Малаялам
 	Rise…	Подъём…
 	Roman Baseline	Римская базовая линия
 	Roman Hanging Punctuation	Римская висячая пунктуация
+	Korean Line Break Anywhere	Перенос корейского текста в любом месте
+	East Asian Composition Settings	Параметры восточноазиатского набора
+	Korean Composition Settings	Параметры корейского набора
 	Rotate	Повернуть
 	Rotate 90° CW	Повернуть на 90° по часовой стрелке
 	Rotate Tool	Инструмент «Поворот»
@@ -3752,6 +3759,8 @@ digits	Malayalam	Малаялам
 	Type on a Path	Текст по контуру
 	Type on a Path Options	Параметры текста по контуру
 	Type on a Path Options…	Параметры текста по контуру…
+	Center on Top	Центрировать вверху
+	Center on Bottom	Центрировать внизу
 	Type on a Path Tool	Инструмент «Текст по контуру»
 	Type Orientation	Ориентация текста
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Текст остаётся текстом, и каждая обводка — линия с её толщиной и штрихами.
@@ -5646,6 +5655,7 @@ lighting	Light	Свет
 	Ruby…	Руби…
 	Ruby	Руби
 	Geometric Guides	Геометрические направляющие
+	Optical Effects	Оптические эффекты
 	Geometric Patterns	Геометрические узоры
 	Grit Textures	Зернистые текстуры
 	Ease In	Плавное начало

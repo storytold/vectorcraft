@@ -416,6 +416,8 @@ digits	Malayalam	말라얄람어
 	Stair Step	계단
 	Gravity	중력
 	Type on a Path Options…	패스 위 문자 옵션…
+	Center on Top	위쪽에 가운데 맞춤
+	Center on Bottom	아래쪽에 가운데 맞춤
 	Threaded Text	연결된 문자
 	Create	만들기
 	Release Selection	선택 해제
@@ -446,6 +448,10 @@ digits	Malayalam	말라얄람어
 	Arch	아치
 @msg	select point type or type on a path	포인트 문자 또는 패스 위 문자를 선택하십시오
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	연결된 문자의 패스 위 문자에는 동적 텍스트를 사용할 수 없습니다: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	열린 패스나 컴파운드 패스 위 문자는 위쪽이나 아래쪽에 가운데 맞춤할 수 없습니다: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	길이나 높이가 없는 패스 위 문자는 가운데 맞춤할 수 없습니다: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	연결된 문자의 패스 위 문자는 위쪽이나 아래쪽에 가운데 맞춤할 수 없습니다: {frames}
+@msg	select type on a closed path	닫힌 패스 위 문자를 선택하세요
 	Fill with Placeholder Text	자리 표시 문자로 채우기
 	Insert Inline Symbol	인라인 심볼 삽입
 	Show Hidden Characters	숨겨진 문자 표시
@@ -2935,6 +2941,9 @@ mark-style	Japanese	일본식
 	Right Plane	오른쪽 평면
 	Right:	오른쪽:
 	Roman Hanging Punctuation	로마자 걸림 문장 부호
+	Korean Line Break Anywhere	한글 어디서나 줄 바꿈
+	East Asian Composition Settings	동아시아 조판 설정
+	Korean Composition Settings	한글 조판 설정
 	Rotate	회전
 	Rotate Tool	회전 도구
 	Rotate View Tool	보기 회전 도구
@@ -5621,6 +5630,7 @@ lighting	Light	광원
 	Ruby…	루비…
 	Ruby	루비
 	Geometric Guides	기하학적 안내선
+	Optical Effects	광학 효과
 	Geometric Patterns	기하학적 패턴
 	Grit Textures	입자 텍스처
 	Ease In	서서히 시작
