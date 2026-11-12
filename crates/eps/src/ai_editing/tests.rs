@@ -294,6 +294,51 @@ fn writing_again_gives_the_same_bytes() {
     assert!(first.warnings.is_empty(), "{:?}", first.warnings);
 }
 
+/// The CMYK equivalent written beside RGB or Lab values is the one of the values as written (to four
+/// decimals, Lab clamped to the range a reader reads), so the reopened file is written with the same
+/// numbers: a new document's swatches, and colors of many decimals in fills, gradient stops, global
+/// process swatches (RGB and Lab), an RGB spot swatch (in a fill and in a stop), Lab spot swatches
+/// and a Lab spot swatch out of range.
+#[test]
+fn cmyk_equivalents_are_written_again_unchanged() {
+    let mut doc = Document::new(300.0, 200.0);
+    let v = |i: u16, s: f32| (f32::from(i) * s + 0.123_456_7).fract();
+    let rgb = |i: u16| Color::rgb(v(i, 0.137_911_3), v(i, 0.271_828_2), v(i, 0.314_159_3));
+    let lab = |i: u16| Color::lab(v(i, 0.137_911_3) * 100.0, v(i, 0.271_828_2) * 200.0 - 100.0, v(i, 0.314_159_3) * 200.0 - 100.0);
+    let glaze = rgb(102);
+    let swatch = |name: String, c: Color, spot: bool| Swatch { name, paint: solid(c), global: true, spot };
+    let mut named: Vec<(String, Color, bool)> =
+        vec![("Glaze".into(), glaze, true), ("Out".into(), Color::lab(104.567_89, -140.123_46, 131.987_65), true)];
+    for i in 0..8u16 {
+        named.push((format!("Leaf {i}"), rgb(i + 110), false));
+        named.push((format!("Fern {i}"), lab(i + 120), false));
+        named.push((format!("Moss {i}"), lab(i + 130), true));
+    }
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.extend(named.iter().map(|(name, c, spot)| swatch(name.clone(), *c, *spot)));
+    doc.swatches = swatches.into();
+    let layer = doc.layers[0].id;
+    for i in 0..24u16 {
+        let x = f64::from(i % 8) * 30.0 + 10.0;
+        let y = f64::from(i / 8) * 30.0 + 10.0;
+        let n = square(&mut doc, Rect::new(x, y, x + 20.0, y + 20.0), rgb(i));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let mut stops: Vec<GradientStop> = (0..5u16).map(|i| GradientStop::new(f32::from(i) / 5.0, rgb(i + 50))).collect();
+    stops.push(GradientStop { swatch: Some("Glaze".into()), tint: 0.7, ..GradientStop::new(1.0, glaze.tinted(0.7)) });
+    let mut fills = vec![gradient_paint(Gradient::new(GradientKind::Linear, stops), None, None)];
+    fills.extend(named.iter().map(|(name, c, spot)| linked(name, *c, if *spot { 1.0 } else { 0.6 })));
+    for (i, fill) in fills.into_iter().enumerate() {
+        let x = (i % 9) as f64 * 30.0 + 10.0;
+        let y = (i / 9) as f64 * 30.0 + 110.0;
+        let n = painted(&mut doc, shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)), vec![AppearanceItem::Fill(FillLayer::new(fill))]);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let first = program(&doc);
+    let again = String::from_utf8(export_ai_editing(&read_back(&doc), &opts()).unwrap().program).unwrap().replace("\r\n", "\n");
+    same_lines(&again.lines().map(String::from).collect::<Vec<_>>(), &first.lines().map(String::from).collect::<Vec<_>>());
+}
+
 #[test]
 fn the_data_is_zstandard_compressed_with_the_header_as_metadata() {
     let doc = sample();
@@ -5870,25 +5915,6 @@ fn outlines(doc: &Document) -> Vec<String> {
     out
 }
 
-/// Fails with the lines where `got` and `want` differ in more than their numbers' last written
-/// decimal (a color read back from four decimals gives its other model's values again from them).
-fn near_lines(got: &str, want: &str) {
-    let near = |a: &str, b: &str| {
-        let (a, b): (Vec<&str>, Vec<&str>) = (a.split(' ').collect(), b.split(' ').collect());
-        a.len() == b.len()
-            && a.iter().zip(&b).all(|(x, y)| match (x.trim_start_matches("%_").parse::<f64>(), y.trim_start_matches("%_").parse::<f64>()) {
-                (Ok(x), Ok(y)) => (x - y).abs() <= 2e-3,
-                _ => x == y,
-            })
-    };
-    let (g, w): (Vec<&str>, Vec<&str>) = (got.lines().collect(), want.lines().collect());
-    let differ: Vec<String> = (0..g.len().max(w.len()))
-        .filter(|&i| !matches!((g.get(i), w.get(i)), (Some(a), Some(b)) if near(a, b)))
-        .map(|i| format!("line {i}:\n  got  {:?}\n  want {:?}", g.get(i), w.get(i)))
-        .collect();
-    assert!(differ.is_empty(), "{}", differ.join("\n"));
-}
-
 #[test]
 fn objects_with_live_effects_and_graphic_styles_are_read_back() {
     let doc = styles_document();
@@ -6210,25 +6236,7 @@ fn art_styles_write_the_same_bytes_again() {
     assert_eq!(private_data(&doc, &opts()).unwrap().0, private_data(&doc, &opts()).unwrap().0);
     // What is read back is written as it was.
     let again = export_ai_editing(&read_back(&doc), &opts()).unwrap().program;
-    near_lines(&rgb_without_cmyk(&shown(&again)), &rgb_without_cmyk(&shown(&first.program)));
-}
-
-/// `program` with the CMYK equivalents of plain RGB colors blanked out: the first four numbers of
-/// `c m y k r g b Xa` (or `XA`) and of an RGB gradient stop's `c m y k r g b 2 ... Bs`. Named and
-/// spot RGB colors (`... (name) tint Xk`, `Xx` and spot stops) are not blanked; the document this
-/// is used on has none. The Generic CMYK separation of a color at the edge of the press gamut can
-/// land on one of two results that differ by up to 0.01 when the RGB changes in its last float
-/// bits, as it does between the first save and the save of the reopened file, and the platform's
-/// float math decides which. The RGB values stay compared.
-fn rgb_without_cmyk(program: &str) -> String {
-    let blank = |line: &str| {
-        let (prefix, rest) = line.strip_prefix("%_").map_or(("", line), |r| ("%_", r));
-        let t: Vec<&str> = rest.split(' ').collect();
-        let color = t.len() == 8 && matches!(t[7], "Xa" | "XA");
-        let stop = t.len() > 8 && t[7] == "2" && t.last() == Some(&"Bs");
-        if color || stop { format!("{prefix}_ _ _ _ {}", t[4..].join(" ")) } else { line.to_string() }
-    };
-    program.lines().map(blank).collect::<Vec<_>>().join("\n")
+    same_lines(&shown(&again).lines().map(String::from).collect::<Vec<_>>(), &shown(&first.program).lines().map(String::from).collect::<Vec<_>>());
 }
 
 /// `n` on the first layer of `doc`.

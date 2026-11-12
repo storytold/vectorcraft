@@ -755,6 +755,28 @@ fn a_gradient_fill_and_its_stroke_are_one_object() {
     assert_eq!(n.appearance.stroke_paint().color(), Some(Color::rgb(1.0, 0.0, 0.0)));
 }
 
+/// An RGB gradient stop's CMYK equivalent is the one of its RGB values as written (to four
+/// decimals), so the reopened file writes the same stops.
+#[test]
+fn rgb_stops_are_written_again_unchanged() {
+    let mut doc = Document::new(100.0, 100.0);
+    let rgb = |i: u16| {
+        let v = |s: f32| (f32::from(i) * s + 0.123_456_7).fract();
+        Color::rgb(v(0.137_911_3), v(0.271_828_2), v(0.314_159_3))
+    };
+    let stops = (0..12u16).map(|i| GradientStop::new(f32::from(i) / 11.0, rgb(i))).collect();
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 50.0)), paint, Paint::None);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let stops = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap().lines().filter(|l| l.ends_with("%_Bs")).map(String::from).collect::<Vec<_>>();
+    let first = write(&doc).bytes;
+    let again = write(&crate::import(&first).unwrap().document).bytes;
+    let (first, again) = (stops(first), stops(again));
+    assert_eq!(first.len(), 12, "{first:?}");
+    assert_eq!(again, first);
+}
+
 /// A gradient from white to #1b2a6b, the colors of #2687's circle, placed at `geom` (None: fitted
 /// to the object).
 fn white_to_navy(kind: GradientKind, geom: Option<vectorcraft_color::GradientGeom>) -> Paint {

@@ -11,7 +11,7 @@ use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, Rect, Shape, Vec2};
 
 use super::{MAX_NEST, Writer, Xy};
-use crate::ai_ops::{average, unit};
+use crate::ai_ops::{self, average, unit};
 use crate::ps;
 
 pub(in crate::ai_editing) const GRADIENTS: &str =
@@ -371,7 +371,9 @@ impl Writer<'_> {
     /// A stop's color and its style: gray `lightness 0`, CMYK `c m y k 1`, RGB (and Lab, as RGB)
     /// `c m y k r g b 2` with its CMYK equivalent; a spot color its full color's CMYK equivalent,
     /// then its RGB values when it isn't CMYK, its name and how much lighter than the full color,
-    /// then `3` (CMYK), or `1 4` (RGB, and Lab as RGB).
+    /// then `3` (CMYK), or `1 4` (RGB, and Lab as RGB). An RGB color's CMYK equivalent is converted
+    /// from its values as written ([`ai_ops::as_written`]), a Lab color's from its Lab values, and a
+    /// spot color's is the one the palette writes for it.
     fn stop_color(&mut self, s: &mut String, stop: &GradientStop) {
         let doc = self.doc;
         let intent = self.cms.settings().intent;
@@ -380,7 +382,7 @@ impl Writer<'_> {
             && let Paint::Solid { color: full, swatch: None, .. } = sw.paint
         {
             if sw.spot {
-                let cmyk = self.cms.to_cmyk(&doc.linked_color(full, true), intent).map(unit);
+                let cmyk = self.cms.to_cmyk(&doc.linked_color(ai_ops::as_written(full), true), intent).map(unit);
                 ps::push_nums(s, &cmyk.map(f64::from));
                 let rgb = !matches!(full, Color::Cmyk { .. });
                 if rgb {
@@ -406,7 +408,8 @@ impl Writer<'_> {
                 s.push_str("1 ");
             }
             color @ (Color::Rgb { .. } | Color::Lab { .. }) => {
-                let cmyk = self.cms.to_cmyk(&color, intent).map(unit);
+                let source = if matches!(color, Color::Rgb { .. }) { ai_ops::as_written(color) } else { color };
+                let cmyk = self.cms.to_cmyk(&source, intent).map(unit);
                 ps::push_nums(s, &cmyk.map(f64::from));
                 ps::push_nums(s, &color.to_rgb().map(|v| f64::from(unit(v))));
                 s.push_str("2 ");
