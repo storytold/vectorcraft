@@ -9353,6 +9353,33 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
     assert_eq!(images, 0, "only the traced paths are kept");
 }
 
+/// For a selected image the Contextual Task Bar offers Remove Background, which clears the
+/// background in the image's pixels at once (no dialog) with the command's defaults.
+#[test]
+fn the_task_bar_removes_a_selected_images_background() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let img =
+        image::RgbaImage::from_fn(20, 20, |x, y| image::Rgba(if (6..14).contains(&x) && (6..14).contains(&y) { [200, 0, 0, 255] } else { [255; 4] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    app.run("file.place", json!({"name": "dot.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let labels = task_bar_labels(&mut app, &ctx);
+    let at = labels.iter().find(|(t, _)| t == "Remove Background").map(|(_, r)| r.center()).expect("Remove Background is offered");
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(true)]);
+    frame(&mut app, &ctx, vec![button(false)]);
+    assert!(app.ui.dialog.is_none(), "it runs at once");
+    let st = app.session.active().unwrap();
+    let Some(NodeKind::Image(im)) = st.selection.objects.first().and_then(|id| st.doc.node(*id)).map(|n| &n.kind) else { panic!("an image") };
+    let px = image::load_from_memory(&st.doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(10, 10).0[3]), (0, 255), "the white background is cleared, the red dot kept");
+}
+
 /// The labels the Contextual Task Bar draws in a headless frame (after one to lay it out), with
 /// their rects; none while it isn't shown. The SVG loaders are installed so the icons draw as
 /// images instead of egui's ⚠ placeholder, which the label list would otherwise pick up.
