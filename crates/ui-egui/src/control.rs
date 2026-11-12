@@ -406,7 +406,7 @@ struct Hiding {
     /// shown instead ([`unreadable_library_ids`]).
     hidden: Vec<(String, String)>,
     /// The other loaded library ids the UI state and the session hold: an occurrence of a hidden id or
-    /// path that continues into one of them stays ([`known_continuation`]).
+    /// path that begins one of them stays ([`begins_known_id`]).
     readable: std::collections::BTreeSet<String>,
 }
 
@@ -506,9 +506,8 @@ fn collect_library_panel_ids(v: &Value, ids: &mut std::collections::BTreeSet<Str
 /// Writes each id of `ids` as the id the reply shows instead, and the path in it as the file name
 /// shown, wherever `v` holds them, in every string and key: a library's id, its panel's id
 /// (`library:swatches:loaded/<path>`), status text, a dialog, the command palette query, a script's
-/// report and a recorded step. An occurrence followed by a character that continues a path
-/// ([`continues_path`]) stays only when the longer text is another loaded library's id
-/// ([`known_continuation`]): a readable library's id that begins with a hidden one keeps its path. On
+/// report and a recorded step. An occurrence that begins another loaded library's id stays
+/// ([`begins_known_id`]): a readable library's id that begins with a hidden one keeps its path. On
 /// Windows the ids and paths are matched in any case of ASCII letters.
 fn hide_library_ids(v: &mut Value, hiding: &Hiding) {
     let pairs = hidden_text(&hiding.hidden);
@@ -596,8 +595,8 @@ fn occurrences(text: &str, needle: &str, fold: bool) -> Vec<usize> {
 }
 
 /// `s` with the `from` texts of the rewrite's pairs written as their `to` texts, at each occurrence
-/// not followed by a character that continues a path ([`continues_path`]) into another loaded library's id
-/// ([`known_continuation`]). A hidden id or path written with `%XX` escapes (in a `file:` URL) is
+/// that does not begin another loaded library's id ([`begins_known_id`]). A hidden id or path written
+/// with `%XX` escapes (in a `file:` URL) is
 /// replaced too; the escapes around it stay. `None` when nothing changed.
 fn replace_text(s: &str, r: &Rewrite) -> Option<String> {
     let replaced = replace_plain_text(s, r);
@@ -616,7 +615,7 @@ fn replace_text(s: &str, r: &Rewrite) -> Option<String> {
         for at in occurrences(&decoded, from, r.fold) {
             let end = at + from.len();
             let free = !taken.iter().any(|&(a, b)| at < b && a < end);
-            if free && (!continues_path(&decoded[end..]) || !known_continuation(&decoded, at, end, r)) {
+            if free && !begins_known_id(&decoded, at, end, r) {
                 taken.push((at, end));
                 cuts.push((spans[at].0, spans[end - 1].1, to.as_str()));
             }
@@ -706,7 +705,7 @@ fn replace_matches(s: &str, r: &Rewrite, fold: bool) -> Option<String> {
         let mut copied = 0;
         for at in found {
             let end = at + from.len();
-            if !continues_path(&text[end..]) || !known_continuation(text, at, end, r) {
+            if !begins_known_id(text, at, end, r) {
                 next.push_str(&text[copied..at]);
                 next.push_str(to);
                 copied = end;
@@ -726,19 +725,19 @@ fn continues_path(rest: &str) -> bool {
     rest.trim_start_matches(['.', '-', '~']).starts_with(|c: char| c.is_alphanumeric() || matches!(c, '_' | '/' | '\\'))
 }
 
-/// Is the longer text that the occurrence `text[at..end]` starts, up to the first space, quote,
-/// bracket, `,`, `;` or `|` after `end`, another loaded library's id ([`Hiding::readable`]), written
-/// with or without its `loaded/`, with no `.` or `..` part? A readable library's id that begins with a
-/// hidden one stays; a hidden path followed by more path text (`<path>.bak`) is still hidden.
-fn known_continuation(text: &str, at: usize, end: usize, r: &Rewrite) -> bool {
-    let stop = text[end..].find(|c: char| c.is_whitespace() || "\"'`()[]{}<>,;|".contains(c)).map_or(text.len(), |n| end + n);
-    let longer = &text[at..stop];
-    if longer.split(['/', '\\']).any(|part| part == "." || part == "..") {
-        return false;
-    }
-    let same = |id: &str, want: &str| if r.fold { id.eq_ignore_ascii_case(want) } else { id == want };
-    let id = if longer.starts_with("loaded/") { longer.to_string() } else { format!("loaded/{longer}") };
-    r.hiding.readable.iter().any(|known| same(known, &id))
+/// Does the occurrence `text[at..end]` begin a longer loaded library id ([`Hiding::readable`]), written
+/// with or without its `loaded/` and with no `.` or `..` part, that ends where the text stops
+/// continuing a path ([`continues_path`])?
+/// A readable library's id that begins with a hidden one stays, also with a space after the hidden
+/// part; a hidden path followed by other path text (`<path>.bak`, `<path>/../x`) is still hidden.
+fn begins_known_id(text: &str, at: usize, end: usize, r: &Rewrite) -> bool {
+    let rest = &text[at..];
+    let same = |a: &str, b: &str| if r.fold { a.eq_ignore_ascii_case(b) } else { a == b };
+    let dotted = |id: &str| id.split(['/', '\\']).any(|part| part == "." || part == "..");
+    r.hiding.readable.iter().filter(|known| !dotted(known)).any(|known| {
+        let id = if rest.starts_with("loaded/") { known.as_str() } else { known.strip_prefix("loaded/").unwrap_or(known) };
+        id.len() > end - at && rest.get(..id.len()).is_some_and(|head| same(head, id)) && !continues_path(&rest[id.len()..])
+    })
 }
 
 /// Text that a person or a script wrote, by its key: a command palette query, a script's report and a
