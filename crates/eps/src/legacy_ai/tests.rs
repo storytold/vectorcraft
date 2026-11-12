@@ -110,6 +110,119 @@ fn conic_gradients_are_written_as_wedges_clipped_to_the_shape() {
     }
 }
 
+/// The format's gradients pad past their ends: a linear gradient that repeats or reflects is
+/// written with its stops repeated across the shape (a definition of its own, not named after the
+/// swatch), and a conic one as wedges that repeat with the stops (which print as the canvas
+/// draws them), with a warning.
+#[test]
+fn spread_gradients_are_written_with_their_stops_repeated() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let linear = |spread| {
+        let mut g = GradientPaint::new(Gradient { spread, repeats: 3, ..Gradient::new(GradientKind::Linear, stops.clone()) });
+        // Across the shape: three runs.
+        g.geom = Some(GradientGeom {
+            start: vectorcraft_geom::Point::new(20.0, 50.0),
+            end: vectorcraft_geom::Point::new(180.0, 50.0),
+            aspect: 1.0,
+            focal: None,
+        });
+        g.swatch = Some("Bands".into());
+        Paint::Gradient(Box::new(g))
+    };
+    for (spread, colors) in [
+        (GradientSpread::Repeat, ["0 0 1", "1 0 0", "0 0 1", "1 0 0", "0 0 1", "1 0 0"]),
+        (GradientSpread::Reflect, ["0 0 1", "1 0 0", "1 0 0", "0 0 1", "0 0 1", "1 0 0"]),
+    ] {
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), linear(spread), Paint::None);
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == SPREAD), "{:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes);
+        assert!(text.contains("(Gradient) 0 6 Bd") && !text.contains("(Bands)"), "{text}");
+        // A linear definition lists its stops from the last to the first, each RGB stop as
+        // `c m y k r g b 2 …`.
+        let def = text.split("(Gradient) 0 6 Bd\n[\n").nth(1).unwrap();
+        for (line, rgb) in def.lines().take(6).zip(colors) {
+            assert!(line.contains(&format!(" {rgb} 2 ")), "{spread:?}: {line} lacks {rgb}\n{def}");
+        }
+    }
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Reflect, repeats: 3, ..Gradient::new(GradientKind::Conic, stops) });
+    g.geom = Some(GradientGeom {
+        start: vectorcraft_geom::Point::new(100.0, 50.0),
+        end: vectorcraft_geom::Point::new(140.0, 30.0),
+        aspect: 1.0,
+        focal: None,
+    });
+    let mut doc = Document::new(200.0, 100.0);
+    let n = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let text = String::from_utf8_lossy(&write(&doc).bytes).into_owned();
+    assert!(text.matches("\nf\n").count() >= 3 * CONIC_WEDGES, "a wedge a degree for each run");
+}
+
+/// A gradient repeated more times than the reader keeps stops for is written with no more stops
+/// than it reads, with a warning, so it opens with every stop that was written.
+#[test]
+fn many_repeats_are_written_within_the_stops_the_reader_reads() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    // A run of 0.4 pt across a shape 160 pt wide: 400 runs.
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(GradientKind::Linear, stops) });
+    g.geom = Some(GradientGeom {
+        start: vectorcraft_geom::Point::new(20.0, 50.0),
+        end: vectorcraft_geom::Point::new(60.0, 50.0),
+        aspect: 1.0,
+        focal: None,
+    });
+    let mut doc = Document::new(200.0, 100.0);
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == SPREAD_CAPPED), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    let def = text.split("%AI5_BeginGradient: (Gradient)\n").nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+    let written = def.matches(" %_Bs\n").count();
+    assert!((2..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{written} stops");
+    let read = crate::import(&out.bytes).unwrap().document;
+    let mut stops = None;
+    read.walk(|n| {
+        if let (None, Paint::Gradient(g)) = (&stops, n.appearance.fill_paint()) {
+            stops = Some(g.gradient.stops.len());
+        }
+    });
+    assert_eq!(stops, Some(written), "every stop written is read");
+}
+
+/// A radial gradient repeated out from a center far from the shape is written with its ramp points
+/// (percent) to five decimals, so its runs keep their places hundreds of runs out.
+#[test]
+fn far_runs_keep_their_places() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, ..Gradient::new(GradientKind::Radial, stops) });
+    // Runs 0.25 pt apart, the shape 480 runs and more from the center.
+    let c = vectorcraft_geom::Point::new(-100.0, 50.0);
+    g.geom = Some(GradientGeom { start: c, end: c + vectorcraft_geom::Vec2::new(0.25, 0.0), aspect: 1.0, focal: None });
+    let bounds = Rect::new(20.0, 10.0, 180.0, 90.0);
+    let padded = g.gradient.padded_within(&g.geom.unwrap(), bounds, crate::import::MAX_GRADIENT_STOPS).unwrap();
+    let mut doc = Document::new(200.0, 100.0);
+    let n = shape(&mut doc, shapes::rectangle(bounds), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let text = String::from_utf8_lossy(&write(&doc).bytes).into_owned();
+    let def = text.split("%AI5_BeginGradient: (Gradient)\n").nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+    let ramps: Vec<f64> = def.lines().filter_map(|l| l.strip_suffix(" %_Bs")).map(|l| l.rsplit(' ').next().unwrap().parse().unwrap()).collect();
+    assert_eq!(ramps.len(), padded.gradient.stops.len());
+    for (ramp, stop) in ramps.iter().zip(&padded.gradient.stops) {
+        assert!((ramp / 100.0 - f64::from(stop.offset)).abs() < 2e-7, "{ramp} for {}", stop.offset);
+    }
+}
+
 /// The format has no diamond gradient: a diamond fill, and a diamond stroke (written as its filled
 /// outline), are four path objects clipped to the shape, each a linear gradient over a quadrant
 /// of the diamond's frame, with a warning; the definition is not named after the swatch.
@@ -137,6 +250,32 @@ fn diamond_gradients_are_written_as_four_linear_gradients_clipped_to_the_shape()
         assert!(!text.contains("(Gem)"), "not named after the swatch");
         assert_eq!(text.matches(" Bg\n").count(), 4, "a gradient a quadrant");
     }
+}
+
+/// A diamond gradient that repeats is four linear gradients over the quadrants of its frame, each
+/// with its stops repeated out to the shape's edge, with a warning.
+#[test]
+fn a_spread_diamond_repeats_in_each_quadrant() {
+    use vectorcraft_color::GradientSpread;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 3, ..Gradient::new(GradientKind::Diamond, stops) });
+    g.geom = Some(vectorcraft_color::GradientGeom {
+        start: vectorcraft_geom::Point::new(100.0, 50.0),
+        end: vectorcraft_geom::Point::new(140.0, 30.0),
+        aspect: 0.7,
+        focal: None,
+    });
+    let mut doc = Document::new(200.0, 100.0);
+    let n = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == DIAMOND) && out.warnings.iter().any(|w| w == SPREAD), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert_eq!(text.matches(" Bg\n").count(), 4, "a gradient a quadrant");
+    let defs: Vec<usize> =
+        text.split("%AI5_BeginGradient: ").skip(1).map(|d| d.split("%AI5_EndGradient").next().unwrap_or("").matches(" %_Bs\n").count()).collect();
+    assert!(!defs.is_empty() && defs.iter().all(|&n| n >= 6), "stops in each definition: {defs:?}");
 }
 
 /// `doc` written with options `o`. Every file the tests write is also run as a PostScript program
@@ -1191,6 +1330,59 @@ fn variable_font_settings_are_warned_as_left_out() {
     let out = write(&doc);
     assert!(out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
     assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
+}
+
+/// Standard Vertical Roman Alignment is written as `Tv` and Tate-chu-yoko in horizontal type as a
+/// Kumi block recorded for later use, `TY` (§15.3.4), each where it changes: the marks read back
+/// on the same characters, a block is closed before its text object ends, and type with neither
+/// mark has neither operator.
+#[test]
+fn vertical_roman_and_tate_chu_yoko_are_written_and_read_back() {
+    use vectorcraft_doc::{TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let roman = vectorcraft_doc::CharStyle { standard_vertical_roman: true, ..plain.clone() };
+    let tcy = vectorcraft_doc::CharStyle { tate_chu_yoko: true, ..plain.clone() };
+    let both = vectorcraft_doc::CharStyle { tate_chu_yoko: true, standard_vertical_roman: true, ..plain.clone() };
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut marked = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "A", plain.clone());
+    for (text, st) in [("12", &tcy), ("b", &roman), ("c", &both), ("34", &tcy)] {
+        marked.runs.push(TextRun::new(text, st.clone()));
+    }
+    let next = TextObject::point(vectorcraft_geom::Point::new(20.0, 80.0), "D", plain.clone());
+    for t in [marked, next] {
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == TYPE || w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert_eq!((text.matches("1 TY\n").count(), text.matches("0 TY\n").count()), (2, 2), "{text}");
+    assert_eq!((text.matches("1 Tv\n").count(), text.matches("0 Tv\n").count()), (1, 1), "{text}");
+    // The last block ends before its text object does.
+    assert!(text.contains("(34) Tx\n0 TY\nTO\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let flags = |t: &TextObject| -> Vec<(String, bool, bool)> {
+        let mut out: Vec<(String, bool, bool)> = vec![];
+        for r in &t.runs {
+            let key = (r.style.tate_chu_yoko, r.style.standard_vertical_roman);
+            match out.last_mut() {
+                Some(last) if (last.1, last.2) == key => last.0.push_str(&r.text),
+                _ => out.push((r.text.clone(), key.0, key.1)),
+            }
+        }
+        out
+    };
+    let s = |x: &str| x.to_string();
+    assert_eq!(
+        flags(&read[0].1),
+        [(s("A"), false, false), (s("12"), true, false), (s("b"), false, true), (s("c"), true, true), (s("34"), true, false)]
+    );
+    assert_eq!(flags(&read[1].1), [(s("D"), false, false)]);
+
+    // Type with neither mark has neither operator.
+    let text = String::from_utf8(write(&typed()).bytes).unwrap();
+    assert!(!text.contains(" Tv\n") && !text.contains(" TY\n"), "{text}");
 }
 
 /// A legacy `.ai` text path holds the path and where the type starts on it, and no Align to Path

@@ -438,7 +438,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a
             continue;
         };
         let preview = d.images.get(&key).map(|b| b.bytes.clone());
-        // A file read as it is keeps its own type; one turned upright (EXIF orientation) is the PNG it became.
+        // A file read as it is keeps its own type; one turned upright by its orientation is the PNG, or CMYK TIFF, it became.
         let mime = match fileio::format_for_name(g.link.name()) {
             Some(f) if img.blob.bytes.as_slice() == bytes.as_slice() => f.mime.to_string(),
             _ => img.blob.mime.clone(),
@@ -900,12 +900,12 @@ fn rows<'a>(gs: impl Iterator<Item = &'a Group>, doc_path: Option<&str>) -> Vec<
 /// May a reply to the caller asking now carry the link path `path` (of the document saved at
 /// `doc_path`)? Always without read roots in force; with them, only when the file it names (a
 /// relative path taken from the document's folder) lies inside them.
-fn path_shown(path: &str, doc_path: Option<&str>) -> bool {
+pub(crate) fn path_shown(path: &str, doc_path: Option<&str>) -> bool {
     crate::file_access::current().is_none() || fileio::document_path(path, doc_path).is_ok_and(|p| crate::file_access::check_read(&p).is_ok())
 }
 
 /// `row[key] = path` when [`path_shown`] says so; otherwise `row` has no `key`.
-fn note_path(row: &mut Value, key: &str, path: &str, doc_path: Option<&str>) {
+pub(crate) fn note_path(row: &mut Value, key: &str, path: &str, doc_path: Option<&str>) {
     if path_shown(path, doc_path) {
         row[key] = json!(path);
     } else if let Some(o) = row.as_object_mut() {

@@ -405,6 +405,8 @@
 	Stair Step	Schody
 	Gravity	Gravitace
 	Type on a Path Options…	Možnosti textu na cestě…
+	Center on Top	Vystředit nahoře
+	Center on Bottom	Vystředit dole
 	Threaded Text	Zřetězený text
 	Create	Vytvořit
 	Release Selection	Uvolnit výběr
@@ -425,6 +427,10 @@
 	Arch	Klenba
 @msg	select point type or type on a path	vyberte bodový text nebo text na cestě
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text na cestě ve zřetězeném textu nemůže používat dynamický text: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	text na otevřené nebo složené cestě nelze vystředit nahoře ani dole: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	text na cestě bez délky nebo bez výšky nelze vystředit: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	text na cestě ve zřetězeném textu nelze vystředit nahoře ani dole: {frames}
+@msg	select type on a closed path	vyberte text na uzavřené cestě
 	Fill with Placeholder Text	Vyplnit zástupným textem
 	Insert Inline Symbol	Vložit symbol do textu
 	Show Hidden Characters	Zobrazit skryté znaky
@@ -1420,6 +1426,7 @@ lighting	Light	Světlo
 	Rotate View Tool	Nástroj Otočení zobrazení
 	Trackpad Gesture to Rotate View	Otáčet zobrazení gestem na trackpadu
 	Hold a Tool Shortcut to Use the Tool Temporarily	Podržením klávesové zkratky nástroj dočasně použít
+	Show Bounding Box While Moving and Drawing	Zobrazit ohraničovací rámeček při přesouvání a kreslení
 	Rotate View	Otočení zobrazení
 	Rounded Rectangle Tool	Nástroj Zaoblený obdélník
 	Scale Tool	Nástroj Změna velikosti
@@ -1701,6 +1708,17 @@ digits	Malayalam	Malajálamské
 	The selected character's font is not available.	Písmo vybraného znaku není k dispozici.
 	No alternates for the selected character.	Vybraný znak nemá žádné alternativy.
 	Double-click to replace	Dvojklikem nahradíte
+	Select one character with the Type tool first.	Nejprve nástrojem Text vyberte jeden znak.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} je glyf písma {font}, ne písma, kterým je vybraný text nastaven ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} patří znaku {base} (U+{base_code}) {place}; váš výběr je {sel} (U+{code}).
+	at the start of a word	na začátku slova
+	in the middle of a word	uprostřed slova
+	at the end of a word	na konci slova
+	standing alone	když stojí samostatně
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} není alternativou znaku {sel} (U+{code}) tak, jak stojí ve svém slově.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dvojklikem vložíte {base} (U+{code}): prezentační tvar se nespojuje, písmeno ano.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Vloženo {base} (U+{code}) místo prezentačního tvaru: písmo ho podle polohy spojí se sousedy.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Žádná funkce OpenType tento glyf zde nekreslí, proto nahradí glyf znaku a nemusí se spojit se sousedními znaky.
 	Double-click to insert	Dvojklikem vložíte
 	Entire Font	Celé písmo
 	glyph {id}	glyf {id}
@@ -1861,6 +1879,8 @@ digits	Malayalam	Malajálamské
 	Save Image Trace Preset	Uložit přednastavení vektorizace obrazu
 	Delete Image Trace Preset	Odstranit přednastavení vektorizace obrazu
 	Method:	Metoda:
+	Pad	Prodloužit
+	Repeats	Počet opakování
 	Mode:	Režim:
 	Noise	Šum
 	Create:	Vytvořit:
@@ -3960,6 +3980,9 @@ theme	Appearance	Motiv
 	Select All Unused	Vybrat všechny nepoužité
 	Sort by Kind	Seřadit podle druhu
 	Sort by Name	Seřadit podle názvu
+	Spot Color Objects	Objekty s přímými barvami
+	Pattern Objects	Objekty se vzorky
+	Gradient Objects	Objekty s přechody
 	Spot Colors	Přímé barvy
 	Spot Colors (0)	Přímé barvy (0)
 	Swatch Options	Možnosti položky vzorníku
@@ -4681,6 +4704,8 @@ imageTrace	Outline	Obrys
 @msg	the Smooth slider is not open	Posuvník Vyhladit není otevřený
 @msg	the screen color sampler is already open	nástroj pro nabírání barvy z obrazovky už je otevřený
 @msg	this system has no screen color sampler	tento systém nemá nástroj pro nabírání barvy z obrazovky
+@msg	the screen color sampler did not answer	nástroj pro nabírání barvy z obrazovky neodpověděl
+@msg	the screen color sampler failed	nástroj pro nabírání barvy z obrazovky selhal
 @msg	bad colour `{hex}` (#rrggbb)	chybná barva `{hex}` (#rrggbb)
 @msg	bad page tree	chybný strom stránek
 @msg	bad shortcut	chybná klávesová zkratka
@@ -4710,6 +4735,7 @@ imageTrace	Outline	Obrys
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` není barva jako "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: nejvýše {MAX_TABLE} barev
 @msg	command `{0}` is not available right now: {1}	příkaz `{0}` nyní není k dispozici: {1}
+@msg	command `{id}` is not available right now	příkaz `{id}` nyní není k dispozici
 @msg	compound paths can only contain paths	složené cesty mohou obsahovat jen cesty
 @msg	compressed (RLE) bitmaps can't be read yet	komprimované bitmapy (RLE) zatím nelze načíst
 @msg	damaged	poškozeno
@@ -6040,6 +6066,7 @@ mark-style	Japanese	Japonské
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrická vodítka
+	Optical Effects	Optické efekty
 	Geometric Patterns	Geometrické vzorky
 	Grit Textures	Zrnité textury
 	Ease In	Pozvolný začátek
@@ -6082,6 +6109,9 @@ axis	Y Axis	osa Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` platí pro výplně přechodem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musí být true nebo false
 @msg	`method` must be classic or perceptual	`method` musí být classic nebo perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` musí být pad, repeat nebo reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musí být celé číslo od 1 do {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` platí pro lineární, kruhové, kuželové a kosočtverečné přechody
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Nainstalovat „{name}“, který žádá o velký výpočetní rozpočet?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Každé spuštění může trvat až {minutes} minut a vykonat {times}krát víc práce, než smějí jiné zásuvné moduly. Běží na pozadí a můžete ho zrušit.
@@ -6331,6 +6361,11 @@ axis	Y Axis	osa Y
 	Grass Fan	Vějíř na trávu
 	Pattern Borders	Vzorkové okraje
 	Scatter Shapes	Rozptýlené tvary
+	Dry Media	Suché techniky
+	Chalk Grain	Křídové zrno
+	Graphite Pencil	Grafitová tužka
+	Wax Crayon	Vosková pastelka
+	Charcoal Dust	Uhlový prach
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)
@@ -6991,3 +7026,8 @@ breakText	Glyphs	Glyfy
 @msg	Some islands could not be joined to the area around the art	Některé ostrůvky nebylo možné připojit k oblasti kolem kresby
 @msg	`width` must be from {lo} to {hi} pt	`width` musí být od {lo} do {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musí být celé číslo od 1 do {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Rámeček a linie pro vybírání…
+	Weed Box and Lines	Rámeček a linie pro vybírání
+	Margin	Okraj
+	Box	Rámeček
+	Swatch	Vzorek
