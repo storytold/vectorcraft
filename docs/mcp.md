@@ -4442,9 +4442,12 @@ page describes saving the list from the Keyboard Shortcuts dialog as a text file
 
 The desktop app adds its active artboard, the one the Artboards panel highlights, to the `object.align`,
 `object.distribute`, `object.distributeSpacing` and `select.allOnArtboard` calls it runs without `artboard`, as it does
-for `edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack`, and to each `command.batch`. A batch passes its
+for `edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack` (while the Artboard tool has several artboards
+selected, it adds those to these three as `artboards` instead; in a document without artboards it adds neither), and to
+each `command.batch`. A batch passes its
 `artboard` on to each of these steps that names
-none, when the step runs. When the document a step runs in has no artboard at that index (for example, after an
+none, when the step runs; a paste step that names `artboards` keeps them, and one that names neither, while the
+Artboard tool is chosen with several artboards selected, pastes a copy on each of those. When the document a step runs in has no artboard at that index (for example, after an
 earlier step deleted the active artboard when it was the last one), the step gets that document's last artboard. In
 remote mode, MCP's `run_command` calls and each step of the `command_batch` tool get the active artboard too. The
 Actions panel plays an action as a `command.batch`, omitting steps whose playback checkmarks are
@@ -5119,7 +5122,14 @@ its resources as they are now and raises no conflict.
 Placement: `edit.paste {center}` centres the objects on a point (the app passes the view centre), else offsets them
 by `dx`/`dy` (the Paste Offset preference). With nothing selected, `edit.pasteInFront` / `edit.pasteInBack` put them
 on top / at the bottom of the current layer. `edit.pasteOnAllArtboards` keeps their offset to the artboard they were
-copied from. `layer.pasteRemembersLayers {on?}` (a document option, `document.inspect` → `pasteRemembersLayers`)
+copied from. `edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack` take `artboard` (one artboard) or
+`artboards: [index…]` (a copy on each, placed where the objects were on the artboard they were copied from, the
+copies in artboard order); `artboard` wins when both are given. Without either, while the Artboard tool is chosen with
+several artboards selected, they paste a copy on each of those, and the journal records them as `artboards`; a
+recorded action leaves both out. Art copied from no artboard keeps its place on the first artboard named and its
+offset to that one on the others. An index the document does not have, a repeated index, a value that is not an index
+or an empty list fails, and nothing is pasted. Copied artboards come back once, where they were, whichever artboards
+are named. `layer.pasteRemembersLayers {on?}` (a document option, `document.inspect` → `pasteRemembersLayers`)
 pastes objects back into the layers they came from, by name, making missing ones. Drawing modes (`view.drawMode`) apply
 too: in Draw Inside, `edit.paste`, `edit.pasteInPlace` and `edit.pasteOnAllArtboards` put the objects inside the
 object drawn into (its clip group, made on the first paste), whatever Paste Remembers Layers says; in Draw Behind,
