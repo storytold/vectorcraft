@@ -537,6 +537,19 @@ opens the picker through `run_command` with the remote backend. `ui.colorPanel {
 the panel menu's Show Recent Colors, which hides the Color panel's Recent Colors row, and `true` shows it again;
 applied colors still join the list while it is hidden.
 
+In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
+screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
+portal's [PickColor](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Screenshot.html)
+on Linux, and the EyeDropper API in browsers that have it. `inspect_ui` reports `screenSampler: true` while it
+waits. The picked sRGB color is converted into the working RGB space and becomes the fill or the stroke of the
+active proxy in one undo step; `stroke: true` picks the stroke, and `picker: true` sends the color to the open
+Color Picker. A cancel leaves the colors as they were. On Linux, a session without a portal that has PickColor
+shows "this system has no screen color sampler" in the status bar, a portal that does not return from the call
+within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers shows "the screen color sampler
+did not answer", and a portal that ends the request in another way shows "the screen color sampler failed"; each
+ends the wait, so the sampler can be shown again. Windows, the BSDs and headless sessions have no screen color
+sampler.
+
 | Tool | Arguments | Notes |
 |---|---|---|
 | `list_commands` | `{filter?, query?, menu?, enabledOnly?, brief?}` | The command catalogue: id, label, menu, shortcut, params doc, enablement, and `schema` and `inputSchema` for a command with a parameter schema (the params doc and both schemas are left out with `brief`). |

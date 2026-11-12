@@ -4786,6 +4786,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the Smooth slider is not open	スムーズスライダーが開いていません
 @msg	the screen color sampler is already open	画面のカラーサンプラーはすでに開いています
 @msg	this system has no screen color sampler	このシステムには画面のカラーサンプラーがありません
+@msg	the screen color sampler did not answer	画面のカラーサンプラーが応答しませんでした
+@msg	the screen color sampler failed	画面のカラーサンプラーでエラーが発生しました
 @msg	Corners edits the corners of a path	「コーナー」で編集できるのはパスの角だけです
 @msg	give corners of the path: anchors where its sides meet at an angle	パスの角 (辺が角度をなして交わるアンカーポイント) を指定してください
 @msg	select one path, or give its `id`	パスを 1 つ選択するか、その `id` を指定してください

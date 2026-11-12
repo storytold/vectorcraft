@@ -6036,6 +6036,8 @@ digits	Malayalam	Malaiàlam
 @msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	aquest fitxer PostScript no es pot llegir ({why}): desa’l com a PDF o SVG a l’aplicació que l’ha creat
 @msg	This shortcut file is in a form VectorCraft can't read.	Aquest fitxer de dreceres té un format que VectorCraft no pot llegir.
 @msg	this system has no screen color sampler	aquest sistema no té cap mostrejador de color de pantalla
+@msg	the screen color sampler did not answer	el mostrejador de color de pantalla no ha respost
+@msg	the screen color sampler failed	el mostrejador de color de pantalla ha fallat
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	aquesta traça crearia més de {max} punts d’ancoratge, més dels que el document pot mostrar amb fluïdesa: augmenta el Soroll, redueix Traçats o Colors, o tria un preajust de fidelitat més baixa
 @msg	thumbnail: no page {n} (the file has 1)	miniatura: no hi ha la pàgina {n} (el fitxer en té 1)
 @msg	tintReduction must be from 0 to 100 %	tintReduction ha de ser d’entre 0 i 100 %

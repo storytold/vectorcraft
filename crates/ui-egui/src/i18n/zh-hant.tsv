@@ -2268,6 +2268,8 @@ file-filter	Templates	範本
 @msg	the Smooth slider is not open	「平滑」滑桿未開啟
 @msg	the screen color sampler is already open	螢幕取色器已開啟
 @msg	this system has no screen color sampler	此系統沒有螢幕取色器
+@msg	the screen color sampler did not answer	螢幕取色器沒有回應
+@msg	the screen color sampler failed	螢幕取色器發生錯誤
 @msg	Corners edits the corners of a path	「轉角」用於編輯路徑的轉角
 @msg	give corners of the path: anchors where its sides meet at an angle	請提供路徑的轉角：其各邊以角度相交處的錨點
 @msg	select one path, or give its `id`	請選取一條路徑，或提供其 `id`

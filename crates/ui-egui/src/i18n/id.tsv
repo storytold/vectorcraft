@@ -5517,6 +5517,8 @@ mark-style	Japanese	Jepang
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar
+@msg	the screen color sampler did not answer	pengambil warna layar tidak merespons
+@msg	the screen color sampler failed	pengambil warna layar gagal
 swatch	[None]	[Tidak ada]
 swatch	[Registration]	[Registrasi]
 swatch	White	Putih

@@ -4431,6 +4431,8 @@ axis	Both	Entrambi
 @msg	the Smooth slider is not open	il cursore Smussa non è aperto
 @msg	the screen color sampler is already open	il campionatore di colore dello schermo è già aperto
 @msg	this system has no screen color sampler	questo sistema non ha un campionatore di colore dello schermo
+@msg	the screen color sampler did not answer	il campionatore di colore dello schermo non ha risposto
+@msg	the screen color sampler failed	il campionatore di colore dello schermo ha avuto un errore
 @msg	bad colour `{hex}` (#rrggbb)	colore non valido `{hex}` (#rrggbb)
 @msg	bad page tree	albero delle pagine non valido
 @msg	bad shortcut	scelta rapida non valida

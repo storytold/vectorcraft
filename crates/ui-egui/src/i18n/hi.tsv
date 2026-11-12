@@ -7928,6 +7928,8 @@ antiAlias	Sharp	शार्प
 @msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	इस पोस्टस्क्रिप्ट फ़ाइल को पढ़ा नहीं जा सकता ({why}): इसे उस ऐप में PDF या SVG के रूप में सेव करें जिसने इसे बनाया
 @msg	This shortcut file is in a form VectorCraft can't read.	यह शॉर्टकट फ़ाइल एक फॉर्म VectorCraft में है जिसे पढ़ा नहीं जा सकता है।
 @msg	this system has no screen color sampler	इस प्रणाली में कोई स्क्रीन रंग नमूना नहीं है
+@msg	the screen color sampler did not answer	स्क्रीन रंग नमूने ने उत्तर नहीं दिया
+@msg	the screen color sampler failed	स्क्रीन रंग नमूना विफल रहा
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	यह निशान {max} एंकर पॉइंट से अधिक होगा, डॉक्यूमेंट की तुलना में अधिक आसानी से दिखा सकते हैं: शोर, निचले पाथ या रंग उठाना, या कम-fidelity प्रीसेट चुनना
 @msg	thumbnail: no page {n} (the file has 1)	थंबनेल: कोई पेज {n} (फ़ाइल में 1 है)
 @msg	thumbnail: no page {v} (the {what} has {count})	थंबनेल: कोई पेज {v} ({what} में {count} है)

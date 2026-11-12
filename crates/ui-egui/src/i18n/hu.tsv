@@ -4924,6 +4924,8 @@ imageTrace	Outline	Körvonal
 @msg	the Smooth slider is not open	a Simítás csúszka nincs megnyitva
 @msg	the screen color sampler is already open	a képernyős színmintavevő már nyitva van
 @msg	this system has no screen color sampler	ezen a rendszeren nincs képernyős színmintavevő
+@msg	the screen color sampler did not answer	a képernyős színmintavevő nem válaszolt
+@msg	the screen color sampler failed	a képernyős színmintavevő hibába ütközött
 @msg	bad colour `{hex}` (#rrggbb)	hibás szín: `{hex}` (#rrggbb)
 @msg	bad page tree	hibás oldalfa
 @msg	bad shortcut	hibás billentyűparancs

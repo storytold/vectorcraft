@@ -4689,6 +4689,8 @@ imageTrace	Outline	Obrys
 @msg	the Smooth slider is not open	Posuvník Vyhladit není otevřený
 @msg	the screen color sampler is already open	nástroj pro nabírání barvy z obrazovky už je otevřený
 @msg	this system has no screen color sampler	tento systém nemá nástroj pro nabírání barvy z obrazovky
+@msg	the screen color sampler did not answer	nástroj pro nabírání barvy z obrazovky neodpověděl
+@msg	the screen color sampler failed	nástroj pro nabírání barvy z obrazovky selhal
 @msg	bad colour `{hex}` (#rrggbb)	chybná barva `{hex}` (#rrggbb)
 @msg	bad page tree	chybný strom stránek
 @msg	bad shortcut	chybná klávesová zkratka

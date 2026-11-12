@@ -4713,6 +4713,8 @@ theme	Appearance	외관
 @msg	the Smooth slider is not open	매끄럽게 슬라이더가 열려 있지 않습니다
 @msg	the screen color sampler is already open	화면 색상 추출기가 이미 열려 있습니다
 @msg	this system has no screen color sampler	이 시스템에는 화면 색상 추출기가 없습니다
+@msg	the screen color sampler did not answer	화면 색상 추출기가 응답하지 않았습니다
+@msg	the screen color sampler failed	화면 색상 추출기에 오류가 발생했습니다
 @msg	Corners edits the corners of a path	모퉁이는 패스의 모퉁이를 편집합니다
 @msg	give corners of the path: anchors where its sides meet at an angle	패스의 모퉁이, 즉 변이 각을 이루며 만나는 앵커를 지정하세요
 @msg	select one path, or give its `id`	패스를 하나 선택하거나 `id`를 지정하세요

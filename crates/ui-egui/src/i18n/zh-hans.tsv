@@ -4483,6 +4483,8 @@ imageTrace	Outline	轮廓
 @msg	the Smooth slider is not open	平滑滑块未打开
 @msg	the screen color sampler is already open	屏幕取色器已打开
 @msg	this system has no screen color sampler	此系统没有屏幕取色器
+@msg	the screen color sampler did not answer	屏幕取色器没有响应
+@msg	the screen color sampler failed	屏幕取色器出错
 @msg	Corners edits the corners of a path	转角用于编辑路径的转角
 @msg	give corners of the path: anchors where its sides meet at an angle	请给出路径的转角：其各边以一定角度相交处的锚点
 @msg	select one path, or give its `id`	请选择一条路径，或给出其 `id`

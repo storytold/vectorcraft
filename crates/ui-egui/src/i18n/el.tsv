@@ -5846,6 +5846,8 @@ effect	Points	Σημεία
 @msg	the screen color sampler is already open	η δειγματοληψία χρώματος από την οθόνη είναι ήδη ανοιχτή
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	αυτό είναι αρχείο PostScript (ένα .ai αποθηκευμένο σε παλαιότερη μορφή ή χωρίς συμβατότητα PDF, ή αρχείο EPS), όχι PDF: οι εντολές Αρχείο › Άνοιγμα και Αρχείο › Τοποθέτηση το διαβάζουν ως EPS
 @msg	this system has no screen color sampler	αυτό το σύστημα δεν έχει δειγματοληψία χρώματος από την οθόνη
+@msg	the screen color sampler did not answer	η δειγματοληψία χρώματος από την οθόνη δεν απάντησε
+@msg	the screen color sampler failed	η δειγματοληψία χρώματος από την οθόνη απέτυχε
 @msg	the image can't be read as a texture	η εικόνα δεν μπορεί να διαβαστεί ως υφή
 
 # User Interface › Accent Color

@@ -4415,6 +4415,8 @@ axis	Both	Обидві
 @msg	the Smooth slider is not open	повзунок «Згладити» не відкрито
 @msg	the screen color sampler is already open	засіб вибору кольору з екрана вже відкритий
 @msg	this system has no screen color sampler	у цій системі немає засобу вибору кольору з екрана
+@msg	the screen color sampler did not answer	засіб вибору кольору з екрана не відповів
+@msg	the screen color sampler failed	у засобі вибору кольору з екрана сталася помилка
 @msg	bad colour `{hex}` (#rrggbb)	неприпустимий колір `{hex}` (#rrggbb)
 @msg	bad page tree	неприпустиме дерево сторінок
 @msg	bad shortcut	неприпустиме поєднання клавіш

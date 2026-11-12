@@ -4143,6 +4143,8 @@ axis	Both	Her İkisi
 @msg	the Color Picker is not open	Renk Seçici açık değil
 @msg	the screen color sampler is already open	ekran rengi örnekleyici zaten açık
 @msg	this system has no screen color sampler	bu sistemin ekran rengi örnekleyicisi yok
+@msg	the screen color sampler did not answer	ekran rengi örnekleyici yanıt vermedi
+@msg	the screen color sampler failed	ekran rengi örnekleyici başarısız oldu
 @msg	bad colour `{hex}` (#rrggbb)	kötü renk `{hex}` (#rrggbb)
 @msg	bad page tree	kötü sayfa ağacı
 @msg	bad shortcut	kötü kısayol
