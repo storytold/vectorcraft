@@ -184,6 +184,29 @@ fn justification_options_read_from_a_file_stay_in_range() {
     assert_eq!(same, d);
 }
 
+/// Korean Line Break Anywhere is off for a new paragraph and saved only when off; a paragraph
+/// saved before it existed, or a text object saved without paragraph attributes, reads with it on,
+/// and both values read back as saved.
+#[test]
+fn korean_line_break_anywhere_is_saved_only_when_off() {
+    let off = ParaStyle::default();
+    assert!(!off.korean_line_break_anywhere);
+    let saved = serde_json::to_value(&off).unwrap();
+    assert_eq!(saved["korean_line_break_anywhere"], false);
+    assert_eq!(serde_json::from_value::<ParaStyle>(saved).unwrap(), off);
+    let on = ParaStyle { korean_line_break_anywhere: true, ..ParaStyle::default() };
+    let saved = serde_json::to_value(&on).unwrap();
+    assert!(saved.get("korean_line_break_anywhere").is_none());
+    assert_eq!(serde_json::from_value::<ParaStyle>(saved).unwrap(), on);
+    let old: ParaStyle = serde_json::from_str(r#"{"justify":"Left"}"#).unwrap();
+    assert!(old.korean_line_break_anywhere);
+    let mut saved = serde_json::to_value(TextObject::point(Point::ZERO, "가나", CharStyle::default())).unwrap();
+    assert_eq!(saved["para"]["korean_line_break_anywhere"], false);
+    saved.as_object_mut().unwrap().remove("para");
+    let old: TextObject = serde_json::from_value(saved).unwrap();
+    assert_eq!(old.para, ParaStyle { korean_line_break_anywhere: true, ..ParaStyle::default() });
+}
+
 /// Numbered lists: each number style writes its numbers and rolls over (letters after Z,
 /// roman numerals in subtractive forms, zero-padded numbers past their digits), the marker adds
 /// a period, and the count runs through list paragraphs, skips empty and bulleted ones and

@@ -102,7 +102,7 @@ fn the_dialogs_and_the_format_list_name_hpgl() {
     let r = Session::new().execute("document.formats", &json!({})).unwrap();
     let f = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "hpgl").unwrap().clone();
     assert_eq!((f["read"].as_bool(), f["write"].as_bool(), f["raster"].as_bool()), (Some(true), Some(true), Some(false)));
-    for o in ["useArtboards", "hpglVersion", "curveTolerance", "pens", "origin", "sortPaths"] {
+    for o in ["useArtboards", "hpglVersion", "curveTolerance", "pens", "origin", "sortPaths", "insideFirst"] {
         assert!(f["options"].get(o).is_some(), "{o}: {f}");
     }
     assert_eq!(writable_format(None, Some("x/part.plt")).unwrap().id, "hpgl");
@@ -184,6 +184,7 @@ fn export_options_are_checked() {
         (json!({"format": "hpgl", "pens": "#ff0000"}), "`pens` must be an array of 1 to 255 #rrggbb colors"),
         (json!({"format": "hpgl", "origin": "top"}), "`origin` must be one of bottomLeft, center"),
         (json!({"format": "hpgl", "sortPaths": "yes"}), "`sortPaths` must be true or false"),
+        (json!({"format": "hpgl", "insideFirst": 1}), "`insideFirst` must be true or false"),
     ];
     for (p, want) in cases {
         let e = refused(&mut s, p.clone());
@@ -196,6 +197,25 @@ fn export_options_are_checked() {
     let p = json!({"format": "hpgl", "origin": "CENTER", "pens": ["#ff0000", "#000000"], "curveTolerance": 10, "sortPaths": true});
     let plot = String::from_utf8(bytes(&s.execute("document.export", &p).unwrap())).unwrap();
     assert_eq!(plot, "IN;PU;SP2;PU-141,141;PD-564,141,-564,564,-141,564,-141,141;PU;SP0;");
+}
+
+/// `insideFirst` draws the square inside the other one first, though it was made last.
+#[test]
+fn inside_first_draws_the_inner_square_first() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#000000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 80})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 30, "y": 30, "width": 20, "height": 20})).unwrap();
+    let starts = |s: &mut Session, p: Value| {
+        let plot = String::from_utf8(bytes(&s.execute("document.export", &p).unwrap())).unwrap();
+        (plot.find("PU141,1270;").unwrap(), plot.find("PU423,988;").unwrap())
+    };
+    let (outer, inner) = starts(&mut s, json!({"format": "hpgl"}));
+    assert!(outer < inner);
+    let (outer, inner) = starts(&mut s, json!({"format": "hpgl", "insideFirst": true}));
+    assert!(inner < outer);
 }
 
 /// Export Selection plots the selected square alone (the red one, made last), from the
