@@ -726,6 +726,13 @@ mod portable {
         }
     }
 
+    /// How long a paste's read of `request` after a late answer waits at `now`: as long as any read
+    /// of `request`, or until [`IMAGE_WAIT`] after the unanswered read was `sent` when that is later.
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    fn follow_up_wait(request: Request, sent: Instant, now: Instant) -> Duration {
+        wait_for(request).max((sent + IMAGE_WAIT).saturating_duration_since(now))
+    }
+
     /// The longest an X11 read of arboard's lasts while the owner sends nothing: a text read tries
     /// six formats and waits up to 4 s for each, and a second more covers the rest of the read.
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
@@ -793,8 +800,9 @@ mod portable {
         /// paste takes the internal clipboard, when the answer is what `ours` put on the clipboard
         /// or doesn't come. Otherwise the clipboard is read as [`Clipboard::read_now_or_later`] and
         /// the paste read it, this answer standing in for the read it answers: copied files, else
-        /// text, else the bitmap, and the bitmap when the text is blank or only names a picture
-        /// (`adopt_system_clipboard_or_defer` in `vectorcraft-ui-egui`).
+        /// text, else the bitmap, and the bitmap when it is asked for and the text is blank or only
+        /// names a picture (`adopt_system_clipboard_or_defer` in `vectorcraft-ui-egui`). Those reads
+        /// wait as [`follow_up_wait`] says.
         fn paste(self, ours: Option<&Ours>, mimes: &[&'static str]) -> Option<Flavour> {
             let wait = (self.sent + IMAGE_WAIT).saturating_duration_since(Instant::now());
             let answer = super::loads::wait_for_answer(&self.answer, wait).ok()?;
@@ -812,7 +820,7 @@ mod portable {
                 None => self
                     .reads
                     .ask(request)
-                    .and_then(|a| super::loads::wait_for_answer(&a, wait_for(request)))
+                    .and_then(|a| super::loads::wait_for_answer(&a, follow_up_wait(request, self.sent, Instant::now())))
                     .unwrap_or_else(|why| Answer::failed(request, why)),
             };
             if let Some(f) = copied_file(read(Request::Files).files(), mimes) {
@@ -821,7 +829,7 @@ mod portable {
             let text = if mimes.contains(&TEXT) { read(Request::Text).text().ok().filter(|t| !t.is_empty()) } else { None };
             let bitmap = |read: &mut dyn FnMut(Request) -> Answer| image_flavour(read(Request::Image).image().ok()?);
             match text {
-                Some(t) if t.trim().is_empty() || vectorcraft_engine::cmd::clipboard::names_a_picture(&t) => {
+                Some(t) if mimes.contains(&BITMAP) && (t.trim().is_empty() || vectorcraft_engine::cmd::clipboard::names_a_picture(&t)) => {
                     bitmap(&mut read).or(Some(Flavour { mime: TEXT, data: t.into_bytes() }))
                 }
                 Some(t) => Some(Flavour { mime: TEXT, data: t.into_bytes() }),
@@ -1477,6 +1485,12 @@ mod portable {
             assert_eq!(wait_for(Request::Text), super::super::loads::LOAD_WAIT);
             assert_eq!(wait_for(Request::Files), super::super::loads::LOAD_WAIT);
             assert_eq!(wait_for(Request::Image), Duration::from_secs(10));
+            // A paste's reads after a late answer wait until 10 s after the unanswered read was
+            // sent, and never less than any read of their kind.
+            let sent = Instant::now();
+            assert_eq!(follow_up_wait(Request::Text, sent, sent + Duration::from_secs(3)), Duration::from_secs(7));
+            assert_eq!(follow_up_wait(Request::Files, sent, sent + Duration::from_secs(9)), super::super::loads::LOAD_WAIT);
+            assert_eq!(follow_up_wait(Request::Image, sent, sent + Duration::from_secs(20)), IMAGE_WAIT);
             // X11 waits for an unanswered read when the clipboard closes; data-control doesn't.
             assert_eq!(finish(false), X11_READ_LIMIT);
             assert_eq!(finish(true), Duration::ZERO);
@@ -1583,6 +1597,19 @@ mod portable {
             let paste = std::thread::spawn(move || unanswered.paste(None, &[TEXT]));
             drop(release);
             assert_eq!(paste.join().ok().flatten().map(|f| f.data), Some(b"late text".to_vec()));
+
+            // A paste of text alone pastes text that names a picture, not the picture.
+            let (mut cb, release) = slow_owner(|request| match request {
+                Request::Text => Answer::Text(Ok("<img src=\"art.png\">".into())),
+                Request::Image => Answer::Image(Ok(arboard::ImageData { width: 3, height: 1, bytes: Cow::Owned(vec![0; 12]) })),
+                Request::Files => Answer::Files(vec![]),
+            });
+            assert!(cb.read_waiting(Request::Text, Duration::ZERO).text().is_err());
+            let unanswered = cb.unanswered(&[TEXT]).expect("the text read is kept for the paste");
+            let paste = std::thread::spawn(move || unanswered.paste(None, &[TEXT]));
+            drop(release);
+            let pasted = paste.join().ok().flatten().expect("the text is pasted");
+            assert_eq!((pasted.mime, pasted.data), (TEXT, b"<img src=\"art.png\">".to_vec()));
 
             // An answer that came before the paste may be old: it is dropped, not pasted.
             let (mut cb, release) = slow_owner(|request| Answer::failed(request, "not asked".into()));
