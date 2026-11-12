@@ -376,7 +376,17 @@ pub(crate) fn snapshot() -> Arc<Snapshot> {
     static LAST: Mutex<Option<Arc<Snapshot>>> = Mutex::new(None);
     let mut revision = menus::plugin_revision();
     let last = LAST.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    if let Some(s) = last.filter(|s| s.revision == revision) {
+    // A test's walk hook runs even when a snapshot of this revision is already stored.
+    #[cfg(test)]
+    let hooked = {
+        let f = tests::WHILE_WALKING.take();
+        let hooked = f.is_some();
+        tests::WHILE_WALKING.set(f);
+        hooked
+    };
+    #[cfg(not(test))]
+    let hooked = false;
+    if let Some(s) = last.filter(|s| s.revision == revision && !hooked) {
         return s;
     }
     // When a plug-in is installed or removed during the walk, the entries may not match
@@ -1532,8 +1542,9 @@ mod tests {
             vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
         };
         let (before, during) = ("test.ui.walk-before", "test.ui.walk-during");
-        // A new revision, so the next snapshot walks the menus.
         install(before);
+        // Stores the snapshot of this revision, as another test thread may already have done.
+        snapshot();
         WHILE_WALKING.set(Some(Box::new(move || {
             // Another caller builds the snapshot and keymap of the revision read before the walk.
             crate::keymap::template_for(&snapshot());
