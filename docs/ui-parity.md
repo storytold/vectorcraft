@@ -514,9 +514,9 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-11 | minor | Scissors hover and cuts share Pen-style path/align/intersect/anchor snapping (#6470), retaining view options, Alt Add Anchor and cut endpoint selection; headless tool and Session regressions referenced. Scores and estimates unchanged. |
 | 2026-11-11 | minor | Outline view: a click on a path's outline selects it through an image or a gradient mesh in front, which Outline draws as a frame or mesh lines (#6437). |
 | 2026-11-11 | minor | A middle-click on a document tab (or its ×) closes it as the × does; closing a document's last view with unsaved changes asks to save first (#6506). VectorCraft addition; scores and estimates unchanged. |
+| 2026-11-11 | minor | Scissors hover and cuts share Pen-style path/align/intersect/anchor snapping (#6470), retaining view options, Alt Add Anchor and cut endpoint selection; headless tool and Session regressions referenced. Scores and estimates unchanged. |
 | 2026-11-03 | minor | A double-click on a ruler adds a guide at the pointer (#5239): a vertical one on the top ruler, a horizontal one on the left ruler; scores and estimates unchanged. |
 | 2026-11-10 | minor | Symbol libraries: Inventory Icons joins Basic Shapes, UI Frames and Map Markers as a fourth built-in library (Sword, Shield, Potion, Key, Gem; no default 9-slice). |
 | 2026-11-11 | minor | Files that record no units (PDF, EPS or `.ai` without ruler units, raster images, metafiles, Affinity files, importer plug-ins) open and revert in Preferences › Units › General instead of points; native, SVG and DXF files and `.ai`/EPS ruler units are kept (#5820). Scores and estimates unchanged. |

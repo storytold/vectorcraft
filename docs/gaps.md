@@ -859,9 +859,9 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-11 | minor | G11: Scissors shares the Pen's path/align/intersect/anchor snapping (#6470); existing options, Alt Add Anchor and cut endpoint selection retained. Prepared tool regressions referenced; scope and estimates unchanged. |
 | 2026-11-11 | minor | G5: built-in Energy Beams brush library (Laser Bolt, Plasma Arc, Charge Wave, Spark Trail); Missing trimmed; estimate 5–15 → 4–14 h; MCP Brush libraries list Energy Beams. |
 | 2026-11-11 | minor | G5: built-in Skill Icons symbol library (Attack, Defend, Heal, Buff, Ult); Missing trimmed; estimate 6–16 → 5–15 h; MCP Symbol libraries list Skill Icons. |
+| 2026-11-11 | minor | G11: Scissors shares the Pen's path/align/intersect/anchor snapping (#6470); existing options, Alt Add Anchor and cut endpoint selection retained. Prepared tool regressions referenced; scope and estimates unchanged. |
 | 2026-11-10 | minor | G6: MCP catalogue (#6460): headless lists `UI_COMMANDS` (`ui: true`), eight prompts, effect vs command ids, 33 tools, commands/reference; estimate unchanged. |
 | 2026-11-11 | minor | G5: built-in Status Effects graphic style library (Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade, Shield Buff); Missing trimmed; estimate 7–17 → 6–16 h; MCP docs list UI Frames and Map Markers under Symbol libraries. |
 | 2026-11-11 | minor | G5: built-in Inventory Icons symbol library (Sword, Shield, Potion, Key, Gem; no default 9-slice); Missing trimmed; estimate 8–18 → 7–17 h. |
