@@ -1842,6 +1842,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
 	Roman Hanging Punctuation	Romersk hængende tegnsætning
 	Korean Line Break Anywhere	Koreansk linjeskift hvor som helst
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Indstillinger for østasiatisk komposition
 	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
@@ -2912,6 +2913,7 @@ antiAlias	Sharp	Skarp
 	Hide Code	Skjul kode
 	Images:	Billeder:
 	Include Metadata	Medtag metadata
+	Include Variable Data	Medtag variabeldata
 	Internal CSS	Intern CSS
 	Layer Names	Lagnavne
 	Minify	Minificér

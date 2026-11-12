@@ -165,6 +165,7 @@ impl Writer<'_> {
             }
         }
         let id = self.id_attr(n);
+        self.note_outlined(n.id);
         let a = self.attrs(&css::transparency(n));
         // Text outlined because SVG text can't draw it (bent glyphs, vertical type, ruby, effects on
         // a path and the like) names its text for screen readers and search; Convert to Outlines

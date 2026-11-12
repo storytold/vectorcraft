@@ -387,6 +387,7 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
         }
         let hangul =
             text.chars().any(|c| matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{AC00}'..='\u{D7FF}' | '\u{FFA0}'..='\u{FFDC}'));
+        let pairs = text.chars().zip(text.chars().skip(1)).any(|(a, b)| vectorcraft_text::inseparable(a, b));
         let held = ParaStyle {
             justify: p.justify,
             left_indent: p.left_indent,
@@ -403,6 +404,9 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             // The text document has no Korean Line Break Anywhere: it reads back off, which
             // changes only the lines of a paragraph with Hangul in it.
             korean_line_break_anywhere: p.korean_line_break_anywhere && !hangul,
+            // Nor Bunri-Kinshi: it reads back off, which changes only the lines of a paragraph
+            // with an inseparable pair in it.
+            bunri_kinshi: p.bunri_kinshi && !pairs,
             ..ParaStyle::default()
         };
         *p != held

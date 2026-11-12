@@ -1856,6 +1856,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
 	Roman Hanging Punctuation	Romeinse hangende leestekens
 	Korean Line Break Anywhere	Koreaans regeleinde overal
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Instellingen voor Oost-Aziatische zetting
 	Korean Composition Settings	Instellingen voor Koreaanse zetting
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
@@ -2926,6 +2927,7 @@ antiAlias	Sharp	Scherp
 	Hide Code	Code verbergen
 	Images:	Afbeeldingen:
 	Include Metadata	Metadata opnemen
+	Include Variable Data	Variabelegegevens opnemen
 	Internal CSS	Interne CSS
 	Layer Names	Laagnamen
 	Minify	Minify

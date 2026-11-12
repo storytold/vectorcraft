@@ -100,9 +100,10 @@ fn continues_word(g: &SGlyph, next: Option<&SGlyph>) -> bool {
 
 /// A glyph letter spacing follows: a visible glyph followed by another character in the same word
 /// (`next` is the next glyph that is not a format control, or a zero-width space). The glyphs of
-/// one shaped cluster (a letter and its combining marks) take none between them.
+/// one shaped cluster (a letter and its combining marks) take none between them, and neither do the
+/// two halves of an inseparable pair that Bunri-Kinshi keeps together.
 fn letter_gap(g: &SGlyph, next: Option<&SGlyph>) -> bool {
-    gap_owner(g) && continues_word(g, next)
+    gap_owner(g) && !g.keeps_next && continues_word(g, next)
 }
 
 /// The width of a word space in `g`'s font and size: what letter spacing is a share of.
