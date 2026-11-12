@@ -1401,6 +1401,25 @@ fn outlines_flagged_none_and_dashes_read() {
     assert_eq!((o.cap, o.join), (Cap::Square, vectorcraft_cdr::model::Join::Bevel));
 }
 
+/// Dashes stored in an outline whose line type doesn't mark it dashed (bit 2) are not drawn: the
+/// outline is solid.
+#[test]
+fn dashes_are_drawn_only_when_the_line_type_marks_them() {
+    let black = synth::color(2, [0, 0, 0, 100]);
+    for version in [700, 1200, 1500] {
+        for (line_type, dashed) in [(2, false), (0x22, false), (0x42, false), (4, true), (0x24, true), (0x44, true)] {
+            let v = V(version);
+            let outline = v.outline(9, synth::Pen { line_type, width: 1.0, cap: 0, join: 0 }, &black, &[2, 1]);
+            let style = vec![(10, 9u32.to_le_bytes().to_vec()), (30, v.points(&[(0.0, 0.0, 0), (10.0, 0.0, 0x40)]))];
+            let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 3, &style, None)])]);
+            let d = read(&synth::file_of(version, vec![list(b"otlt", vec![chunk(b"outl", outline)]), page]), Limits::default()).unwrap();
+            let s = shapes(&d.pages[0].layers[0].objects);
+            let o = s[0].outline.as_ref().unwrap();
+            assert_eq!(o.dashes.is_empty(), !dashed, "{version} {line_type:#x}: {:?}", o.dashes);
+        }
+    }
+}
+
 #[test]
 fn library_colors_from_version_13_keep_their_names_and_tints() {
     // A model 21 color (blue, green, red, tint) shown at 50 %, and its library name.

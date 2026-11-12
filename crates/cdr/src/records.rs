@@ -355,7 +355,9 @@ pub(crate) fn outline(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<
         2 => Join::Bevel,
         _ => Join::Miter,
     };
-    let dashes = if dashes.iter().any(|d| *d > 0.0) { dashes } else { Vec::new() };
+    // Bit 2 of the line type marks the outline dashed; without it the dashes stored are not drawn
+    // (R48).
+    let dashes = if line_type & 4 != 0 && dashes.iter().any(|d| *d > 0.0) { dashes } else { Vec::new() };
     Some((id, Some(Outline { width, color, cap, join, dashes })))
 }
 

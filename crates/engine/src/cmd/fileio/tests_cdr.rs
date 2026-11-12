@@ -385,7 +385,8 @@ fn fills_and_outlines_keep_their_colors_widths_caps_joins_and_dashes() {
     let v = V(1300);
     let red = synth::color(5, [0, 0, 255, 0]);
     let black = synth::color(2, [0, 0, 0, 100]);
-    let pen = synth::Pen { line_type: 0, width: 2.0, cap: 1, join: 2 };
+    // Line type 4: a dashed outline.
+    let pen = synth::Pen { line_type: 4, width: 2.0, cap: 1, join: 2 };
     let args = vec![
         (20, 1u32.to_le_bytes().to_vec()),
         (10, 2u32.to_le_bytes().to_vec()),
