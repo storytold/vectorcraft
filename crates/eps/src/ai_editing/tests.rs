@@ -6935,6 +6935,81 @@ fn a_linked_object_past_the_object_limit_warns_that_its_link_is_left_out() {
     }
 }
 
+/// A link to a graphic style with Twist is kept where the reader reads Twist: on a curve, a curved
+/// compound path or a group with nothing stroked up to a quarter turn, and on a path with straight
+/// segments at any angle. A stroked curve, a group with a stroked member or a guide, or a curve,
+/// compound path or group twisted further, is written without the link and warns.
+#[test]
+fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
+    // A document with the object `make` builds from its appearance, `ap` with Twist at `angle`,
+    // linked to a graphic style of that appearance.
+    fn twisted(angle: f64, ap: Appearance, make: impl FnOnce(&mut Document, Appearance) -> Node) -> Document {
+        let mut doc = Document::new(200.0, 100.0);
+        let ap = Appearance { effects: vec![fx("distort.twist", serde_json::json!({"angle": angle}))], ..ap };
+        let mut g = vectorcraft_doc::GraphicStyle::new("Twisted", ap.clone());
+        g.id = 9;
+        doc.graphic_styles.push(g);
+        let mut n = make(&mut doc, ap);
+        n.extras_mut().graphic_style = Some(9);
+        put(&mut doc, n);
+        doc
+    }
+    let oval = || shapes::ellipse(Rect::new(10.0, 10.0, 90.0, 60.0));
+    let square = || shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 60.0));
+    let red = solid(Color::rgb(1.0, 0.0, 0.0));
+    let filled = || Appearance::basic(black_fill(), Paint::None, 0.0);
+    let path = |p: PathData| move |doc: &mut Document, ap: Appearance| Node::path(doc.alloc_id(), p, ap);
+    let ring = |doc: &mut Document, ap: Appearance| {
+        let outer = Node::path(doc.alloc_id(), oval(), Appearance::default());
+        let inner = Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(30.0, 20.0, 70.0, 50.0)), Appearance::default());
+        let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::NonZero });
+        n.appearance = ap.into();
+        n
+    };
+    // A group of a filled square and `second`.
+    let group = |second: fn(&mut Document) -> Node| {
+        move |doc: &mut Document, ap: Appearance| {
+            let first = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), filled());
+            let second = second(doc);
+            let mut n = Node::group(doc.alloc_id(), vec![Arc::new(first), Arc::new(second)]);
+            n.appearance = ap.into();
+            n
+        }
+    };
+    let curve = |doc: &mut Document| {
+        Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(50.0, 10.0, 90.0, 60.0)), Appearance::basic(black_fill(), Paint::None, 0.0))
+    };
+    let stroked_curve = |doc: &mut Document| {
+        let ap = Appearance::basic(black_fill(), solid(Color::rgb(1.0, 0.0, 0.0)), 2.0);
+        Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(50.0, 10.0, 90.0, 60.0)), ap)
+    };
+    let guide = |doc: &mut Document| {
+        let path = shapes::rectangle(Rect::new(50.0, 10.0, 90.0, 60.0));
+        Node::new(doc.alloc_id(), NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: true })
+    };
+    for (what, doc, kept) in [
+        ("a twisted curve", twisted(45.0, filled(), path(oval())), true),
+        ("a curve twisted a quarter turn back", twisted(-90.0, filled(), path(oval())), true),
+        ("a square twisted three quarters of a turn", twisted(270.0, filled(), path(square())), true),
+        ("a curve twisted past a quarter turn", twisted(120.0, filled(), path(oval())), false),
+        ("a stroked curve", twisted(45.0, Appearance::basic(black_fill(), red.clone(), 2.0), path(oval())), false),
+        ("a curved compound path", twisted(-60.0, filled(), ring), true),
+        ("a curved compound path twisted past a quarter turn", twisted(120.0, filled(), ring), false),
+        ("a twisted group", twisted(90.0, Appearance::default(), group(curve)), true),
+        ("a group twisted past a quarter turn", twisted(135.0, Appearance::default(), group(curve)), false),
+        ("a group with a stroked member", twisted(45.0, Appearance::default(), group(stroked_curve)), false),
+        ("a group with a guide", twisted(45.0, Appearance::default(), group(guide)), false),
+    ] {
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), !kept, "{what}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let n = &back.layers[0].children().unwrap()[0];
+        let style = n.extras().graphic_style.and_then(|id| back.graphic_style_by_id(id)).map(|g| g.name.as_str());
+        assert_eq!(style, kept.then_some("Twisted"), "{what}: {n:?}");
+        assert_eq!(n.appearance.effects.iter().any(|e| e.id == "distort.twist"), kept, "{what}: {n:?}");
+    }
+}
+
 /// Twist and Transform on an object that isn't linked to a graphic style are not written as a style
 /// of its own: the object reads back without live effects.
 #[test]
