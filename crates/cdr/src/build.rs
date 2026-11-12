@@ -62,7 +62,7 @@ const MAX_CLIP_DEPTH: usize = 64;
 
 pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) -> Result<Drawing, Error> {
     let root = ix.root().ok_or(Error::NotCdr)?;
-    let version = version(ix, root);
+    let version = ix.version();
     // A template whose `vrsn` chunk doesn't name a version read (R28).
     if version == 0 {
         return Err(Error::NotCdr);
@@ -133,20 +133,6 @@ pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) 
     Ok(Drawing { version, page_size, pages, master, guides, warnings: std::mem::take(cx.warn) })
 }
 
-/// The version: the `vrsn` chunk's when it names one from 3 to 27, else the form type's (R1, R2).
-/// A template's form type names no version, so its `vrsn` chunk decides whatever it names (R28).
-/// Letters count differently from the version 24 update on (R1), so when both name a version
-/// after 27 the `vrsn` chunk's is the one refused.
-fn version(ix: &Index, root: &Chunk) -> u16 {
-    let vrsn = ix.children(root).iter().find(|c| &c.id == b"vrsn").and_then(|c| Rd::new(ix.data(c)).u16());
-    match vrsn {
-        Some(v) if (layout::OLDEST_RIFF..=layout::NEWEST).contains(&v) => v,
-        Some(v) if ix.form_version == 0 => v,
-        Some(v) if v > layout::NEWEST && ix.form_version > layout::NEWEST => v,
-        _ => ix.form_version,
-    }
-}
-
 #[derive(Default)]
 struct Found<'i> {
     fills: Vec<&'i Chunk>,
@@ -168,7 +154,11 @@ fn collect<'i>(ix: &'i Index, root: &'i Chunk, found: &mut Found<'i>) {
             b"outl" => found.outlines.push(c),
             b"mcfg" => found.mcfg = found.mcfg.or(Some(c)),
             b"guid" => found.guid = found.guid.or(Some(c)),
-            _ if c.is_list(b"stlt") => found.stlt = found.stlt.or(Some(c)),
+            // Before version 7 the list holds chunks, which are looked through.
+            _ if c.is_list(b"stlt") => {
+                found.stlt = found.stlt.or(Some(c));
+                stack.extend(ix.children(c).iter().rev());
+            }
             _ if c.is_list(b"clpt") => found.clpt.push(c),
             _ if c.is_list(b"page") => found.pages.push(c),
             _ => stack.extend(ix.children(c).iter().rev()),

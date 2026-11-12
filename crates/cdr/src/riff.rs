@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::io::Read as _;
 
 use crate::bytes::{Rd, u32_at};
+use crate::layout;
 use crate::limits::Budget;
 use crate::package::Streams;
 use crate::{Error, Warning};
@@ -58,6 +59,9 @@ pub(crate) struct Index<'a> {
     leaves: Cell<BTreeMap<(usize, usize), usize>>,
     /// Bytes that redirects to bytes another chunk already took may still read.
     shared_left: Cell<usize>,
+    /// The first `vrsn` chunk among the file's own chunks, once seen, and the version it names
+    /// (`None` when it can't be read) (R2).
+    vrsn: Option<Option<u16>>,
 }
 
 /// A list still to be split into its children.
@@ -139,6 +143,7 @@ impl<'a> Index<'a> {
             lists: Cell::default(),
             leaves: Cell::default(),
             shared_left: Cell::new(budget.limits.member),
+            vrsn: None,
         };
         ix.chunks.push(Chunk { id: *b"RIFF", form, src: 0, start: 12, len: 0, first: 0, count: 0 });
         let mut queue = vec![Pending { entry: 0, src: 0, start: 12, end, pool: None, depth: 0 }];
@@ -195,6 +200,19 @@ impl<'a> Index<'a> {
         self.chunks.first()
     }
 
+    /// The version: the `vrsn` chunk's when it names one from 3 to 27, else the form type's (R1,
+    /// R2). A template's form type names no version, so its `vrsn` chunk decides whatever it names
+    /// (R28). Letters count differently from the version 24 update on (R1), so when both name a
+    /// version after 27 the `vrsn` chunk's is the one refused.
+    pub(crate) fn version(&self) -> u16 {
+        match self.vrsn.flatten() {
+            Some(v) if (layout::OLDEST_RIFF..=layout::NEWEST).contains(&v) => v,
+            Some(v) if self.form_version == 0 => v,
+            Some(v) if v > layout::NEWEST && self.form_version > layout::NEWEST => v,
+            _ => self.form_version,
+        }
+    }
+
     /// The warnings for data streams that were left out.
     pub(crate) fn stream_warnings(&self, warn: &mut Vec<Warning>) {
         if let Some(s) = &self.streams {
@@ -228,8 +246,11 @@ impl<'a> Index<'a> {
                     continue;
                 }
             };
-            // A `LIST stlt` holds the style tables, not chunks (R4); its body is read whole (R45).
-            if chunk.id == LIST && chunk.form != *b"stlt" {
+            if p.entry == 0 && chunk.id == *b"vrsn" && self.vrsn.is_none() {
+                let at = chunk.start as usize;
+                self.vrsn = Some(self.span(chunk.src, at, at + chunk.len as usize).and_then(|b| Rd::new(b).u16()));
+            }
+            if chunk.id == LIST {
                 lists.push(self.chunks.len());
             }
             self.chunks.push(chunk);
@@ -241,6 +262,12 @@ impl<'a> Index<'a> {
         }
         for i in lists {
             let Some(c) = self.chunks.get(i).copied() else { continue };
+            // From version 7 a `LIST stlt` holds the style tables, not chunks (R4); its body is read
+            // whole (R45). Before version 7 it holds chunks. The file's own chunks, its `vrsn`
+            // among them, are all read before this.
+            if c.form == *b"stlt" && self.version() >= 700 {
+                continue;
+            }
             if p.depth + 1 > budget.limits.depth {
                 push(warn, Warning::TooDeep);
                 continue;

@@ -1136,6 +1136,28 @@ fn a_style_table_list_is_not_read_as_chunks() {
     assert!(d.page_size.is_some_and(|(w, h)| (w - 100.0).abs() < 0.01 && (h - 50.0).abs() < 0.01));
 }
 
+/// Before version 7 a `LIST stlt` holds chunks (R4), which are read like the document's others.
+#[test]
+fn a_style_list_before_version_7_is_read_as_chunks() {
+    for version in [400, 500, 600] {
+        let v = V(version);
+        let red = if version < 500 { synth::color4(1, [0, 100, 100, 0]) } else { synth::color(5, [0, 0, 255, 0]) };
+        let styles = list(b"stlt", vec![list(b"filt", vec![chunk(b"fill", v.fill(1, &red))])]);
+        let rect = synth::object(v, 1, &[(20, 1u32.to_le_bytes().to_vec()), (30, v.rect(10.0, 10.0, 0.0))], None);
+        let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![rect])]);
+        let content = vec![list(b"doc ", vec![styles]), page];
+        let d = read(&synth::file_of(version, content.clone()), Limits::default()).unwrap();
+        let s = shapes(&d.pages[0].layers[0].objects);
+        assert!(s[0].fill.is_some(), "{version}");
+        assert!(d.warnings.is_empty(), "{version}: {:?}", d.warnings);
+        // A template, whose form type names no version, by its `vrsn` chunk.
+        let mut template = synth::file_of(version, content);
+        template[8..12].copy_from_slice(b"CDTA");
+        let d = read(&template, Limits::default()).unwrap();
+        assert!(shapes(&d.pages[0].layers[0].objects)[0].fill.is_some(), "{version}");
+    }
+}
+
 /// The objects of a styled drawing: a rectangle with only its style (argument 200), one whose
 /// style leaves the fill and outline to its parent, and one with an outline argument of its own.
 fn graphic_style_drawing(version: u16, table: synth::Node) -> Vec<u8> {
@@ -1189,6 +1211,26 @@ fn objects_without_their_own_fill_or_outline_take_their_styles() {
             assert!(d.warnings.is_empty(), "{version} {text}: {:?}", d.warnings);
         }
     }
+}
+
+/// A template whose style table comes before its `vrsn` chunk still reads the table by the
+/// version that chunk names.
+#[test]
+fn a_style_table_before_the_version_chunk_reads_by_that_version() {
+    let styles = [synth::Style { id: 0x10, parent: 0, fill: 0x100, outline: 0x200 }, synth::Style { id: 0x11, parent: 0x10, fill: 0, outline: 0 }];
+    let table = synth::stlt(V(1000), &[(0x100, 1)], &[(0x200, 2)], &styles, true);
+    let mut file = graphic_style_drawing(1000, chunk(b"junk", vec![]));
+    // The drawing's chunks, the table put first, ahead of `vrsn`.
+    let body = file.split_off(12);
+    file.extend(synth::plain(&table));
+    file.extend(body);
+    file[8..12].copy_from_slice(b"CDTA");
+    let len = (file.len() - 8) as u32;
+    file[4..8].copy_from_slice(&len.to_le_bytes());
+    let d = read(&file, Limits::default()).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    assert_eq!(s[0].fill, Some(Color::Rgb([1.0, 0.0, 0.0])));
+    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
 }
 
 /// A style table that doesn't parse to its end is damage when an object needs a style from it;
