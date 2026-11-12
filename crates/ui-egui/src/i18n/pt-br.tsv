@@ -1046,6 +1046,8 @@ antiAlias	Sharp	Nítido
 	Extrude & Bevel…	Extrusão e Bisel…
 	3D (Classic)	3D (Clássico)
 	Extrude & Bevel (Classic)…	Extrusão e Bisel (Clássico)…
+	Revolve (Classic)…	Revolver (Clássico)…
+	Rotate (Classic)…	Girar (Clássico)…
 	Surface	Superfície
 	Wireframe	Aramado
 	No Shading	Sem Sombreamento
@@ -1962,6 +1964,7 @@ antiAlias	Sharp	Nítido
 	Order:	Ordem:
 	Ordinals	Ordinais
 	Organic Fades	Esmaecimentos Orgânicos
+	Holographic	Holográficos
 	Orientation	Orientação
 	Orientation:	Orientação:
 	Original	Original
@@ -4114,6 +4117,7 @@ axis	Both	Ambos
 @msg	not a valid plug-in module: {0}	não é um módulo de plug-in válido: {0}
 @msg	not an EMF or WMF file	não é um arquivo EMF ou WMF
 @msg	not an HP-GL file	não é um arquivo HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` deve ser uma matriz de 1 a 255 cores #rrggbb
 @msg	not found	não encontrado
 @msg	not in pattern editing mode	não está no modo de edição de padrão
 @msg	finish editing the pattern first	termine de editar o padrão primeiro
@@ -6226,6 +6230,17 @@ axis	Y Axis	Eixo Y
 	Charge Wave	Onda de carga
 	Spark Trail	Rastro de faíscas
 	Calligraphic Nibs	Penas Caligráficas
+	Bristle Brushes	Pincéis de Cerdas
+	Fine Liner	Traço Fino
+	Pointed Flat	Chato Pontudo
+	Stubby Round	Redondo Curto
+	Dry Scrub	Esfregado Seco
+	Soft Dome	Cúpula Suave
+	Filbert	Língua de Gato
+	Angled Round	Redondo Chanfrado
+	Angled Flat	Chato Chanfrado
+	Fan Blender	Leque Esfumador
+	Grass Fan	Leque de Grama
 	Pattern Borders	Bordas de Padrão
 	Scatter Shapes	Formas de Dispersão
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
@@ -6604,6 +6619,10 @@ breakText	Glyphs	Glifos
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Traçados usam um ou mais destes pincéis. Remover os pincéis desses traçados e excluir os pincéis?
 	Remove Strokes	Remover Traçados
 	Place Brush Art	Colocar Arte do Pincel
+	Replace Brush Art	Substituir Arte do Pincel
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Traçados usam este pincel. Aplicar a nova arte a esses traçados, ou deixá-los como estão e adicionar uma cópia do pincel com a nova arte?
+	Apply to Strokes	Aplicar aos Traçados
+	Leave Strokes	Manter Traçados
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` não tem arte (só os pincéis de dispersão, de arte e de padrão têm)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Ferramentas de Organização
@@ -7011,6 +7030,19 @@ swatch	Yellow Green	Verde-amarelado
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} linha anterior descartada|{n} linhas anteriores descartadas
 @plural	{n} line cut|{n} lines cut	{n} linha cortada|{n} linhas cortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`
+
+# Learn panel
+	Learn	Aprender
+	Explore tutorials	Explorar tutoriais
+	For you	Para você
+	Skills	Habilidades
+	Get started	Primeiros passos
+	Quick skill guide	Guia rápido de habilidades
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriais práticos curtos das ferramentas essenciais, agrupados por habilidade. Escolha uma habilidade para ver os tutoriais dela.
+	List Tutorials	Listar Tutoriais
+	Show Tutorial	Mostrar Tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Atualizar Efeitos Adiados

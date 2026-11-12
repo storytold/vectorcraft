@@ -843,6 +843,23 @@ mod gradient_chip_tests {
         assert!(chip.iter().all(|c| c.a() == 0), "{chip:?}");
     }
 
+    /// A Holographic glow's chip is clear at the corners and nearly opaque at the center; a foil's
+    /// chip is opaque everywhere.
+    #[test]
+    fn holographic_chips_show_a_glow_clear_at_its_edge_and_a_foil_opaque() {
+        use vectorcraft_color::Paint;
+        let lib = vectorcraft_color::libraries::builtin_library("holographic").unwrap();
+        let chip = |name: &str| match &lib.swatch(name).unwrap().paint {
+            Paint::Gradient(g) => gradient_chip_colors(g, 20.0, 20.0, 4, 4),
+            p => panic!("{name}: {p:?}"),
+        };
+        let glow = chip("Mint Halo");
+        assert!([0, 4, 20, 24].iter().all(|&i| glow[i].a() == 0), "{glow:?}");
+        assert!(glow[2 * 5 + 2].a() >= 240, "{glow:?}");
+        let foil = chip("Prism Veil");
+        assert!(foil.iter().all(|c| c.a() == 255), "{foil:?}");
+    }
+
     #[test]
     fn freeform_chip_mixes_points_in_the_model_they_share() {
         use vectorcraft_color::{Color, Freeform, FreeformPoint};

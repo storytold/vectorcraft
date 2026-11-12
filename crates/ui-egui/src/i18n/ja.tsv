@@ -531,6 +531,8 @@ digits	Malayalam	マラヤーラム数字
 	Extrude & Bevel…	押し出しとベベル…
 	3D (Classic)	3D（クラシック）
 	Extrude & Bevel (Classic)…	押し出しとベベル（クラシック）…
+	Revolve (Classic)…	回転体（クラシック）…
+	Rotate (Classic)…	回転（クラシック）…
 	Surface	表面
 	Wireframe	ワイヤーフレーム
 	No Shading	陰影なし
@@ -872,6 +874,7 @@ digits	Malayalam	マラヤーラム数字
 	Sky Gradients	空のグラデーション
 	Neutral Gradients	ニュートラルグラデーション
 	Organic Fades	オーガニックフェード
+	Holographic	ホログラフィック
 	Duotone Gradients	ダブルトーングラデーション
 	Radial Glows	円形グロー
 	Save Swatch Library…	スウォッチライブラリを保存…
@@ -4697,6 +4700,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{bpp}-bit bitmaps can't be read	{bpp} ビットのビットマップは読み込めません
 @msg	not an EMF or WMF file	EMF ファイルでも WMF ファイルでもありません
 @msg	not an HP-GL file	HP-GL ファイルではありません
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` は 1〜255 個の #rrggbb 形式のカラーの配列にしてください
 @msg	its layers use {_1}, which aren't read yet	レイヤーで使用されている {_1} はまだ読み込めません
 @msg	the EMF header is damaged	EMF ヘッダーが破損しています
 @msg	damaged	破損しています
@@ -6001,6 +6005,17 @@ axis	Y Axis	Y 軸
 	Charge Wave	チャージウェーブ
 	Spark Trail	スパークトレイル
 	Calligraphic Nibs	カリグラフィペン先
+	Bristle Brushes	剛毛ブラシ集
+	Fine Liner	細線ライナー
+	Pointed Flat	先細平筆
+	Stubby Round	短丸筆
+	Dry Scrub	ドライスクラブ
+	Soft Dome	ソフトドーム
+	Filbert	フィルバート
+	Angled Round	斜め丸筆
+	Angled Flat	斜め平筆
+	Fan Blender	ぼかし扇筆
+	Grass Fan	草描き扇筆
 	Pattern Borders	パターンボーダー
 	Scatter Shapes	散布シェイプ
 	Save Brush Library…	ブラシライブラリを保存…
@@ -6380,6 +6395,10 @@ breakText	Glyphs	字形
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	これらのブラシの 1 つ以上が線で使われています。それらの線からブラシを外して、ブラシを削除しますか？
 	Remove Strokes	線を削除
 	Place Brush Art	ブラシのアートを配置
+	Replace Brush Art	ブラシのアートを置き換え
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	このブラシは線で使われています。新しいアートをそれらの線に適用しますか？それとも線をそのままにして、新しいアートを持つブラシのコピーを追加しますか？
+	Apply to Strokes	線に適用
+	Leave Strokes	線を保持
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` にはアートがありません (アートを持つのは散布ブラシ、アートブラシ、パターンブラシだけです)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	配置ツール
@@ -6632,6 +6651,19 @@ breakText	Glyphs	字形
 @plural	{n} earlier line dropped|{n} earlier lines dropped	古い行 {n} 行を破棄
 @plural	{n} line cut|{n} lines cut	{n} 行を切り詰め
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` と `last` には、コンソールが保持している行の番号を、`first` が `last` より前になるよう指定してください
+
+# Learn panel
+	Learn	学ぶ
+	Explore tutorials	チュートリアルを見る
+	For you	おすすめ
+	Skills	スキル
+	Get started	はじめに
+	Quick skill guide	クイックスキルガイド
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	基本ツールを学ぶ短い実践チュートリアルを、スキルごとにまとめています。スキルを選ぶとチュートリアルが表示されます。
+	List Tutorials	チュートリアルの一覧
+	Show Tutorial	チュートリアルを表示
+@msg	missing `tutorial` (see learn.list)	`tutorial` が指定されていません (learn.list を参照)
+@msg	unknown tutorial `{id}` (see learn.list)	`{id}` は不明なチュートリアルです (learn.list を参照)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	保留中の効果を更新

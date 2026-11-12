@@ -461,6 +461,54 @@ fn art_dropped_on_the_panel_becomes_an_art_brush_and_a_brush_drags_out() {
     assert!(matches!(drag.as_deref(), Some(PanelDrag::Brush { name, def }) if *name == after[0].0 && def["name"] == json!(name)), "{drag:?}");
 }
 
+/// Art dragged off the canvas and released on a scatter, art or pattern brush with Alt held
+/// replaces that brush's art (no stroke uses it, so nothing asks); without Alt, or on a
+/// calligraphic brush, the list opens New Brush as before.
+#[test]
+fn art_alt_dropped_on_a_brush_with_art_replaces_its_art() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 12})).unwrap()["id"].as_u64().unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 0.0, show);
+    let tiles: Vec<Rect> = clickable(&out).into_iter().map(|c| c.1).filter(|r| r.width() == 64.0).collect();
+    assert_eq!(shown(&brushes(&mut app).0, &[])[3], "Dots");
+    let dots = app.run("brush.get", json!({"name": "Dots"})).unwrap();
+    let drop = |app: &mut VectorcraftApp, at: Pos2, modifiers: egui::Modifiers, time: f64| {
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::Art(vec![NodeId(id)]));
+        frame_with(&ctx, app, vec![egui::Event::PointerMoved(at)], modifiers, time, show);
+        frame_with(&ctx, app, vec![button(at, false)], modifiers, time + 0.1, show);
+    };
+    // Without Alt: New Brush, and Dots stays as it was.
+    drop(&mut app, tiles[3].center(), egui::Modifiers::NONE, 1.0);
+    assert!(app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::new_brush::KIND));
+    app.ui.dialog = None;
+    // Alt on a calligraphic or a bristle brush: New Brush too.
+    let list = brushes(&mut app).0;
+    let names = shown(&list, &[]);
+    let at = |name: &str| tiles[names.iter().position(|n| *n == name).unwrap()].center();
+    for (i, name) in ["3 pt. Round", "Bristle Round"].into_iter().enumerate() {
+        let lib = app.run("brush.list", json!({})).unwrap();
+        drop(&mut app, at(name), egui::Modifiers::ALT, 2.0 + i as f64);
+        assert!(app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::new_brush::KIND), "{name}");
+        app.ui.dialog = None;
+        assert_eq!(app.run("brush.list", json!({})).unwrap(), lib, "{name}");
+    }
+    assert_eq!(app.run("brush.get", json!({"name": "Dots"})).unwrap(), dots);
+    // Alt on Dots (scatter), Arrow (art) and Chain (pattern, its side tile): the rectangle is its
+    // art now, in one undo step each.
+    for (i, (name, key)) in [("Dots", "art"), ("Arrow", "art"), ("Chain", "side")].into_iter().enumerate() {
+        let steps = app.session.active().unwrap().history.undo.len();
+        drop(&mut app, at(name), egui::Modifiers::ALT, 4.0 + i as f64);
+        assert!(app.ui.dialog.is_none(), "no stroke uses {name}: nothing asks");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "{name}");
+        let art: vectorcraft_doc::Node = serde_json::from_value(app.run("brush.get", json!({"name": name})).unwrap()[key].clone()).unwrap();
+        let b = art.geometric_bounds().unwrap();
+        assert!((b.width() - 30.0).abs() < 1e-6 && (b.height() - 12.0).abs() < 1e-6, "{name}: {b:?}");
+    }
+}
+
 /// A brush dragged onto the left half of another brush of its type goes before it, with a bar
 /// marking the slot while it is held there, as one undo step; dropped on a brush of another
 /// type, it stays where it is and the status bar says why.

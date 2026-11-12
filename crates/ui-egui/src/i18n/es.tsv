@@ -1153,6 +1153,8 @@ font-technology	Variable	Variables
 	Extrude & Bevel…	Extrusión y biselado…
 	3D (Classic)	3D (clásico)
 	Extrude & Bevel (Classic)…	Extrusión y biselado (clásico)…
+	Revolve (Classic)…	Revolución (clásico)…
+	Rotate (Classic)…	Rotar (clásico)…
 	Surface	Superficie
 	Wireframe	Malla
 	No Shading	Sin sombreado
@@ -2365,6 +2367,7 @@ font-technology	Variable	Variables
 	Options:	Opciones:
 	Options…	Opciones…
 	Organic Fades	Desvanecidos orgánicos
+	Holographic	Holográficos
 	or more spaces with a tab	o más espacios por una tabulación
 	Order:	Orden:
 	Ordinals	Ordinales
@@ -4576,6 +4579,7 @@ axis	Both	Ambos
 @msg	not a valid plug-in module: {0}	no es un módulo de plugin válido: {0}
 @msg	not an EMF or WMF file	no es un archivo EMF ni WMF
 @msg	not an HP-GL file	no es un archivo HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` debe ser una lista de 1 a 255 colores #rrggbb
 @msg	not found	no se encontró
 @msg	not in pattern editing mode	no está en el modo de edición de motivos
 @msg	finish editing the pattern first	termina primero la edición del motivo
@@ -6253,6 +6257,17 @@ axis	Y Axis	Eje Y
 	Charge Wave	Onda de carga
 	Spark Trail	Estela de chispas
 	Calligraphic Nibs	Plumillas caligráficas
+	Bristle Brushes	Pinceles de cerdas
+	Fine Liner	Delineador fino
+	Pointed Flat	Plano puntiagudo
+	Stubby Round	Redondo corto
+	Dry Scrub	Frotado seco
+	Soft Dome	Cúpula suave
+	Filbert	Lengua de gato
+	Angled Round	Redondo biselado
+	Angled Flat	Plano biselado
+	Fan Blender	Abanico difuminador
+	Grass Fan	Abanico de hierba
 	Pattern Borders	Bordes de motivo
 	Scatter Shapes	Formas de dispersión
 	Save Brush Library…	Guardar biblioteca de pinceles…
@@ -6629,6 +6644,10 @@ breakText	Glyphs	Glifos
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Algunos trazos usan uno o más de estos pinceles. ¿Quitar los pinceles de esos trazos y eliminar los pinceles?
 	Remove Strokes	Quitar trazos
 	Place Brush Art	Colocar ilustración del pincel
+	Replace Brush Art	Reemplazar ilustración del pincel
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Algunos trazos usan este pincel. ¿Aplicar la nueva ilustración a esos trazos, o dejarlos como están y añadir una copia del pincel con la nueva ilustración?
+	Apply to Strokes	Aplicar a los trazos
+	Leave Strokes	Dejar los trazos
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` no tiene ilustración (solo la tienen los pinceles de dispersión, de arte y de motivo)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Herramientas de organización
@@ -6881,6 +6900,19 @@ breakText	Glyphs	Glifos
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} línea anterior descartada|{n} líneas anteriores descartadas
 @plural	{n} line cut|{n} lines cut	{n} línea recortada|{n} líneas recortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` y `last` deben ser números de líneas que la consola conserva, `first` antes que `last`
+
+# Learn panel
+	Learn	Aprender
+	Explore tutorials	Explorar tutoriales
+	For you	Para ti
+	Skills	Habilidades
+	Get started	Primeros pasos
+	Quick skill guide	Guía rápida de habilidades
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriales prácticos breves sobre las herramientas esenciales, agrupados por habilidad. Elige una habilidad para ver sus tutoriales.
+	List Tutorials	Enumerar tutoriales
+	Show Tutorial	Mostrar tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (consulta learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconocido `{id}` (consulta learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualizar efectos aplazados

@@ -1329,6 +1329,8 @@ font-technology	Variable	Biến thiên
 	Extrude & Bevel…	Kéo dài & vát…
 	3D (Classic)	3D (cổ điển)
 	Extrude & Bevel (Classic)…	Kéo dài & vát (cổ điển)…
+	Revolve (Classic)…	Xoay tròn (cổ điển)…
+	Rotate (Classic)…	Xoay (cổ điển)…
 	Surface	Bề mặt
 	Wireframe	Khung dây
 	No Shading	Không tô bóng
@@ -2972,6 +2974,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
 	Organic Fades	Mờ dần tự nhiên
+	Holographic	Ảnh ba chiều
 	Radial Gradient	Chuyển sắc hướng tâm
 	Conic Gradient	Chuyển sắc hình nón
 	Diamond Gradient	Chuyển sắc hình thoi
@@ -4924,6 +4927,7 @@ theme	Appearance	Giao diện
 @msg	This shortcut file is in a form VectorCraft can't read.	Tệp phím tắt này có dạng mà VectorCraft không đọc được.
 @msg	not an EMF or WMF file	không phải tệp EMF hoặc WMF
 @msg	not an HP-GL file	không phải tệp HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` phải là mảng từ 1 đến 255 màu #rrggbb
 @msg	not found	không tìm thấy
 @msg	not in pattern editing mode	không ở chế độ chỉnh sửa họa tiết
 @msg	finish editing the pattern first	hãy hoàn tất chỉnh sửa họa tiết trước
@@ -5917,6 +5921,17 @@ axis	Y Axis	Trục Y
 	Charge Wave	Sóng nạp
 	Spark Trail	Vệt tia lửa
 	Calligraphic Nibs	Ngòi bút thư pháp
+	Bristle Brushes	Bộ cọ lông
+	Fine Liner	Nét mảnh
+	Pointed Flat	Cọ dẹt nhọn
+	Stubby Round	Cọ tròn ngắn
+	Dry Scrub	Chà khô
+	Soft Dome	Vòm mềm
+	Filbert	Cọ lưỡi mèo
+	Angled Round	Cọ tròn xiên
+	Angled Flat	Cọ dẹt xiên
+	Fan Blender	Cọ quạt hòa trộn
+	Grass Fan	Cọ quạt vẽ cỏ
 	Pattern Borders	Viền họa tiết
 	Scatter Shapes	Hình phân tán
 	Save Brush Library…	Lưu thư viện cọ…
@@ -6296,6 +6311,10 @@ breakText	Glyphs	Glyph
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Có nét đang dùng một hoặc nhiều cọ này. Gỡ cọ khỏi các nét đó và xóa cọ?
 	Remove Strokes	Gỡ nét
 	Place Brush Art	Đặt đối tượng của cọ
+	Replace Brush Art	Thay đối tượng của cọ
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Có nét đang dùng cọ này. Áp dụng đối tượng mới cho các nét đó, hay giữ nguyên chúng và thêm một bản sao của cọ với đối tượng mới?
+	Apply to Strokes	Áp dụng cho nét
+	Leave Strokes	Giữ nguyên nét
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` không có đối tượng (chỉ cọ phân tán, cọ bản vẽ và cọ họa tiết mới có)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Công cụ sắp xếp
@@ -6548,6 +6567,19 @@ breakText	Glyphs	Glyph
 @plural	{n} earlier line dropped|{n} earlier lines dropped	đã bỏ {n} dòng cũ
 @plural	{n} line cut|{n} lines cut	đã cắt {n} dòng
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` và `last` phải là số thứ tự của các dòng mà bảng điều khiển đang giữ, `first` đứng trước `last`
+
+# Learn panel
+	Learn	Học
+	Explore tutorials	Khám phá hướng dẫn
+	For you	Dành cho bạn
+	Skills	Kỹ năng
+	Get started	Bắt đầu
+	Quick skill guide	Hướng dẫn nhanh về kỹ năng
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Các hướng dẫn thực hành ngắn cho những công cụ thiết yếu, xếp theo kỹ năng. Chọn một kỹ năng để xem các hướng dẫn của nó.
+	List Tutorials	Liệt kê hướng dẫn
+	Show Tutorial	Hiện hướng dẫn
+@msg	missing `tutorial` (see learn.list)	thiếu `tutorial` (xem learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	hướng dẫn không xác định `{id}` (xem learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn
