@@ -3275,3 +3275,22 @@ fn hebrew_parallel_round3_selection_values() {
         assert_eq!(tr(he, source), expected, "Hebrew UI regression for {source}");
     }
 }
+
+#[test]
+fn hebrew_parallel_round3_typography_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Add Fonts", "הוספת גופנים"),
+        ("Baseline Shift", "הסטת קו בסיס"),
+        ("Font Family:", "משפחת גופנים:"),
+        ("Font Style:", "סגנון גופן:"),
+        ("Find Font", "חיפוש גופן"),
+        ("First Line Indent:", "כניסת שורה ראשונה:"),
+        ("Break Text into Lines", "פיצול טקסט לשורות"),
+        ("Break Text into Words", "פיצול טקסט למילים"),
+        ("Character Color", "צבע תו"),
+        ("Left-to-Right Paragraph Direction", "כיוון פסקה משמאל לימין"),
+    ] {
+        assert_eq!(tr(he, source), expected, "Hebrew UI regression for {source}");
+    }
+}
