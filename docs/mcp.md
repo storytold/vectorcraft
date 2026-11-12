@@ -153,6 +153,11 @@ the suite) keep the agent to the folders you give it:
   and `modified` the document keeps of that file. Each row keeps its id, `name` (`fileName`), status and other
   fields. This applies to every document, also one the person or a client with wider roots opened. The paths a
   client gives `links.relink` and `links.unembed` stay in their replies, and the document's links are not changed.
+- `prefs.get`, `prefs.list`, `prefs.set` and `prefs.reset` show a folder preference outside the read roots
+  (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`) as
+  `null`; an empty folder and the scratch disk choices `Startup` and `None` stay. In `prefs.get {}` and
+  `prefs.reset`, an export preset in `screenExportPresets` leaves out its `folder` when the folder is outside the
+  read roots, and the preset stays. The preferences themselves are not changed.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
@@ -1335,6 +1340,22 @@ fails with no change. A description with a `…` entry takes more keys than it l
 (`…settings as file.new`), or, except for the export and save commands below, any key when it names none (one
 object can carry several formats' options). A command that takes its own reply back
 (`document.setup`, `text.areaOptions`) says so the same way.
+
+The app's own commands are not checked against their descriptions, but those listed here refuse a value of the wrong
+type and change nothing: `view.setZoom` (`zoom`, `center`), `view.screenMode` (`mode`), `window.panel` (`toggle`,
+`toggleGroup`), `file.revert` (`confirmed`), `file.close` (`index`), `ui.newSwatch` (`spot`, `global`),
+`ui.symbolOptions` (`edit`), `ui.batchDialog` (`set`, `action`) and `file.exportSelection` (`multiple`). So do the
+control channel's `ui.key`, `ui.move`, `ui.wheel`, `ui.click`, `ui.drag`, `ui.pointer`, `ui.resize`, `ui.screenshot`,
+`ui.render` and `ui.set` for their numbers, switches and `mods`, and the headless session's key, pointer and screenshot
+calls. Omitting a param or giving null keeps its default, with two exceptions: `ui.click`'s `count` and `ui.drag`'s
+`count` and `steps` refuse null, and a headless pointer event needs its `x` and `y`. A pointer event's `pressure`,
+`holdMs`, `tiltX`, `tiltY` and `rotation` must be numbers and its `space` must be `doc` or `screen`. A pointer packet
+with one malformed event sends none of its events:
+
+```json
+{"id": "view.setZoom", "params": {"zoom": "200"}}
+→ `zoom` must be a number
+```
 
 Saved actions aren't checked this way. When the Actions panel plays an action (Play at any speed, an action's function
 key, the Batch dialog or `ui.action.play`), a key a command no longer reads, recorded by an older version, is ignored
@@ -5925,8 +5946,11 @@ DXF layer (hidden layers switched off, locked ones locked, non-printing ones not
 straight paths become polylines (an open path of one straight segment becomes a line, except for a stroke weight
 before 2000), curved ones cubic splines through every anchor, fills their outlines followed by
 solid hatches (laser and cutter software reads the outlines and skips hatches; R12 has no hatches: the outlines
-alone), strokes lines with their lineweight and a linetype per dash pattern, and placed images image entities linked
-to PNG or JPEG files (`rasterFormat`) written next to the drawing (`linked` in the result). Coordinates are y up
+alone; an open path's fill outline is closed, as the fill is), strokes lines with their lineweight and a linetype per dash pattern, and placed images image entities linked
+to PNG or JPEG files (`rasterFormat`) written next to the drawing (`linked` in the result). `includeImages: false`
+leaves placed images out, with no image entity, no linked file and no decoding of their pixels, and `includeHatches:
+false` writes each filled area as its outlines alone, without its solid hatch (both default to `true`; these two
+options are VectorCraft's own). Either one, when it leaves something out, adds one note to `warnings`. Coordinates are y up
 from the bottom-left corner of the first artboard (or `artboard`), in drawing units: `scale` units per `unit` (default
 1 mm = 1 unit, which sets `$INSUNITS`); `scaleLineweights` scales the lineweights with them. `colors` is `8`, `16` or
 `256` indexed colours, or `true` (default; true colour with the nearest index, DXF 2004 and later). `preserve:
@@ -5939,7 +5963,8 @@ selected objects in their layers (every export takes it), and `useArtboards: tru
 artboard holding the art over it. `dxfPreset: "cnc"` (CNC / CAM; default `"custom"`) sets the options for cutting
 software that the call does not give: version `2000` (the oldest version that has both lightweight polylines and lineweights), `unit:
 "mm"` and `scale: 1`, `colors: 256` (all version 2000 holds), `preserve: "editability"` with `alterPaths: false` (every
-stroke a center line), `outlineText: true` (type as paths), and `rasterFormat: "png"`. DXF Options has the same choice as its Preset menu,
+stroke a center line), `outlineText: true` (type as paths), `includeImages: false` and `includeHatches: false` (the
+cutting paths alone: fills as their outlines, no image files), and `rasterFormat: "png"`. DXF Options has the same choice as its Preset menu,
 which shows Custom again once a field it sets is changed. What DXF can't hold (gradients and patterns as one colour,
 blending, opacity masks, raster effects, clipping) comes back in `warnings`. In R13 and later, an image that can't be decoded is left out with
 no linked file, and `warnings` carries "an image couldn't be decoded and is missing from the picture" once for all such
@@ -6992,7 +7017,9 @@ the middle of its bounding box's right side, hollow on point type and filled on 
 Type and Convert To Point Type. Either keeps the text and its styles and is one undo step; `ids` picks the objects
 (default: the selection). A frame of threaded text that `type.convertToPointType` converts leaves its thread with the
 text it holds, and the story flows through the other frames without that text; a thread left with one frame is no
-longer a thread.
+longer a thread. Area type with Dynamic Text (Block) on becomes point type with Dynamic Text off, at the sizes Block
+set its lines to, as `type.dynamicText {on: false}` leaves them; converting it back to area type does not turn Block
+on again.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.convertToAreaType","params":{"ids":[42]}}}
@@ -8009,7 +8036,10 @@ needs a person's approval too, and `plugin.install` refuses `grant: [permission]
 app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,
 `ui.dialog.confirm` and injected input can't confirm it. Its OK takes input only once the question has been on screen
 in the focused window for half a second, counted again for every new question and after the window gets the focus
-back. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
+back. A question that a request asked, directly or through a file dialog it opened, can't be approved by the person
+either: the reply adds `approval: "personMustStartInstall"`, OK stays disabled, and the person installs the plug-in
+with Object › Plug-ins › Install Plug-in… themselves. A request's `replace: true` doesn't skip the question about
+taking another module's place. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
 accepts `grant` and `allowHeavy` from any request, in that session only (headless; it can't be combined with
 `--connect`, `--automation-read-root` or `--automation-write-root`). A server confined to folders has no plug-in
 store, so it reads no `grants.json`, and a module that lists permissions or asks for a heavy budget does not install
@@ -8553,12 +8583,30 @@ keys without bounds make 1 step. `starts` gives, per object, the anchor of its f
 from (as the Blend tool's clicks on anchor points do; an open path's last anchor runs it the other way). With the
 Blend tool, `press_key` Escape drops the object clicked first and stops the next click adding to the blend
 just made; the document and the selection stay as they are. A blend
-among the objects takes the others in as more key objects, keeping its options, name and transparency:
+among the objects takes the others in as more key objects, keeping its options, name, transparency and whether it
+has a spine:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.blend.make","params":{"ids":[12,15],"starts":[0,2],"steps":8}}}
 {"name":"run_command","arguments":{"command":"object.blend.make","params":{"ids":[20,31]}}}
 {"name":"run_command","arguments":{"command":"object.blend.info","params":{}}}
+```
+
+`object.blend.createSpine {mode?: "auto" | "always" | "never"}` is the Blend panel's Create Spine menu: whether new
+blends get a spine (the [help page](https://helpx.adobe.com/illustrator/desktop/manage-colors/apply-transparency-and-blending/blend-panel-overview.html)
+describes the three choices). Without `mode` it reads the setting; both return `{mode}`. Auto, the default, and Always
+give every new blend a straight spine between the key centers, as before, whatever its key objects are. Never makes blends without a spine: their steps sit where a straight spine puts them, and
+`object.blend.info` reports `hasSpine: false` and no `spine`. Such a blend has no easing (`easingType` and `ramp` are
+refused, and the Blend panel dims Type and Ramp), Reverse Spine and the `object.blend.spine.*` commands refuse it
+("the blend has no spine"), and Release gives back its keys with no spine path. Replace Spine gives it a spine. The
+setting is kept with the preferences, is not an undo step and does not change blends already made, and
+`object.blend.make {createSpine}` chooses for one new blend. Any other value is refused ("`mode` must be one of auto,
+always, never") and changes nothing. A blend saved without a spine keeps `noSpine` in the native file; `.ai` and
+EPS files hold its drawn steps, as they do for every blend:
+
+```json
+{"name":"run_command","arguments":{"command":"object.blend.createSpine","params":{"mode":"never"}}}
+{"name":"run_command","arguments":{"command":"object.blend.make","params":{"ids":[20,31],"createSpine":"always"}}}
 ```
 
 With the Blend tool active, `tool.select {tool: "blend"}` finishes the blend, as a click on the tool's button or W
@@ -8571,7 +8619,7 @@ the spine passes nearest, `object.blend.spine.moveAnchor {anchor, x, y}` moves a
 `handle: "in" | "out"` it places that handle), `object.blend.spine.convertAnchor {anchor, to: "smooth" | "corner", x?, y?}` converts a point's handles (a Smooth drag with `x, y` creates opposite handles; Corner retracts both), `object.blend.spine.reshapeSegment {segment, t, dx, dy, perpendicular?}` bends a segment
 so its point at `t` moves by (dx, dy), turning a straight spine into a curve (`perpendicular` works as in `path.reshapeSegment`), and `object.blend.spine.removeAnchor
 {anchor}` deletes a point no key sits on; the first edit turns the spine into a path. Moving a key moves its end of the spine. Release
-(`object.blend.release`) leaves the spine as a path that paints nothing (`spines` in the result):
+(`object.blend.release`) leaves the spine of a blend that has one as a path that paints nothing (`spines` in the result):
 
 ```json
 {"name":"run_command","arguments":{"command":"object.blend.spine.addAnchor","params":{"id":40,"x":150,"y":100}}}
