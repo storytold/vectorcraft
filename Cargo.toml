@@ -14,7 +14,7 @@ repository = "https://github.com/storytold/vectorcraft"
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb", default-features = false, features = ["interpret", "write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "bb8320f5fa5d20fa78a026d0de06fe4e2f08a099", features = ["serde"] }
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "c4b8405d5fd8f29cf77de528206bd2b38bb0ecb6", features = ["serde"] }
 craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
 craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
 # Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per

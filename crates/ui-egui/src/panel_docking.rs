@@ -950,6 +950,7 @@ impl Transaction {
         if let Some(saved) = &location.group {
             apply(&mut candidate, Action::ResizeGroup { panel: panel.clone(), height: saved.height })?;
             apply(&mut candidate, Action::ResizeFlyoutWidth { panel: panel.clone(), width: saved.flyout_width })?;
+            apply(&mut candidate, Action::MoveFlyoutTop { panel: panel.clone(), offset: saved.flyout_offset })?;
             apply(&mut candidate, Action::SetMinimized { panel: panel.clone(), minimized: saved.minimized })?;
         }
         self.workspace.layout = candidate;
@@ -1089,6 +1090,7 @@ fn known(action: &Action<String>) -> bool {
         | Action::ResizeColumn { panel, .. }
         | Action::ResizeGroup { panel, .. }
         | Action::ResizeFlyoutWidth { panel, .. }
+        | Action::MoveFlyoutTop { panel, .. }
         | Action::ResizeIconic { panel, .. }
         | Action::SetNative { panel, .. }
         | Action::SetMonitor { panel, .. } => registered(panel),
