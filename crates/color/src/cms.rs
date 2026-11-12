@@ -321,6 +321,9 @@ pub struct Cms {
     settings: ColorSettings,
     rgb: RgbSpace,
     cmyk: CmykSpace,
+    /// The working settings, when a document's assigned profiles take the place of their spaces
+    /// ([`use_document_profiles`]): a [`ProofTarget::WorkingCmyk`] proof simulates their CMYK space.
+    working: Option<Arc<Cms>>,
 }
 
 impl std::fmt::Debug for Cms {
@@ -331,7 +334,7 @@ impl std::fmt::Debug for Cms {
 
 impl Default for Cms {
     fn default() -> Self {
-        Self { settings: ColorSettings::default(), rgb: RgbSpace::Srgb, cmyk: CmykSpace::Generic(generic()) }
+        Self { settings: ColorSettings::default(), rgb: RgbSpace::Srgb, cmyk: CmykSpace::Generic(generic()), working: None }
     }
 }
 
@@ -339,7 +342,7 @@ impl Cms {
     /// Profiles named by a legacy name are stored under their current name.
     pub fn new(settings: &ColorSettings) -> Result<Self, CmsError> {
         let settings = ColorSettings { rgb: canonical_name(&settings.rgb).into(), cmyk: canonical_name(&settings.cmyk).into(), ..settings.clone() };
-        Ok(Self { rgb: rgb_space(&settings.rgb)?, cmyk: cmyk_space(&settings.cmyk)?, settings })
+        Ok(Self { rgb: rgb_space(&settings.rgb)?, cmyk: cmyk_space(&settings.cmyk)?, settings, working: None })
     }
     pub fn settings(&self) -> &ColorSettings {
         &self.settings
@@ -543,8 +546,9 @@ impl Cms {
             ProofTarget::Deuteranopia => simulate_cvd(srgb, &DEUTERANOPIA),
             ProofTarget::Tritanopia => TRITANOPIA.simulate(srgb),
             ProofTarget::WorkingCmyk => {
-                let cmyk = self.srgb_to_cmyk(srgb, proof.intent);
-                self.cmyk_to_srgb(cmyk, proof.simulate_paper)
+                let working = self.working_cms();
+                let cmyk = working.srgb_to_cmyk(srgb, proof.intent);
+                working.cmyk_to_srgb(cmyk, proof.simulate_paper)
             }
             ProofTarget::Cmyk(name) => match cmyk_space(name) {
                 Ok(sp) => {
@@ -556,20 +560,29 @@ impl Cms {
         }
     }
 
-    /// Display sRGB of CMYK inks in the proof's CMYK space (the working space for RGB targets).
+    /// Display sRGB of CMYK inks in the proof's CMYK space (this context's CMYK space for RGB
+    /// targets).
     pub fn proof_cmyk_to_srgb(&self, cmyk: [f32; 4], proof: &ProofSetup) -> [f32; 3] {
         match &proof.target {
             ProofTarget::Cmyk(name) => match cmyk_space(name) {
                 Ok(sp) => Self::cmyk_to_srgb_in(&sp, cmyk, proof.simulate_paper, self.settings.bpc),
                 Err(_) => self.cmyk_to_srgb(cmyk, proof.simulate_paper),
             },
+            ProofTarget::WorkingCmyk => self.working_cms().cmyk_to_srgb(cmyk, proof.simulate_paper),
             _ => self.cmyk_to_srgb(cmyk, proof.simulate_paper),
         }
     }
 
+    /// The context of the working settings: the one [`use_document_profiles`] put a document's
+    /// profiles in place of, else this one.
+    fn working_cms(&self) -> &Cms {
+        self.working.as_deref().unwrap_or(self)
+    }
+
     /// A cached 3-D lookup table implementing [`Cms::proof_srgb`] for 8-bit pixels.
     pub fn proof_lut(&self, proof: &ProofSetup) -> Arc<ProofLut> {
-        let key = format!("{:?}|{:?}|{:?}|{}", self.settings, proof.target, proof.intent, proof.simulate_paper);
+        let working = self.working.as_ref().map(|w| &w.settings);
+        let key = format!("{:?}|{working:?}|{:?}|{:?}|{}", self.settings, proof.target, proof.intent, proof.simulate_paper);
         let mut cache = PROOF_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         if let Some((_, l)) = cache.iter().find(|(k, _)| *k == key) {
             return l.clone();
@@ -955,7 +968,8 @@ pub fn use_document_profiles(rgb: Option<&str>, cmyk: Option<&str>) -> bool {
     }
     // The working settings were checked when they were set; a working profile removed since then
     // leaves the active settings as they are.
-    let Ok(cms) = Cms::new(&st) else { return false };
+    let Ok(mut cms) = Cms::new(&st) else { return false };
+    cms.working = Some(working);
     install(Arc::new(cms));
     true
 }

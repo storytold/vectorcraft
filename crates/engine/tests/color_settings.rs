@@ -180,6 +180,35 @@ fn a_batch_converts_through_the_profile_it_assigns() {
     assert_eq!(converted, fill(&device, b));
 }
 
+/// View › Proof Setup › Working CMYK simulates the working CMYK space of Color Settings in a
+/// document assigned another CMYK profile, in Proof Colors and in Separations Preview, and a change
+/// of the working CMYK space shows in the next proof while the document keeps its profile.
+#[test]
+fn working_cmyk_proofs_a_tagged_document_through_the_working_space() {
+    const NAME: &str = "Tagged CMYK";
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: Some(NAME), paths: vec![] };
+    cms::register_icc(&cms::icc_bytes(cms::GENERIC_CMYK).unwrap(), Some(NAME.into())).unwrap();
+    let proof = cms::ProofSetup::default();
+    assert_eq!(proof.target, cms::ProofTarget::WorkingCmyk);
+    let (blue, inks) = ([0.2, 0.4, 0.8], [0.6, 0.3, 0.0, 0.1]);
+    let mut s = session();
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": NAME}));
+    let (active, working) = (cms::active(), cms::working());
+    assert_eq!(active.settings().cmyk, NAME);
+    assert_eq!(active.proof_srgb(blue, &proof), working.proof_srgb(blue, &proof), "Proof Colors");
+    assert_eq!(active.proof_cmyk_to_srgb(inks, &proof), working.proof_cmyk_to_srgb(inks, &proof), "Separations Preview");
+    let _ = active.proof_lut(&proof);
+    exec(&mut s, "edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK}));
+    let (active, working) = (cms::active(), cms::working());
+    assert_eq!(active.settings().cmyk, NAME, "the document keeps its profile");
+    let lut = active.proof_lut(&proof);
+    let fresh = cms::ProofLut::build(|rgb| working.proof_srgb(rgb, &proof));
+    for px in [[51, 102, 204], [230, 30, 30], [20, 160, 40], [128, 128, 128]] {
+        assert_eq!(lut.apply8(px), fresh.apply8(px), "the proof of {px:?} through the new working CMYK space");
+    }
+}
+
 /// Separations Preview follows the Color Settings and the profiles loaded: a renderer draws a gray
 /// square on the Black plate through the new working CMYK profile, and the four process plates
 /// through a proof profile loaded again under the same name, as a new renderer draws them.
