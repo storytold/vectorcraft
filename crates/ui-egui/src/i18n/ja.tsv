@@ -290,6 +290,10 @@ digits	Malayalam	マラヤーラム数字
 	Blend Options…	ブレンドオプション…
 	Expand	拡張
 	Replace Spine	スパインを置き換え
+	Create Spine	スパインを作成
+	Create Spine:	スパインを作成:
+	Always	常に
+	Never	しない
 	Reverse Spine	スパインを反転
 	Reverse Front to Back	前後を反転
 	Envelope Distort	エンベロープ
@@ -859,6 +863,7 @@ digits	Malayalam	マラヤーラム数字
 	Spectrum Gradients	スペクトルグラデーション
 	Sky Gradients	空のグラデーション
 	Neutral Gradients	ニュートラルグラデーション
+	Organic Fades	オーガニックフェード
 	Duotone Gradients	ダブルトーングラデーション
 	Radial Glows	円形グロー
 	Save Swatch Library…	スウォッチライブラリを保存…
@@ -870,6 +875,7 @@ digits	Malayalam	マラヤーラム数字
 	Search Commands…	コマンドを検索…
 	VectorCraft Help…	VectorCraft ヘルプ…
 	Preview	プレビュー
+	Preview:	プレビュー:
 	Show Edges	エッジを表示
 	Show Corner Widget	コーナーウィジェットを表示
 	Show Template	テンプレートを表示
@@ -1459,6 +1465,14 @@ antiAlias	Sharp	シャープ
 	Disable Auto Add/Delete	自動追加/削除機能を使用しない
 	Disable Opacity Mask	不透明マスクを無効にする
 	Discard	破棄
+	Preserve	保持
+	TIFF (Black & White)	TIFF (白黒)
+	TIFF (8-bit Color)	TIFF (8 bit カラー)
+	High Resolution	高解像度
+	Medium Resolution	中解像度
+	Low Resolution	低解像度
+	Language Level 2	言語レベル 2
+	Language Level 3	言語レベル 3
 	Discard Empty Type	空のテキストを破棄
 	Discard Recovered Documents	復帰したドキュメントを破棄
 	Discard White Overprint in Output	出力時に白のオーバープリントを破棄
@@ -2717,6 +2731,8 @@ mark-style	Japanese	日本式
 	Randomly change saturation and brightness	彩度と明度をランダムに変更
 	Range:	範囲:
 	Raster File Format:	ラスターファイル形式:
+	Include Placed Images	配置画像を含める
+	Include Fill Hatches	塗りのハッチングを含める
 	Raster Sample Size:	ラスターのサンプルサイズ:
 	Raster/Vector Balance:	ラスター／ベクターのバランス:
 	Rasterize Unsupported Art	非対応のアートをラスタライズ
@@ -5757,6 +5773,8 @@ axis	Y Axis	Y 軸
 	Version: {version}	バージョン: {version}
 	Install “{name}” in place of the plug-in with the same ID?	同じ ID のプラグインの代わりに「{name}」をインストールしますか？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	このファイルは、以前にこの ID でインストールされていたプラグインではありません。この ID 用に保持されている設定とキャッシュを引き継ぎます。
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動操作がこのプラグインのインストールを要求しました。インストールするには、オブジェクト › プラグイン › プラグインをインストール… をご自身で選んでください。
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動操作がこのプラグインのインストールを要求しました。インストールするには、オブジェクト › プラグイン › プラグインをインストール… をご自身で選んでください。
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	「{name}」は ID {_1} のプラグインとは別のモジュールで、そのプラグイン用に保持されている設定とキャッシュを引き継ぐことになります。ユーザーが同意したら `replace: true` を指定してインストールしてください
 	File SHA-256: {hash}	ファイルの SHA-256: {hash}
 	Read the objects it is given	渡されたオブジェクトの読み取り
@@ -5819,6 +5837,12 @@ axis	Y Axis	Y 軸
 @msg	command {name}: `label` must be 1-64 printable characters	コマンド {name}: `label` は印刷可能な 1-64 文字にしてください
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	コマンド {name}: a-z 0-9 _ からなり英字で始まる 1-{MAX_COMMAND_ID} 文字の ID を使用してください
 @msg	command {name}: {e}	コマンド {name}: {e}
+@msg	manifest: {e}	マニフェスト: {e}
+@msg	manifest: {e} at line {line} column {column}	マニフェスト: {e} ({line} 行目、{column} 列目)
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` は、それぞれ `id` と `label` を持つコマンドのリストにしてください
+@msg	command {name} must be an object with an `id` and a `label`	コマンド {name} は `id` と `label` を持つオブジェクトにしてください
+@msg	missing field `{key}`	フィールド `{key}` がありません
+@msg	duplicate field `{key}`	フィールド `{key}` が重複しています
 @msg	only a filter or a live effect declares `commands`	`commands` を宣言できるのはフィルターかライブ効果だけです
 @msg	“{name}” › {label}: {e}	「{name}」 › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	モジュールの SHA-256 が `hash` の値と一致しません。何もインストールされませんでした
@@ -6535,6 +6559,11 @@ breakText	Glyphs	字形
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	読み込みプラグインは `extensions` を 1～{MAX_EXTENSIONS} 個宣言します
 @msg	only an exporter or an importer declares `extensions`	`extensions` を宣言できるのは書き出しプラグインと読み込みプラグインだけです
 @msg	an importer always gets an import's budget: leave `budget` out	読み込みプラグインには常に読み込みの予算が割り当てられます: `budget` は省略してください
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	トラブルシューティング情報をコピー
+@msg	Copied the troubleshooting info	トラブルシューティング情報をコピーしました
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	前回の VectorCraft のセッションは、閉じる前に応答しなくなりました。ヘルプ › トラブルシューティング情報をコピー で、バグ報告用の詳細をコピーできます
 
 # Safe Mode
 	Safe Mode…	セーフモード…

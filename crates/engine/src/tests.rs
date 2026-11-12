@@ -133,6 +133,7 @@ mod placed_document;
 mod plugins;
 mod prefs;
 mod prefs_file;
+mod prefs_roots;
 mod previewbounds;
 mod print;
 mod printadvanced;

@@ -870,8 +870,10 @@ impl SaveJob {
             _ => encode_all(doc, f.id, &self.params),
         }
         .map_err(|e| named_for_save(cmd, e))?;
-        // A legacy .ai file per artboard.
-        let per_artboard = f.id == "ai" && super::legacy_ai::wanted(cmd, f, &self.params)?;
+        // A legacy .ai file per artboard, or the files the EPS encoder writes: one, or with Use
+        // Artboards and two or more artboards the central file at the path and a file per
+        // artboard beside it.
+        let per_artboard = f.id == "eps" || (f.id == "ai" && super::legacy_ai::wanted(cmd, f, &self.params)?);
         if enc.files.len() != 1 && !per_artboard {
             return Err(bad(cmd, "Save writes one artboard: name one, or export several with document.export"));
         }
@@ -1101,6 +1103,25 @@ fn format_options(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
+    // An EPS save that named artboards without Use Artboards, or with it on, had it on (the
+    // encoder reads them so): it shows on, with those artboards as the range.
+    if f.id == "eps"
+        && let Some(m) = &saved
+        && m.get("useArtboards").and_then(Value::as_bool) != Some(false)
+    {
+        let range = m.get("range").and_then(Value::as_str).filter(|r| !r.trim().is_empty());
+        let boards = m
+            .get("artboards")
+            .and_then(|a| serde_json::from_value::<Vec<usize>>(a.clone()).ok())
+            .or_else(|| m.get("artboard").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()).map(|i| vec![i]))
+            .filter(|b| !b.is_empty());
+        if range.is_some() || boards.is_some() {
+            v["options"]["useArtboards"]["value"] = json!(true);
+            if let (None, Some(boards)) = (range, boards) {
+                v["options"]["range"]["value"] = json!(range_text(&boards));
+            }
+        }
+    }
     v["saveFormats"] =
         SAVE_FORMATS.iter().filter_map(|id| format(id)).map(|f| json!({"id": f.id, "label": f.label, "extensions": f.extensions})).collect();
     Ok(v)
@@ -1113,7 +1134,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai|eps (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead (an option given flat or in svg and in options with different values is an error), compress?: bool (native, also in options: gzip; default: the useCompression preference; warnings say when the format doesn't read compress, version, preview or precision given flat, or a key given in options), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), precision?: 0..9 (native: round path anchors and handles to this many decimal places, a smaller file; colors, transforms and type stay exact; default: exact, and a later save without it writes exactly again), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: true (native: also carry a PDF of every artboard; false omits it) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly, on the active artboard (the app's, else the one the document opened on; with editingData: false, the first); separateArtboards writes more files, one per artboard. EPS saves the chosen artboard (first by default), retaining its page margins and the whole editable document; its PostScript appearance flattens transparency, as EPS requires. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF/EPS saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified. A key that no save format takes, beside the path or in options, and an unknown key inside a PDF option's object or svg, are refused",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai|eps (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead (an option given flat or in svg and in options with different values is an error), compress?: bool (native, also in options: gzip; default: the useCompression preference; warnings say when the format doesn't read compress, version, preview or precision given flat, or a key given in options), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), precision?: 0..9 (native: round path anchors and handles to this many decimal places, a smaller file; colors, transforms and type stay exact; default: exact, and a later save without it writes exactly again), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: true (native: also carry a PDF of every artboard; false omits it) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file and EPS (below): a .ai file is a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly, on the active artboard (the app's, else the one the document opened on; with editingData: false, the first); separateArtboards writes more files, one per artboard. EPS takes the options of document.exportEps: by default one file whose bounding box fits the visible art (the first artboard when no art shows), carrying the whole editable document; useArtboards: true (also when artboard, artboards or range names artboards; file.formatOptions then reports it true) makes the chosen artboard the page, drawn with its background color (without Use Artboards, only the first artboard's page when no art shows has its color), and with two or more chosen the file at the path is the central file of the visible art (again the first artboard when none shows) and each artboard is also written to <name>_<artboard>.eps beside it, holding that artboard; selectedOnly is refused; its PostScript appearance flattens transparency, as EPS requires. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF/EPS saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified. A key that no save format takes, beside the path or in options, and an unknown key inside a PDF option's object or svg, are refused",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),
@@ -1167,7 +1188,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Format Options",
             [],
             None,
-            "{format?: a writable format id or ait (default: the document's own)} → {id, label, extensions, mime, read, write, raster, options: {name: {type, default, description, value}}, saveFormats: [{id, label, extensions}]}; value = the document's option as last saved in that format, else (native, for a document not yet saved as one) as the last native save used it, else the default",
+            "{format?: a writable format id or ait (default: the document's own)} → {id, label, extensions, mime, read, write, raster, options: {name: {type, default, description, value}}, saveFormats: [{id, label, extensions}]}; value = the document's option as last saved in that format, else (native, for a document not yet saved as one) as the last native save used it, else the default (EPS: useArtboards is true when the last save named artboards without it, and range then names them)",
             always,
             format_options
         ),

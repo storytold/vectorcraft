@@ -520,7 +520,7 @@ pub(crate) fn levels(w: usize, h: usize, px: &dyn Fn(usize) -> [u16; 4], setting
 /// the tolerance plus the softness on, and in proportion between them.
 fn level(c: [u16; 3], refs: &[[u16; 3]], settings: &Settings) -> u8 {
     let Settings { tolerance, softness, measure, .. } = *settings;
-    let d = refs.iter().map(|r| apart(c, *r, measure)).fold(f64::INFINITY, f64::min);
+    let d = percent(refs.iter().map(|r| gap(c, *r, measure)).fold(f64::INFINITY, f64::min), measure);
     if d <= tolerance {
         0
     } else if d >= tolerance + softness {
@@ -530,16 +530,22 @@ fn level(c: [u16; 3], refs: &[[u16; 3]], settings: &Settings) -> u8 {
     }
 }
 
-/// How far apart `a` and `b` are, as a percentage, measured as `measure` says: the RGB distance of
-/// the largest one (black to white), or the largest difference on one channel of the channel's range.
-/// A difference of `k` 8-bit steps on one channel is exactly `k / 255 × 100` with channels.
-fn apart(a: [u16; 3], b: [u16; 3], measure: Match) -> f64 {
+/// How far apart `a` and `b` are, measured as `measure` says, before `percent` converts it: the
+/// squared RGB distance, or the largest difference on one channel.
+fn gap(a: [u16; 3], b: [u16; 3], measure: Match) -> f64 {
     match measure {
-        Match::Distance => {
-            let sq: f64 = a.iter().zip(b).map(|(x, y)| (f64::from(*x) - f64::from(y)).powi(2)).sum();
-            sq.sqrt() / (65_535.0 * 3f64.sqrt()) * 100.0
-        }
-        Match::Channels => f64::from(a.iter().zip(b).map(|(x, y)| x.abs_diff(y)).max().unwrap_or(0)) / 65_535.0 * 100.0,
+        Match::Distance => a.iter().zip(b).map(|(x, y)| (f64::from(*x) - f64::from(y)).powi(2)).sum(),
+        Match::Channels => f64::from(a.iter().zip(b).map(|(x, y)| x.abs_diff(y)).max().unwrap_or(0)),
+    }
+}
+
+/// A `gap` as a percentage: of the largest RGB distance (black to white) with distance, or of the
+/// channel's range with channels. A difference of `k` 8-bit steps on one channel is exactly
+/// `k / 255 × 100` with channels.
+fn percent(gap: f64, measure: Match) -> f64 {
+    match measure {
+        Match::Distance => gap.sqrt() / (65_535.0 * 3f64.sqrt()) * 100.0,
+        Match::Channels => gap / 65_535.0 * 100.0,
     }
 }
 

@@ -2295,6 +2295,7 @@ font-technology	Variable	Variabla
 	Options for Selection…	Alternativ för markering…
 	Options:	Alternativ:
 	Options…	Alternativ…
+	Organic Fades	Organiska toningar
 	or more spaces with a tab	eller fler blanksteg med en tabb
 	Order:	Ordning:
 	Ordinals	Ordningstal
@@ -2484,6 +2485,7 @@ font-technology	Variable	Variabla
 	Presets:	Förinställningar:
 	Press 	Tryck på 
 	Preview	Förhandsgranskning
+	Preview:	Förhandsgranskning:
 	Preview All Layers	Förhandsgranska alla lager
 	Preview in Browser	Förhandsgranska i webbläsare
 	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filerna i stället)
@@ -2576,6 +2578,8 @@ digits	Malayalam	Malayalam
 	Range:	Omfång:
 	Raster Effects	Rastereffekter
 	Raster File Format:	Rasterfilformat:
+	Include Placed Images	Inkludera placerade bilder
+	Include Fill Hatches	Inkludera skrafferingar av fyllningar
 	Raster Sample Size:	Samplingsstorlek för raster:
 	Raster/Vector Balance:	Raster-/vektorbalans:
 	Rasterize	Rastrera
@@ -2756,6 +2760,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Ersätt typsnitt
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersätt den med en annan fil eller ignorera den: dess bilder fortsätter att visa förhandsgranskningen som sparats med dokumentet.
 	Replace Spine	Ersätt ryggrad
+	Create Spine	Skapa ryggrad
+	Create Spine:	Skapa ryggrad:
+	Always	Alltid
+	Never	Aldrig
 	Replace Symbol	Ersätt symbol
 	Reset Transformation	Återställ transformering
 	Replace With Font	Ersätt med typsnitt
@@ -6097,6 +6105,8 @@ axis	Y Axis	Y-axel
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installera ”{name}” i stället för det plugin som har samma id?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Den här filen är inte det plugin som tidigare installerades med detta id. Den får de inställningar och den cache som sparats för detta id.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	En automatisering bad om att installera det här pluginet. Välj själv Objekt › Plugins › Installera plugin… för att installera det.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	En automatisering bad om att installera det här pluginet. Välj själv Objekt › Plugins › Installera plugin… för att installera det.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	”{name}” är en annan modul än pluginet med id {_1} och skulle få de inställningar och den cache som sparats för det: installera det med `replace: true` när användaren har godkänt
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Läsa objekten den får
@@ -6155,6 +6165,11 @@ axis	Y Axis	Y-axel
 @msg	command {name}: `label` must be 1-64 printable characters	kommando {name}: `label` måste ha 1-64 utskrivbara tecken
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommando {name}: använd ett id med 1-{MAX_COMMAND_ID} tecken av a-z 0-9 _ som börjar med en bokstav
 @msg	command {name}: {e}	kommando {name}: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (rad {line}, kolumn {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` måste vara en lista med kommandon, vart och ett med `id` och `label`
+@msg	command {name} must be an object with an `id` and a `label`	kommandot {name} måste vara ett objekt med `id` och `label`
+@msg	missing field `{key}`	fältet `{key}` saknas
+@msg	duplicate field `{key}`	fältet `{key}` förekommer två gånger
 @msg	only a filter or a live effect declares `commands`	bara ett filter eller en live-effekt deklarerar `commands`
 @msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modulen har inte den SHA-256 som `hash` anger: ingenting installerades
@@ -7462,7 +7477,7 @@ digits	Hindi	Hindi
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	EPS flattener: {e}	EPS-utplattning: {e}
 @msg	EPS options: {e}	EPS-alternativ: {e}
-@msg	EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS	När du sparar som EPS behålls ritytan och allt bildmaterial: använd document.export för beskuren EPS eller EPS med bara det markerade
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	När du sparar som EPS skrivs allt bildmaterial: använd document.export för EPS med bara det markerade
 @msg	every numbered name for the result is taken	alla numrerade namn för resultatet är upptagna
 @msg	expanded SVG styles exceed the import size limit	de expanderade SVG-stilarna överskrider storleksgränsen för import
 @msg	expected {"dataBase64"}	förväntade {"dataBase64"}
@@ -8329,6 +8344,11 @@ digits	Hindi	Hindi
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	filen är större än de {MAX_INPUT_BYTES} byte som en importfunktion läser
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importfunktion anger 1 till {MAX_EXTENSIONS} `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	en importfunktion får alltid en imports budget: utelämna `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiera felsökningsinformation
+@msg	Copied the troubleshooting info	Kopierade felsökningsinformationen
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Den senaste VectorCraft-sessionen slutade svara innan den stängdes. Hjälp › Kopiera felsökningsinformation kopierar detaljerna till en felrapport
 
 # Safe Mode
 	Safe Mode…	Felsäkert läge…

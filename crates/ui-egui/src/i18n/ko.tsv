@@ -283,6 +283,10 @@ digits	Malayalam	말라얄람어
 	Blend Options…	블렌드 옵션…
 	Expand	확장
 	Replace Spine	스파인 바꾸기
+	Create Spine	스파인 만들기
+	Create Spine:	스파인 만들기:
+	Always	항상
+	Never	안 함
 	Reverse Spine	스파인 반전
 	Reverse Front to Back	앞뒤 반전
 	Envelope Distort	엔벨로프 왜곡
@@ -852,6 +856,7 @@ digits	Malayalam	말라얄람어
 	Spectrum Gradients	스펙트럼 그레이디언트
 	Sky Gradients	하늘 그레이디언트
 	Neutral Gradients	중간색 그레이디언트
+	Organic Fades	유기적 페이드
 	Duotone Gradients	듀오톤 그레이디언트
 	Radial Glows	방사형 광선
 	Save Swatch Library…	견본 라이브러리 저장…
@@ -863,6 +868,7 @@ digits	Malayalam	말라얄람어
 	Search Commands…	명령 검색…
 	VectorCraft Help…	VectorCraft 도움말…
 	Preview	미리 보기
+	Preview:	미리 보기:
 	Show Edges	가장자리 표시
 	Show Corner Widget	모퉁이 위젯 표시
 	Show Template	템플릿 표시
@@ -1449,6 +1455,14 @@ antiAlias	Sharp	날카롭게
 	Disable Auto Add/Delete	자동 추가/삭제 사용 안 함
 	Disable Opacity Mask	불투명 마스크 사용 안 함
 	Discard	삭제
+	Preserve	보존
+	TIFF (Black & White)	TIFF (흑백)
+	TIFF (8-bit Color)	TIFF (8비트 색상)
+	High Resolution	고해상도
+	Medium Resolution	중간 해상도
+	Low Resolution	저해상도
+	Language Level 2	언어 수준 2
+	Language Level 3	언어 수준 3
 	Discard Empty Type	빈 문자 삭제
 	Discard Recovered Documents	복구된 문서 삭제
 	Discard White Overprint in Output	출력에서 흰색 오버프린트 삭제
@@ -2707,6 +2721,8 @@ mark-style	Japanese	일본식
 	Randomly change saturation and brightness	채도와 명도를 무작위로 변경
 	Range:	범위:
 	Raster File Format:	래스터 파일 형식:
+	Include Placed Images	배치된 이미지 포함
+	Include Fill Hatches	칠 해치 포함
 	Raster Sample Size:	래스터 샘플 크기:
 	Raster/Vector Balance:	래스터/벡터 균형:
 	Rasterize Unsupported Art	지원되지 않는 아트웍 래스터화
@@ -5653,6 +5669,8 @@ axis	Y Axis	Y축
 	Version: {version}	버전: {version}
 	Install “{name}” in place of the plug-in with the same ID?	같은 ID의 플러그인 대신 “{name}”을(를) 설치하시겠습니까?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	이 파일은 이전에 이 ID로 설치된 플러그인이 아닙니다. 이 ID에 보관된 설정과 캐시를 받습니다.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	자동화가 이 플러그인 설치를 요청했습니다. 설치하려면 직접 개체 › 플러그인 › 플러그인 설치…를 선택하세요.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	자동화가 이 플러그인 설치를 요청했습니다. 설치하려면 직접 개체 › 플러그인 › 플러그인 설치…를 선택하세요.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”은(는) ID {_1}의 플러그인과 다른 모듈이며 그 플러그인에 보관된 설정과 캐시를 받게 됩니다. 사용자가 동의하면 `replace: true`로 설치하세요
 	File SHA-256: {hash}	파일 SHA-256: {hash}
 	Read the objects it is given	전달받은 개체 읽기
@@ -5715,6 +5733,12 @@ axis	Y Axis	Y축
 @msg	command {name}: `label` must be 1-64 printable characters	명령 {name}: `label`은 인쇄 가능한 문자 1-64자여야 합니다
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	명령 {name}: a-z 0-9 _로 이루어지고 문자로 시작하는 1-{MAX_COMMAND_ID}자 ID를 사용하세요
 @msg	command {name}: {e}	명령 {name}: {e}
+@msg	manifest: {e}	매니페스트: {e}
+@msg	manifest: {e} at line {line} column {column}	매니페스트: {e} ({line}행 {column}열)
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands`는 각각 `id`와 `label`이 있는 명령 목록이어야 합니다
+@msg	command {name} must be an object with an `id` and a `label`	명령 {name}은(는) `id`와 `label`이 있는 객체여야 합니다
+@msg	missing field `{key}`	`{key}` 필드가 없습니다
+@msg	duplicate field `{key}`	`{key}` 필드가 중복되었습니다
 @msg	only a filter or a live effect declares `commands`	필터나 라이브 효과만 `commands`를 선언합니다
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	모듈의 SHA-256이 `hash`에 지정된 값과 다릅니다. 아무것도 설치되지 않았습니다
@@ -6431,6 +6455,11 @@ breakText	Glyphs	글리프
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	가져오기 플러그인은 `extensions`를 1~{MAX_EXTENSIONS}개 선언합니다
 @msg	only an exporter or an importer declares `extensions`	`extensions`는 내보내기 또는 가져오기 플러그인만 선언합니다
 @msg	an importer always gets an import's budget: leave `budget` out	가져오기 플러그인은 항상 가져오기 예산을 받습니다: `budget`을 생략하세요
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	문제 해결 정보 복사
+@msg	Copied the troubleshooting info	문제 해결 정보를 복사했습니다
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	지난 VectorCraft 세션이 닫히기 전에 응답을 멈췄습니다. 도움말 › 문제 해결 정보 복사로 버그 보고용 세부 정보를 복사할 수 있습니다
 
 # Safe Mode
 	Safe Mode…	안전 모드…

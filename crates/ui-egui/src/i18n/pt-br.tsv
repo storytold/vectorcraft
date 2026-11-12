@@ -1953,6 +1953,7 @@ antiAlias	Sharp	Nítido
 	Options…	Opções…
 	Order:	Ordem:
 	Ordinals	Ordinais
+	Organic Fades	Esmaecimentos Orgânicos
 	Orientation	Orientação
 	Orientation:	Orientação:
 	Original	Original
@@ -2120,6 +2121,7 @@ antiAlias	Sharp	Nítido
 	Presets:	Predefinidos:
 	Press 	Pressione 
 	Preview	Visualização
+	Preview:	Visualização:
 	Preview Mode	Modo de Visualização
 	Preview in Browser	Visualizar no Navegador
 	Preview the document as it is now	Visualizar o documento como está agora
@@ -2201,6 +2203,8 @@ digits	Malayalam	Malaiala
 	Range:	Intervalo:
 	Raster Effects	Efeitos de Raster
 	Raster File Format:	Formato de Arquivo Raster:
+	Include Placed Images	Incluir Imagens Inseridas
+	Include Fill Hatches	Incluir Hachuras dos Preenchimentos
 	Raster Sample Size:	Tamanho da Amostra Raster:
 	Raster/Vector Balance:	Equilíbrio Raster/Vetor:
 	Rasterize Unsupported Art	Rasterizar Arte Não Suportada
@@ -2356,6 +2360,10 @@ digits	Malayalam	Malaiala
 	Replace:	Substituir:
 	Replace Font	Substituir Fonte
 	Replace Spine	Substituir Coluna
+	Create Spine	Criar Coluna
+	Create Spine:	Criar Coluna:
+	Always	Sempre
+	Never	Nunca
 	Replace Symbol	Substituir Símbolo
 	Reset Transformation	Redefinir Transformação
 	Replace With Font	Substituir Com Fonte
@@ -5990,6 +5998,8 @@ axis	Y Axis	Eixo Y
 	Version: {version}	Versão: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instalar “{name}” no lugar do plug-in com o mesmo ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Este arquivo não é o plug-in instalado antes com este ID. Ele recebe as configurações e o cache guardados para esse ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Uma automação pediu para instalar este plug-in. Para instalá-lo, escolha Objeto › Plug-ins › Instalar Plug-in… você mesmo.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Uma automação pediu para instalar este plug-in. Para instalá-lo, escolha Objeto › Plug-ins › Instalar Plug-in… você mesmo.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” é um módulo diferente do plug-in com ID {_1} e receberia as configurações e o cache guardados para ele: instale-o com `replace: true` depois que o usuário concordar
 	File SHA-256: {hash}	SHA-256 do arquivo: {hash}
 	Read the objects it is given	Ler os objetos que recebe
@@ -6052,6 +6062,12 @@ axis	Y Axis	Eixo Y
 @msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` deve ter 1-64 caracteres imprimíveis
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: use um id de 1-{MAX_COMMAND_ID} caracteres de a-z 0-9 _ que comece com uma letra
 @msg	command {name}: {e}	comando {name}: {e}
+@msg	manifest: {e}	manifesto: {e}
+@msg	manifest: {e} at line {line} column {column}	manifesto: {e} (linha {line}, coluna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` deve ser uma lista de comandos, cada um com `id` e `label`
+@msg	command {name} must be an object with an `id` and a `label`	o comando {name} deve ser um objeto com `id` e `label`
+@msg	missing field `{key}`	falta o campo `{key}`
+@msg	duplicate field `{key}`	campo `{key}` duplicado
 @msg	only a filter or a live effect declares `commands`	só um filtro ou um efeito dinâmico declara `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	o módulo não tem o SHA-256 indicado em `hash`: nada foi instalado
@@ -6922,6 +6938,11 @@ swatch	Yellow Green	Verde-amarelado
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	um plug-in de importação declara de 1 a {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	só um plug-in de exportação ou de importação declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	um plug-in de importação sempre recebe o orçamento de uma importação: omita `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copiar informações de solução de problemas
+@msg	Copied the troubleshooting info	Informações de solução de problemas copiadas
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	A última sessão do VectorCraft parou de responder antes de fechar. Ajuda › Copiar informações de solução de problemas copia os detalhes para um relatório de bug
 
 # Safe Mode
 	Safe Mode…	Modo de Segurança…
