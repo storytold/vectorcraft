@@ -3785,6 +3785,34 @@ fn an_unstroked_run_with_a_stroke_style_loses_nothing() {
     }
 }
 
+/// The text document has no Korean Line Break Anywhere: a paragraph with it on and Hangul in it
+/// is reported as left out, and comes back off; with it off, or with no Hangul, nothing is
+/// reported.
+#[test]
+fn korean_line_break_anywhere_is_reported_only_for_korean_paragraphs() {
+    use vectorcraft_doc::TextObject;
+    for (text, on, reported) in [("가나다 라마", true, true), ("가나다 라마", false, false), ("Plain", true, false)] {
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), text, style(14.0, Color::BLACK));
+        t.para.korean_line_break_anywhere = on;
+        let mut doc = Document::new(200.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(!out.warnings.is_empty(), reported, "{text} {on}: {:?}", out.warnings);
+        let mut all = vec![];
+        paths(&read_back(&doc).layers, &mut all);
+        let paras: Vec<bool> = all
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.para_at(0).korean_line_break_anywhere),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(paras, [false], "{text} {on}");
+    }
+}
+
 #[test]
 fn type_is_written_again_as_the_same_bytes() {
     let doc = typed();

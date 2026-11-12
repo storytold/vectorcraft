@@ -3,7 +3,7 @@ use super::common::{fix_ids, ids_json, is_envelope, roots_param, selected_of, wr
 use super::mesh::{handle_param, index_param, whole};
 use super::{
     Affine, Appearance, Arc, Beside, Color, Document, EngineError, EnvelopeKind, EnvelopeMap, EnvelopeOptions, Node, NodeId, NodeKind, Paint,
-    PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, f64_or, f64_req, id_param, json, live, ok, switch_or, text_param,
+    PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, f64_or, f64_req, json, live, object_param, ok, switch_or, text_param,
 };
 
 // ---------- Envelope ----------
@@ -419,7 +419,7 @@ pub(super) fn env_edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn env_set_mesh_point(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.setMeshPoint";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let index = index_param(p, "index", C)?;
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let handle = handle_param(p, C)?;
