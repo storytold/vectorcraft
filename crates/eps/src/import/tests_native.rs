@@ -5419,7 +5419,14 @@ fn type_envelope_text(family: &str, paint: Option<&str>) -> String {
 fn arc_envelope(text: &Node, bend: f64) -> Node {
     let mut text = text.clone();
     text.visible = true;
-    let kind = vectorcraft_doc::live::EnvelopeKind::Warp { style: "arc".into(), bend, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::live::EnvelopeKind::Warp {
+        style: "arc".into(),
+        bend,
+        h: 0.0,
+        v: 0.0,
+        horizontal: true,
+        version: vectorcraft_doc::live::WARP_NET,
+    };
     Node::new(
         vectorcraft_doc::NodeId(1_000_000),
         NodeKind::Envelope {
@@ -6932,4 +6939,22 @@ fn text_a_placed_file_covers_only_at_its_first_placement_is_kept() {
     assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
     assert_eq!(text_of(&d.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
     assert!(!w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
+}
+
+/// #6865: explicitly trusting editing data keeps an artboard larger than its PDF page.
+#[test]
+fn trusted_editing_data_keeps_an_artboard_taller_than_its_pdf_page() {
+    let art = native(&layer("Oversized", true, &square(10, 10))).replace(" 0 0 100 100", " 0 0 12992.726 14637.147");
+    let (d, w, read) = crate::layered_ai(&private(&art), Document::new(12992.7, 14400.0), vec![], false, true, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Oversized"], "{w:?}");
+    assert!((d.artboards[0].rect.height() - 14637.147).abs() < 0.001);
+    assert_eq!(kinds(&d.layers[0]), ["path"]);
+    assert!(w.iter().any(|w| w.contains("artboard is larger than the PDF page")), "{w:?}");
+    let child = &d.layers[0].children().unwrap()[0];
+    assert!(child.visual_bounds().unwrap().y0 > 14400.0, "art beyond the PDF page is kept");
+    let (_, w, read) = crate::layered_ai(&private(&art), Document::new(12992.7, 14400.0), vec![], false, false, 1.0);
+    assert!(!read, "default import still rejects the size mismatch: {w:?}");
+    let (_, w, read) = crate::layered_ai(&private(&art), Document::new(12000.0, 14400.0), vec![], false, true, 1.0);
+    assert!(!read, "the uncapped dimension must still match: {w:?}");
 }

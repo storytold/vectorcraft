@@ -79,6 +79,9 @@ pub(crate) struct SGlyph {
     /// A letter of a Korean word kept whole (Korean Line Break Anywhere off): a CJK character
     /// here doesn't let the line break after it ([`keep_korean_words`]).
     pub keeps_word: bool,
+    /// Bunri-Kinshi (Paragraph panel menu): the glyph's cluster ends with the first character of
+    /// an inseparable pair, so a line may not break after it ([`keep_inseparable_pairs`]).
+    pub keeps_next: bool,
     /// No Break (Character panel menu): keep this glyph on the same line as the neighbouring
     /// glyphs that have it.
     pub no_break: bool,
@@ -347,6 +350,36 @@ pub(crate) fn keep_korean_words(sg: &mut [SGlyph]) {
         }
         start += len + 1;
     }
+}
+
+/// Bunri-Kinshi: mark each glyph of `sg` (a paragraph's glyphs, shaped from `text`, which their
+/// bytes index) whose cluster ends right before the second character of an inseparable pair
+/// ([`inseparable`]) as [`SGlyph::keeps_next`], so a line never breaks inside the pair. A pair is
+/// two neighboring source characters, whatever their fonts and styles; an inline graphic or a
+/// shaped cluster holding both characters is never a pair.
+pub(crate) fn keep_inseparable_pairs(text: &str, sg: &mut [SGlyph]) {
+    for k in 1..sg.len() {
+        let (a, b) = (&sg[k - 1], &sg[k]);
+        if a.byte == b.byte || a.inline.is_some() || b.inline.is_some() || a.byte + a.len != b.byte {
+            continue;
+        }
+        let last = text.get(a.byte..b.byte).and_then(|s| s.chars().next_back()).unwrap_or(a.ch);
+        if inseparable(last, b.ch) {
+            sg[k - 1].keeps_next = true;
+        }
+    }
+}
+
+/// Is `a` followed by `b` an inseparable pair that Bunri-Kinshi keeps on one line? VectorCraft's
+/// set is the pairs W3C JLREQ lists for its class cl-08 (https://www.w3.org/TR/jlreq/#cl-08): two
+/// em dashes, two horizontal ellipses, two two-dot leaders, and the upper half of a vertical kana
+/// repeat mark (U+3033 or U+3034) followed by its lower half (U+3035). File writers call it to
+/// report whether a paragraph's lines depend on Bunri-Kinshi.
+pub fn inseparable(a: char, b: char) -> bool {
+    matches!(
+        (a, b),
+        ('\u{2014}', '\u{2014}') | ('\u{2026}', '\u{2026}') | ('\u{2025}', '\u{2025}') | ('\u{3033}', '\u{3035}') | ('\u{3034}', '\u{3035}')
+    )
 }
 
 /// Is `c` Hangul: a syllable, a jamo or a compatibility jamo (full or half width)?
@@ -875,33 +908,113 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
     source.get(i).filter(|(range, _)| range.contains(&byte)).map(|_| span.start + i)
 }
 
-/// Can one glyph draw characters in styles `a` and `b`? Only when the styles are equal, except that
-/// horizontal type (`vertical` false) does not read Standard Vertical Roman Alignment or the
-/// tate-chu-yoko offsets, so styles that differ only in those are drawn alike there. The space
-/// before a line's first character ([`space_before`]) is never read inside a cluster, which takes it
-/// from its first character, so it doesn't split a ligature either.
+/// Can one glyph draw characters in styles `a` and `b`? OpenType features already apply to their
+/// own character ranges during shaping, so feature-only differences do not split a cluster.
+/// Horizontal type does not read Standard Vertical Roman Alignment or the tate-chu-yoko offsets.
+/// The space before a line's first character ([`space_before`]) comes from the cluster's first
+/// character, so it does not split a ligature either.
 fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
-    let b = &CharStyle { kerning_before: a.kerning_before, ..b.clone() };
-    if a == b {
-        return true;
-    }
-    !vertical
-        && *a
-            == CharStyle {
-                standard_vertical_roman: a.standard_vertical_roman,
-                tcy_up_down: a.tcy_up_down,
-                tcy_left_right: a.tcy_left_right,
-                ..b.clone()
-            }
+    // Exhaustive, like `shapes_alike`: compare borrowed fields without copying feature lists.
+    let CharStyle {
+        font_family,
+        font_style,
+        font_version,
+        font_axes,
+        size,
+        leading,
+        tracking,
+        kerning,
+        kerning_before,
+        optical_kerning,
+        baseline_shift,
+        h_scale,
+        v_scale,
+        rotation,
+        fill,
+        stroke,
+        stroke_width,
+        underline,
+        strikethrough,
+        all_caps,
+        features: _,
+        style_name,
+        overprint_fill,
+        overprint_stroke,
+        stroke_cap,
+        stroke_join,
+        stroke_miter_limit,
+        stroke_dash,
+        stroke_align,
+        position,
+        small_caps,
+        char_align,
+        char_direction,
+        kashidas,
+        proportional_metrics,
+        tate_chu_yoko,
+        tcy_up_down,
+        tcy_left_right,
+        standard_vertical_roman,
+        digits,
+        font_height_reference,
+        no_break,
+        language,
+        glyph_alternate,
+    } = a;
+    // Keep PartialEq's non-reflexive behavior for ignored numeric fields, without cloning styles.
+    let offsets = (standard_vertical_roman, tcy_up_down, tcy_left_right);
+    let other_offsets = if vertical { (&b.standard_vertical_roman, &b.tcy_up_down, &b.tcy_left_right) } else { offsets };
+    kerning_before == &a.kerning_before
+        && offsets == other_offsets
+        && font_family == &b.font_family
+        && font_style == &b.font_style
+        && font_version == &b.font_version
+        && font_axes == &b.font_axes
+        && size == &b.size
+        && leading == &b.leading
+        && tracking == &b.tracking
+        && kerning == &b.kerning
+        && optical_kerning == &b.optical_kerning
+        && baseline_shift == &b.baseline_shift
+        && h_scale == &b.h_scale
+        && v_scale == &b.v_scale
+        && rotation == &b.rotation
+        && fill == &b.fill
+        && stroke == &b.stroke
+        && stroke_width == &b.stroke_width
+        && underline == &b.underline
+        && strikethrough == &b.strikethrough
+        && all_caps == &b.all_caps
+        && style_name == &b.style_name
+        && overprint_fill == &b.overprint_fill
+        && overprint_stroke == &b.overprint_stroke
+        && stroke_cap == &b.stroke_cap
+        && stroke_join == &b.stroke_join
+        && stroke_miter_limit == &b.stroke_miter_limit
+        && stroke_dash == &b.stroke_dash
+        && stroke_align == &b.stroke_align
+        && position == &b.position
+        && small_caps == &b.small_caps
+        && char_align == &b.char_align
+        && char_direction == &b.char_direction
+        && kashidas == &b.kashidas
+        && proportional_metrics == &b.proportional_metrics
+        && tate_chu_yoko == &b.tate_chu_yoko
+        && digits == &b.digits
+        && font_height_reference == &b.font_height_reference
+        && no_break == &b.no_break
+        && language == &b.language
+        && glyph_alternate == &b.glyph_alternate
 }
 
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
 /// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
-/// run's, see [`shape_segment`]), the space before a line's first character ([`space_before`])
-/// and the tracking, as long as the tracking keeps or drops standard
-/// ligatures alike ([`crate::features::ligatures_suppressed_by`]).
+/// run's, see [`shape_segment`]), the space before a line's first character ([`space_before`]),
+/// the OpenType features (each run's apply to its own characters, as features over a range of the
+/// one buffer) and the tracking, as long as the tracking keeps or drops standard ligatures alike
+/// ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
     // Every field is named, so that a new attribute has to be sorted into one group or the other.
     let CharStyle {
@@ -925,7 +1038,9 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         underline: _,
         strikethrough: _,
         all_caps,
-        features,
+        // Runs with different feature lists shape as one buffer: each run's features apply to its
+        // own characters only ([`shape_segment`]).
+        features: _,
         style_name: _,
         overprint_fill: _,
         overprint_stroke: _,
@@ -958,7 +1073,6 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         && *h_scale == b.h_scale
         && *v_scale == b.v_scale
         && *all_caps == b.all_caps
-        && *features == b.features
         && *position == b.position
         && *small_caps == b.small_caps
         && *proportional_metrics == b.proportional_metrics
@@ -1085,6 +1199,7 @@ fn inline_glyph(
         inline: Some(InlineBox { art: drawn, xf }),
         word_end: false,
         keeps_word: false,
+        keeps_next: false,
         no_break: st.no_break,
         vertical_roman: false,
         cursive: false,
@@ -1121,6 +1236,23 @@ struct Shaped {
     chars: Vec<u32>,
 }
 
+/// The features that turn the whole-text features `base` into `own` over the clusters `range`, put
+/// after `base` so that they win there: each feature of `own` that `base` lacks or has with
+/// another value, and each of `base` that `own` leaves out, back at the value the shaper has
+/// without it (on for the default features, off for the rest). The range is given with an
+/// inclusive end because harfrust's `Feature::new` takes an exclusive end one cluster short, but
+/// applies it as exclusive: a one-byte character would get an empty range.
+fn ranged_features(base: &[Feature], own: &[Feature], range: Range<usize>, out: &mut Vec<Feature>) {
+    const ON_BY_DEFAULT: [&[u8; 4]; 7] = [b"kern", b"liga", b"clig", b"calt", b"apkn", b"vkrn", b"vapk"];
+    for f in own.iter().filter(|f| !base.iter().any(|b| b.tag == f.tag && b.value == f.value)) {
+        out.push(Feature::new(f.tag, f.value, range.start..=range.end));
+    }
+    for b in base.iter().filter(|b| !own.iter().any(|f| f.tag == b.tag)) {
+        let default = ON_BY_DEFAULT.iter().any(|t| Tag::new(t) == b.tag);
+        out.push(Feature::new(b.tag, u32::from(default), range.start..=range.end));
+    }
+}
+
 fn is_mark(c: char) -> bool {
     use unicode_general_category::{GeneralCategory, get_general_category};
     matches!(get_general_category(c), GeneralCategory::NonspacingMark | GeneralCategory::SpacingMark | GeneralCategory::EnclosingMark)
@@ -1132,8 +1264,8 @@ fn is_mark(c: char) -> bool {
 /// characters with automatic kerning: the manual value replaces the font's pair after its
 /// character, and a character before it with automatic kerning keeps the font's pair with it
 /// (except before a character that All Caps or Small Caps sets as several letters, such as ß as
-/// SS). A cluster that would take in characters of runs with different styles (a ligature, a
-/// base with its marks) is not formed: the segment is shaped in pieces at those run boundaries.
+/// SS). A cluster that would take in characters of runs with different drawing attributes (a
+/// ligature, a base with its marks) is not formed, except for paint-only harakat differences.
 fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
     let Segment { range, runs, source_runs, st, face, small, level } = seg;
     let (range, small) = (range.clone(), *small);
@@ -1196,6 +1328,23 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let styled_marks = !mark_boundaries.is_empty();
     let char_level = std::cell::Cell::new(false);
 
+    // Runs that differ only in their OpenType feature lists are shaped as one buffer: the features
+    // of each run apply to its own characters only (a feature with a range of clusters, which here
+    // are source bytes), over those of `base_style`, whose features apply to the whole segment. So
+    // a feature or an alternate (`salt=2`) on one letter of an Arabic word leaves the joining,
+    // ligatures and kerning of the whole word to the shaper, as the same text without it.
+    // `variant` makes a style's features and `base` is what it makes for `base_style`.
+    let run_features = |variant: &dyn Fn(&CharStyle) -> Vec<Feature>, base_style: &CharStyle, base: &[Feature]| {
+        let mut ranged = Vec::new();
+        for (r, run_style) in runs.get(source_runs.clone()).unwrap_or_default() {
+            let (a, b) = (r.start.max(range.start), r.end.min(range.end));
+            if run_style.features != base_style.features && a < b {
+                let own = variant(&CharStyle { features: run_style.features.clone(), ..base_style.clone() });
+                ranged_features(base, &own, a..b, &mut ranged);
+            }
+        }
+        ranged
+    };
     // Shape the segment as if all of it were in `st`, with the features `more` on top.
     let shape_in = |st: &CharStyle, more: &[Feature]| {
         // A BCP 47 tag is short ASCII; anything else (a file may hold anything) is shaped without one.
@@ -1210,8 +1359,13 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
             // The baseline and character-level pass use exactly the same resolved features.
             // Alternate positioning passes still resolve their own features, with `more` last.
-            let with_more = |resolved: Vec<Feature>| resolved.into_iter().chain(more.iter().cloned()).collect::<Vec<_>>();
-            let along_features = with_more(feats.resolve(st));
+            let with_more = |variant: &dyn Fn(&CharStyle) -> Vec<Feature>| {
+                let mut resolved = variant(st);
+                resolved.extend(run_features(variant, st, &resolved));
+                resolved.extend(more.iter().cloned());
+                resolved
+            };
+            let along_features = with_more(&|s| feats.resolve(s));
             // gid, cluster, x and y advance, x and y offset.
             let shape = |feats: &[Feature], direction: Direction| {
                 let mut buf = UnicodeBuffer::new();
@@ -1274,7 +1428,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             if feats.proportional(st) {
                 // `palt` is positioning only: the same glyphs set on their full widths tell which
                 // advances it changed (kerning and the rest change both alike).
-                let full = shape(&with_more(feats.resolve_fixed_width(st)), along);
+                let full = shape(&with_more(&|s| feats.resolve_fixed_width(s)), along);
                 if same_glyphs(&full) {
                     *proportional = full.iter().zip(raw).map(|(a, b)| a.2 != b.2).collect();
                 }
@@ -1285,7 +1439,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 // and without either tell how it moves each and changes its advance down the column
                 // (y up, advances negative). Which advances `vpal` itself changed comes from setting
                 // them with it alone.
-                let ttb = |proportional, kerning| shape(&with_more(feats.resolve_vertical(st, proportional, kerning)), Direction::TopToBottom);
+                let ttb = |proportional, kerning| shape(&with_more(&|s| feats.resolve_vertical(s, proportional, kerning)), Direction::TopToBottom);
                 let (with, without, alone) = (ttb(true, true), ttb(false, false), ttb(true, false));
                 if same_glyphs(&with) && same_glyphs(&without) && same_glyphs(&alone) {
                     *vpal = with
@@ -1385,8 +1539,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     cluster_starts.dedup();
     // A glyph is drawn in one style: where a cluster would take in characters of runs in different
     // styles, the runs are shaped apart, as runs that do not shape alike are.
-    // Except at harakat styled apart only in paint ([`crate::harakat`]), and, in horizontal type, where
-    // the runs differ only in settings that vertical type alone reads.
+    // Except at harakat styled apart only in paint ([`crate::harakat`]), feature-only boundaries,
+    // and, in horizontal type, settings that vertical type alone reads.
     let inside_clusters: Vec<usize> = boundaries()
         .filter(|&b| cluster_starts.binary_search(&b).is_err() && !drawn_alike(run_at(b - 1).1, run_at(b).1, feats.vertical))
         .filter(|b| mark_boundaries.binary_search(b).is_err())
@@ -1518,6 +1672,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             inline: None,
             word_end: false,
             keeps_word: false,
+            keeps_next: false,
             no_break: gst.no_break,
             vertical_roman: gst.standard_vertical_roman,
             cursive,

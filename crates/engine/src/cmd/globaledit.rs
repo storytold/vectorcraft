@@ -20,6 +20,9 @@
 //!   and they lie the same way relative to each other: the group as a whole is moved or scaled.
 //!   With Appearance on, each of those objects must have the same fill and stroke too; with Size,
 //!   the groups the same width and height.
+//! - Selecting one of the repeated objects with the Selection tool highlights the similar objects
+//!   at once, before Global Edit starts. Here they are the objects Start Global Edit would take
+//!   with the current Global Edit Options ([`similar`]).
 //! - While Global Edit is on, an edit made to one of the found objects is made to all of them,
 //!   each in proportion to its own size: halving the height of a 100 pt object halves a 20 pt
 //!   match to 10 pt. Stop Global Edit (or Escape) ends it.
@@ -780,18 +783,55 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
 
 /// The outlines of the members of the active document's Global Edit that are not selected, hold
 /// no selected object and sit inside no selected object, in their layer's colour: the canvas
-/// highlights them while Global Edit is on.
+/// highlights them while Global Edit is on. While it is off, with one supported object selected,
+/// they are the outlines of the objects Start Global Edit would take with the Global Edit Options
+/// ([`similar`]).
 pub fn highlights(s: &Session) -> Outlines {
     let Some(st) = s.active() else { return vec![] };
-    let Some(ge) = &st.global_edit else { return vec![] };
+    let Some(ge) = &st.global_edit else { return similar(s) };
     if let Some((rev, out)) = &*ge.outlines.borrow()
         && *rev == st.revision
     {
         return out.clone();
     }
+    let out = outlines(st, &ge.members);
+    *ge.outlines.borrow_mut() = Some((st.revision, out.clone()));
+    out
+}
+
+/// [`similar`]'s outlines as of a document revision and the options they were found with.
+pub type SimilarCache = std::cell::RefCell<Option<(u64, Options, Outlines)>>;
+
+/// Before Global Edit starts: with one supported object selected, the outlines of the other
+/// objects Start Global Edit would take now with the session's Global Edit Options, so the canvas
+/// shows them as soon as the object is selected. None while an interaction (a drag) is in
+/// progress, or when fewer than two objects would be taken. Kept per document revision and
+/// options, as finding them walks the whole document.
+pub fn similar(s: &Session) -> Outlines {
+    let Some(st) = s.active() else { return vec![] };
+    if st.global_edit.is_some() || st.interaction.is_some() || st.selection.objects.len() != 1 {
+        return vec![];
+    }
+    let o = &s.global_edit_options;
+    if let Some((rev, opts, out)) = &*st.similar_outlines.borrow()
+        && *rev == st.revision
+        && opts == o
+    {
+        return out.clone();
+    }
+    let out = match matches(s, o) {
+        Ok(m) if m.len() >= 2 => outlines(st, &m),
+        _ => vec![],
+    };
+    *st.similar_outlines.borrow_mut() = Some((st.revision, o.clone(), out.clone()));
+    out
+}
+
+/// The outlines of `members` that are not selected, hold no selected object and sit inside no
+/// selected object, in their layer's color.
+fn outlines(st: &crate::DocState, members: &[(NodeId, Affine)]) -> Outlines {
     let symbols = st.doc.symbol_boxes();
-    let out: Vec<_> = ge
-        .members
+    members
         .iter()
         .filter_map(|(id, _)| {
             let n = st.doc.node(*id).filter(|n| !holds(n, &st.selection.objects))?;
@@ -804,9 +844,7 @@ pub fn highlights(s: &Session) -> Outlines {
             };
             Some((path, st.doc.layer_color(*id)))
         })
-        .collect();
-    *ge.outlines.borrow_mut() = Some((st.revision, out.clone()));
-    out
+        .collect()
 }
 
 #[cfg(test)]

@@ -191,7 +191,8 @@ impl<'a> Device<'a> for Builder<'_> {
                 if self.type_glyph(o, transform * glyph_transform, scale, Some(paint), stroke.as_ref(), overprint) {
                     return;
                 }
-                self.flush_text();
+                // A line kept as outlines leaves them open: this glyph joins them.
+                self.end_text();
                 let mut bp = o.outline();
                 bp.apply_affine(transform * glyph_transform);
                 let (paint, opacity) = self.paint(paint, stroke.is_some(), self.walked(true));

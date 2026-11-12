@@ -275,6 +275,29 @@ fn art_options_width_follows_the_pen_pressure() {
     assert!((drawn_height(&app, id) - before).abs() < 1e-6);
 }
 
+/// Art Brush Options' Width menu also offers Tilt, Bearing and Rotation, each with the second
+/// width, and shows the one set when it opens again.
+#[test]
+fn art_options_width_follows_tilt_bearing_and_rotation() {
+    let mut app = app();
+    let (id, before) = brushed(&mut app, "Tapered Stroke");
+    for (mode, label) in [("tilt", "Tilt"), ("bearing", "Bearing"), ("rotation", "Rotation")] {
+        app.run("ui.brushOptions", json!({"name": "Tapered Stroke"})).unwrap();
+        set(&mut app, json!({"widthMode": mode, "widthMax": 300}));
+        assert!(shown(&mut app).contains(label), "{mode}");
+        super::super::confirm(&mut app).unwrap();
+        let def = app.run("brush.get", json!({"name": "Tapered Stroke"})).unwrap();
+        assert_eq!((&def["width_mode"], &def["width_max"]), (&json!(mode), &json!(300.0)), "{mode}");
+        // A stroke drawn without the pen's input is half way: 200 %.
+        let after = drawn_height(&app, id);
+        assert!((after - 2.0 * before).abs() < 0.01 * before, "{mode}: {before} then {after}");
+        app.run("ui.brushOptions", json!({"name": "Tapered Stroke"})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.str("widthMode"), d.f64("widthMax", 0.0)), (mode.into(), 300.0), "{mode}");
+        super::super::cancel(&mut app);
+    }
+}
+
 /// A context with the app's fonts and theme, for [`frame`].
 fn ctx() -> egui::Context {
     let ctx = egui::Context::default();
