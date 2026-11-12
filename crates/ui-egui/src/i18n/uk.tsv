@@ -896,6 +896,17 @@ font-technology	Variable	Варіативні
 	The selected character's font is not available.	Шрифт виділеного символу недоступний.
 	No alternates for the selected character.	Виділений символ не має альтернатив.
 	Double-click to replace	Двічі клацніть для заміни
+	Select one character with the Type tool first.	Спершу виділіть один символ інструментом «Текст».
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — гліф шрифту {font}, а не шрифту виділеного тексту ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} належить символу {base} (U+{base_code}) {place}; виділено символ {sel} (U+{code}).
+	at the start of a word	на початку слова
+	in the middle of a word	у середині слова
+	at the end of a word	наприкінці слова
+	standing alone	в окремому вигляді
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} не є альтернативою символу {sel} (U+{code}) у тому вигляді, в якому він стоїть у своєму слові.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Двічі клацніть, щоб вставити замість нього {base} (U+{code}): форма подання не з’єднується, літера з’єднується.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Замість форми подання вставлено {base} (U+{code}): шрифт з’єднує його із сусідніми за положенням.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Жодна функція OpenType не малює тут цей гліф, тому він замінює гліф символу й може не з’єднуватися із сусідніми символами.
 	Double-click to insert	Двічі клацніть для вставки
 	Double-click to rename	Двічі клацніть для перейменування
 	Double-click to target the contents	Двічі клацніть, щоб вибрати вміст як об’єкт
@@ -2026,6 +2037,8 @@ file-filter	Templates	Шаблони
 	Metallic Gradients	Металеві градієнти
 	Meters	Метри
 	Method:	Метод:
+	Pad	Продовжити
+	Repeats	Кількість повторів
 	Millimeters	Міліметри
 	Minify	Мінімізувати
 	Minimal	Мінімальний
@@ -2390,6 +2403,10 @@ file-filter	Templates	Шаблони
 	Arch	Арка
 @msg	select point type or type on a path	виберіть точковий текст або текст за контуром
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст за контуром у пов’язаному тексті не може використовувати динамічний текст: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	не можна центрувати вгорі чи внизу текст за незамкненим або складеним контуром: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	не можна центрувати текст за контуром без довжини або без висоти: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	не можна центрувати вгорі чи внизу текст за контуром у пов’язаному тексті: {frames}
+@msg	select type on a closed path	виділіть текст за замкненим контуром
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано
 	Options	Параметри
@@ -2961,6 +2978,7 @@ digits	Malayalam	Малаялам
 	Rotate View Tool	Інструмент «Поворот виду»
 	Trackpad Gesture to Rotate View	Повертати вид жестом трекпада
 	Hold a Tool Shortcut to Use the Tool Temporarily	Тимчасово використовувати інструмент, утримуючи його клавішу
+	Show Bounding Box While Moving and Drawing	Показувати обмежувальну рамку під час переміщення та малювання
 	Rotate…	Повернути…
 	Rotation	Поворот
 	Roughen…	Надати нерівності…
@@ -3452,6 +3470,9 @@ effect	Points	Точки
 	Split Path	Розділити контур
 	spot	плашковий
 	Spot Color	Плашковий колір
+	Spot Color Objects	Об’єкти з плашковими кольорами
+	Pattern Objects	Об’єкти з візерунками
+	Gradient Objects	Об’єкти з градієнтами
 	Spot Colors	Плашкові кольори
 	Spot Colors…	Плашкові кольори…
 	Spread:	Розворот:
@@ -3762,6 +3783,8 @@ effect	Points	Точки
 	Type on a Path	Текст за контуром
 	Type on a Path Options	Параметри тексту за контуром
 	Type on a Path Options…	Параметри тексту за контуром…
+	Center on Top	Центрувати вгорі
+	Center on Bottom	Центрувати внизу
 	Type on a Path Tool	Інструмент «Текст за контуром»
 	Type Orientation	Орієнтація тексту
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Текст залишається текстом, і кожне обведення — лінія з її товщиною та штрихами.
@@ -4407,6 +4430,8 @@ axis	Both	Обидві
 @msg	the Smooth slider is not open	повзунок «Згладити» не відкрито
 @msg	the screen color sampler is already open	засіб вибору кольору з екрана вже відкритий
 @msg	this system has no screen color sampler	у цій системі немає засобу вибору кольору з екрана
+@msg	the screen color sampler did not answer	засіб вибору кольору з екрана не відповів
+@msg	the screen color sampler failed	у засобі вибору кольору з екрана сталася помилка
 @msg	bad colour `{hex}` (#rrggbb)	неприпустимий колір `{hex}` (#rrggbb)
 @msg	bad page tree	неприпустиме дерево сторінок
 @msg	bad shortcut	неприпустиме поєднання клавіш
@@ -4436,6 +4461,7 @@ axis	Both	Обидві
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не є кольором, наприклад "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не більше {MAX_TABLE} кольорів
 @msg	command `{0}` is not available right now: {1}	команда `{0}` зараз недоступна: {1}
+@msg	command `{id}` is not available right now	команда `{id}` зараз недоступна
 @msg	compound paths can only contain paths	складені контури можуть містити лише контури
 @msg	compressed (RLE) bitmaps can't be read yet	стислі (RLE) растрові зображення поки не читаються
 @msg	damaged	пошкоджено
@@ -5644,6 +5670,7 @@ lighting	Light	Світло
 	Ruby…	Рубі…
 	Ruby	Рубі
 	Geometric Guides	Геометричні напрямні
+	Optical Effects	Оптичні ефекти
 	Geometric Patterns	Геометричні візерунки
 	Grit Textures	Зернисті текстури
 	Ease In	Плавний початок
@@ -5688,6 +5715,9 @@ axis	Y Axis	Вісь Y
 @msg	`dither` must be true or false	`dither` має бути true або false
 	Perceptual	Перцептивний
 @msg	`method` must be classic or perceptual	`method` має бути classic або perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` має бути pad, repeat або reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` має бути цілим числом від 1 до {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` застосовується до лінійних, радіальних, конічних і ромбоподібних градієнтів
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Встановити «{name}», якому потрібен великий обчислювальний бюджет?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Кожен запуск може тривати до {minutes} хвилин і виконувати в {times} разів більше роботи, ніж дозволено іншим модулям. Він працює у фоні, і його можна скасувати.
@@ -5937,6 +5967,11 @@ axis	Y Axis	Вісь Y
 	Grass Fan	Віяло для трави
 	Pattern Borders	Візерункові облямівки
 	Scatter Shapes	Розсіяні фігури
+	Dry Media	Сухі матеріали
+	Chalk Grain	Крейдяне зерно
+	Graphite Pencil	Графітний олівець
+	Wax Crayon	Восковий олівець
+	Charcoal Dust	Вугільний пил
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)
@@ -6601,3 +6636,8 @@ breakText	Glyphs	Гліфи
 @msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
 @msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Рамка й лінії вибірки…
+	Weed Box and Lines	Рамка й лінії вибірки
+	Margin	Поле
+	Box	Рамка
+	Swatch	Зразок

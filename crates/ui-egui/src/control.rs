@@ -253,7 +253,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     }
     let mut inspected = json!({
         "scriptRunning": app.session.script_running(),
-        "scriptReport": app.session.script_report(),
+        "scriptReport": app.session.shown_script_report(),
         "tool": app.session.tool_id(),
         "toolOptions": app.session.tool_options(),
         "ui": ui,
@@ -870,7 +870,7 @@ fn rotate_view_pointer(
         None => {
             let rect = app.canvas_rect.ok_or("no canvas yet")?;
             let view = app.view().ok_or("no document")?;
-            RotateViewPress { window, document_resets, xf: Xf::new(rect, view), start_angle: 0.0, start_rotation: view.rotation }
+            RotateViewPress { window, document_resets, xf: Xf::at(rect, view, app.canvas_ui_zoom), start_angle: 0.0, start_rotation: view.rotation }
         }
     };
     // A gesture cannot turn a different document/view or resume after its document was reset.
@@ -975,7 +975,7 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
         Err(e) => return err(e),
     };
     let view = app.view_info();
-    let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
+    let xf = app.canvas_xf();
     let screen = |e: &Value| e.get("space").and_then(Value::as_str) == Some("screen");
     if !rotating && xf.is_none() && events.iter().any(screen) {
         return err("no canvas yet");

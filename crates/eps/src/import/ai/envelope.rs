@@ -244,6 +244,7 @@ fn warp(o: &Obj) -> Option<EnvelopeKind> {
         h: percent("DeformHoriz")?,
         v: percent("DeformVert")?,
         horizontal: !vertical,
+        version: vectorcraft_doc::live::WARP_NET,
     })
 }
 

@@ -364,6 +364,8 @@
 	Stair Step	Schodki
 	Gravity	Grawitacja
 	Type on a Path Options…	Opcje tekstu na ścieżce…
+	Center on Top	Wyśrodkuj na górze
+	Center on Bottom	Wyśrodkuj na dole
 	Threaded Text	Tekst wątkowy
 	Create	Utwórz
 	Release Selection	Uwolnij zaznaczenie
@@ -384,6 +386,10 @@
 	Arch	Sklepienie
 @msg	select point type or type on a path	zaznacz tekst punktowy lub tekst na ścieżce
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	nie można wyśrodkować na górze ani na dole tekstu na ścieżce otwartej lub złożonej: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	nie można wyśrodkować tekstu na ścieżce bez długości lub bez wysokości: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	nie można wyśrodkować na górze ani na dole tekstu na ścieżce w tekście wątkowym: {frames}
+@msg	select type on a closed path	zaznacz tekst na zamkniętej ścieżce
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
 	Show Hidden Characters	Pokaż ukryte znaki
@@ -1341,6 +1347,7 @@ lighting	Light	Światło
 	Rotate View Tool	Narzędzie Obrót widoku
 	Trackpad Gesture to Rotate View	Obracaj widok gestem na gładziku
 	Hold a Tool Shortcut to Use the Tool Temporarily	Używaj narzędzia tymczasowo, przytrzymując jego skrót
+	Show Bounding Box While Moving and Drawing	Pokaż obwiednię podczas przesuwania i rysowania
 	Rounded Rectangle Tool	Narzędzie Zaokrąglony prostokąt
 	Scale Tool	Narzędzie Skalowanie
 	Scallop Tool	Narzędzie Ząbkowanie
@@ -1613,6 +1620,17 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Czcionka zaznaczonego znaku jest niedostępna.
 	No alternates for the selected character.	Brak alternatyw dla zaznaczonego znaku.
 	Double-click to replace	Kliknij dwukrotnie, aby zastąpić
+	Select one character with the Type tool first.	Najpierw zaznacz jeden znak narzędziem Tekst.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} to glif czcionki {font}, a nie czcionki zaznaczonego tekstu ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} należy do znaku {base} (U+{base_code}) {place}; Twoje zaznaczenie to {sel} (U+{code}).
+	at the start of a word	na początku wyrazu
+	in the middle of a word	w środku wyrazu
+	at the end of a word	na końcu wyrazu
+	standing alone	gdy stoi osobno
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} nie jest alternatywą znaku {sel} (U+{code}) w takiej postaci, w jakiej stoi w swoim wyrazie.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Kliknij dwukrotnie, aby wstawić zamiast tego {base} (U+{code}): forma prezentacyjna się nie łączy, litera tak.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Wstawiono {base} (U+{code}) zamiast formy prezentacyjnej: czcionka łączy go z sąsiadami zależnie od pozycji.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Żadna funkcja OpenType nie rysuje tutaj tego glifu, więc zastępuje on glif znaku i może nie łączyć się z sąsiednimi znakami.
 	Double-click to insert	Kliknij dwukrotnie, aby wstawić
 	Entire Font	Cała czcionka
 	glyph {id}	glif {id}
@@ -1779,6 +1797,8 @@ digits	Malayalam	Malajalam
 	Save Image Trace Preset	Zapisz ustawienie obrysu obrazu
 	Delete Image Trace Preset	Usuń ustawienie obrysu obrazu
 	Method:	Metoda:
+	Pad	Przedłuż
+	Repeats	Liczba powtórzeń
 	Mode:	Tryb:
 	Noise	Szum
 	Create:	Utwórz:
@@ -3819,6 +3839,9 @@ theme	Appearance	Wygląd
 	Select All Unused	Zaznacz wszystkie nieużywane
 	Sort by Kind	Sortuj według rodzaju
 	Sort by Name	Sortuj według nazwy
+	Spot Color Objects	Obiekty z kolorami dodatkowymi
+	Pattern Objects	Obiekty ze wzorkami
+	Gradient Objects	Obiekty z gradientami
 	Spot Colors	Kolory dodatkowe
 	Swatch Options	Opcje próbki
 	Ungroup Color Group	Rozgrupuj grupę kolorów
@@ -4504,6 +4527,8 @@ imageTrace	Outline	Kontur
 @msg	the Smooth slider is not open	Suwak Wygładź nie jest otwarty
 @msg	the screen color sampler is already open	narzędzie do pobierania koloru z ekranu jest już otwarte
 @msg	this system has no screen color sampler	ten system nie ma narzędzia do pobierania koloru z ekranu
+@msg	the screen color sampler did not answer	narzędzie do pobierania koloru z ekranu nie odpowiedziało
+@msg	the screen color sampler failed	narzędzie do pobierania koloru z ekranu zgłosiło błąd
 @msg	bad colour `{hex}` (#rrggbb)	nieprawidłowy kolor `{hex}` (#rrggbb)
 @msg	bad page tree	nieprawidłowe drzewo stron
 @msg	bad shortcut	nieprawidłowy skrót
@@ -4533,6 +4558,7 @@ imageTrace	Outline	Kontur
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nie jest kolorem w rodzaju "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksymalnie {MAX_TABLE} kolorów
 @msg	command `{0}` is not available right now: {1}	polecenie `{0}` jest teraz niedostępne: {1}
+@msg	command `{id}` is not available right now	polecenie `{id}` jest teraz niedostępne
 @msg	compound paths can only contain paths	ścieżki złożone mogą zawierać tylko ścieżki
 @msg	compressed (RLE) bitmaps can't be read yet	skompresowanych bitmap (RLE) nie można jeszcze odczytać
 @msg	damaged	uszkodzony
@@ -5895,6 +5921,7 @@ mark-style	Japanese	Japońskie
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometryczne linie pomocnicze
+	Optical Effects	Efekty optyczne
 	Geometric Patterns	Wzorki geometryczne
 	Grit Textures	Tekstury ziarniste
 	Ease In	Łagodny początek
@@ -5937,6 +5964,9 @@ axis	Y Axis	Oś Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` dotyczy wypełnień gradientem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musi mieć wartość true lub false
 @msg	`method` must be classic or perceptual	`method` musi mieć wartość classic lub perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` musi mieć wartość pad, repeat lub reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musi być liczbą całkowitą od 1 do {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` dotyczy gradientów liniowych, radialnych, stożkowych i rombowych
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Zainstalować „{name}”, wtyczkę, która prosi o duży budżet obliczeń?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Każde uruchomienie może trwać do {minutes} minut i wykonać {times} razy więcej pracy, niż mogą inne wtyczki. Działa w tle i można je anulować.
@@ -6186,6 +6216,11 @@ axis	Y Axis	Oś Y
 	Grass Fan	Wachlarz do trawy
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone
+	Dry Media	Techniki suche
+	Chalk Grain	Ziarno kredy
+	Graphite Pencil	Ołówek grafitowy
+	Wax Crayon	Kredka woskowa
+	Charcoal Dust	Pył węglowy
 	Save Brush Library…	Zapisz bibliotekę pędzli…
 @msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
 @msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)
@@ -6848,3 +6883,8 @@ breakText	Glyphs	Glify
 @msg	Some islands could not be joined to the area around the art	Niektórych wysp nie udało się połączyć z obszarem wokół grafiki
 @msg	`width` must be from {lo} to {hi} pt	`width` musi mieścić się w zakresie od {lo} do {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musi być liczbą całkowitą od 1 do {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Ramka i linie do wybierania…
+	Weed Box and Lines	Ramka i linie do wybierania
+	Margin	Margines
+	Box	Ramka
+	Swatch	Próbka
