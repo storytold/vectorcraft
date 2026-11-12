@@ -853,6 +853,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-12 | minor | G11: numeric fields keep the caret when a focus click is released more than 1 pt from its press; a tap within 1 pt still selects the whole value (#6659, follow-up to #1326); short-drag and jitter-tap regressions in `tests/numfields.rs`; estimates unchanged. |
 | 2026-11-10 | minor | G6: MCP catalogue (#6460): headless lists `UI_COMMANDS` (`ui: true`), eight prompts, effect vs command ids, 33 tools, commands/reference; estimate unchanged. |
 | 2026-11-11 | minor | G5: built-in Status Effects graphic style library (Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade, Shield Buff); Missing trimmed; estimate 7–17 → 6–16 h; MCP docs list UI Frames and Map Markers under Symbol libraries. |
 | 2026-11-11 | minor | G5: built-in Inventory Icons symbol library (Sword, Shield, Potion, Key, Gem; no default 9-slice); Missing trimmed; estimate 8–18 → 7–17 h. |
