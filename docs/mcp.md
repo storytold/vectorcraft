@@ -8632,10 +8632,10 @@ first selected blend without `id`) and returns `{id, easingType, ramp, colorShif
 replaced or edited spine, or `orientation: "path"`) and not made without one (`createSpine: "never"`), as the Blend
 panel's Type and Ramp do. A value out of range, a hidden or locked blend and a target that is not a blend are errors,
 and a call that changes nothing records no undo step (`changed: false`). With one blend selected that has a spine,
-the Selection and Blend tools show the same two values as widgets
+the Selection and Blend tools show the same values as widgets
 16 px above and below the spine's halfway point (where the boxes of three or more other visible objects hold that
 spot, a widget moves out in 16 px steps, up to 144 px, joined to the halfway point by a line): the upper one sets
-`colorShift` and the lower one `ramp`, by one per screen pixel dragged along the spine and by one per arrow key
+`colorShift` and the lower one, shown only when the steps follow the spine as `ramp` needs, sets `ramp`, by one per screen pixel dragged along the spine and by one per arrow key
 during the drag (ten with Shift). Each drag is one undo step, and `press_key` Escape or a switch to another tool
 during it puts the value back:
 

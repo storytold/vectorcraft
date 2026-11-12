@@ -239,11 +239,11 @@ impl BlendWidgetDrag {
     /// An arrow key during the drag: one point more (`more`) or less, ten with Shift.
     pub fn step(&mut self, cx: &ToolContext, more: bool, big: bool) -> Vec<Action> {
         let by = if big { 10.0 } else { 1.0 };
-        self.keys += if more { by } else { -by };
-        // Past either end, the keys stop adding: the way back starts at once.
+        // The step goes from the value shown, so past either end (by keys or by the drag) the way
+        // back starts at once.
         let (lo, hi) = self.widget.control.range();
-        let free = self.dragged(cx);
-        self.keys = self.keys.clamp(lo - free, hi - free);
+        let stepped = (self.value_now(cx) + if more { by } else { -by }).clamp(lo, hi);
+        self.keys = stepped - self.dragged(cx);
         self.preview(cx)
     }
 
@@ -532,5 +532,37 @@ mod tests {
         assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
         assert!(!t.busy() && !t.transforming());
         assert!(t.pointer(&c, &ev(PointerKind::Up, at)).is_empty(), "the release commits nothing");
+    }
+
+    /// A double-click on a widget with the Selection tool does nothing to the artwork under it.
+    #[test]
+    fn a_double_click_on_a_widget_leaves_the_artwork_under_it_alone() {
+        let (mut d, _, s) = blend_doc(&[(100.0, 200.0), (300.0, 200.0)], eased());
+        cover(&mut d, 190.0, 206.0, 210.0, 226.0);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let at = Point::new(200.0, 216.0);
+        assert!(over_widget(&c, at));
+        let mut t = SelectionTool::default();
+        assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, at)).is_empty());
+        // Beside the widget, the double-click reaches the artwork.
+        assert!(!t.pointer(&c, &ev(PointerKind::DoubleClick, Point::new(192.0, 224.0))).is_empty());
+    }
+
+    /// After a drag past either end, the first arrow key steps back from the value shown.
+    #[test]
+    fn an_arrow_key_after_a_drag_past_an_end_steps_from_the_value_shown() {
+        let (d, id, s) = blend_doc(&[(100.0, 200.0), (300.0, 200.0)], eased());
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let at = Point::new(200.0, 216.0);
+        let ramp = |v: f64| vec![Action::Preview("object.blend.setEasing".into(), json!({"id": id.0, "ramp": v}))];
+        for (moved, back, shown) in [(200.0, ToolKey::Left, 99.0), (-200.0, ToolKey::Right, 1.0)] {
+            let mut t = SelectionTool::default();
+            t.pointer(&c, &ev(PointerKind::Down, at));
+            t.pointer(&c, &ev(PointerKind::Drag, at + Vec2::new(moved, 0.0)));
+            assert_eq!(t.key(&c, back, Mods::default()), ramp(shown), "{moved}");
+            assert_eq!(t.pointer(&c, &ev(PointerKind::Up, at + Vec2::new(moved, 0.0))), vec![Action::Commit]);
+        }
     }
 }
