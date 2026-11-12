@@ -6532,9 +6532,15 @@ else its topmost visible fill's, where a fill or stroke at 0% opacity does not c
 of its stops, a gradient mesh's the average of its points' colors (points at 0% opacity left out), and a pattern's its first visible solid fill (gray
 when it has none). The pens draw in turn, each pen's paths in paint order, or with `sortPaths: true` each next path
 the one that starts nearest where the pen stopped (an open path may be drawn from its other end, and a closed one
-starts at its point nearest the pen). Curves become straight moves no further than `curveTolerance` points from the
-curve (default 0.1, from 0.01 to 10). These defaults, the 255-pen limit and the rules for pen numbers and colors above
-are VectorCraft's own.
+starts at its point nearest the pen). With `insideFirst: true`, a path is drawn only after every path of the same
+pen that lies inside it, for example a letter's counter before the letter and a part's holes before the part. A
+path lies inside a closed path when it does not cross that path's line, every part of it lies inside that path (by
+the even-odd rule) or on its line, and some part lies inside: a path touching the line around it is inside, a path
+crossing it or leaving it through a corner is not, and copies of one outline are not inside each other. Without
+`sortPaths` the paths otherwise keep paint order; with it, the next path is the nearest of those free to draw.
+Curves become straight moves no further than `curveTolerance` points from the curve (default 0.1, from 0.01 to 10).
+These defaults, the 255-pen limit and the rules for pen numbers, colors and the order of paths above are
+VectorCraft's own.
 
 `hpglVersion: "hpgl"` (the default) writes `IN;`, then for each pen `PU;SP<n>;` and each path `PUx,y;PDx,y,…;`, and
 ends with `PU;SP0;`. `"hpgl2"` also writes the palette (`NP` and a `PC` color for each pen) and draws each pen's
@@ -6543,11 +6549,16 @@ with a coordinate outside −32,768 to 32,767 units (about 82 cm from the origin
 as it is, with a warning that older devices may not read it; this check is VectorCraft's own. `warnings` names
 type drawn as outlines, inline graphics in type (left out), placed images, opacity masks, raster effects, stroke
 looks that are not drawn, art past the plotter's range, HP-GL coordinates past 16-bit numbers, colors past 255 pens,
-and the limits on points, clipping work, symbols, live art, nesting depth and sorting.
+and the limits on points, clipping work, symbols, live art, nesting depth and sorting. Sorting and finding which paths lie inside which share one
+work budget for the plot, 500 million box and point comparisons. When sorting runs out of it, the paths not yet
+drawn keep paint order, each after the paths inside it with `insideFirst`. When it runs out while the writer is
+finding which paths lie inside which, the paths of that pen and of the later pens keep paint order. Both cases add
+a warning.
 
 ```json
 {"name":"export","arguments":{"path":"/tmp/decal.plt","format":"hpgl"}}
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/sheet.plt","useArtboards":true,"hpglVersion":"hpgl2","pens":["#000000","#ff0000"],"sortPaths":true}}}
+{"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/stencil.plt","sortPaths":true,"insideFirst":true}}}
 ```
 
 ## TIFF, BMP and Targa export
