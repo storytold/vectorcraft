@@ -492,7 +492,8 @@ impl NineSliceMap {
     /// [`Self::most_placed`] for a container placed by [`Self::container`].
     fn most_container(&self, n: &Node, boxes: &SymbolBoxes, depth: u32) -> u64 {
         let own = self.most_mask(n, boxes, depth).saturating_add(1);
-        n.children().into_iter().flatten().fold(own, |sum, c| sum.saturating_add(self.most_at(c, boxes, depth + 1)))
+        // As [`Self::container`] places it: a layer's ruler guides left out.
+        n.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).fold(own, |sum, c| sum.saturating_add(self.most_at(c, boxes, depth + 1)))
     }
 
     /// [`Self::most_placed`] for the opacity mask of `n` as [`Self::place_mask`] places it: a
@@ -560,7 +561,8 @@ impl NineSliceMap {
         let kids = out.children_mut().map(std::mem::take).unwrap_or_default();
         out.transform(center, false);
         if let Some(children) = out.children_mut() {
-            *children = kids.iter().map(|c| Arc::new(self.place_at(c, boxes, depth + 1))).collect();
+            // A ruler guide of a layer is not art: it is not placed.
+            *children = kids.iter().filter(|c| !c.is_ruler_guide()).map(|c| Arc::new(self.place_at(c, boxes, depth + 1))).collect();
         }
         self.place_mask(n, &mut out, boxes, depth);
         out

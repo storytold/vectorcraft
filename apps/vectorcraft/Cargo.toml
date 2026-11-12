@@ -113,6 +113,10 @@ wayland-backend = { version = "0.3", features = ["client_system"] }
 # exactly: review the diff before bumping.
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 zbus = "=5.19.0"
+# Tells whether arboard reads through the compositor's data-control protocol or through X11, the
+# same check arboard makes (src/clipboard.rs). MIT OR Apache-2.0, already in the build through
+# arboard.
+wl-clipboard-rs = "0.9"
 
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.

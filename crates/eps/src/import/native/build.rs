@@ -1669,7 +1669,7 @@ fn page_boards(doc: &Document, visible: &Document, first: usize, pages: &[Rect])
 /// Drops the guides of artboards `doc` no longer has: an artboard guide goes with its artboard.
 fn drop_guides_off_boards(doc: &mut Document) {
     let kept: Vec<u32> = doc.artboards.iter().map(|a| a.id).collect();
-    doc.guides.retain(|g| g.artboard.is_none_or(|id| kept.contains(&id)));
+    doc.retain_guides(&mut vectorcraft_doc::Selection::default(), |g| g.artboard.is_none_or(|id| kept.contains(&id)));
 }
 
 /// Draw `doc`'s layers, artboards and guides `k` times as large, from the origin, with their
@@ -1682,12 +1682,11 @@ pub(crate) fn scale_document(doc: &mut Document, k: f64, styles: bool) {
         let layer = Arc::make_mut(layer);
         layer.transform(a, scaling);
         scale_wrap_offsets(layer, k);
+        // A transform leaves ruler guides where they are: their positions scale here.
+        layer.map_ruler_guide_positions(&mut |_, pos| *pos *= k);
     }
     for board in &mut doc.artboards {
         board.rect = a.transform_rect_bbox(board.rect);
-    }
-    for guide in &mut doc.guides {
-        guide.pos *= k;
     }
     if styles {
         for g in doc.graphic_styles.iter_mut() {

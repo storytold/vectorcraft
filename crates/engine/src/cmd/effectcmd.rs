@@ -889,6 +889,10 @@ fn expand_pieces(
     let mut seen = std::collections::HashSet::from([id]);
     let mut expanded = std::collections::HashMap::new();
     for c in m.children_mut().into_iter().flatten() {
+        // A layer's ruler guides are not art: they keep their ids and expand to nothing.
+        if c.is_ruler_guide() {
+            continue;
+        }
         let c = Arc::make_mut(c);
         let mut listed = None;
         if all || c.id == id {
@@ -1084,6 +1088,11 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
         // The place of each member in the walk of `n`: after `n` and the members before it.
         let mut at = 1;
         for c in n.children_mut().into_iter().flatten() {
+            if c.is_ruler_guide() {
+                // A layer's ruler guide expands to nothing, but the walk of `n` still visits it.
+                at += 1;
+                continue;
+            }
             let from = out.len();
             match members.remove(&c.id) {
                 Some(listed) => out.extend(listed),
@@ -1097,7 +1106,8 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
             for (_, place) in &mut out[from..] {
                 *place += at;
             }
-            at += c.count();
+            // Every node the walk visits, ruler guides in a sublayer too (`Node::count` leaves them out).
+            c.walk(&mut |_| at += 1);
         }
     }
     changed.then_some(n)

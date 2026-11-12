@@ -599,6 +599,83 @@ fn hide_options_comes_back_after_a_restart() {
     }
 }
 
+/// The panel menu's Show Recent Colors hides the Recent Colors row and shows it again. Applied
+/// colors still join the list while the row is hidden, Hide Options hides the row either way, and
+/// the Swatches panel keeps its own row.
+#[test]
+fn show_recent_colors_hides_and_shows_the_row() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let none = egui::Modifiers::NONE;
+    // The first recent chip's rect and the panel's height. The second frame's answer counts, since
+    // egui also answers for a widget the frame before drew.
+    let chip = |app: &mut VectorcraftApp| {
+        frame_with(app, &ctx, vec![], none, ("recent", 0usize));
+        frame_with(app, &ctx, vec![], none, ("recent", 0usize))
+    };
+    let (shown, full) = chip(&mut app);
+    assert!(shown.is_some(), "the row shows by default");
+    // The item is checked while the row shows.
+    click_menu_item(&mut app, &ctx, "✓ Show Recent Colors");
+    assert!(!app.ui.color_show_recent_colors);
+    let (hidden, short) = chip(&mut app);
+    assert!(hidden.is_none() && short < full, "the row is hidden: {short} / {full}");
+    // A color applied while the row is hidden still joins the list.
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    assert_eq!(app.session.recent_colors.first().map(|c| c.to_hex()).as_deref(), Some("#00ff00"));
+    // The Swatches panel keeps its row (drawn in a context of its own, whose chip ids the Color
+    // panel's would share).
+    let mut swatch_chip = None;
+    let screen_rect = Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(280.0, 700.0)));
+    let swatches = egui::Context::default();
+    let mut out = swatches.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| {
+        crate::panels::swatches::show(&mut app, ui);
+        swatch_chip = swatches.read_response(ui.scope_id().with(("recent", 0usize))).map(|r| r.rect);
+    });
+    out.textures_delta.clear();
+    assert!(swatch_chip.is_some(), "the Swatches panel still draws its recent colors");
+    // Show Options leaves the row hidden, and Hide Options hides it with the row checked too.
+    app.run("ui.colorPanel", json!({"options": false})).unwrap();
+    app.run("ui.colorPanel", json!({"options": true})).unwrap();
+    assert!(chip(&mut app).0.is_none(), "Show Options keeps Show Recent Colors unchecked");
+    click_menu_item(&mut app, &ctx, "Show Recent Colors");
+    assert!(chip(&mut app).0.is_some(), "checking the item shows the row again");
+    assert_eq!(app.run("ui.colorPanel", json!({"options": false})).unwrap()["recentColors"], true);
+    assert!(chip(&mut app).0.is_none(), "Hide Options hides the row");
+    assert!(app.ui.color_show_recent_colors, "Hide Options leaves Show Recent Colors checked");
+    let r = app.run("ui.colorPanel", json!({"options": true, "recentColors": false})).unwrap();
+    assert_eq!((&r["options"], &r["recentColors"]), (&json!(true), &json!(false)));
+    assert!(chip(&mut app).0.is_none());
+    app.run("ui.colorPanel", json!({"recentColors": true})).unwrap();
+    assert_eq!(chip(&mut app).1, full, "the panel is as tall as before");
+}
+
+/// Show Recent Colors is kept with the UI state, which the app saves with its preferences. A saved
+/// state without it, or with a value that isn't true or false, reads as checked, and the rest of the
+/// state still loads. A value that isn't true or false in the command answers an error and changes
+/// nothing.
+#[test]
+fn show_recent_colors_comes_back_after_a_restart() {
+    let mut app = app();
+    app.run("ui.colorPanel", json!({"recentColors": false})).unwrap();
+    let saved: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+    assert!(!saved.color_show_recent_colors);
+    assert_eq!(crate::control::inspect(&app, &egui::Context::default())["ui"]["color_show_recent_colors"], false);
+    let old: crate::UiState = serde_json::from_value(json!({"place_link": false})).unwrap();
+    assert!(old.color_show_recent_colors, "a state saved before the setting existed shows the row");
+    for v in [json!(7), json!("hide"), json!({}), Value::Null] {
+        let ui: crate::UiState = serde_json::from_value(json!({"color_show_recent_colors": v, "place_link": false})).unwrap();
+        assert_eq!((ui.color_show_recent_colors, ui.place_link), (true, false), "{v}");
+    }
+    for v in [json!("no"), json!(0), json!([])] {
+        let e = app.run("ui.colorPanel", json!({"mode": "cmyk", "options": false, "recentColors": v})).unwrap_err();
+        assert_eq!(e, "`recentColors` must be true or false", "{v}");
+    }
+    assert_eq!((app.ui.color_mode, app.ui.color_hide_options, app.ui.color_show_recent_colors), (None, false, false));
+}
+
 /// `ui.colorPanel {mode}` picks a mode as the panel menu does: HSB shows an RGB fill as H, S and
 /// B, and CMYK converts it as one undo step.
 #[test]
@@ -607,7 +684,7 @@ fn ui_color_panel_picks_a_mode_as_the_menu_does() {
     let ctx = egui::Context::default();
     app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
     let r = app.run("ui.colorPanel", json!({"mode": "hsb"})).unwrap();
-    assert_eq!(r, json!({"mode": "hsb", "options": true, "shown": "hsb"}));
+    assert_eq!(r, json!({"mode": "hsb", "options": true, "recentColors": true, "shown": "hsb"}));
     assert_eq!(slider_labels(&mut app, &ctx), ["H", "S", "B"]);
     assert_eq!(crate::control::inspect(&app, &ctx)["ui"]["color_mode"], "hsb");
     assert_eq!(paints_hex(&app).0, "#336699", "HSB keeps the RGB color");
@@ -617,7 +694,7 @@ fn ui_color_panel_picks_a_mode_as_the_menu_does() {
     assert!(matches!(crate::panels::current_paints(&app).0.color(), Some(Color::Rgb { .. })), "undo restores it");
     assert_eq!(paints_hex(&app).0, "#336699");
     // `{}` reads the settings: CMYK stays picked, and the RGB fill shows in its own model.
-    assert_eq!(app.run("ui.colorPanel", json!({})).unwrap(), json!({"mode": "cmyk", "options": true, "shown": "rgb"}));
+    assert_eq!(app.run("ui.colorPanel", json!({})).unwrap(), json!({"mode": "cmyk", "options": true, "recentColors": true, "shown": "rgb"}));
     // A tint of a global swatch shows Tint mode.
     app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 1, "y": 0, "k": 0}, "spot": true})).unwrap();
     app.run("paint.setFill", json!({"swatch": "Ink", "tint": 50})).unwrap();

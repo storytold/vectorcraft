@@ -13,6 +13,11 @@ use crate::*;
 const DESATURATE: &[u8] = include_bytes!("../../../plugins/tests/fixtures/desaturate.wasm");
 const DESATURATE_ID: &str = "org.vectorcraft.example.desaturate";
 
+/// Held by the tests that set the Additional Plug-ins Folder preference or run `plugin.reload`:
+/// the folder last loaded and its report are kept for the whole process, so another test loading
+/// its own folder between two steps would change what the next step loads or lists.
+static PREFS_FOLDER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn run(s: &mut Session, cmd: &str, p: Value) -> Value {
     s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd}: {e}"))
 }
@@ -1278,6 +1283,7 @@ fn filters_keep_their_data_with_the_document() {
 
 #[test]
 fn plugin_management_commands() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     install(&mut s, DESATURATE);
     let list = run(&mut s, "plugin.list", json!({}));
@@ -1313,6 +1319,26 @@ fn plugin_management_commands() {
     assert_eq!(r["failed"].as_array().unwrap().len(), 1);
     assert_eq!(run(&mut s, "plugin.list", json!({}))["folder"]["loaded"], json!(["test.engine.folder"]));
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Clearing the Additional Plug-ins Folder forgets the folder: setting the same folder again
+/// installs what is in it, as setting any other folder does.
+#[test]
+fn plugins_folder_set_again_after_clearing_installs_its_plugins() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = crate::tests_links::Folder::new("plugin-folder-cleared");
+    let id = "test.engine.foldercleared";
+    let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+    std::fs::write(dir.0.join("cleared.wasm"), wat::parse_str(src).unwrap()).unwrap();
+    let mut s = session();
+    let folder = json!({"key": "pluginsFolder", "value": dir.0.display().to_string()});
+    run(&mut s, "prefs.set", folder.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed from the folder");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    run(&mut s, "prefs.set", json!({"key": "pluginsFolder", "value": ""}));
+    run(&mut s, "prefs.set", folder);
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again when the folder is set again");
+    run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
@@ -1947,6 +1973,125 @@ fn a_grant_that_cannot_be_removed_stops_plugin_remove() {
     assert!(!std::path::Path::new(&file).exists());
 }
 
+/// When `plugin.remove` can't remove the grant and can't move the settings back either, its error
+/// says where the settings are, and the plug-in gets no storage until they are back. A second
+/// removal that can't remove the grant moves them back rather than deleting them, and so does the
+/// next load of the plug-in.
+#[test]
+fn settings_that_cannot_be_moved_back_are_reported_and_moved_back_later() {
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-move-back");
+    let id = "test.engine.permissions.movebackfail";
+    let approved = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
+    let recorded = std::fs::read(&grants).unwrap();
+    // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
+    let entry = serde_json::from_slice::<Vec<Value>>(&recorded).unwrap().remove(0);
+    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    std::fs::write(&grants, &full).unwrap();
+    let data = crate::store::plugin_data_dir(&folder.0, id);
+    let settings = br#"{"zoom":"aGVsbG8="}"#;
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), settings).unwrap();
+    let mut aside = data.clone().into_os_string();
+    aside.push(".removed");
+    let aside = std::path::PathBuf::from(aside);
+
+    crate::store::MOVE_BACK_FAILS.set(true);
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    crate::store::MOVE_BACK_FAILS.set(false);
+    assert!(refused.contains(crate::store::GRANT_NOT_REMOVED), "{refused}");
+    assert!(refused.contains(&aside.display().to_string()) && refused.contains("the folder is in use"), "{refused}");
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "the plug-in stays installed");
+    assert!(!data.exists());
+    assert_eq!(std::fs::read(aside.join("settings.json")).unwrap(), settings);
+    assert!(vectorcraft_plugins::registry::storage(id).is_none(), "no empty settings take their place");
+
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert_eq!(refused, crate::store::GRANT_NOT_REMOVED);
+    assert_eq!(std::fs::read(data.join("settings.json")).unwrap(), settings, "the second removal moves the settings back");
+    assert!(!aside.exists());
+
+    crate::store::MOVE_BACK_FAILS.set(true);
+    assert!(s.execute("plugin.remove", &json!({"id": id})).is_err());
+    crate::store::MOVE_BACK_FAILS.set(false);
+    assert!(!data.exists());
+
+    // A folder of the plug-in's own made meanwhile is used, and a removal that can't remove the
+    // grant leaves both.
+    let newer = br#"{"zoom":"bmV3"}"#;
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), newer).unwrap();
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert_eq!(refused, crate::store::GRANT_NOT_REMOVED);
+    assert_eq!(std::fs::read(data.join("settings.json")).unwrap(), newer);
+    assert_eq!(std::fs::read(aside.join("settings.json")).unwrap(), settings, "the kept settings stay");
+    std::fs::remove_dir_all(&data).unwrap();
+
+    // A restart loads the plug-in again with its settings.
+    std::fs::write(&grants, &recorded).unwrap();
+    vectorcraft_plugins::registry::remove(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "the plug-in loads");
+    assert_eq!(std::fs::read(data.join("settings.json")).unwrap(), settings, "the load moves the settings back");
+    assert!(!aside.exists());
+
+    run(&mut next, "plugin.remove", json!({"id": id}));
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert!(!data.exists() && !aside.exists(), "the removal deletes the settings");
+    assert_eq!(std::fs::read_dir(data.parent().unwrap()).unwrap().count(), 0, "nothing is left beside them");
+}
+
+/// What a deletion left in a plug-in's renamed settings folder, marked by the `.delete` file beside
+/// it, isn't moved back. When that file can't be written, nothing is deleted, so the folder stays
+/// whole and counts as kept settings.
+#[test]
+fn a_removal_deletes_only_folders_it_marked() {
+    let folder = crate::tests_links::Folder::new("plugin-store-delete-mark");
+    let id = "test.engine.permissions.deletemark";
+    let approved = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let install = json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]});
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    let data = crate::store::plugin_data_dir(&folder.0, id);
+    let settings = br#"{"zoom":"aGVsbG8="}"#;
+    let mut aside = data.clone().into_os_string();
+    aside.push(".removed");
+    let aside = std::path::PathBuf::from(aside);
+    let mut marker = aside.clone().into_os_string();
+    marker.push(".delete");
+
+    // The next install starts with no settings, and its removal deletes the leftover and the mark.
+    std::fs::create_dir_all(&aside).unwrap();
+    std::fs::write(aside.join("settings.json"), settings).unwrap();
+    std::fs::write(&marker, b"").unwrap();
+    run(&mut next, "plugin.install", install.clone());
+    assert!(!data.exists(), "a leftover of a deletion isn't moved back");
+    run(&mut next, "plugin.remove", json!({"id": id}));
+    assert_eq!(std::fs::read_dir(data.parent().unwrap()).unwrap().count(), 0, "the leftover and its mark are deleted");
+
+    // When the mark can't be written, the removal deletes nothing: installing the id again needs
+    // `replace`, and a removal of the id that isn't installed deletes the folder.
+    run(&mut next, "plugin.install", install.clone());
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), settings).unwrap();
+    crate::store::MARKER_WRITE_FAILS.set(true);
+    let removed = next.execute("plugin.remove", &json!({"id": id}));
+    crate::store::MARKER_WRITE_FAILS.set(false);
+    assert_eq!(removed.unwrap(), json!({"removed": id}));
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert_eq!(std::fs::read(aside.join("settings.json")).unwrap(), settings, "nothing is deleted without the mark");
+    assert!(!std::path::Path::new(&marker).exists());
+    assert!(next.execute("plugin.install", &install).is_err(), "the kept settings go to a new install only with `replace`");
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert_eq!(std::fs::read(aside.join("settings.json")).unwrap(), settings);
+    run(&mut next, "plugin.remove", json!({"id": id}));
+    assert_eq!(std::fs::read_dir(data.parent().unwrap()).unwrap().count(), 0, "the removal of the id deletes the kept folder");
+}
+
 /// Windows keeps a file another program holds open without delete sharing, so the last grant can't
 /// be removed by deleting `grants.json`.
 #[cfg(windows)]
@@ -1979,6 +2124,7 @@ fn a_grants_file_that_cannot_be_deleted_keeps_the_stored_module() {
 /// the plug-in store stays, with the stored module it covers.
 #[test]
 fn a_plugin_folder_ends_the_process_grant_of_an_id_it_replaces() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     let id = "test.engine.permissions.folderstale";
     let empty = json!({"objects": []});
@@ -2156,6 +2302,7 @@ fn a_failed_store_write_keeps_the_stored_module_with_its_grant() {
 /// grants held by the process.
 #[test]
 fn a_plugin_folder_skips_a_changed_module_until_it_is_approved() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     let id = "test.engine.permissions.folderbytes";
     let plain = "test.engine.permissions.folderplain";
@@ -2384,6 +2531,7 @@ fn a_run_past_the_memory_budget_fails_before_the_plugin_starts() {
 /// until it is granted on its own.
 #[test]
 fn granted_permissions_are_kept_and_folders_skip_the_rest() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let folder = crate::tests_links::Folder::new("plugin-store-grants");
     let id = "test.engine.permissions.stored";
     let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
@@ -2472,6 +2620,7 @@ fn granted_permissions_are_kept_and_folders_skip_the_rest() {
 /// covers no module.
 #[test]
 fn a_grant_covers_only_the_module_it_was_given_to() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let folder = crate::tests_links::Folder::new("plugin-store-grant-hash");
     let id = "test.engine.granthash";
     let mut s = session();
@@ -3212,6 +3361,40 @@ fn removing_an_id_that_is_not_installed_deletes_its_storage() {
     assert!(s.execute("plugin.remove", &json!({"id": id})).is_err(), "nothing left to remove");
 }
 
+/// The `plugin.*` commands that the tests running every command with `{}` run
+/// ([`crate::runs_with_empty_params`]) leave the cache of an installed plug-in as it is, so
+/// those tests can run beside the ones here that check a cache. Each command runs with `{}` in a
+/// document with two rectangles, one or both selected, as `every_command_survives_empty_params`
+/// runs it.
+#[test]
+fn plugin_commands_run_with_empty_params_keep_other_plugins_caches() {
+    let folder = crate::tests_links::Folder::new("plugin-storage-empty-params");
+    let id = "test.engine.storageemptyparams";
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(&mut s, id, WRITES);
+    run(&mut s, "plugin.run", json!({"id": id, "ids": []}));
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": id}))["cacheBytes"], json!(3));
+    let mut ran = vec![];
+    for all in [false, true] {
+        for c in crate::cmd::command_specs().iter().filter(|c| c.id.starts_with("plugin.") && crate::runs_with_empty_params(c.id)) {
+            let mut other = session();
+            let a = rect(&mut other, 10.0, "#ff0000");
+            rect(&mut other, 40.0, "#0000ff");
+            if all {
+                run(&mut other, "select.all", json!({}));
+            } else {
+                run(&mut other, "select.set", json!({"ids": [a.0]}));
+            }
+            let _ = other.execute(c.id, &json!({}));
+            ran.push(c.id);
+            assert_eq!(run(&mut s, "plugin.info", json!({"id": id}))["cacheBytes"], json!(3), "after {}", c.id);
+        }
+    }
+    assert!(ran.contains(&"plugin.list"), "{ran:?}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// The settings file and the cache are checked: a file that doesn't read is moved aside and the
 /// settings start empty; a write past a cap fails and changes nothing; cache entries whose names
 /// differ only in case are two files; a removed plug-in's storage takes no more writes.
@@ -3599,5 +3782,62 @@ fn a_filter_that_calls_commands_is_given_the_edit_in_progress() {
     run(&mut s, "edit.undo", json!({}));
     let x = run(&mut s, "document.inspect", json!({}))["layers"][0]["children"][0]["bounds"]["x"].clone();
     assert_eq!(x, json!(17.0), "undoing the filter brings back the moved rectangle");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// Installs a filter `id` that calls commands and hands back what it is given, with `commands` (a
+/// JSON list of command specs) in its manifest.
+fn install_echo_calling(s: &mut Session, id: &str, commands: &str) {
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["select.all"],"commands":{commands}}}"#
+    );
+    let wasm = wat::parse_str(tpl::module(&manifest, tpl::ECHO, "", 1)).unwrap();
+    run(s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}));
+}
+
+/// With Real-time Drawing off, a 50 × 50 rectangle at (10, 10) whose move by 7 pt is still being
+/// dragged: the tool has stored the move, which the document does not hold yet.
+fn deferred_move(s: &mut Session) -> NodeId {
+    let r = NodeId(run(s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    run(s, "prefs.set", json!({"key": "realTimeDrawing", "value": false}));
+    let move_by = vectorcraft_tools::Action::Preview("object.move".into(), json!({"dx": 7, "dy": 0}));
+    s.apply_actions(vec![vectorcraft_tools::Action::Begin("Move".into()), move_by]).unwrap();
+    assert_eq!(node(s, r).geometric_bounds().unwrap().x0, 10.0, "the move is not applied while it is dragged");
+    r
+}
+
+/// The rectangle a run named `label` during [`deferred_move`] left: moved, with the interaction
+/// ended and the move an undo step of its own before the run's.
+fn assert_moved_once(s: &Session, r: NodeId, label: &str) {
+    assert!(!s.in_interaction());
+    assert_eq!(node(s, r).geometric_bounds().unwrap().x0, 17.0, "the filter was given the moved rectangle");
+    let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, [label, "Move"]);
+}
+
+/// With Real-time Drawing off, `plugin.run` of a filter that calls commands during a drag applies
+/// the dragged move first and gives the filter the moved rectangle, which it hands back as it was.
+#[test]
+fn a_filter_that_calls_commands_is_given_a_deferred_move() {
+    let id = "test.engine.callsdeferred";
+    let mut s = session();
+    install_echo_calling(&mut s, id, "[]");
+    let r = deferred_move(&mut s);
+    run(&mut s, "plugin.run", json!({"id": id}));
+    assert_moved_once(&s, r, &format!("Test {id}"));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A plug-in command that calls commands, run with Real-time Drawing off during a drag, is given
+/// the moved rectangle as `plugin.run` is.
+#[test]
+fn a_plugin_command_that_calls_commands_is_given_a_deferred_move() {
+    let id = "test.engine.callsdeferredcmd";
+    let mut s = session();
+    install_echo_calling(&mut s, id, r#"[{"id":"same","label":"Same"}]"#);
+    let r = deferred_move(&mut s);
+    run(&mut s, &format!("plugin.{id}.same"), json!({}));
+    assert_moved_once(&s, r, "Same");
     run(&mut s, "plugin.remove", json!({"id": id}));
 }

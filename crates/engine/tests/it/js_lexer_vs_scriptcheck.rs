@@ -1,8 +1,8 @@
 //! The JavaScript parser's lexer (`vectorcraft-js`) and the script checker's (`vectorcraft-scriptcheck`)
 //! read the same scripts the same way: both crates stand alone, so each has its own lexer, and these
 //! tests run both over one set of scripts and fail on any disagreement about the lines a script has,
-//! its preprocessor lines, and where a string, comment or regular expression that is never closed
-//! starts. The scripts stay inside ECMAScript 3, the language both read (no XML literals, which
+//! its preprocessor lines, where a string, comment or regular expression that is never closed
+//! starts, and the characters a name may hold. The scripts stay inside ECMAScript 3, the language both read (no XML literals, which
 //! only the checker reads).
 
 use vectorcraft_js::{Options, TokenKind, parse, tokenize};
@@ -85,6 +85,44 @@ fn both_lexers_find_the_same_unclosed_token_on_the_same_line() {
         let message = LEXICAL.iter().find(|(c, _)| c == code).map(|(_, m)| *m).unwrap();
         assert!(ours.message.contains(message), "{src:?}: {}", ours.message);
         assert_eq!(ours.line as usize, *line, "{src:?}");
+    }
+}
+
+/// Characters on both sides of the identifier rule: `Other_ID_Start`, `Other_ID_Continue`, connector
+/// punctuation, marks, digits and letters of other scripts, a letter and a mark Unicode 17.0
+/// assigned, and a superscript digit, a `Pattern_Syntax` letter and punctuation that no name holds.
+const NAME_CHARS: &[char] = &[
+    '\u{AA}', '\u{B2}', '\u{B7}', '\u{D7}', '\u{300}', '\u{387}', '\u{660}', '\u{88F}', '\u{1369}', '\u{1885}', '\u{19DA}', '\u{1ACF}', '\u{200C}',
+    '\u{200D}', '\u{203F}', '\u{2040}', '\u{2118}', '\u{212E}', '\u{2160}', '\u{2E2F}', '\u{3005}', '\u{309B}', '\u{30FB}', '\u{FE33}', '\u{FF10}',
+    '\u{FF65}',
+];
+
+/// Whether the parser reads `src` as one identifier spelling `name`.
+fn one_identifier(src: &str, name: &str) -> bool {
+    let want = TokenKind::Ident(name.to_string());
+    tokenize(src, &js_options()).is_ok_and(|tokens| tokens.iter().filter(|t| t.kind != TokenKind::Eof).map(|t| &t.kind).eq([&want]))
+}
+
+/// Whether the checker lists the member `app.<src>` as `app.<name>`.
+fn checker_member(src: &str, name: &str) -> bool {
+    let report = check("script.jsx", format!("app.{src};\n").as_bytes(), None, &Limits::default());
+    report.members.iter().any(|m| m.name == format!("app.{name}"))
+}
+
+#[test]
+fn both_lexers_take_the_same_characters_into_names() {
+    assert!(checker_member("a\u{2118}b", "a\u{2118}b") && one_identifier("a\u{2118}b", "a\u{2118}b"));
+    assert!(checker_member("\u{88F}\u{1ACF}", "\u{88F}\u{1ACF}") && one_identifier("\u{88F}\u{1ACF}", "\u{88F}\u{1ACF}"));
+    for &c in NAME_CHARS {
+        let escape = format!("\\u{:04X}", u32::from(c));
+        for (src, name) in [
+            (format!("a{c}b"), format!("a{c}b")),
+            (format!("{c}b"), format!("{c}b")),
+            (format!("a{escape}b"), format!("a{c}b")),
+            (format!("{escape}b"), format!("{c}b")),
+        ] {
+            assert_eq!(checker_member(&src, &name), one_identifier(&src, &name), "{src:?} (U+{:04X})", u32::from(c));
+        }
     }
 }
 

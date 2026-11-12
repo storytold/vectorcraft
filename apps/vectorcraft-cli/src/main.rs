@@ -486,7 +486,12 @@ fn info(args: &[String]) -> Result<(), String> {
     let base = h.call("engine.execute", json!({"command": "file.info", "params": {}}))?;
     let doc = h.session.doc().map_err(|e| e.to_string())?.doc.clone();
     let mut kinds: std::collections::BTreeMap<&'static str, usize> = Default::default();
-    doc.walk(|n| *kinds.entry(n.kind_label()).or_default() += 1);
+    // Ruler guides are not counted among the objects.
+    doc.walk(|n| {
+        if !n.is_ruler_guide() {
+            *kinds.entry(n.kind_label()).or_default() += 1;
+        }
+    });
     let fonts = h.call("engine.execute", json!({"command": "text.fonts", "params": {}})).unwrap_or(Value::Null);
     let artboards: Vec<Value> =
         doc.artboards.iter().map(|a| json!({"name": a.name, "rect": [a.rect.x0, a.rect.y0, a.rect.width(), a.rect.height()]})).collect();

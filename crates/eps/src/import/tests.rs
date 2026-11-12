@@ -1588,3 +1588,40 @@ fn abutting_blocks_of_distinct_colours_stay_apart() {
     let gaps: String = (0..10).map(|i| format!("{} setgray {} 10 2 80 rectfill ", f64::from(i) / 40.0, 10 + i * 3)).collect();
     assert_eq!(objects(&read(&gaps).document).len(), 10);
 }
+
+/// A string a program scans again and again (`token`) makes a fresh copy each time, and the copies
+/// count against the memory budget.
+#[test]
+fn rescanned_strings_are_charged() {
+    let body = "/s 1048576 string def s 0 40 put s 1048575 41 put\n1100 { s token pop pop pop } repeat\n";
+    let e = import(&eps(body)).unwrap_err();
+    assert!(e.contains("too much memory"), "{e}");
+    // A few scans stay far within it.
+    let r = import(&eps("/s 1048576 string def s 0 40 put s 1048575 41 put\n20 { s token pop pop pop } repeat\n")).unwrap();
+    assert!(!r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
+}
+
+/// An image names no more data sources than a color space has components: thousands of references
+/// to one string are refused before any is copied.
+#[test]
+fn an_image_with_thousands_of_data_sources_is_refused() {
+    let sources = "<80> ".repeat(2048);
+    let e = import(&eps(&format!(
+        "/DeviceCMYK setcolorspace << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8 \
+         /MultipleDataSources true /ImageMatrix [1 0 0 1 0 0] /DataSource [{sources}] >> image"
+    )))
+    .unwrap_err();
+    assert!(e.contains("rangecheck") && e.contains("DataSource"), "{e}");
+}
+
+/// A filter over the program's own file that fails to decode is spent: a program that catches the
+/// error and reads again gets the end of the file, not the same decode over again.
+#[test]
+fn a_failed_filter_decode_is_not_tried_again() {
+    let body = "/f currentfile /FlateDecode filter def\n/n 0 def 3 { { f read { pop } if } stopped { /n n 1 add def } if } repeat\n\
+                n 1 eq { 0 0 10 10 rectfill } if\n";
+    let r = import(&eps(body)).unwrap();
+    let mut paths = 0;
+    r.document.walk(|n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+    assert_eq!(paths, 1, "{:?}", r.warnings);
+}

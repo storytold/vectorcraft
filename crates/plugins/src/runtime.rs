@@ -14,7 +14,7 @@ use crate::{Error, Kind, Result};
 pub const ABI_VERSION: i32 = 1;
 
 /// Fuel handed out per slice; between slices the host checks the deadline.
-const FUEL_SLICE: u64 = 20_000_000;
+pub const FUEL_SLICE: u64 = 20_000_000;
 
 /// wasmi's fuel costs, but compiling costs nothing. wasmi compiles a function when it is first
 /// called, and charges the run that calls it by the function's size. When the slice a run was in
@@ -23,6 +23,9 @@ const FUEL_SLICE: u64 = 20_000_000;
 /// slices fell decided. So a run pays for its own instructions only, as many on a first run as on
 /// the next. Copying keeps wasmi's default cost, a unit for every 64 bytes.
 const FUEL_COSTS: CustomFuelCosts = CustomFuelCosts { bytes_copied_per_fuel: 64, fuel_per_bytes_translated: 0, fuel_per_bytes_validated: 0 };
+
+/// Bytes a bulk memory instruction copies or fills for each unit of fuel.
+pub const BYTES_COPIED_PER_FUEL: u32 = FUEL_COSTS.bytes_copied_per_fuel;
 
 /// Instructions a heavy filter's run may use besides [`Limits::fuel_per_byte`] for each byte of
 /// input ([`crate::Budget::Heavy`]): 20 times a light one's. Its output's size can't add to it:

@@ -548,3 +548,21 @@ fn the_data_of_an_image_too_large_to_read_is_skipped() {
         assert_eq!(super::tests::fill(&o[0]), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{program}");
     }
 }
+
+/// A JPEG whose header claims far more pixels than an image may have is refused before the decoder
+/// allocates for them.
+#[test]
+fn a_jpeg_with_a_huge_header_is_refused_before_it_is_decoded() {
+    let mut jpeg = vec![];
+    image::codecs::jpeg::JpegEncoder::new(&mut jpeg).encode(&[128; 64], 8, 8, image::ExtendedColorType::L8).unwrap();
+    // The frame header (marker, length, precision, height, width) now says 65535 × 65535.
+    let sof = jpeg.windows(2).position(|w| w == [0xFF, 0xC0]).unwrap();
+    jpeg[sof + 5..sof + 9].fill(0xFF);
+    let jpeg: String = jpeg.iter().map(|b| format!("{b:02x}")).collect();
+    let e = import(&eps(&format!(
+        "/DeviceGray setcolorspace << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8 /ImageMatrix [1 0 0 1 0 0] \
+         /DataSource currentfile /ASCIIHexDecode filter /DCTDecode filter >> image\n{jpeg}>"
+    )))
+    .unwrap_err();
+    assert!(e.contains("too large"), "{e}");
+}

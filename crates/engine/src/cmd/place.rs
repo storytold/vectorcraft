@@ -47,7 +47,10 @@ use vectorcraft_geom::{Affine, Point, Rect, shapes};
 use vectorcraft_pdf::CropTo;
 
 use super::fileio::{self, Format, RasterImage};
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, finite_numbers, has_doc, object_param, str_param, unique_name};
+use super::{
+    CommandSpec, Result, Session, always, bad, bool_or, check_numbers, check_switches, cmd, finite_numbers, has_doc, object_param, str_param,
+    switch_or, unique_name,
+};
 use crate::{EngineError, MAX_COORD};
 
 const PLACE: &str = "file.place";
@@ -377,7 +380,7 @@ fn placeable(l: &Node) -> bool {
 fn art_of<'a>(nodes: impl Iterator<Item = &'a Arc<Node>>) -> Vec<Node> {
     nodes
         .filter_map(|c| match &c.kind {
-            NodeKind::Path { guide: true, .. } => None,
+            _ if c.is_guide() => None,
             NodeKind::Layer { children, clip, .. } => placeable(c).then(|| {
                 let mut g = (**c).clone();
                 g.kind = NodeKind::Group { children: art_of(children.iter()).into_iter().map(Arc::new).collect(), clip: *clip };
@@ -556,8 +559,9 @@ fn place(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn prepare(s: &Session, p: &Value) -> Result<PlaceJob> {
-    let replace = bool_or(p, "replace", false);
-    let template = bool_or(p, "template", false);
+    let replace = switch_or(p, "replace", false, PLACE)?;
+    let template = switch_or(p, "template", false, PLACE)?;
+    check_switches(p, &["link"], PLACE)?;
     let at = at_param(p)?;
     let rect = rect_param(p)?;
     if replace && (template || at.is_some() || rect.is_some()) {
@@ -778,6 +782,8 @@ impl Session {
     /// desktop the Place dialog's OK with several files does this off the UI thread).
     pub fn prepare_place_queue(&self, params: &Value) -> Result<QueueJob> {
         has_doc(self).map_err(|why| EngineError::Disabled(QUEUE.into(), why))?;
+        check_switches(params, &["link", "template"], QUEUE)?;
+        check_numbers(params, &["thumbnail"], QUEUE)?;
         Ok(QueueJob { params: params.clone(), files: queued_files(params)? })
     }
 
@@ -846,6 +852,8 @@ fn info(_: &mut Session, p: &Value) -> Result<Value> {
 /// `file.place.info` with `p`, without the session (on the desktop the Place dialog reads its
 /// files' lines this way off the UI thread).
 pub fn read_info(p: &Value) -> Result<Value> {
+    check_switches(p, &["link"], "file.place.info")?;
+    check_numbers(p, &["thumbnail"], "file.place.info")?;
     // A PDF/.ai page linked or not has the same size and art.
     let mut l = load(p, "file.place.info", None, false)?;
     let natural = l.natural;

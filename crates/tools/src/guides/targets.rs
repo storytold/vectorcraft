@@ -579,7 +579,7 @@ impl Targets {
         if cx.guides {
             self.rulers = cx
                 .doc
-                .guides
+                .ruler_guides()
                 .iter()
                 .filter(|g| cx.doc.guide_shown(g))
                 .map(|g| Ruler { vertical: g.vertical, pos: g.pos, span: cx.doc.guide_span(g) })

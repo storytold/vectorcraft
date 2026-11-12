@@ -116,13 +116,15 @@ pub(crate) fn art_under(doc: &vectorcraft_doc::Document, id: NodeId, out: &mut V
     let Some(n) = doc.node(id) else { return };
     if n.is_layer() {
         if let Some(kids) = n.children() {
-            for c in kids {
+            for c in kids.iter().filter(|c| !c.is_ruler_guide()) {
                 art_under(doc, c.id, out);
             }
         }
         return;
     }
-    out.push(id);
+    if !n.is_ruler_guide() {
+        out.push(id);
+    }
 }
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {

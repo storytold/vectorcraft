@@ -63,6 +63,7 @@ impl Loaded {
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
 /// (what browsers, PDF and SVG viewers show).
+#[derive(Clone)]
 pub struct RasterImage {
     /// Content key for `Document::images` (identical files share one blob).
     pub key: String,
@@ -305,10 +306,10 @@ pub(super) fn outlined_if_asked(mut doc: Document, warnings: Vec<String>, opts: 
     (doc, warnings)
 }
 
-/// Does `doc` hold no art: only layers, with nothing in them?
+/// Does `doc` hold no art: only layers, with nothing in them but ruler guides?
 fn draws_nothing(doc: &Document) -> bool {
     let mut art = false;
-    doc.walk(|n| art |= !n.is_layer());
+    doc.walk(|n| art |= !n.is_layer() && !n.is_ruler_guide());
     !art
 }
 
@@ -490,6 +491,16 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let i = super::affinity::import(&title, bytes)?;
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
+        }
+        // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
+        // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
+        "psd" | "psb" if opts.layers => {
+            let cms = vectorcraft_color::cms::active();
+            match super::psdlayers::import(bytes, opts.hidden_layers, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)) {
+                Ok(Some((doc, warnings))) => (doc, warnings, false),
+                Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
+                Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
+            }
         }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),

@@ -9,6 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
+use super::{CONIC, CONIC_WEDGES};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -152,7 +153,9 @@ impl<'a> Writer<'a> {
         self.locked = false;
         self.line("0 A");
         self.in_hidden = !n.visible;
-        self.contents(children, *clip, false);
+        // Ruler guides are kept in the document's native copy only.
+        let art: Vec<Arc<Node>> = children.iter().filter(|c| !c.is_ruler_guide()).cloned().collect();
+        self.contents(&art, *clip, false);
         self.in_hidden = false;
         self.line("LB\n%AI5_EndLayer--");
         true
@@ -209,6 +212,10 @@ impl<'a> Writer<'a> {
 
     /// One object (inside a container locked when `locked`).
     fn node(&mut self, n: &Node, locked: bool) {
+        // Ruler guides are kept in the document's native copy only.
+        if n.is_ruler_guide() {
+            return;
+        }
         if !n.visible && !self.in_hidden {
             match self.hidden {
                 HiddenObjects::Omit => {
@@ -292,6 +299,8 @@ impl<'a> Writer<'a> {
                     self.nest -= 1;
                 }
             }
+            // Ruler guides are kept in the document's native copy only.
+            NodeKind::RulerGuide { .. } => {}
         }
     }
 
@@ -415,6 +424,11 @@ impl<'a> Writer<'a> {
         if direct_fill(&f.paint) {
             return self.path_object(path, rule, Some(f), None);
         }
+        if let Paint::Gradient(g) = &f.paint
+            && g.gradient.kind == GradientKind::Conic
+        {
+            return self.conic_object(path, rule, f, g);
+        }
         let Paint::Pattern { pattern, xf } = &f.paint else {
             // A freeform gradient: its average colour.
             self.warn(FREEFORM);
@@ -450,6 +464,36 @@ impl<'a> Writer<'a> {
             self.node(t, locked);
         }
         self.lock(locked);
+        self.line("Q");
+    }
+
+    /// A conic gradient fill (the format has no conic gradient) as [`CONIC_WEDGES`] solid wedges
+    /// about its center clipped to `path` (filled by `rule`), each running on to the seam under
+    /// the next ([`vectorcraft_color::GradientGeom::conic_wedges`]).
+    fn conic_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, g: &GradientPaint) {
+        self.warn(CONIC);
+        if g.gradient.stops.iter().any(|s| s.opacity < 1.0) {
+            self.warn(TRANSPARENCY);
+        }
+        let area = path.to_bezpath().bounding_box();
+        let wedges = g.resolve(area).conic_wedges(area, CONIC_WEDGES, true);
+        self.line("q");
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        for (pts, t) in wedges {
+            let (color, _) = g.gradient.sample_keep_model(t as f32);
+            let wedge = FillLayer { paint: Paint::solid(color), ..f.clone() };
+            self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&wedge), None);
+        }
         self.line("Q");
     }
 
@@ -680,12 +724,9 @@ impl<'a> Writer<'a> {
         if lost_attributes(t) {
             self.warn(TYPE_ATTRIBUTES);
         }
-        // Area type that Shrink Text to Fit scales down is written in the styles it draws in.
-        let fitted = matches!((&t.kind, t.area.fit), (TextKind::Area { .. }, vectorcraft_doc::AreaFit::ShrinkText { .. }))
-            .then(|| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale)
-            .filter(|f| *f != 1.0)
-            .map(|f| vectorcraft_text::scaled(t, f));
-        let t = fitted.as_ref().unwrap_or(t);
+        // Type that Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in.
+        let fitted = vectorcraft_text::drawn(t);
+        let t = &*fitted;
         let m = self.to_art * t.xf * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let (kind, path, start) = match &t.kind {
             TextKind::Point => (0, None, 0.0),

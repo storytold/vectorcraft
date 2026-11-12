@@ -32,7 +32,7 @@ fn open(app: &mut VectorcraftApp, kind: &str, fields: serde_json::Value) {
 }
 
 fn objects(app: &VectorcraftApp) -> usize {
-    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.iter().filter(|c| !c.is_ruler_guide()).count())).sum()
 }
 
 #[test]
@@ -570,11 +570,11 @@ fn split_into_grid_opens_at_the_selections_size_and_previews() {
     ]);
     frame(&mut app, Default::default());
     // The preview: 2 × 3 cells and the guides along their edges, not yet an undo step.
-    assert_eq!((objects(&app), app.session.doc().unwrap().doc.guides.len()), (6, 10));
+    assert_eq!((objects(&app), app.session.doc().unwrap().doc.ruler_guides().len()), (6, 10));
     assert!(app.session.in_interaction());
     confirm(&mut app).unwrap();
     let st = app.session.doc().unwrap();
-    assert_eq!((objects(&app), st.doc.guides.len(), st.history.undo.len()), (6, 10, undo + 1));
+    assert_eq!((objects(&app), st.doc.ruler_guides().len(), st.history.undo.len()), (6, 10, undo + 1));
     assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
     // Cancel rolls a preview back.
     app.run("select.all", json!({})).unwrap();
