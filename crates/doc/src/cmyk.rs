@@ -306,7 +306,7 @@ fn jpeg_inks(bytes: &[u8]) -> Option<Inks> {
 
 /// The ink amounts of a CMYK TIFF (16-bit samples to 8 bits), its inks stored together or one plane
 /// per ink.
-pub fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
+fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
     let (kind, mut d) = tiff(bytes)?;
     let (w, h) = d.dimensions().ok()?;
     if !matches!(kind, tiff::ColorType::CMYK(8 | 16)) {
@@ -316,10 +316,10 @@ pub fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
     Inks::new(w, h, read_samples(&mut d, n, 4)?)
 }
 
-/// CMYK TIFF `bytes` as Open and Place store them: as they are, or, when they store one plane per
-/// ink, which the image decoder doesn't read, their ink amounts written again by
-/// [`ImageBlob::cmyk_tiff_at`] with the resolution `ppi`. `None` for other images and for CMYK
-/// TIFFs whose inks [`ImageBlob::cmyk`] doesn't read.
+/// CMYK TIFF `bytes` that no orientation turns ([`turned_cmyk`] stores the others) as Open and
+/// Place store them: as they are, or, when they store one plane per ink, which the image decoder
+/// doesn't read, their ink amounts written again by [`ImageBlob::cmyk_tiff_at`] with the resolution
+/// `ppi`. `None` for other images and for CMYK TIFFs whose inks [`ImageBlob::cmyk`] doesn't read.
 pub fn stored_cmyk_tiff(bytes: &[u8], ppi: Option<(f64, f64)>) -> Option<Vec<u8>> {
     let inks = tiff_inks(bytes)?;
     let (_, mut d) = tiff(bytes)?;
@@ -327,6 +327,21 @@ pub fn stored_cmyk_tiff(bytes: &[u8], ppi: Option<(f64, f64)>) -> Option<Vec<u8>
         return Some(bytes.to_vec());
     }
     ImageBlob::cmyk_tiff_at(&inks, ppi).map(|b| Arc::unwrap_or_clone(b.bytes))
+}
+
+/// CMYK JPEG or TIFF `bytes` that `orientation` turns or flips, as Open and Place store them: their
+/// ink amounts ([`ImageBlob::cmyk`], 8 bits each) turned and written again by
+/// [`ImageBlob::cmyk_tiff_at`] with the resolution `ppi` of the turned pixels, with the turned
+/// width and height. `None` for other images and for CMYK images whose inks [`ImageBlob::cmyk`]
+/// doesn't read.
+pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi: Option<(f64, f64)>) -> Option<(Vec<u8>, (u32, u32))> {
+    let inks = if bytes.starts_with(&[0xFF, 0xD8]) { jpeg_inks(bytes) } else { tiff_inks(bytes) }?;
+    // Four 8-bit inks to a pixel, turned as four 8-bit channels are.
+    let mut px = image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(inks.width, inks.height, inks.data)?);
+    px.apply_orientation(orientation);
+    let inks = Inks::new(px.width(), px.height(), px.into_bytes())?;
+    let tiff = ImageBlob::cmyk_tiff_at(&inks, ppi)?;
+    Some((Arc::unwrap_or_clone(tiff.bytes), (inks.width, inks.height)))
 }
 
 /// A TIFF whose pixels have samples after their colour, which the image decoder doesn't read at

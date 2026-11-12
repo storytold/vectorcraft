@@ -815,8 +815,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw. JPEG XL images are
 /// read with [`jxlread`] and stored as PNG, with the ICC profile their colors are left in.
 /// A PNG, JPEG, GIF, WebP or TIFF whose orientation ([`exif_orientation`]) turns or flips it is
-/// stored as it is shown, with its resolution's axes swapped when it turns a quarter; a CMYK TIFF
-/// keeps its inks, 8 bits each ([`turned_cmyk_tiff`]).
+/// stored as it is shown, with its resolution's axes swapped when it turns a quarter; a CMYK JPEG
+/// or TIFF keeps its inks, 8 bits each, as a CMYK TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]).
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -858,11 +858,12 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let orientation = matches!(f.id, "png" | "jpg" | "gif" | "webp" | "tiff").then(|| exif_orientation(bytes)).flatten();
     let turned = orientation.is_some();
     // The resolution describes the stored pixels; a quarter turn swaps its axes.
-    let shown_ppi = jxlread::oriented_resolution(ppi, orientation.map_or(1, |o| u32::from(o.to_exif())));
-    if let Some(orientation) = orientation.filter(|_| f.id == "tiff")
-        && let Some(stored) = turned_cmyk_tiff(bytes, orientation, shown_ppi)
+    let quarter = orientation.is_some_and(|o| o.to_exif() >= 5);
+    let shown_ppi = ppi.map(|(x, y)| if quarter { (y, x) } else { (x, y) });
+    if let Some(orientation) = orientation.filter(|_| matches!(f.id, "jpg" | "tiff"))
+        && let Some((tiff, size)) = vectorcraft_doc::cmyk::turned_cmyk(bytes, orientation, shown_ppi)
     {
-        return stored;
+        return stored(tiff, "image/tiff", size, shown_ppi);
     }
     let kept = match f.id {
         _ if turned => None,
@@ -912,20 +913,6 @@ pub(crate) fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientat
     let decoded = || image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?.orientation().ok();
     let tagged = || vectorcraft_doc::cmyk::tiff_orientation(bytes).and_then(|v| Orientation::from_exif(u8::try_from(v).ok()?));
     decoded().or_else(tagged).filter(|o| *o != Orientation::NoTransforms)
-}
-
-/// CMYK TIFF `bytes` turned or flipped by their `orientation`, as [`raster_image`] stores them:
-/// their ink amounts ([`vectorcraft_doc::cmyk::tiff_inks`], 8 bits each) turned and written again
-/// by [`ImageBlob::cmyk_tiff_at`] with the resolution `ppi` of the turned pixels. `None` for other
-/// images and for CMYK TIFFs whose inks it doesn't read.
-fn turned_cmyk_tiff(bytes: &[u8], orientation: image::metadata::Orientation, ppi: Option<(f64, f64)>) -> Option<Result<RasterImage>> {
-    let inks = vectorcraft_doc::cmyk::tiff_inks(bytes)?;
-    // Four 8-bit inks to a pixel, turned as four 8-bit channels are.
-    let mut px = image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(inks.width, inks.height, inks.data)?);
-    px.apply_orientation(orientation);
-    let inks = vectorcraft_doc::cmyk::Inks::new(px.width(), px.height(), px.into_bytes())?;
-    let tiff = ImageBlob::cmyk_tiff_at(&inks, ppi)?;
-    Some(stored(std::sync::Arc::unwrap_or_clone(tiff.bytes), "image/tiff", (inks.width, inks.height), ppi))
 }
 
 /// `img` stored as a PNG that keeps the file's resolution and carries `icc`, the ICC profile its

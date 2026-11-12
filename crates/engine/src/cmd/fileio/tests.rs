@@ -1078,6 +1078,47 @@ fn cmyk_tiffs_turned_by_their_orientation_keep_their_inks() {
     }
 }
 
+/// A CMYK JPEG that its EXIF orientation turns or flips keeps its inks, turned, stored as a CMYK
+/// TIFF; a quarter turn swaps the resolution's axes. Orientation 1 keeps the JPEG as it is, and
+/// the stored image, read again, is not turned a second time.
+#[test]
+fn cmyk_jpegs_turned_by_their_orientation_keep_their_inks() {
+    use vectorcraft_render::encode::jpeg::{self, ColorModel, JpegOptions};
+    // 48 × 32: the top-left 16 × 16 (one whole JPEG MCU) full cyan, the rest 30% black.
+    let inks: Vec<u8> =
+        (0..32u32).flat_map(|y| (0..48u32).flat_map(move |x| if x < 16 && y < 16 { [255, 0, 0, 0] } else { [0, 0, 0, 77] })).collect();
+    let o = JpegOptions { color_model: ColorModel::Cmyk, embed_icc: false, ..Default::default() };
+    let jpg = jpeg::encode(&inks, 48, 32, 100, None, &o).unwrap();
+    for orientation in 1..=8u16 {
+        let exif = [b"Exif\0\0".as_slice(), &exif_block(orientation, (300, 150))].concat();
+        let mut file = jpg[..2].to_vec();
+        file.extend([0xff, 0xe1]);
+        file.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+        file.extend(&exif);
+        file.extend(&jpg[2..]);
+        let what = format!("orientation {orientation}");
+        let quarter = orientation >= 5;
+        let (size, ppi) = if quarter { ((32, 48), (150.0, 300.0)) } else { ((48, 32), (300.0, 150.0)) };
+        let mime = if orientation == 1 { "image/jpeg" } else { "image/tiff" };
+        let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert_eq!(((img.width, img.height), img.ppi, img.blob.mime.as_str()), (size, Some(ppi), mime), "{what}");
+        assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
+        let inks = img.blob.cmyk().unwrap_or_else(|| panic!("{what}: the inks are lost"));
+        assert_eq!((inks.width, inks.height), size, "{what}: the inks' size");
+        let (w, h) = size;
+        let at = |x: u32, y: u32| inks.data[usize::try_from((y * w + x) * 4).unwrap()..][..4].to_vec();
+        let cyan = |p: &[u8]| p[0] > 200 && p[3] < 40;
+        let corners = [(false, false), (true, false), (true, true), (false, true)];
+        let cyans: Vec<_> =
+            corners.into_iter().filter(|&(right, bottom)| cyan(&at(if right { w - 4 } else { 4 }, if bottom { h - 4 } else { 4 }))).collect();
+        assert_eq!(cyans, [first_pixel_at(orientation)], "{what}: the first stored pixel's corner");
+        let black = at(w / 2, h / 2);
+        assert!(black[0] < 40 && (60..=95).contains(&black[3]), "{what}: the other inks, {black:?}");
+        let again = raster_image(&img.blob.bytes).unwrap();
+        assert_eq!(((again.width, again.height), again.blob.cmyk()), (size, Some(inks)), "{what}: read again, it isn't turned again");
+    }
+}
+
 /// A PNG (its `eXIf` chunk and `pHYs` resolution), a WebP (its `EXIF` chunk) and an RGB TIFF read
 /// by the image decoder, turned a quarter by their orientation, swap their resolution's axes; a
 /// half turn keeps them.
