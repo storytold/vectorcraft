@@ -682,6 +682,343 @@ fn a_recovery_save_takes_the_next_area_when_the_first_is_tidied_away() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A session keeping its copies in folder `dir`, with one modified document whose copy is written.
+fn saved_in(dir: &std::path::Path) -> (Session, String) {
+    let mut s = Session::new();
+    s.prefs.recovery_folder = dir.to_string_lossy().to_string();
+    s.execute("file.new", &json!({"width": 50, "height": 50})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap();
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    let area = s.recovery.own_area().unwrap().to_string();
+    (s, area)
+}
+
+/// A new app over folder `dir`, with nothing open.
+#[cfg(unix)]
+fn other_app(dir: &std::path::Path) -> Session {
+    let mut s = Session::new();
+    s.prefs.recovery_folder = dir.to_string_lossy().to_string();
+    s
+}
+
+/// The area's lock file was removed while its app runs: the next recovery save locks the area
+/// again, so another app neither offers nor discards its copy.
+#[cfg(unix)]
+#[test]
+fn a_recovery_save_locks_the_area_again_when_its_lock_file_was_removed() {
+    use cmd::recovery::Lock;
+    let dir = std::env::temp_dir().join(format!("vc-recovery-relock-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (mut a, area) = saved_in(&dir);
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    a.execute("file.recovery.save", &json!({})).unwrap();
+    assert_eq!(a.recovery.own_area(), Some(area.as_str()));
+    let mut b = other_app(&dir);
+    assert!(offered(&mut b).is_empty());
+    assert!(b.execute("file.recovery.discard", &json!({})).unwrap()["discarded"].as_array().unwrap().is_empty());
+    assert!(dir.join(&area).join("Untitled-1-1.vectorcraft").is_file());
+    assert!(matches!(FolderStore::new(&dir).lock(&area), Ok(Lock::Busy)));
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The whole area was removed while its app runs: the next recovery save makes it again, locked,
+/// with the copy written again.
+#[cfg(unix)]
+#[test]
+fn a_recovery_save_makes_the_area_again_when_it_was_removed() {
+    use cmd::recovery::Lock;
+    let dir = std::env::temp_dir().join(format!("vc-recovery-remade-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (mut a, area) = saved_in(&dir);
+    std::fs::remove_dir_all(dir.join(&area)).unwrap();
+    let r = a.execute("file.recovery.save", &json!({})).unwrap();
+    assert_eq!(r["saved"][0]["file"], format!("{area}/Untitled-1-1").as_str(), "{r}");
+    assert!(dir.join(&area).join("Untitled-1-1.vectorcraft").is_file());
+    assert!(matches!(FolderStore::new(&dir).lock(&area), Ok(Lock::Busy)));
+    assert!(offered(&mut other_app(&dir)).is_empty());
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Another app locked the area after its lock file was removed: the next heartbeat takes a new
+/// area, and the document is to be copied again there. Its copy in the old area stays until then.
+#[cfg(unix)]
+#[test]
+fn an_area_another_app_locked_meanwhile_is_left_for_a_new_one() {
+    use cmd::recovery::Lock;
+    let dir = std::env::temp_dir().join(format!("vc-recovery-moved-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (mut a, area) = saved_in(&dir);
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    let store = FolderStore::new(&dir);
+    let Ok(Lock::Held(other)) = store.lock(&area) else { panic!("the other app locks the area") };
+    let uid = a.doc().unwrap().uid;
+    assert_eq!(cmd::recovery::heartbeat(&mut a), [uid]);
+    let mine = a.recovery.own_area().unwrap().to_string();
+    assert_ne!(mine, area);
+    assert!(a.doc().unwrap().recovery.is_none());
+    assert!(dir.join(&area).join("Untitled-1-1.vectorcraft").is_file(), "kept until the new copy is written");
+    let r = a.execute("file.recovery.save", &json!({})).unwrap();
+    assert_eq!(r["saved"][0]["file"], format!("{mine}/Untitled-1-1").as_str(), "{r}");
+    assert!(!dir.join(&area).join("Untitled-1-1.vectorcraft").exists(), "the copy left there goes");
+    assert!(matches!(store.lock(&mine), Ok(Lock::Busy)));
+    drop(other);
+    assert!(offered(&mut other_app(&dir)).is_empty());
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A copy written in the background into the area the session left meanwhile is not the
+/// document's copy: it stays only until the document is copied again in the new area.
+#[cfg(unix)]
+#[test]
+fn a_copy_written_into_an_area_left_meanwhile_goes_once_copied_again() {
+    use cmd::recovery::Lock;
+    let dir = std::env::temp_dir().join(format!("vc-recovery-inflight-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (mut a, area) = saved_in(&dir);
+    a.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 5, "height": 5})).unwrap();
+    let store: Arc<dyn RecoveryStore> = Arc::new(FolderStore::new(&dir));
+    let (jobs, _) = cmd::recovery::jobs(&mut a, &store).unwrap();
+    assert_eq!(jobs.len(), 1);
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    let Ok(Lock::Held(other)) = store.lock(&area) else { panic!("the other app locks the area") };
+    cmd::recovery::heartbeat(&mut a);
+    for j in jobs {
+        j.write().unwrap();
+        j.finish(&mut a);
+    }
+    assert!(a.doc().unwrap().recovery.is_none());
+    assert!(dir.join(&area).join("Untitled-1-1.vectorcraft").is_file());
+    let uid = a.doc().unwrap().uid;
+    assert_eq!(cmd::recovery::heartbeat(&mut a), [uid], "the next heartbeat has it copied again");
+    let r = a.execute("file.recovery.save", &json!({})).unwrap();
+    assert_eq!(r["saved"].as_array().unwrap().len(), 1, "{r}");
+    assert!(!dir.join(&area).join("Untitled-1-1.vectorcraft").exists());
+    assert!(cmd::recovery::heartbeat(&mut a).is_empty());
+    drop(other);
+    assert!(offered(&mut other_app(&dir)).is_empty());
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Another app locked the area meanwhile and the document is unchanged since its copy: the next
+/// recovery save still writes the copy, in the new area.
+#[cfg(unix)]
+#[test]
+fn a_recovery_save_copies_unchanged_documents_into_the_new_area() {
+    use cmd::recovery::Lock;
+    let dir = std::env::temp_dir().join(format!("vc-recovery-unchanged-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (mut a, area) = saved_in(&dir);
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    let Ok(Lock::Held(other)) = FolderStore::new(&dir).lock(&area) else { panic!("the other app locks the area") };
+    let r = a.execute("file.recovery.save", &json!({})).unwrap();
+    let mine = a.recovery.own_area().unwrap().to_string();
+    assert_ne!(mine, area);
+    assert_eq!(r["saved"][0]["file"], format!("{mine}/Untitled-1-1").as_str(), "{r}");
+    assert!(dir.join(&mine).join("Untitled-1-1.vectorcraft").is_file());
+    assert!(!dir.join(&area).join("Untitled-1-1.vectorcraft").exists());
+    drop(other);
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A copy left in an area the session had to leave goes at once when its document is saved,
+/// reverted or closed, and every one goes when the app quits with nothing unsaved.
+#[cfg(unix)]
+#[test]
+fn copies_left_behind_go_when_their_document_is_saved_reverted_or_closed() {
+    use cmd::recovery::Lock;
+    let base = std::env::temp_dir().join(format!("vc-recovery-leftgo-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let dir = base.join("recovery");
+    let path = base.join("doc.vectorcraft").to_string_lossy().to_string();
+    let left = |area: &str| std::fs::read_dir(dir.join(area)).unwrap().flatten().any(|e| e.path().extension().is_some_and(|x| x == "vectorcraft"));
+    for how in ["save", "revert", "close", "quit"] {
+        let (mut a, _) = saved_in(&dir);
+        a.execute("document.save", &json!({"path": path})).unwrap();
+        a.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 5, "height": 5})).unwrap();
+        a.execute("file.recovery.save", &json!({})).unwrap();
+        let area = a.recovery.own_area().unwrap().to_string();
+        std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+        let Ok(Lock::Held(other)) = FolderStore::new(&dir).lock(&area) else { panic!("the other app locks the area") };
+        cmd::recovery::heartbeat(&mut a);
+        assert!(left(&area), "{how}");
+        match how {
+            "save" => a.execute("document.save", &json!({"path": path})).map(drop).unwrap(),
+            "revert" => a.execute("file.revert", &json!({})).map(drop).unwrap(),
+            "close" => a.execute("file.close", &json!({})).map(drop).unwrap(),
+            _ => cmd::recovery::forget_all(&mut a),
+        }
+        assert!(!left(&area), "{how}");
+        drop(other);
+        drop(a);
+    }
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// The lock file was removed: the next heartbeat locks the area again, before any recovery save.
+#[cfg(unix)]
+#[test]
+fn a_heartbeat_locks_the_area_again_when_its_lock_file_was_removed() {
+    use cmd::recovery::Lock;
+    let dir = std::env::temp_dir().join(format!("vc-recovery-beatlock-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (mut a, area) = saved_in(&dir);
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    assert!(cmd::recovery::heartbeat(&mut a).is_empty(), "the copy is still there");
+    assert_eq!(a.recovery.own_area(), Some(area.as_str()));
+    assert!(matches!(FolderStore::new(&dir).lock(&area), Ok(Lock::Busy)));
+    assert!(offered(&mut other_app(&dir)).is_empty());
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The lock file was removed and can't be made again (the area folder can't be written to now):
+/// the session takes a new area and writes its copy there.
+#[cfg(unix)]
+#[test]
+fn an_area_whose_lock_file_cannot_be_made_again_is_left_for_a_new_one() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    use cmd::recovery::Lock;
+    // Permissions don't stop the superuser.
+    if rustix::process::geteuid().is_root() {
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("vc-recovery-readonly-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (mut a, area) = saved_in(&dir);
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    std::fs::set_permissions(dir.join(&area), std::fs::Permissions::from_mode(0o500)).unwrap();
+    let r = a.execute("file.recovery.save", &json!({})).unwrap();
+    let mine = a.recovery.own_area().unwrap().to_string();
+    assert_ne!(mine, area);
+    assert_eq!(r["saved"][0]["file"], format!("{mine}/Untitled-1-1").as_str(), "{r}");
+    assert!(matches!(FolderStore::new(&dir).lock(&mine), Ok(Lock::Busy)));
+    std::fs::set_permissions(dir.join(&area), std::fs::Permissions::from_mode(0o700)).unwrap();
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A copy left behind that can't be removed when its document is saved (its area can't be written
+/// to now) stays the session's own: it isn't offered here, and a later heartbeat removes it.
+#[cfg(unix)]
+#[test]
+fn a_copy_left_behind_that_cannot_be_removed_yet_stays_the_sessions_own() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    use cmd::recovery::Lock;
+    // Permissions don't stop the superuser.
+    if rustix::process::geteuid().is_root() {
+        return;
+    }
+    let base = std::env::temp_dir().join(format!("vc-recovery-leftstuck-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let dir = base.join("recovery");
+    let path = base.join("doc.vectorcraft").to_string_lossy().to_string();
+    let (mut a, area) = saved_in(&dir);
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    let Ok(Lock::Held(other)) = FolderStore::new(&dir).lock(&area) else { panic!("the other app locks the area") };
+    cmd::recovery::heartbeat(&mut a);
+    std::fs::set_permissions(dir.join(&area), std::fs::Permissions::from_mode(0o500)).unwrap();
+    a.execute("document.save", &json!({"path": path})).unwrap();
+    std::fs::set_permissions(dir.join(&area), std::fs::Permissions::from_mode(0o700)).unwrap();
+    let copy = dir.join(&area).join("Untitled-1-1.vectorcraft");
+    assert!(copy.is_file());
+    drop(other);
+    assert!(offered(&mut a).is_empty());
+    cmd::recovery::heartbeat(&mut a);
+    assert!(!copy.exists());
+    drop(a);
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// A copy left in an area the session had to leave is still the session's own after the app that
+/// locked that area is gone: the session neither offers nor discards it.
+#[cfg(unix)]
+#[test]
+fn a_copy_left_behind_is_not_offered_by_its_own_app() {
+    use cmd::recovery::Lock;
+    let dir = std::env::temp_dir().join(format!("vc-recovery-leftmine-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (mut a, area) = saved_in(&dir);
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    let Ok(Lock::Held(other)) = FolderStore::new(&dir).lock(&area) else { panic!("the other app locks the area") };
+    cmd::recovery::heartbeat(&mut a);
+    drop(other);
+    assert!(offered(&mut a).is_empty());
+    let r = a.execute("file.recovery.discard", &json!({})).unwrap();
+    assert!(r["discarded"].as_array().unwrap().is_empty(), "{r}");
+    assert!(a.execute("file.recovery.discard", &json!({"file": format!("{area}/Untitled-1-1")})).is_err());
+    assert!(dir.join(&area).join("Untitled-1-1.vectorcraft").is_file());
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A complex document (Data Recovery off for those) gets no new copy after the session left its
+/// area: it keeps the copy it left there, and the heartbeat asks for it only once.
+#[cfg(unix)]
+#[test]
+fn a_complex_documents_copy_left_behind_is_asked_for_once() {
+    use cmd::recovery::Lock;
+    let dir = std::env::temp_dir().join(format!("vc-recovery-leftcomplex-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut a = other_app(&dir);
+    let mut d = vectorcraft_doc::Document::new(1000.0, 1000.0);
+    let layer = d.layers[0].id;
+    for i in 0..cmd::recovery::COMPLEX_OBJECTS {
+        let id = d.alloc_id();
+        let r = vectorcraft_geom::Rect::new((i % 200) as f64, (i / 200) as f64, (i % 200) as f64 + 1.0, (i / 200) as f64 + 1.0);
+        let n = vectorcraft_doc::Node::path(id, vectorcraft_geom::shapes::rectangle(r), vectorcraft_doc::Appearance::default_art());
+        d.insert(Some(layer), i, n).unwrap();
+    }
+    a.add_document(d, None);
+    a.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap();
+    let r = a.execute("file.recovery.save", &json!({})).unwrap();
+    let copy = r["saved"][0]["file"].as_str().unwrap().to_string();
+    let area = a.recovery.own_area().unwrap().to_string();
+    a.prefs.recovery_off_for_complex = true;
+    std::fs::remove_file(dir.join(&area).join(".lock")).unwrap();
+    let Ok(Lock::Held(other)) = FolderStore::new(&dir).lock(&area) else { panic!("the other app locks the area") };
+    let uid = a.doc().unwrap().uid;
+    assert_eq!(cmd::recovery::heartbeat(&mut a), [uid]);
+    let r = a.execute("file.recovery.save", &json!({})).unwrap();
+    assert!(r["saved"].as_array().unwrap().is_empty(), "{r}");
+    assert!(cmd::recovery::heartbeat(&mut a).is_empty(), "asked for once");
+    assert!(dir.join(format!("{copy}.vectorcraft")).is_file(), "its copy stays");
+    drop(other);
+    drop(a);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The preference named another folder while a copy was written in the background: the copy goes
+/// from the folder it was written to, and the document keeps its copy in the new folder.
+#[test]
+fn a_copy_finished_after_the_folder_changed_goes_from_its_own_folder() {
+    let base = std::env::temp_dir().join(format!("vc-recovery-refolder-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (old, new) = (base.join("old"), base.join("new"));
+    let (mut a, area) = saved_in(&old);
+    a.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 5, "height": 5})).unwrap();
+    let store: Arc<dyn RecoveryStore> = Arc::new(FolderStore::new(&old));
+    let (jobs, _) = cmd::recovery::jobs(&mut a, &store).unwrap();
+    a.prefs.recovery_folder = new.to_string_lossy().to_string();
+    a.execute("file.recovery.save", &json!({})).unwrap();
+    let mine = a.doc().unwrap().recovery.as_ref().unwrap().file.clone();
+    for j in jobs {
+        j.write().unwrap();
+        j.finish(&mut a);
+    }
+    assert!(!old.join(&area).join("Untitled-1-1.vectorcraft").exists());
+    assert_eq!(a.doc().unwrap().recovery.as_ref().unwrap().file, mine);
+    assert!(new.join(format!("{mine}.vectorcraft")).is_file());
+    drop(a);
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 #[test]
 fn saving_reverting_or_closing_removes_the_copy() {
     let dir = std::env::temp_dir().join(format!("vc-recovery-save-{}", std::process::id()));

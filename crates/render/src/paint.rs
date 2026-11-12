@@ -46,6 +46,8 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
                     ctx.set_paint_transform(geom.conic_frame());
                     peniko::Gradient::new_sweep((0.0, 0.0), 0.0, std::f32::consts::TAU).with_stops(stops.as_slice())
                 }
+                // peniko has no diamond gradient: it is drawn as pixels, as a dithered fill is.
+                GradientKind::Diamond => return crate::dither::set_dithered_paint(ctx, g, bounds, bounds, f.ink, false),
                 _ => {
                     ctx.reset_paint_transform();
                     let (s, e) =
@@ -67,7 +69,19 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
 pub(crate) fn set_fill_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Frame) -> bool {
     match p {
         Paint::Gradient(g) if g.gradient.dither && g.gradient.kind != GradientKind::Freeform && !g.gradient.stops.is_empty() => {
-            crate::dither::set_dithered_paint(ctx, g, bounds, f.ink)
+            crate::dither::set_dithered_paint(ctx, g, bounds, bounds, f.ink, true)
+        }
+        _ => set_paint(ctx, p, bounds, f),
+    }
+}
+
+/// [`set_paint`] for a stroke whose outline (miters, caps and arrowheads included) fits the box
+/// `area` gives: a diamond gradient, drawn as pixels, is sampled over that box too, so the parts
+/// of the outline past `bounds` get the diamond's colors there. `area` runs only for a diamond.
+pub(crate) fn set_stroke_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, area: impl FnOnce() -> Rect, f: &Frame) -> bool {
+    match p {
+        Paint::Gradient(g) if g.gradient.kind == GradientKind::Diamond && !g.gradient.stops.is_empty() => {
+            crate::dither::set_dithered_paint(ctx, g, bounds, area(), f.ink, false)
         }
         _ => set_paint(ctx, p, bounds, f),
     }

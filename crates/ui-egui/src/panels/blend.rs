@@ -1,13 +1,17 @@
-//! Blend panel (Window → Blend): Make, the Spacing and Orientation of the selected blend (with no
-//! blend selected, the options new blends start with), Reverse Front to Back, Reverse Spine,
-//! Replace Spine, Expand and Release. Each control runs its Object → Blend command
-//! (`object.blend.make`, `object.blend.options` and the others), so a change of the selected
-//! blend's spacing or orientation shows on the canvas at once as one undo step. Make is dimmed
-//! until two or more objects are selected. Spacing and Orientation are dimmed until a blend or two
-//! or more objects are selected, and the other buttons are dimmed until a blend is selected.
+//! Blend panel (Window → Blend): Make, Create Spine (whether new blends get a spine), the Spacing
+//! and Orientation of the selected blend (with no blend selected, the options new blends start
+//! with), Reverse Front to Back, Reverse Spine, Replace Spine, Expand and Release. Each control
+//! runs its Object → Blend command (`object.blend.make`, `object.blend.createSpine`,
+//! `object.blend.options` and the others), so a change of the selected blend's spacing or
+//! orientation shows on the canvas at once as one undo step. Make is dimmed until two or more
+//! objects are selected. Create Spine is always available. Spacing and Orientation are dimmed until
+//! a blend or two or more objects are selected, and the other buttons are dimmed until a blend is
+//! selected. Easing and Reverse Spine are dimmed for a blend made without a spine.
 
 use egui::Ui;
 use serde_json::{Value, json};
+use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::live::BlendSpineMode;
 
 use super::selection_len;
 use crate::VectorcraftApp;
@@ -38,10 +42,18 @@ fn buttons(app: &mut VectorcraftApp, ui: &mut Ui, row: &[(&str, &str)]) {
     });
 }
 
-/// Can `cmd` run on the selection? Make needs two or more objects, and the other commands need a
-/// selected blend.
+/// Can `cmd` run on the selection? Make needs two or more objects, the other commands need a
+/// selected blend, and Reverse Spine needs every selected blend to have a spine.
 fn available(app: &VectorcraftApp, cmd: &str) -> bool {
-    crate::menus::enabled(app, cmd) && (cmd != "object.blend.make" || selection_len(app) >= 2)
+    crate::menus::enabled(app, cmd)
+        && (cmd != "object.blend.make" || selection_len(app) >= 2)
+        && (cmd != "object.blend.reverseSpine" || !selects_blend_without_spine(app))
+}
+
+/// Is a blend made without a spine selected?
+fn selects_blend_without_spine(app: &VectorcraftApp) -> bool {
+    let Ok(st) = app.session.doc() else { return false };
+    st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Blend { spec, .. }) if spec.no_spine))
 }
 
 /// `object.blend.options` parameters for spacing mode `mode`, with the step count and distance
@@ -95,8 +107,9 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     let selected = info["target"] == "blend";
-    // Position easing needs a spine to run along: a replaced one, or Align to Path.
-    let spined = info["spine"]["explicit"] == true || info["orientation"] == "path";
+    // Position easing needs a spine to run along: a replaced one, or Align to Path. A blend made
+    // without a spine has none.
+    let spined = info["hasSpine"] != false && (info["spine"]["explicit"] == true || info["orientation"] == "path");
     ui.add_enabled_ui(selected && spined, |ui| {
         let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
         let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
@@ -129,9 +142,30 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// Create Spine: whether new blends get a spine. It shows the setting new blends take, whatever is
+/// selected, and a change runs `object.blend.createSpine`; blends already made keep theirs.
+fn create_spine(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let current = app.session.prefs.blend_options.unwrap_or_default().create_spine;
+    let modes = BlendSpineMode::ALL;
+    let labels = [tl!("Auto"), tl!("Always"), tl!("Never")];
+    let shown = modes.iter().position(|m| *m == current).and_then(|i| labels.get(i)).copied().unwrap_or(labels[0]);
+    let mut change = None;
+    widgets::label_row(ui, tl!("Create Spine:"), LABEL_W, |ui| {
+        if let Some(mode) =
+            widgets::dropdown(ui, "blend-panel-create-spine", shown, &labels, ui.available_width().max(FIELD_W)).and_then(|i| modes.get(i))
+        {
+            change = Some(*mode);
+        }
+    });
+    if let Some(mode) = change {
+        app.run("object.blend.createSpine", json!({ "mode": mode.id() })).ok();
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let blend = crate::menus::enabled(app, "object.blend.release");
     buttons(app, ui, &[(tl!("Make"), "object.blend.make")]);
+    create_spine(app, ui);
     widgets::divider(ui);
     ui.add_enabled_ui(blend || selection_len(app) >= 2, |ui| settings(app, ui));
     widgets::label_row(ui, tl!("Direction:"), LABEL_W, |ui| buttons(app, ui, &[(tl!("Reverse Front to Back"), "object.blend.reverseFrontToBack")]));

@@ -880,3 +880,177 @@ fn conic_pixels_follow_the_sweep() {
     let many = GradientPaint { gradient: Gradient::new(GradientKind::Conic, many), ..g };
     assert_eq!(many.pixels(b, b, 4, 4, true, &Color::to_rgb).count(), 16);
 }
+
+/// A diamond placed at `center` with its vector `dx` long to the right and aspect `aspect`.
+fn diamond_at(center: Point, dx: f64, aspect: f64) -> GradientGeom {
+    GradientGeom { start: center, end: center + Vec2::new(dx, 0.0), aspect, focal: None }
+}
+
+#[test]
+fn a_diamond_runs_from_its_center_out_to_a_square_with_a_corner_at_the_end_of_its_vector() {
+    let g = diamond_at(Point::new(100.0, 100.0), 50.0, 1.0);
+    let t = |x: f64, y: f64| g.param_at(GradientKind::Diamond, Point::new(x, y));
+    assert!(t(100.0, 100.0).abs() < 1e-12);
+    // The square's corners: at the end of the vector and a quarter turn on from it each way.
+    for (x, y) in [(150.0, 100.0), (100.0, 150.0), (50.0, 100.0), (100.0, 50.0)] {
+        assert!((t(x, y) - 1.0).abs() < 1e-12, "({x}, {y})");
+    }
+    // Halfway along an edge, and halfway out along a diagonal (the middle of the edge's half size).
+    assert!((t(125.0, 125.0) - 1.0).abs() < 1e-12);
+    assert!((t(112.5, 87.5) - 0.5).abs() < 1e-12);
+    // Past the square: more than 1 (the last stop pads on).
+    assert!((t(200.0, 200.0) - 4.0).abs() < 1e-12);
+    // The aspect stretches the square across the vector into a rhombus.
+    let tall = diamond_at(Point::new(100.0, 100.0), 50.0, 2.0);
+    assert!((tall.param_at(GradientKind::Diamond, Point::new(100.0, 200.0)) - 1.0).abs() < 1e-12);
+    assert!((tall.param_at(GradientKind::Diamond, Point::new(150.0, 100.0)) - 1.0).abs() < 1e-12);
+    // Turned: the corner follows the vector.
+    let turned = GradientGeom { end: Point::new(130.0, 140.0), ..g };
+    assert!((turned.param_at(GradientKind::Diamond, Point::new(130.0, 140.0)) - 1.0).abs() < 1e-12);
+    assert!((turned.param_at(GradientKind::Diamond, Point::new(115.0, 120.0)) - 0.5).abs() < 1e-12);
+}
+
+#[test]
+fn diamond_kind_names_and_fit() {
+    for s in ["diamond", "Diamond", "DIAMOND"] {
+        assert_eq!(GradientKind::parse(s), Some(GradientKind::Diamond), "{s}");
+    }
+    assert_eq!(GradientKind::Diamond.label(), "Diamond");
+    assert!(GradientKind::Diamond.is_centered());
+    assert!(GradientKind::ALL.contains(&GradientKind::Diamond));
+    // Level: the square's edges pass through the box's corners, so it covers the box exactly.
+    let b = Rect::new(0.0, 0.0, 200.0, 100.0);
+    let fit = GradientGeom::fit(GradientKind::Diamond, b, 0.0);
+    assert_eq!(fit.start, Point::new(100.0, 50.0));
+    assert!(fit.end.distance(Point::new(250.0, 50.0)) < 1e-9, "{fit:?}");
+    for c in [Point::new(0.0, 0.0), Point::new(200.0, 0.0), Point::new(200.0, 100.0), Point::new(0.0, 100.0)] {
+        assert!((fit.param_at(GradientKind::Diamond, c) - 1.0).abs() < 1e-9, "{c:?}");
+    }
+    // At any angle the square covers the box and runs through its farthest corner, on a square
+    // box too.
+    for b in [b, Rect::new(0.0, 0.0, 100.0, 100.0)] {
+        for angle in [30.0, 45.0, 90.0, -120.0] {
+            let fit = GradientGeom::fit(GradientKind::Diamond, b, angle);
+            let levels = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)]
+                .map(|c| fit.param_at(GradientKind::Diamond, c));
+            assert!(levels.iter().all(|&t| t <= 1.0 + 1e-9), "{angle}: {levels:?}");
+            assert!(levels.iter().any(|&t| (t - 1.0).abs() < 1e-9), "{angle}: {levels:?}");
+        }
+    }
+}
+
+#[test]
+fn a_diamond_follows_moves_turns_scales_and_mirrors() {
+    let c = Point::new(10.0, 20.0);
+    let g0 = diamond_at(c, 30.0, 0.5);
+    let probes = [c + Vec2::new(5.0, 7.0), c + Vec2::new(-9.0, 2.0), c + Vec2::new(3.0, -11.0), c + Vec2::new(-20.0, -4.0)];
+    for a in [
+        Affine::rotate(0.7),
+        Affine::scale(2.5),
+        Affine::translate((4.0, -9.0)) * Affine::rotate(-2.0),
+        Affine::FLIP_X,
+        Affine::FLIP_Y * Affine::rotate(1.1),
+        // Along and across the vector.
+        Affine::scale_non_uniform(2.0, 0.5),
+        Affine::scale_non_uniform(-3.0, 0.25),
+    ] {
+        let mut g = g0;
+        g.transform(a, GradientKind::Diamond);
+        assert!(g.start.distance(a * c) < 1e-9, "{a:?}");
+        // A mirror changes nothing a diamond shows: its aspect stays a size.
+        assert!(g.aspect > 0.0, "{a:?}: {g:?}");
+        for p in probes {
+            let (want, got) = (g0.param_at(GradientKind::Diamond, p), g.param_at(GradientKind::Diamond, a * p));
+            assert!((want - got).abs() < 1e-9, "{a:?} at {p:?}: {want} vs {got}");
+        }
+    }
+    // Under a shear the corner stays where the vector maps.
+    let shear = Affine::new([1.0, 0.0, 0.6, 1.0, 0.0, 0.0]);
+    let mut g = g0;
+    g.transform(shear, GradientKind::Diamond);
+    assert!((g.param_at(GradientKind::Diamond, shear * (c + Vec2::new(30.0, 0.0))) - 1.0).abs() < 1e-9, "{g:?}");
+    // Out-of-range numbers: a finite aspect after any transform.
+    for bad in [diamond_at(c, 30.0, f64::NAN), diamond_at(c, f64::INFINITY, 1.0), diamond_at(c, 0.0, 1.0)] {
+        let mut g = bad;
+        g.transform(Affine::rotate(0.4), GradientKind::Diamond);
+        assert!(g.aspect.is_finite(), "{g:?}");
+    }
+}
+
+/// A diamond without a frame (no vector, a flat or a not-finite extent) has no inside: every
+/// point is past its edge and takes the last stop. Points that aren't numbers do too.
+#[test]
+fn a_diamond_with_no_extent_or_bad_numbers_is_its_last_stop() {
+    let c = Point::new(50.0, 50.0);
+    for g in [
+        diamond_at(c, 0.0, 1.0),
+        diamond_at(c, 30.0, 0.0),
+        diamond_at(c, 30.0, f64::NAN),
+        diamond_at(c, f64::INFINITY, 1.0),
+        GradientGeom { start: Point::new(f64::NAN, 0.0), ..diamond_at(c, 30.0, 1.0) },
+    ] {
+        assert!(g.diamond_frame().is_none(), "{g:?}");
+        assert!(g.diamond_quadrants(Rect::new(0.0, 0.0, 100.0, 100.0)).is_none(), "{g:?}");
+        assert_eq!(g.param_at(GradientKind::Diamond, Point::new(60.0, 40.0)), 1.0, "{g:?}");
+    }
+    let g = diamond_at(c, 30.0, 1.0);
+    assert_eq!(g.param_at(GradientKind::Diamond, Point::new(f64::NAN, 1.0)), 1.0);
+    assert!(g.param_at(GradientKind::Diamond, Point::new(f64::INFINITY, 1.0)) >= 1.0);
+}
+
+/// The four linear gradients a format without diamond gradients gets, drawn in order, equal the
+/// diamond everywhere, and each edge drawn lies on the quadrant drawn before it.
+#[test]
+fn diamond_quadrants_are_linear_gradients_that_equal_the_diamond() {
+    let b = Rect::new(0.0, 0.0, 200.0, 100.0);
+    let probes: Vec<Point> = (0..=20).flat_map(|i| (0..=10).map(move |j| Point::new(i as f64 * 10.0 + 0.3, j as f64 * 10.0 + 0.7))).collect();
+    // Squashed and turned, stretched twice as tall as wide, and stretched by a shear.
+    let mut turned = diamond_at(Point::new(60.0, 40.0), 30.0, 0.5);
+    turned.transform(Affine::rotate_about(0.4, Point::new(60.0, 40.0)), GradientKind::Diamond);
+    let mut sheared = diamond_at(Point::new(90.0, 50.0), 25.0, 1.0);
+    sheared.transform(Affine::new([2.0, 0.0, 0.7, 1.0, -60.0, 0.0]), GradientKind::Diamond);
+    for g in [turned, diamond_at(Point::new(100.0, 50.0), 20.0, 2.0), sheared] {
+        let quadrants = g.diamond_quadrants(b).expect("a frame");
+        for p in &probes {
+            // The last quadrant drawn that holds the point paints it.
+            let Some((_, linear)) = quadrants.iter().rev().find(|(poly, _)| inside(poly, *p)) else { panic!("{p:?} is in no quadrant") };
+            let (want, got) = (g.param_at(GradientKind::Diamond, *p), linear.param_at(GradientKind::Linear, *p));
+            assert!((want - got).abs() < 1e-9, "{g:?} at {p:?}: {want} vs {got}");
+        }
+    }
+    let g = turned;
+    let quadrants = g.diamond_quadrants(b).expect("a frame");
+    // Next to each edge of a quadrant drawn later, on either side, the quadrant drawn before it
+    // lies underneath (the first quadrant's edges are covered by the second and the last).
+    let frame = g.diamond_frame().expect("a frame");
+    for (unit, under) in [
+        // The second quadrant's first edge, on the first.
+        (Point::new(0.01, 0.5), 0),
+        (Point::new(-0.01, 0.5), 0),
+        // The third's, on the second.
+        (Point::new(-0.5, 0.01), 1),
+        (Point::new(-0.5, -0.01), 1),
+        // The last's two, on the third and on the first.
+        (Point::new(-0.01, -0.5), 2),
+        (Point::new(0.01, -0.5), 2),
+        (Point::new(0.5, -0.01), 0),
+        (Point::new(0.5, 0.01), 0),
+    ] {
+        assert!(inside(&quadrants[under].0, frame * unit), "{unit:?} lies on quadrant {under}");
+    }
+}
+
+/// A diamond's pixels (what SVG and PDF draw a dithered or Perceptual one as, and what the canvas
+/// draws) follow the squares.
+#[test]
+fn diamond_pixels_follow_the_squares() {
+    let b = Rect::new(0.0, 0.0, 5.0, 5.0);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, Gradient::default().stops));
+    g.geom = Some(diamond_at(Point::new(2.5, 2.5), 2.5, 1.0));
+    let px: Vec<[u8; 4]> = g.pixels(b, b, 5, 5, false, &Color::to_rgb).collect();
+    // White at the center, black in the corners, and the same on each side of it.
+    assert!(px[2 * 5 + 2][0] > 200 && px[0][0] < 10 && px[24][0] < 10, "{px:?}");
+    assert_eq!(px[2 * 5 + 1], px[2 * 5 + 3]);
+    assert_eq!(px[5 + 2], px[3 * 5 + 2]);
+    assert_eq!(px[2 * 5 + 1], px[5 + 2]);
+}

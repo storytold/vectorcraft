@@ -255,6 +255,7 @@ antiAlias	Sharp	Nítido
 	Asset Export Settings	Configurações de Exportação de Ativos
 	Assets	Ativos
 	Assign	Atribuir
+	Assign Profile	Atribuir Perfil
 	Assign Profile…	Atribuir Perfil…
 	Assign:	Atribuir:
 	Attach to Active Plane	Anexar ao Plano Ativo
@@ -1941,6 +1942,9 @@ antiAlias	Sharp	Nítido
 	Optical	Óptico
 	Optical Margin Alignment	Alinhamento de Margem Óptica
 	Dynamic Text	Texto Dinâmico
+	Dynamic Text Presets	Predefinições de Texto Dinâmico
+	Arch	Abóbada
+@msg	select point type or type on a path	selecione texto de ponto ou texto em um caminho
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	o texto em um caminho de um texto encadeado não pode usar Texto Dinâmico: {frames}
 	Optimize for fast web view	Otimizar para visualização rápida na web
 	Optimized	Otimizado
@@ -1949,6 +1953,7 @@ antiAlias	Sharp	Nítido
 	Options…	Opções…
 	Order:	Ordem:
 	Ordinals	Ordinais
+	Organic Fades	Esmaecimentos Orgânicos
 	Orientation	Orientação
 	Orientation:	Orientação:
 	Original	Original
@@ -2116,6 +2121,7 @@ antiAlias	Sharp	Nítido
 	Presets:	Predefinidos:
 	Press 	Pressione 
 	Preview	Visualização
+	Preview:	Visualização:
 	Preview Mode	Modo de Visualização
 	Preview in Browser	Visualizar no Navegador
 	Preview the document as it is now	Visualizar o documento como está agora
@@ -2187,6 +2193,7 @@ digits	Malayalam	Malaiala
 	Radial Glows	Brilhos Radiais
 	Radial Gradient	Gradiente Radial
 	Conic Gradient	Gradiente Cônico
+	Diamond Gradient	Gradiente em Losango
 	Radius:	Raio:
 	Rainbow	Arco-íris
 	Random	Aleatório
@@ -2196,6 +2203,8 @@ digits	Malayalam	Malaiala
 	Range:	Intervalo:
 	Raster Effects	Efeitos de Raster
 	Raster File Format:	Formato de Arquivo Raster:
+	Include Placed Images	Incluir Imagens Inseridas
+	Include Fill Hatches	Incluir Hachuras dos Preenchimentos
 	Raster Sample Size:	Tamanho da Amostra Raster:
 	Raster/Vector Balance:	Equilíbrio Raster/Vetor:
 	Rasterize Unsupported Art	Rasterizar Arte Não Suportada
@@ -2351,6 +2360,10 @@ digits	Malayalam	Malaiala
 	Replace:	Substituir:
 	Replace Font	Substituir Fonte
 	Replace Spine	Substituir Coluna
+	Create Spine	Criar Coluna
+	Create Spine:	Criar Coluna:
+	Always	Sempre
+	Never	Nunca
 	Replace Symbol	Substituir Símbolo
 	Reset Transformation	Redefinir Transformação
 	Replace With Font	Substituir Com Fonte
@@ -2668,6 +2681,15 @@ digits	Malayalam	Malaiala
 	Stun Pulse	Atordoamento
 	Stealth Fade	Furtividade
 	Shield Buff	Escudo
+	Textures	Texturas
+	Fine Grain	Grão fino
+	Canvas Weave	Trama de tela
+	Burlap Sack	Saco de juta
+	Cracked Glaze	Esmalte craquelado
+	Mosaic Floor	Piso de mosaico
+	Quilted Squares	Quadrados acolchoados
+	Leaded Glass	Vitral de chumbo
+	Damp Paper	Papel úmido
 	Shape	Forma
 	Shape Builder	Construtor de Formas
 	Shape Builder Regions	Regiões do Construtor de Formas
@@ -3789,6 +3811,7 @@ axis	Both	Ambos
 @msg	`{key}` must be a number, not {v}	`{key}` deve ser um número, não {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} deve ser um tempo Unix em segundos (um inteiro) ou null
 @msg	`{key}` must be a string	`{key}` deve ser uma string
+@msg	`{key}` must be a profile name or null	`{key}` deve ser um nome de perfil ou null
 @msg	`{key}` must be a whole number	`{key}` deve ser um número inteiro
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` deve ser um número inteiro entre {min} e {max} (recebido {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` deve estar entre {min} e {max} (recebido {x})
@@ -4274,7 +4297,7 @@ axis	Both	Ambos
 @msg	unknown format	formato desconhecido
 @msg	unknown format `{f}` (Save writes {_1})	formato desconhecido `{f}` (Salvar grava {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modo de forma livre desconhecido `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo de gradiente desconhecido `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipo de gradiente desconhecido `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	destaque desconhecido `{h}`
 @msg	unknown option `{path}.{k}`	opção desconhecida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressões desconhecidas `{o}` (preserve, simulate ou discard)
@@ -5114,6 +5137,7 @@ axis	Both	Ambos
 	Weight	Espessura
 	Windows	Windows
 	Working CMYK (don't tag)	CMYK de Trabalho (não marcar)
+	Working RGB (don't tag)	RGB de Trabalho (não marcar)
 	Workspace {i}	Espaço de Trabalho {i}
 	Yellow	Amarelo
 	[Normal Character Style]	[Estilo de Caractere Normal]
@@ -5701,7 +5725,7 @@ mark-style	Japanese	Japonesas
 @msg	span must be "object" or "selection", got {v}	span deve ser "object" ou "selection", não {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiciona um `gradient`, não uma amostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiciona um degradê: informe `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" posiciona um degradê linear, radial ou cônico, não um de forma livre
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" posiciona um degradê linear, radial, cônico ou em losango, não um de forma livre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" posiciona o próprio degradê: omita `start` e `end` (eles já o posicionam em coordenadas do documento)
 	Make Image Dynamic	Tornar imagem dinâmica
 @msg	Batch: {count} processed	Lote: {count} processados
@@ -5974,6 +5998,8 @@ axis	Y Axis	Eixo Y
 	Version: {version}	Versão: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instalar “{name}” no lugar do plug-in com o mesmo ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Este arquivo não é o plug-in instalado antes com este ID. Ele recebe as configurações e o cache guardados para esse ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Uma automação pediu para instalar este plug-in. Para instalá-lo, escolha Objeto › Plug-ins › Instalar Plug-in… você mesmo.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Uma automação pediu para instalar este plug-in. Para instalá-lo, escolha Objeto › Plug-ins › Instalar Plug-in… você mesmo.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” é um módulo diferente do plug-in com ID {_1} e receberia as configurações e o cache guardados para ele: instale-o com `replace: true` depois que o usuário concordar
 	File SHA-256: {hash}	SHA-256 do arquivo: {hash}
 	Read the objects it is given	Ler os objetos que recebe
@@ -6036,6 +6062,12 @@ axis	Y Axis	Eixo Y
 @msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` deve ter 1-64 caracteres imprimíveis
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: use um id de 1-{MAX_COMMAND_ID} caracteres de a-z 0-9 _ que comece com uma letra
 @msg	command {name}: {e}	comando {name}: {e}
+@msg	manifest: {e}	manifesto: {e}
+@msg	manifest: {e} at line {line} column {column}	manifesto: {e} (linha {line}, coluna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` deve ser uma lista de comandos, cada um com `id` e `label`
+@msg	command {name} must be an object with an `id` and a `label`	o comando {name} deve ser um objeto com `id` e `label`
+@msg	missing field `{key}`	falta o campo `{key}`
+@msg	duplicate field `{key}`	campo `{key}` duplicado
 @msg	only a filter or a live effect declares `commands`	só um filtro ou um efeito dinâmico declara `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	o módulo não tem o SHA-256 indicado em `hash`: nada foi instalado
@@ -6907,6 +6939,11 @@ swatch	Yellow Green	Verde-amarelado
 @msg	only an exporter or an importer declares `extensions`	só um plug-in de exportação ou de importação declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	um plug-in de importação sempre recebe o orçamento de uma importação: omita `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copiar informações de solução de problemas
+@msg	Copied the troubleshooting info	Informações de solução de problemas copiadas
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	A última sessão do VectorCraft parou de responder antes de fechar. Ajuda › Copiar informações de solução de problemas copia os detalhes para um relatório de bug
+
 # Safe Mode
 	Safe Mode…	Modo de Segurança…
 	Safe Mode	Modo de Segurança
@@ -6927,6 +6964,7 @@ swatch	Yellow Green	Verde-amarelado
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinhar à Grade de Pixels
+	Align New Objects to Pixel Grid	Alinhar Novos Objetos à Grade de Pixels
 	Not Aligned to Pixel Grid	Não Alinhado à Grade de Pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	somente caminhos e caminhos compostos podem ser alinhados à grade de pixels
 @msg	side is left or right, not `{s}`	side é left ou right, não `{s}`
