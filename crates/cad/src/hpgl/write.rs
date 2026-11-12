@@ -142,9 +142,11 @@ impl Origin {
 #[derive(Clone, Debug)]
 pub struct HpglOptions {
     pub version: Version,
-    /// How far a flattened curve may lie from the curve, points ([`TOLERANCE_RANGE`]).
+    /// How far a flattened curve may lie from the curve, points ([`TOLERANCE_RANGE`]; a value
+    /// outside it is an error).
     pub tolerance: f64,
-    /// The pen table: pen 1's color first. Empty: a pen for each color the art draws in.
+    /// The pen table: pen 1's color first, up to [`MAX_PENS`] (more is an error). Empty: a pen for
+    /// each color the art draws in.
     pub pens: Vec<[u8; 3]>,
     pub origin: Origin,
     /// Draw each pen's paths nearest first, instead of in paint order.
@@ -184,8 +186,13 @@ pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> R
     if regions.iter().any(|r| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0) {
         return Err("the export region is empty".into());
     }
-    let tolerance =
-        if opts.tolerance.is_finite() { opts.tolerance.clamp(*TOLERANCE_RANGE.start(), *TOLERANCE_RANGE.end()) } else { DEFAULT_TOLERANCE };
+    if !TOLERANCE_RANGE.contains(&opts.tolerance) {
+        return Err("the curve tolerance must be from 0.01 to 10 points".into());
+    }
+    if opts.pens.len() > MAX_PENS {
+        return Err("the pen table holds more than 255 pens".into());
+    }
+    let tolerance = opts.tolerance;
     // Layers the plot leaves out go first: baking can wrap one in art that would be drawn (its
     // crop marks).
     let shown = plotted(&doc.layers, false).map(|layers| {

@@ -441,6 +441,22 @@ fn an_empty_or_zero_length_plot_has_no_moves() {
     assert!(export(&d, &nan).is_err());
 }
 
+/// A tolerance outside its range and a pen table of more than 255 pens are errors, not changed.
+#[test]
+fn bad_options_are_errors() {
+    let d = three();
+    for tolerance in [0.0, 0.009, 10.01, f64::NAN, f64::INFINITY] {
+        let o = HpglOptions { tolerance, ..opts(&d) };
+        assert_eq!(export(&d, &o).err().as_deref(), Some("the curve tolerance must be from 0.01 to 10 points"), "{tolerance}");
+    }
+    for tolerance in [0.01, 10.0] {
+        assert!(export(&d, &HpglOptions { tolerance, ..opts(&d) }).is_ok(), "{tolerance}");
+    }
+    let o = HpglOptions { pens: vec![[0, 0, 0]; MAX_PENS + 1], ..opts(&d) };
+    assert_eq!(export(&d, &o).err().as_deref(), Some("the pen table holds more than 255 pens"));
+    assert!(export(&d, &HpglOptions { pens: vec![[0, 0, 0]; MAX_PENS], ..opts(&d) }).is_ok());
+}
+
 #[test]
 fn art_past_the_plotter_range_is_cut_off() {
     let d = doc_with(|d| vec![stroked(d, line((0.0, 50.0), (1e9, 50.0)), Color::BLACK)]);
