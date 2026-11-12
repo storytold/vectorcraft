@@ -552,22 +552,28 @@ impl<'a, 'b> Ctx<'a, 'b> {
         // Version 3 counts the first object types from 0, one below the later numbers (R32).
         let kind = if self.p.types_from_zero && loda.kind <= 4 { loda.kind + 1 } else { loda.kind };
         // A shape without its coordinates, or a polygon without its sides, is damage like a shape
-        // whose coordinates can't be read.
+        // whose coordinates can't be read; one left out at the coordinate limit is not.
+        self.budget.coordinates_refused();
         let g = match kind {
             RECTANGLE => coords.and_then(|c| geometry::rect(c, &self.p)),
             ELLIPSE => coords.and_then(|c| geometry::ellipse(c, &self.p)),
             CURVE => coords.and_then(|c| geometry::point_list(c, &self.p, self.budget, self.warn)).map(Geometry::Path),
             PATH if self.p.paths => coords.and_then(|c| geometry::path_record(c, &self.p, self.budget, self.warn)).map(Geometry::Path),
-            POLYGON => coords
-                .and_then(|c| geometry::point_list(c, &self.p, self.budget, self.warn))
-                .zip(loda.arg(ARG_POLYGON))
-                .and_then(|(base, sides)| geometry::polygon(&base, sides, &self.p, self.budget, self.warn)),
+            POLYGON => match loda.arg(ARG_POLYGON) {
+                Some(sides) => coords
+                    .and_then(|c| geometry::point_list(c, &self.p, self.budget, self.warn))
+                    .and_then(|base| geometry::polygon(&base, sides, &self.p, self.budget, self.warn)),
+                None => {
+                    push(self.warn, Warning::Damaged);
+                    return None;
+                }
+            },
             _ => {
                 push(self.warn, Warning::UnsupportedObjects);
                 return None;
             }
         };
-        if g.is_none() {
+        if g.is_none() && !self.budget.coordinates_refused() {
             push(self.warn, Warning::Damaged);
         }
         g

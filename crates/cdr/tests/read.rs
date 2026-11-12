@@ -420,7 +420,7 @@ fn hostile_version_1_files_stop_within_their_bytes_and_limits() {
     curve[114..116].copy_from_slice(&3u16.to_le_bytes());
     let d = read(&synth::wl_file(b'e', (612.0, 792.0), &[curve]), Limits { coordinates: 2, ..Limits::default() }).unwrap();
     assert_eq!(wl_objects(&d).len(), 0);
-    assert!(d.warnings.contains(&Warning::TooDeep));
+    assert_eq!(d.warnings, vec![Warning::TooDeep]);
     // Objects past the object limit are left out, and records past the chunk limit stop the read.
     let many: Vec<Vec<u8>> = (0..10).map(|_| rect()).collect();
     let d = read(&synth::wl_file(b'e', (612.0, 792.0), &many), Limits { objects: 4, ..Limits::default() }).unwrap();
@@ -1399,6 +1399,34 @@ fn outlines_flagged_none_and_dashes_read() {
     let o = s[0].outline.as_ref().unwrap();
     assert_eq!(o.dashes, vec![3.0, 1.0]);
     assert_eq!((o.cap, o.join), (Cap::Square, vectorcraft_cdr::model::Join::Bevel));
+}
+
+/// A curve or polygon left out at the coordinate limit gives the limit warning, not the damage
+/// warning.
+#[test]
+fn shapes_past_the_coordinate_limit_are_not_damage() {
+    let v = V(1100);
+    let curve = synth::object(v, 3, &[(30, v.points(&[(0.0, 0.0, 0), (10.0, 0.0, 0x40), (10.0, 10.0, 0x40)]))], None);
+    let side = synth::POLYGON_SIDE;
+    let mut sides = vec![0; 4];
+    sides.extend(5u32.to_le_bytes());
+    sides.extend([0; 8]);
+    sides.extend(0.05f64.to_le_bytes());
+    sides.extend(0.05f64.to_le_bytes());
+    sides.extend([v.coord(0.0), v.coord(0.0)].concat());
+    let base = v.points(&[(0.0, side, 0x0C), (side * 0.587, side * 0.809, 0x44)]);
+    let polygon = synth::object(v, 0x14, &[(30, base.clone()), (11000, sides)], None);
+    for (objects, limit) in [(vec![curve], 2), (vec![polygon], 4)] {
+        let file = synth::riff(1100, &[synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", objects)])]);
+        let d = read(&file, Limits { coordinates: limit, ..Limits::default() }).unwrap();
+        assert!(d.pages[0].layers[0].objects.is_empty());
+        assert_eq!(d.warnings, vec![Warning::TooDeep]);
+    }
+    // A polygon without its sides is damage, past the limit too.
+    let sideless = synth::object(v, 0x14, &[(30, base)], None);
+    let file = synth::riff(1100, &[synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![sideless])])]);
+    let d = read(&file, Limits { coordinates: 1, ..Limits::default() }).unwrap();
+    assert_eq!(d.warnings, vec![Warning::Damaged]);
 }
 
 /// Dashes stored in an outline whose line type doesn't mark it dashed (bit 2) are not drawn: the

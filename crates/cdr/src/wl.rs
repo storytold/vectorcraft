@@ -134,8 +134,10 @@ fn page_box(b: &[u8], settings: usize, p: &Profile) -> Option<(f64, f64)> {
 /// One drawn object's record (R43, R44): a shape, or `None` with a warning for text, for an object
 /// of another type and for a shape that can't be read.
 fn object(rec: &[u8], fields: Fields, p: &Profile, budget: &mut Budget, warn: &mut Vec<Warning>) -> Option<Object> {
+    // A curve left out at the coordinate limit is not damage.
+    budget.coordinates_refused();
     let read = shape(rec, fields, p, budget, warn);
-    if read.is_none() {
+    if read.is_none() && !budget.coordinates_refused() {
         push(warn, Warning::Damaged);
     }
     read?.map(|s| Object::Shape(Box::new(s)))

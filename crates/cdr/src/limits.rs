@@ -74,11 +74,19 @@ pub(crate) struct Budget {
     objects: usize,
     coordinates: usize,
     dashes: usize,
+    /// A request for coordinates was refused since [`Budget::coordinates_refused`] last asked.
+    refused: bool,
 }
 
 impl Budget {
     pub(crate) fn new(limits: Limits) -> Self {
-        Budget { limits, inflated: 0, chunks: 0, objects: 0, coordinates: 0, dashes: 0 }
+        Budget { limits, inflated: 0, chunks: 0, objects: 0, coordinates: 0, dashes: 0, refused: false }
+    }
+
+    /// Whether a request for coordinates was refused since the last call, which tells a shape
+    /// left out at the limit from one whose bytes don't parse.
+    pub(crate) fn coordinates_refused(&mut self) -> bool {
+        std::mem::take(&mut self.refused)
     }
 
     /// Bytes an inflate may still produce.
@@ -117,7 +125,10 @@ impl Budget {
                 self.coordinates = t;
                 true
             }
-            None => false,
+            None => {
+                self.refused = true;
+                false
+            }
         }
     }
 
