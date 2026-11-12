@@ -577,6 +577,24 @@ fn layers_have_fourteen_operands() {
     assert!(text.contains("%AI5_BeginLayer\n0 1 0 0 1 0 1 -1 10 200 30 0 70 0 Lb\n(Sub) Ln\n"), "{text}");
 }
 
+/// A template layer is written with Illustrator's own template flag, as Illustrator CS6 writes one
+/// (`0 1 1 0 1 0 0 7 128 128 128 1 50 0 Lb`), and opens as a template layer again.
+#[test]
+fn template_layers_keep_their_template_flag() {
+    let mut doc = Document::new(100.0, 100.0);
+    doc.layers.clear();
+    let mut layer = Node::layer(doc.alloc_id(), "Measurements", LayerColor::Preset(0));
+    layer.visible = false;
+    if let NodeKind::Layer { template, .. } = &mut layer.kind {
+        *template = true;
+    }
+    doc.layers.push(Arc::new(layer));
+    let text = program(&doc);
+    assert!(text.contains("%AI5_BeginLayer\n0 1 1 0 1 0 0 0 79 128 255 1 50 0 Lb\n(Measurements) Ln\n"), "{text}");
+    let back = read_back(&doc);
+    assert!(matches!(back.layers[0].kind, NodeKind::Layer { template: true, .. }), "{:?}", back.layers[0].kind);
+}
+
 #[test]
 fn layers_are_named_as_xml_ids_after_their_names() {
     let mut doc = sample();

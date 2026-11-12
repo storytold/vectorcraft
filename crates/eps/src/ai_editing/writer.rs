@@ -63,7 +63,6 @@ pub(super) const EFFECTS: &str = "live effects other than geometry effects are l
 pub(super) const SWATCHES: &str = "freeform gradient swatches, gradient swatches of more than 256 stops, and pattern swatches whose patterns the data can't define, are left out of the editing data for other apps";
 pub(super) const SYMBOL_LIMIT: &str = "symbol instances past 16,000,000 objects of symbol art in all are left out of the editing data for other apps";
 pub(super) const OBJECT_LIMIT: &str = "art past 4,000,000 objects in all is left out of the editing data for other apps";
-const TEMPLATES: &str = "template layers are written as dimmed layers that don't print in the editing data for other apps";
 pub(super) const DYNAMIC_TEXT: &str = "Dynamic Text is written as the sizes the type is drawn at in the editing data for other apps";
 
 /// The transparency `mode opacity isolate knockout shape Xy` sets: the blending mode ([`blend_code`]),
@@ -451,9 +450,6 @@ impl<'a> Writer<'a> {
     fn write_layer(&mut self, n: &Node, after: &[Arc<Node>]) {
         let NodeKind::Layer { color, template, printable, children, clip, preview, dim_images } = &n.kind else { return };
         let (index, [r, g, b]) = ai_ops::layer_color(*color);
-        if *template {
-            self.warn(TEMPLATES);
-        }
         self.effects(n);
         if n.extras().mask.is_some() {
             self.warn(LAYER_MASKS);
@@ -470,12 +466,15 @@ impl<'a> Writer<'a> {
         let clips = *clip && after.is_empty() && self.clip.is_none() && children.first().is_some_and(|c| clip_path(c).is_some());
         let _ = writeln!(
             self.body,
-            "%AI5_BeginLayer\n{} {} {} {} {} 0 1 {index} {r} {g} {b} 0 {dim} {} Lb\n{} Ln",
+            "%AI5_BeginLayer\n{} {} {} {} {} 0 {} {index} {r} {g} {b} {} {dim} {} Lb\n{} Ln",
             flag(n.visible),
             flag(*preview),
             flag(!n.locked),
             flag(*printable && !*template),
             flag(dim_images.is_some() || *template),
+            // Illustrator CS6 writes 0 here for its template layers and 1 for every other layer.
+            flag(!*template),
+            flag(*template),
             flag(clips),
             ps::bytes(name.as_bytes()),
         );

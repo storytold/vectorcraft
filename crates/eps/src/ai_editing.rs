@@ -49,9 +49,10 @@
 //!   or end with white space, variables past 256, data sets past 1,000, bindings past 100,000 or to XML ids longer than
 //!   255 characters, names and values past 8,388,608 bytes in all), and values past 200,000 text
 //!   lines and values in all.
-//! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed 0 1 colorIndex r g b 0
-//!   dimPercent clipping Lb` (14 operands; a color that isn't one of the preset layer colors has the
-//!   index -1; `clipping` is 1 for a clipping layer), `(name) Ln`, the layer's name as an XML id in an
+//! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed 0 notTemplate colorIndex r g b
+//!   template dimPercent clipping Lb` (14 operands; a color that isn't one of the preset layer colors has
+//!   the index -1; a template layer is also written hidden from print and dimmed, as Illustrator writes
+//!   it; `clipping` is 1 for a clipping layer), `(name) Ln`, the layer's name as an XML id in an
 //!   `/ArtDictionary`, its art and sublayers, `LB`, `%AI5_EndLayer--`.
 //! - Colors: `g` gray, `k` CMYK, `c m y k r g b Xa` RGB (Lab is written as RGB); a spot color
 //!   `c m y k (name) tint x` (CMYK) or `c m y k r g b|L a b (name) tint 1|2 Xx` (RGB or Lab); a
