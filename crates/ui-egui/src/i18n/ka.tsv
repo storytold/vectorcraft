@@ -1532,6 +1532,7 @@ digits	Malayalam	მალაიალამური
 	No gradient swatches	გრადიენტის ნიმუშები არ არის
 	Points: clicks add free points	წერტილები: დაწკაპუნებები ამატებს თავისუფალ წერტილებს
 	Radial Gradient	რადიალური გრადიენტი
+	Conic Gradient	კონუსური გრადიენტი
 	Reset to White, Black	თეთრზე და შავზე დაბრუნება
 	Reverse Gradient	გრადიენტის შებრუნება
 	Gradient Presets	გრადიენტის პრესეტები
@@ -3989,6 +3990,8 @@ font-technology	Variable	ცვლადი
 @msg	`groupColors` must be an array	`groupColors` უნდა იყოს მასივი
 @msg	`library` is a library id or name (see {list})	`library` არის ბიბლიოთეკის id ან სახელი (იხ. {list})
 @msg	`mode` applies to freeform gradients	`mode` ეხება თავისუფალი ფორმის გრადიენტებს
+@msg	a negative `aspect` applies to conic gradients	უარყოფითი `aspect` ეხება კონუსურ გრადიენტებს
+@msg	`focal` applies to radial gradients	`focal` ეხება რადიალურ გრადიენტებს
 @msg	`preserve` must be an object	`preserve` უნდა იყოს ობიექტი
 @msg	`globalAdjust` must be an object	`globalAdjust` უნდა იყოს ობიექტი
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` უნდა იყოს 1, 3 ან 5
@@ -4454,7 +4457,7 @@ font-technology	Variable	ცვლადი
 @msg	unknown format	უცნობი ფორმატი
 @msg	unknown format `{f}` (Save writes {_1})	უცნობი ფორმატი `{f}` (შენახვა წერს: {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	უცნობი თავისუფალი რეჟიმი `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	უცნობი გამოკვეთა `{h}`
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
@@ -5444,7 +5447,7 @@ imageTrace	Outline	კონტური
 @msg	span must be "object" or "selection", got {v}	span უნდა იყოს "object" ან "selection", მიღებულია {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" ათავსებს `gradient`-ს და არა ფერის ნიმუშს
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" ათავსებს გრადიენტს: მიუთითეთ `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" ათავსებს წრფივ ან რადიალურ გრადიენტს და არა თავისუფალი ფორმისას
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" ათავსებს წრფივ, რადიალურ ან კონუსურ გრადიენტს და არა თავისუფალი ფორმისას
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" თავად ათავსებს გრადიენტს: გამოტოვეთ `start` და `end` (ისინი მას უკვე დოკუმენტის კოორდინატებში ათავსებენ)
 	Make Image Dynamic	გამოსახულების დინამიკურად ქცევა
 	Import Data Sets…	მონაცემთა ნაკრებების იმპორტი…

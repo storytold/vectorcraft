@@ -40,6 +40,12 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
                     };
                     g.with_stops(stops.as_slice())
                 }
+                GradientKind::Conic => {
+                    // One turn about the origin, carried onto the extent ellipse: its frame starts
+                    // the sweep along the vector, and a mirrored frame reverses it.
+                    ctx.set_paint_transform(geom.conic_frame());
+                    peniko::Gradient::new_sweep((0.0, 0.0), 0.0, std::f32::consts::TAU).with_stops(stops.as_slice())
+                }
                 _ => {
                     ctx.reset_paint_transform();
                     let (s, e) =

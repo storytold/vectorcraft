@@ -2421,6 +2421,7 @@ digits	Malayalam	Malayalam
 	Radial	Radyal
 	Radial Glows	Radyal Parıltılar
 	Radial Gradient	Radyal Gradyan
+	Conic Gradient	Konik Gradyan
 	Radius 1	Yarıçap 1
 	Radius 2	Yarıçap 2
 	Radius1	Yarıçap1
@@ -3997,6 +3998,8 @@ axis	Both	Her İkisi
 @msg	`groupColors` must be an array	`groupColors` bir dizi olmalıdır
 @msg	`library` is a library id or name (see {list})	`library` bir kitaplık kimliği veya adıdır (bkz. {list})
 @msg	`mode` applies to freeform gradients	`mode` serbest biçimli degradeler için geçerlidir
+@msg	a negative `aspect` applies to conic gradients	negatif `aspect` konik degradeler için geçerlidir
+@msg	`focal` applies to radial gradients	`focal` radyal degradeler için geçerlidir
 @msg	`preserve` must be an object	`preserve` bir nesne olmalıdır
 @msg	`globalAdjust` must be an object	`globalAdjust` bir nesne olmalıdır
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` 1, 3 veya 5 olmalıdır
@@ -4456,7 +4459,7 @@ axis	Both	Her İkisi
 @msg	unknown format	bilinmeyen format
 @msg	unknown format `{f}` (Save writes {_1})	bilinmeyen format `{f}` (Kaydet, {_1} yazar)
 @msg	unknown freeform mode `{m}` (points, lines)	bilinmeyen serbest biçimli mod `{m}` (noktalar, çizgiler)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, serbest biçimli)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, serbest biçimli)
 @msg	unknown highlight `{h}`	bilinmeyen vurgu `{h}`
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (koru, benzet veya at)
@@ -5456,7 +5459,7 @@ theme	Appearance	Görünüm
 @msg	span must be "object" or "selection", got {v}	span "object" veya "selection" olmalıdır, {v} değil
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" bir renk örneği değil, bir `gradient` yerleştirir
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" bir degrade yerleştirir: `gradient` verin
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal veya radyal bir degrade yerleştirir
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal, radyal veya konik bir degrade yerleştirir
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" degradenin kendisini yerleştirir: `start` ve `end` değerlerini vermeyin (bunlar degradeyi zaten belge koordinatlarına yerleştirir)
 	Make Image Dynamic	Görüntüyü Dinamik Hale Getirin
 	Import Data Sets…	Veri Kümelerini İçe Aktar…

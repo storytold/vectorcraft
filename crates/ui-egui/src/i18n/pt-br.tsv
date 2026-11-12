@@ -2177,6 +2177,7 @@ digits	Malayalam	Malaiala
 	Radial	Radial
 	Radial Glows	Brilhos Radiais
 	Radial Gradient	Gradiente Radial
+	Conic Gradient	Gradiente Cônico
 	Radius:	Raio:
 	Rainbow	Arco-íris
 	Random	Aleatório
@@ -3759,6 +3760,8 @@ axis	Both	Ambos
 @msg	`groupColors` must be an array	`groupColors` deve ser uma matriz
 @msg	`library` is a library id or name (see {list})	`library` é o id ou o nome de uma biblioteca (veja {list})
 @msg	`mode` applies to freeform gradients	`mode` se aplica a gradientes de forma livre
+@msg	a negative `aspect` applies to conic gradients	um `aspect` negativo se aplica a gradientes cônicos
+@msg	`focal` applies to radial gradients	`focal` se aplica a gradientes radiais
 @msg	`preserve` must be an object	`preserve` deve ser um objeto
 @msg	`globalAdjust` must be an object	`globalAdjust` deve ser um objeto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` deve ser 1, 3 ou 5
@@ -4251,7 +4254,7 @@ axis	Both	Ambos
 @msg	unknown format	formato desconhecido
 @msg	unknown format `{f}` (Save writes {_1})	formato desconhecido `{f}` (Salvar grava {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modo de forma livre desconhecido `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	tipo de gradiente desconhecido `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo de gradiente desconhecido `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	destaque desconhecido `{h}`
 @msg	unknown option `{path}.{k}`	opção desconhecida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressões desconhecidas `{o}` (preserve, simulate ou discard)
@@ -5663,7 +5666,7 @@ mark-style	Japanese	Japonesas
 @msg	span must be "object" or "selection", got {v}	span deve ser "object" ou "selection", não {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiciona um `gradient`, não uma amostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiciona um degradê: informe `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" posiciona um degradê linear ou radial, não um de forma livre
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" posiciona um degradê linear, radial ou cônico, não um de forma livre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" posiciona o próprio degradê: omita `start` e `end` (eles já o posicionam em coordenadas do documento)
 	Make Image Dynamic	Tornar imagem dinâmica
 @msg	Batch: {count} processed	Lote: {count} processados
