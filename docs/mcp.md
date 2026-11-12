@@ -1876,7 +1876,8 @@ VectorCraft reads files by these rules of its own:
   line, the files must also be inside them. A path outside, a Windows network path (`\\host\share`) and a device path
   (`\\?\`, `\\.\`) are refused before anything is looked up: `exists` is `false`, the dates and `getFiles` give `null`,
   and `error` is `Script file access denied`. A path that leads out through a link or a junction is refused too, and
-  `getFiles` leaves such an entry out.
+  `getFiles` leaves such an entry out. A missing file is refused the same way unless the nearest folder above it that
+  exists is inside the script's folder. It is also refused when a link above it leads to a folder that does not exist.
 - `open` reads the whole file. A file larger than 8 MiB is refused from its size before any of it is read, with
   `Script file exceeds 8 MiB`, and a run that opens more than 32 MiB in all ends with an error. A run has at most 256
   files open at once; another `open` returns `false` with `Script has 256 files open` until one is closed.
