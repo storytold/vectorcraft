@@ -6842,8 +6842,8 @@ its pixels are decoded. `file.place {path}` links the file like any image. Vecto
 `.cdr` drawings of versions 1 to 27 (and `.cdt` templates, which open as a new untitled document) open and
 place as editable art, the ZIP packages that versions 14 and later save included. Each page becomes an artboard, side
 by side. Layers of the same name on different pages become one layer when the pages stack them in the same order, and
-the master page's guidelines become guides on every page. Groups stay groups, and a PowerClip becomes a clipping
-group whose clipping path keeps the container's fill and outline. Curves, paths, arcs and polygons (stars
+the master page's guidelines become guides on every page. Groups stay groups, and a container with the objects it clips
+becomes a clipping group whose clipping path keeps the container's fill and outline. Curves, paths, arcs and polygons (stars
 included) become paths, and rectangles and ellipses become live shapes; a rectangle keeps each corner's radius. Uniform
 fills and outlines keep their colors, widths, caps, joins and dashes (an outline of width 0 becomes a 0.25 pt stroke),
 an outline behind the fill becomes a stroke below the fill, and an object without a fill or outline of its own

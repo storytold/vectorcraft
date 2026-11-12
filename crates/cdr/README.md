@@ -15,7 +15,7 @@ with each object's transform. It does not write `.cdr` files.
 | Layers (drawing, desktop, guides and grid layers), the master page's among them | layers by name and kind |
 | Guidelines (object type 0x16, and the version 7 `guid` chunk) | guidelines at their point and angle |
 | Groups (`LIST grp `) | groups |
-| PowerClip containers and the groups of `LIST clpt` they clip | the container with the objects it clips |
+| Clipping containers and the groups of `LIST clpt` they clip | the container with the objects it clips |
 | Curves (point lists of moves, lines and cubic curves) and paths (object type 0x25, version 10 on) | paths |
 | Rectangles (one corner radius, four from version 9) | rectangles with each corner's radius |
 | Ellipses, arcs and pies | ellipses, and paths for arcs and pies |

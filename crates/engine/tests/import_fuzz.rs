@@ -282,7 +282,7 @@ proptest! {
         cut in 12usize..8192,
         edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
     ) {
-        // The feature sample adds a style table, a PowerClip and a lens to the shapes.
+        // The feature sample adds a style table, a clipping container and a lens to the shapes.
         let compress = compress && version >= 700;
         let mut bytes =
             if features { vectorcraft_cdr::synth::feature_sample(version, compress) } else { vectorcraft_cdr::synth::sample(version, compress) };

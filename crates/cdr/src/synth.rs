@@ -588,7 +588,7 @@ pub fn container(id: u32) -> (u32, Vec<u8>) {
     (8005, [id, 1, 0, 1].iter().flat_map(|v| v.to_le_bytes()).collect())
 }
 
-/// A RIFF drawing of `version` (7 to 13) with a style table, a PowerClip and a lens: a rectangle
+/// A RIFF drawing of `version` (7 to 13) with a style table, a clipping container and a lens: a rectangle
 /// that takes its fill and outline from its style, a container that clips two rectangles, one
 /// with an outline behind the fill, and a rectangle with a lens; compressed when `compress`.
 /// Before version 7, the [`sample`].

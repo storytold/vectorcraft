@@ -121,7 +121,7 @@ pub struct Shape {
 pub enum Object {
     Shape(Box<Shape>),
     Group(Vec<Object>),
-    /// A container and the objects it clips (a PowerClip): `objects` (front to back) show only
+    /// A clipping container and the objects it clips: `objects` (front to back) show only
     /// inside the container's shape, with its fill behind them and its outline over them.
     Clip {
         container: Box<Shape>,

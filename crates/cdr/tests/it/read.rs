@@ -1288,10 +1288,10 @@ fn a_container_clips_the_group_it_names() {
     }
 }
 
-/// The feature sample, the seed of the importer's fuzz tests, reads its style table, PowerClip and
-/// lens in every version from 7 to 13, plain and compressed.
+/// The feature sample, the seed of the importer's fuzz tests, reads its style table, clipping
+/// container and lens in every version from 7 to 13, plain and compressed.
 #[test]
-fn the_feature_sample_reads_its_styles_powerclip_and_lens() {
+fn the_feature_sample_reads_its_styles_container_and_lens() {
     for version in [700, 800, 900, 1000, 1100, 1200, 1300] {
         for compress in [false, true] {
             let d = read(&synth::feature_sample(version, compress), Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
