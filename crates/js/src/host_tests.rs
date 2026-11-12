@@ -561,6 +561,24 @@ fn an_evaluators_source_takes_fuel_before_it_is_parsed() {
     assert_eq!(ends.get(), 3);
 }
 
+#[test]
+fn an_evaluators_whole_source_must_fit_in_the_heap_before_it_is_parsed() {
+    // A third of the source and the other two thirds each fit in the heap; the whole does not.
+    // The source does not parse, so a parse would throw a syntax error instead.
+    let n = (1 << 17) + 1;
+    let source: HostFunction = Rc::new(move |_| Ok(Data::String(format!("{}(", " ".repeat(n - 1)))));
+    let item = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    let mut r = realm(1_000_000);
+    r.define_host_object("host", vec![("evaluate".into(), item)]).unwrap();
+    r.interp().collect_for_room();
+    let heap_bytes = r.interp().heap.bytes + crate::heap::string_bytes(n * 5 / 6);
+    r.set_limits(Limits { fuel: 1_000_000, heap_bytes, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Limit(LimitKind::Heap));
+    // With room for the whole source, it is parsed.
+    r.set_limits(Limits { fuel: 1_000_000, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Thrown);
+}
+
 proptest::proptest! {
     /// A slice size does not change what a script computes.
     #[test]
