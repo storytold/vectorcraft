@@ -710,10 +710,131 @@ fn in_place_pastes_go_onto_the_artboard_named() {
         assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[2].x0 + 10.0, boards[2].y0 + 15.0), "{cmd}");
         let ids = ids_of(&s.execute(cmd, &json!({})).unwrap());
         assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[0].x0 + 10.0, boards[0].y0 + 15.0), "{cmd} without one");
-        // An artboard that isn't there: where they were.
-        let ids = ids_of(&s.execute(cmd, &json!({"artboard": 9})).unwrap());
-        assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[0].x0 + 10.0, boards[0].y0 + 15.0), "{cmd} on no artboard");
+        // An artboard that isn't there, or a value that isn't an index: an error, and nothing pasted.
+        let before = doc(&s).clone();
+        for bad in [json!(9), json!(-1), json!(1.5), json!("1")] {
+            assert!(s.execute(cmd, &json!({"artboard": bad})).is_err(), "{cmd} with artboard {bad}");
+        }
+        assert_eq!(doc(&s), &before, "{cmd}");
     }
+}
+
+/// Paste in Place, in Front and in Back onto several artboards (the Artboard tool's selection, which
+/// the app passes as `artboards`): a copy on each, where the objects were on the artboard they were
+/// copied from, the copies in artboard order and in their own paint order, all selected, in one undo
+/// step.
+#[test]
+fn in_place_pastes_put_a_copy_on_each_artboard_named() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 4})).unwrap();
+    let boards: Vec<Rect> = doc(&s).artboards.iter().map(|a| a.rect).collect();
+    let a = rect(&mut s, boards[1].x0 + 10.0, boards[1].y0 + 15.0, 20.0, 20.0);
+    let b = rect(&mut s, boards[1].x0 + 50.0, boards[1].y0 + 5.0, 10.0, 10.0);
+    copy(&mut s, &[a, b]);
+    for cmd in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let undo = s.doc().unwrap().history.undo.len();
+        let before = doc(&s).clone();
+        let ids = ids_of(&s.execute(cmd, &json!({"artboards": [3, 0]})).unwrap());
+        assert_eq!(ids.len(), 4, "{cmd}: two objects on each of two artboards");
+        for (pair, board) in ids.chunks(2).zip([boards[0], boards[3]]) {
+            assert_eq!(doc(&s).bounds_of(&pair[..1], false).unwrap().origin(), Point::new(board.x0 + 10.0, board.y0 + 15.0), "{cmd}");
+            assert_eq!(doc(&s).bounds_of(&pair[1..], false).unwrap().origin(), Point::new(board.x0 + 50.0, board.y0 + 5.0), "{cmd}");
+        }
+        let layer: Vec<NodeId> = doc(&s).layers[0].children().into_iter().flatten().map(|n| n.id).collect();
+        let at: Vec<usize> = ids.iter().map(|id| layer.iter().position(|n| n == id).unwrap()).collect();
+        assert!(at.windows(2).all(|w| w[0] < w[1]), "{cmd}: in paint order, artboard by artboard: {at:?}");
+        assert_eq!(s.doc().unwrap().selection.in_paint_order(doc(&s)), ids, "{cmd}: the copies are selected");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{cmd}: one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(doc(&s), &before, "{cmd}: undo takes every copy away");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(doc(&s).layers[0].children().into_iter().flatten().count(), layer.len(), "{cmd}: redo");
+        // `artboard` wins over `artboards`.
+        let ids = ids_of(&s.execute(cmd, &json!({"artboard": 2, "artboards": [0, 3]})).unwrap());
+        assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[2].x0 + 10.0, boards[2].y0 + 5.0), "{cmd}");
+        // A list that is empty, names an artboard the document lacks or names one twice, or isn't a
+        // list: an error, and nothing pasted.
+        let before = doc(&s).clone();
+        for bad in [json!([]), json!([0, 4]), json!([1, 1]), json!([0, -1]), json!(2), json!("0,1")] {
+            assert!(s.execute(cmd, &json!({"artboards": bad})).is_err(), "{cmd} with artboards {bad}");
+        }
+        assert!(s.execute(cmd, &json!({"artboard": 1, "artboards": [7]})).is_err(), "{cmd}: a bad list with `artboard`");
+        assert_eq!(doc(&s), &before, "{cmd}");
+    }
+}
+
+/// With the Artboard tool chosen and several artboards selected, Paste in Place, in Front and in
+/// Back put a copy on each without naming them; the journal notes them, so a replay pastes on the
+/// same artboards, and a recorded action leaves them out. With one selected, or another tool, the
+/// objects go where they were.
+#[test]
+fn in_place_pastes_follow_the_artboard_tool_selection() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<Rect> = doc(&s).artboards.iter().map(|a| a.rect).collect();
+    let r = rect(&mut s, boards[0].x0 + 10.0, boards[0].y0 + 15.0, 20.0, 20.0);
+    copy(&mut s, &[r]);
+    let origins = |s: &Session, ids: &[NodeId]| ids.iter().map(|id| doc(s).bounds_of(&[*id], false).unwrap().origin()).collect::<Vec<_>>();
+    let on = |b: &[usize]| b.iter().map(|i| Point::new(boards[*i].x0 + 10.0, boards[*i].y0 + 15.0)).collect::<Vec<_>>();
+    s.select_tool("artboard", ViewInfo::default()).unwrap();
+    for cmd in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        s.set_tool_option("selected", &json!([2, 1]));
+        let start = s.journal.len();
+        let ids = ids_of(&s.execute(cmd, &json!({})).unwrap());
+        assert_eq!(origins(&s, &ids), on(&[1, 2]), "{cmd}");
+        assert_eq!(s.journal.since(start).last().map(|(_, p)| p["artboards"].clone()), Some(json!([1, 2])), "{cmd}: journaled");
+        assert!(s.journal_for_action(start).iter().all(|(_, p)| p.get("artboards").is_none()), "{cmd}: not in an action");
+        // A stale index in the tool's selection is passed over.
+        s.set_tool_option("selected", &json!([0, 9]));
+        let ids = ids_of(&s.execute(cmd, &json!({})).unwrap());
+        assert_eq!(origins(&s, &ids), on(&[0]), "{cmd}: one left");
+        s.set_tool_option("selected", &json!([1]));
+        let ids = ids_of(&s.execute(cmd, &json!({})).unwrap());
+        assert_eq!(origins(&s, &ids), on(&[0]), "{cmd}: one selected, where it was");
+    }
+    s.set_tool_option("selected", &json!([1, 2]));
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    let ids = ids_of(&s.execute("edit.pasteInPlace", &json!({})).unwrap());
+    assert_eq!(origins(&s, &ids), on(&[0]), "another tool: where it was");
+}
+
+/// Art copied from no artboard onto several: it keeps its place on the first and its offset to the
+/// first on the others. Guides alone go on each artboard named.
+#[test]
+fn in_place_pastes_onto_several_artboards_of_art_off_them_and_guides() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<Rect> = doc(&s).artboards.iter().map(|a| a.rect).collect();
+    let r = rect(&mut s, boards[0].x0 - 100.0, boards[0].y0 + 15.0, 20.0, 20.0);
+    copy(&mut s, &[r]);
+    assert_eq!(s.clipboard.source_artboard, None);
+    let ids = ids_of(&s.execute("edit.pasteInPlace", &json!({"artboards": [1, 2]})).unwrap());
+    let at: Vec<Point> = ids.iter().map(|id| doc(&s).bounds_of(&[*id], false).unwrap().origin()).collect();
+    let first = Point::new(boards[0].x0 - 100.0, boards[0].y0 + 15.0);
+    assert_eq!(at, [first, first + (boards[2].origin() - boards[1].origin())]);
+    // Guides alone, copied from artboard 1: one on each artboard named, 30 pt into it.
+    s.execute("guide.add", &json!({"vertical": true, "pos": boards[0].x0 + 30.0})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let r = s.execute("edit.pasteInFront", &json!({"artboards": [1, 2]})).unwrap();
+    assert_eq!(r["guides"], 2);
+    let mut guides: Vec<f64> = doc(&s).ruler_guides().iter().map(|g| g.pos).collect();
+    guides.sort_by(f64::total_cmp);
+    assert_eq!(guides, [boards[0].x0 + 30.0, boards[1].x0 + 30.0, boards[2].x0 + 30.0]);
+}
+
+/// Artboards on the clipboard come back once, where they were, whichever artboards are named.
+#[test]
+fn in_place_pastes_of_copied_artboards_ignore_the_artboards_named() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("artboard.copy", &json!({"index": 0, "art": true})).unwrap();
+    let r = s.execute("edit.pasteInPlace", &json!({"artboards": [1, 2]})).unwrap();
+    assert_eq!(r["artboards"], json!([3]));
+    assert_eq!(ids_of(&r).len(), 1);
+    assert_eq!(doc(&s).artboards[3].rect, doc(&s).artboards[0].rect);
 }
 
 /// Art copied from beside the artboards goes back where it was, whichever artboard is active (#1924).

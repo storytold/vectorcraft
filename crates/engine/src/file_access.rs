@@ -470,7 +470,10 @@ impl ScriptScope {
         let real = match std::fs::canonicalize(path) {
             Ok(real) => real,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(if std::fs::symlink_metadata(path).is_ok() { ScriptRead::Refused } else { ScriptRead::Missing });
+                if std::fs::symlink_metadata(path).is_ok() || !self.missing_inside(path) {
+                    return Err(ScriptRead::Refused);
+                }
+                return Err(ScriptRead::Missing);
             }
             Err(e) => return Err(ScriptRead::Failed(e.to_string())),
         };
@@ -478,6 +481,18 @@ impl ScriptScope {
             return Err(ScriptRead::Refused);
         }
         Ok(real)
+    }
+
+    /// Is the missing `path` inside a granted folder: does the nearest folder above it that exists
+    /// lie inside one? On a file system where case matters, `MAIN/x` beside the granted `main` is
+    /// outside, whether `MAIN` exists or not. A link above it that leads to nothing is outside too,
+    /// so a script cannot tell whether the folder a link leads to exists.
+    fn missing_inside(&self, path: &Path) -> bool {
+        path.ancestors()
+            .skip(1)
+            .find(|a| std::fs::symlink_metadata(a).is_ok())
+            .and_then(|a| std::fs::canonicalize(a).ok())
+            .is_some_and(|real| self.roots.iter().any(|r| inside(&real, r)))
     }
 
     /// What the file or folder at `path` is, located as [`ScriptScope::locate`] locates it.

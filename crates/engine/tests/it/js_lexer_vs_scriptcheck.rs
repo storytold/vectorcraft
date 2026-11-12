@@ -89,11 +89,12 @@ fn both_lexers_find_the_same_unclosed_token_on_the_same_line() {
 }
 
 /// Characters on both sides of the identifier rule: `Other_ID_Start`, `Other_ID_Continue`, connector
-/// punctuation, marks, digits and letters of other scripts, and a superscript digit, a
-/// `Pattern_Syntax` letter and punctuation that no name holds.
+/// punctuation, marks, digits and letters of other scripts, a letter and a mark Unicode 17.0
+/// assigned, and a superscript digit, a `Pattern_Syntax` letter and punctuation that no name holds.
 const NAME_CHARS: &[char] = &[
-    '\u{AA}', '\u{B2}', '\u{B7}', '\u{D7}', '\u{300}', '\u{387}', '\u{660}', '\u{1369}', '\u{1885}', '\u{19DA}', '\u{200C}', '\u{200D}', '\u{203F}',
-    '\u{2040}', '\u{2118}', '\u{212E}', '\u{2160}', '\u{2E2F}', '\u{3005}', '\u{309B}', '\u{30FB}', '\u{FE33}', '\u{FF10}', '\u{FF65}',
+    '\u{AA}', '\u{B2}', '\u{B7}', '\u{D7}', '\u{300}', '\u{387}', '\u{660}', '\u{88F}', '\u{1369}', '\u{1885}', '\u{19DA}', '\u{1ACF}', '\u{200C}',
+    '\u{200D}', '\u{203F}', '\u{2040}', '\u{2118}', '\u{212E}', '\u{2160}', '\u{2E2F}', '\u{3005}', '\u{309B}', '\u{30FB}', '\u{FE33}', '\u{FF10}',
+    '\u{FF65}',
 ];
 
 /// Whether the parser reads `src` as one identifier spelling `name`.
@@ -111,6 +112,7 @@ fn checker_member(src: &str, name: &str) -> bool {
 #[test]
 fn both_lexers_take_the_same_characters_into_names() {
     assert!(checker_member("a\u{2118}b", "a\u{2118}b") && one_identifier("a\u{2118}b", "a\u{2118}b"));
+    assert!(checker_member("\u{88F}\u{1ACF}", "\u{88F}\u{1ACF}") && one_identifier("\u{88F}\u{1ACF}", "\u{88F}\u{1ACF}"));
     for &c in NAME_CHARS {
         let escape = format!("\\u{:04X}", u32::from(c));
         for (src, name) in [

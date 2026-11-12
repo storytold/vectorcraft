@@ -4338,6 +4338,36 @@ fn scaled_area_type_and_type_on_a_path_stay_type() {
     assert!(!program(&doc).contains("/AI11Text"));
 }
 
+/// Type on a path with Dynamic Text is written as type at the sizes it is drawn at, with a warning
+/// that the setting is not written.
+#[test]
+fn dynamic_text_is_written_at_its_drawn_sizes() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let mut doc = Document::new(600.0, 300.0);
+    let layer = doc.layers[0].id;
+    let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Grow", style(12.0, Color::BLACK));
+    t.kind = TextKind::OnPath {
+        path: shapes::line(vectorcraft_geom::Point::new(50.0, 200.0), vectorcraft_geom::Point::new(550.0, 200.0)),
+        start: 0.0,
+        end: None,
+    };
+    t.xf = Affine::IDENTITY;
+    t.dynamic_text = true;
+    let drawn = 12.0 * vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).fit_scale;
+    assert!(drawn > 50.0, "{drawn}");
+    let node = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, node).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::DYNAMIC_TEXT), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let texts: Vec<&TextObject> =
+        back.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.as_ref()) } else { None }).collect();
+    assert_eq!(texts.len(), 1);
+    assert!(!texts[0].dynamic_text);
+    let k = texts[0].xf.as_coeffs()[0];
+    assert_eq!(r3(texts[0].runs[0].style.size * k), r3(drawn));
+}
+
 /// See-through type with the knockout shape flag comes back with the flag and writes no warning.
 #[test]
 fn the_knockout_shape_of_type_comes_back() {
@@ -7505,4 +7535,43 @@ fn variable_font_instances_name_their_design_space() {
 
 fn style_of(size: f64) -> vectorcraft_doc::CharStyle {
     style(size, Color::BLACK)
+}
+
+/// The data has no conic gradient: a conic fill is a linear gradient along its vector, with the
+/// same stops, and so is a conic gradient swatch, with a warning.
+#[test]
+fn conic_gradients_are_written_as_linear_gradients_with_their_stops() {
+    let stops =
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.6, SKY), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, stops.clone()));
+    let (start, end) = (vectorcraft_geom::Point::new(100.0, 50.0), vectorcraft_geom::Point::new(150.0, 50.0));
+    g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect: -0.5, focal: None });
+    let mut doc = Document::new(200.0, 100.0);
+    let id = doc.alloc_id();
+    let l = doc.layers[0].id;
+    let fill = Paint::Gradient(Box::new(g.clone()));
+    doc.insert(Some(l), 0, Node::path(id, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Appearance::basic(fill.clone(), Paint::None, 0.0)))
+        .unwrap();
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Sweep".into(), paint: Paint::Gradient(Box::new(GradientPaint { geom: None, ..g })), global: false, spot: false });
+    doc.swatches = swatches.into();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w.contains("conic gradients are written as linear gradients")), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let mut read = None;
+    back.walk(|n| {
+        if let Paint::Gradient(g) = n.appearance.fill_paint() {
+            read = Some(g.clone());
+        }
+    });
+    let read = read.expect("a gradient fill");
+    assert_eq!(read.gradient.kind, GradientKind::Linear);
+    assert_eq!(
+        read.gradient.stops.iter().map(|s| (s.offset, s.color.to_hex())).collect::<Vec<_>>(),
+        stops.iter().map(|s| (s.offset, s.color.to_hex())).collect::<Vec<_>>()
+    );
+    let geom = read.geom.unwrap();
+    assert!(geom.start.distance(start) < 0.01 && geom.end.distance(end) < 0.01, "{geom:?}");
+    let Some(Paint::Gradient(swatch)) = back.swatch("Sweep").map(|s| &s.paint) else { panic!("the swatch is lost") };
+    assert_eq!(swatch.gradient.kind, GradientKind::Linear);
 }

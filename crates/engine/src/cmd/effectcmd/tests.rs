@@ -881,3 +881,56 @@ fn move_takes_several_effects_that_land_together_in_order() {
     assert!(s.execute("effect.move", &json!({"from": [0, 9], "to": 0, "fromItem": null, "ids": [id.0]})).is_err());
     assert_eq!(node(&s, id).appearance, before);
 }
+
+/// A 3D effect's shadow is set with `effect.setParams` in one undo step, saved in the native file,
+/// drawn in exports and kept as a path by Expand Appearance; settings out of range are refused
+/// without an undo step.
+#[test]
+fn a_3d_shadow_is_one_undo_step_saved_exported_and_expanded() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": effects::EXTRUDE, "ids": [id.0], "item": null})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (params, why) in [
+        (json!({"shadowBounds": 401}), "shadowBounds must be a number from 10 to 400"),
+        (json!({"shadowPosition": "left"}), "shadowPosition must be behind or below"),
+    ] {
+        let before = s.doc().unwrap().doc.clone();
+        let e = s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": params})).unwrap_err().to_string();
+        assert!(e.contains(why), "{params}: {e}");
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    let params = json!({"shadow": true, "shadowPosition": "below", "shadowDistance": 20, "shadowBounds": 150});
+    s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": params})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let art = effects::solid_art(&node(&s, id)).unwrap();
+    let shadow = art.children().unwrap()[0].clone();
+    assert!(matches!(shadow.kind, NodeKind::Path { .. }));
+    // Saved and opened again, the effect keeps its shadow settings and draws the same shadow.
+    let doc = &s.doc().unwrap().doc;
+    let restored = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    let fx = &restored.node(id).unwrap().appearance.effects[0];
+    for (key, value) in params.as_object().unwrap() {
+        assert_eq!(fx.params.get(key), Some(value), "{key}");
+    }
+    assert_eq!(effects::solid_art(restored.node(id).unwrap()).unwrap(), art);
+    // SVG export draws it: one more shape than without the shadow.
+    let shapes = |s: &mut Session| {
+        let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+        vectorcraft_testkit::svg_shapes(&svg)
+    };
+    let with = shapes(&mut s);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let without = shapes(&mut s);
+    assert_eq!(with, without + 1);
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    let mut shadows = 0;
+    s.doc().unwrap().doc.walk(|n| {
+        if n.path_data().is_some() && n.path_data() == shadow.path_data() && n.appearance.items == shadow.appearance.items {
+            shadows += 1;
+        }
+    });
+    assert_eq!(shadows, 1);
+}

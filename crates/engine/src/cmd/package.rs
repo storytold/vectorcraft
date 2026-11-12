@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 
 use super::fileio::{create_dir, write_file};
 use super::links::LinkBase;
-use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, str_param, unique_name};
+use super::{CommandSpec, Result, Session, bad, cmd, has_doc, switch_or, text_param, unique_name};
 
 const C: &str = "file.package";
 
@@ -451,19 +451,20 @@ impl Session {
 /// name, the report's Document Info text and the document.
 fn prepare(s: &mut Session, p: &Value) -> Result<Package> {
     let o = Options {
-        copy_links: bool_or(p, "copyLinks", true),
-        links_folder: bool_or(p, "linksFolder", true),
-        relink: bool_or(p, "relink", true),
-        copy_fonts: bool_or(p, "copyFonts", true),
-        report: bool_or(p, "report", true),
+        copy_links: switch_or(p, "copyLinks", true, C)?,
+        links_folder: switch_or(p, "linksFolder", true, C)?,
+        relink: switch_or(p, "relink", true, C)?,
+        copy_fonts: switch_or(p, "copyFonts", true, C)?,
+        report: switch_or(p, "report", true, C)?,
     };
+    let given_name = text_param(p, "name", C)?;
+    let folder = text_param(p, "folder", C)?;
     let doc_path = s.doc()?.path.clone().ok_or_else(|| bad(C, "save the document first: Package collects a saved document"))?;
     let stem = Path::new(&doc_path).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
-    let name = str_param(p, "name").map_or_else(|| format!("{stem} Folder"), str::to_string);
+    let name = given_name.map_or_else(|| format!("{stem} Folder"), str::to_string);
     if name.trim().is_empty() || name == "." || name == ".." || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
         return Err(bad(C, format!("`{name}` can't name a folder")));
     }
-    let folder = str_param(p, "folder");
     let root = folder.map(|f| Path::new(f).join(&name));
     let info = if o.report { Some(super::docinfo::report(s, false)?) } else { None };
     let doc = s.doc()?.doc.clone();

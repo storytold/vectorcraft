@@ -238,7 +238,7 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     rotate_all_widget(p, xf, tool, &st.doc, &st.selection);
 }
 
-/// The Rotate All and Space widgets (Selection and Objects on Path tools, one Objects on Path
+/// The Rotate All, Space and Move All widgets (Selection and Objects on Path tools, one Objects on Path
 /// group selected). The Rotate All widget is joined by a line to the first object's attachment
 /// point. It stays while dragged.
 fn rotate_all_widget(p: &egui::Painter, xf: &Xf, tool: &str, doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) {
@@ -253,6 +253,7 @@ fn rotate_all_widget(p: &egui::Painter, xf: &Xf, tool: &str, doc: &vectorcraft_d
         p.circle_stroke(c, ROTATE_ALL_RADIUS_PX, Stroke::new(1.0, color));
     }
     space_widget(p, xf, doc, selection);
+    move_all_widget(p, xf, doc, selection);
 }
 
 /// The Space widget (beside the Rotate All widget, with two or more objects on the path): a square
@@ -265,6 +266,19 @@ fn space_widget(p: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document, sel
     p.line_segment([on, c], Stroke::new(1.0, color));
     p.rect_filled(r, 0.0, Color32::WHITE);
     p.rect_stroke(r, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);
+}
+
+/// The Move All widget (beside the Rotate All widget, when the objects have room to move along the
+/// path): a diamond below the first object joined by a line to its attachment point. It stays while
+/// dragged.
+fn move_all_widget(p: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) {
+    use vectorcraft_tools::objects_on_path::{MOVE_ALL_HALF_PX, MoveAllWidget};
+    let Some(w) = MoveAllWidget::of(doc, selection, xf.zoom) else { return };
+    let (on, c, color) = (xf.to_screen(w.first), xf.to_screen(w.at), c32(doc.layer_color(w.group)));
+    let h = MOVE_ALL_HALF_PX;
+    p.line_segment([on, c], Stroke::new(1.0, color));
+    let corners = vec![c + vec2(0.0, -h), c + vec2(h, 0.0), c + vec2(0.0, h), c + vec2(-h, 0.0)];
+    p.add(Shape::convex_polygon(corners, Color32::WHITE, Stroke::new(1.0, color)));
 }
 
 /// Record where the Type tool's IME candidate window goes this pass, if it has an editor.

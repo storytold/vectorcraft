@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area / Path Type",
             [],
             None,
-            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?, font?, style?, color?, keepModel? (as text.create), fit?: none|autoHeight|shrinkText, fitMinPercent? (area: as text.areaOptions; default autoHeight when the autoSizeAreaType preference is on), placeholder?: bool (placeholder text instead, as text.create), justify?, leadingModel?, charAlign? (as text.create)} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id, bounds: {x, y, width, height} (as text.create), overflow?: [id] (the text doesn't fit; left out when it fits)}",
+            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?, font?, style?, color?, keepModel? (as text.create), fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (area: as text.areaOptions; default autoHeight when the autoSizeAreaType preference is on), placeholder?: bool (placeholder text instead, as text.create), justify?, leadingModel?, charAlign? (as text.create)} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id, bounds: {x, y, width, height} (as text.create), overflow?: [id] (the text doesn't fit; left out when it fits)}",
             has_doc,
             create_in_path
         ),
@@ -1623,6 +1623,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         path_effect: Default::default(),
         path_align: Default::default(),
         path_spacing: 0.0,
+        dynamic_text: false,
         wrap: Vec::new(),
         optical_margin: false,
         anti_alias: Default::default(),
@@ -1636,7 +1637,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     };
     super::create::new_type_alignment(s, p, C, &mut t)?;
     if !on_path {
-        t.area.fit = super::create::new_area_fit(s, p, C)?;
+        super::create::new_area_fit(s, p, C, &mut t)?;
     }
     t.system_layout = s.doc()?.doc.setup.system_layout;
     if bool_or(p, "placeholder", false) {
@@ -1914,6 +1915,7 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             path_effect: Default::default(),
             path_align: Default::default(),
             path_spacing: 0.0,
+            dynamic_text: false,
             wrap: Vec::new(),
             optical_margin: false,
             anti_alias: Default::default(),

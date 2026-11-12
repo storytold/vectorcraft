@@ -19,7 +19,7 @@ use super::{
 };
 
 #[cfg(test)]
-pub(crate) use paint::{SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
+pub(crate) use paint::{CONTROL_BOXES_MEASURED, SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
 
 mod images;
 mod nodes;

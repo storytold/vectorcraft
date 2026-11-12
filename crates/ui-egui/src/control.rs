@@ -323,15 +323,11 @@ const PANEL_FIELDS: [&str; 7] =
 /// loaded without a path is named. The UI state refers to a library by its bare id in a library panel
 /// and the Color Guide's limit, by a panel id (`library:<kind>:loaded/<path>`) in the fields of
 /// [`PANEL_FIELDS`] and the workspaces' layouts, and by either in the `library` and `panel` params of
-/// recorded actions' steps; the session lists the libraries it has loaded. Text the person types (a
-/// command palette query, a workspace's or an action's name) is not read. When another of those ids,
-/// or a library loaded in the session, already has that id, the next free one
-/// of `loaded/<file name> (2)`, `(3)` and so on is shown, so that two libraries stay two and
-/// `ui.inspect` and `ui.docking` show a library under the same id. A library keeps its id from one
-/// request to the next while it is referred to. New ids are numbered in this order: the libraries
-/// loaded in the session (the swatch, graphic style, symbol and brush libraries, each kind in the
-/// order it was loaded), then the library panels in their order, the Color Guide's limit and the
-/// other ids the UI state holds.
+/// recorded actions' steps. Text the person types (a command palette query, a workspace's or an
+/// action's name) is not read. The session's loaded libraries whose file the request may not read are
+/// hidden too. The ids are numbered as the library commands number them
+/// ([`vectorcraft_engine::cmd::swatchlib::concealed_library_ids`]), so that two libraries stay two and
+/// `ui.inspect`, `ui.docking` and the library commands show a library under the same id.
 fn unreadable_library_ids(app: &VectorcraftApp) -> Hiding {
     let mut rest = std::collections::BTreeSet::new();
     let ui = serde_json::to_value(&app.ui).unwrap_or_default();
@@ -345,66 +341,22 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Hiding {
         }
     }
     collect_library_panel_ids(&json!(app.ui.transient_panel), &mut rest);
-    // The ids of the libraries loaded in the session: a hidden one does not take the id of one loaded
-    // without a path.
+    let mut ids = rest;
+    for id in app.ui.library_panels.iter().map(|p| p.id.as_str()).chain([app.ui.color_guide_limit.as_str()]) {
+        add_library_id(id, &mut ids);
+    }
+    let mut hidden = vectorcraft_engine::cmd::swatchlib::concealed_library_ids(&app.session, ids.iter().cloned());
+    // The other loaded library ids the session and the UI state hold.
     let s = &app.session;
     let loaded = s.swatch_libraries.infos().chain(s.style_libraries.infos()).chain(s.symbol_libraries.infos()).chain(s.brush_libraries.infos());
-    let loaded: Vec<&str> = loaded.map(|info| info.id.as_str()).collect();
-    let mut ids: Vec<String> = Vec::new();
-    let mut seen = std::collections::BTreeSet::new();
-    let first = loaded.iter().copied().chain(app.ui.library_panels.iter().map(|p| p.id.as_str())).chain([app.ui.color_guide_limit.as_str()]);
-    for id in first.map(str::to_string).chain(rest) {
-        if id.len() > "loaded/".len() && id.starts_with("loaded/") && seen.insert(id.clone()) {
-            ids.push(id);
-        }
-    }
-    let mut hidden = Vec::new();
-    let mut readable_ids = std::collections::BTreeSet::new();
-    let mut taken: std::collections::BTreeSet<String> = loaded.iter().map(|id| id.to_string()).collect();
-    for id in ids {
-        let path = &id["loaded/".len()..];
-        // Either separator: a path saved on another platform counts as a path here too.
-        let name = path.rsplit(['/', '\\']).find(|part| !part.is_empty()).unwrap_or(path).to_string();
-        if name != path && (written_elsewhere(path) || !readable(path)) {
-            hidden.push((id, name));
-        } else {
-            taken.insert(id.clone());
-            readable_ids.insert(id);
-        }
-    }
-    // A library keeps the id it was shown under while it is still referred to and no library loaded
-    // without a path, or one the request may read, has taken that id since.
-    let mut remembered = app.shown_library_ids.borrow_mut();
-    remembered.retain(|(id, shown)| hidden.iter().any(|(h, _)| h == id) && !taken.contains(shown));
-    taken.extend(remembered.iter().map(|(_, shown)| shown.clone()));
-    let mut shown_ids = Vec::with_capacity(hidden.len());
-    for (id, name) in hidden {
-        if let Some((_, shown)) = remembered.iter().find(|(known, _)| *known == id) {
-            shown_ids.push((id, shown.clone()));
-            continue;
-        }
-        let mut shown = format!("loaded/{name}");
-        let mut n = 2;
-        while taken.contains(&shown) {
-            shown = format!("loaded/{name} ({n})");
-            n += 1;
-        }
-        taken.insert(shown.clone());
-        remembered.push((id.clone(), shown.clone()));
-        shown_ids.push((id, shown));
-    }
-    let mut hidden = shown_ids;
+    let readable_ids = loaded
+        .map(|info| info.id.clone())
+        .chain(ids)
+        .filter(|id| id.len() > "loaded/".len() && id.starts_with("loaded/") && !hidden.iter().any(|(h, _)| h == id))
+        .collect();
     // The longest first, so that an id that begins another one does not replace part of it.
     hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
     Hiding { hidden, readable: readable_ids }
-}
-
-/// Is `path`, under a read root, written as an absolute path of another platform: outside Windows, one
-/// that starts with a drive (`C:`) or a `\`? The file access check would read it as a name in the
-/// working folder.
-fn written_elsewhere(path: &str) -> bool {
-    let foreign = path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
-    !cfg!(windows) && foreign && vectorcraft_engine::file_access::current().is_some()
 }
 
 /// What a reply hides ([`hide_library_ids`]).

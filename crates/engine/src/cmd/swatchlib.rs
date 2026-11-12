@@ -6,7 +6,7 @@
 //! pattern) into the document; `swatch.library.save` writes the document's ([`palette_io`]).
 //! `swatch.library.copyToUser` copies a loaded library into the user library folder.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -211,6 +211,22 @@ impl<L: LibraryFile> Libraries<L> {
         self.extra.iter().find(|e| e.info.id == id).and_then(|e| e.path.as_deref())
     }
 
+    /// The ids [`Libraries::get`] finds: the User Defined and loaded libraries', and the loaded ids of
+    /// libraries copied into the user library folder.
+    fn ids(&self) -> impl Iterator<Item = String> + '_ {
+        self.extra.iter().map(|e| e.info.id.clone()).chain(self.copied.iter().map(|(loaded, _)| loaded.clone()))
+    }
+
+    /// The file library `id` was read from, when the request being served may read it.
+    pub fn shown_path(&self, id: &str) -> Option<&str> {
+        self.path(id).filter(|p| readable(p))
+    }
+
+    /// The user library folder, when the request being served may read it.
+    pub fn shown_user_dir(&self) -> Option<&str> {
+        self.user_dir().filter(|d| readable(d))
+    }
+
     /// The User Defined library whose file has the extension of file name `file` and holds `bytes`.
     fn user_file(&self, file: &str, bytes: &[u8]) -> Option<&Extra<L>> {
         let ext = extension(file);
@@ -281,7 +297,10 @@ impl<L: LibraryFile> Libraries<L> {
             self.saved_as
                 .insert(format!("user/{file}").to_lowercase(), SavedAs { name: name.to_string(), hash: vectorcraft_doc::links::hash_bytes(bytes) });
             self.rescan();
-            out["path"] = json!(path);
+            // The folder is the app's own: a confined request sees the file only inside its read roots.
+            if readable(&path) {
+                out["path"] = json!(path);
+            }
             out["library"] = json!(format!("user/{file}"));
         } else if let Some(path) = path {
             write_file(path, bytes)?;
@@ -349,6 +368,10 @@ impl<L: LibraryFile> Libraries<L> {
             .ok_or_else(|| bad(cmd, format!("`{id}` isn't a loaded library")))?;
         let (file, bytes) = match source.filter(|p| L::EXTS.contains(&extension(p).as_str())) {
             Some(p) => {
+                // Outside the request's read roots: the error names no path.
+                if !readable(&p) {
+                    return Err(bad(cmd, "the library's file is outside the read roots"));
+                }
                 let ext = extension(&p);
                 let base = file_name(&p);
                 // A sandbox copy of an import often lands as tmp….tmp.acb (#2996): store it under the
@@ -446,6 +469,85 @@ fn file_name(path: &str) -> String {
     std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().to_string())
 }
 
+/// May the request being served read `path` ([`crate::file_access::check_read`])? Always, without
+/// roots in force.
+fn readable(path: &str) -> bool {
+    crate::file_access::check_read(path).is_ok()
+}
+
+/// Is `path`, under a read root, written as an absolute path of another platform: outside Windows, one
+/// that starts with a drive (`C:`) or a `\`? The file access check would read it as a name in the
+/// working folder.
+fn written_elsewhere(path: &str) -> bool {
+    let foreign = path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    !cfg!(windows) && foreign && crate::file_access::current().is_some()
+}
+
+/// The loaded library ids (`loaded/<path>`) whose file the request being served may not read, each
+/// with the id a reply shows instead: `loaded/<file name>`, as a library loaded without a path is
+/// named. The file name is the last part of the path after either separator, and a path saved as
+/// another platform's absolute path counts as one the request may not read. The ids are those of the session's swatch, brush, symbol and graphic style libraries, then
+/// `others` (ids the UI state refers to). When another id already is or shows that id, the next free
+/// one of `loaded/<file name> (2)`, `(3)` and so on is shown, so that two libraries stay two. The
+/// session's libraries are numbered first, in the sorted order of their full ids, so a library shows
+/// the same id whatever `others` holds; then `others`, in the same order. Without roots in force, none.
+pub fn concealed_library_ids(s: &Session, others: impl IntoIterator<Item = String>) -> Vec<(String, String)> {
+    if crate::file_access::current().is_none() {
+        return vec![];
+    }
+    let session: BTreeSet<String> =
+        s.swatch_libraries.ids().chain(s.brush_libraries.ids()).chain(s.symbol_libraries.ids()).chain(s.style_libraries.ids()).collect();
+    let others: BTreeSet<String> = others.into_iter().filter(|id| !session.contains(id)).collect();
+    let mut hidden = Vec::new();
+    let mut taken = BTreeSet::new();
+    for ids in [session, others] {
+        for id in ids {
+            let name = id.strip_prefix("loaded/").filter(|path| !path.is_empty()).map(|path| {
+                // Either separator: a path saved on another platform counts as a path here too.
+                let name = path.rsplit(['/', '\\']).find(|part| !part.is_empty()).unwrap_or(path).to_string();
+                (name, path)
+            });
+            match name {
+                Some((name, path)) if name != path && (written_elsewhere(path) || !readable(path)) => hidden.push((id, name)),
+                _ => {
+                    taken.insert(id);
+                }
+            }
+        }
+    }
+    hidden
+        .into_iter()
+        .map(|(id, name)| {
+            let mut shown = format!("loaded/{name}");
+            let mut n = 2;
+            while taken.contains(&shown) {
+                shown = format!("loaded/{name} ({n})");
+                n += 1;
+            }
+            taken.insert(shown.clone());
+            (id, shown)
+        })
+        .collect()
+}
+
+/// The id a reply shows for library `id`, given the [`concealed_library_ids`] in force.
+pub(crate) fn shown_id(concealed: &[(String, String)], id: &str) -> String {
+    concealed.iter().find(|(own, _)| own == id).map_or_else(|| id.to_string(), |(_, shown)| shown.clone())
+}
+
+/// The id a reply shows for library `id` ([`concealed_library_ids`]).
+pub(crate) fn shown_library_id(s: &Session, id: &str) -> String {
+    shown_id(&concealed_library_ids(s, []), id)
+}
+
+/// The library id behind `key` when `key` is the id a reply shows for a concealed loaded library.
+pub(crate) fn concealed_library_id(s: &Session, key: &str) -> Option<String> {
+    if !key.starts_with("loaded/") {
+        return None;
+    }
+    concealed_library_ids(s, []).into_iter().find(|(_, shown)| shown == key).map(|(own, _)| own)
+}
+
 /// `name` without its extension.
 pub(crate) fn stem(name: &str) -> &str {
     name.rsplit_once('.').map_or(name, |(s, _)| s)
@@ -477,6 +579,9 @@ pub fn libraries(s: &Session) -> Vec<LibraryInfo> {
 /// Library `key` (an id, or a name in any case) with its info.
 pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<SwatchLibrary>)> {
     if let Some(found) = s.swatch_libraries.get(key) {
+        return Some(found);
+    }
+    if let Some(found) = concealed_library_id(s, key).and_then(|id| s.swatch_libraries.get(&id)) {
         return Some(found);
     }
     if let Some(b) = builtins().find(|(_, b)| b.id == key) {
@@ -556,14 +661,16 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     s.swatch_libraries.rescan();
+    let concealed = concealed_library_ids(s, []);
     let libs: Vec<Value> = libraries(s)
         .into_iter()
         .map(|l| {
             let count = library(s, &l.id).map_or(0, |(_, lib)| lib.len());
-            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": s.swatch_libraries.path(&l.id)})
+            let (id, path) = (shown_id(&concealed, &l.id), s.swatch_libraries.shown_path(&l.id));
+            json!({"id": id, "name": l.name, "category": l.category, "count": count, "path": path})
         })
         .collect();
-    Ok(json!({ "libraries": libs, "userFolder": s.swatch_libraries.user_dir() }))
+    Ok(json!({ "libraries": libs, "userFolder": s.swatch_libraries.shown_user_dir() }))
 }
 
 /// The document's swatches `names` (swatches or colour groups; empty: all) as a library named
@@ -619,7 +726,7 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
             document_library(&loaded.doc, &[], stem(file).to_string(), C)
         }
     })?;
-    Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len()}))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
@@ -629,7 +736,7 @@ fn get(s: &mut Session, p: &Value) -> Result<Value> {
     let groups: Vec<Value> =
         lib.groups.iter().map(|g| json!({"name": g.name, "swatches": g.swatches.iter().map(|w| &w.name).collect::<Vec<_>>()})).collect();
     Ok(
-        json!({"id": info.id, "name": info.name, "category": info.category, "swatches": ungrouped.chain(grouped).collect::<Vec<_>>(), "groups": groups}),
+        json!({"id": shown_library_id(s, &info.id), "name": info.name, "category": info.category, "swatches": ungrouped.chain(grouped).collect::<Vec<_>>(), "groups": groups}),
     )
 }
 
@@ -652,7 +759,7 @@ fn copy_to_user(s: &mut Session, p: &Value) -> Result<Value> {
         "user" => (info, lib, false),
         _ => return Err(bad(C, format!("`{}` is built in and always listed", info.name))),
     };
-    let path = s.swatch_libraries.path(&info.id);
+    let path = s.swatch_libraries.shown_path(&info.id);
     Ok(json!({"library": info.id, "name": info.name, "count": lib.len(), "path": path, "copied": copied}))
 }
 
@@ -792,7 +899,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         })?
     };
     let names = |list: &[(String, String)]| list.iter().map(|(_, n)| n.clone()).collect::<Vec<_>>();
-    let mut out = json!({"library": info.id, "added": names(&added), "existing": names(&existing)});
+    let mut out = json!({"library": shown_library_id(s, &info.id), "added": names(&added), "existing": names(&existing)});
     if let (Some(cmd), Some((_, first))) = (apply, picked.first()) {
         let name = added.iter().chain(&existing).find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
         s.execute(cmd, &json!({"swatch": name, "focus": focus}))?;

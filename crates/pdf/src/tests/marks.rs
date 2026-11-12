@@ -418,6 +418,102 @@ fn a_page_within_14400_pt_is_written_as_before_at_every_version() {
     assert!(r.bytes.starts_with(b"%PDF-1.5") && has(b"/CFM/V2") && !has(b"AESV2"));
 }
 
+/// 10 m in points.
+const TEN_M: f64 = 10.0 / 0.0254 * 72.0;
+
+/// With `long_pages_in_points`, a 10 m page at PDF 1.7 is written at its size in points, with no
+/// `UserUnit`, the warning says so, and the page reads back at 10 m. Without it the page keeps
+/// its `UserUnit`.
+#[test]
+fn long_pages_in_points_writes_a_10_m_page_in_points() {
+    let d = sized(TEN_M, TEN_M / 10.0);
+    let r = report(&d, PdfSettings { long_pages_in_points: true, ..PdfSettings::default() }).unwrap();
+    assert!(r.bytes.starts_with(b"%PDF-1.7"));
+    assert_eq!(raw_numbers(&r.bytes, "/UserUnit", 1), Vec::<f64>::new());
+    let media = raw_numbers(&r.bytes, "/MediaBox", 4);
+    assert!((media[2] - media[0] - 28_346.46).abs() < 0.01 && (media[3] - media[1] - 2_834.65).abs() < 0.01, "{media:?}");
+    assert_eq!(
+        long_page_warnings(&r),
+        [
+            "the page of artboard 1 is 28347 × 2835 pt (10.00 × 1.00 m), longer than PDF's page limit of 14,400 pt (200 in): PDF 1.7 pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in"
+        ],
+        "{:?}",
+        r.warnings
+    );
+    let page = &info(&r.bytes, None).unwrap().pages[0];
+    assert!((page.width - TEN_M).abs() < 0.01 && (page.height - TEN_M / 10.0).abs() < 0.01, "{page:?}");
+    let back = import(&r.bytes).unwrap();
+    let rect = back.artboards[0].rect;
+    assert!((rect.width() - TEN_M).abs() < 0.01 && (rect.height() - TEN_M / 10.0).abs() < 0.01, "{rect:?}");
+    // Off (the default), the page has a `UserUnit` of 28,346.46 / 14,400, rounded up.
+    let off = report(&d, PdfSettings::default()).unwrap();
+    assert_eq!(raw_numbers(&off.bytes, "/UserUnit", 1), [1.969]);
+    assert!(
+        long_page_warnings(&off)[0].ends_with("it is written with a UserUnit of 1.969, so apps that ignore UserUnit show it that many times smaller")
+    );
+    assert!(!settings(json!({})).long_pages_in_points, "off by default");
+}
+
+/// With `long_pages_in_points`, every PDF version writes a 10 m page in points: PDF 1.5 stays
+/// PDF 1.5, and versions that write it in points anyway (PDF 1.3 and 1.4, PDF/X-4) give the same
+/// file as without it.
+#[test]
+fn long_pages_in_points_keeps_every_version_and_changes_nothing_where_pages_are_in_points_already() {
+    let d = sized(TEN_M, TEN_M / 10.0);
+    let with = |set: &PdfSettings| PdfSettings { long_pages_in_points: true, ..set.clone() };
+    for c in Compatibility::ALL.iter().copied() {
+        let set = PdfSettings { compatibility: c, ..PdfSettings::default() };
+        let r = report(&d, with(&set)).unwrap();
+        assert!(r.bytes.starts_with(format!("%PDF-{}", c.id()).as_bytes()), "{}", c.label());
+        assert_eq!(raw_numbers(&r.bytes, "/UserUnit", 1), Vec::<f64>::new(), "{}", c.label());
+        assert!((raw_meters(&r.bytes).0 - 10.0).abs() < 0.001, "{}", c.label());
+        assert!(!r.warnings.iter().any(|w| w.starts_with("PDF 1.5 has no UserUnit")), "{}: {:?}", c.label(), r.warnings);
+        assert_eq!(long_page_warnings(&r).len(), 1, "{}: {:?}", c.label(), r.warnings);
+        if matches!(c, Compatibility::Pdf13 | Compatibility::Pdf14) {
+            assert_eq!(r.bytes, report(&d, set).unwrap().bytes, "{}", c.label());
+        }
+    }
+    let x4 = crate::builtin_presets().into_iter().find(|p| p.name == "PDF/X-4:2010").unwrap().settings;
+    assert_eq!(report(&d, with(&x4)).unwrap().bytes, report(&d, x4).unwrap().bytes);
+}
+
+/// PDF/A-2 limits page boundaries to 14,400 units (ISO 19005-2, 6.1.13): with
+/// `long_pages_in_points`, a PDF/A file gives the same file as without it at every version its
+/// standard allows, and a 10 m page keeps its `UserUnit` from PDF 1.5 on (PDF 1.5 is written as
+/// PDF 1.6 for it).
+#[test]
+fn pdfa2b_long_page_stays_within_14400_units() {
+    let d = sized(TEN_M, TEN_M / 10.0);
+    for s in Standard::ALL.iter().copied().filter(|s| *s != Standard::None && !s.is_pdfx()) {
+        for c in Compatibility::ALL.iter().copied().filter(|c| s.allows(*c)) {
+            let off = PdfSettings { standard: s, compatibility: c, ..PdfSettings::default() };
+            let on = PdfSettings { long_pages_in_points: true, ..off.clone() };
+            let (on, off) = (report(&d, on).unwrap(), report(&d, off).unwrap());
+            assert_eq!(on.bytes, off.bytes, "{} {}", s.label(), c.label());
+            assert_eq!(on.warnings, off.warnings, "{} {}", s.label(), c.label());
+            if c != Compatibility::Pdf14 {
+                assert_eq!(raw_numbers(&on.bytes, "/UserUnit", 1), [1.969], "{} {}", s.label(), c.label());
+                let media = raw_numbers(&on.bytes, "/MediaBox", 4);
+                assert!(media[2] - media[0] <= 14_400.0 && media[3] - media[1] <= 14_400.0, "{} {}: {media:?}", s.label(), c.label());
+            }
+        }
+    }
+}
+
+/// A page of 14,400 pt or less gives the same file with `long_pages_in_points` on or off, at every
+/// PDF version.
+#[test]
+fn long_pages_in_points_leaves_a_page_within_14400_pt_as_it_is() {
+    let d = sized(14_400.0, 300.0);
+    for c in Compatibility::ALL.iter().copied() {
+        let off = PdfSettings { compatibility: c, ..PdfSettings::default() };
+        let on = PdfSettings { long_pages_in_points: true, ..off.clone() };
+        let (off, on) = (report(&d, off).unwrap(), report(&d, on).unwrap());
+        assert_eq!(on.bytes, off.bytes, "{}", c.label());
+        assert_eq!(on.warnings, off.warnings, "{}", c.label());
+    }
+}
+
 #[test]
 fn art_in_the_bleed_is_kept_and_clipped_to_the_bleed_box() {
     let d = doc();

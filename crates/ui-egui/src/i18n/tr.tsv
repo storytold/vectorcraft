@@ -1497,6 +1497,7 @@ font-technology	Variable	Değişken
 	Include Linked Files	Bağlantılı Dosyaları Ekle
 	Include Metadata	Meta Verileri Ekle
 	Include non-printing layers	Yazdırılmayan katmanları dahil et
+	Write pages longer than 200 in at full size in points	200 in'den uzun sayfaları tam boyutta, punto olarak yaz
 	Include SVG Code	SVG Kodunu Ekle
 	Include Swatches for Tints	Renk Tonları için Renk Örneklerini Ekle
 	Inflate…	Şişir…
@@ -2145,6 +2146,8 @@ shape	Open	Açık
 	Open…	Aç…
 	Optical	Optik
 	Optical Margin Alignment	Optik Kenar Boşluğu Hizalaması
+	Dynamic Text	Dinamik Metin
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	zincirli metindeki yol üzerindeki yazı dinamik metin kullanamaz: {frames}
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
 	Options	Seçenekler
@@ -2418,6 +2421,7 @@ digits	Malayalam	Malayalam
 	Radial	Radyal
 	Radial Glows	Radyal Parıltılar
 	Radial Gradient	Radyal Gradyan
+	Conic Gradient	Konik Gradyan
 	Radius 1	Yarıçap 1
 	Radius 2	Yarıçap 2
 	Radius1	Yarıçap1
@@ -3053,6 +3057,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Değiştirilenleri Göster
 	Show Note	Notu Göster
 	Show Options	Seçenekleri Göster
+	Show Recent Colors	Son Renkleri Göster
 	Show Original Path	Orijinal Yolu Göster
 	Color Panel Options	Renk Paneli Seçenekleri
 	Show Package	Paketi Göster
@@ -3409,6 +3414,8 @@ digits	Malayalam	Malayalam
 	Toolbar: Single/Double Column	Araç Çubuğu: Tek/Çift Sütun
 	Toolbar: Add Tool	Araç Çubuğu: Araç Ekle
 	Toolbar: Remove Tool	Araç Çubuğu: Aracı Kaldır
+	Add Tool…	Araç Ekle…
+	Remove Tool	Aracı Kaldır
 	Toolbar: Reset	Araç Çubuğu: Sıfırla
 	Toolbars	Araç çubukları
 	Tools	Araçlar
@@ -3847,6 +3854,13 @@ axis	Both	Her İkisi
 	Dock Panel	Bağlantı İstasyonu Paneli
 	Dock to Top	Üste yerleştir
 	Dock to Bottom	Alta yerleştir
+	Control Bar Options	Kontrol Çubuğu Seçenekleri
+	Tool Options	Araç Seçenekleri
+	Object Options	Nesne Seçenekleri
+	Image Options	Resim Seçenekleri
+	Vertical Alignment	Dikey Hizalama
+	Align and Distribute	Hizala ve Dağıt
+	Document Options	Belge Seçenekleri
 	Dock Control Bar	Kontrol çubuğunu yerleştir
 	Drag to float the toolbar	Araç çubuğunu ayırmak için sürükleyin
 	Drag to the window's left or right edge to dock	Sabitlemek için pencerenin sol veya sağ kenarına sürükleyin
@@ -3987,6 +4001,8 @@ axis	Both	Her İkisi
 @msg	`groupColors` must be an array	`groupColors` bir dizi olmalıdır
 @msg	`library` is a library id or name (see {list})	`library` bir kitaplık kimliği veya adıdır (bkz. {list})
 @msg	`mode` applies to freeform gradients	`mode` serbest biçimli degradeler için geçerlidir
+@msg	a negative `aspect` applies to conic gradients	negatif `aspect` konik degradeler için geçerlidir
+@msg	`focal` applies to radial gradients	`focal` radyal degradeler için geçerlidir
 @msg	`preserve` must be an object	`preserve` bir nesne olmalıdır
 @msg	`globalAdjust` must be an object	`globalAdjust` bir nesne olmalıdır
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` 1, 3 veya 5 olmalıdır
@@ -4446,7 +4462,7 @@ axis	Both	Her İkisi
 @msg	unknown format	bilinmeyen format
 @msg	unknown format `{f}` (Save writes {_1})	bilinmeyen format `{f}` (Kaydet, {_1} yazar)
 @msg	unknown freeform mode `{m}` (points, lines)	bilinmeyen serbest biçimli mod `{m}` (noktalar, çizgiler)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, serbest biçimli)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, serbest biçimli)
 @msg	unknown highlight `{h}`	bilinmeyen vurgu `{h}`
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (koru, benzet veya at)
@@ -4468,7 +4484,7 @@ axis	Both	Her İkisi
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` tek başına çalışır, toplu iş adımı olarak değil
 @msg	unknown preset (one of {_1})	bilinmeyen ön ayar ({_1}'den biri)
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	bilinmeyen ön ayar `{name}` (yüksek, orta, düşük veya kaydedilmiş bir ayar: bkz. flattener.presets.list)
-@msg	unknown preset `{name}` (see flattener.presets.list)	bilinmeyen ön ayar `{name}` (bkz. düzleştirici.presets.list)
+@msg	unknown preset `{name}` (see flattener.presets.list)	bilinmeyen ön ayar `{name}` (bkz. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	bilinmeyen ön ayar `{name}` (bkz. webExport.presets.list)
 @msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	bilinmeyen ön ayar `{name}`: yerleşik ya da kayıtlı bir ön ayar değil (bkz. imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	bilinmeyen taraf `{other}` (sol|sağ|üst|alt)
@@ -4701,7 +4717,13 @@ axis	Both	Her İkisi
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC veya HEIF dosyası okunamayan türde bir görüntü içeriyor
 @msg	HEIC and HEIF images can't be opened in this build	HEIC ve HEIF görüntüleri bu derlemede açılamıyor
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 32 bit PSD görüntü verileri okunamıyor
+@msg	zipped 1-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 1 bit PSD görüntü verileri okunamıyor
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD dosyasının katman verileri bilinmeyen bir sıkıştırma kullanıyor ({m})
+@msg	the PSD file's layer records are damaged	PSD dosyasının katman kayıtları hasarlı
+@msg	the PSD file's layer groups are nested too deeply	PSD dosyasının katman grupları çok derin iç içe geçmiş
+@msg	a layer of the PSD file is too large to read	PSD dosyasının bir katmanı okunamayacak kadar büyük
+@msg	the PSD file's layers take more memory to read than allowed	PSD dosyasının katmanlarını okumak izin verilenden fazla bellek gerektiriyor
+@msg	the layers can't be read ({e}): the file opened as its merged image	katmanlar okunamıyor ({e}): dosya birleştirilmiş görüntüsü olarak açıldı
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz
 @msg	the PSD file is cut short	PSD dosyası kısa kesildi
 @msg	the PSD file's header is damaged	PSD dosyasının başlığı hasarlı
@@ -5394,6 +5416,11 @@ theme	Appearance	Görünüm
 	Softness	Yumuşaklık
 	Ambient Light	Ortam Işığı
 	Light behind the object	Nesnenin arkasındaki ışık
+	Shadows	Gölgeler
+	Distance from Object	Nesneden uzaklık
+	Shadow Bounds	Gölge sınırları
+	Behind Object	Nesnenin arkasında
+	Below Object	Nesnenin altında
 	Registration:	Kayıt:
 	Dimension	Boyut
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : Gerçek boyut — 1:10 etiketler sayfada 10 adet olarak 1 adettir.
@@ -5446,7 +5473,7 @@ theme	Appearance	Görünüm
 @msg	span must be "object" or "selection", got {v}	span "object" veya "selection" olmalıdır, {v} değil
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" bir renk örneği değil, bir `gradient` yerleştirir
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" bir degrade yerleştirir: `gradient` verin
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal veya radyal bir degrade yerleştirir
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal, radyal veya konik bir degrade yerleştirir
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" degradenin kendisini yerleştirir: `start` ve `end` değerlerini vermeyin (bunlar degradeyi zaten belge koordinatlarına yerleştirir)
 	Make Image Dynamic	Görüntüyü Dinamik Hale Getirin
 	Import Data Sets…	Veri Kümelerini İçe Aktar…
@@ -6012,6 +6039,11 @@ axis	Y Axis	Y ekseni
 @msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
+@msg	instruction budget	talimat bütçesi
+@msg	time budget	zaman bütçesi
+@msg	memory budget (the selection is too large to hand over)	bellek bütçesi (seçim aktarılamayacak kadar büyük)
+@msg	output size ({what} is {len} bytes, limit {max})	çıktı boyutu ({what}: {len} bayt, sınır {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	eklentinin izni eklenti deposundan kaldırılamıyor
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” {asked} izinlerini istiyor: masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `grant` geçirin
@@ -6048,6 +6080,16 @@ axis	Y Axis	Y ekseni
 @msg	message must be text	"message" metin olmalıdır
 @msg	allowContinue must be true or false	"allowContinue" true veya false olmalıdır
 @msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
+	Insert Menu Item…	Menü Öğesi Ekle…
+	Insert Menu Item	Menü Öğesi Ekle
+	Menu Item:	Menü öğesi:
+	No menu item matches.	Eşleşen menü öğesi yok.
+	Several menu items match. Choose one from the list.	Birden çok menü öğesi eşleşiyor. Listeden birini seçin.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	İletişim kutusu açan öğeler ile Dosya, Pencere ve Yardım menülerinin öğeleri listelenmez.
+@msg	command must be text	"command" metin olmalıdır
+@msg	no menu item that can be inserted runs this command	eklenebilen hiçbir menü öğesi bu komutu çalıştırmaz
+@msg	the action already has 10,000 steps	eylemde zaten 10.000 adım var
+@msg	the action set would be larger than 8 MiB	eylem seti 8 MiB'tan büyük olurdu
 	Playback Options	Oynatma Seçenekleri
 	Accelerated	Hızlandırılmış
 	Step by Step	Adım Adım
@@ -6358,9 +6400,12 @@ anchor	Points:	Noktalar:
 @msg	{label} must be a number	{label} bir sayı olmalıdır
 @msg	{label} must be a number of at least 0.1	{label} en az 0,1 olan bir sayı olmalıdır
 	Advanced Character Formats	Gelişmiş karakter biçimleri
+	Basic Paragraph Formats	Temel paragraf biçimleri
+	Composition	Dizgi
 	Horizontal Scale	Yatay Ölçek
 	Vertical Scale	Dikey Ölçek
 @msg	{label} must be a number from {min} to {max}	{label} {min} ile {max} arasında bir sayı olmalıdır
+@msg	{label} must be a whole number from {min} to {max}	{label} {min} ile {max} arasında bir tam sayı olmalıdır
 	Character Color	Karakter Rengi
 	OpenType Features	OpenType Özellikleri
 	Stylistic Sets	Stilistik Setler
@@ -6744,6 +6789,7 @@ breakText	Glyphs	Glifler
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Piksel Izgarasına Hizala
+	Not Aligned to Pixel Grid	Piksel Izgarasına Hizalanmamış
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
 @msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil
 	Ignore All	Tümünü Yoksay

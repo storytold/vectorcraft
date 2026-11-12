@@ -115,7 +115,6 @@ impl VectorcraftApp {
             synthetic_dropped_before: 0,
             pending_screenshots: vec![],
             pointer_replies: vec![],
-            shown_library_ids: Default::default(),
             queued_screenshots: vec![],
             screenshot_token: 0,
             screenshot_reserved: 0,

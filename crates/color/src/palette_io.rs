@@ -189,10 +189,22 @@ fn write_css(lib: &SwatchLibrary, keep: impl Fn(&&Swatch) -> bool) -> String {
             let value = match &w.paint {
                 Paint::Solid { color, .. } => css_color(color, 1.0),
                 Paint::Gradient(g) if g.gradient.kind != GradientKind::Freeform => {
+                    // A mirrored conic turns counterclockwise, and CSS only turns clockwise: its stops
+                    // are written mirrored about the seam instead.
+                    let mirrored = g.gradient.kind == GradientKind::Conic && g.geom.is_some_and(|geom| geom.is_mirrored());
+                    let stop = |s: &crate::GradientStop| {
+                        let at = if mirrored { 1.0 - s.offset } else { s.offset };
+                        format!("{} {}%", css_color(&s.color, s.opacity), at * 100.0)
+                    };
                     let stops: Vec<String> =
-                        g.gradient.stops.iter().map(|s| format!("{} {}%", css_color(&s.color, s.opacity), s.offset * 100.0)).collect();
+                        if mirrored { g.gradient.stops.iter().rev().map(stop).collect() } else { g.gradient.stops.iter().map(stop).collect() };
                     match g.gradient.kind {
                         GradientKind::Radial => format!("radial-gradient(circle, {})", stops.join(", ")),
+                        // CSS sweeps clockwise from straight up; the angle is counted counterclockwise
+                        // from the right.
+                        GradientKind::Conic => {
+                            format!("conic-gradient(from {}deg, {})", (90.0 - g.angle).rem_euclid(360.0).round(), stops.join(", "))
+                        }
                         _ => format!("linear-gradient({}deg, {})", (90.0 - g.angle).rem_euclid(360.0).round(), stops.join(", ")),
                     }
                 }

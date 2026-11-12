@@ -12,7 +12,7 @@ use vectorcraft_geom::FillRule;
 
 use super::appearance::{ItemTarget, item_target};
 use super::edit::selected_roots;
-use super::{CommandSpec, Result, Session, bad, bool_or, cmd, f64_or, has_doc, ids_param, targets};
+use super::{CommandSpec, Result, Session, bad, cmd, has_doc, ids_param, number_or, switch_or, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -221,15 +221,16 @@ fn overprint_black_tree(n: &mut Node, op: &OverprintBlack, spots: &[String]) -> 
 }
 
 pub(crate) fn overprint_black(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.colors.overprintBlack";
     let op = OverprintBlack {
-        remove: bool_or(p, "remove", false),
-        min_k: (f64_or(p, "percentage", 100.0) / 100.0).clamp(0.0, 1.0) as f32,
-        fill: bool_or(p, "fill", true),
-        stroke: bool_or(p, "stroke", true),
-        rich: bool_or(p, "includeCmyBlacks", false),
-        spot: bool_or(p, "includeSpotBlacks", false),
+        remove: switch_or(p, "remove", false, C)?,
+        min_k: (number_or(p, "percentage", 100.0, C)? / 100.0).clamp(0.0, 1.0) as f32,
+        fill: switch_or(p, "fill", true, C)?,
+        stroke: switch_or(p, "stroke", true, C)?,
+        rich: switch_or(p, "includeCmyBlacks", false, C)?,
+        spot: switch_or(p, "includeSpotBlacks", false, C)?,
     };
-    let ids = match ids_param(p, "ids", "edit.colors.overprintBlack")? {
+    let ids = match ids_param(p, "ids", C)? {
         Some(v) => v,
         None => selected_roots(s)?,
     };

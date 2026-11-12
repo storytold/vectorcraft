@@ -1655,6 +1655,7 @@ file-filter	Templates	Vorlagen
 	Include Linked Files	Verknüpfte Dateien einschließen
 	Include Metadata	Metadaten einschließen
 	Include non-printing layers	Nicht druckende Ebenen einschließen
+	Write pages longer than 200 in at full size in points	Seiten über 200 in in voller Größe in Punkt schreiben
 	Include SVG Code	SVG-Code einschließen
 	Include Swatches for Tints	Farbfelder für Tonwerte einschließen
 	Inflate…	Aufblasen…
@@ -2288,6 +2289,8 @@ file-filter	Templates	Vorlagen
 	Open…	Öffnen…
 	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
+	Dynamic Text	Dynamischer Text
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	Pfadtext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
 	Options	Optionen
@@ -2567,6 +2570,7 @@ digits	Malayalam	Malayalam
 	Radial	Radial
 	Radial Glows	Radiale Leuchteffekte
 	Radial Gradient	Radialer Verlauf
+	Conic Gradient	Konischer Verlauf
 	Radius 1	Radius 1
 	Radius 2	Radius 2
 	Radius1	Radius1
@@ -3186,6 +3190,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Geänderte einblenden
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
+	Show Recent Colors	Zuletzt verwendete Farben einblenden
 	Show Original Path	Originalpfad einblenden
 	Open this dialog with these settings next time	Dieses Dialogfeld nächstes Mal mit diesen Einstellungen öffnen
 	Auto-Simplify	Automatisch vereinfachen
@@ -3544,6 +3549,8 @@ effect	Points	Punkte
 	Toolbar: Single/Double Column	Werkzeugleiste: ein-/zweispaltig
 	Toolbar: Add Tool	Werkzeugleiste: Werkzeug hinzufügen
 	Toolbar: Remove Tool	Werkzeugleiste: Werkzeug entfernen
+	Add Tool…	Werkzeug hinzufügen…
+	Remove Tool	Werkzeug entfernen
 	Toolbar: Reset	Werkzeugleiste: Zurücksetzen
 	Toolbars	Werkzeugleisten
 	Tools	Werkzeuge
@@ -3961,6 +3968,13 @@ theme	Appearance	Erscheinungsbild
 	Dock Panel	Bedienfeld andocken
 	Dock to Top	Oben andocken
 	Dock to Bottom	Unten andocken
+	Control Bar Options	Optionen der Steuerungsleiste
+	Tool Options	Werkzeugoptionen
+	Object Options	Objektoptionen
+	Image Options	Bildoptionen
+	Vertical Alignment	Vertikale Ausrichtung
+	Align and Distribute	Ausrichten und verteilen
+	Document Options	Dokumentoptionen
 	Dock Control Bar	Steuerungsleiste andocken
 	Drag to float the toolbar	Ziehen, um die Werkzeugleiste abzulösen
 	Drag to the window's left or right edge to dock	Zum Andocken an den linken oder rechten Fensterrand ziehen
@@ -4113,6 +4127,8 @@ theme	Appearance	Erscheinungsbild
 @msg	`groupColors` must be an array	`groupColors` muss ein Array sein
 @msg	`library` is a library id or name (see {list})	`library` ist die ID oder der Name einer Bibliothek (siehe {list})
 @msg	`mode` applies to freeform gradients	`mode` gilt für Freiformverläufe
+@msg	a negative `aspect` applies to conic gradients	ein negatives `aspect` gilt für konische Verläufe
+@msg	`focal` applies to radial gradients	`focal` gilt für radiale Verläufe
 @msg	`preserve` must be an object	`preserve` muss ein Objekt sein
 @msg	`globalAdjust` must be an object	`globalAdjust` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
@@ -4616,7 +4632,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown format	unbekanntes Format
 @msg	unknown format `{f}` (Save writes {_1})	unbekanntes Format `{f}` („Speichern“ schreibt {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	unbekannter Freiformmodus `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	unbekannte Hervorhebung `{h}`
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
@@ -4961,7 +4977,7 @@ theme	Appearance	Erscheinungsbild
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Die Hauptfarbe wird zur Konturfarbe. Die anderen Farben wandern ebenso weit um den Farbkreis wie die Hauptfarbe und behalten ihre Sättigung und Helligkeit.
 	RGB:	RGB:
 	CMYK:	CMYK:
-# PSD files (opened and placed as their merged image).
+# PSD files.
 @msg	not a PSD file	keine PSD-Datei
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus
 @msg	the PSD file has an unknown colour mode ({m})	die PSD-Datei hat einen unbekannten Farbmodus ({m})
@@ -4981,7 +4997,13 @@ theme	Appearance	Erscheinungsbild
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	die HEIC- oder HEIF-Datei enthält eine Bildart, die nicht gelesen werden kann
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- und HEIF-Bilder können in diesem Build nicht geöffnet werden
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
+@msg	zipped 1-bit PSD image data with prediction can't be read	ZIP-komprimierte 1-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
+@msg	the PSD file's layer data uses an unknown compression ({m})	die Ebenendaten der PSD-Datei verwenden eine unbekannte Komprimierung ({m})
+@msg	the PSD file's layer records are damaged	die Ebenendatensätze der PSD-Datei sind beschädigt
+@msg	the PSD file's layer groups are nested too deeply	die Ebenengruppen der PSD-Datei sind zu tief verschachtelt
+@msg	a layer of the PSD file is too large to read	eine Ebene der PSD-Datei ist zu groß zum Lesen
+@msg	the PSD file's layers take more memory to read than allowed	die Ebenen der PSD-Datei brauchen zum Lesen mehr Speicher als erlaubt
+@msg	the layers can't be read ({e}): the file opened as its merged image	die Ebenen können nicht gelesen werden ({e}): die Datei wurde als ihr zusammengefügtes Bild geöffnet
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
 @msg	the JPEG XL file is cut short	die JPEG-XL-Datei ist unvollständig
 @msg	the JPEG XL container is too large to read	der JPEG-XL-Container ist zu groß zum Lesen
@@ -5281,6 +5303,11 @@ effect	Soft	Weich
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+	Shadows	Schatten
+	Distance from Object	Abstand vom Objekt
+	Shadow Bounds	Schattenbegrenzung
+	Behind Object	Hinter dem Objekt
+	Below Object	Unter dem Objekt
 	3D Lighting Preset	3D-Beleuchtungsvorgabe
 	Standard	Standard
 	Diffuse	Diffus
@@ -5348,7 +5375,7 @@ effect	Soft	Weich
 @msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" platziert einen Verlauf: geben Sie `gradient` an
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" platziert einen linearen oder radialen Verlauf, keinen Freiform-Verlauf
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" platziert einen linearen, radialen oder konischen Verlauf, keinen Freiform-Verlauf
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" platziert den Verlauf selbst: lassen Sie `start` und `end` weg (sie platzieren ihn bereits in Dokumentkoordinaten)
 	Make Image Dynamic	Bild dynamisch machen
 	Import Data Sets…	Datensätze importieren…
@@ -5639,6 +5666,11 @@ axis	Y Axis	Y-Achse
 @msg	`inputs` needs the permission `doc.read`	`inputs` erfordert die Berechtigung `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	Speicherbudget (Objekt {_1} benötigt {size} Byte Eingabe, {left} verbleiben)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	Objektbudget (mehr als {MAX_OBJECTS} schreibgeschützte Objekte)
+@msg	instruction budget	Anweisungsbudget
+@msg	time budget	Zeitbudget
+@msg	memory budget (the selection is too large to hand over)	Speicherbudget (die Auswahl ist zu groß zum Übergeben)
+@msg	output size ({what} is {len} bytes, limit {max})	Ausgabegröße ({what} ist {len} Byte groß, Grenze {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	die Berechtigung des Plug-ins kann nicht aus dem Plug-in-Speicher entfernt werden
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	die Berechtigung `{shown}` ist für eine spätere Plug-in-API reserviert; dieser Host gewährt sie nicht
 @msg	unknown permission `{shown}`	unbekannte Berechtigung `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ verlangt die Berechtigungen {asked}: Eine Person muss sie in der Desktop-App genehmigen, oder übergeben Sie `grant` in einer mit --allow-plugin-grants gestarteten Sitzung
@@ -5675,6 +5707,16 @@ axis	Y Axis	Y-Achse
 @msg	message must be text	message muss Text sein
 @msg	allowContinue must be true or false	allowContinue muss true oder false sein
 @msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
+	Insert Menu Item…	Menübefehl einfügen…
+	Insert Menu Item	Menübefehl einfügen
+	Menu Item:	Menübefehl:
+	No menu item matches.	Kein Menübefehl passt.
+	Several menu items match. Choose one from the list.	Mehrere Menübefehle passen. Wählen Sie einen aus der Liste.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Befehle, die ein Dialogfeld öffnen, sowie Befehle der Menüs „Datei“, „Fenster“ und „Hilfe“ werden nicht aufgeführt.
+@msg	command must be text	command muss Text sein
+@msg	no menu item that can be inserted runs this command	kein einfügbarer Menübefehl führt diesen Befehl aus
+@msg	the action already has 10,000 steps	die Aktion hat bereits 10.000 Schritte
+@msg	the action set would be larger than 8 MiB	der Aktionssatz wäre größer als 8 MiB
 	Playback Options	Wiedergabeoptionen
 	Accelerated	Beschleunigt
 	Step by Step	Schrittweise
@@ -5988,9 +6030,12 @@ anchor	Points:	Punkte:
 @msg	{label} must be a number	{label} muss eine Zahl sein
 @msg	{label} must be a number of at least 0.1	{label} muss eine Zahl von mindestens 0,1 sein
 	Advanced Character Formats	Erweiterte Zeichenformate
+	Basic Paragraph Formats	Grundlegende Absatzformate
+	Composition	Satz
 	Horizontal Scale	Horizontale Skalierung
 	Vertical Scale	Vertikale Skalierung
 @msg	{label} must be a number from {min} to {max}	{label} muss eine Zahl von {min} bis {max} sein
+@msg	{label} must be a whole number from {min} to {max}	{label} muss eine ganze Zahl von {min} bis {max} sein
 	Character Color	Zeichenfarbe
 	OpenType Features	OpenType-Funktionen
 	Stylistic Sets	Stilsätze
@@ -6375,6 +6420,7 @@ breakText	Glyphs	Glyphen
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Am Pixelraster ausrichten
+	Not Aligned to Pixel Grid	Nicht am Pixelraster ausgerichtet
 @msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden
 @msg	side is left or right, not `{s}`	side ist left oder right, nicht `{s}`
 	Ignore All	Alle ignorieren
