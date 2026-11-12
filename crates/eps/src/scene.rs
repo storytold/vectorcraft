@@ -43,6 +43,7 @@ const SPOT_GRADIENTS_L2: &str =
 const SPOT_GRADIENTS_SHARED: &str = "gradients whose spot inks can't share a DeviceN color space are written without the spot inks";
 const SPOT_GRADIENTS_PERCEPTUAL: &str = "Perceptual gradients of spot colors are written in process colors";
 const CONIC_WEDGES: &str = "conic gradients are written as solid wedges (EPS has no conic shading)";
+const DIAMOND_QUADRANTS: &str = "diamond gradients are written as four linear gradients (EPS has no diamond shading)";
 /// Wedges a conic gradient is written as: one a degree.
 const CONIC_WEDGE_COUNT: usize = 360;
 /// The most colorants a DeviceN color space may have (PostScript's limit).
@@ -934,9 +935,9 @@ impl<'a> Scene<'a> {
         (space, out)
     }
 
-    /// Paint all of `area` (inside the current clip) with linear, radial or conic gradient `g`,
-    /// placed on `bounds`: a smooth shading at Level 3, else stepped fills (a conic: wedges at
-    /// both levels).
+    /// Paint all of `area` (inside the current clip) with linear, radial, conic or diamond gradient
+    /// `g`, placed on `bounds`: a smooth shading at Level 3, else stepped fills (a conic: wedges at
+    /// both levels; a diamond: four linear gradients, [`Self::diamond_quadrants`]).
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
         let geom = g.resolve(bounds);
         let (space, stops) = self.gradient_stops(&g.gradient);
@@ -951,6 +952,7 @@ impl<'a> Scene<'a> {
         let smooth = self.o.level == Level::Three && !self.o.compatible_gradients;
         match g.gradient.kind {
             GradientKind::Conic => self.conic_steps(&geom, area, space, &stops),
+            GradientKind::Diamond => self.diamond_quadrants(&geom, area, space, &stops, smooth),
             GradientKind::Radial => {
                 let r = geom.length().max(1e-6);
                 let squash = geom.radial_squash();
@@ -996,6 +998,43 @@ impl<'a> Scene<'a> {
                 self.line(if i == 0 { "newpath moveto" } else { "lineto" });
             }
             self.line("closepath fill");
+        }
+    }
+
+    /// A diamond gradient over `area` as four linear gradients, each clipped to a quadrant of its
+    /// frame and equal to the diamond there (PostScript has no diamond shading;
+    /// [`vectorcraft_color::GradientGeom::diamond_quadrants`]): smooth axial shadings, else
+    /// stepped fills. Each quadrant but the last runs on under the next (stops are opaque here),
+    /// so no hairline shows between them. A diamond without an extent is its last stop.
+    fn diamond_quadrants(
+        &mut self,
+        geom: &vectorcraft_color::GradientGeom,
+        area: Rect,
+        space: &GradientSpace,
+        stops: &[(f64, Vec<f32>)],
+        smooth: bool,
+    ) {
+        let Some(quadrants) = geom.diamond_quadrants(area) else {
+            if let Some((_, c)) = stops.last() {
+                self.set_comps(space, c);
+                self.rect_fill(area);
+            }
+            return;
+        };
+        self.warn(DIAMOND_QUADRANTS);
+        for (pts, q) in quadrants {
+            self.line("q");
+            for (i, p) in pts.iter().enumerate() {
+                push_nums(&mut self.body, &[p.x, p.y]);
+                self.line(if i == 0 { "newpath moveto" } else { "lineto" });
+            }
+            self.line("closepath clip newpath");
+            if smooth {
+                self.shading(2, space, &[q.start.x, q.start.y, q.end.x, q.end.y], stops);
+            } else {
+                self.linear_steps(q.start, q.end, area, space, stops);
+            }
+            self.line("Q");
         }
     }
 

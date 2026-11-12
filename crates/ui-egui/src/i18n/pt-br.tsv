@@ -2188,6 +2188,7 @@ digits	Malayalam	Malaiala
 	Radial Glows	Brilhos Radiais
 	Radial Gradient	Gradiente Radial
 	Conic Gradient	Gradiente Cônico
+	Diamond Gradient	Gradiente em Losango
 	Radius:	Raio:
 	Rainbow	Arco-íris
 	Random	Aleatório
@@ -4285,7 +4286,7 @@ axis	Both	Ambos
 @msg	unknown format	formato desconhecido
 @msg	unknown format `{f}` (Save writes {_1})	formato desconhecido `{f}` (Salvar grava {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modo de forma livre desconhecido `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo de gradiente desconhecido `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipo de gradiente desconhecido `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	destaque desconhecido `{h}`
 @msg	unknown option `{path}.{k}`	opção desconhecida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressões desconhecidas `{o}` (preserve, simulate ou discard)
@@ -5713,7 +5714,7 @@ mark-style	Japanese	Japonesas
 @msg	span must be "object" or "selection", got {v}	span deve ser "object" ou "selection", não {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiciona um `gradient`, não uma amostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiciona um degradê: informe `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" posiciona um degradê linear, radial ou cônico, não um de forma livre
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" posiciona um degradê linear, radial, cônico ou em losango, não um de forma livre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" posiciona o próprio degradê: omita `start` e `end` (eles já o posicionam em coordenadas do documento)
 	Make Image Dynamic	Tornar imagem dinâmica
 @msg	Batch: {count} processed	Lote: {count} processados

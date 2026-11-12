@@ -2560,6 +2560,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Radiellt sken
 	Radial Gradient	Radiell gradient
 	Conic Gradient	Konisk gradient
+	Diamond Gradient	Rombgradient
 	Radius 1	Radie 1
 	Radius 2	Radie 2
 	Radius1	Radie1
@@ -4645,7 +4646,7 @@ axis	Both	Båda
 @msg	unknown format	okänt format
 @msg	unknown format `{f}` (Save writes {_1})	okänt format `{f}` (Spara skriver {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	okänt fritt läge `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	okänd gradienttyp `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	okänd gradienttyp `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	okänd högdager `{h}`
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
@@ -5798,7 +5799,7 @@ theme	Appearance	Utseende
 @msg	span must be "object" or "selection", got {v}	span måste vara "object" eller "selection", fick {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerar en `gradient`, inte en färgruta
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerar en gradient: ange `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" placerar en linjär, radiell eller konisk gradient, inte en fri
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" placerar en linjär, radiell, konisk eller rombformad gradient, inte en fri
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerar själva gradienten: utelämna `start` och `end` (de placerar den redan i dokumentkoordinater)
 @msg	the Color Picker is not open	färgväljaren är inte öppen
 @msg	the Simplify slider is not open	Förenkla-reglaget är inte öppet

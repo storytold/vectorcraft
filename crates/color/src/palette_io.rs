@@ -205,6 +205,23 @@ fn write_css(lib: &SwatchLibrary, keep: impl Fn(&&Swatch) -> bool) -> String {
                         GradientKind::Conic => {
                             format!("conic-gradient(from {}deg, {})", (90.0 - g.angle).rem_euclid(360.0).round(), stops.join(", "))
                         }
+                        // CSS has no diamond gradient: four layers, each a quarter of the box with
+                        // the stops running from the center out to its corner at a diagonal angle,
+                        // make the diamond its fit gives a box of any shape: the level at a point
+                        // is its distance from the center along both axes over the box's
+                        // half-width plus half-height
+                        // (https://www.w3.org/TR/css-images-3/#linear-gradients). Turned by an angle
+                        // that is not a multiple of 90 degrees, its corners leave the box's axes,
+                        // and a circle stands in for it, as for a radial swatch.
+                        GradientKind::Diamond if (1e-9..90.0 - 1e-9).contains(&g.angle.rem_euclid(90.0)) => {
+                            format!("radial-gradient(circle, {})", stops.join(", "))
+                        }
+                        GradientKind::Diamond => {
+                            let stops = stops.join(", ");
+                            [("top left", 315), ("top right", 45), ("bottom right", 135), ("bottom left", 225)]
+                                .map(|(corner, deg)| format!("linear-gradient({deg}deg, {stops}) {corner} / 50% 50% no-repeat"))
+                                .join(", ")
+                        }
                         _ => format!("linear-gradient({}deg, {})", (90.0 - g.angle).rem_euclid(360.0).round(), stops.join(", ")),
                     }
                 }

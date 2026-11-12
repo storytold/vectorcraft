@@ -2652,6 +2652,7 @@ digits	Malayalam	Малаялам
 	Radial Glows	Радиальные свечения
 	Radial Gradient	Радиальный градиент
 	Conic Gradient	Конический градиент
+	Diamond Gradient	Ромбовидный градиент
 	Radius 1	Радиус 1
 	Radius 2	Радиус 2
 	Radius1	Радиус1
@@ -4785,7 +4786,7 @@ axis	Both	Оба
 @msg	unknown format	неизвестный формат
 @msg	unknown format `{f}` (Save writes {_1})	неизвестный формат `{f}` (сохранение записывает {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	неизвестный режим произвольной формы `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	неизвестный тип градиента `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	неизвестный тип градиента `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	неизвестное выделение `{h}`
 @msg	unknown option `{path}.{k}`	неизвестный параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)
@@ -5437,7 +5438,7 @@ lighting	Light	Свет
 @msg	span must be "object" or "selection", got {v}	span должен быть "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" размещает `gradient`, а не образец
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" размещает градиент: укажите `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" размещает линейный, радиальный или конический градиент, а не произвольный
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" размещает линейный, радиальный, конический или ромбовидный градиент, а не произвольный
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам размещает градиент: уберите `start` и `end` (они уже задают его в координатах документа)
 	Make Image Dynamic	Сделать изображение динамическим
 	Import Data Sets…	Импортировать наборы данных…

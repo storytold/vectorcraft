@@ -1624,6 +1624,7 @@ digits	Malayalam	Malajalam
 	Points: clicks add free points	Punkty: kliknięcia dodają wolne punkty
 	Radial Gradient	Gradient promienisty
 	Conic Gradient	Gradient stożkowy
+	Diamond Gradient	Gradient rombowy
 	Reset to White, Black	Resetuj do bieli i czerni
 	Reverse Gradient	Odwróć gradient
 	Save to Swatches	Zapisz w próbkach
@@ -4882,7 +4883,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	nieznany format
 @msg	unknown format `{f}` (Save writes {_1})	nieznany format `{f}` (zapis tworzy {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	nieznany tryb dowolny `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	nieznane wyróżnienie `{h}`
 @msg	unknown option `{path}.{k}`	nieznana opcja `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
@@ -5683,7 +5684,7 @@ mark-style	Japanese	Japońskie
 @msg	span must be "object" or "selection", got {v}	span musi mieć wartość "object" lub "selection", a nie {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umieszcza `gradient`, a nie próbkę
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umieszcza gradient: podaj `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" umieszcza gradient liniowy, radialny lub stożkowy, a nie dowolny
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" umieszcza gradient liniowy, radialny, stożkowy lub rombowy, a nie dowolny
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umieszcza sam gradient: pomiń `start` i `end` (one już umieszczają go we współrzędnych dokumentu)
 	Make Image Dynamic	Uczyń obraz dynamicznym
 	Import Data Sets…	Importuj zestawy danych…

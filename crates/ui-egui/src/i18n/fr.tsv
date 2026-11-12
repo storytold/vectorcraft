@@ -2615,6 +2615,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Halos radiaux
 	Radial Gradient	Dégradé radial
 	Conic Gradient	Dégradé conique
+	Diamond Gradient	Dégradé en losange
 	Radius 1	Rayon 1
 	Radius 2	Rayon 2
 	Radius1	Rayon1
@@ -4737,7 +4738,7 @@ axis	Both	Les deux
 @msg	unknown format	format inconnu
 @msg	unknown format `{f}` (Save writes {_1})	format inconnu `{f}` (Enregistrer écrit {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode de forme libre inconnu `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	type de dégradé inconnu `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	type de dégradé inconnu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	mise en évidence inconnue `{h}`
 @msg	unknown option `{path}.{k}`	option inconnue `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	surimpressions inconnues `{o}` (preserve, simulate ou discard)
@@ -5825,7 +5826,7 @@ theme	Appearance	Apparence
 @msg	span must be "object" or "selection", got {v}	span doit être "object" ou "selection", pas {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" place un `gradient`, pas une nuance
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" place un dégradé : indiquez `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" place un dégradé linéaire, radial ou conique, pas un dégradé de forme libre
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" place un dégradé linéaire, radial, conique ou en losange, pas un dégradé de forme libre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" place le dégradé lui-même : omettez `start` et `end` (ils le placent déjà en coordonnées du document)
 	Make Image Dynamic	Rendre l'image dynamique
 	Import Data Sets…	Importer des jeux de données…

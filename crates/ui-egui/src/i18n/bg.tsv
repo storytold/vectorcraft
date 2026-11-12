@@ -2550,6 +2550,7 @@ digits	Malayalam	Малаялам
 	Radial Glows	Лъчисти сияния
 	Radial Gradient	Лъчист градиент
 	Conic Gradient	Конусен градиент
+	Diamond Gradient	Ромбовиден градиент
 	Radius 1	Радиус 1
 	Radius 2	Радиус 2
 	Radius1	Радиус1
@@ -4560,7 +4561,7 @@ axis	Both	И двете
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (точки, линии)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, свободна форма)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, ромбовиден, свободна форма)
 @msg	unknown highlight `{h}`	непознат акцент `{h}`
 @msg	unknown option `{path}.{k}`	непозната опция `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
@@ -5664,7 +5665,7 @@ theme	Appearance	Външен вид
 @msg	span must be "object" or "selection", got {v}	span трябва да е "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" поставя `gradient`, а не мостра
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" поставя градиент: задайте `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" поставя линеен, радиален или конусен градиент, а не свободен
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" поставя линеен, радиален, конусен или ромбовиден градиент, а не свободен
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" поставя самия градиент: пропуснете `start` и `end` (те вече го поставят в координатите на документа)
 	Make Image Dynamic	Динамично изображение
 	Import Data Sets…	Импортиране на набори от данни…
