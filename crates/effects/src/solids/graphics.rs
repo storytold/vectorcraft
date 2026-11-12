@@ -316,22 +316,24 @@ fn cubic_to(out: &mut BezPath, c: CubicBez, to: &dyn Fn(Point) -> Option<Point>)
 /// The graphics `graphics` lists for `face`, drawn on caps `caps` (the faces of that end of the
 /// object's solids that the viewer sees) through `map`, for an object whose bounds have
 /// center `center`: one clipping group of every such graphic, shaded with the first cap's light.
-/// A graphic whose symbol `doc` does not have draws nothing. `None` when there is nothing to draw
-/// or the art is past the limits.
+/// A graphic whose symbol `doc` does not have draws nothing. `elements` counts the path elements
+/// the effect's graphics have drawn so far, after a perspective cuts their curves, and is shared by
+/// every call for one effect. `None` when there is nothing to draw or that count passes
+/// [`MAX_ELEMENTS`].
 pub(super) fn face_art(
     doc: Option<&Document>,
     id: NodeId,
     graphics: &[MappedGraphic],
-    face: PlanarFace,
-    map: &FaceMap,
+    (face, map): (PlanarFace, &FaceMap),
     center: Point,
     caps: &[&Facet],
+    elements: &mut usize,
 ) -> Option<Node> {
     let doc = doc?;
     let light = caps.first()?.illumination;
     let affine = map.local_affine(center).filter(|_| map.is_affine());
+    let cuts = if affine.is_some() { 1 } else { PERSPECTIVE_PIECES };
     let mut children = vec![];
-    let mut elements = 0usize;
     for g in graphics.iter().filter(|g| g.face == face) {
         let Some(symbol) = doc.symbols.iter().find(|s| s.name == g.symbol) else { continue };
         // A symbol past the limits is left out; the other graphics still draw.
@@ -351,8 +353,9 @@ pub(super) fn face_art(
         let gradient_map = local * place;
         for piece in pieces {
             let placed = piece.path.transformed(place);
-            elements = elements.saturating_add(placed.subpaths.iter().map(|s| s.anchors.len() + 1).sum());
-            if elements.saturating_mul(if affine.is_some() { 1 } else { PERSPECTIVE_PIECES }) > MAX_ELEMENTS {
+            let added: usize = placed.subpaths.iter().map(|s| s.anchors.len() + 1).sum();
+            *elements = elements.saturating_add(added.saturating_mul(cuts));
+            if *elements > MAX_ELEMENTS {
                 return None;
             }
             let mut rule = piece.rule;

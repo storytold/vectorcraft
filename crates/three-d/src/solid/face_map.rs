@@ -40,20 +40,26 @@ impl FaceMap {
         self.rows.map(|r| r[0] * p.x + r[1] * p.y + r[2])
     }
 
+    /// The homogeneous depth a mapped point must lie beyond: the eye's distance times [`NEAREST`]
+    /// with perspective, 0 without.
+    fn nearest(&self) -> f64 {
+        self.eye.map_or(0.0, |e| e * NEAREST)
+    }
+
     /// Where art point `p` lands on the page. `None` when it lies at or behind the eye, or the
     /// result is not finite.
     pub fn to_page(&self, p: Point) -> Option<Point> {
         let [u, v, w] = self.homogeneous(p);
-        let limit = self.eye.map_or(0.0, |e| e * NEAREST);
-        if w.is_nan() || w <= limit {
+        if w.is_nan() || w <= self.nearest() {
             return None;
         }
         let q = Point::new(self.origin.x + u / w, self.origin.y + v / w);
         (q.x.is_finite() && q.y.is_finite()).then_some(q)
     }
 
-    /// The art point that lands on page point `q`. `None` when the face is seen edge-on there or
-    /// the point lies beyond the face's horizon.
+    /// The art point that lands on page point `q`. `None` when the face is seen edge-on there, the
+    /// point lies beyond the face's horizon, or it lies nearer the eye than [`FaceMap::to_page`]
+    /// maps.
     pub fn to_art(&self, q: Point) -> Option<Point> {
         let (u, v) = (q.x - self.origin.x, q.y - self.origin.y);
         let [r0, r1, r2] = self.rows;
@@ -65,8 +71,9 @@ impl FaceMap {
             return None;
         }
         let p = Point::new((c * e - b * f) / det, (a * f - c * d) / det);
-        // A point of the plane behind the eye projects to the same page point as one in front.
-        (p.x.is_finite() && p.y.is_finite() && self.homogeneous(p)[2] > 0.0).then_some(p)
+        // A point of the plane behind the eye projects to the same page point as one in front, and
+        // `to_page` maps no point nearer the eye than its limit.
+        (p.x.is_finite() && p.y.is_finite() && self.homogeneous(p)[2] > self.nearest()).then_some(p)
     }
 
     /// The part of rectangle `r` of the face's plane whose points [`FaceMap::to_page`] maps, kept

@@ -527,6 +527,83 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
     assert!(!frame(&mut app, vec![button(target, true)]));
 }
 
+/// One frame of the artboard's graphic handles over an 800 × 600 canvas with `events`: whether the
+/// handles took the pointer.
+fn handles_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> bool {
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    let mut taken = false;
+    ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+        crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+        let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+        taken = super::graphic_handles_input(app, ui, &resp, rect);
+    })
+    .textures_delta
+    .clear();
+    taken
+}
+
+/// Where document point (`x`, `y`) is on the 800 × 600 canvas of [`handles_frame`].
+fn handles_screen(app: &VectorcraftApp, x: f64, y: f64) -> egui::Pos2 {
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    crate::canvas::Xf::new(rect, &app.view().cloned().unwrap_or_default()).to_screen(vectorcraft_geom::Point::new(x, y))
+}
+
+fn primary(pos: egui::Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+#[test]
+fn a_view_gesture_on_a_graphics_handle_is_left_to_the_canvas() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    let handle = handles_screen(&app, 150.0, 150.0);
+    let space = |pressed| egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
+    // With Space held, the press pans the view.
+    handles_frame(&mut app, &ctx, vec![space(true)]);
+    assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false), space(false)]);
+    // With the Hand, Zoom or Rotate View tool, the press is the tool's.
+    for tool in ["hand", "zoom", "rotateView"] {
+        app.select_tool(tool);
+        assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]), "{tool}");
+        handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    }
+    // With another tool and Space up, the press grabs the handle.
+    app.select_tool("selection");
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+}
+
+#[test]
+fn a_selection_change_during_a_handle_drag_ends_it() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    let square = app.session.active().unwrap().selection.objects[0].0;
+    // A second object with the same graphic.
+    let other = app.run("shape.rectangle", json!({"x": 400, "y": 400, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}}))
+        .unwrap();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    app.run("select.set", json!({"ids": [square]})).unwrap();
+    let graphic_of = |app: &VectorcraftApp, id: u64| {
+        let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        n.appearance.effects[0].params["graphics"][0].clone()
+    };
+    let before = graphic_of(&app, other);
+    let (handle, target, further) = (handles_screen(&app, 150.0, 150.0), handles_screen(&app, 170.0, 140.0), handles_screen(&app, 190.0, 130.0));
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(target)]);
+    // The selection changes to the other object while the pointer is down: the drag ends there.
+    app.run("select.set", json!({"ids": [other]})).unwrap();
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(further)]);
+    handles_frame(&mut app, &ctx, vec![primary(target, false)]);
+    assert_eq!(graphic_of(&app, other), before, "the other object's graphic moved");
+    let moved = graphic_of(&app, square);
+    assert!((moved["x"].as_f64().unwrap() - 20.0).abs() < 0.11, "{moved}");
+}
+
 #[test]
 fn changed_settings_lists_only_new_values() {
     let before = json!({"depth": 50.0, "cap": true, "bevel": "none"});

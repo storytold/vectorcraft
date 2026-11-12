@@ -1,7 +1,7 @@
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect};
 
 use super::super::{Extrude, Facet, PlanarFace, View, extrude, plane};
-use super::{FaceMap, extrude_face_map, plane_face_map};
+use super::{FaceMap, NEAREST, extrude_face_map, plane_face_map};
 
 fn square() -> (PathData, Rect) {
     let mut b = BezPath::new();
@@ -123,6 +123,24 @@ fn a_point_behind_the_eye_has_no_page_point() {
     let view = View { rotation_x: -89.0, perspective: 160.0, ..turned(0.0) };
     let map = plane_face_map(bounds, view).unwrap();
     assert!(map.to_page(Point::new(40.0, -1e6)).is_none() || map.to_page(Point::new(40.0, 1e6)).is_none());
+}
+
+#[test]
+fn a_page_point_nearer_the_eye_than_the_page_map_allows_has_no_art_point() {
+    let (_, bounds) = square();
+    let view = View { rotation_x: -89.0, perspective: 160.0, ..turned(0.0) };
+    let map = plane_face_map(bounds, view).unwrap();
+    let limit = map.eye.unwrap() * NEAREST;
+    // An art point in front of the eye, but at half the nearest depth `to_page` maps.
+    let [a, b, c] = map.rows[2];
+    let p0 = bounds.center();
+    let t = (limit / 2.0 - (a * p0.x + b * p0.y + c)) / (a * a + b * b);
+    let p = Point::new(p0.x + t * a, p0.y + t * b);
+    let [u, v, w] = map.homogeneous(p);
+    assert!(w > 0.0 && w < limit, "{w}");
+    assert_eq!(map.to_page(p), None);
+    let q = Point::new(map.origin.x + u / w, map.origin.y + v / w);
+    assert_eq!(map.to_art(q), None, "the inverse map takes {q:?} back to an art point the page map has no point for");
 }
 
 #[test]

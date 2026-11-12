@@ -197,6 +197,33 @@ fn a_rename_reaches_graphics_in_graph_designs_and_opacity_masks() {
 }
 
 #[test]
+fn pasted_into_another_document_a_graphic_brings_its_symbol() {
+    let (mut s, id) = setup("threeD.extrude");
+    s.execute("threeD.mapGraphic", &json!({"symbol": "Mark"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    // The symbol the pasted object's graphic names, and the size of that symbol's art.
+    let pasted = |s: &mut Session| {
+        s.execute("edit.paste", &json!({})).unwrap();
+        let st = s.doc().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        let name = n.appearance.effects[0].params["graphics"][0]["symbol"].as_str().unwrap().to_string();
+        let size = vectorcraft_render::effects::graphic_bounds(&st.doc, &name).map(|r| (r.width(), r.height()));
+        (name, size)
+    };
+    // A document without the symbol gets it.
+    s.execute("file.new", &json!({"width":400,"height":400})).unwrap();
+    assert_eq!(pasted(&mut s), ("Mark".to_string(), Some((11.0, 21.0))));
+    // A document whose symbol "Mark" is other art gets the copied symbol under a free name.
+    s.execute("file.new", &json!({"width":400,"height":400})).unwrap();
+    let other = s.execute("path.create", &json!({"d":"M0 0L50 0L50 50L0 50Z"})).unwrap()["id"].clone();
+    s.execute("threeD.addGraphic", &json!({"name": "Mark", "ids": [other]})).unwrap();
+    let (name, size) = pasted(&mut s);
+    assert_ne!(name, "Mark");
+    assert_eq!(size, Some((11.0, 21.0)));
+}
+
+#[test]
 fn a_symbol_only_a_graphic_style_uses_is_used() {
     let (mut s, id) = setup("threeD.extrude");
     s.execute("threeD.mapGraphic", &json!({"symbol": "Mark"})).unwrap();

@@ -812,7 +812,8 @@ type Cast<'a> = (vectorcraft_three_d::ShadowCaster, vectorcraft_three_d::Shadow,
 /// for each planar face with a graphic, the art and the face. `caps` are the faces the viewer sees
 /// of the ends of the object's solids, each with its end; `bounds` are the bounds the solids were
 /// built with; `opacity` is the opacity of the fill or stroke those solids are painted with, which
-/// the graphics take too.
+/// the graphics take too. `elements` is the effect's count of drawn path elements, shared by every
+/// call for one effect ([`graphics::face_art`]).
 fn graphic_art(
     doc: Option<&Document>,
     id: NodeId,
@@ -820,6 +821,7 @@ fn graphic_art(
     bounds: Rect,
     caps: &[&Facet],
     opacity: f32,
+    elements: &mut usize,
 ) -> Vec<(PlanarFace, Arc<Node>)> {
     let list = graphics::mapped_graphics(p);
     if list.is_empty() || !takes_graphics(effect) {
@@ -835,7 +837,7 @@ fn graphic_art(
             } else {
                 vectorcraft_three_d::extrude_face_map(bounds, extrude_options(p), view, face)
             }?;
-            graphics::face_art(doc, id, &list, face, &map, bounds.center(), &on).map(|mut art| {
+            graphics::face_art(doc, id, &list, (face, &map), bounds.center(), &on, elements).map(|mut art| {
                 art.opacity *= opacity;
                 (face, Arc::new(art))
             })
@@ -864,6 +866,8 @@ fn masks_surface(paint: &Paint, colored: bool) -> bool {
 /// drawn right after (the last of those solids holding its face) and its face. With `per_member`
 /// (a member's opacity mask or blending mode applies to its surfaces) each member's solids get
 /// graphics of their own, clipped to that member's caps, so they stay in that member's scopes.
+/// All the groups share one limit on the path elements drawn: once it is reached, later groups
+/// draw no graphics.
 fn placed_graphics(
     doc: Option<&Document>,
     id: NodeId,
@@ -886,11 +890,12 @@ fn placed_graphics(
         }
     }
     let mut out = vec![];
+    let mut elements = 0usize;
     for group in groups {
         let caps: Vec<&Facet> = group.iter().flat_map(|f| &f.caps).collect();
         let opacity = group.first().map_or(1.0, |f| f.opacity);
         let blend = group.first().map_or(BlendMode::Normal, |f| f.blend);
-        for (face, mut art) in graphic_art(doc, id, effect, bounds, &caps, opacity) {
+        for (face, mut art) in graphic_art(doc, id, effect, bounds, &caps, opacity, &mut elements) {
             if let Some(f) = group.iter().rev().find(|f| f.caps.iter().any(|c| c.end == Some(face))) {
                 Arc::make_mut(&mut art).blend = blend;
                 out.push((f.at, face, art));

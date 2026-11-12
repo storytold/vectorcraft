@@ -315,6 +315,29 @@ fn members_with_their_own_blending_get_graphics_of_their_own() {
 }
 
 #[test]
+fn members_with_graphics_of_their_own_share_one_element_limit() {
+    // A red polygon of 30,000 sides: cut by a perspective, one copy fits the limit, two do not.
+    let mut d = document();
+    let mut poly = BezPath::new();
+    for k in 0..30_000 {
+        let a = k as f64 / 30_000.0 * std::f64::consts::TAU;
+        let p = Point::new(5.0 + 5.0 * a.cos(), 5.0 + 5.0 * a.sin());
+        if k == 0 { poly.move_to(p) } else { poly.line_to(p) }
+    }
+    poly.close_path();
+    let art = Node::path(NodeId(0), PathData::from_bezpath(&poly), Appearance::basic(Paint::solid(red()), Paint::None, 0.0));
+    d.symbols.push(Symbol { dynamic: false, name: "Dense".into(), art: Arc::new(art) });
+    let a = square(1, Rect::new(0.0, 0.0, 50.0, 100.0), Paint::solid(Color::rgb(0.5, 0.5, 0.5)));
+    let mut b = square(2, Rect::new(50.0, 0.0, 100.0, 100.0), Paint::solid(Color::rgb(0.5, 0.5, 0.5)));
+    b.blend = BlendMode::Multiply;
+    let mut group = Node::group(NodeId(3), vec![Arc::new(a), Arc::new(b)]);
+    let p = json!({"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0, "perspectiveAngle": 60.0, "shade": false, "graphics": [{"symbol": "Dense", "scale": 1000.0}]});
+    group.appearance.effects.push(crate::new_effect(EXTRUDE, &p).unwrap());
+    // The first member's graphic is drawn; the second would pass the limit, so it draws none.
+    assert_eq!(graphics_in(&solid_art_in(Some(&d), &group).unwrap()).len(), 1);
+}
+
+#[test]
 fn a_plane_and_a_hollow_solid() {
     let d = document();
     let plane = object(ROTATE, json!({"rotationY": 30.0, "graphics": [{"symbol": "Mark"}]}));

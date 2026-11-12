@@ -327,13 +327,19 @@ fn handle_drag_id() -> egui::Id {
     egui::Id::unique("three-d-graphic-handle-drag")
 }
 
-/// A drag of graphic `index`'s handle: its face, and the page offset from the handle to the point
-/// where it was grabbed.
-#[derive(Clone, Copy, Debug)]
+/// A drag of graphic `index`'s handle: its face, the page offset from the handle to the point
+/// where it was grabbed, and the document and selected objects it was grabbed for.
+#[derive(Clone, Debug)]
 struct HandleDrag {
     index: usize,
     face: vectorcraft_effects::PlanarFace,
     grab: vectorcraft_geom::Vec2,
+    owner: (u64, Vec<u64>),
+}
+
+/// The active document's uid and its selected objects' ids: what a handle drag moves graphics for.
+fn drag_owner(app: &VectorcraftApp) -> (u64, Vec<u64>) {
+    app.session.active().map(|st| (st.uid, st.selection.objects.iter().map(|id| id.0).collect())).unwrap_or_default()
 }
 
 /// How near a press must be to a graphic's handle to grab it, in screen points.
@@ -347,6 +353,13 @@ pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, res
     let xf = &crate::canvas::Xf::at(rect, app.view().unwrap_or(&crate::state::View::default()), app.canvas_ui_zoom);
     let pointer = ui.input(|i| i.pointer.interact_pos());
     if let Some(drag) = ctx.data(|m| m.get_temp::<HandleDrag>(handle_drag_id())) {
+        if drag_owner(app) != drag.owner {
+            // The selection or the document changed during the drag: commit the preview and end
+            // the drag, so its grab offset does not move another object's graphic.
+            send(app, &ctx, Map::new(), false);
+            ctx.data_mut(|m| m.remove::<HandleDrag>(handle_drag_id()));
+            return true;
+        }
         let down = ui.input(|i| i.pointer.primary_down());
         if let (Some(p), Some((frame, mut list, _))) = (pointer, graphic_handles(app, &ctx))
             && let Some((x, y)) = frame.offset_at(drag.face, xf.to_doc(p) - drag.grab)
@@ -369,6 +382,12 @@ pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, res
     if !(resp.hovered() && ui.input(|i| i.pointer.primary_pressed())) {
         return false;
     }
+    // A press with Space held, or with the Hand, Zoom or Rotate View tool, pans, zooms or turns the
+    // view, as on any other part of the canvas.
+    let space = ui.input(|i| i.key_down(egui::Key::Space));
+    if space || matches!(app.session.tool_id(), "hand" | "zoom" | "rotateView") {
+        return false;
+    }
     let (Some(p), Some((_, list, handles))) = (pointer, graphic_handles(app, &ctx)) else { return false };
     let nearest = handles
         .iter()
@@ -377,7 +396,8 @@ pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, res
         .min_by(|a, b| a.2.total_cmp(&b.2));
     let Some((index, at, _)) = nearest else { return false };
     let Some(face) = list.get(index).map(|g| g.face) else { return false };
-    ctx.data_mut(|m| m.insert_temp(handle_drag_id(), HandleDrag { index, face, grab: xf.to_doc(p) - at }));
+    let owner = drag_owner(app);
+    ctx.data_mut(|m| m.insert_temp(handle_drag_id(), HandleDrag { index, face, grab: xf.to_doc(p) - at, owner }));
     set_selected_graphic(&ctx, index);
     true
 }
