@@ -66,8 +66,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // encoder is told the file it writes (an exporter plug-in gets its name and extension).
     let label = format!("Exporting {}", fileio::file_name(&path));
     // A PDF's View PDF after saving: the first file written opens in the system viewer, unless
-    // automation asked for the export (checked now: a background export ends after the request).
-    let view = params.get("viewAfterSaving").and_then(Value::as_bool).unwrap_or(false) && app.refuse_automation("viewAfterSaving").is_ok();
+    // automation asked for the export, also through a save panel it opened (checked now: a
+    // background export ends after the request).
+    let view = params.get("viewAfterSaving").and_then(Value::as_bool).unwrap_or(false) && !app.automation_asked();
     let (mut params, target) = (params.clone(), path.clone());
     if let Some(o) = params.as_object_mut() {
         o.insert("path".into(), json!(path));
