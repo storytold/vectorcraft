@@ -262,6 +262,10 @@
 	Blend Options…	Možnosti prolnutí…
 	Expand	Rozložit
 	Replace Spine	Nahradit páteř
+	Create Spine	Vytvořit páteř
+	Create Spine:	Vytvořit páteř:
+	Always	Vždy
+	Never	Nikdy
 	Reverse Spine	Obrátit páteř
 	Reverse Front to Back	Obrátit pořadí zepředu dozadu
 	Envelope Distort	Deformace obálkou
@@ -2391,6 +2395,8 @@ digits	Malayalam	Malajálamské
 	Export Selected Art Only	Exportovat jen vybranou kresbu
 	Number of Colors:	Počet barev:
 	Raster File Format:	Formát rastrového souboru:
+	Include Placed Images	Zahrnout umístěné obrazy
+	Include Fill Hatches	Zahrnout šrafy výplní
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Plné barvy vyžadují verzi 2004 nebo novější: zapíše se nejbližší z 256 barev.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Text se převede na křivky a tahy, které čára CAD nedokáže vykreslit, se stanou vyplněnými tvary.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text zůstane textem a každý tah bude čárou s vlastní tloušťkou a čárkováním.
@@ -6088,6 +6094,8 @@ axis	Y Axis	osa Y
 	Version: {version}	Verze: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Nainstalovat „{name}“ místo zásuvného modulu se stejným ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tento soubor není zásuvný modul dříve nainstalovaný s tímto ID. Získá nastavení a mezipaměť uchovávané pro toto ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ je jiný modul než zásuvný modul s ID {_1} a získal by nastavení a mezipaměť uchovávané pro něj: nainstalujte ho s `replace: true`, jakmile uživatel souhlasí
 	File SHA-256: {hash}	SHA-256 souboru: {hash}
 	Read the objects it is given	Číst objekty, které dostane
@@ -6150,6 +6158,12 @@ axis	Y Axis	osa Y
 @msg	command {name}: `label` must be 1-64 printable characters	příkaz {name}: `label` musí mít 1-64 tisknutelných znaků
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	příkaz {name}: použijte id o 1-{MAX_COMMAND_ID} znacích z a-z 0-9 _, které začíná písmenem
 @msg	command {name}: {e}	příkaz {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (řádek {line}, sloupec {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` musí být seznam příkazů, každý s `id` a `label`
+@msg	command {name} must be an object with an `id` and a `label`	příkaz {name} musí být objekt s `id` a `label`
+@msg	missing field `{key}`	chybí pole `{key}`
+@msg	duplicate field `{key}`	pole `{key}` je uvedeno dvakrát
 @msg	only a filter or a live effect declares `commands`	`commands` deklaruje jen filtr nebo živý efekt
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nemá SHA-256 uvedený v `hash`: nic nebylo nainstalováno

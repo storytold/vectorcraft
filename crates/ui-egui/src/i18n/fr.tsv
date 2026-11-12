@@ -2633,6 +2633,8 @@ digits	Malayalam	Malayalam
 	Range:	Plage :
 	Raster Effects	Effets de pixellisation
 	Raster File Format:	Format du fichier pixellisé :
+	Include Placed Images	Inclure les images importées
+	Include Fill Hatches	Inclure les hachures des fonds
 	Raster Sample Size:	Taille de l’échantillon pixellisé :
 	Raster/Vector Balance:	Équilibre pixellisé/vectoriel :
 	Rasterize	Pixelliser
@@ -2814,6 +2816,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Remplacer la police
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Remplacez-le par un autre fichier ou ignorez-le : ses images continueront d’afficher l’aperçu enregistré avec le document.
 	Replace Spine	Remplacer la dorsale
+	Create Spine	Créer une dorsale
+	Create Spine:	Créer une dorsale :
+	Always	Toujours
+	Never	Jamais
 	Replace Symbol	Remplacer le symbole
 	Reset Transformation	Réinitialiser la transformation
 	Replace With Font	Remplacer par la police
@@ -6083,6 +6089,8 @@ axis	Y Axis	Axe Y
 	Version: {version}	Version : {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installer « {name} » à la place du module externe qui a le même ID ?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ce fichier n’est pas le module externe installé auparavant avec cet ID. Il reçoit les réglages et le cache conservés pour cet ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Une automatisation a demandé l’installation de ce module externe. Pour l’installer, choisissez Objet › Modules externes › Installer un module externe… vous-même.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Une automatisation a demandé l’installation de ce module externe. Pour l’installer, choisissez Objet › Modules externes › Installer un module externe… vous-même.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	« {name} » est un autre module que le module externe d’ID {_1} et recevrait les réglages et le cache conservés pour celui-ci : installez-le avec `replace: true` une fois que l’utilisateur l’accepte
 	File SHA-256: {hash}	SHA-256 du fichier : {hash}
 	Read the objects it is given	Lire les objets qui lui sont transmis
@@ -6145,6 +6153,12 @@ axis	Y Axis	Axe Y
 @msg	command {name}: `label` must be 1-64 printable characters	commande {name} : `label` doit compter 1-64 caractères imprimables
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	commande {name} : utilisez un id de 1-{MAX_COMMAND_ID} caractères parmi a-z 0-9 _ commençant par une lettre
 @msg	command {name}: {e}	commande {name} : {e}
+@msg	manifest: {e}	manifeste : {e}
+@msg	manifest: {e} at line {line} column {column}	manifeste : {e} (ligne {line}, colonne {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` doit être une liste de commandes, chacune avec `id` et `label`
+@msg	command {name} must be an object with an `id` and a `label`	la commande {name} doit être un objet avec `id` et `label`
+@msg	missing field `{key}`	champ `{key}` manquant
+@msg	duplicate field `{key}`	champ `{key}` en double
 @msg	only a filter or a live effect declares `commands`	seul un filtre ou un effet dynamique déclare `commands`
 @msg	“{name}” › {label}: {e}	« {name} » › {label} : {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	le module n’a pas le SHA-256 indiqué par `hash` : rien n’a été installé
