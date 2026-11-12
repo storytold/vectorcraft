@@ -40,6 +40,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use vectorcraft_js::{Data, HostError, HostItem, Realm, RunError};
 
@@ -77,6 +78,10 @@ pub(crate) const PATH_TOO_LONG: &str = "Script file path exceeds 32,767 characte
 pub(crate) const MASK_TOO_COSTLY: &str = "Script folder mask takes too many steps to match";
 const OVER_RUN_BYTES: &str = "the script opened more file data than one run may open (32 MiB)";
 
+/// The id of the next file a script opens. Ids are unique across runs, so a `File` that a named
+/// engine kept from an earlier run does not name a file a later run opened.
+static NEXT_HANDLE: AtomicU32 = AtomicU32::new(1);
+
 /// The script's file state: its scope, where `Folder.current` starts, the files it has open and how
 /// much it has read.
 pub(crate) struct Disk {
@@ -84,7 +89,6 @@ pub(crate) struct Disk {
     home: String,
     start: String,
     open: HashMap<u32, Open>,
-    next: u32,
     temps: u32,
     bytes: usize,
 }
@@ -94,7 +98,7 @@ impl Disk {
     pub(crate) fn new(scope: &ScriptScope) -> Self {
         let home = home_folder();
         let start = scope.folder().map_or_else(|| home.clone(), |p| p.to_string_lossy().into_owned());
-        Self { scope: scope.clone(), home, start, open: HashMap::new(), next: 1, temps: 0, bytes: 0 }
+        Self { scope: scope.clone(), home, start, open: HashMap::new(), temps: 0, bytes: 0 }
     }
 
     /// The path `text` names from the folder `base`, a platform path; `text`'s URI escapes are
@@ -161,8 +165,10 @@ impl Disk {
         }
         self.bytes += bytes.len();
         let file = Open::new(bytes, encoding).ok_or_else(|| HostError::Error(UNDECODABLE.to_string()))?;
-        let id = self.next;
-        self.next = self.next.wrapping_add(1).max(1);
+        let mut id = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
+        while id == 0 || self.open.contains_key(&id) {
+            id = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
+        }
         self.open.insert(id, file);
         Ok(id)
     }
@@ -649,10 +655,11 @@ fn millis(t: Option<std::time::SystemTime>) -> Data {
     t.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(Data::Null, |d| Data::Number(d.as_millis() as f64))
 }
 
-/// One host function of `__vcFiles`, counted and charged as a host call.
-fn call(host: &Rc<Host>, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> HostItem {
-    let h = host.clone();
+/// One host function of `__vcFiles`, counted and charged as a host call of the run `link` holds.
+fn call(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> HostItem {
+    let l = link.clone();
     HostItem::Function(Rc::new(move |a| {
+        let h = super::current(&l)?;
         bump(&h.counts.file_calls);
         let r = f(&h, &a)?;
         h.charge_call(super::data_size(&r).saturating_add(a.iter().map(super::data_size).sum()))?;
@@ -865,11 +872,20 @@ fn encoding_available(_: &Host, a: &[Data]) -> Result<Data, HostError> {
     Ok(Data::Bool(Encoding::parse(&arg_text(a, 0)).is_some()))
 }
 
-/// Adds `File` and `Folder` to the realm.
-pub(super) fn install(realm: &mut Realm, host: &Rc<Host>) -> Result<(), RunError> {
-    let start = {
-        let disk = host.disk.borrow();
-        disk.pathname(&disk.start, &disk.start, false).fs()
+/// The folder `Folder.current` starts at in the run `host` serves: the script's own folder.
+fn start_folder(host: &Host, _: &[Data]) -> Result<Data, HostError> {
+    let disk = host.disk.borrow();
+    Ok(Data::String(disk.pathname(&disk.start, &disk.start, false).fs()))
+}
+
+/// Adds `File` and `Folder` to the realm, their host functions acting for the run `link` holds.
+pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunError> {
+    let unchecked = |f: fn(&Host, &[Data]) -> Result<Data, HostError>| {
+        let l = link.clone();
+        HostItem::Function(Rc::new(move |a| {
+            let h = super::current(&l)?;
+            f(&h, &a)
+        }))
     };
     let value = |s: &str| HostItem::Value(Data::String(s.to_string()));
     let text = HostItem::Object(vec![
@@ -889,28 +905,28 @@ pub(super) fn install(realm: &mut Realm, host: &Rc<Host>) -> Result<(), RunError
         ("text".into(), text),
         ("system".into(), value(system)),
         ("lineFeed".into(), value(if WINDOWS { "Windows" } else { "Unix" })),
-        ("current".into(), HostItem::Function(Rc::new(move |_| Ok(Data::String(start.clone()))))),
-        ("locations".into(), call(host, locations_of)),
-        ("encode".into(), call(host, encode_text)),
-        ("decode".into(), call(host, decode_text)),
-        ("encodingAvailable".into(), call(host, encoding_available)),
-        ("parse".into(), call(host, parse)),
-        ("relative".into(), call(host, relative)),
-        ("tempName".into(), call(host, temp_name)),
-        ("stat".into(), call(host, stat)),
-        ("open".into(), call(host, open)),
-        ("close".into(), call(host, close)),
-        ("read".into(), call(host, read)),
-        ("readln".into(), call(host, readln)),
-        ("readch".into(), call(host, readch)),
-        ("seek".into(), call(host, seek)),
-        ("tell".into(), call(host, tell)),
-        ("eof".into(), call(host, eof)),
-        ("encoding".into(), call(host, encoding)),
-        ("setEncoding".into(), call(host, set_encoding)),
-        ("list".into(), call(host, list)),
-        ("resolve".into(), call(host, resolve)),
-        ("execute".into(), call(host, execute)),
+        ("current".into(), unchecked(start_folder)),
+        ("locations".into(), call(link, locations_of)),
+        ("encode".into(), call(link, encode_text)),
+        ("decode".into(), call(link, decode_text)),
+        ("encodingAvailable".into(), call(link, encoding_available)),
+        ("parse".into(), call(link, parse)),
+        ("relative".into(), call(link, relative)),
+        ("tempName".into(), call(link, temp_name)),
+        ("stat".into(), call(link, stat)),
+        ("open".into(), call(link, open)),
+        ("close".into(), call(link, close)),
+        ("read".into(), call(link, read)),
+        ("readln".into(), call(link, readln)),
+        ("readch".into(), call(link, readch)),
+        ("seek".into(), call(link, seek)),
+        ("tell".into(), call(link, tell)),
+        ("eof".into(), call(link, eof)),
+        ("encoding".into(), call(link, encoding)),
+        ("setEncoding".into(), call(link, set_encoding)),
+        ("list".into(), call(link, list)),
+        ("resolve".into(), call(link, resolve)),
+        ("execute".into(), call(link, execute)),
     ];
     realm.define_file_classes(items)
 }

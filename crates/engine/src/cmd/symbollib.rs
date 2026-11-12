@@ -19,7 +19,7 @@ use super::brushsym::{CURRENT_SYMBOL, natural_size, normalize, place_xf, set_nat
 use super::clipboard::Clipboard;
 use super::clipboard::resources::SwatchChoices;
 use super::swatch::str_list;
-use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
+use super::swatchlib::{FileData, LibraryFile, LibraryInfo, concealed_library_id, concealed_library_ids, shown_id, shown_library_id, stem};
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, number_or, str_param};
 
 /// The extension of saved symbol libraries: native documents.
@@ -386,6 +386,9 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<SymbolLibrary
     if let Some(found) = s.symbol_libraries.get(key) {
         return Some(found);
     }
+    if let Some(found) = concealed_library_id(s, key).and_then(|id| s.symbol_libraries.get(&id)) {
+        return Some(found);
+    }
     if let Some(b) = BUILTIN.iter().find(|b| b.id == key) {
         return Some((builtin_info(b), builtin_library(key)?));
     }
@@ -400,14 +403,16 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     s.symbol_libraries.rescan();
+    let concealed = concealed_library_ids(s, []);
     let libs: Vec<Value> = libraries(s)
         .into_iter()
         .map(|l| {
             let count = library(s, &l.id).map_or(0, |(_, lib)| lib.len());
-            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": s.symbol_libraries.path(&l.id)})
+            let (id, path) = (shown_id(&concealed, &l.id), s.symbol_libraries.shown_path(&l.id));
+            json!({"id": id, "name": l.name, "category": l.category, "count": count, "path": path})
         })
         .collect();
-    Ok(json!({ "libraries": libs, "userFolder": s.symbol_libraries.user_dir() }))
+    Ok(json!({ "libraries": libs, "userFolder": s.symbol_libraries.shown_user_dir() }))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
@@ -421,7 +426,7 @@ fn get(s: &mut Session, p: &Value) -> Result<Value> {
             json!({"name": sym.name, "size": [w, h], "registration": d.symbol_registration(&sym.name).0, "exportType": d.symbol_export_type(&sym.name).id()})
         })
         .collect();
-    Ok(json!({"id": info.id, "name": info.name, "category": info.category, "symbols": symbols}))
+    Ok(json!({"id": shown_library_id(s, &info.id), "name": info.name, "category": info.category, "symbols": symbols}))
 }
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
@@ -456,7 +461,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let centre = st.doc.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
     let at = if place { Some(Point::new(number_or(p, "x", centre.x, C)?, number_or(p, "y", centre.y, C)?)) } else { None };
     let parent = if place { st.target_parent()? } else { None };
-    let mut out = json!({ "library": info.id });
+    let mut out = json!({ "library": shown_library_id(s, &info.id) });
     if imported.added > 0 || place {
         let placed = s.edit("Add to Symbols", |d, sel| {
             let imported = clip.import_into(d, &choices, false)?;
@@ -512,7 +517,7 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
         }
         SymbolLibrary::from_document(&loaded.doc, &[], stem(file).to_string()).map_err(|e| bad(C, e))
     })?;
-    Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len()}))
 }
 
 #[cfg(test)]

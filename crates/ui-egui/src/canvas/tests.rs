@@ -4806,6 +4806,45 @@ fn a_selected_objects_on_path_group_shows_its_space_widget() {
     assert_eq!(widgets(&mut app), 0, "one object");
 }
 
+/// A selected Objects on Path group whose objects have room to move along the path shows its Move
+/// All widget, a white diamond below its first object, with the Selection and Objects on Path tools;
+/// objects spread evenly to both ends of an open path have no room, and show none.
+#[test]
+fn a_selected_objects_on_path_group_shows_its_move_all_widget_when_it_has_room() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = id(app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap());
+    let ctx = egui::Context::default();
+    // A diamond: its top and bottom corners one above the other, its full height apart.
+    let diamond = |d: &egui::epaint::PathShape| {
+        let h = 2.0 * vectorcraft_tools::objects_on_path::MOVE_ALL_HALF_PX;
+        let [top, _, bottom, _] = d.points[..] else { return false };
+        d.closed && d.fill == Color32::WHITE && top.x == bottom.x && (bottom.y - top.y - h).abs() < 1e-3
+    };
+    let widgets = |app: &mut VectorcraftApp| shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Path(d) if diamond(d))).count();
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 0, "Auto: the objects reach both ends");
+    app.session.execute("object.objectsOnPath.options", &json!({"ids": [g], "spacing": 60})).unwrap();
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("objectsOnPath");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "an object in the group, not the group");
+    // One object can move along the path whatever its Space.
+    app.session.execute("object.objectsOnPath.options", &json!({"ids": [g], "spacing": "auto"})).unwrap();
+    app.run("edit.clear", json!({"ids": [b]})).unwrap();
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    assert_eq!(widgets(&mut app), 1, "one object");
+}
+
 /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
 fn hidden_chars(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) -> Vec<Shape> {
     let raw = egui::RawInput { screen_rect: Some(xf.rect), ..Default::default() };

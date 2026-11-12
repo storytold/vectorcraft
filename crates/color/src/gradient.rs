@@ -15,19 +15,35 @@ pub enum GradientKind {
     Radial,
     /// Freeform gradients: colour points and lines (see [`crate::freeform`]).
     Freeform,
+    /// Conic (angle) gradients: the stops sweep once around the center (`start`), clockwise on
+    /// the page from the vector, with a seam where the last stop meets the first. A negative
+    /// `aspect` mirrors the sweep (see [`GradientGeom::transform`]).
+    Conic,
 }
 
 impl GradientKind {
-    /// Parse a kind name (`linear`, `radial`, `freeform`; any case).
+    /// Every kind, in the order the Gradient panel lists them.
+    pub const ALL: [GradientKind; 4] = [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic, GradientKind::Freeform];
+    /// Parse a kind name (`linear`, `radial`, `conic`, `freeform`; any case). `angle` and
+    /// `conical` also mean conic.
     pub fn parse(s: &str) -> Option<Self> {
-        [GradientKind::Linear, GradientKind::Radial, GradientKind::Freeform].into_iter().find(|k| k.label().eq_ignore_ascii_case(s))
+        if s.eq_ignore_ascii_case("angle") || s.eq_ignore_ascii_case("conical") {
+            return Some(GradientKind::Conic);
+        }
+        Self::ALL.into_iter().find(|k| k.label().eq_ignore_ascii_case(s))
     }
     pub fn label(self) -> &'static str {
         match self {
             GradientKind::Linear => "Linear",
             GradientKind::Radial => "Radial",
             GradientKind::Freeform => "Freeform",
+            GradientKind::Conic => "Conic",
         }
+    }
+    /// Is it placed by a center (`start`) and an extent ellipse (radial and conic), rather than
+    /// by a line?
+    pub fn is_centered(self) -> bool {
+        matches!(self, GradientKind::Radial | GradientKind::Conic)
     }
 }
 
@@ -642,19 +658,23 @@ pub struct GradientGeom {
 /// How far out a focal point may sit, as a fraction of the extent ellipse.
 const FOCAL_MAX: f64 = 0.99;
 
+/// Most wedges [`GradientGeom::conic_wedges`] draws a conic gradient as.
+pub const MAX_CONIC_WEDGES: usize = 4096;
+
 fn one64() -> f64 {
     1.0
 }
 
 impl GradientGeom {
     /// Default placement for a bounding box: linear spans the box through the centre at `angle_deg`,
-    /// radial is centred with radius = half the larger dimension and its vector at `angle_deg`.
+    /// radial and conic are centered with radius = half the larger dimension and their vector at
+    /// `angle_deg`.
     pub fn fit(kind: GradientKind, b: Rect, angle_deg: f64) -> Self {
         let c = b.center();
         let a = angle_deg.to_radians();
         let d = Vec2::new(a.cos(), -a.sin());
         match kind {
-            GradientKind::Radial => Self { start: c, end: c + d * (b.width().max(b.height()) / 2.0), aspect: 1.0, focal: None },
+            GradientKind::Radial | GradientKind::Conic => Self { start: c, end: c + d * (b.width().max(b.height()) / 2.0), aspect: 1.0, focal: None },
             _ => {
                 // Project the box corners onto the direction to cover the whole box.
                 let half = (b.width() * d.x.abs() + b.height() * d.y.abs()) / 2.0;
@@ -668,7 +688,12 @@ impl GradientGeom {
     /// Linear (and freeform) gradients keep their isolines: the new vector is the normal to the
     /// mapped isolines, reaching the line the old end maps onto. Radial gradients map their ellipse
     /// (the radius along the vector, `aspect` × the radius across it); its principal axes give the
-    /// new end (on the axis nearest the mapped vector) and aspect.
+    /// new end (on the axis nearest the mapped vector) and aspect. Conic gradients keep their
+    /// vector exactly (where the sweep starts, so the seam stays in place) and take the mapped
+    /// extent across it as their aspect, its sign flipping under a mirror so the sweep turns the
+    /// other way: exact for moves, rotations, uniform scales and mirrors, and the nearest frame
+    /// that keeps the seam under a shear or a non-uniform scale. A conic whose vector has no
+    /// length, or whose aspect is 0, still has the sign of its aspect flipped by a mirror.
     pub fn transform(&mut self, a: Affine, kind: GradientKind) {
         // The focal point is a point like any other.
         self.focal = self.focal.map(|f| a * f);
@@ -677,9 +702,26 @@ impl GradientGeom {
         let perp = |v: Vec2| Vec2::new(-v.y, v.x);
         let start = a * self.start;
         let u = self.end - self.start;
+        let mirror = m0 * m3 - m1 * m2 < 0.0;
         if u.hypot2() < 1e-18 {
             self.start = start;
             self.end = start;
+            if kind == GradientKind::Conic && mirror {
+                self.aspect = -self.aspect;
+            }
+            return;
+        }
+        if kind == GradientKind::Conic {
+            let (lu, lw) = (lin(u), lin(perp(u) * self.aspect));
+            self.start = start;
+            self.end = start + lu;
+            let aspect = lw.dot(perp(lu)) / lu.hypot2();
+            self.aspect = match (lu.hypot2() > 1e-18 && aspect.is_finite(), aspect == 0.0) {
+                (false, _) => 1.0,
+                // A flat extent keeps its sign, so a mirror still turns the sweep the other way.
+                (true, true) => 0.0f64.copysign(if self.aspect.is_sign_negative() != mirror { -1.0 } else { 1.0 }),
+                (true, false) => aspect,
+            };
             return;
         }
         if kind != GradientKind::Radial {
@@ -724,8 +766,15 @@ impl GradientGeom {
     /// The gradient parameter (0 at the start, 1 at the end) at document point `p`: the projection
     /// onto the vector for linear gradients, the elliptical radius (honouring `aspect`) for radial,
     /// measured from the focal point (each level is the ellipse scaled about the line from the
-    /// focal point to the centre).
+    /// focal point to the centre). For conic gradients it is the turn from the vector in
+    /// [`Self::conic_frame`], clockwise on the page (counterclockwise when mirrored), in 0..=1.
     pub fn param_at(&self, kind: GradientKind, p: Point) -> f64 {
+        if kind == GradientKind::Conic {
+            let q = (self.conic_frame().inverse() * p).to_vec2();
+            let t = q.y.atan2(q.x) / std::f64::consts::TAU;
+            let t = if t < 0.0 { t + 1.0 } else { t };
+            return if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.0 };
+        }
         let u = self.end - self.start;
         if u.hypot2() < 1e-18 {
             return 0.0;
@@ -746,11 +795,70 @@ impl GradientGeom {
         (-b - (b * b - a * d.hypot2()).max(0.0).sqrt()) / a
     }
 
-    /// The map from the unit circle onto a radial's extent ellipse: (1, 0) to the end, (0, 1) to
-    /// `aspect` × the radius across the vector. None when the ellipse is flat (no inverse).
+    /// The map from the unit circle onto a radial's (or conic's) extent ellipse: (1, 0) to the
+    /// end, (0, 1) to `aspect` × the radius across the vector (a conic's negative aspect mirrors
+    /// it). None when the ellipse is flat (no inverse).
     pub fn unit_frame(&self) -> Option<Affine> {
         let u = self.end - self.start;
         (u.hypot2() * self.aspect.abs() > 1e-18).then(|| Affine::new([u.x, u.y, -u.y * self.aspect, u.x * self.aspect, self.start.x, self.start.y]))
+    }
+
+    /// The frame a conic gradient sweeps in: its [`Self::unit_frame`], or, when the extent
+    /// ellipse is flat or not finite (a vector without length, an aspect of 0, or a file's
+    /// out-of-range numbers), the unit circle about the start turning from the vector's direction
+    /// (from the right when the vector has none), mirrored by a negative aspect. The canvas,
+    /// Expand and every export draw a conic in this frame.
+    pub fn conic_frame(&self) -> Affine {
+        if let Some(m) = self.unit_frame().filter(|m| m.is_finite() && m.determinant().abs() > 1e-18) {
+            return m;
+        }
+        if !self.start.is_finite() {
+            return Affine::IDENTITY;
+        }
+        let u = self.end - self.start;
+        let len = u.hypot();
+        let d = if len.is_finite() && len > 1e-9 { u / len } else { Vec2::new(1.0, 0.0) };
+        let s = if self.aspect.is_sign_negative() && !self.aspect.is_nan() { -1.0 } else { 1.0 };
+        Affine::new([d.x, d.y, -d.y * s, d.x * s, self.start.x, self.start.y])
+    }
+
+    /// Is the sweep mirrored (counterclockwise on the page): a conic's negative aspect?
+    pub fn is_mirrored(&self) -> bool {
+        self.conic_frame().determinant() < 0.0
+    }
+
+    /// A conic gradient as `n` solid wedges around its center (at most [`MAX_CONIC_WEDGES`]), for
+    /// formats without conic gradients: each wedge's outline (the center, then an arc that
+    /// reaches past every corner of `b`) and the turn its color is sampled at (its middle). With
+    /// `overlap` (opaque stops), each wedge runs on to the seam and the next is drawn over it, so
+    /// no hairline of what lies below shows between neighbors and the seam stays sharp.
+    pub fn conic_wedges(&self, b: Rect, n: usize, overlap: bool) -> Vec<(Vec<Point>, f64)> {
+        let n = n.clamp(1, MAX_CONIC_WEDGES);
+        let frame = self.conic_frame();
+        let to_unit = frame.inverse();
+        let corners = [b.origin(), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)];
+        let reach = corners.iter().map(|&c| (to_unit * c).to_vec2().hypot()).fold(0.0f64, f64::max).max(1e-6);
+        let reach = if reach.is_finite() { reach * 1.01 } else { 1.0 };
+        // Arc points at most ARC of a turn apart, at a radius where their chords stay outside
+        // `reach`.
+        const ARC: f64 = 1.0 / 32.0;
+        let r = reach / (std::f64::consts::PI * ARC).cos();
+        let at = |turn: f64| {
+            let a = turn * std::f64::consts::TAU;
+            frame * Point::new(r * a.cos(), r * a.sin())
+        };
+        let center = frame * Point::ORIGIN;
+        (0..n)
+            .map(|k| {
+                let from = k as f64 / n as f64;
+                let to = if overlap { 1.0 } else { (k + 1) as f64 / n as f64 };
+                let steps = ((to - from) / ARC).ceil().max(1.0) as usize;
+                let mut pts = Vec::with_capacity(steps + 2);
+                pts.push(center);
+                pts.extend((0..=steps).map(|i| at(from + (to - from) * i as f64 / steps as f64)));
+                (pts, (k as f64 + 0.5) / n as f64)
+            })
+            .collect()
     }
 
     /// The map that squashes a radial gradient's circle (centre `start`, radius the vector's
@@ -901,7 +1009,7 @@ impl GradientPaint {
     pub fn draws_as_pixels(&self, fill: bool) -> bool {
         self.gradient.kind == GradientKind::Freeform || (fill && self.gradient.dither) || !self.gradient.method.is_classic()
     }
-    /// A linear or radial gradient placed on box `bounds` as a `cols` × `rows` grid of
+    /// A linear, radial or conic gradient placed on box `bounds` as a `cols` × `rows` grid of
     /// unpremultiplied RGBA8 pixels over `area`, row by row, each sampled at its centre (colours
     /// as `rgb` gives them, mixed as the renderer mixes them: [`Ramp`]). Dithered and painting a
     /// fill (`fill`; dither applies to fills only), each colour channel of pixel (column, row) gets
@@ -932,7 +1040,7 @@ impl GradientPaint {
     ) -> impl Iterator<Item = [u8; 4]> + use<> {
         self.grid(Ramp::new(&self.gradient, rgb), bounds, area, cols, rows, cells, fill, false)
     }
-    /// [`Self::pixels`] of a linear or radial gradient whose stops are all CMYK, as C, M, Y, K
+    /// [`Self::pixels`] of a linear, radial or conic gradient whose stops are all CMYK, as C, M, Y, K
     /// and opacity levels mixed from the stops' inks; `None` when a stop is in another model,
     /// there are no stops, or a Perceptual curve has too many stops for [`Gradient::ink_mixes`].
     /// Dither's noise adds no ink where the ramp has none.

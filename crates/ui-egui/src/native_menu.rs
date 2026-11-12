@@ -499,6 +499,9 @@ pub enum Event {
     /// A key equivalent pressed: the item's key with the modifiers held, to be handled as the key
     /// press it was.
     Key(KeyboardShortcut),
+    /// A menu of the bar opened. The Scripts folder is read again, as when the in-window File menu
+    /// opens; the new listing shows the next time the menu opens.
+    Opened,
 }
 
 /// A platform's native menu bar (the desktop app implements it for macOS with muda).
@@ -517,6 +520,8 @@ pub struct NativeMenu {
     /// Hash of the state the menus were last read in ([`state_hash`]).
     state: Option<u64>,
     clicks: Vec<Item>,
+    /// A menu opened since the last [`run`].
+    opened: bool,
     /// Something was chosen (AppKit may have toggled a check mark itself): read the menus again.
     dirty: bool,
     logged: bool,
@@ -524,17 +529,21 @@ pub struct NativeMenu {
 
 impl NativeMenu {
     pub fn new(backend: Box<dyn Backend>) -> NativeMenu {
-        NativeMenu { backend, state: None, clicks: Vec::new(), dirty: true, logged: false }
+        NativeMenu { backend, state: None, clicks: Vec::new(), opened: false, dirty: true, logged: false }
     }
 
-    /// The key equivalents pressed since the last frame, for [`key_events`]; clicks wait for
-    /// [`run`].
+    /// The key equivalents pressed since the last frame, for [`key_events`]; clicks and menus
+    /// opened wait for [`run`].
     pub fn take_keys(&mut self) -> Vec<KeyboardShortcut> {
         let mut keys = Vec::new();
         for e in self.backend.drain() {
             match e {
                 Event::Key(k) => keys.push(k),
                 Event::Click(it) => self.clicks.push(it),
+                Event::Opened => {
+                    self.opened = true;
+                    continue;
+                }
             }
             self.dirty = true;
         }
@@ -542,9 +551,14 @@ impl NativeMenu {
     }
 }
 
-/// Run the items clicked in the native menu since the last frame, like in-window menu clicks.
+/// Run the items clicked in the native menu since the last frame, like in-window menu clicks, and
+/// read the Scripts folder again when a menu opened.
 pub fn run(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let picking = app.file_dialog_open();
+    let Some(menu) = app.services.native_menu.as_mut() else { return };
+    if std::mem::take(&mut menu.opened) {
+        crate::scripts_menu::refresh(app, Some(ctx));
+    }
     let Some(menu) = app.services.native_menu.as_mut() else { return };
     for it in std::mem::take(&mut menu.clicks) {
         // A click that raced the menu going inert under a file dialog.
