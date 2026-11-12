@@ -719,6 +719,37 @@ fn item_art(id: NodeId, item: &AppearanceItem, shapes: &[(PathData, FillRule)], 
     Some(g)
 }
 
+/// Whether a sublayer among the members of `n`, or among its groups' members, holds a ruler guide.
+fn sublayer_guides(n: &Node) -> bool {
+    n.children().is_some_and(|ch| ch.iter().any(|c| c.holds_ruler_guides() || (!c.is_layer() && sublayer_guides(c))))
+}
+
+/// Move the ruler guides of the sublayers among the members of `n`, and among its groups'
+/// members, to `out`, in order. A guide taken from a hidden or locked sublayer, or from one inside
+/// such a sublayer or group, is hidden or locked itself. Only containers holding one are copied.
+fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, hidden: bool, locked: bool) {
+    let Some(ch) = n.children_mut() else { return };
+    for c in ch.iter_mut().filter(|c| c.holds_ruler_guides() || (!c.is_layer() && sublayer_guides(c))) {
+        let c = Arc::make_mut(c);
+        let (hidden, locked) = (hidden || !c.visible, locked || c.locked);
+        if c.is_layer()
+            && let Some(lc) = c.children_mut()
+        {
+            let (taken, art): (Vec<_>, Vec<_>) = std::mem::take(lc).into_iter().partition(|g| g.is_ruler_guide());
+            *lc = art;
+            out.extend(taken.into_iter().map(|mut g| {
+                if hidden || locked {
+                    let g = Arc::make_mut(&mut g);
+                    g.visible &= !hidden;
+                    g.locked |= locked;
+                }
+                g
+            }));
+        }
+        take_sublayer_guides(c, out, hidden, locked);
+    }
+}
+
 /// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
 /// reshaping all its members as one piece (the whole art's bounds as their reference box), and its
 /// own fills and strokes turned into art painting the members' geometry ([`member_shapes`]) below
@@ -739,7 +770,12 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     let mut m = n.clone();
     // A layer's ruler guides take no part: they go back above the evaluated art at the end.
-    let guides = m.children_mut().map(|ch| ch.split_off(Node::guide_run_start(ch))).unwrap_or_default();
+    let mut guides = m.children_mut().map(|ch| ch.split_off(Node::guide_run_start(ch))).unwrap_or_default();
+    // So do its sublayers' guides, which would otherwise go with the art the effects replace or
+    // copy: they stay on this layer, hidden and locked as their sublayers were.
+    if m.is_layer() && (pathfinder || !fx.is_empty()) {
+        take_sublayer_guides(&mut m, &mut guides, false, false);
+    }
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
         let result = pathfinder_children(doc, &m, Some(&hook)).unwrap_or_default();

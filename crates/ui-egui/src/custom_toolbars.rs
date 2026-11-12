@@ -1,8 +1,10 @@
 //! Window › Toolbars › New Toolbar (#1759): toolbars the user makes and names. New Toolbar asks
 //! for a name and makes a blank toolbar that floats on its own; the ••• button at its foot opens the
 //! All Tools drawer beside it, and tools dragged from the drawer fill it (`edit_toolbar`, with the
-//! `toolbar` param of its commands). Its title bar moves it, its × hides it and its double arrow
-//! shows its tools in one column or two. Each toolbar is listed under Window › Toolbars, where its
+//! `toolbar` param of its commands). The + button above it opens Add Tool…, a menu of every tool
+//! where a click adds the tool at the end, and whose Remove Tool items take tools out: VectorCraft's
+//! own way to fill a toolbar without a drag. Its title bar moves it, its × hides it and its double
+//! arrow shows its tools in one column or two. Each toolbar is listed under Window › Toolbars, where its
 //! item shows or hides it, and is kept with the workspace it was made in (`Workspace::toolbars`).
 //! Window › Toolbars › Manage Toolbars (also in the drawer's menu) renames, copies and deletes them.
 //!
@@ -553,6 +555,10 @@ enum Action {
     /// A group's flyout: its tools, its button, and the toolbar's name.
     Flyout(Vec<&'static str>, egui::Rect, String),
     EditToolbar(String),
+    /// A tool picked in Add Tool…'s menu, added at the end of the toolbar named.
+    AddTool(String, &'static str),
+    /// A tool picked under Remove Tool in Add Tool…'s menu, taken out of the toolbar named.
+    RemoveTool(String, &'static str),
     /// The title bar's ×.
     Hide(String),
     /// The title bar's double arrow: two columns (true) or one.
@@ -561,8 +567,8 @@ enum Action {
 
 /// The toolbars made with New Toolbar that show, each floating where its title bar was dragged: the
 /// title bar's × hides it and its double arrow lays the tools out in one column or two; then its
-/// tool buttons (a group's flyout opens as the Tools panel's do) and the ••• button that opens the
-/// All Tools drawer beside it.
+/// tool buttons (a group's flyout opens as the Tools panel's do), the + button whose menu adds and
+/// removes tools, and the ••• button that opens the All Tools drawer beside it.
 pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Tab hides them, also when Window › Tools shows the Tools panel again.
     if app.ui.tab_hid.is_some() || app.ui.custom_toolbars.iter().all(|b| !b.shown) {
@@ -660,9 +666,13 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         });
                     }
                     ui.add_space(4.0);
+                    // Add Tool…: a menu of the tools, which adds one to this toolbar or takes one out.
+                    let add = ui.vertical_centered(|ui| widgets::icon_button(ui, "plus", "Add Tool…", false, 26.0)).inner;
                     // Edit Toolbar: the All Tools drawer opens beside this toolbar, by this button.
-                    ui.vertical_centered(|ui| widgets::icon_button(ui, "ellipsis", "Edit Toolbar", edit_this, 26.0)).inner
+                    (add, ui.vertical_centered(|ui| widgets::icon_button(ui, "ellipsis", "Edit Toolbar", edit_this, 26.0)).inner)
                 });
+                let (add, edit) = edit;
+                add_menu(&add, &t, &bar, &mut actions);
                 if edit.clicked() {
                     actions.push(Action::EditToolbar(bar.name.clone()));
                 }
@@ -718,6 +728,16 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
             Action::EditToolbar(name) => {
                 if let Err(e) = app.run("window.editToolbar", json!({ "toolbar": name })) {
+                    app.status(e);
+                }
+            }
+            Action::AddTool(name, tool) => {
+                if let Err(e) = app.run("toolbar.addTool", json!({ "tool": tool, "toolbar": name })) {
+                    app.status(e);
+                }
+            }
+            Action::RemoveTool(name, tool) => {
+                if let Err(e) = app.run("toolbar.removeTool", json!({ "tool": tool, "toolbar": name })) {
                     app.status(e);
                 }
             }
@@ -791,6 +811,42 @@ fn slot_button(ui: &mut egui::Ui, t: &Tokens, p: &Press, slot: &[String], action
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, &tip));
     resp.on_hover_text(tip);
     Some(rect)
+}
+
+/// The area of Add Tool…'s menu on the toolbar named `name`.
+pub(crate) fn add_menu_id(name: &str) -> egui::Id {
+    egui::Id::unique(("custom-toolbar-add", key(name)))
+}
+
+/// Add Tool…'s menu, which the + button on the toolbar `bar` opens: under Remove Tool the tools in
+/// the toolbar, where a click takes one out; then every tool under the All Tools drawer's headings,
+/// where a click adds one at the end (dimmed: in the toolbar already). It scrolls past the window's
+/// bottom bars, as other long menus do ([`widgets::menu_scroll`]).
+fn add_menu(button: &egui::Response, t: &Tokens, bar: &CustomToolbar, actions: &mut Vec<Action>) {
+    egui::Popup::menu(button).id(add_menu_id(&bar.name)).show(|ui| {
+        ui.set_min_width(200.0);
+        widgets::menu_scroll(ui, |ui| {
+            let held: Vec<&'static str> = bar.slots.iter().flatten().filter_map(|id| tool_info(id).map(|t| t.id)).collect();
+            let heading = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(text).size(12.0).color(t.text_strong));
+            if !held.is_empty() {
+                heading(ui, &format!("{}:", tl!("Remove Tool")));
+                for tool in held.iter().filter_map(|id| tool_info(id)) {
+                    if widgets::menu_item(ui, tool.label, true, false) {
+                        actions.push(Action::RemoveTool(bar.name.clone(), tool.id));
+                    }
+                }
+                ui.separator();
+            }
+            for (cat, tools) in crate::edit_toolbar::sections() {
+                heading(ui, &format!("{}:", tl!(cat)));
+                for tool in tools {
+                    if widgets::menu_item(ui, tool.label, !held.contains(&tool.id), false) {
+                        actions.push(Action::AddTool(bar.name.clone(), tool.id));
+                    }
+                }
+            }
+        });
+    });
 }
 
 /// Remember `id` as the tool shown by each slot of a toolbar made with New Toolbar that holds it,

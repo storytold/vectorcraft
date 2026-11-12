@@ -102,6 +102,7 @@ shown_when = [
     "The Artboard tool inside an artboard.",
     "The Gradient tool over the annotator's handles and during most gradient drags.",
     "The Perspective Grid and Perspective Selection over plane widgets and handles.",
+    "Selection and Objects on Path over an Objects on Path group's Move All widget, and while dragging it.",
 ]
 hotspot = "The centre."
 look = "A four-way move cursor."

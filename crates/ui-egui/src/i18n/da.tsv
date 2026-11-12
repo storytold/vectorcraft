@@ -1090,6 +1090,8 @@ lighting	Light	Lys
 	Toolbar: Single/Double Column	Værktøjslinje: Enkelt/dobbelt kolonne
 	Toolbar: Add Tool	Værktøjslinje: Tilføj værktøj
 	Toolbar: Remove Tool	Værktøjslinje: Fjern værktøj
+	Add Tool…	Tilføj værktøj…
+	Remove Tool	Fjern værktøj
 	Toolbar: Reset	Værktøjslinje: Nulstil
 	Two Point Perspective Preset 1	2-punkts perspektivforudindstilling 1
 	Two Point Perspective Preset 2	2-punkts perspektivforudindstilling 2
@@ -1598,6 +1600,7 @@ digits	Malayalam	Malayalam
 	No gradient swatches	Ingen gradientfarveprøver
 	Points: clicks add free points	Punkter: klik tilføjer frie punkter
 	Radial Gradient	Radial gradient
+	Conic Gradient	Konisk gradient
 	Reset to White, Black	Nulstil til hvid, sort
 	Reverse Gradient	Omvend gradient
 	Save to Swatches	Gem i farveprøver
@@ -4192,6 +4195,8 @@ imageTrace	Outline	Kontur
 @msg	`gradient` must be an object	`gradient` skal være et objekt
 @msg	`library` is a library id or name (see {list})	`library` er et biblioteks-id eller -navn (se {list})
 @msg	`mode` applies to freeform gradients	`mode` gælder for freeform-gradienter
+@msg	a negative `aspect` applies to conic gradients	et negativt `aspect` gælder for koniske gradienter
+@msg	`focal` applies to radial gradients	`focal` gælder for radiale gradienter
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` skal være 1, 3 eller 5
 @msg	`stops` must be an array	`stops` skal være et array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` skal være et objekt med SVG-indstillinger (se document.formats)
@@ -4627,7 +4632,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	ukendt format
 @msg	unknown format `{f}` (Save writes {_1})	ukendt format `{f}` (Gem skriver {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	ukendt freeform-tilstand `{m}` (punkter, linjer)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	ukendt gradienttype `{k}` (lineær, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	ukendt gradienttype `{k}` (lineær, radial, konisk, freeform)
 @msg	unknown highlight `{h}`	ukendt fremhævning `{h}`
 @msg	unknown option `{path}.{k}`	ukendt indstilling `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (bevar, simulér eller forkast)
@@ -4829,7 +4834,13 @@ imageTrace	Outline	Kontur
 @msg	the PSD file has an unknown colour mode ({m})	PSD-filen har en ukendt farvetilstand ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	PSD-filens billeddata bruger en ukendt komprimering ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-billedet er for stort til at læse ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zippet 32-bit PSD-billeddata med prædiktion kan ikke læses
+@msg	zipped 1-bit PSD image data with prediction can't be read	zippet 1-bit PSD-billeddata med prædiktion kan ikke læses
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD-filens lagdata bruger en ukendt komprimering ({m})
+@msg	the PSD file's layer records are damaged	PSD-filens lagposter er beskadigede
+@msg	the PSD file's layer groups are nested too deeply	PSD-filens laggrupper er indlejret for dybt
+@msg	a layer of the PSD file is too large to read	et lag i PSD-filen er for stort til at læse
+@msg	the PSD file's layers take more memory to read than allowed	PSD-filens lag kræver mere hukommelse at læse end tilladt
+@msg	the layers can't be read ({e}): the file opened as its merged image	lagene kan ikke læses ({e}): filen blev åbnet som sit samlede billede
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bit PSD-filer i denne farvetilstand kan ikke læses
 @msg	the PSD file is cut short	PSD-filen er afkortet
 @msg	the PSD file's header is damaged	PSD-filens header er beskadiget
@@ -5380,7 +5391,7 @@ mark-style	Japanese	Japansk
 @msg	span must be "object" or "selection", got {v}	span skal være "object" eller "selection", fik {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerer en `gradient`, ikke en farveprøve
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerer en overgang: angiv `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" placerer en lineær eller radial overgang, ikke en fri
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" placerer en lineær, radial eller konisk overgang, ikke en fri
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerer overgangen selv: udelad `start` og `end` (de placerer den allerede i dokumentkoordinater)
 	Make Image Dynamic	Gør billede dynamisk
 	Import Data Sets…	Importér datasæt…
@@ -6541,6 +6552,7 @@ breakText	Glyphs	Glyffer
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Juster efter pixelgitter
+	Not Aligned to Pixel Grid	Ikke justeret efter pixelgitter
 @msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`
 	Edit Custom Dictionary	Redigér egen ordliste
 	Entry:	Opslag:

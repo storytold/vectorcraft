@@ -2687,6 +2687,7 @@ mark-style	Japanese	日本式
 	RECENT	最近使用したもの
 	Radar Graph Tool	レーダーチャートツール
 	Radial Gradient	円形グラデーション
+	Conic Gradient	円錐グラデーション
 	Random	ランダム
 	Randomize Colors	カラーをランダム化
 	Randomly change color order	カラーの順序をランダムに変更
@@ -3323,6 +3324,8 @@ mark-style	Japanese	日本式
 	Toolbar: Single/Double Column	ツールバー: 1 列／2 列
 	Toolbar: Add Tool	ツールバー: ツールを追加
 	Toolbar: Remove Tool	ツールバー: ツールを削除
+	Add Tool…	ツールを追加…
+	Remove Tool	ツールを削除
 	Toolbar: Reset	ツールバー: リセット
 	Top:	上:
 	Total Width:	合計幅:
@@ -4349,6 +4352,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`gradient` must be an object	`gradient` にはオブジェクトを指定してください
 @msg	`groupColors` must be an array	`groupColors` には配列を指定してください
 @msg	`mode` applies to freeform gradients	`mode` はフリーフォームグラデーションにのみ適用されます
+@msg	a negative `aspect` applies to conic gradients	負の `aspect` は円錐グラデーションにのみ適用されます
+@msg	`focal` applies to radial gradients	`focal` は円形グラデーションにのみ適用されます
 @msg	`preserve` must be an object	`preserve` にはオブジェクトを指定してください
 @msg	`globalAdjust` must be an object	`globalAdjust` にはオブジェクトを指定してください
 @msg	`stops` must be an array	`stops` には配列を指定してください
@@ -4358,7 +4363,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	stop {i} needs `offset`	分岐点 {i} には `offset` が必要です
 @msg	stop {i} needs a valid `color`	分岐点 {i} には有効な `color` が必要です
 @msg	stop {i}: `{k}` must be a number	分岐点 {i}: `{k}` には数値を指定してください
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	`{k}` は不明なグラデーションの種類です (linear、radial、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	`{k}` は不明なグラデーションの種類です (linear、radial、conic、freeform)
 @msg	the art could not be sampled	アートをサンプリングできませんでした
 @msg	the art is too light for any dots	アートが明るすぎて網点を生成できません
 @msg	the document has no symbols	ドキュメントにシンボルがありません
@@ -5050,7 +5055,13 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC または HEIF ファイルには読み込めない種類の画像が含まれています
 @msg	HEIC and HEIF images can't be opened in this build	このビルドでは HEIC と HEIF の画像を開けません
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 画像が大きすぎて読み込めません（{_1} × {_2} ピクセル）
-@msg	zipped 32-bit PSD image data with prediction can't be read	予測付き ZIP 圧縮の 32 bit PSD 画像データは読み込めません
+@msg	zipped 1-bit PSD image data with prediction can't be read	予測付き ZIP 圧縮の 1 bit PSD 画像データは読み込めません
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD ファイルのレイヤーデータの圧縮方式が不明です（{m}）
+@msg	the PSD file's layer records are damaged	PSD ファイルのレイヤーレコードが破損しています
+@msg	the PSD file's layer groups are nested too deeply	PSD ファイルのレイヤーグループの入れ子が深すぎます
+@msg	a layer of the PSD file is too large to read	PSD ファイルのレイヤーが大きすぎて読み込めません
+@msg	the PSD file's layers take more memory to read than allowed	PSD ファイルのレイヤーの読み込みに許容量を超えるメモリーが必要です
+@msg	the layers can't be read ({e}): the file opened as its merged image	レイヤーを読み込めません（{e}）：ファイルは統合画像として開かれました
 @msg	{depth}-bit PSD files in this colour mode can't be read	このカラーモードの {depth} bit PSD ファイルは読み込めません
 @msg	the PSD file is cut short	PSD ファイルが途中で切れています
 @msg	the PSD file's header is damaged	PSD ファイルのヘッダーが破損しています
@@ -5436,7 +5447,7 @@ lighting	Light	ライト
 @msg	span must be "object" or "selection", got {v}	span は "object" または "selection" で指定してください ({v} は指定できません)
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" は `gradient` を配置します。スウォッチは配置できません
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" はグラデーションを配置します: `gradient` を指定してください
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" は線形または円形グラデーションを配置します。フリーグラデーションは配置できません
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" は線形、円形または円錐グラデーションを配置します。フリーグラデーションは配置できません
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" はグラデーション自体を配置します: `start` と `end` は省略してください (これらはすでにドキュメント座標で配置を指定します)
 	Make Image Dynamic	画像を動的にする
 	Import Data Sets…	データセットを読み込み…
@@ -5748,6 +5759,11 @@ axis	Y Axis	Y 軸
 @msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	オブジェクト予算 ({MAX_OBJECTS} 個を超える読み取り専用オブジェクト)
+@msg	instruction budget	命令予算
+@msg	time budget	時間予算
+@msg	memory budget (the selection is too large to hand over)	メモリ予算 (選択範囲が大きすぎて渡せません)
+@msg	output size ({what} is {len} bytes, limit {max})	出力サイズ ({what} は {len} バイト、上限 {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	プラグインの許可をプラグインストアから削除できません
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	「{name}」は権限 {asked} を求めています。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `grant` を指定してください
@@ -6487,6 +6503,7 @@ breakText	Glyphs	字形
 
 # Align to Pixel Grid
 	Align to Pixel Grid	ピクセルグリッドに整合
+	Not Aligned to Pixel Grid	ピクセルグリッドに未整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
 @msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）
 	Ignore All	すべて無視

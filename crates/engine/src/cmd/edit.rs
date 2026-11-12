@@ -9,9 +9,9 @@ use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::clipboard::SwatchChoices;
 use super::{
-    CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, clock_date, cmd, date_param,
-    f64_or, f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param,
-    index, ok, point_param, str_param, switch_or,
+    CommandSpec, Result, Session, always, bad, can_clear_history, can_redo, can_undo, check_numbers, checked_ids_param, clock_date, cmd, date_param,
+    f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param, index,
+    number_or, ok, point_param, str_param, switch_or,
 };
 use crate::{Clipboard, EngineError, inspect};
 
@@ -237,7 +237,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).map(index).or(s.active_index()).ok_or(EngineError::NoDocument)?;
+    let i = opt_u64(p, "file.close", "index")?.map(index).or(s.active_index()).ok_or(EngineError::NoDocument)?;
     if !s.close_document(i) {
         return Err(bad("file.close", "no such document"));
     }
@@ -269,7 +269,7 @@ fn doc_move(s: &mut Session, p: &Value) -> Result<Value> {
 fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("document.node", "missing id"))?;
     let mut opts = slice_opts(p, "document.node")?;
-    let summary = bool_or(p, "summary", false);
+    let summary = switch_or(p, "summary", false, "document.node")?;
     if !summary && (opts.depth.is_some() || opts.child_limit.is_some()) {
         // The full object JSON is never truncated: a slice without `summary` would
         // otherwise silently return the whole subtree.
@@ -663,7 +663,8 @@ fn undo_group_begin(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
-    s.end_undo_group(bool_or(p, "cancel", false));
+    let cancel = switch_or(p, "cancel", false, "edit.undoGroup.end")?;
+    s.end_undo_group(cancel);
     ok()
 }
 
@@ -1231,6 +1232,9 @@ impl PasteMode {
 
 fn paste(s: &mut Session, p: &Value, mode: PasteMode) -> Result<Value> {
     let choices = SwatchChoices::parse(mode.label(), p)?;
+    if mode == PasteMode::Offset {
+        check_numbers(p, &["dx", "dy"], "edit.paste")?;
+    }
     // Taken out of the session for the edit (and put back whatever happens).
     let clip = std::mem::take(&mut s.clipboard);
     let r = paste_clip(s, p, mode, &clip, &choices);
@@ -1385,7 +1389,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         (_, Some((_, dv))) => vec![Affine::translate(dv)],
         (PasteMode::Offset | PasteMode::Library | PasteMode::Drag, None) => vec![match point_param(p, "center") {
             Some(c) => clip.bounds().map_or(Affine::IDENTITY, |b| Affine::translate(c - b.center())),
-            None => Affine::translate((f64_or(p, "dx", off), f64_or(p, "dy", off))),
+            None => Affine::translate((number_or(p, "dx", off, mode.label())?, number_or(p, "dy", off, mode.label())?)),
         }],
         (PasteMode::AllArtboards, None) => {
             let src = clip.source_artboard.or_else(|| st.doc.artboards.first().map(|a| a.rect)).map(|r| r.origin()).unwrap_or_default();
@@ -1560,8 +1564,8 @@ fn layer_named(d: &mut Document, name: &str) -> NodeId {
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
-    let dx = f64_or(p, "dx", 0.0);
-    let dy = f64_or(p, "dy", 0.0);
+    let dx = number_or(p, "dx", 0.0, "edit.duplicate")?;
+    let dy = number_or(p, "dy", 0.0, "edit.duplicate")?;
     let ids = s.edit("Duplicate", |d, sel| duplicate_in(d, sel, &roots, Affine::translate((dx, dy))))?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }

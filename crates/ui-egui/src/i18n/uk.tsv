@@ -2638,6 +2638,7 @@ digits	Malayalam	Малаялам
 	Radial	Радіальний
 	Radial Glows	Радіальні світіння
 	Radial Gradient	Радіальний градієнт
+	Conic Gradient	Конічний градієнт
 	Radius 1	Радіус 1
 	Radius 2	Радіус 2
 	Radius1	Радіус1
@@ -3632,6 +3633,8 @@ effect	Points	Точки
 	Toolbar: Single/Double Column	Панель інструментів: один/два стовпці
 	Toolbar: Add Tool	Панель інструментів: додати інструмент
 	Toolbar: Remove Tool	Панель інструментів: вилучити інструмент
+	Add Tool…	Додати інструмент…
+	Remove Tool	Вилучити інструмент
 	Toolbar: Reset	Панель інструментів: скинути
 	Toolbars	Панелі інструментів
 	Tools	Інструменти
@@ -4234,6 +4237,8 @@ axis	Both	Обидві
 @msg	`groupColors` must be an array	`groupColors` має бути масивом
 @msg	`library` is a library id or name (see {list})	`library` — це ідентифікатор або ім’я бібліотеки (див. {list})
 @msg	`mode` applies to freeform gradients	`mode` застосовується до довільних градієнтів
+@msg	a negative `aspect` applies to conic gradients	від’ємний `aspect` застосовується до конічних градієнтів
+@msg	`focal` applies to radial gradients	`focal` застосовується до радіальних градієнтів
 @msg	`preserve` must be an object	`preserve` має бути об’єктом
 @msg	`globalAdjust` must be an object	`globalAdjust` має бути об’єктом
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` має бути 1, 3 або 5
@@ -4736,7 +4741,7 @@ axis	Both	Обидві
 @msg	unknown format	невідомий формат
 @msg	unknown format `{f}` (Save writes {_1})	невідомий формат `{f}` (збереження записує {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	невідомий режим довільної форми `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	невідомий тип градієнта `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	невідоме виділення `{h}`
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
@@ -4993,7 +4998,13 @@ axis	Both	Обидві
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC або HEIF містить зображення такого типу, яке не вдається прочитати
 @msg	HEIC and HEIF images can't be opened in this build	зображення HEIC і HEIF не можна відкрити в цій збірці
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
-@msg	zipped 32-bit PSD image data with prediction can't be read	32-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
+@msg	zipped 1-bit PSD image data with prediction can't be read	1-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
+@msg	the PSD file's layer data uses an unknown compression ({m})	дані шарів файлу PSD використовують невідоме стиснення ({m})
+@msg	the PSD file's layer records are damaged	записи шарів файлу PSD пошкоджено
+@msg	the PSD file's layer groups are nested too deeply	групи шарів файлу PSD вкладено надто глибоко
+@msg	a layer of the PSD file is too large to read	шар файлу PSD завеликий для читання
+@msg	the PSD file's layers take more memory to read than allowed	для читання шарів файлу PSD потрібно більше пам’яті, ніж дозволено
+@msg	the layers can't be read ({e}): the file opened as its merged image	не вдається прочитати шари ({e}): файл відкрито як зведене зображення
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються
 @msg	the PSD file is cut short	файл PSD обрізаний
 @msg	the PSD file's header is damaged	заголовок файлу PSD пошкоджено
@@ -5373,7 +5384,7 @@ lighting	Light	Світло
 @msg	span must be "object" or "selection", got {v}	span має бути "object" або "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" розміщує `gradient`, а не зразок
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" розміщує градієнт: вкажіть `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" розміщує лінійний або радіальний градієнт, а не довільний
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний або конічний градієнт, а не довільний
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам розміщує градієнт: приберіть `start` і `end` (вони вже задають його в координатах документа)
 	Make Image Dynamic	Зробити зображення динамічним
 	Import Data Sets…	Імпортувати набори даних…
@@ -5663,6 +5674,11 @@ axis	Y Axis	Вісь Y
 @msg	`inputs` needs the permission `doc.read`	для `inputs` потрібен дозвіл `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет пам’яті (об’єкту {_1} потрібно {size} байтів вхідних даних, залишилося {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет об’єктів (понад {MAX_OBJECTS} об’єктів лише для читання)
+@msg	instruction budget	бюджет інструкцій
+@msg	time budget	бюджет часу
+@msg	memory budget (the selection is too large to hand over)	бюджет пам’яті (виділення завелике для передавання)
+@msg	output size ({what} is {len} bytes, limit {max})	розмір виводу ({what}: {len} байтів, межа {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	дозвіл модуля не вдається вилучити зі сховища модулів
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	дозвіл `{shown}` зарезервовано для пізнішого API модулів; цей хост його не надає
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» запитує дозволи {asked}: їх має схвалити людина в настільному застосунку, або передайте `grant` у сеансі, запущеному з --allow-plugin-grants
@@ -6402,6 +6418,7 @@ breakText	Glyphs	Гліфи
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
+	Not Aligned to Pixel Grid	Не вирівняні за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
 @msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`
 	Ignore All	Пропустити все
