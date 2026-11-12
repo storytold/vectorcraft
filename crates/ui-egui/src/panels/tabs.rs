@@ -346,7 +346,7 @@ fn place_above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, spa
 /// Screen points per point of text `n` at the canvas zoom, as [`above_text`] sizes the ruler:
 /// across the frame for area type, the zoom for point type.
 fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
-    let xf = crate::canvas::Xf::new(app.canvas_rect?, app.view()?);
+    let xf = app.canvas_xf()?;
     let per = match &n.kind {
         NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. }) => f64::from(xf.rect_to_screen(n.geometric_bounds()?).width()) / span,
         _ => xf.zoom,
@@ -358,7 +358,7 @@ fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
 /// put 0 on the text's left edge and its marks at the canvas zoom, so each stop sits over the
 /// column it sets (#729). `span`: the ruler's length in the text's points.
 fn above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64) -> Option<()> {
-    let xf = crate::canvas::Xf::new(app.canvas_rect?, app.view()?);
+    let xf = app.canvas_xf()?;
     let on_screen = xf.rect_to_screen(n.geometric_bounds()?);
     // Screen points per point of the text: across the frame for area type (so a scaled frame
     // lines up too), the zoom for point type.

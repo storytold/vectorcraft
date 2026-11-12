@@ -570,8 +570,8 @@ fn envelope_warp_make_and_content_stays_inside_bounds() {
     let pts = all_anchors(&out);
     assert!(pts.len() > 4, "curves are subdivided");
     assert!(pts.iter().all(|p| b.contains(*p)), "{b:?}");
-    // It really is bent: the sides moved down.
-    assert!(pts.iter().any(|p| p.y > 201.0));
+    // It really is bent: the top corners swung out past the sides.
+    assert!(pts.iter().any(|p| p.x < 99.0) && pts.iter().any(|p| p.x > 301.0));
 }
 
 #[test]

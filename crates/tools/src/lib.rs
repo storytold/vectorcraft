@@ -148,13 +148,26 @@ pub trait Tool: Send {
         false
     }
     /// Is a drag moving, scaling or rotating the selection (the canvas then hides the bounding box,
-    /// so only the art is seen going with the pointer, except during a handle resize)?
+    /// so only the art is seen going with the pointer, except during a handle resize, and during a
+    /// move with General › Show Bounding Box While Moving and Drawing on)?
     fn transforming(&self) -> bool {
         false
     }
     /// Is the transforming drag a resize by a bounding-box handle? The canvas then keeps drawing
     /// the bounding box at the changing bounds.
     fn resizing(&self) -> bool {
+        false
+    }
+    /// Is the transforming drag a move of the selection (an Alt-drag copy included)? With General ›
+    /// Show Bounding Box While Moving and Drawing on, the canvas then draws the bounding box where
+    /// the drag has moved the selection.
+    fn moving(&self) -> bool {
+        false
+    }
+    /// Is a drag drawing a new shape that the tool shows the bounding box of once drawn? With
+    /// General › Show Bounding Box While Moving and Drawing on, the canvas then draws the box around
+    /// the shape as it is drawn.
+    fn drawing_boxed(&self) -> bool {
         false
     }
     /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool

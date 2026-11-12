@@ -202,6 +202,13 @@ impl AngleProfile {
         if v.is_finite() { vectorcraft_geom::normalize_deg(v) } else { 0.0 }
     }
 
+    /// The angle at `t` (0..1) as [`Self::at`] reads it, but in the samples' own running degrees,
+    /// so the whole turns the curve makes along the stroke are kept; 0 without any samples.
+    pub fn unwrapped_at(&self, t: f64) -> f64 {
+        let v = interpolated(&self.points, t).unwrap_or(0.0);
+        if v.is_finite() { v } else { 0.0 }
+    }
+
     /// A profile from (position, degrees) samples in order along the stroke: non-finite ones are
     /// dropped, each sample is joined to the one before it the shorter way round, and the curve is
     /// simplified to within 1° and kept to [`PressureProfile::MAX_POINTS`]. `None` without a sample.

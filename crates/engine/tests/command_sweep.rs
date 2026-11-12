@@ -9,11 +9,11 @@ use vectorcraft_engine::{Session, command_specs};
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::Fixture;
 use vectorcraft_testkit::invariants::{check_all, check_session, doc_json};
-use vectorcraft_testkit::strategies::{junk_params, junk_values, param_keys, safe_value};
+use vectorcraft_testkit::strategies::{command_param_keys, junk_params_for_command, junk_values, param_keys, safe_value_for_command};
 
-/// Commands that replace/close the active document or touch the filesystem are fine to call, but a
-/// few need their file and folder params redirected into a temp dir (`safe_value`, which
-/// `junk_params` applies).
+/// Commands that replace/close the active document or touch the filesystem are fine to call, but
+/// their file and folder params are redirected into a temp dir (`safe_value_for_command`, which
+/// `junk_params_for_command` applies, by the keys the command catalog names as files and folders).
 fn safe_path() -> String {
     vectorcraft_testkit::temp_dir("sweep").join("out.bin").to_string_lossy().to_string()
 }
@@ -190,6 +190,33 @@ fn heavy(id: &str) -> bool {
     id.starts_with("document.serialize") || id.starts_with("document.export") || id == "document.open"
 }
 
+/// Is `p` a params object with `k` as its only key?
+fn sends_alone(p: &Value, k: &str) -> bool {
+    p.as_object().is_some_and(|o| o.len() == 1 && o.contains_key(k))
+}
+
+/// The junk params the sweeps send `c`: all of them, or for a [`heavy`] command the first 12 and,
+/// for each key the command catalog names as a file or folder that no case among those sends alone
+/// ([`sends_alone`]), the first case that sends a string under it alone (or any value when none
+/// does).
+fn junk_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value> {
+    let mut cases = junk_params_for_command(c, path);
+    if heavy(c.id) {
+        let rest = cases.split_off(cases.len().min(12));
+        for (k, _) in vectorcraft_engine::cmd::location_keys(c) {
+            if cases.iter().any(|p| sends_alone(p, k)) {
+                continue;
+            }
+            let alone = || rest.iter().filter(|p| sends_alone(p, k));
+            let found = alone().find(|p| p.get(k).is_some_and(Value::is_string)).or_else(|| alone().next());
+            if let Some(p) = found {
+                cases.push(p.clone());
+            }
+        }
+    }
+    cases
+}
+
 #[test]
 fn every_command_with_junk_params() {
     let path = safe_path();
@@ -197,10 +224,7 @@ fn every_command_with_junk_params() {
     let mut calls = 0usize;
     for fx in Fixture::ALL {
         for c in command_specs() {
-            let mut cases = junk_params(c.params, &path);
-            if heavy(c.id) {
-                cases.truncate(12);
-            }
+            let cases = junk_cases(c, &path);
             for p in &cases {
                 calls += 1;
                 if let Some(f) = probe(fx, c.id, p) {
@@ -234,13 +258,10 @@ fn tool_edit_state(s: &Session) -> ToolEditState {
 /// The params the tool-edit sweep sends `c`: junk params, then each documented key turned on and
 /// off, with a string under a file or folder key replaced by a location inside `path`'s folder.
 fn tool_edit_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value> {
-    let mut cases = junk_params(c.params, path);
-    if heavy(c.id) {
-        cases.truncate(12);
-    }
-    for k in param_keys(c.params) {
+    let mut cases = junk_cases(c, path);
+    for k in command_param_keys(c) {
         for v in [json!(true), json!(false), json!(1), json!("on")] {
-            cases.push(json!({ k.as_str(): safe_value(&k, &v, path) }));
+            cases.push(json!({ k.as_str(): safe_value_for_command(c, &k, &v, path) }));
         }
     }
     // Find Objects selects only with a filter, which one key at a time does not give it.
@@ -250,33 +271,107 @@ fn tool_edit_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value
     cases
 }
 
-/// Every string the sweeps send under a key that names a file or folder to write is inside the
-/// sweep's temp folder, so no run writes into the working directory.
+/// The strings in `v`, the value at `at` in a case of command `id`, that name a place on disk
+/// outside `dir`, as `id at: value`: `v` itself and the members of arrays in it when `named` (it is
+/// under a key that names a file or folder), and in objects at any depth, the values under such
+/// keys ([`names_location`]).
+fn outside_locations(id: &str, at: &str, v: &Value, named: bool, dir: &std::path::Path, out: &mut std::collections::BTreeSet<String>) {
+    match v {
+        Value::String(s) if named && !std::path::Path::new(s).starts_with(dir) => {
+            out.insert(format!("{id} {at}: {v}"));
+        }
+        Value::Array(a) => {
+            for (i, x) in a.iter().enumerate() {
+                outside_locations(id, &format!("{at}[{i}]"), x, named, dir, out);
+            }
+        }
+        Value::Object(o) => {
+            for (k, x) in o {
+                outside_locations(id, &format!("{at}.{k}"), x, names_location(None, k), dir, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Does `key` name a file or folder, in command `spec` when given: a key in
+/// `vectorcraft_engine::cmd::key_location`'s list that `vectorcraft_engine::cmd::location_in` keeps
+/// for `spec`.
+fn names_location(spec: Option<&vectorcraft_engine::CommandSpec>, key: &str) -> bool {
+    match spec {
+        Some(spec) => vectorcraft_engine::cmd::location_in(spec, key).is_some(),
+        None => vectorcraft_engine::cmd::key_location(key).is_some(),
+    }
+}
+
+/// Every string the sweeps send under a key that names a file or folder, in the command catalog
+/// (`vectorcraft_engine::cmd::location_keys`, so a command added later is checked too) or inside
+/// an object or an array at any depth, is inside the sweep's temp folder, so no run reads or
+/// writes in the working directory. `every_command_with_junk_params` sends every such key of every
+/// command alone in at least one case ([`junk_cases`]).
 #[test]
 fn sweep_cases_name_files_only_inside_the_temp_folder() {
     let path = safe_path();
     let dir = vectorcraft_testkit::temp_dir("sweep");
-    let keys = ["path", "diffPath", "folder", "destinationFolder"];
-    let mut seen = std::collections::BTreeSet::new();
+    let mut unsent = vec![];
     let mut outside = std::collections::BTreeSet::new();
     for c in command_specs() {
-        let mut cases = junk_params(c.params, &path);
+        let keys = vectorcraft_engine::cmd::location_keys(c);
+        let run = junk_cases(c, &path);
+        for (k, _) in &keys {
+            if !run.iter().any(|p| sends_alone(p, k)) {
+                unsent.push(format!("{} {k}", c.id));
+            }
+        }
+        let mut cases = junk_params_for_command(c, &path);
         cases.extend(tool_edit_cases(c, &path));
+        cases.extend(serializable_cases(c, &path));
         for p in &cases {
             let Some(o) = p.as_object() else { continue };
-            for (k, v) in o.iter().filter(|(k, _)| keys.contains(&k.as_str())) {
-                seen.insert(k.clone());
-                if let Some(s) = v.as_str()
-                    && !std::path::Path::new(s).starts_with(&dir)
-                {
-                    outside.insert(format!("{} {{\"{k}\": {v}}}", c.id));
-                }
+            for (k, v) in o {
+                outside_locations(c.id, k, v, names_location(Some(c), k), &dir, &mut outside);
             }
         }
     }
-    assert_eq!(seen.len(), keys.len(), "the sweeps send only {seen:?}");
+    assert!(unsent.is_empty(), "every_command_with_junk_params sends no case for {unsent:?}");
     let outside: Vec<String> = outside.into_iter().collect();
     assert!(outside.is_empty(), "{} cases name a location outside {}:\n{}", outside.len(), dir.display(), outside.join("\n"));
+}
+
+/// The cases sweep keys the command catalog names as files and folders: `document.open`'s
+/// `{path | name …}`, `addon.document.saveTimestampedCopy`'s `{folder? (…)}`, `document.compare`'s
+/// `diffPath`, `file.saveAs`'s `path` after `{…as document.save}` and `links.relink`'s
+/// `paths: [{ids, path}]`, each with a string in the temp folder, and a folder key a folder there.
+#[test]
+fn sweep_cases_send_the_file_keys_of_the_command_catalog() {
+    let path = safe_path();
+    let dir = vectorcraft_testkit::temp_dir("sweep");
+    let spec = |id: &str| command_specs().iter().find(|c| c.id == id).unwrap();
+    let inside = |v: &Value| v.as_str().is_some_and(|s| std::path::Path::new(s).starts_with(&dir));
+    for (id, key) in [
+        ("document.open", "path"),
+        ("addon.document.saveTimestampedCopy", "folder"),
+        ("document.compare", "diffPath"),
+        ("text.addFontFiles", "files"),
+        ("file.saveAs", "path"),
+    ] {
+        let cases = junk_params_for_command(spec(id), &path);
+        let sent: Vec<&Value> = cases.iter().filter_map(|p| p.get(key)).collect();
+        assert!(sent.iter().any(|v| inside(v) || v.as_array().is_some_and(|a| a.iter().any(inside))), "{id} sends no `{key}` in the temp folder");
+    }
+    for (id, key) in
+        [("document.open", "path"), ("document.open", "name"), ("addon.document.saveTimestampedCopy", "folder"), ("links.relink", "folder")]
+    {
+        assert!(param_keys(spec(id).params).iter().any(|k| k == key), "{id} has no `{key}` key");
+    }
+    let folder = junk_params_for_command(spec("addon.document.saveTimestampedCopy"), &path);
+    assert!(folder.iter().filter_map(|p| p.get("folder")?.as_str()).all(|s| s != path && std::path::Path::new(s).starts_with(&dir)));
+    let relink = junk_params_for_command(spec("links.relink"), &path);
+    let nested = relink.iter().filter_map(|p| p.get("paths")?.as_array()).flatten().filter_map(|e| e.get("path")).filter(|v| v.is_string());
+    assert!(nested.clone().count() > 0 && nested.clone().all(inside), "links.relink sends no `paths[].path` in the temp folder");
+    // A key that names part of the document in a command keeps its junk there.
+    let on_path = junk_params_for_command(spec("text.createInPath"), &path);
+    assert!(on_path.iter().any(|p| p.get("path") == Some(&json!("junk"))));
 }
 
 /// Every command that runs at once while the active tool computes an edit on another thread (a
@@ -799,6 +894,12 @@ fn structured_junk() {
         ("addon.pen.reshape", json!({"id": 2, "segment": 0, "t": "x", "dx": 1, "dy": 1, "mode": "symmetric"})),
         ("addon.pen.nextSegment", json!({"curved": "yes"})),
         ("addon.pen.closeJoin", json!({"ids": [u64::MAX]})),
+        // Cutting Tools add-on.
+        ("addon.cutting.weed", json!({"margin": 1e5, "count": 1000, "gap": 1e5, "direction": "both"})),
+        ("addon.cutting.weed", json!({"margin": -1, "count": 1.5, "spacing": 0, "gap": f64::MAX, "weight": 1e308})),
+        ("addon.cutting.weed", json!({"spacing": 1e-300, "box": "no", "direction": ["both"], "swatch": 5})),
+        ("addon.cutting.weed", json!({"spacing": "1 mm", "box": false, "direction": "vertical", "swatch": "no such swatch"})),
+        ("addon.cutting.weed", json!({"count": u64::MAX, "margin": "x", "gap": null, "weight": 0})),
         // Type Tools add-on.
         ("addon.type.textTweaker", json!({"attribute": "size", "from": 1296, "to": 0.1, "shape": "random", "seed": u64::MAX})),
         ("addon.type.textTweaker", json!({"attribute": "tracking", "from": f64::MAX, "to": -1e308, "shape": "spike"})),
@@ -1008,28 +1109,36 @@ fn polygon_properties_junk() {
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
 }
 
+/// The params `fuzzed_calls_keep_documents_serializable` sends `c`: each key with each of the
+/// first junk values, a string under a file or folder key replaced by a location inside `path`'s
+/// folder.
+fn serializable_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value> {
+    if heavy(c.id) || c.id.starts_with("file.") {
+        return vec![];
+    }
+    let mut cases = vec![];
+    for v in junk_values().iter().take(8) {
+        for k in command_param_keys(c) {
+            cases.push(json!({ k.as_str(): safe_value_for_command(c, &k, v, path) }));
+        }
+    }
+    cases
+}
+
 /// After a successful fuzzed call, the document still round-trips and exports.
 #[test]
 fn fuzzed_calls_keep_documents_serializable() {
     let path = safe_path();
     let mut failures = vec![];
     for c in command_specs() {
-        if heavy(c.id) || c.id.starts_with("file.") {
-            continue;
-        }
-        for v in junk_values().iter().take(8) {
-            for k in param_keys(c.params) {
-                let k = if k == "path" { continue } else { k };
-                let mut s = Fixture::Multi.session();
-                let p = json!({ k.clone(): v });
-                let ok = catch_quiet(|| s.execute(c.id, &p)).map(|r| r.is_ok()).unwrap_or(false);
-                if ok && let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
-                    failures.push(format!("{} {p}: {e}", c.id));
-                }
+        for p in serializable_cases(c, &path) {
+            let mut s = Fixture::Multi.session();
+            let ok = catch_quiet(|| s.execute(c.id, &p)).map(|r| r.is_ok()).unwrap_or(false);
+            if ok && let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                failures.push(format!("{} {p}: {e}", c.id));
             }
         }
     }
-    let _ = path;
     failures.sort();
     failures.dedup();
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.iter().take(40).cloned().collect::<Vec<_>>().join("\n"));
@@ -1092,7 +1201,7 @@ fn recovery_commands_with_a_damaged_store_and_junk_params() {
     for fx in Fixture::ALL {
         for id in ["file.recovery.save", "file.recovery.list", "file.recovery.restore", "file.recovery.discard"] {
             let spec = command_specs().iter().find(|c| c.id == id).unwrap();
-            for p in std::iter::once(json!({})).chain(junk_params(spec.params, &path)) {
+            for p in std::iter::once(json!({})).chain(junk_params_for_command(spec, &path)) {
                 let mut s = fx.session();
                 s.recovery.set_store(store.clone());
                 let r = catch_quiet(|| no_panic(s.execute(id, &p)));
@@ -1121,7 +1230,7 @@ fn envelope_commands_with_junk_params_on_envelopes() {
                 command_specs().iter().map(|c| c.id).filter(|id| id.starts_with("object.envelope.") || id.starts_with("object.mesh.")).collect();
             for id in ids {
                 let spec = command_specs().iter().find(|c| c.id == id).unwrap();
-                for p in std::iter::once(json!({})).chain(junk_params(spec.params, &path)) {
+                for p in std::iter::once(json!({})).chain(junk_params_for_command(spec, &path)) {
                     let mut s = Fixture::Multi.session();
                     if s.execute(make, mp).is_err() {
                         failures.push(format!("{make} failed on the Multi fixture"));
@@ -1218,7 +1327,7 @@ fn text_commands_with_junk_params_on_inline_graphics() {
     }
     for id in ["text.insertInline", "text.editRange", "text.getRange", "text.setRangeStyle", "type.insert"] {
         let spec = command_specs().iter().find(|c| c.id == id).unwrap();
-        for p in std::iter::once(json!({})).chain(junk_params(spec.params, &path)) {
+        for p in std::iter::once(json!({})).chain(junk_params_for_command(spec, &path)) {
             run(id, &p);
         }
     }

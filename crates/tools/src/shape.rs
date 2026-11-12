@@ -668,6 +668,15 @@ impl Tool for ShapeTool {
     fn resizing(&self) -> bool {
         matches!(self.selection, Some(SelectionDrag::Scale { .. }))
     }
+    /// A move of the selection by its center point, as the Selection tool's move.
+    fn moving(&self) -> bool {
+        matches!(self.selection, Some(SelectionDrag::Move { began: true, .. }))
+    }
+    /// Drawing a shape with a tool that shows the selection's bounding box. The Line Segment tool
+    /// shows no box, so it reports none.
+    fn drawing_boxed(&self) -> bool {
+        shows_shape_widgets(self.id) && self.began
+    }
     /// Adjusting a widget (the canvas hides the bounding box meanwhile, as for the Selection tool).
     fn transforming(&self) -> bool {
         match &self.widget {

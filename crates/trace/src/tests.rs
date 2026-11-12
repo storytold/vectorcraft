@@ -1281,6 +1281,92 @@ fn hairlines_keep_their_colour_in_color_mode() {
     assert_eq!(q.labels.iter().filter(|&&l| l == black).count(), 8 * 80 * 2 - 64);
 }
 
+/// Where a point lies across [`wavy_bands`]' gradient: the same all along each of its contours.
+fn wavy_u(x: f64, y: f64) -> f64 {
+    x + 8.0 * (y / 23.0).sin()
+}
+
+/// The dark square of [`wavy_bands`]: its left, top, right and bottom sides.
+const WAVY_SQUARE: [f64; 4] = [100.3, 40.2, 132.6, 80.7];
+
+/// A 256 × 128 gradient from blue to orange whose contours wave from top to bottom, with 6 levels
+/// of noise per channel, and a dark square with crisp sides on it, drawn anti-aliased.
+fn wavy_bands() -> Raster {
+    const LOW: [f64; 3] = [30.0, 60.0, 120.0];
+    const HIGH: [f64; 3] = [230.0, 170.0, 60.0];
+    Raster::from_fn(256, 128, |x, y| {
+        let mut sum = [0.0; 3];
+        for i in 0..16 {
+            let (sx, sy) = (f64::from(x) + (f64::from(i % 4) + 0.5) / 4.0, f64::from(y) + (f64::from(i / 4) + 0.5) / 4.0);
+            let [l, t, r, b] = WAVY_SQUARE;
+            let c = if (l..r).contains(&sx) && (t..b).contains(&sy) {
+                [20.0; 3]
+            } else {
+                let along = ((wavy_u(sx, sy) + 8.0) / 272.0).clamp(0.0, 1.0);
+                [0, 1, 2].map(|k| LOW[k] + (HIGH[k] - LOW[k]) * along)
+            };
+            for k in 0..3 {
+                sum[k] += c[k] / 16.0;
+            }
+        }
+        let c = |k: usize| (sum[k] + 6.0 * jitter(x, y, k as u32)).round().clamp(0.0, 255.0) as u8;
+        [c(0), c(1), c(2), 255]
+    })
+}
+
+/// How far the borders between the bands of a [`wavy_bands`] trace stray from contours of the
+/// gradient: the RMS, over points along every curve more than 6 px from the image's border and from
+/// the square, of the point's [`wavy_u`] less the mean of its stretch (the points in a row along
+/// one curve), over stretches that run at least 30 px down the image. Also returns their number.
+fn contour_spread(res: &TraceResult) -> (f64, usize) {
+    use vectorcraft_geom::ParamCurve;
+    let [l, t, r, b] = WAVY_SQUARE;
+    let away = |p: Point| p.x > 6.0 && p.x < 250.0 && p.y > 6.0 && p.y < 122.0 && !(p.x > l - 6.0 && p.x < r + 6.0 && p.y > t - 6.0 && p.y < b + 6.0);
+    let mut stretches: Vec<Vec<Point>> = vec![];
+    for sp in res.paths.iter().flat_map(|p| &p.path.subpaths) {
+        let mut stretch = vec![];
+        for p in (0..sp.segment_count()).flat_map(|i| (0..64).map(move |k| sp.segment(i).eval(f64::from(k) / 64.0))) {
+            if away(p) {
+                stretch.push(p);
+            } else if !stretch.is_empty() {
+                stretches.push(std::mem::take(&mut stretch));
+            }
+        }
+        stretches.push(stretch);
+    }
+    stretches.retain(|s| s.iter().map(|p| p.y).fold(f64::MIN, f64::max) - s.iter().map(|p| p.y).fold(f64::MAX, f64::min) >= 30.0);
+    let mut sum = 0.0;
+    let mut n = 0;
+    for s in &stretches {
+        let mean = s.iter().map(|p| wavy_u(p.x, p.y)).sum::<f64>() / s.len() as f64;
+        sum += s.iter().map(|p| (wavy_u(p.x, p.y) - mean).powi(2)).sum::<f64>();
+        n += s.len();
+    }
+    ((sum / n.max(1) as f64).sqrt(), stretches.len())
+}
+
+#[test]
+fn the_borders_of_a_gradients_bands_follow_its_contours() {
+    let res = trace(&wavy_bands(), &sixteen_colors());
+    // The square's sides are edges: it keeps its four corners.
+    let [l, t, r, b] = WAVY_SQUARE;
+    let square = res.paths.iter().find(|p| p.color.iter().all(|&c| c < 40)).expect("the dark square");
+    let nearest = [Point::new(l, t), Point::new(r, t), Point::new(r, b), Point::new(l, b)].map(|corner| {
+        square.path.subpaths[0]
+            .anchors
+            .iter()
+            .filter(|a| a.kind == vectorcraft_geom::AnchorKind::Corner)
+            .map(|a| a.p.distance(corner))
+            .fold(f64::MAX, f64::min)
+    });
+    assert!(nearest.iter().all(|&d| d < 0.3), "the nearest corner anchors to the square's corners: {nearest:?} px");
+    let (spread, stretches) = contour_spread(&res);
+    // Each of the borders between the 15 or so bands, once for the band on either side of it.
+    assert!(stretches >= 20, "{stretches} stretches");
+    // (Smoothed as edges are, 1.13 px.)
+    assert!(spread < 0.9, "the borders stray {spread} px from the gradient's contours");
+}
+
 #[test]
 fn the_bands_of_a_gradient_stay_apart() {
     let img = Raster::from_fn(256, 64, |x, y| [x as u8, (x / 2 + y) as u8, 200 - (x / 2) as u8, 255]);
@@ -1308,6 +1394,77 @@ fn a_noisy_gradient_keeps_its_tones_without_specks() {
     let unsmoothed = quantize(&img, &params).palette.len();
     assert!(res.palette.len() > unsmoothed && res.palette.len() >= 24, "{} colours, {unsmoothed} unsmoothed", res.palette.len());
     assert!(res.paths.len() <= 2 * res.palette.len(), "{} paths of {} colours", res.paths.len(), res.palette.len());
+}
+
+/// A shaded ball and a lit wall on a dark mottled ground, with `noise` levels of noise per channel:
+/// a photo's tones, in color or (`gray`) as their grays.
+fn photo_scene(noise: f64, gray: bool) -> Raster {
+    Raster::from_fn(160, 128, |x, y| {
+        let ground = f64::from(20 + 10 * ((x / 16 + y / 16) % 3));
+        let (dx, dy) = (f64::from(x) - 60.0, f64::from(y) - 64.0);
+        let c = if dx * dx + dy * dy < 1600.0 {
+            let shade = 0.25 + 0.75 * (1.0 - (dx + dy + 40.0) / 110.0).max(0.0);
+            [210.0 * shade + 20.0, 150.0 * shade + 20.0, 100.0 * shade + 20.0]
+        } else if x >= 110 {
+            let t = f64::from(y) / 127.0;
+            [200.0 - 90.0 * t, 180.0 - 40.0 * t, 70.0 + 50.0 * t]
+        } else {
+            [ground; 3]
+        };
+        let p = [0, 1, 2].map(|k| (c[k] + noise * jitter(x, y, k as u32)).round().clamp(0.0, 255.0) as u8);
+        if gray {
+            let g = quantize::luma([p[0], p[1], p[2], 255]);
+            [g, g, g, 255]
+        } else {
+            [p[0], p[1], p[2], 255]
+        }
+    })
+}
+
+#[test]
+fn a_gray_photo_is_continuous_tone_as_its_color_original_is() {
+    for noise in [4.0, 6.0] {
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, true)), "gray, noise {noise}");
+    }
+    // Three-color gray flat art stays flat art with up to 16 levels of uniform noise. (Heavier
+    // noise or JPEG artifacts can make gray flat art continuous tone.)
+    let clean = three_colour_art(0.0);
+    for noise in [0.0, 8.0, 16.0] {
+        let mut gray = three_colour_art(noise);
+        for p in gray.rgba.as_chunks_mut::<4>().0 {
+            let g = quantize::luma(*p);
+            p[..3].fill(g);
+        }
+        assert!(!quantize::continuous_tone(&gray), "gray flat art, noise {noise}");
+        // The same noise on every channel, as a gray scan has it.
+        let scan = Raster::from_fn(clean.width, clean.height, |x, y| {
+            let i = ((y * clean.width + x) * 4) as usize;
+            let g = f64::from(quantize::luma([clean.rgba[i], clean.rgba[i + 1], clean.rgba[i + 2], 255]));
+            let v = (g + noise * jitter(x, y, 0)).round().clamp(0.0, 255.0) as u8;
+            [v, v, v, 255]
+        });
+        assert!(!quantize::continuous_tone(&scan), "gray scan of flat art, noise {noise}");
+    }
+    // Nine clean equal gray bands, more levels than eight colors can hold, stay flat art.
+    for step in [15, 30] {
+        let bands = Raster::from_fn(180, 60, |x, _| {
+            let v = (x / 20 * step) as u8;
+            [v, v, v, 255]
+        });
+        assert!(!quantize::continuous_tone(&bands), "nine gray bands {step} levels apart");
+    }
+}
+
+#[test]
+fn a_gray_photo_is_smoothed_before_it_is_traced() {
+    // As a color photo is. Traced with its noise, the noise mixes neighboring tones into one,
+    // leaving fewer colors than asked for, and steps the edges between them (more anchors).
+    for noise in [4.0, 6.0] {
+        let res = trace(&photo_scene(noise, true), &sixteen_colors());
+        assert!(res.palette.len() >= 14, "noise {noise}: {} colors", res.palette.len());
+        assert!(res.anchor_count() <= 1100, "noise {noise}: {} anchors", res.anchor_count());
+    }
 }
 
 #[test]

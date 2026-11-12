@@ -804,6 +804,17 @@ antiAlias	Sharp	Nítido
 	The selected character's font is not available.	A fonte do caractere selecionado não está disponível.
 	No alternates for the selected character.	Nenhuma alternativa para o caractere selecionado.
 	Double-click to replace	Clique duplo para substituir
+	Select one character with the Type tool first.	Primeiro selecione um caractere com a ferramenta Texto.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} é um glifo de {font}, não da fonte do texto selecionado ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertence a {base} (U+{base_code}) {place}; sua seleção é {sel} (U+{code}).
+	at the start of a word	no início de uma palavra
+	in the middle of a word	no meio de uma palavra
+	at the end of a word	no fim de uma palavra
+	standing alone	quando está sozinho
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} não é uma alternativa de {sel} (U+{code}) como ele está em sua palavra.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Clique duplo para inserir {base} (U+{code}) no lugar: uma forma de apresentação não se une, a letra sim.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) foi inserido no lugar de uma forma de apresentação: a fonte o une aos vizinhos conforme a posição.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nenhum recurso OpenType desenha este glifo aqui, então ele substitui o glifo do caractere e pode não se unir aos caracteres vizinhos.
 	Double-click to insert	Clique duplo para inserir
 	Double-click to rename	Clique duplo para renomear
 	Double-click to target the contents	Clique duplo para direcionar o conteúdo
@@ -1701,6 +1712,8 @@ antiAlias	Sharp	Nítido
 	Metallic Gradients	Gradientes Metálicos
 	Meters	Metros
 	Method:	Método:
+	Pad	Prolongar
+	Repeats	Repetições
 	Millimeters	Milímetros
 	Minify	Minificar
 	Minimize	Minimizar
@@ -1956,6 +1969,10 @@ antiAlias	Sharp	Nítido
 	Arch	Abóbada
 @msg	select point type or type on a path	selecione texto de ponto ou texto em um caminho
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	o texto em um caminho de um texto encadeado não pode usar Texto Dinâmico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	o texto em um caminho aberto ou composto não pode ser centralizado em cima ou embaixo: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	o texto em um caminho sem comprimento ou sem altura não pode ser centralizado: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	o texto em um caminho de um texto encadeado não pode ser centralizado em cima ou embaixo: {frames}
+@msg	select type on a closed path	selecione texto em um caminho fechado
 	Optimize for fast web view	Otimizar para visualização rápida na web
 	Optimized	Otimizado
 	Options	Opções
@@ -2455,6 +2472,7 @@ digits	Malayalam	Malaiala
 	Rotate View Tool	Ferramenta Girar Visualização
 	Trackpad Gesture to Rotate View	Girar Visualização com Gesto do Trackpad
 	Hold a Tool Shortcut to Use the Tool Temporarily	Manter o Atalho de uma Ferramenta Pressionado para Usá-la Temporariamente
+	Show Bounding Box While Moving and Drawing	Mostrar Caixa Delimitadora ao Mover e Desenhar
 	Rotate…	Girar…
 	Rotation	Rotação
 	Roughen…	Enrugar…
@@ -2866,6 +2884,9 @@ digits	Malayalam	Malaiala
 	Split Into Grid…	Dividir em Grade…
 	Split Path	Dividir Caminho
 	Spot Color	Cor Spot
+	Spot Color Objects	Objetos com cores spot
+	Pattern Objects	Objetos com padrões
+	Gradient Objects	Objetos com gradientes
 	Spot Colors	Cores Spot
 	Spot Colors…	Cores Spot…
 	Spread:	Propagação:
@@ -3068,6 +3089,8 @@ digits	Malayalam	Malaiala
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	O texto vira contornos, e os traços que uma linha CAD não pode desenhar viram formas preenchidas.
 	Type on a Path	Texto em um Caminho
 	Type on a Path Options…	Opções de Texto em um Caminho…
+	Center on Top	Centralizar em Cima
+	Center on Bottom	Centralizar em Baixo
 	Type on a Path Tool	Ferramenta Texto em um Caminho
 	Type stays text, and every stroke is a line with its lineweight and dashes.	O texto permanece texto, e todo traço é uma linha com sua espessura e tracejados.
 	Type:	Tipo:
@@ -3941,6 +3964,7 @@ axis	Both	Ambos
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` não é uma cor como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: no máximo {MAX_TABLE} cores
 @msg	command `{0}` is not available right now: {1}	o comando `{0}` não está disponível agora: {1}
+@msg	command `{id}` is not available right now	o comando `{id}` não está disponível agora
 @msg	compound paths can only contain paths	traçados compostos só podem conter traçados
 @msg	compressed (RLE) bitmaps can't be read yet	bitmaps compactados (RLE) ainda não podem ser lidos
 @msg	damaged	danificado
@@ -5787,6 +5811,8 @@ mark-style	Japanese	Japonesas
 @msg	the Smooth slider is not open	o controle deslizante Suavizar não está aberto
 @msg	the screen color sampler is already open	o coletor de cores da tela já está aberto
 @msg	this system has no screen color sampler	este sistema não tem coletor de cores da tela
+@msg	the screen color sampler did not answer	o coletor de cores da tela não respondeu
+@msg	the screen color sampler failed	o coletor de cores da tela falhou
 	Darkness	Escuridão
 	Dimension	Cota
 	Dimension Tool Options	Opções da Ferramenta Cota
@@ -5955,6 +5981,7 @@ mark-style	Japanese	Japonesas
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guias geométricas
+	Optical Effects	Efeitos ópticos
 	Geometric Patterns	Padrões geométricos
 	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
@@ -5997,6 +6024,9 @@ axis	Y Axis	Eixo Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a preenchimentos em gradiente (paint.setFill)
 @msg	`dither` must be true or false	`dither` deve ser true ou false
 @msg	`method` must be classic or perceptual	`method` deve ser classic ou perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` deve ser pad, repeat ou reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve ser um número inteiro de 1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a gradientes lineares, radiais, cônicos e em losango
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Instalar “{name}”, que pede um orçamento de processamento grande?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Cada execução pode levar até {minutes} minutos e fazer {times} vezes o trabalho permitido a outros plug-ins. Ela é executada em segundo plano, e você pode cancelá-la.
@@ -6246,6 +6276,11 @@ axis	Y Axis	Eixo Y
 	Grass Fan	Leque de Grama
 	Pattern Borders	Bordas de Padrão
 	Scatter Shapes	Formas de Dispersão
+	Dry Media	Técnicas Secas
+	Chalk Grain	Grão de Giz
+	Graphite Pencil	Lápis de Grafite
+	Wax Crayon	Giz de Cera
+	Charcoal Dust	Pó de Carvão
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
 @msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
@@ -7064,3 +7099,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
 @msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Caixa e Linhas de Descasque…
+	Weed Box and Lines	Caixa e Linhas de Descasque
+	Margin	Margem
+	Box	Caixa
+	Swatch	Amostra
