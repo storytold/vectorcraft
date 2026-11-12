@@ -39,7 +39,9 @@ pub(crate) struct SGlyph {
     pub dy: f64,
     /// Right to left: the run's manual kerning, which moves the glyph right along the baseline,
     /// outside its Character Rotation; with whole-point advances, the difference the kerning makes
-    /// to the cluster's rounded advance. 0 otherwise.
+    /// to the cluster's rounded advance. Left to right and in vertical type: the space before a
+    /// line's first character ([`CharStyle::kerning_before`]), which moves it along the line the
+    /// same way. 0 otherwise.
     pub kern_shift: f64,
     /// Outline scale (font units -> points).
     pub sx: f64,
@@ -522,6 +524,37 @@ pub(crate) fn shape_runs(
     }
 }
 
+/// [`CharStyle::kerning_before`] of the character at `byte` of `text` in style `st`, in points of
+/// `spacing_em`: the space before it when it starts a line by itself ([`crate::edit::starts_line`]), else 0. Its
+/// cluster takes the space in its advance, as manual kerning takes the space after a character,
+/// and left to right (and in vertical type) its glyphs are drawn that much later on the line
+/// (#5111). Right to left, the line starts at its right: the space the advance gains is already on
+/// that side.
+fn space_before(text: &str, byte: usize, st: &CharStyle, spacing_em: f64) -> f64 {
+    if st.kerning_before == 0.0 || !crate::edit::starts_line(text, byte) || text.get(byte..).is_some_and(|rest| rest.starts_with(['\n', '\u{2028}']))
+    {
+        return 0.0;
+    }
+    Some(st.kerning_before / 1000.0 * spacing_em).filter(|s| s.is_finite()).unwrap_or(0.0)
+}
+
+/// The space before the character at `byte` of `text` in style `st`, in points, as the layout sets
+/// it ([`CharStyle::kerning_before`]): its thousandths of the em the character is set in, when it
+/// starts a line by itself, else 0. For writers that place a line's first character themselves.
+pub fn line_start_space(text: &str, byte: usize, st: &CharStyle, vertical: bool) -> f64 {
+    let small = st.small_caps.is_some() && !st.all_caps && text.get(byte..).and_then(|s| s.chars().next()).is_some_and(char::is_lowercase);
+    space_before(text, byte, st, glyph_size(st, small) * spacing_scale(st, vertical))
+}
+
+/// The size characters in style `st` are shaped at: Superscript, Subscript and synthesized Small
+/// Caps (`small`: a lowercase letter in them) shrink the glyphs; line metrics keep the full size.
+fn glyph_size(st: &CharStyle, small: bool) -> f64 {
+    let full = st.size.max(0.0);
+    let (pos_scale, _) = st.position.scale_shift(full);
+    let small_scale = if small { st.small_caps.unwrap_or(100.0) / 100.0 } else { 1.0 };
+    full * pos_scale * small_scale
+}
+
 /// Line segments of a glyph outline in font units, cached for the current shaping pass.
 type Profile = Vec<(f64, f64, f64, f64)>;
 type CachedProfile = (Profile, (f64, f64));
@@ -817,8 +850,11 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 
 /// Can one glyph draw characters in styles `a` and `b`? Only when the styles are equal, except that
 /// horizontal type (`vertical` false) does not read Standard Vertical Roman Alignment or the
-/// tate-chu-yoko offsets, so styles that differ only in those are drawn alike there.
+/// tate-chu-yoko offsets, so styles that differ only in those are drawn alike there. The space
+/// before a line's first character ([`space_before`]) is never read inside a cluster, which takes it
+/// from its first character, so it doesn't split a ligature either.
 fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
+    let b = &CharStyle { kerning_before: a.kerning_before, ..b.clone() };
     if a == b {
         return true;
     }
@@ -836,7 +872,8 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
 /// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
-/// run's, see [`shape_segment`]) and the tracking, as long as the tracking keeps or drops standard
+/// run's, see [`shape_segment`]), the space before a line's first character ([`space_before`])
+/// and the tracking, as long as the tracking keeps or drops standard
 /// ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
     // Every field is named, so that a new attribute has to be sorted into one group or the other.
@@ -849,6 +886,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         leading: _,
         tracking,
         kerning: _,
+        kerning_before: _,
         optical_kerning: _,
         baseline_shift: _,
         h_scale,
@@ -948,8 +986,9 @@ fn shaping_script(c: char) -> Script {
 ///
 /// The art is scaled uniformly to `scale` x the font size tall, its left edge on the pen and its
 /// vertical centre on the middle of the cap height raised by the inline's shift (see
-/// [`InlineArt`]). Its advance is the scaled art width plus tracking and its character's manual
-/// kerning, which right to left in horizontal type also moves the art right by the value, as it
+/// [`InlineArt`]). Its advance is the scaled art width plus tracking, its character's manual
+/// kerning and the space before it at a line's start ([`space_before`]). Right to left in
+/// horizontal type the manual kerning also moves the art right by the value, as it
 /// moves a letter's glyph. The art doesn't take the run's Horizontal Scale; the tracking and the
 /// kerning do, as after a letter ([`spacing_scale`]). The glyph's ascent and descent grow to the
 /// art's extent so a tall graphic opens up its line. A missing symbol takes a square of the same
@@ -983,7 +1022,8 @@ fn inline_glyph(
     let spacing_em = size * spacing_scale(st, vertical);
     let tracking = Some(st.tracking / 1000.0 * spacing_em).filter(|t| t.is_finite()).unwrap_or(0.0);
     let manual_kern = st.kerning.map(|v| v / 1000.0 * spacing_em).filter(|k| k.is_finite()).unwrap_or(0.0);
-    let adv = width + tracking + manual_kern;
+    let before = space_before(text, range.start, st, spacing_em);
+    let adv = width + tracking + manual_kern + before;
     SGlyph {
         face: face.clone(),
         gid: 0,
@@ -994,7 +1034,7 @@ fn inline_glyph(
         tracking: if adv.is_finite() { tracking } else { 0.0 },
         dx: 0.0,
         dy: 0.0,
-        kern_shift: if level.is_rtl() && !vertical { manual_kern } else { 0.0 },
+        kern_shift: if level.is_rtl() && !vertical { manual_kern } else { before },
         // Not used to draw (the art has its own transform), but they make the glyph's em box
         // its run's em: Character Alignment and Top-to-Top leading treat an inline graphic as a
         // character of its run's size, whatever its scale (see `layout::glyph_em`).
@@ -1079,9 +1119,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let cursive = text_seg.chars().map(|c| c.script()).find(|s| !matches!(s, Script::Common | Script::Inherited)).is_some_and(joins);
     let full = st.size.max(0.0);
     // Superscript/subscript and small capitals shrink the glyphs; line metrics keep the full size.
-    let (pos_scale, pos_shift) = st.position.scale_shift(full);
-    let small_scale = if small { st.small_caps.unwrap_or(100.0) / 100.0 } else { 1.0 };
-    let size = full * pos_scale * small_scale;
+    let (_, pos_shift) = st.position.scale_shift(full);
+    let size = glyph_size(st, small);
     let k = size / face.upem;
     let km = full / face.upem;
     let hs = st.h_scale / 100.0;
@@ -1407,15 +1446,19 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             adv = 0.0;
         } else {
             let manual_kern = gst.kerning.map(|v| v / 1000.0 * spacing_em).unwrap_or(0.0);
+            let before = space_before(text, cl, gst, spacing_em);
             // Manual kerning spaces a character from the next one in reading order. Right to left,
             // that one is drawn to its left: the cluster's glyphs move right along the baseline by
             // the value, so that the space its last glyph's advance gains is at the cluster's left.
+            // The space before a line's first character moves them the other way.
             if level.is_rtl() && !feats.vertical {
                 kern_shift = manual_kern;
+            } else {
+                kern_shift = before;
             }
             if last_in_cluster {
                 tracked = gst.tracking / 1000.0 * spacing_em;
-                adv += tracked + manual_kern;
+                adv += tracked + manual_kern + before;
             }
         }
         out.push(SGlyph {

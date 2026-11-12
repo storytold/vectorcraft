@@ -1132,6 +1132,8 @@ font-technology	Variable	Variabel
 	Extrude & Bevel…	Extrudieren und abgeflachte Kante…
 	3D (Classic)	3D (klassisch)
 	Extrude & Bevel (Classic)…	Extrudieren und abgeflachte Kante (klassisch)…
+	Revolve (Classic)…	Kreiseln (klassisch)…
+	Rotate (Classic)…	Drehen (klassisch)…
 	Surface	Oberfläche
 	Wireframe	Drahtmodell
 	No Shading	Keine Schattierung
@@ -2327,6 +2329,7 @@ file-filter	Templates	Vorlagen
 	Options:	Optionen:
 	Options…	Optionen…
 	Organic Fades	Organische Verläufe
+	Holographic	Holografisch
 	or more spaces with a tab	oder mehr Leerzeichen durch einen Tabulator
 	Order:	Reihenfolge:
 	Ordinals	Ordinalzahlen
@@ -4501,6 +4504,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
 @msg	not an HP-GL file	keine HP-GL-Datei
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` muss ein Array von 1 bis 255 Farben der Form #rrggbb sein
 @msg	not found	nicht gefunden
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus
 @msg	finish editing the pattern first	beenden Sie zuerst die Bearbeitung des Musters
@@ -5902,6 +5906,17 @@ axis	Y Axis	Y-Achse
 	Charge Wave	Ladewelle
 	Spark Trail	Funkenspur
 	Calligraphic Nibs	Kalligrafie-Federn
+	Bristle Brushes	Borstenpinsel-Set
+	Fine Liner	Feiner Liner
+	Pointed Flat	Spitzer Flachpinsel
+	Stubby Round	Kurzer Rundpinsel
+	Dry Scrub	Trockenes Schrubben
+	Soft Dome	Weiche Kuppel
+	Filbert	Katzenzunge
+	Angled Round	Schräger Rundpinsel
+	Angled Flat	Schräger Flachpinsel
+	Fan Blender	Fächer zum Verblenden
+	Grass Fan	Grasfächer
 	Pattern Borders	Musterbordüren
 	Scatter Shapes	Streuformen
 	Save Brush Library…	Pinsel-Bibliothek speichern…
@@ -6281,6 +6296,10 @@ breakText	Glyphs	Glyphen
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturen verwenden einen oder mehrere dieser Pinsel. Pinsel von diesen Konturen entfernen und die Pinsel löschen?
 	Remove Strokes	Konturen entfernen
 	Place Brush Art	Pinselgrafik platzieren
+	Replace Brush Art	Pinselgrafik ersetzen
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturen verwenden diesen Pinsel. Die neue Grafik auf diese Konturen anwenden oder sie unverändert lassen und eine Kopie des Pinsels mit der neuen Grafik hinzufügen?
+	Apply to Strokes	Auf Konturen anwenden
+	Leave Strokes	Konturen beibehalten
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` hat keine Grafik (nur Spezial-, Bild- und Musterpinsel haben eine)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Anordnungswerkzeuge
@@ -6533,6 +6552,19 @@ breakText	Glyphs	Glyphen
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ältere Zeile verworfen|{n} ältere Zeilen verworfen
 @plural	{n} line cut|{n} lines cut	{n} Zeile gekürzt|{n} Zeilen gekürzt
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` und `last` müssen Nummern von Zeilen sein, die die Konsole enthält, `first` vor `last`
+
+# Learn panel
+	Learn	Lernen
+	Explore tutorials	Lernprogramme entdecken
+	For you	Für Sie
+	Skills	Fertigkeiten
+	Get started	Erste Schritte
+	Quick skill guide	Kurzanleitung zu Fertigkeiten
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Kurze praktische Lernprogramme zu den wichtigsten Werkzeugen, nach Fertigkeiten geordnet. Wählen Sie eine Fertigkeit, um ihre Lernprogramme zu sehen.
+	List Tutorials	Lernprogramme auflisten
+	Show Tutorial	Lernprogramm anzeigen
+@msg	missing `tutorial` (see learn.list)	`tutorial` fehlt (siehe learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	unbekanntes Lernprogramm `{id}` (siehe learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Zurückgestellte Effekte aktualisieren

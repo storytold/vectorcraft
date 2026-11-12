@@ -21,7 +21,7 @@ use super::super::menucmds::whole_or;
 use super::super::object::choice;
 use super::super::textedit::{CharChange, text_mut, text_ref, type_ranges};
 use super::super::typecmd::refresh_bounds;
-use super::super::typemenu::text_ids;
+use super::super::typemenu::{bake_dynamic_text, text_ids};
 use super::super::{CommandSpec, bad, cmd, has_selection, number_or, switch_or, targets};
 use crate::{EngineError, Result, Session};
 
@@ -61,7 +61,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release Type on a Path…",
             ["Object", "Plug-ins", "Type Tools"],
             None,
-            "{mode?: \"both\" (point type and the path) | \"path\" (the path only) | \"text\" (point type only) (\"both\"), keepOriginal?: false (true: the type on a path stays and the released objects go just above it), ids?: [id…], id? (instead of ids; neither: the selection)} split each type on a path among the objects (inside groups too) into point type and the path it was set on. The point type holds the same text with the same character and paragraph attributes, on one straight line whose baseline starts where the first character sat on the path; Type on a Path Options (effect, align to path, spacing, flip, brackets) don't apply to point type and are dropped. The path keeps its exact shape (open or closed, anchors and handles, the object's transform) and comes out with no fill and no stroke, in the type's layer and place in the stacking order. Other objects are left alone, and with no type on a path among them nothing changes and no undo step is made. One undo step; the released objects are selected → {ids (released, bottom to top), paths, texts}",
+            "{mode?: \"both\" (point type and the path) | \"path\" (the path only) | \"text\" (point type only) (\"both\"), keepOriginal?: false (true: the type on a path stays and the released objects go just above it), ids?: [id…], id? (instead of ids; neither: the selection)} split each type on a path among the objects (inside groups too) into point type and the path it was set on. The point type holds the same text with the same character and paragraph attributes, on one straight line whose baseline starts where the first character sat on the path; Type on a Path Options (effect, align to path, spacing, flip, brackets) don't apply to point type and are dropped; type with Dynamic Text on (type.dynamicText) comes out with it off, at the sizes it was drawn at. The path keeps its exact shape (open or closed, anchors and handles, the object's transform) and comes out with no fill and no stroke, in the type's layer and place in the stacking order. Other objects are left alone, and with no type on a path among them nothing changes and no undo step is made. One undo step; the released objects are selected → {ids (released, bottom to top), paths, texts}",
             has_selection,
             release_path
         ),
@@ -230,8 +230,9 @@ fn first_pen(lay: &vectorcraft_text::TextLayout) -> Option<Point> {
 
 /// `t`, type on a path, as point type on one straight line: the same runs and character and
 /// paragraph attributes, its baseline starting where its first character sat on the path (in the
-/// object's own text space, so its transform stays). Type on a Path Options are dropped. None for
-/// other type, or when it can't be placed.
+/// object's own text space, so its transform stays). Type on a Path Options are dropped, and
+/// Dynamic Text is turned off at the sizes it draws the text at. None for other type, or when it
+/// can't be placed.
 fn released_text(t: &TextObject) -> Option<TextObject> {
     let TextKind::OnPath { path, .. } = &t.kind else { return None };
     let db = vectorcraft_text::FontDb::global();
@@ -244,6 +245,8 @@ fn released_text(t: &TextObject) -> Option<TextObject> {
         (p.x.is_finite() && p.y.is_finite()).then_some(p)
     })?;
     let mut out = t.clone();
+    // Point type has no brackets to fit: it keeps the sizes the path drew it at.
+    bake_dynamic_text(&mut out);
     out.kind = TextKind::Point;
     out.path_effect = Default::default();
     out.path_align = Default::default();
