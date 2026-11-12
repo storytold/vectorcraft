@@ -6845,8 +6845,8 @@ by side. Layers of the same name on different pages become one layer when the pa
 the master page's guidelines become guides on every page. Groups stay groups, and a PowerClip becomes a clipping
 group whose clipping path keeps the container's fill and outline. Curves, paths, arcs and polygons (stars
 included) become paths, and rectangles and ellipses become live shapes; a rectangle keeps each corner's radius. Uniform
-fills and outlines keep their colors, widths, caps, joins and dashes, an outline behind the fill becomes a stroke below
-the fill, and an object without a fill or outline of its own
+fills and outlines keep their colors, widths, caps, joins and dashes (an outline of width 0 becomes a 0.25 pt stroke),
+an outline behind the fill becomes a stroke below the fill, and an object without a fill or outline of its own
 takes its style's. A library color that the drawing stores with its
 name and values (version 13 and later) becomes a spot swatch with its tint, and one stored only by its number opens as
 a black spot color. Text, bitmaps, blends, contours, brush strokes, other objects the reader doesn't read yet,

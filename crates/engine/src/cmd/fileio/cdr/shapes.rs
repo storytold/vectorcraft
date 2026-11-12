@@ -15,6 +15,9 @@ use vectorcraft_doc::{Document, Guide, LiveShape, Node, NodeKind};
 
 /// The most nested groups mapped; the reader holds nesting well below it.
 const MAX_DEPTH: usize = 256;
+/// The width, in points, of a stroke made from an outline of width 0: the width PDF import gives a
+/// line width of 0 (`crates/pdf/src/import/state.rs`).
+const HAIRLINE: f64 = 0.25;
 
 pub(super) struct Builder {
     pub(super) doc: Document,
@@ -187,7 +190,8 @@ impl Builder {
     }
 
     fn stroke(&mut self, o: &cd::Outline) -> StrokeLayer {
-        let width = if o.width.is_finite() { o.width.clamp(0.0, 1000.0) } else { 0.0 };
+        // A drawn outline of width 0 shows as a hairline, as a PDF line width of 0 does.
+        let width = if o.width.is_finite() && o.width > 0.0 { o.width.min(1000.0) } else { HAIRLINE };
         let mut l = StrokeLayer::new(self.paint(&o.color), width);
         l.cap = match o.cap {
             cd::Cap::Butt => LineCap::Butt,

@@ -411,6 +411,36 @@ fn fills_and_outlines_keep_their_colors_widths_caps_joins_and_dashes() {
     assert!(dash.pattern.len() == 2 && (dash.pattern[0] - 6.0).abs() < 0.01 && (dash.pattern[1] - 2.0).abs() < 0.01, "{:?}", dash.pattern);
 }
 
+/// An outline of width 0 opens as a hairline stroke, which draws; a thin outline keeps its width.
+#[test]
+fn outlines_of_width_0_open_as_hairlines() {
+    use vectorcraft_doc::appearance::AppearanceItem;
+    let v = V(1100);
+    let black = synth::color(2, [0, 0, 0, 100]);
+    let doc = list(
+        b"doc ",
+        vec![list(
+            b"otlt",
+            vec![
+                chunk(b"outl", v.outline(2, synth::Pen { line_type: 2, width: 0.0, cap: 0, join: 0 }, &black, &[])),
+                chunk(b"outl", v.outline(3, synth::Pen { line_type: 2, width: 0.1, cap: 0, join: 0 }, &black, &[])),
+            ],
+        )],
+    );
+    let rect = |outline: u32| synth::object(v, 1, &[(10, outline.to_le_bytes().to_vec()), (30, v.rect(10.0, 10.0, 0.0))], None);
+    let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![rect(2), rect(3)])]);
+    let (doc, _) = super::cdr::import(&synth::riff(1100, &[chunk(b"vrsn", 1100u16.to_le_bytes().to_vec()), doc, page])).unwrap();
+    let widths: Vec<f64> = paths(&doc)
+        .iter()
+        .map(|n| match n.appearance.items.as_slice() {
+            [AppearanceItem::Stroke(s)] => s.width,
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    // Bottom to top: the file lists the 0.1 pt outline last.
+    assert!(widths.len() == 2 && (widths[0] - 0.1).abs() < 0.01 && (widths[1] - 0.25).abs() < 1e-9, "{widths:?}");
+}
+
 /// An outline behind the fill becomes a stroke painted before the fill.
 #[test]
 fn outlines_behind_the_fill_paint_first() {
