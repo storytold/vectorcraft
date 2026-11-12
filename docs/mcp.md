@@ -1353,6 +1353,20 @@ message, as in `` `steps` must be a number, not "8" ``, and change nothing: `ste
 `highlight` in `object.mesh.create`; and `opacity` in `object.mesh.setPointColor`. A null is read as a key left out.
 `object.mesh.create` refuses an `at` that is not two numbers with `` `at` must be [x, y] ``.
 
+The graph commands refuse a value of the wrong type, naming the key, and leave the graph and the undo history as they
+were. `graph.setType` refuses `` `columnWidth` must be a number, not "50" `` for `columnWidth` and `clusterWidth`;
+`` `legend` must be true or false `` for `legend`, `markPoints`, `connectPoints`, `edgeToEdge`, `separateScales`,
+`ticksBetweenLabels`, `firstRowInFront`, `firstColumnInFront`, `filledLines`, `dropShadow` and `legendAcrossTop`;
+`` `type` must be a string `` for `type`, `valueAxis`, the three tick lengths, `prefix`, `suffix`, `rightPrefix`,
+`rightSuffix`, `pieLegend`, `piePosition` and `pieSort`; and `` `ticks` must be a number, not "5" `` (or
+`` `ticks` must be 0 or more `` for a negative number) for `ticks`, `rightTicks` and the three tick mark counts.
+`axisMin`, `axisMax`, `rightAxisMin` and `rightAxisMax` take a number, or null to go back to the value calculated from
+the data; any other value is refused with `` `axisMin` must be a number or null, not "10" ``. `graph.setData` and
+`graph.create` refuse a `csv` that is not a string, `series` or `categories` that are not lists, and `rows` that are not
+lists of numbers and nulls; `graph.setData` also refuses a `transpose` or `switchXY` that is not true or false, and
+`graph.create` a `type` that is not a string or a `width` or `height` that is not a number. A null is read as a key
+left out.
+
 The transform, Align, Object Properties and Live Shape Properties commands refuse a string, a number or another value
 that is not true or false with `` `strokes` must be true or false ``, naming the key, and leave the document and its
 undo history as they were: the options `copy`, `strokes`, `corners`, `patterns`, `objects` and `typeAreas` in
