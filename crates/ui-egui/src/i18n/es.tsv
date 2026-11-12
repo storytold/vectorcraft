@@ -4542,6 +4542,7 @@ axis	Both	Ambos
 @msg	not a stored central record	no es un registro central almacenado
 @msg	not a valid plug-in module: {0}	no es un módulo de plugin válido: {0}
 @msg	not an EMF or WMF file	no es un archivo EMF ni WMF
+@msg	not an HP-GL file	no es un archivo HP-GL
 @msg	not found	no se encontró
 @msg	not in pattern editing mode	no está en el modo de edición de motivos
 @msg	finish editing the pattern first	termina primero la edición del motivo

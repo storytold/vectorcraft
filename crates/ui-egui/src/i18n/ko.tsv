@@ -4582,6 +4582,7 @@ theme	Appearance	외관
 @msg	the image's pixels don't match its size	이미지의 픽셀이 크기와 맞지 않습니다
 @msg	{bpp}-bit bitmaps can't be read	{bpp}비트 비트맵은 읽을 수 없습니다
 @msg	not an EMF or WMF file	EMF 또는 WMF 파일이 아닙니다
+@msg	not an HP-GL file	HP-GL 파일이 아닙니다
 @msg	its layers use {_1}, which aren't read yet	레이어에 {_1}이(가) 있으며, 아직 읽을 수 없습니다
 @msg	the EMF header is damaged	EMF 헤더가 손상되었습니다
 @msg	damaged	손상됨
