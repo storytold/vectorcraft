@@ -4,6 +4,7 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod rasterfollow;
 mod scale;
 mod transformfx;
 
@@ -1246,6 +1247,96 @@ fn roughen_smooth_makes_no_cusps() {
                 let (prev, next) = (sp.anchors[(i + n - 1) % n].p, sp.anchors[(i + 1) % n].p);
                 let chord = (a.p - prev).hypot().max((next - a.p).hypot());
                 assert!((a.h_out - a.p).hypot() >= chord / 12.0 - 1e-9, "seed {seed}: cusp at {:?}", a.p);
+            }
+        }
+    }
+}
+
+#[test]
+fn roughen_at_size_0_keeps_the_outline_and_spaces_its_points_evenly() {
+    use vectorcraft_geom::AnchorKind;
+    use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
+    let (a, b) = (Point::new(0.0, 0.0), Point::new(300.0, 0.0));
+    let curve = PathData::single(SubPath::new(
+        vec![
+            vectorcraft_geom::Anchor::with_handles(a, a, Point::new(10.0, 40.0)),
+            vectorcraft_geom::Anchor::with_handles(b, Point::new(100.0, 200.0), b),
+        ],
+        false,
+    ));
+    let ellipse = shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 50.0));
+    // Two subpaths with lines and curves: a closed one whose last segment is a line, and an open
+    // one that ends with a line.
+    let (c, d, e, f) = (Point::new(100.0, 100.0), Point::new(200.0, 0.0), Point::new(300.0, 0.0), Point::new(300.0, 100.0));
+    let mixed = PathData::new(vec![
+        SubPath::new(
+            vec![
+                vectorcraft_geom::Anchor::corner(a),
+                vectorcraft_geom::Anchor::with_handles(Point::new(100.0, 0.0), Point::new(100.0, 0.0), Point::new(160.0, 20.0)),
+                vectorcraft_geom::Anchor::with_handles(c, Point::new(160.0, 80.0), c),
+            ],
+            true,
+        ),
+        SubPath::new(
+            vec![
+                vectorcraft_geom::Anchor::with_handles(d, d, Point::new(220.0, 60.0)),
+                vectorcraft_geom::Anchor::with_handles(e, Point::new(280.0, 60.0), e),
+                vectorcraft_geom::Anchor::corner(f),
+            ],
+            false,
+        ),
+    ]);
+    for path in [square(), ellipse, curve, mixed] {
+        let all: Vec<_> = path.subpaths.iter().flat_map(|sp| (0..sp.segment_count()).map(|i| sp.segment(i))).collect();
+        let off = |q: Point| all.iter().map(|c| c.nearest(q, 1e-9).distance_sq).fold(f64::INFINITY, f64::min).sqrt();
+        for params in
+            [json!({"size": 0}), json!({"size": 0, "points": "corner"}), json!({"size": 0, "relative": false, "points": "corner", "seed": 7})]
+        {
+            let out = run("distort.roughen", params.clone(), &path);
+            assert!(out.anchor_count() > path.anchor_count(), "{params}: the points are added");
+            assert_eq!(out.subpaths.len(), path.subpaths.len(), "{params}");
+            for (sp, got) in path.subpaths.iter().zip(&out.subpaths) {
+                assert_eq!(got.closed, sp.closed);
+                // Walk the result one original segment at a time: its pieces end on the segment's end anchor.
+                let mut at = 0;
+                for i in 0..sp.segment_count() {
+                    let (orig, end) = (sp.segment(i), sp.anchors[(i + 1) % sp.anchors.len()]);
+                    let start = got.anchors[at];
+                    let was = sp.anchors[i];
+                    assert_eq!((start.p, start.kind, start.has_in(), start.has_out()), (was.p, was.kind, was.has_in(), was.has_out()), "{params}");
+                    let mut pieces = vec![];
+                    loop {
+                        let piece = got.segment(at);
+                        for j in 0..=8 {
+                            let q = piece.eval(j as f64 / 8.0);
+                            assert!(off(q) < 1e-6, "{params}: {q:?} is {} off the outline", off(q));
+                        }
+                        pieces.push(piece.arclen(1e-6));
+                        at += 1;
+                        if piece.p3.distance(end.p) < 1e-9 {
+                            break;
+                        }
+                        // A point the effect added: a corner without handles on a line, a smooth
+                        // point whose handles follow the curve.
+                        let added = got.anchors[at];
+                        if sp.segment_is_line(i) {
+                            assert_eq!((added.kind, added.has_in(), added.has_out()), (AnchorKind::Corner, false, false), "{params}");
+                        } else {
+                            assert_eq!(added.kind, AnchorKind::Smooth, "{params}");
+                            let (hi, ho) = (added.h_in - added.p, added.h_out - added.p);
+                            assert!(hi.cross(ho).abs() < 1e-6 * hi.hypot() * ho.hypot() && hi.dot(ho) < 0.0, "{params}: {added:?}");
+                        }
+                    }
+                    assert!(pieces.len() > 1, "{params}: segment {i} is split");
+                    assert!(close(pieces.iter().sum::<f64>(), orig.arclen(1e-6), 1e-3), "{params}: {pieces:?}");
+                    let (lo, hi) = pieces.iter().fold((f64::INFINITY, 0.0f64), |(lo, hi), &l| (lo.min(l), hi.max(l)));
+                    assert!(hi - lo < 1e-3, "{params}: segment {i}'s pieces from {lo} to {hi}");
+                }
+                assert_eq!(at, got.segment_count(), "{params}");
+                if !sp.closed {
+                    let (last, was) = (got.anchors[at], sp.anchors[sp.anchors.len() - 1]);
+                    assert_eq!((last.p, last.kind, last.has_in(), last.has_out()), (was.p, was.kind, was.has_in(), was.has_out()), "{params}");
+                }
             }
         }
     }

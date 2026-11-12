@@ -598,6 +598,21 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let edit_this = editing.as_deref() == Some(bar.name.as_str());
         let mut moved = None;
         let mut drops = None;
+        // A Learn link locating a tool of this toolbar: its button, scrolled into view once.
+        let locate = crate::panels::learn::locate::wanted(&app.ui, Some(&bar.name));
+        let scrolled = app.ui.learn_locate.as_ref().is_some_and(|l| l.scrolled);
+        // The toolbar comes to the front once, over other floating toolbars, unless the tool's
+        // group is torn off into a strip, which comes to the front instead.
+        let holder: Option<Vec<&'static str>> = locate
+            .and_then(|tool| bar.slots.iter().find(|s| s.iter().any(|t| t == tool)))
+            .map(|slot| slot.iter().filter_map(|id| tool_info(id).map(|t| t.id)).collect());
+        let torn_off = holder
+            .as_ref()
+            .is_some_and(|tools| tools.len() > 1 && tools.first().is_some_and(|key| crate::toolbar::is_floating(app, Some(&bar.name), key)));
+        if holder.is_some() && !torn_off && crate::panels::learn::locate::raise_once(&mut app.ui) {
+            ctx.move_to_top(egui::LayerId::new(egui::Order::Middle, id));
+        }
+        let (mut found, mut did_scroll) = (None, false);
         egui::Area::new(id).order(egui::Order::Middle).fixed_pos(pos).show(ctx, |ui| {
             crate::toolbar::flyout_frame(&t, false).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).show(ui, |ui| {
                 ui.set_width(width);
@@ -657,10 +672,16 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         ui.horizontal(|ui| {
                             ui.add_space((middle - BUTTON / 2.0 * row.len() as f32 - ui.cursor().min.x).max(0.0));
                             for &(s, slot) in row {
-                                if let Some(rect) = slot_button(ui, &t, &press, slot, &mut actions)
-                                    && edit_this
-                                {
+                                let Some((rect, shown)) = slot_button(ui, &t, &press, slot, &mut actions) else { continue };
+                                if edit_this {
                                     buttons.push((s, rect));
+                                }
+                                if let Some(tool) = locate.filter(|tool| slot.iter().any(|id| id == tool)) {
+                                    if !scrolled && !ui.clip_rect().contains_rect(rect) {
+                                        ui.scroll_to_rect(rect, None);
+                                        did_scroll = true;
+                                    }
+                                    found = Some((rect, shown == tool, slot.clone(), ui.layer_id(), ui.clip_rect()));
                                 }
                             }
                         });
@@ -696,6 +717,22 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             && let Some(b) = app.ui.custom_toolbars.get_mut(k)
         {
             b.pos = [p.x, p.y];
+        }
+        // The button is marked when it shows the located tool, else the group's flyout opens on it;
+        // a group torn off into a strip is marked there.
+        if did_scroll {
+            crate::panels::learn::locate::scroll_once(&mut app.ui);
+            ctx.request_repaint();
+        } else if let Some((rect, shows, slot, layer, clip)) = found {
+            let tools: Vec<&'static str> = slot.iter().filter_map(|id| tool_info(id).map(|t| t.id)).collect();
+            let torn_off = tools.len() > 1 && tools.first().is_some_and(|key| crate::toolbar::is_floating(app, Some(&bar.name), key));
+            if !torn_off {
+                if shows {
+                    crate::panels::learn::locate::mark(app, ctx, layer, clip, rect);
+                } else if crate::panels::learn::locate::reveal_once(&mut app.ui) {
+                    actions.push(Action::Flyout(tools, rect, bar.name.clone()));
+                }
+            }
         }
     }
     if let Some((bounds, button)) = clicked_anchor.or(anchor) {
@@ -767,13 +804,11 @@ struct Press<'a> {
 
 /// One slot's tool button, as the Tools panel's: it shows the tool chosen last from its group, a
 /// press selects it, and a long or right press opens the group's flyout; while the drawer edits the
-/// toolbar, it drags instead. Returns where it is drawn.
-fn slot_button(ui: &mut egui::Ui, t: &Tokens, p: &Press, slot: &[String], actions: &mut Vec<Action>) -> Option<egui::Rect> {
+/// toolbar, it drags instead. Returns where it is drawn and the tool it shows.
+fn slot_button(ui: &mut egui::Ui, t: &Tokens, p: &Press, slot: &[String], actions: &mut Vec<Action>) -> Option<(egui::Rect, &'static str)> {
     let tools: Vec<&'static str> = slot.iter().filter_map(|id| tool_info(id).map(|t| t.id)).collect();
-    let &first = tools.first()?;
     let is_active = tools.contains(&p.active);
-    let shown_id = if is_active { p.active } else { p.bar.slot_tool.get(first).and_then(|id| tool_info(id)).map_or(first, |t| t.id) };
-    let shown = tool_info(shown_id).filter(|t| tools.contains(&t.id)).or_else(|| tool_info(first))?;
+    let shown = tool_info(shown_tool(p.bar, p.active, &tools)?)?;
     let (rect, resp) = ui.allocate_exact_size(vec2(BUTTON, crate::toolbar::PITCH - 1.0), Sense::click_and_drag());
     let well = egui::Rect::from_center_size(rect.center(), vec2(30.0, 27.5));
     if is_active {
@@ -810,7 +845,18 @@ fn slot_button(ui: &mut egui::Ui, t: &Tokens, p: &Press, slot: &[String], action
     let tip = crate::toolbar::tip(shown);
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, &tip));
     resp.on_hover_text(tip);
-    Some(rect)
+    Some((rect, shown.id))
+}
+
+/// The tool a slot's button on `bar` shows, of the slot's known `tools`: the active tool when the
+/// slot holds it, else the one chosen last from the slot's group, else its first; none for a slot
+/// with no known tool.
+pub(crate) fn shown_tool(bar: &CustomToolbar, active: &'static str, tools: &[&'static str]) -> Option<&'static str> {
+    let &first = tools.first()?;
+    if tools.contains(&active) {
+        return Some(active);
+    }
+    Some(bar.slot_tool.get(first).and_then(|id| tools.iter().copied().find(|t| t == id)).unwrap_or(first))
 }
 
 /// The area of Add Tool…'s menu on the toolbar named `name`.

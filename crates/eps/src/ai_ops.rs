@@ -103,6 +103,27 @@ pub(crate) fn unit(v: f32) -> f32 {
     if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
 }
 
+/// `color` as a reader reads it back from the values written for it ([`ps::written`]): RGB values
+/// clamped to 0..1, L to 0..100 and a and b to -128..127, each to four decimals; other colors
+/// unchanged.
+pub(crate) fn as_written(color: Color) -> Color {
+    let w = |v: f32| ps::written(f64::from(v)) as f32;
+    match color {
+        Color::Rgb { r, g, b } => Color::rgb(w(unit(r)), w(unit(g)), w(unit(b))),
+        Color::Lab { l, a, b } => Color::lab(w(l.clamp(0.0, 100.0)), w(a.clamp(-128.0, 127.0)), w(b.clamp(-128.0, 127.0))),
+        c => c,
+    }
+}
+
+/// The RGB values written for `color`, clamped to 0..1: an RGB color's own values (in the working
+/// RGB space, as a reader reads them back), any other color's display RGB.
+pub(crate) fn rgb_values(color: Color) -> [f32; 3] {
+    match color {
+        Color::Rgb { r, g, b } => [r, g, b].map(unit),
+        c => c.to_rgb().map(unit),
+    }
+}
+
 /// The average colour of a gradient's stops (in RGB).
 pub(crate) fn average(g: &Gradient) -> Color {
     let n = g.stops.len().max(1) as f32;

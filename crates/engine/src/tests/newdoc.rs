@@ -291,6 +291,20 @@ fn file_new_and_artboard_new_take_the_same_largest_side() {
         assert!(err.contains(in_meters), "{p}: {err}");
     }
     assert_eq!(boards(&s).len(), 2);
+
+    // A side below 1 pt is kept as given, as file.new keeps it, and a size taken from such an artboard keeps it too.
+    let mut s = new_doc(json!({"width": 0.5, "height": 0.25}));
+    assert_eq!(boards(&s), [Rect::new(0.0, 0.0, 0.5, 0.25)]);
+    s.execute("artboard.new", &json!({"x": 0, "y": 10, "width": 0.5, "height": 0.75})).unwrap();
+    s.execute("artboard.new", &json!({"x": 0, "y": 20})).unwrap();
+    assert_eq!(boards(&s)[1..], [Rect::new(0.0, 10.0, 0.5, 10.75), Rect::new(0.0, 20.0, 0.5, 20.75)]);
+    // artboard.setProps keeps such sides when it changes something else, on a locked artboard too,
+    // and still raises a supplied side to 1 pt.
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "Small"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 2, "name": "Small locked"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "height": 0.5})).unwrap();
+    assert_eq!(boards(&s), [Rect::new(0.0, 0.0, 0.5, 1.0), Rect::new(0.0, 10.0, 0.5, 10.75), Rect::new(0.0, 20.0, 0.5, 20.75)]);
 }
 
 #[test]
