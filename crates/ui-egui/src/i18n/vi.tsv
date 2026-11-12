@@ -3227,6 +3227,7 @@ mark-style	Japanese	Kiểu Nhật
 	Reshape	Định hình lại
 	Reshape Segment	Định hình lại đoạn
 	Reshape Spine Segment	Định hình lại đoạn trục
+	Blend Easing	Gia tốc hòa trộn
 	Reshape Tool	Công cụ Định hình lại
 	Reshape Type Area	Định hình lại vùng chữ
 	Resize	Thay đổi kích thước
@@ -3282,6 +3283,7 @@ mark-style	Japanese	Kiểu Nhật
 	Rotate View Tool	Công cụ Xoay chế độ xem
 	Trackpad Gesture to Rotate View	Xoay chế độ xem bằng cử chỉ trên bàn di chuột
 	Hold a Tool Shortcut to Use the Tool Temporarily	Giữ phím tắt của công cụ để tạm thời dùng công cụ đó
+	Show Bounding Box While Moving and Drawing	Hiện hộp bao khi di chuyển và vẽ
 	Rotate…	Xoay…
 	Rotation	Góc xoay
 	Rotation relative to:	Xoay tương đối với:
@@ -5942,6 +5944,11 @@ axis	Y Axis	Trục Y
 	User Brush Library 9	Thư viện cọ người dùng 9
 	User Brush Library 10	Thư viện cọ người dùng 10
 	Art Ribbons	Dải băng nghệ thuật
+	Ink and Wash	Mực và màu loang
+	Tapered Ink	Mực vuốt nhọn
+	Brush Pen	Bút lông
+	Soft Wash	Màu loang mềm
+	Pooling Wash	Màu loang đọng viền
 	Zigzag	Zigzag
 	Burst Ray	Tia va chạm
 	Dash Trail	Vệt đứt đoạn

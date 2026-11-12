@@ -2080,6 +2080,7 @@ file-filter	Templates	Vorlagen
 	Move Slices	Slices verschieben
 	Move Spine Point	Achsenpunkt verschieben
 	Reshape Spine Segment	Achsensegment umformen
+	Blend Easing	Beschleunigung der Angleichung
 	Move Brush	Pinsel verschieben
 	Move Swatch	Farbfeld verschieben
 	Move Up	Nach oben verschieben
@@ -2910,6 +2911,7 @@ digits	Malayalam	Malayalam
 	Rotate View Tool	Ansichtdrehung-Werkzeug
 	Trackpad Gesture to Rotate View	Ansicht mit Trackpad-Geste drehen
 	Hold a Tool Shortcut to Use the Tool Temporarily	Werkzeug-Tastaturbefehl gedrückt halten, um das Werkzeug vorübergehend zu verwenden
+	Show Bounding Box While Moving and Drawing	Begrenzungsrahmen beim Verschieben und Zeichnen einblenden
 	Rotate…	Drehen…
 	Rotation	Drehung
 	Roughen…	Aufrauen…
@@ -5927,6 +5929,11 @@ axis	Y Axis	Y-Achse
 	User Brush Library 9	Benutzer-Pinsel-Bibliothek 9
 	User Brush Library 10	Benutzer-Pinsel-Bibliothek 10
 	Art Ribbons	Bildbänder
+	Ink and Wash	Tusche und Lavur
+	Tapered Ink	Spitz zulaufende Tusche
+	Brush Pen	Pinselstift
+	Soft Wash	Weiche Lavur
+	Pooling Wash	Lavur mit Farbrand
 	Zigzag	Zickzack
 	Burst Ray	Stoßstrahl
 	Dash Trail	Strichelspur

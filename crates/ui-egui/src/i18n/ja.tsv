@@ -2328,6 +2328,7 @@ antiAlias	Sharp	シャープ
 	Move Slices	スライスを移動
 	Move Spine Point	スパインポイントを移動
 	Reshape Spine Segment	スパインセグメントをシェイプ変形
+	Blend Easing	ブレンドのイージング
 	Move Brush	ブラシを移動
 	Move Swatch	スウォッチを移動
 	Move Up	上へ移動
@@ -2973,6 +2974,7 @@ mark-style	Japanese	日本式
 	Rotate View Tool	回転ビューツール
 	Trackpad Gesture to Rotate View	トラックパッドのジェスチャーでビューを回転
 	Hold a Tool Shortcut to Use the Tool Temporarily	ツールのショートカットを押している間だけツールを使用
+	Show Bounding Box While Moving and Drawing	移動中と描画中にバウンディングボックスを表示
 	Rotation	回転
 	Round Cap	丸型線端
 	Round Join	ラウンド結合
@@ -6026,6 +6028,11 @@ axis	Y Axis	Y 軸
 	User Brush Library 9	ユーザーブラシライブラリ 9
 	User Brush Library 10	ユーザーブラシライブラリ 10
 	Art Ribbons	アートリボン
+	Ink and Wash	墨と淡彩
+	Tapered Ink	先細りの墨
+	Brush Pen	筆ペン
+	Soft Wash	柔らかい淡彩
+	Pooling Wash	たまりのある淡彩
 	Zigzag	ジグザグ
 	Burst Ray	バーストレイ
 	Dash Trail	ダッシュトレイル
