@@ -796,16 +796,26 @@ mod portable {
         }
 
         /// What a paste of one of `mimes` takes, once this read's answer comes, waiting for it until
-        /// [`IMAGE_WAIT`] after it was sent, as long as a paste's bitmap read waits. `None`, so the
-        /// paste takes the internal clipboard, when the answer is what `ours` put on the clipboard
-        /// or doesn't come. Otherwise the clipboard is read as [`Clipboard::read_now_or_later`] and
-        /// the paste read it, this answer standing in for the read it answers: copied files, else
+        /// [`IMAGE_WAIT`] after it was sent, as long as a paste's bitmap read waits. Once it comes,
+        /// the same read is made again, since the clipboard may have changed hands meanwhile.
+        /// `None`, so the paste takes the internal clipboard, when that answer doesn't come or the
+        /// new one is what `ours` put on the clipboard. Otherwise the clipboard is read as
+        /// [`Clipboard::read_now_or_later`] and the paste read it, the new answer standing in for
+        /// the read it answers: copied files, else
         /// text, else the bitmap, and the bitmap when it is asked for and the text is blank or only
         /// names a picture (`adopt_system_clipboard_or_defer` in `vectorcraft-ui-egui`). Those reads
         /// wait as [`follow_up_wait`] says.
         fn paste(self, ours: Option<&Ours>, mimes: &[&'static str]) -> Option<Flavour> {
             let wait = (self.sent + IMAGE_WAIT).saturating_duration_since(Instant::now());
-            let answer = super::loads::wait_for_answer(&self.answer, wait).ok()?;
+            super::loads::wait_for_answer(&self.answer, wait).ok()?;
+            let fresh = |request: Request| {
+                self.reads
+                    .ask(request)
+                    .and_then(|a| super::loads::wait_for_answer(&a, follow_up_wait(request, self.sent, Instant::now())))
+                    .unwrap_or_else(|why| Answer::failed(request, why))
+            };
+            // The late answer may come from an app that lost the clipboard while it was awaited.
+            let answer = fresh(self.request);
             let held = match (&answer, ours) {
                 (Answer::Text(Ok(now)), Some(Ours::Text(t))) => now == t,
                 (Answer::Image(Ok(now)), Some(Ours::Image(w, h))) => (now.width, now.height) == (*w, *h),
@@ -817,11 +827,7 @@ mod portable {
             let mut answer = Some(answer);
             let mut read = |request: Request| match answer.take_if(|a| a.request() == request) {
                 Some(answer) => answer,
-                None => self
-                    .reads
-                    .ask(request)
-                    .and_then(|a| super::loads::wait_for_answer(&a, follow_up_wait(request, self.sent, Instant::now())))
-                    .unwrap_or_else(|why| Answer::failed(request, why)),
+                None => fresh(request),
             };
             if let Some(f) = copied_file(read(Request::Files).files(), mimes) {
                 return Some(f);
@@ -852,7 +858,8 @@ mod portable {
     impl Late {
         /// What a paste of one of `mimes` takes once the answer comes ([`Unanswered::paste`]). The
         /// core protocol's text is waited for as long, until [`IMAGE_WAIT`] after its read was
-        /// sent, and pasted unless it is empty, what `ours` put on the clipboard, or doesn't come.
+        /// sent, then read again, and pasted unless it is empty, what `ours` put on the clipboard,
+        /// or doesn't come.
         fn paste(self, ours: Option<&Ours>, mimes: &[&'static str]) -> Option<Flavour> {
             match self {
                 Self::Arboard(unanswered) => unanswered.paste(ours, mimes),
@@ -1611,6 +1618,20 @@ mod portable {
             let pasted = paste.join().ok().flatten().expect("the text is pasted");
             assert_eq!((pasted.mime, pasted.data), (TEXT, b"<img src=\"art.png\">".to_vec()));
 
+            // The app that answers late may have lost the clipboard meanwhile: the paste reads it
+            // again and takes the new owner's text.
+            let texts_read = std::sync::atomic::AtomicUsize::new(0);
+            let (mut cb, release) = slow_owner(move |request| match request {
+                Request::Text if texts_read.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 => Answer::Text(Ok("old owner".into())),
+                Request::Text => Answer::Text(Ok("new owner".into())),
+                _ => Answer::failed(request, "none".into()),
+            });
+            assert!(cb.read_waiting(Request::Text, Duration::ZERO).text().is_err());
+            let unanswered = cb.unanswered(&[TEXT]).expect("the text read is kept for the paste");
+            let paste = std::thread::spawn(move || unanswered.paste(None, &[TEXT]));
+            drop(release);
+            assert_eq!(paste.join().ok().flatten().map(|f| f.data), Some(b"new owner".to_vec()));
+
             // An answer that came before the paste may be old: it is dropped, not pasted.
             let (mut cb, release) = slow_owner(|request| Answer::failed(request, "not asked".into()));
             assert!(cb.read_waiting(Request::Text, Duration::ZERO).text().is_err());
@@ -1668,6 +1689,23 @@ mod portable {
                 std::thread::yield_now();
             }
             assert!(reads.unanswered(&[TEXT]).is_none());
+
+            // The app that answers late may have lost the clipboard meanwhile: the paste reads it
+            // again and takes the new owner's text.
+            let (release, gate) = std::sync::mpsc::channel::<()>();
+            let mut texts_read = 0;
+            let loads = Loads::spawn("test", Duration::ZERO, move |()| {
+                let _ = gate.recv();
+                texts_read += 1;
+                Ok(if texts_read == 1 { "old owner" } else { "new owner" }.to_string())
+            })
+            .unwrap();
+            let mut reads = TextReads::new(loads);
+            assert!(reads.get(Duration::ZERO).is_err());
+            let late = Late::Wayland(reads.unanswered(&[TEXT]).expect("the read is kept for the paste"));
+            let paste = std::thread::spawn(move || late.paste(None, &[TEXT]));
+            drop(release);
+            assert_eq!(paste.join().ok().flatten().map(|f| f.data), Some(b"new owner".to_vec()));
         }
 
         #[test]
@@ -1698,7 +1736,7 @@ mod wayland {
     use std::time::{Duration, Instant};
 
     use super::TEXT;
-    use super::loads::{GONE, LOAD_WAIT, Loads, wait_for_answer};
+    use super::loads::{Asker, GONE, LOAD_WAIT, Loads, wait_for_answer};
 
     /// What a text read gives.
     type Text = Result<String, String>;
@@ -1724,12 +1762,18 @@ mod wayland {
     pub(super) struct Unanswered {
         answer: mpsc::Receiver<Text>,
         sent: Instant,
+        /// The worker, for the read made again once the answer comes.
+        reads: Asker<(), Text>,
     }
 
     impl Unanswered {
-        /// The text, once it comes, waiting for it until `limit` after the read was sent.
+        /// The text, read again once this read's answer comes, waiting for that answer until
+        /// `limit` after the read was sent, and for the new one as long, [`LOAD_WAIT`] at least.
+        /// The late answer may come from an app that lost the clipboard while it was awaited.
         pub(super) fn text(self, limit: Duration) -> Text {
-            wait_for_answer(&self.answer, (self.sent + limit).saturating_duration_since(Instant::now()))?
+            let left = |now: Instant| (self.sent + limit).saturating_duration_since(now);
+            let _late = wait_for_answer(&self.answer, left(Instant::now()))?;
+            wait_for_answer(&self.reads.ask(())?, LOAD_WAIT.max(left(Instant::now())))?
         }
     }
 
@@ -1749,7 +1793,7 @@ mod wayland {
                 Ok(text) => text,
                 Err(why) => {
                     if why != GONE {
-                        self.unanswered = Some(Unanswered { answer, sent });
+                        self.unanswered = Some(Unanswered { answer, sent, reads: self.loads.asker() });
                     }
                     Err(why)
                 }
