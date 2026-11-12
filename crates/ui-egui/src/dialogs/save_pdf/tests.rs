@@ -92,6 +92,72 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
     assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
 }
 
+/// Opened for a page of the art's bounds (Export As with Use Artboards off), the dialog has no
+/// Artboards section, and OK writes one page of the art's bounds with its options, a saved preset
+/// and View PDF after Saving included.
+#[test]
+fn a_page_of_the_arts_bounds_has_no_artboards_section_and_takes_the_options() {
+    let (mut app, written, opened) = app();
+    app.run("pdf.preset.save", json!({"name": "Mine", "compatibility": "1.5"})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    theme::install_fonts(&ctx);
+    let has_range = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        nodes.iter().any(|(_, n)| n.label() == Some("Range:") && n.role() == egui::accesskit::Role::RadioButton)
+    };
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/artboards.pdf"})).unwrap();
+    has_range(&mut app);
+    assert!(has_range(&mut app), "the artboards' dialog has the section");
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/art.pdf", "preset": "Mine", "useArtboards": false})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().bool(ART_BOUNDS));
+    has_range(&mut app);
+    assert!(!has_range(&mut app), "no artboards to choose");
+    set_field(&mut app, "viewAfterSaving", json!(true));
+    let r = super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "closes after saving");
+    assert_eq!(r["path"], "/tmp/art.pdf");
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert!(w[0].1.starts_with(b"%PDF-1.5"), "the saved preset reaches the writer");
+    let pdf = vectorcraft_pdf::import(&w[0].1).unwrap();
+    assert_eq!(pdf.artboards.len(), 1);
+    let size = pdf.artboards[0].rect.size();
+    assert!((50.0..52.0).contains(&size.width) && (40.0..42.0).contains(&size.height), "the rectangle's bounds with its stroke: {size:?}");
+    assert_eq!(opened.borrow().len(), 1, "View PDF after Saving opens the file");
+    assert!(opened.borrow()[0].0.ends_with("/tmp/art.pdf"));
+}
+
+/// With Background Export on, a page of the art's bounds is written in the background, as Export
+/// As writes its other formats.
+#[test]
+fn a_page_of_the_arts_bounds_is_written_in_the_background() {
+    let written = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(String, Vec<u8>)>::new()));
+    let w = written.clone();
+    let services = Services {
+        write_shared: Some(std::sync::Arc::new(move |p: &str, b: &[u8]| {
+            w.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.session.prefs.background_export = true;
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/bg.pdf", "useArtboards": false})).unwrap();
+    let r = super::super::confirm(&mut app).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    assert!(app.ui.dialog.is_none());
+    crate::background::wait_all(&mut app);
+    let w = written.lock().unwrap();
+    assert_eq!(w.len(), 1);
+    assert_eq!(w[0].0, "/tmp/bg.pdf");
+    assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 1);
+}
+
 #[test]
 fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
     let (mut app, written, opened) = app();

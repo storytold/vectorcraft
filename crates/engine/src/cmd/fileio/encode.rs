@@ -321,13 +321,29 @@ pub(crate) fn anti_alias(id: &str) -> std::result::Result<AntiAlias, String> {
 
 /// The `useArtboards` param of a PDF, AI, DXF or raster export (SVG has its own): `true` writes every
 /// chosen artboard (default all), `false` the bounds of the visible art instead, absent one
-/// artboard (raster, DXF) or the chosen pages (PDF, AI).
-fn use_artboards(p: &Value) -> Result<Option<bool>> {
+/// artboard (raster, DXF) or the chosen pages (PDF, AI). Errors name the command `cmd`.
+pub(super) fn use_artboards(cmd: &str, p: &Value) -> Result<Option<bool>> {
     match p.get("useArtboards") {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Bool(b)) => Ok(Some(*b)),
-        Some(v) => Err(bad(C, format!("useArtboards must be true or false, not {v}"))),
+        Some(v) => Err(bad(cmd, format!("useArtboards must be true or false, not {v}"))),
     }
+}
+
+/// With `useArtboards: false` in `p`: `doc` without its opacity-mask or symbol editing layer and
+/// with one artboard, the bounds of its visible art, and `p` without the artboard choice. `None`
+/// when `useArtboards` is absent, null or true. A document with no visible art is refused.
+pub(super) fn art_page(cmd: &str, doc: &Document, p: &Value) -> Result<Option<(Document, Value)>> {
+    if use_artboards(cmd, p)? != Some(false) {
+        return Ok(None);
+    }
+    let doc = &*doc.without_edit_modes();
+    let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(cmd, "nothing to export: the document has no visible art"))?;
+    let mut q = super::export::without_artboards(p);
+    if let Some(o) = q.as_object_mut() {
+        o.remove("useArtboards");
+    }
+    Ok(Some((single_artboard(doc, bounds, "Art"), q)))
 }
 
 /// The `rect` param of a raster export: `[x, y, width, height]` in points, y down. `None` when
@@ -503,7 +519,7 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
     let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
     // SVG reads its own `useArtboards` (an SVG option).
-    let use_artboards = if f.raster || matches!(f.id, "pdf" | "ai" | "dxf" | "emf" | "wmf" | "hpgl") { use_artboards(p)? } else { None };
+    let use_artboards = if f.raster || matches!(f.id, "pdf" | "ai" | "dxf" | "emf" | "wmf" | "hpgl") { use_artboards(C, p)? } else { None };
     // `rect`: that area of the page, as if it were the only artboard (the document is not changed).
     if let Some(rect) = page_rect(f, p)? {
         let mut q = super::export::without_artboards(p);
@@ -513,13 +529,10 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
         }
         return encode_files(&single_artboard(doc, rect, "Rect"), f, &q);
     }
-    if use_artboards == Some(false) {
-        let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(C, "nothing to export: the document has no visible art"))?;
-        let mut q = super::export::without_artboards(p);
-        if let Some(o) = q.as_object_mut() {
-            o.remove("useArtboards");
-        }
-        return encode_files(&single_artboard(doc, bounds, "Art"), f, &q);
+    if use_artboards == Some(false)
+        && let Some((art, q)) = art_page(C, doc, p)?
+    {
+        return encode_files(&art, f, &q);
     }
     let bytes = match f.id {
         "vectorcraft" => super::native::encode(C, f, doc, p)?,

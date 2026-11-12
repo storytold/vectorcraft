@@ -283,6 +283,16 @@ fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
     assert_eq!(app.run("file.exportAs", json!({"path": path, "format": "svg"})).unwrap()["pending"], dialogs::confirm::KIND);
     app.ui.dialog = None;
     assert_eq!(std::fs::read(&path).unwrap(), saved);
+    // So does a PDF written by Save PDF's OK, and the question stays open when Save PDF closes.
+    assert_eq!(app.run("file.export.pdf", json!({"path": path})).unwrap()["pending"], dialogs::confirm::KIND);
+    app.ui.dialog = None;
+    for artboards in [true, false] {
+        app.run("ui.savePdfDialog", json!({"path": path, "useArtboards": artboards})).unwrap();
+        dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND), "useArtboards {artboards}");
+        app.ui.dialog = None;
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), saved);
     // Another name doesn't ask.
     let copy = d.join("b.svg").to_string_lossy().to_string();
     assert!(app.run("file.exportAs", json!({"path": copy, "format": "svg"})).unwrap().get("pending").is_none());

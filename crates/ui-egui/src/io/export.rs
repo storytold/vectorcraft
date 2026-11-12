@@ -62,6 +62,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // Background Export: encoded and written from this snapshot while editing goes on. The
     // encoder is told the file it writes (an exporter plug-in gets its name and extension).
     let label = format!("Exporting {}", fileio::file_name(&path));
+    // A PDF's View PDF after saving: the first file written opens in the system viewer, unless
+    // automation asked for the export (checked now: a background export ends after the request).
+    let view = params.get("viewAfterSaving").and_then(Value::as_bool).unwrap_or(false) && app.refuse_automation("viewAfterSaving").is_ok();
     let (mut params, target) = (params.clone(), path.clone());
     if let Some(o) = params.as_object_mut() {
         o.insert("path".into(), json!(path));
@@ -113,6 +116,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
             Some(first) => exported_with_notes(&what, warnings.len(), first),
             None => format!("Exported {what}"),
         };
+        if view && let Some(path) = r["path"].as_str() {
+            view_file(app, path);
+        }
         show_with_notes(app, status, warnings);
         Ok(r)
     })?;
@@ -192,8 +198,14 @@ pub(crate) fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut par
 /// File → Save as PDF: `document.exportPdf` with `params` (the Save PDF dialog's options), written
 /// to `path` (else a picked or suggested name) → `{path, bytes, warnings}`. With
 /// `viewAfterSaving`, the written file opens in the system viewer (not on the web, which
-/// downloads it).
+/// downloads it). Writing over the file the document was opened from, when opening it left things
+/// out, asks first and runs `file.export.pdf` again on OK.
 pub fn export_pdf(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    if let Some(path) = params.get("path").and_then(Value::as_str)
+        && let Some(r) = ask_before_losing(app, path, "file.export.pdf", &params)
+    {
+        return Ok(r);
+    }
     let view = params.get("viewAfterSaving").and_then(Value::as_bool).unwrap_or(false);
     let (path, mut v) = run_to_file(app, "document.exportPdf", "pdf", params)?;
     if view {
