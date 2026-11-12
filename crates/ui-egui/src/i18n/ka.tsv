@@ -7090,3 +7090,15 @@ font-script	Japanese	იაპონური
 	Deferred Effects	გადადებული ეფექტები
 @msg	no plug-in effect is deferred	პლაგინის ეფექტი არ არის გადადებული
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	ჭრის ხელსაწყოები
+	Stencil Bridges…	ტრაფარეტის ხიდები…
+	Stencil Bridges	ტრაფარეტის ხიდები
+	Shortest Crossing	უმოკლესი გადაკვეთა
+	Direction	მიმართულება
+@msg	The selected art has no islands to bridge	მონიშნულ ნახატს არ აქვს დასაკავშირებელი კუნძულები
+@msg	No bridge of this width fits across the selected art	ამ სიგანის ხიდი მონიშნულ ნახატზე არ ეტევა
+@msg	Some islands could not be joined to the area around the art	ზოგიერთი კუნძული ვერ დაუკავშირდა ნახატის გარშემო არეს
+@msg	`width` must be from {lo} to {hi} pt	`width` უნდა იყოს {lo}-დან {hi} pt-მდე
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` უნდა იყოს მთელი რიცხვი 1-დან {MAX_BRIDGES_PER_ISLAND}-მდე
