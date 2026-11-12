@@ -67,6 +67,28 @@ fn objects_round_trip_through_the_json_model() {
     assert_eq!(d, before);
 }
 
+/// A mirrored conic gradient handed back keeps its negative aspect (its sweep stays mirrored),
+/// kept within the same range as other aspects; a radial's is kept positive.
+#[test]
+fn a_mirrored_conic_keeps_its_sign_through_a_plug_in() {
+    let (d, ids, _) = doc();
+    let a = ids[0].0;
+    let fill = |kind: &str, aspect: f64| {
+        let mut g = vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default());
+        g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect, focal: None });
+        let mut p = serde_json::to_value(Paint::Gradient(Box::new(g))).unwrap();
+        p["gradient"]["kind"] = json!(kind);
+        p
+    };
+    for (kind, aspect, want) in [("Conic", -0.5, -0.5), ("Conic", -500.0, -100.0), ("Conic", 0.5, 0.5), ("Radial", -0.5, 0.01)] {
+        let mut d = d.clone();
+        let out = decode_json(json!({"objects": [{"id": a, "fills": [fill(kind, aspect)]}]})).unwrap();
+        apply_output(&mut d, &ids, out, None, &keep).unwrap();
+        let Paint::Gradient(g) = d.node(ids[0]).unwrap().appearance.fill_paint() else { panic!("a gradient fill") };
+        assert_eq!(g.geom.unwrap().aspect, want, "{kind} {aspect}");
+    }
+}
+
 /// A path handed back as it was stays the live shape it was (a rectangle keeps its corner
 /// widgets); a path that changed is a plain path.
 #[test]

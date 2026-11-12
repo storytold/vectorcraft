@@ -257,6 +257,12 @@ pub struct Facet {
     /// The facet's outline with the profile's curves kept as cubics, for [`Facet::path`]. The
     /// contours stay the polygon that visibility and depth use.
     pub outline: Option<PathData>,
+    /// The facet is a piece of the solid's sides (Extrude & Bevel's walls and bevels, Inflate's
+    /// sides) rather than of its ends (the caps, a plane, Inflate's front and back).
+    pub side: bool,
+    /// The facet is turned away from the viewer: a closed solid keeps it (seen edge-on, or with
+    /// Draw Hidden Faces) and draws it behind the facets turned toward the viewer.
+    pub away: bool,
     /// The contours in view space, before projection, for tests that measure depths.
     #[cfg(test)]
     view: Vec<Vec<V3>>,

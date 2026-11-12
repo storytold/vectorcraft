@@ -741,6 +741,16 @@ fn insert_child_before_and_after_take_fuel_for_each_child_they_scan() {
 }
 
 #[test]
+fn namespace_lookups_take_fuel_for_each_ancestor_they_climb() {
+    let shallow = "var x = <a><a/></a>; var leaf = x.children()[0];";
+    let deep = "var x = <a/>; var leaf = x; for (var i = 0; i < 150; i++) { var c = <a/>; leaf.appendChild(c); leaf = c; }";
+    for action in ["leaf.inScopeNamespaces()", "leaf.namespaceDeclarations()", "leaf.namespace()", "leaf.namespace('p')"] {
+        let (s, d) = (fuel_of(shallow, action), fuel_of(deep, action));
+        assert!(d >= s + 149, "{action}: {s} one level down, {d} 150 levels down");
+    }
+}
+
+#[test]
 fn limits_cannot_be_caught_by_the_script() {
     assert_eq!(kind_of(TIGHT, "try { for (;;) (<a/>).toXMLString(); } catch (e) { 1 }"), RunErrorKind::Limit(LimitKind::Fuel));
 }

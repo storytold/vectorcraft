@@ -21,6 +21,8 @@ pub(in crate::ai_editing) const SWATCH_PLACEMENT: &str =
     "the placement of pattern swatches that move, turn or scale their pattern is left out of the editing data for other apps";
 pub(in crate::ai_editing) const GRADIENT_MIX: &str =
     "gradients that mix their colors perceptually or dither are written as classic gradients in the editing data for other apps";
+pub(in crate::ai_editing) const CONIC: &str =
+    "conic gradients are written as linear gradients along their vector, with the same stops, in the editing data for other apps";
 pub(in crate::ai_editing) const STOP_LINKS: &str =
     "gradient stops linked to global process colors are written as their colors in the editing data for other apps";
 /// The length of a linear gradient's caps (`Bc`): the canvas's side.
@@ -43,8 +45,8 @@ pub(super) struct PatternOut {
     used: bool,
 }
 
-/// Can `g` be written as a gradient (a linear or radial one with stops, no more than the `.ai`
-/// reader reads)?
+/// Can `g` be written as a gradient (a linear, radial or conic one with stops, no more than the
+/// `.ai` reader reads; a conic is written linear, [`CONIC`])?
 fn writable_gradient(g: &Gradient) -> bool {
     g.kind != GradientKind::Freeform && !g.stops.is_empty() && g.stops.len() <= crate::import::MAX_GRADIENT_STOPS
 }
@@ -299,6 +301,9 @@ impl Writer<'_> {
     fn gradient_def(&mut self, s: &mut String, d: &GradientDef) {
         if d.gradient.dither || !d.gradient.method.is_classic() {
             self.warn(GRADIENT_MIX);
+        }
+        if d.gradient.kind == GradientKind::Conic {
+            self.warn(CONIC);
         }
         let name = ps::bytes(d.name.as_bytes());
         let radial = d.gradient.kind == GradientKind::Radial;
