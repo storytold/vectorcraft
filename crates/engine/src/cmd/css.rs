@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
 use vectorcraft_svg::{CssOptions, CssSheet, css_rules};
 
-use super::fileio::{default_name, encode_with_warnings, isolated, write_file};
+use super::fileio::{Note, default_name, encode_with_notes, isolated, note_texts, write_file};
 use super::{CommandSpec, Result, Session, bad, cmd, has_doc, named_ids, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -118,20 +118,22 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let css = format!("{}\n", sheet.text());
     let doc = &s.doc()?.doc;
-    // Encode the pictures of rasterized art, and add each of their warnings once.
+    // Encode the pictures of rasterized art, and add each of their warnings once. What CSS can't
+    // describe is a loss.
     let mut images = Vec::new();
-    let mut warnings = sheet.warnings.clone();
+    let mut notes: Vec<Note> = sheet.warnings.iter().cloned().map(Note::loss).collect();
     for r in &sheet.rules {
         let Some(name) = &r.image else { continue };
         let (d, _) = isolated(doc, &[r.id], name).ok_or_else(|| bad(C, format!("{} paints nothing to rasterize", r.selector)))?;
-        let (png, notes) = encode_with_warnings(&d, "png", &json!({}))?;
+        let (png, given) = encode_with_notes(&d, "png", &json!({}))?;
         images.push((name, png));
-        for w in notes {
-            if !warnings.contains(&w) {
-                warnings.push(w);
+        for n in given {
+            if !notes.iter().any(|x| x.text == n.text) {
+                notes.push(n);
             }
         }
     }
+    let warnings = note_texts(&notes);
     let n = sheet.rules.len();
     match path {
         Some(path) => {

@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, fills and strokes at an opacity of 0 left out, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
             has_doc,
             info
         ),
@@ -131,14 +131,16 @@ fn repeat_entry(d: &Document, n: &Node, spec: &RepeatSpec) -> (Value, (String, S
 }
 
 /// The Document Info categories of `d` (only `category` when given) from `info` (what
-/// `document.info` reports), its fonts, its image objects, the rows of its Repeat objects and the
-/// rows of its objects filled or stroked with a spot color, with a pattern and with a gradient.
+/// `document.info` reports), its fonts, its image objects, the rows of the brushes its art uses, the
+/// rows of its Repeat objects and the rows of its objects filled or stroked with a spot color, with a
+/// pattern and with a gradient.
 #[allow(clippy::too_many_arguments)]
 fn sections(
     d: &Document,
     info: &Value,
     fonts: &BTreeSet<super::fonts::UsedFont>,
     images: &[ImageRow],
+    brushes: &[(String, String)],
     repeats: &[(String, String)],
     spot_objects: &[(String, String)],
     pattern_objects: &[(String, String)],
@@ -184,7 +186,7 @@ fn sections(
                     rows
                 }
                 "graphicStyles" => names("graphicStyleNames"),
-                "brushes" => names("brushNames"),
+                "brushes" => brushes.to_vec(),
                 "spotColors" => spot_objects.to_vec(),
                 "patterns" => pattern_objects.to_vec(),
                 "gradients" => gradient_objects.to_vec(),
@@ -326,12 +328,18 @@ fn painted_runs<'a>(d: &Document, spots: &HashSet<&str>, n: &'a Node) -> Option<
     if !own && !t.runs.iter().any(|r| is_listed(&r.style.fill) || is_listed(&r.style.stroke)) {
         return None;
     }
+    Some((t, drawn_runs(d, t)))
+}
+
+/// The runs of type `t` that its layout draws: those with a glyph outline (list markers and ruby
+/// included) or an underline or strikethrough bar, laid out as the renderer lays it out.
+fn drawn_runs(d: &Document, t: &vectorcraft_doc::TextObject) -> BTreeSet<usize> {
     let db = vectorcraft_text::FontDb::global();
     let resolved = d.inline_resolved(t);
     let lay = vectorcraft_text::layout(db, &resolved);
     let mut painted: BTreeSet<usize> = lay.glyphs.iter().chain(&lay.ruby).filter(|g| !g.outline.elements().is_empty()).map(|g| g.run).collect();
     painted.extend(vectorcraft_text::decorations(&lay, db, &resolved).into_iter().map(|(run, _)| run));
-    Some((t, painted))
+    painted
 }
 
 /// The names a paint is listed by in a Document Info category: its spot colors, its pattern or its
@@ -340,18 +348,17 @@ type PaintNames<'a> = dyn Fn(&Paint) -> Vec<String> + 'a;
 
 /// The spot colors, patterns or gradients (`label`: [`spot_labels`], [`pattern_label`] or
 /// [`gradient_label`], each paint's names) that `n`'s own fills and strokes paint, each once. A
-/// hidden fill or stroke and a stroke with no width paint nothing, and neither does any fill or
+/// hidden fill or stroke, a fill or stroke at an opacity of 0 and a stroke with no width paint
+/// nothing, and neither does any fill or
 /// stroke of a guide (drawn in the guide color), of a compound path's member (`members`: the
 /// compound path's own fills and strokes paint it) or of type whose layout draws nothing
 /// (`painted_runs`). An image's fills and strokes paint only where an effect gives them a shape.
-/// With `ink` (the spot colors), a fill or stroke at an opacity of 0 prints no ink and is left out.
 fn own_paints(
     d: &Document,
     n: &Node,
     members: &HashSet<*const Node>,
     painted_runs: Option<&(&vectorcraft_doc::TextObject, BTreeSet<usize>)>,
     label: &PaintNames<'_>,
-    ink: bool,
 ) -> Vec<String> {
     if matches!(n.kind, NodeKind::Path { guide: true, .. })
         || members.contains(&std::ptr::from_ref(n))
@@ -366,8 +373,7 @@ fn own_paints(
         .then(|| vectorcraft_render::effects::image_paint(Some(d), n).into_iter().flat_map(|(_, _, item)| label(item.paint())).collect());
     let mut out: Vec<String> = vec![];
     for item in &n.appearance.items {
-        let prints = item.opacity() > 0.0;
-        if !item.visible() || matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0) || (ink && !prints) {
+        if !item.visible() || item.opacity() <= 0.0 || matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0) {
             continue;
         }
         for name in label(item.paint()) {
@@ -382,6 +388,41 @@ fn own_paints(
 /// [`pattern_label`] or [`gradient_label`] as the names [`own_paints`] takes.
 fn one_label(label: fn(&Paint) -> Option<String>) -> impl Fn(&Paint) -> Vec<String> {
     move |p| label(p).into_iter().collect()
+}
+
+/// The brushes `n`'s own strokes draw with, in the order of its appearance. A hidden stroke, a
+/// stroke at an opacity of 0, a stroke with no paint and a stroke with no width draw nothing, and neither does any stroke of a
+/// guide (drawn in the guide color) or of a compound path's member (`members`: the compound path's
+/// own strokes draw it). An image's strokes draw only where an effect gives them a shape, and only
+/// paths, compound paths, type and images draw strokes of their own.
+fn applied_brushes(d: &Document, n: &Node, members: &HashSet<*const Node>) -> Vec<String> {
+    if matches!(n.kind, NodeKind::Path { guide: true, .. }) || members.contains(&std::ptr::from_ref(n)) {
+        return vec![];
+    }
+    let brush = |item: &vectorcraft_doc::AppearanceItem| match item {
+        vectorcraft_doc::AppearanceItem::Stroke(st) if item.visible() && st.opacity > 0.0 && !st.paint.is_none() && st.width > 0.0 => {
+            st.brush.clone().filter(|b| !b.is_empty())
+        }
+        _ => None,
+    };
+    if matches!(n.kind, NodeKind::Image(_)) {
+        return vectorcraft_render::effects::image_paint(Some(d), n).iter().filter_map(|(_, _, item)| brush(item)).collect();
+    }
+    let used: Vec<String> = n.appearance.items.iter().filter_map(brush).collect();
+    if used.is_empty() {
+        return used;
+    }
+    // A path or compound path with no segment gives its strokes nothing to follow, and neither does
+    // type whose layout draws nothing (spaces and line breaks without an underline or strikethrough).
+    let segments = |pd: &vectorcraft_geom::PathData| pd.subpaths.iter().any(|sp| sp.segment_count() > 0);
+    let follows = match &n.kind {
+        NodeKind::Path { .. } => n.path_data().is_some_and(segments),
+        NodeKind::Compound { children, .. } => children.iter().filter_map(|c| c.path_data()).any(segments),
+        NodeKind::Text(t) => !drawn_runs(d, t).is_empty(),
+        // A brush on any other kind of object (a layer, a group, a ruler guide) is not listed.
+        _ => false,
+    };
+    if follows { used } else { vec![] }
 }
 
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
@@ -428,8 +469,10 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let mut spot = BTreeSet::new();
     let (spot_label, pattern, gradient) = (|p: &Paint| spot_labels(&spot_swatches, p), one_label(pattern_label), one_label(gradient_label));
     let mut styles: Vec<&str> = if selection_only { vec![] } else { d.graphic_styles.iter().map(|g| g.name.as_str()).collect() };
-    // `brushes` holds the Brushes panel's brushes, or with selectionOnly it holds the brushes that the selected objects' strokes use.
-    let mut brushes: Vec<String> = if selection_only { vec![] } else { vectorcraft_brush::library(d).into_iter().map(|b| b.name).collect() };
+    // `library` holds the Brushes panel's brushes, and `brushes` the brushes the visited objects' strokes draw with, each once,
+    // in walk order.
+    let library = vectorcraft_brush::library(d);
+    let mut brushes: Vec<String> = vec![];
     // `repeats` and `repeat_rows` hold the `repeatObjects` entries and the rows of the Repeat objects that the walk visits, in walk order.
     let mut repeats: Vec<Value> = vec![];
     let mut repeat_rows: Vec<(String, String)> = vec![];
@@ -504,9 +547,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             }
             // The spot colors, the patterns and the gradients this object's fills and strokes paint, each once.
             let painted_runs = painted_runs(d, &spot_swatches, n);
-            let mut used_spots = own_paints(d, n, &members, painted_runs.as_ref(), &spot_label, true);
-            let mut used_patterns = own_paints(d, n, &members, painted_runs.as_ref(), &pattern, false);
-            let mut used_gradients = own_paints(d, n, &members, painted_runs.as_ref(), &gradient, false);
+            let mut used_spots = own_paints(d, n, &members, painted_runs.as_ref(), &spot_label);
+            let mut used_patterns = own_paints(d, n, &members, painted_runs.as_ref(), &pattern);
+            let mut used_gradients = own_paints(d, n, &members, painted_runs.as_ref(), &gradient);
             // The characters' own paints: an inline graphic draws no outline and does not take its
             // run's paint (a list marker set in its run does), and a stroke with no width paints
             // nothing.
@@ -572,14 +615,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             {
                 styles.push(&g.name);
             }
-            if selection_only {
-                for item in &n.appearance.items {
-                    if let vectorcraft_doc::AppearanceItem::Stroke(st) = item
-                        && let Some(b) = &st.brush
-                        && !brushes.contains(b)
-                    {
-                        brushes.push(b.clone());
-                    }
+            for b in applied_brushes(d, n, &members) {
+                if !brushes.contains(&b) {
+                    brushes.push(b);
                 }
             }
             if let NodeKind::Repeat(spec) = &n.kind {
@@ -590,6 +628,17 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         });
     }
     let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
+    // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the last of two
+    // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type.
+    let kinds: HashMap<&str, &vectorcraft_brush::BrushKind> = library.iter().map(|b| (b.name.as_str(), &b.kind)).collect();
+    let brush_entries: Vec<Value> =
+        brushes.iter().map(|name| json!({ "name": name, "type": kinds.get(name.as_str()).map(|k| k.type_id()) })).collect();
+    let brush_rows: Vec<(String, String)> = brushes
+        .iter()
+        .map(|name| {
+            (name.clone(), kinds.get(name.as_str()).map_or_else(|| "missing from the Brushes panel".to_string(), |k| format!("{} brush", k.label())))
+        })
+        .collect();
     let mut out = json!({
         "document": document_summary(d),
         "objects": counts,
@@ -604,6 +653,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "graphicStyles": d.graphic_styles.len(),
         "graphicStyleNames": styles,
         "brushNames": brushes,
+        "brushes": brush_entries,
+        "panelBrushNames": library.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(),
         "repeatObjects": repeats,
         "characterStyles": d.char_styles.len(),
         "paragraphStyles": d.para_styles.len(),
@@ -615,7 +666,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     });
     // The document's name: its file's, else its title.
     out["document"]["name"] = json!(st.title());
-    let sections = sections(d, &out, &fonts, &image_rows, &repeat_rows, &spot_rows, &pattern_rows, &gradient_rows, category);
+    let sections = sections(d, &out, &fonts, &image_rows, &brush_rows, &repeat_rows, &spot_rows, &pattern_rows, &gradient_rows, category);
     if text {
         return Ok(json!({ "text": report_text(&st.title(), selection_only, &sections) }));
     }
@@ -728,38 +779,129 @@ mod tests {
         assert_eq!(length(&mut s, json!({"selectionOnly": true})), 0.0);
     }
 
-    /// Document Info › Brushes lists the Brushes panel's brushes, and with Selection Only it lists
-    /// the brushes the selected objects' strokes use, each once.
+    /// Document Info › Brushes lists the brushes the art's strokes use, each once with its type, and
+    /// leaves out the Brushes panel's brushes no art uses (`panelBrushNames` lists those). With
+    /// Selection Only it lists the brushes the selected objects' strokes use.
     #[test]
     fn info_lists_the_brushes() {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
         let panel: Vec<Value> =
             s.execute("brush.list", &json!({})).unwrap()["brushes"].as_array().unwrap().iter().map(|b| b["name"].clone()).collect();
-        let i = s.execute("document.info", &json!({"category": "brushes"})).unwrap();
-        assert_eq!(i["brushNames"], json!(panel));
+        let brushes = |s: &mut Session, p: Value| s.execute("document.info", &p).unwrap();
+        // No art uses a brush: the category is empty.
+        let i = brushes(&mut s, json!({"category": "brushes"}));
+        assert_eq!((i["brushNames"].clone(), i["brushes"].clone(), i["panelBrushNames"].clone()), (json!([]), json!([]), json!(panel)));
         assert_eq!((i["sections"][0]["id"].as_str(), i["sections"][0]["title"].as_str()), (Some("brushes"), Some("Brushes")));
-        let rows: Vec<Value> = panel.iter().map(|n| json!([n, ""])).collect();
-        assert_eq!(i["sections"][0]["rows"], json!(rows));
+        assert_eq!(i["sections"][0]["rows"], json!([]));
         let a = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
         let b = s.execute("shape.rectangle", &json!({"x": 20, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
         let c = s.execute("shape.rectangle", &json!({"x": 40, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
         s.execute("brush.apply", &json!({"ids": [a], "name": "Charcoal"})).unwrap();
-        s.execute("brush.apply", &json!({"ids": [b], "name": "Arrow"})).unwrap();
+        s.execute("brush.apply", &json!({"ids": [b], "name": "Dots"})).unwrap();
         s.execute("brush.apply", &json!({"ids": [c], "name": "Charcoal"})).unwrap();
-        let names =
-            |s: &mut Session| s.execute("document.info", &json!({"selectionOnly": true, "category": "brushes"})).unwrap()["brushNames"].clone();
+        // The whole document: the two brushes the art uses, each once, with their types; "3 pt. Round" (a Calligraphic
+        // brush in the panel) is left out.
+        let i = brushes(&mut s, json!({"category": "brushes"}));
+        assert_eq!(i["brushNames"], json!(["Charcoal", "Dots"]));
+        assert_eq!(i["brushes"], json!([{"name": "Charcoal", "type": "art"}, {"name": "Dots", "type": "scatter"}]));
+        assert_eq!(i["sections"][0]["rows"], json!([["Charcoal", "Art brush"], ["Dots", "Scatter brush"]]));
+        assert!(panel.contains(&json!("3 pt. Round")) && i["panelBrushNames"] == json!(panel));
+        let text = brushes(&mut s, json!({"category": "brushes", "format": "text"}))["text"].as_str().unwrap().to_string();
+        assert!(text.contains("\nBRUSHES\nCharcoal: Art brush\nDots: Scatter brush\n") && !text.contains("3 pt. Round"), "{text}");
+        assert!(!text.contains("OBJECTS"), "{text}");
+        // Selection Only: the brushes the selected objects' strokes use.
+        let selected = |s: &mut Session| brushes(s, json!({"selectionOnly": true, "category": "brushes"}));
         s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
-        assert_eq!(names(&mut s), json!(["Charcoal", "Arrow"]));
+        assert_eq!(selected(&mut s)["brushNames"], json!(["Charcoal", "Dots"]));
         s.execute("select.set", &json!({"ids": [b]})).unwrap();
-        assert_eq!(names(&mut s), json!(["Arrow"]));
+        let i = selected(&mut s);
+        assert_eq!(
+            (i["brushes"].clone(), i["sections"][0]["rows"].clone()),
+            (json!([{"name": "Dots", "type": "scatter"}]), json!([["Dots", "Scatter brush"]]))
+        );
+        let text = brushes(&mut s, json!({"selectionOnly": true, "category": "brushes", "format": "text"}))["text"].as_str().unwrap().to_string();
+        assert!(text.contains("\nBRUSHES\nDots: Scatter brush\n") && !text.contains("Charcoal"), "{text}");
         // A stroke without a brush lists none.
         let plain = s.execute("shape.rectangle", &json!({"x": 60, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
         s.execute("select.set", &json!({"ids": [plain]})).unwrap();
-        assert_eq!(names(&mut s), json!([]));
-        let text = s.execute("document.info", &json!({"category": "brushes", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
-        assert!(text.contains(&format!("\nBRUSHES\n{}\n", panel[0].as_str().unwrap())), "{text}");
-        assert!(text.contains("\nCharcoal\n") && text.contains("\nArrow\n") && !text.contains("OBJECTS"), "{text}");
+        assert_eq!(selected(&mut s)["brushNames"], json!([]));
+    }
+
+    /// Document Info › Brushes leaves out brushes on strokes that draw nothing (hidden, at an
+    /// opacity of 0, with no width or paint, a guide's, a compound path member's, a path's with no segment, type's that
+    /// draws no characters, a group's own), lists a brush the Brushes panel does
+    /// not hold with no type, and gives a name two panel brushes share the type the renderer uses.
+    #[test]
+    fn info_brushes_skip_undrawn_strokes_and_name_missing_brushes() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let square = |s: &mut Session, x: f64| {
+            s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap()
+        };
+        let (hidden, thin, guide, missing) = (square(&mut s, 0.0), square(&mut s, 20.0), square(&mut s, 40.0), square(&mut s, 60.0));
+        let (empty, faint) = (square(&mut s, 80.0), square(&mut s, 200.0));
+        s.execute("brush.apply", &json!({"ids": [hidden, thin, guide, missing, empty, faint], "name": "Charcoal"})).unwrap();
+        let (p, q) = (square(&mut s, 100.0), square(&mut s, 120.0));
+        s.execute("select.set", &json!({"ids": [p, q]})).unwrap();
+        let compound = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        // A compound path's member: the compound path's own stroke draws it.
+        let NodeKind::Compound { children, .. } = &mut d.node_mut(NodeId(compound)).unwrap().kind else { panic!("not a compound path") };
+        let member = &mut std::sync::Arc::make_mut(&mut children[0]).appearance;
+        member.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+        member.stroke_mut().unwrap().brush = Some("Dots".into());
+        d.node_mut(NodeId(hidden)).unwrap().appearance.stroke_mut().unwrap().visible = false;
+        d.node_mut(NodeId(thin)).unwrap().appearance.stroke_mut().unwrap().width = 0.0;
+        // A stroke at an opacity of 0 draws nothing.
+        d.node_mut(NodeId(faint)).unwrap().appearance.stroke_mut().unwrap().opacity = 0.0;
+        if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(guide)).unwrap().kind {
+            *g = true;
+        }
+        // A path with no segment: its stroke follows nothing.
+        if let NodeKind::Path { path, .. } = &mut d.node_mut(NodeId(empty)).unwrap().kind {
+            *path = vectorcraft_geom::PathData::default();
+        }
+        d.node_mut(NodeId(missing)).unwrap().appearance.stroke_mut().unwrap().brush = Some("Gone".into());
+        let i = s.execute("document.info", &json!({"category": "brushes"})).unwrap();
+        assert_eq!(i["brushes"], json!([{"name": "Gone", "type": null}]));
+        assert_eq!(i["sections"][0]["rows"], json!([["Gone", "missing from the Brushes panel"]]));
+        // A stroke with no paint draws nothing.
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        d.node_mut(NodeId(missing)).unwrap().appearance.stroke_mut().unwrap().paint = Paint::None;
+        assert_eq!(s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushes"], json!([]));
+        // Two panel brushes with one name: the type is the one the renderer draws with, the last one's.
+        let twin = square(&mut s, 140.0);
+        s.execute("brush.apply", &json!({"ids": [twin], "name": "Charcoal"})).unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let mut lib = vectorcraft_brush::library(d);
+        let kinds: Vec<vectorcraft_brush::BrushKind> =
+            ["Charcoal", "Dots"].iter().map(|n| lib.iter().find(|b| b.name == *n).unwrap().kind.clone()).collect();
+        lib.extend(kinds.into_iter().map(|kind| vectorcraft_brush::Brush { name: "Twin".into(), kind }));
+        vectorcraft_brush::store(d, &lib);
+        d.node_mut(NodeId(twin)).unwrap().appearance.stroke_mut().unwrap().brush = Some("Twin".into());
+        assert_eq!(s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushes"], json!([{"name": "Twin", "type": "scatter"}]));
+        // Type: a brushed stroke on drawn characters is listed, one on spaces alone is not.
+        let blank = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "  "})).unwrap()["id"].as_u64().unwrap();
+        let word = s.execute("text.create", &json!({"x": 10, "y": 90, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        for (id, name) in [(blank, "Dots"), (word, "Arrow")] {
+            let ap = &mut d.node_mut(NodeId(id)).unwrap().appearance;
+            ap.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+            ap.stroke_mut().unwrap().brush = Some(name.into());
+        }
+        let names = s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushNames"].clone();
+        assert_eq!(names, json!(["Twin", "Arrow"]));
+        // A group's own stroke: the group draws its members.
+        let (m1, m2) = (square(&mut s, 160.0), square(&mut s, 180.0));
+        s.execute("select.set", &json!({"ids": [m1, m2]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let ap = &mut d.node_mut(NodeId(group)).unwrap().appearance;
+        ap.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+        ap.stroke_mut().unwrap().brush = Some("Leaves".into());
+        let names = s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushNames"].clone();
+        assert_eq!(names, json!(["Twin", "Arrow"]));
     }
 
     /// Document Info › Repeat Objects lists each Repeat object by name with its kind and the number
@@ -870,6 +1012,11 @@ mod tests {
         s.execute("paint.setFill", &json!({"ids": [e], "none": true})).unwrap();
         s.execute("paint.setStroke", &json!({"ids": [e], "swatch": "Dots"})).unwrap();
         s.execute("appearance.setItem", &json!({"ids": [e], "index": 1, "weight": 0})).unwrap();
+        // Nor does a pattern fill at an opacity of 0.
+        let clear = square(&mut s, 220.0);
+        s.execute("paint.setStroke", &json!({"ids": [clear], "none": true})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [clear], "swatch": "Dots"})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [clear], "index": 0, "opacity": 0})).unwrap();
         // A type object with no characters paints nothing either.
         let empty = s.execute("text.create", &json!({"x": 0, "y": 300, "text": ""})).unwrap()["id"].clone();
         s.execute("paint.setFill", &json!({"ids": [empty], "swatch": "Dots"})).unwrap();
@@ -930,7 +1077,7 @@ mod tests {
         assert_eq!(i["patternNames"], json!(["Dots"]));
         // Objects counts the objects that Pattern Objects lists.
         assert_eq!(i["objects"]["patterns"].as_u64(), Some(5), "{}", i["objects"]);
-        s.execute("select.set", &json!({"ids": [d, e, empty, blank, guide, compound, image.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [d, e, clear, empty, blank, guide, compound, image.0]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["patterns"].is_null() && i["patternObjects"] == json!([]), "{}", i["objects"]);
         let i = s.execute("document.info", &json!({"category": "patterns"})).unwrap();

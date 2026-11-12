@@ -18,6 +18,8 @@
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
 //! - `ui.dialog.set {field, value}` or `{fields: [{field, value}…]}` (all or none; setting a field
 //!   the dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`];
+//!   a `__` field other than the controls of the dialog's kind is an error too, so a request cannot
+//!   change the command, targets or file the dialog's OK acts on: [`crate::dialogs::protected_field`];
 //!   `action: confirm | cancel` then confirms or cancels that dialog in the same request and replies
 //!   `{dialog, result}`) / `ui.dialog.confirm` / `ui.dialog.cancel`
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
@@ -1442,6 +1444,9 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
                 };
                 // Every field is checked before any is set, so a request sets all of them or none.
                 if let Some((f, _)) = fields.iter().find(|(f, _)| !crate::dialogs::accepts_field(d, f)) {
+                    if crate::dialogs::protected_field(d, f) {
+                        return err(format!("the `{}` dialog cannot set protected field `{f}`", d.kind));
+                    }
                     let names = crate::dialogs::field_names(d).join(", ");
                     return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
                 }
