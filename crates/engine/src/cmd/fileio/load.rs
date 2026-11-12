@@ -492,6 +492,16 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
         }
+        // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
+        // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
+        "psd" | "psb" if opts.layers => {
+            let cms = vectorcraft_color::cms::active();
+            match super::psdlayers::import(bytes, opts.hidden_layers, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)) {
+                Ok(Some((doc, warnings))) => (doc, warnings, false),
+                Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
+                Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
+            }
+        }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };

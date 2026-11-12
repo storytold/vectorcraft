@@ -1,8 +1,8 @@
 //! EPS export for every EPS path (`document.export {format: eps}`, `document.exportEps`, Export As
 //! → EPS Options): the options parsed from the params, transparency flattened with a flattener
 //! preset, one file of the art's bounds or one per artboard (with a central file of the whole
-//! document when there are several and art shows), the preview and thumbnail rendered,
-//! and the native document embedded for reopening.
+//! document when there are several and art shows), the preview rendered and the thumbnail made
+//! from it, and the native document embedded for reopening.
 
 use std::borrow::Cow;
 
@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_eps::{EpsOptions, Level, Overprint, Preview, Raster};
 use vectorcraft_geom::{Point, Rect};
+use vectorcraft_render::Rendered;
 
 use super::super::flatten::{FlattenOptions, expand_transparent_tile_images, flatten_expanded};
 use super::super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, str_param};
@@ -244,14 +245,38 @@ fn pages(doc: &Document, set: &Settings, saving: bool) -> Result<(Vec<Page>, boo
     }
 }
 
-/// `rect` of `doc` drawn at a pixel a point (fewer when larger than `max` a side), straight RGBA,
-/// transparent or on white.
-fn render(r: &mut vectorcraft_render::Renderer, doc: &Document, rect: Rect, max: f64, transparent: bool) -> Result<Raster> {
+/// Pixels a point for `rect`: one, or fewer when it is larger than `max` a side.
+fn fit(rect: Rect, max: f64) -> f64 {
     let long = rect.width().max(rect.height());
-    let scale = if long > max { max / long } else { 1.0 };
+    if long > max { max / long } else { 1.0 }
+}
+
+/// `rect` of `doc` drawn at [`fit`]'s scale for `max`, transparent or on white.
+fn render(r: &mut vectorcraft_render::Renderer, doc: &Document, rect: Rect, max: f64, transparent: bool) -> Result<Rendered> {
+    let scale = fit(rect, max);
     vectorcraft_render::raster_size(rect, scale).map_err(|e| bad(C, e))?;
-    let img = r.render_region(doc, rect, scale, !transparent);
-    Ok(Raster { width: img.width, height: img.height, rgba: img.to_straight() })
+    Ok(r.render_region(doc, rect, scale, !transparent))
+}
+
+/// `img` as the writer takes it: straight RGBA.
+fn straight(img: &Rendered) -> Raster {
+    Raster { width: img.width, height: img.height, rgba: img.to_straight() }
+}
+
+/// The thumbnail of `rect` made from `preview`, the same rect rendered larger: at the size a
+/// thumbnail render of `rect` has, each pixel the average of the preview's pixels under it, on white.
+fn thumbnail_of(preview: &Rendered, rect: Rect) -> Result<Raster> {
+    let (width, height) = vectorcraft_render::raster_size(rect, fit(rect, THUMBNAIL)).map_err(|e| bad(C, e))?;
+    let mut rgba = preview.area_resized(width, height).map_err(|e| bad(C, e))?.pixels;
+    // Premultiplied over white: each channel gains the white the pixel's alpha leaves showing.
+    for px in rgba.as_chunks_mut::<4>().0 {
+        let clear = 255 - px[3];
+        for c in &mut px[..3] {
+            *c = c.saturating_add(clear);
+        }
+        px[3] = 255;
+    }
+    Ok(Raster { width, height, rgba })
 }
 
 /// What the file carries to reopen: `doc` (with only artboard `board` when the file is one of
@@ -330,11 +355,18 @@ fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
     let mut renderer = vectorcraft_render::Renderer::new();
     for (board, region, origin) in pages {
         let rect = vectorcraft_eps::preview_rect(region, origin);
-        let preview = match set.eps.preview {
+        let shown = match set.eps.preview {
             Preview::None => None,
             kind => Some(render(&mut renderer, doc, rect, preview_limit, set.eps.transparent_preview && kind == Preview::TiffColor)?),
         };
-        let thumbnail = set.thumbnails.then(|| render(&mut renderer, doc, rect, THUMBNAIL, false)).transpose()?;
+        // The thumbnail is made from the preview; only a file without one renders it.
+        let thumbnail = match (set.thumbnails, &shown) {
+            (false, _) => None,
+            (true, Some(img)) => Some(thumbnail_of(img, rect)?),
+            (true, None) => Some(straight(&render(&mut renderer, doc, rect, THUMBNAIL, false)?)),
+        };
+        let preview = shown.as_ref().map(straight);
+        drop(shown);
         let o = EpsOptions {
             region,
             origin,

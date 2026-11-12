@@ -109,6 +109,30 @@ impl VectorcraftApp {
         }
     }
 
+    /// Paste in place, in front and in back (#693), Select › All on Active Artboard (#1006), and Align,
+    /// Distribute Objects and Distribute Spacing with Align to Artboard, and Edit Symbol from the Symbols
+    /// panel act on the active artboard, the view's, which the app adds to command `id`'s `params` as
+    /// `artboard`. A batch passes it on to those steps. While the Artboard tool has several artboards
+    /// selected, the paste commands get those as `artboards` instead, and paste a copy on each; in a
+    /// document without artboards they get neither.
+    fn add_active_artboard(&self, id: &str, params: &mut Value) {
+        let paste = matches!(id, "edit.pasteInPlace" | "edit.pasteInFront" | "edit.pasteInBack");
+        if (vectorcraft_engine::ON_ACTIVE_ARTBOARD.contains(&id) || id == "command.batch")
+            && params.get("artboard").is_none()
+            && !(paste && params.get("artboards").is_some())
+            && self.view().is_some()
+            && let Some(n) = self.session.active().map(|d| d.doc.artboards.len()).filter(|n| *n > 0 || !paste)
+            && let Some(p) = params.as_object_mut()
+        {
+            let picked = panels::artboards::picked(self, n);
+            if paste && picked.len() > 1 {
+                p.insert("artboards".into(), serde_json::json!(picked));
+            } else {
+                p.insert("artboard".into(), serde_json::json!(panels::artboards::selected(self, n)));
+            }
+        }
+    }
+
     /// [`Self::run`] it, inside what asks for file dialogs.
     fn run_now(&mut self, id: &str, params: Value) -> Result<Value, String> {
         crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
@@ -129,18 +153,7 @@ impl VectorcraftApp {
             return r;
         }
         let mut params = params;
-        // Paste in place, in front and in back (#693), Select › All on Active Artboard (#1006), and Align,
-        // Distribute Objects and Distribute Spacing with Align to Artboard, and Edit Symbol from the Symbols
-        // panel act on the active artboard, the view's, which the app passes as `artboard`. A batch passes
-        // it on to those steps.
-        if (vectorcraft_engine::ON_ACTIVE_ARTBOARD.contains(&id) || id == "command.batch")
-            && params.get("artboard").is_none()
-            && self.view().is_some()
-            && let Some(n) = self.session.active().map(|d| d.doc.artboards.len())
-            && let Some(p) = params.as_object_mut()
-        {
-            p.insert("artboard".into(), serde_json::json!(panels::artboards::selected(self, n)));
-        }
+        self.add_active_artboard(id, &mut params);
         // Edit Symbol from the Symbols panel in a document without artboards centers the symbol's
         // art in the view, whose center the app passes as `viewCenter`, to a batch's symbol.edit
         // steps too.
