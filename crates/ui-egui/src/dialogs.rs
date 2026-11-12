@@ -77,6 +77,7 @@ mod new_document;
 pub mod new_swatch;
 pub mod new_text_style;
 pub mod objects_on_path_options;
+pub mod icon_composer;
 pub mod office_export;
 pub mod package;
 pub mod para_style_options;
@@ -385,6 +386,7 @@ registry! {
     SaveOptions: [save_options::KIND] => save_options::SPEC,
     TextExport: [text_export::KIND] => text_export::SPEC,
     OfficeExport: [office_export::KIND] => office_export::SPEC,
+    IconComposer: [icon_composer::KIND] => icon_composer::SPEC,
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
     PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
     Relink: [relink::KIND] => relink::SPEC,

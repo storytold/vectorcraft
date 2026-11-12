@@ -143,6 +143,18 @@ pub(crate) fn create_dir(path: &str) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
+/// Make folder `path` when there is none there yet → `false` when something is already at `path`
+/// (its parent must exist). Made in one step, so two exports never share a folder.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn create_new_dir(path: &str) -> Result<bool> {
+    may_write(path)?;
+    match std::fs::create_dir(path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(e) => Err(EngineError::Other(format!("{path}: {e}"))),
+    }
+}
+
 /// Write `bytes` to a new file at `path`. A file already at `path` is an error and is never
 /// replaced. When the write fails part way, the file it started is removed.
 #[cfg(not(target_arch = "wasm32"))]
@@ -459,6 +471,11 @@ pub fn write_file_with(path: &str, _: &mut dyn FnMut(&mut dyn std::io::Write) ->
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn create_dir(path: &str) -> Result<()> {
+    Err(no_fs(path))
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn create_new_dir(path: &str) -> Result<bool> {
     Err(no_fs(path))
 }
 

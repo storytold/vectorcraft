@@ -53,6 +53,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     "Export",
                     vec![
                         c("Export for Screens…", "file.exportForScreens"),
+                        c("Export for Icon Composer…", "document.exportForIconComposer"),
                         c("Export As…", "file.exportAs"),
                         c("Export As SVG…", "file.export.svg"),
                         c("Export As PNG…", "file.export.png"),

@@ -263,6 +263,24 @@ pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Val
     export_files(app, "document.exportForScreens", params)
 }
 
+/// File › Export › Export for Icon Composer… with `document.exportForIconComposer` params: the
+/// files go into a new folder inside `folder`; without one, the web downloads them as one ZIP (a
+/// browser download has no folders, and the artboards' files share names) and the other frontends
+/// get them back as base64. The status bar reports them as Export for Screens does.
+pub fn export_for_icon_composer(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    let mut params = if params.is_object() { params } else { json!({}) };
+    let folder = params.get("folder").and_then(Value::as_str).map(str::trim).unwrap_or_default().to_string();
+    if folder.is_empty() && app.services.download.is_some() {
+        params["zip"] = json!(true);
+    }
+    // Made after the exports and saves started before it.
+    background::wait_all(app);
+    let r = app.session.execute("document.exportForIconComposer", &params).map_err(|e| e.to_string())?;
+    // The folder the export made inside `folder`.
+    let made = r["folder"].as_str().filter(|_| !folder.is_empty()).map(str::to_string).unwrap_or(folder);
+    report_exported(app, r, &made, None, false)
+}
+
 /// [`export_for_screens`] through command `id` (`document.exportForScreens` or `assets.export`; or
 /// `assets.export3D`, whose reply takes the same form and which always runs at once).
 /// On the desktop with Background Export on, an export into a folder (the `folder` param, else the

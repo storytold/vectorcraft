@@ -42,6 +42,7 @@ mod mesh3d;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
 mod heifread;
 mod hpgl;
+mod iconcomposer;
 mod jp2read;
 mod metafile;
 mod naming;
@@ -130,7 +131,7 @@ mod tests_readonly;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::{Placed, copy_new, file_metadata};
 pub(crate) use access::{
-    absolute_path, create_dir, document_path, file_created, file_stamp, read_file, read_file_head, shown_link, shown_path, write_file, write_new_file,
+    absolute_path, create_dir, create_new_dir, document_path, file_created, file_stamp, read_file, read_file_head, shown_link, shown_path, write_file, write_new_file,
 };
 #[cfg(all(test, windows))]
 pub(crate) use access::{document_path_on, document_path_with};
@@ -190,6 +191,8 @@ mod tests_palette;
 
 #[cfg(test)]
 mod tests_batch;
+#[cfg(test)]
+mod tests_iconcomposer;
 #[cfg(test)]
 mod tests_screens;
 #[cfg(test)]
