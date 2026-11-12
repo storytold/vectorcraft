@@ -2,7 +2,7 @@ use super::{
     Affine, Arc, BezPath, ClipEntry, ClipPaintEntry, Compose, Composite, Document, FillRule, Frame, GeomEntry, ISOLATION_DIM, Ink, MAX_GUIDE_DASHES,
     Node, NodeId, NodeKind, Rect, RenderContext, RenderOptions, Renderer, Shape, SymbolBoxes, TraceView, blend_mode, brush_fx, effects, fx, group,
     holds_instance, holds_plugin_effect, images, kurbo, lru, mask_value, painted_items, plain_image, polygon_length, rects_overlap,
-    shape_masked_image, single_plain_fill, text_geom_snapped, white_shape_mask,
+    shape_masked_image, single_plain_fill, white_shape_mask,
 };
 use crate::kept_paths::{self, KeptPath};
 use crate::node_checks::{holds_measured_three_d, measures_three_d};
@@ -354,7 +354,10 @@ impl Renderer {
         {
             let t = &*f.doc.inline_resolved(t);
             let (g, kept) = match f.text_snap(t) {
-                Some(xf) => (Arc::new(text_geom_snapped(t, Some(xf))), false),
+                Some(xf) => (
+                    Arc::new(crate::text_geom::text_geom_snapped_for_strokes(t, Some(xf), crate::text_geom::TextGeom::object_stroke_requested(a))),
+                    false,
+                ),
                 None => self.text_geom_of(a, t),
             };
             self.draw_text_geom(ctx, f, a, t, &g, kept);

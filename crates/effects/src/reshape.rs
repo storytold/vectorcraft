@@ -215,10 +215,10 @@ pub(crate) fn glyph_outlines(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::Bez
     (runs, all)
 }
 
-/// [`glyph_outlines`], the bounds of `t`'s layout in text space, and its colour glyphs, which have
+/// [`glyph_outlines`], `t`'s layout in text space, and its colour glyphs, which have
 /// no outlines, placed in the document with their runs: bitmap glyphs (emoji) as images holding
 /// their pixels, then COLR and SVG glyphs as their art, as the renderer paints them.
-fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::BezPath, Rect, Vec<(usize, Node)>) {
+fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::BezPath, vectorcraft_text::TextLayout, Vec<(usize, Node)>) {
     let db = vectorcraft_text::FontDb::global();
     let layout = vectorcraft_text::layout(db, t);
     let mut runs = vec![kurbo::BezPath::new(); t.runs.len()];
@@ -239,10 +239,10 @@ fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::Bez
     }
     let images = layout.glyphs.iter().filter_map(|g| Some((g.run, g.placed_image_node(t.xf)?)));
     let colours = images.chain(layout.glyphs.iter().filter_map(|g| Some((g.run, g.placed_colour(t.xf)?)))).collect();
-    (runs, all, layout.bounds, colours)
+    (runs, all, layout, colours)
 }
 
-/// Type as glyph outlines in document space: one path per run with the run's fill and stroke,
+/// Type as glyph outlines in document space: raw run fills and compatible group-end strokes,
 /// over its colour glyphs (images, art), and (when the object has its own fills/strokes) the whole
 /// outline with the object's items below the characters under them and the others over them, as
 /// the renderer paints them. Each run's path is placed by the type's transform, which also scales its stroke
@@ -252,35 +252,61 @@ fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::Bez
 /// ([`vectorcraft_doc::NodeExtras::type_outlines`]).
 pub fn outline_text(n: &Node) -> Option<Node> {
     let NodeKind::Text(t) = &n.kind else { return None };
-    let (runs, all, bounds, colours) = laid_out(t);
+    let (runs, all, layout, colours) = laid_out(t);
+    let bounds = layout.bounds;
+    let object_stroke = n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0));
+    let plan = crate::text_stroke::prepare(t, &layout, object_stroke);
     let path = |bp: &kurbo::BezPath| PathData::from_bezpath(bp).transformed(t.xf);
     let scaling = vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() };
+    let character = |bp: &kurbo::BezPath, mut ap: Appearance| {
+        ap.pin_gradients(bounds);
+        let mut piece = Node::path(n.id, PathData::from_bezpath(bp), ap);
+        piece.transform(t.xf, scaling);
+        Arc::new(piece)
+    };
     let mut children: Vec<Arc<Node>> = vec![];
     for (i, (bp, run)) in runs.iter().zip(&t.runs).enumerate() {
         // Colour glyphs paint themselves, under their run's fill, as the renderer paints them.
         children.extend(colours.iter().filter(|(r, _)| *r == i).map(|(_, art)| Arc::new(with_id(art, n.id))));
-        if bp.elements().is_empty() {
-            continue;
+        let end = plan.group_ending_at(i);
+        let normalized = run.style.has_stroke() && end.is_none_or(|g| g.boundary.is_some());
+        if !bp.elements().is_empty() {
+            let mut ap = run.style.appearance();
+            if normalized {
+                ap.items.retain(AppearanceItem::is_fill);
+            }
+            children.push(character(bp, ap));
         }
-        let mut ap = run.style.appearance();
-        ap.pin_gradients(bounds);
-        let mut piece = Node::path(n.id, PathData::from_bezpath(bp), ap);
-        piece.transform(t.xf, scaling);
-        children.push(Arc::new(piece));
+        if let Some(boundary) = end.and_then(|g| g.boundary.as_ref()) {
+            let ap = Appearance { items: vec![AppearanceItem::Stroke(run.style.stroke_layer())], ..Default::default() };
+            children.push(character(boundary, ap));
+        }
     }
     if !n.appearance.items.is_empty() && !all.elements().is_empty() {
         let (below, above) = n.appearance.split_contents();
         let tb = t.xf.transform_rect_bbox(bounds);
-        let glyphs = |items: &[AppearanceItem]| {
-            let mut ap = Appearance { items: items.to_vec(), ..Default::default() };
-            ap.pin_gradients(tb);
-            Arc::new(Node::path(n.id, path(&all), ap))
+        let glyphs = |items: &[AppearanceItem]| -> Vec<Arc<Node>> {
+            let piece = |bp: &kurbo::BezPath, items: Vec<AppearanceItem>| {
+                let mut ap = Appearance { items, ..Default::default() };
+                ap.pin_gradients(tb);
+                Arc::new(Node::path(n.id, path(bp), ap))
+            };
+            match &plan.all {
+                Some(boundary) => items
+                    .iter()
+                    .map(|item| {
+                        let bp = if item.is_fill() { &all } else { boundary };
+                        piece(bp, vec![item.clone()])
+                    })
+                    .collect(),
+                None => vec![piece(&all, items.to_vec())],
+            }
         };
         if !below.is_empty() {
-            children.insert(0, glyphs(below));
+            children.splice(0..0, glyphs(below));
         }
         if !above.is_empty() {
-            children.push(glyphs(above));
+            children.extend(glyphs(above));
         }
     }
     let mut g = Node::group(n.id, children);

@@ -134,3 +134,61 @@ fn a_mixed_document_lays_out_again_only_the_japanese_type() {
     let (svg, again) = export_layouts_again(vec![point("Latin"), point("「かな」。"), point(""), point("Ab2")]);
     assert_eq!(again, 1, "{svg}");
 }
+
+/// The outlined SVG keeps different fills in order, then paints one compatible stroke. A changed
+/// stroke remains a paint-order boundary. This checks composition, not Arabic font shaping.
+#[test]
+fn outlined_runs_keep_fills_before_their_compatible_stroke() {
+    use vectorcraft_color::Color;
+    for changed_stroke in [false, true] {
+        let first = CharStyle {
+            size: 40.0,
+            fill: Paint::solid(Color::rgb8(255, 0, 0)),
+            stroke: Paint::solid(Color::BLACK),
+            stroke_width: 2.0,
+            ..Default::default()
+        };
+        let second = CharStyle { fill: Paint::solid(Color::rgb8(0, 0, 255)), stroke_width: if changed_stroke { 3.0 } else { 2.0 }, ..first.clone() };
+        let mut text = TextObject::point(Point::new(20.0, 80.0), "A", first);
+        text.runs.push(TextRun::new("B", second));
+        let mut doc = Document::new(200.0, 120.0);
+        let node = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(text)));
+        doc.insert(Some(doc.layers[0].id), 0, node).unwrap();
+        let svg = crate::export(&doc, &crate::ExportOptions { outline_text: true, ..Default::default() });
+        let back = crate::import(&svg).unwrap();
+        let mut paints = Vec::new();
+        // A Compound paints once; its children are contours, not additional paint layers.
+        fn collect_paints(n: &Node, paints: &mut Vec<(&'static str, String, f64)>) {
+            if !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+                if let Some(children) = n.children() {
+                    for child in children {
+                        collect_paints(child, paints);
+                    }
+                }
+                return;
+            }
+            for item in &n.appearance.items {
+                match item {
+                    AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => {
+                        paints.push(("fill", f.paint.color().unwrap().to_hex(), 0.0));
+                    }
+                    AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0 => {
+                        paints.push(("stroke", s.paint.color().unwrap().to_hex(), s.width));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for layer in &back.layers {
+            collect_paints(layer, &mut paints);
+        }
+        let fill = |hex: &str| ("fill", hex.to_string(), 0.0);
+        let stroke = |width| ("stroke", "#000000".to_string(), width);
+        let expected = if changed_stroke {
+            vec![fill("#ff0000"), stroke(2.0), fill("#0000ff"), stroke(3.0)]
+        } else {
+            vec![fill("#ff0000"), fill("#0000ff"), stroke(2.0)]
+        };
+        assert_eq!(paints, expected, "changed_stroke={changed_stroke}: {svg}");
+    }
+}

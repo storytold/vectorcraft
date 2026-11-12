@@ -1,8 +1,8 @@
 use super::output::{xml_attr_escape, xml_attr_valid, xml_text};
 use super::{
-    Affine, AppearanceItem, Arc, BTreeSet, BezPath, BlendMode, CharStyle, FillRule, FontDb, FontFace, GradientKind, HashMap, Justify, Node, NodeId,
-    NodeKind, Paint, PathData, Props, Rect, StrokeAlign, Styling, TextKind, TextObject, Writer, base64_encode, css, css_string, fmt_num,
-    font_descriptor, xml_escape,
+    Affine, AppearanceItem, Arc, BTreeSet, BlendMode, CharStyle, FillRule, FontDb, FontFace, GradientKind, HashMap, Justify, Node, NodeId, NodeKind,
+    Paint, PathData, Props, Rect, StrokeAlign, Styling, TextKind, TextObject, Writer, base64_encode, css, css_string, fmt_num, font_descriptor,
+    xml_escape,
 };
 
 /// `chars` (sorted) as a CSS `unicode-range` (`U+41-5A,U+61`).
@@ -65,6 +65,14 @@ impl Writer<'_> {
         p
     }
 
+    /// A text paint piece: both the written path and any expanded stroke use this geometry.
+    /// Fill pieces keep their raw contours; normalized stroke pieces must also replace `d`.
+    fn text_shape(&mut self, path: &PathData, items: Vec<AppearanceItem>, bounds: Rect) {
+        let ap = vectorcraft_doc::Appearance { items, ..Default::default() };
+        let d = self.path_d(path, self.xf);
+        self.shape(&Node::path(NodeId(u64::MAX), path.clone(), ap), &d, None, &[path], FillRule::NonZero, Some(bounds));
+    }
+
     /// Type: its characters (live text, or glyph outlines when text is exported as outlines) and,
     /// as the canvas paints them, the object's own fills and strokes on the glyph outlines: those
     /// below the Characters row under the characters, the others over them.
@@ -113,13 +121,19 @@ impl Writer<'_> {
             all.extend(bar.iter());
         }
         let pd = PathData::from_bezpath(&all).transformed(t.xf);
-        let d = self.path_d(&pd, self.xf);
-        let tb = Some(t.xf.transform_rect_bbox(lay.bounds));
+        let object_stroke =
+            n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0));
+        let plan = vectorcraft_effects::text_stroke::prepare(t, &lay, object_stroke);
+        let stroke = plan.all.as_ref().map(|bp| PathData::from_bezpath(bp).transformed(t.xf));
+        let tb = t.xf.transform_rect_bbox(lay.bounds);
         let (below, above) = n.appearance.split_contents();
         let glyphs = |w: &mut Self, items: &[AppearanceItem]| {
-            if !items.is_empty() {
-                let ap = vectorcraft_doc::Appearance { items: items.to_vec(), ..Default::default() };
-                w.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, None, &[&pd], FillRule::NonZero, tb);
+            if let Some(stroke) = &stroke {
+                for item in items {
+                    w.text_shape(if item.is_fill() { &pd } else { stroke }, vec![item.clone()], tb);
+                }
+            } else if !items.is_empty() {
+                w.text_shape(&pd, items.to_vec(), tb);
             }
         };
         glyphs(self, below);
@@ -144,8 +158,8 @@ impl Writer<'_> {
         self.line("</g>");
     }
 
-    /// Text as glyph outlines: one compound path per run, painted like the run (gradients span
-    /// the whole text), over its colour glyphs, as on the canvas.
+    /// Text as glyph outlines: raw run fills and compatible group-end strokes (gradients span
+    /// the whole text), over the runs' colour glyphs, as on the canvas.
     fn text_outlines(&mut self, n: &Node, t: &TextObject) {
         let db = vectorcraft_text::FontDb::global();
         let lay = vectorcraft_text::layout(db, t);
@@ -153,6 +167,7 @@ impl Writer<'_> {
         // Underline and strikethrough bars join their run's outlines; ruby glyphs are painted
         // with the run of the text they annotate.
         let bars = vectorcraft_text::decorations(&lay, db, t);
+        let plan = vectorcraft_effects::text_stroke::prepare(t, &lay, false);
         for (run, outline) in lay
             .glyphs
             .iter()
@@ -206,14 +221,19 @@ impl Writer<'_> {
                     self.node(&art);
                 }
             }
-            if bp.elements().is_empty() {
-                continue;
+            let end = plan.group_ending_at(i);
+            let normalized = run.style.has_stroke() && end.is_none_or(|g| g.boundary.is_some());
+            if !bp.elements().is_empty() {
+                let pd = PathData::from_bezpath(bp);
+                let mut ap = run.style.appearance();
+                if normalized {
+                    ap.items.retain(AppearanceItem::is_fill);
+                }
+                self.text_shape(&pd, ap.items, lay.bounds);
             }
-            let pd = PathData::from_bezpath(bp);
-            // An unnamed id: the pieces carry no id attribute (the group has it).
-            let glyphs = Node::path(NodeId(u64::MAX), pd.clone(), run.style.appearance());
-            let d = self.path_d(&pd, self.xf);
-            self.shape(&glyphs, &d, None, &[&pd], FillRule::NonZero, Some(lay.bounds));
+            if let Some(boundary) = end.and_then(|g| g.boundary.as_ref()) {
+                self.text_shape(&PathData::from_bezpath(boundary), vec![AppearanceItem::Stroke(run.style.stroke_layer())], lay.bounds);
+            }
         }
         self.xf = saved;
         self.depth -= 1;
@@ -358,24 +378,26 @@ impl Writer<'_> {
         let db = vectorcraft_text::FontDb::global();
         let lay = vectorcraft_text::layout(db, t);
         let bars = vectorcraft_text::decorations(&lay, db, t);
+        let plan = vectorcraft_effects::text_stroke::prepare(t, &lay, false);
         // The glyphs stay in text space; the text's transform joins the document's meanwhile.
         let saved = self.xf;
         self.xf = saved * t.xf;
         for (i, run) in t.runs.iter().enumerate().filter(|(_, r)| aligned(&r.style)) {
-            let mut bp = BezPath::new();
-            for g in lay.glyphs.iter().filter(|g| g.run == i) {
-                bp.extend(g.outline.iter());
-            }
-            for (_, bar) in bars.iter().filter(|(r, _)| *r == i) {
-                bp.extend(bar.iter());
+            let Some(group) = plan.group_ending_at(i) else { continue };
+            let mut bp = group.boundary.clone().unwrap_or_default();
+            if group.boundary.is_none() {
+                for g in lay.glyphs.iter().chain(&lay.ruby).filter(|g| g.run == i) {
+                    bp.extend(g.outline.iter());
+                }
+                for (_, bar) in bars.iter().filter(|(r, _)| *r == i) {
+                    bp.extend(bar.iter());
+                }
             }
             if bp.elements().is_empty() {
                 continue;
             }
             let pd = PathData::from_bezpath(&bp);
-            let ap = vectorcraft_doc::Appearance { items: vec![AppearanceItem::Stroke(run.style.stroke_layer())], ..Default::default() };
-            let d = self.path_d(&pd, self.xf);
-            self.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, None, &[&pd], FillRule::NonZero, Some(lay.bounds));
+            self.text_shape(&pd, vec![AppearanceItem::Stroke(run.style.stroke_layer())], lay.bounds);
         }
         self.xf = saved;
     }

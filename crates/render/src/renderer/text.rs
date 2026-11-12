@@ -16,7 +16,14 @@ impl Renderer {
         let owner = self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned();
         let (g, kept) = match (f.text_snap(t), owner) {
             (None, Some(a)) => self.text_geom_of(&a, t),
-            (snap, _) => (Arc::new(text_geom_snapped(t, snap)), false),
+            (snap, _) => {
+                let geometry = if TextGeom::object_stroke_requested(n) {
+                    crate::text_geom::text_geom_snapped_for_strokes(t, snap, true)
+                } else {
+                    text_geom_snapped(t, snap)
+                };
+                (Arc::new(geometry), false)
+            }
         };
         self.draw_text_geom(ctx, f, n, t, &g, kept);
     }
@@ -147,8 +154,10 @@ impl Renderer {
     /// `Document::inline_resolved` sized again, is laid out without the cache. Also returns
     /// whether the geometry is kept in the cache.
     pub(super) fn text_geom_of(&mut self, a: &Arc<Node>, t: &TextObject) -> (Arc<TextGeom>, bool) {
+        let object_stroke = TextGeom::object_stroke_requested(a);
+        let make = || Arc::new(if object_stroke { crate::text_geom::text_geom_for_strokes(t, true) } else { text_geom(t) });
         if !matches!(&a.kind, NodeKind::Text(own) if std::ptr::eq(&**own, t)) {
-            return (Arc::new(text_geom(t)), false);
+            return (make(), false);
         }
         let fonts = vectorcraft_text::FontDb::global().generation();
         if fonts != self.text_fonts {
@@ -158,14 +167,19 @@ impl Renderer {
             self.text_fonts = fonts;
         }
         let key = Arc::as_ptr(a) as usize;
-        if let Some((_, g)) = self.texts.get_if(&key, self.stamp, |(node, _)| Arc::ptr_eq(node, a)) {
+        if let Some((_, g)) = self.texts.get_if(&key, self.stamp, |(node, g)| Arc::ptr_eq(node, a) && (!object_stroke || g.strokes.object_requested))
+        {
             return (g.clone(), true);
         }
         if let Some(&previous) = self.text_ids.get(&a.id)
             && let Some(g) = self
                 .texts
-                .get_if(&previous, self.stamp, |(node, _)| {
+                .get_if(&previous, self.stamp, |(node, g)| {
                     let NodeKind::Text(old) = &node.kind else { return false };
+                    // An Appearance-only edit can add a stroke without changing the text.
+                    if object_stroke && !g.strokes.object_requested {
+                        return false;
+                    }
                     // Shrink Text to Fit searches document-point sizes, so a scale change can
                     // alter layout. Translation leaves the glyphs in text space unchanged.
                     if old.xf.as_coeffs()[..4] != t.xf.as_coeffs()[..4] {
@@ -182,7 +196,7 @@ impl Renderer {
             let kept = self.keep_text(a, g.clone());
             return (g, kept);
         }
-        let g = Arc::new(text_geom(t));
+        let g = make();
         let kept = self.keep_text(a, g.clone());
         (g, kept)
     }
@@ -244,8 +258,13 @@ impl Renderer {
             all.apply_affine(t.xf);
             all
         });
+        let stroke_all = g.strokes.all.as_ref().filter(|_| TextGeom::object_stroke_requested(n)).map(|path| {
+            let mut path = path.clone();
+            path.apply_affine(t.xf);
+            path
+        });
         if let Some(all) = &all {
-            self.draw_text_items(ctx, f, n, below, all, tb);
+            self.draw_text_items(ctx, f, n, below, (all, stroke_all.as_ref().unwrap_or(all)), tb);
         }
         if f.opts.highlight_substitutions {
             for (on, path) in [
@@ -274,18 +293,19 @@ impl Renderer {
             }
             let path = g.run(i);
             let path = path.as_ref();
-            if path.elements().is_empty() {
-                continue;
-            }
             ctx.set_transform(xf);
             ctx.set_fill_rule(peniko::Fill::NonZero);
-            if paint::set_fill_paint(ctx, &run.style.fill, g.bounds, f) {
+            if !path.elements().is_empty() && paint::set_fill_paint(ctx, &run.style.fill, g.bounds, f) {
                 self.fold_alpha(ctx, f.ink, &run.style.fill);
                 overprint(ctx, run.style.overprint_fill);
                 ctx.fill_path(path);
             }
-            if run.style.has_stroke() {
-                // Character strokes are drawn in text space, with their cap, join and dashes.
+            if run.style.has_stroke()
+                && let Some(group) = g.strokes.group_ending_at(i)
+            {
+                // Original fills keep their order; a compatible scope paints its one border
+                // after the last fill. The immutable plan also serves paint-only/black copies.
+                let path = group.boundary.as_ref().unwrap_or(path);
                 overprint(ctx, run.style.overprint_stroke);
                 let chars = kept.then_some((g, i));
                 self.draw_stroke(ctx, f, t.xf, path, FillRule::NonZero, &run.style.stroke_layer(), chars, g.bounds);
@@ -294,7 +314,7 @@ impl Renderer {
         overprint(ctx, false);
         self.draw_inlines(ctx, f, t, g);
         if let Some(all) = &all {
-            self.draw_text_items(ctx, f, n, above, all, tb);
+            self.draw_text_items(ctx, f, n, above, (all, stroke_all.as_ref().unwrap_or(all)), tb);
         }
     }
 
@@ -528,7 +548,8 @@ impl Renderer {
     /// Paint some of type `n`'s own fills and strokes (`items`) on its glyph outlines `all`
     /// (document space; `tb` their bounds). Fills composite with their own opacity and blend mode;
     /// strokes take every stroke option, as on paths.
-    fn draw_text_items(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, items: &[AppearanceItem], all: &BezPath, tb: Rect) {
+    fn draw_text_items(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, items: &[AppearanceItem], paths: (&BezPath, &BezPath), tb: Rect) {
+        let (all, stroke) = paths;
         for item in items.iter().filter(|i| i.visible() && !i.paint().is_none()) {
             match item {
                 AppearanceItem::Fill(fl) => {
@@ -547,8 +568,8 @@ impl Renderer {
                     }
                 }
                 AppearanceItem::Stroke(st) if st.width > 0.0 => {
-                    if st.brush.is_none() || !self.draw_brush(ctx, f, n, all, st) {
-                        self.draw_stroke(ctx, f, Affine::IDENTITY, all, FillRule::NonZero, st, None, tb);
+                    if st.brush.is_none() || !self.draw_brush(ctx, f, n, stroke, st) {
+                        self.draw_stroke(ctx, f, Affine::IDENTITY, stroke, FillRule::NonZero, st, None, tb);
                     }
                 }
                 AppearanceItem::Stroke(_) => {}
@@ -645,12 +666,12 @@ const MAX_TYPE_PAINTS: usize = 8;
 
 /// The paints of type `t` of node `n` (laid out in `g`) in groups that
 /// [`Renderer::draw_type_pixels`] draws one at a time, in the order they are drawn: the object's
-/// own fills and strokes below the characters, the runs' fills and strokes, then the object's own
-/// fills and strokes above the characters. Each of the object's own fills and strokes is a group,
-/// and so is each fill and stroke of a run, except that fills and strokes of runs one after
+/// own fills and strokes below the characters, the runs' fills and scope-ending strokes, then the
+/// object's own fills and strokes above the characters. Each object fill or stroke is a group,
+/// and so is each fill and stroke scope, except that fills and strokes of runs one after
 /// another in solid colors are one group when colors are drawn opaque (`opaque`). A run's stroke
-/// starts a new group rather than join its own fill's, so the stroke's edges inside the characters
-/// take the method too. Paints that draw nothing are left out. `None` for type with more than
+/// starts a new group rather than join its scope's fills, so the stroke's inner edges take the
+/// method too. Paints that draw nothing are left out. `None` for type with more than
 /// [`MAX_TYPE_PAINTS`] groups, which is drawn as one.
 fn type_paints(n: &Node, t: &TextObject, g: &TextGeom, opaque: bool) -> Option<Vec<Vec<TypePaint>>> {
     let shown = |i: &AppearanceItem| i.visible() && !i.paint().is_none() && !matches!(i, AppearanceItem::Stroke(st) if st.width <= 0.0);
@@ -660,15 +681,20 @@ fn type_paints(n: &Node, t: &TextObject, g: &TextGeom, opaque: bool) -> Option<V
     // Whether the last group holds run paints in opaque solid colors, which the next such paint joins.
     let mut joins = false;
     for (i, run) in t.runs.iter().enumerate() {
-        if g.run(i).elements().is_empty() {
-            continue;
-        }
-        let fill = (!run.style.fill.is_none()).then_some((TypePaint::Fill(i), &run.style.fill));
-        let stroke = run.style.has_stroke().then_some((TypePaint::Stroke(i), &run.style.stroke));
+        let path = g.run(i);
+        let group = g.strokes.group_ending_at(i);
+        let stroke_path = group.and_then(|g| g.boundary.as_ref()).unwrap_or(path.as_ref());
+        let fill = (!path.elements().is_empty() && !run.style.fill.is_none()).then_some((TypePaint::Fill(i), &run.style.fill));
+        let stroke =
+            (group.is_some() && !stroke_path.elements().is_empty() && run.style.has_stroke()).then_some((TypePaint::Stroke(i), &run.style.stroke));
         for (p, paint) in [fill, stroke].into_iter().flatten() {
             let solid = opaque && matches!(paint, vectorcraft_color::Paint::Solid { .. });
-            // A run's fill and stroke overlap along every outline, so they never share a group.
-            let own_fill = matches!(p, TypePaint::Stroke(_)) && groups.last().is_some_and(|last| last.contains(&TypePaint::Fill(i)));
+            // The stroke overlaps every fill in its original scope, even after the other run
+            // strokes are hidden for a paint-only draw. Never regroup from those hidden paints.
+            let own_fill = matches!(p, TypePaint::Stroke(_))
+                && groups.last().is_some_and(|last| {
+                    last.iter().any(|paint| matches!(paint, TypePaint::Fill(fill) if group.is_some_and(|g| g.runs.contains(fill))))
+                });
             match groups.last_mut() {
                 Some(last) if joins && solid && !own_fill => last.push(p),
                 _ => groups.push(vec![p]),
@@ -681,6 +707,7 @@ fn type_paints(n: &Node, t: &TextObject, g: &TextGeom, opaque: bool) -> Option<V
 }
 
 /// Node `n` and type `t` with every paint but those in `keep` taken away.
+/// The caller keeps the original `TextGeom` stroke plan: hidden paints must not split its scopes.
 fn type_paint_only(n: &Node, t: &TextObject, keep: &[TypePaint]) -> (Node, TextObject) {
     let keep: std::collections::HashSet<TypePaint> = keep.iter().copied().collect();
     let (mut n, mut t) = (n.clone(), t.clone());

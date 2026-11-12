@@ -53,6 +53,7 @@ mod solids;
 pub mod stroke;
 mod stylize;
 pub mod svg_filter;
+pub mod text_stroke;
 pub mod trap;
 mod util;
 mod warp;
