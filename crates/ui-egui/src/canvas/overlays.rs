@@ -238,14 +238,15 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     rotate_all_widget(p, xf, tool, &st.doc, &st.selection);
 }
 
-/// The Rotate All, Space and Move All widgets (Selection and Objects on Path tools, one Objects on Path
-/// group selected). The Rotate All widget is joined by a line to the first object's attachment
-/// point. It stays while dragged.
+/// The Select/Move, Rotate All, Space and Move All widgets (Selection and Objects on Path tools, one
+/// Objects on Path group selected). The Rotate All widget is joined by a line to the first object's
+/// attachment point. It stays while dragged.
 fn rotate_all_widget(p: &egui::Painter, xf: &Xf, tool: &str, doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) {
     use vectorcraft_tools::objects_on_path::{ROTATE_ALL_RADIUS_PX, RotateAllWidget};
     if !matches!(tool, "selection" | "objectsOnPath") {
         return;
     }
+    member_widgets(p, xf, doc, selection);
     if let Some(w) = RotateAllWidget::of(doc, selection, xf.zoom) {
         let (on, c, color) = (xf.to_screen(w.pivot), xf.to_screen(w.at), c32(doc.layer_color(w.group)));
         p.line_segment([on, c], Stroke::new(1.0, color));
@@ -255,6 +256,23 @@ fn rotate_all_widget(p: &egui::Painter, xf: &Xf, tool: &str, doc: &vectorcraft_d
     space_widget(p, xf, doc, selection);
     move_all_widget(p, xf, doc, selection);
 }
+
+/// The Select/Move widgets: a ring on each object's attachment point, filled blue for the chosen
+/// object. They are drawn under the other widgets, which a press takes first.
+fn member_widgets(p: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) {
+    use vectorcraft_tools::objects_on_path::{MEMBER_RADIUS_PX, MemberWidget};
+    for w in MemberWidget::all(doc, selection, xf.zoom) {
+        let c = xf.to_screen(w.at);
+        if w.chosen {
+            p.circle(c, MEMBER_RADIUS_PX, MEMBER_CHOSEN, Stroke::new(1.0, Color32::WHITE));
+        } else {
+            p.circle(c, MEMBER_RADIUS_PX, Color32::TRANSPARENT, Stroke::new(1.5, c32(doc.layer_color(w.group))));
+        }
+    }
+}
+
+/// The fill of the chosen object's Select/Move widget.
+pub(super) const MEMBER_CHOSEN: Color32 = Color32::from_rgb(0x1f, 0x6f, 0xeb);
 
 /// The Space widget (beside the Rotate All widget, with two or more objects on the path): a square
 /// joined by a line to the last object's attachment point. It stays while dragged.

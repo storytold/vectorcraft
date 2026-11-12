@@ -11,7 +11,9 @@ use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
 use serde_json::{Value, json};
-use vectorcraft_brush::{self as brush, ArtBrush, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation};
+use vectorcraft_brush::{
+    self as brush, ArtBrush, Bristle, BristleShape, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation,
+};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, PatternDef, Symbol};
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, SubPath, shapes};
@@ -169,10 +171,12 @@ pub struct BuiltinBrushLibrary {
 pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "art-ribbons", name: "Art Ribbons", make: art_ribbons },
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
+    BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
+    BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
 ];
 
 /// Built-in library `id`, made once.
@@ -288,6 +292,31 @@ fn calligraphic_nibs() -> BrushLibrary {
         pressure,
     ];
     built("Calligraphic Nibs", Document::new(100.0, 100.0), brushes)
+}
+
+/// A bristle brush: `shape`, then size (pt), bristle length, density, thickness, paint opacity
+/// and stiffness (%).
+fn bristle(name: &str, shape: BristleShape, [size, length, density, thickness, opacity, stiffness]: [f64; 6]) -> Brush {
+    Brush { name: name.into(), kind: BrushKind::Bristle(Bristle { shape, size, length, density, thickness, opacity, stiffness }) }
+}
+
+/// Bristle Brushes: one bristle brush for each tip shape, from a fine liner to wide fans for
+/// blending and texture.
+fn bristle_brushes() -> BrushLibrary {
+    use BristleShape::*;
+    let brushes = vec![
+        bristle("Fine Liner", RoundPoint, [2.0, 140.0, 30.0, 30.0, 90.0, 75.0]),
+        bristle("Pointed Flat", FlatPoint, [5.0, 120.0, 55.0, 35.0, 80.0, 60.0]),
+        bristle("Stubby Round", RoundBlunt, [8.0, 60.0, 70.0, 50.0, 85.0, 80.0]),
+        bristle("Dry Scrub", FlatBlunt, [10.0, 40.0, 25.0, 60.0, 60.0, 95.0]),
+        bristle("Soft Dome", RoundCurve, [12.0, 160.0, 85.0, 20.0, 45.0, 25.0]),
+        bristle("Filbert", FlatCurve, [9.0, 110.0, 65.0, 40.0, 70.0, 45.0]),
+        bristle("Angled Round", RoundAngle, [7.0, 130.0, 50.0, 35.0, 75.0, 55.0]),
+        bristle("Angled Flat", FlatAngle, [11.0, 100.0, 60.0, 45.0, 80.0, 65.0]),
+        bristle("Fan Blender", RoundFan, [16.0, 220.0, 40.0, 15.0, 35.0, 20.0]),
+        bristle("Grass Fan", FlatFan, [20.0, 260.0, 15.0, 25.0, 65.0, 35.0]),
+    ];
+    built("Bristle Brushes", Document::new(100.0, 100.0), brushes)
 }
 
 fn border(name: &str, side: Node, corner: Option<Node>, fit: PatternFit) -> Brush {
@@ -444,6 +473,170 @@ fn energy_beams() -> BrushLibrary {
         art("Spark Trail", spark, Colorization::Tints),
     ];
     built("Energy Beams", Document::new(100.0, 100.0), brushes)
+}
+
+/// The fixed-seed number source of the Dry Media grain: integer steps and plain arithmetic, so the
+/// art is the same on every run and every platform.
+struct Grain(u64);
+
+impl Grain {
+    /// The next number in 0..1.
+    fn next(&mut self) -> f64 {
+        self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (self.0 >> 11) as f64 / (1u64 << 53) as f64
+    }
+    /// The next number in `a`..`b`.
+    fn range(&mut self, a: f64, b: f64) -> f64 {
+        a + (b - a) * self.next()
+    }
+}
+
+/// `floor` at x = `x0` and `x1`, rising smoothly to 1 within `ramp` pt of each.
+fn ends(x: f64, x0: f64, x1: f64, ramp: f64, floor: f64) -> f64 {
+    let t = ((x - x0).min(x1 - x) / ramp).clamp(0.0, 1.0);
+    floor + (1.0 - floor) * t * t * (3.0 - 2.0 * t)
+}
+
+/// A closed band from x = `x0` to `x1` in `n` steps, at most `half` pt either side of y = 0 times
+/// `taper(x)`; each edge point is pulled in by up to `rough` of that.
+fn rough_band(g: &mut Grain, (x0, x1): (f64, f64), n: usize, half: f64, rough: f64, taper: impl Fn(f64) -> f64) -> PathData {
+    let xs: Vec<f64> = (0..=n).map(|i| x0 + (x1 - x0) * i as f64 / n as f64).collect();
+    let mut pts: Vec<Point> = xs.iter().map(|&x| Point::new(x, -half * taper(x) * (1.0 - rough * g.next()))).collect();
+    let bottom: Vec<Point> = xs.iter().rev().map(|&x| Point::new(x, half * taper(x) * (1.0 - rough * g.next()))).collect();
+    pts.extend(bottom);
+    PathData::single(SubPath::polyline(&pts, true))
+}
+
+/// A small four-cornered fleck around (`cx`, `cy`), at most `w` × `h` pt either side; one corner
+/// in each direction, so its outline never crosses itself.
+fn fleck(g: &mut Grain, cx: f64, cy: f64, w: f64, h: f64) -> PathData {
+    let mut side = |a: f64, b: f64| g.range(a, b);
+    let pts = [
+        (cx - w * side(0.6, 1.0), cy + h * side(-0.3, 0.3)),
+        (cx + w * side(-0.3, 0.3), cy - h * side(0.6, 1.0)),
+        (cx + w * side(0.6, 1.0), cy + h * side(-0.3, 0.3)),
+        (cx + w * side(-0.3, 0.3), cy + h * side(0.6, 1.0)),
+    ];
+    polygon(&pts)
+}
+
+/// `body` with `holes` (inside it, apart from each other) cut out, even-odd, in gray `k`: what
+/// lies under the stroke shows through the holes.
+fn holed(body: PathData, holes: Vec<PathData>, k: f32) -> Node {
+    let children = std::iter::once(body).chain(holes).map(|p| Arc::new(Node::path(NodeId(0), p, Appearance::default()))).collect();
+    let mut n = Node::new(NodeId(0), NodeKind::Compound { children, rule: FillRule::EvenOdd });
+    n.appearance = Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::gray(k))))], ..Default::default() }.into();
+    n
+}
+
+/// Path `p` filled with gray `k` (1 is black).
+fn ink(p: PathData, k: f32) -> Node {
+    filled(p, Paint::solid(Color::gray(k)))
+}
+
+/// Slivers `w` × `h` pt (ranges) in `count` slots along x = 6..94 inside a band `half` pt wide
+/// times `taper`. Each stays within `reach` of the band's half width from y = 0, taken where the
+/// band is narrowest over the sliver and the 3 pt either side of it, so with `reach` below the
+/// band's roughness margin no sliver touches the band's edge or another sliver.
+fn slivers(g: &mut Grain, count: usize, half: f64, reach: f64, (w, h): ((f64, f64), (f64, f64)), taper: impl Fn(f64) -> f64) -> Vec<PathData> {
+    let slot = 88.0 / count as f64;
+    (0..count)
+        .map(|i| {
+            let cx = 6.0 + slot * (i as f64 + 0.5);
+            let (w, h) = (g.range(w.0, w.1), g.range(h.0, h.1));
+            let room = reach * half * taper(cx - w - 3.0).min(taper(cx + w + 3.0));
+            let cy = g.range(-1.0, 1.0) * (room - h).max(0.0);
+            fleck(g, cx, cy, w, h)
+        })
+        .collect()
+}
+
+/// Dry Media: art brushes of grainy dry drawing marks, chalk, pencil, crayon and charcoal (original
+/// vector grain from fixed seeds; every brush 100 pt long, black and grays that take the stroke
+/// color as tints, gaps cut out so the paper shows).
+pub(crate) fn dry_media() -> BrushLibrary {
+    // Chalk Grain, 100 × 8 pt: a soft band with narrow scratches and chips along its edges.
+    let chalk = {
+        let mut g = Grain(0x0c4a_1c0a);
+        let taper = |x: f64| ends(x, 0.0, 100.0, 10.0, 0.35);
+        let body = rough_band(&mut g, (0.0, 100.0), 36, 4.0, 0.25, taper);
+        let scratches = slivers(&mut g, 14, 4.0, 0.7, ((1.2, 2.4), (0.15, 0.3)), taper);
+        let mut parts = vec![holed(body, scratches, 0.8)];
+        for i in 0..18 {
+            let cx = 3.0 + 94.0 * (i as f64 + g.range(0.2, 0.8)) / 18.0;
+            let side = if i % 2 == 0 { -1.0 } else { 1.0 };
+            let cy = side * 4.0 * taper(cx) * g.range(0.7, 0.95);
+            let (w, h) = (g.range(0.3, 0.7), g.range(0.25, 0.5));
+            let f = fleck(&mut g, cx, cy, w, h);
+            parts.push(ink(f, 1.0));
+        }
+        group(parts)
+    };
+    // Graphite Pencil, 100 × 2.5 pt: a solid tapered core with fine slanted hatching at its edges.
+    let pencil = {
+        let mut g = Grain(0x009e_4c11);
+        let core = rough_band(&mut g, (0.0, 100.0), 40, 0.8, 0.12, |x| ends(x, 0.0, 100.0, 18.0, 0.25));
+        let mut parts = vec![ink(core, 1.0)];
+        for i in 0..24 {
+            let x0 = 2.0 + 92.0 * (i as f64 + g.range(0.0, 0.4)) / 24.0;
+            let len = g.range(1.5, 3.0);
+            let t = g.range(0.12, 0.2);
+            let slant = g.range(0.1, 0.3);
+            let y0 = if i % 2 == 0 { -g.range(0.85, 1.05) } else { g.range(0.85, 1.25) - t - slant };
+            parts.push(ink(polygon(&[(x0, y0 + slant), (x0 + len, y0), (x0 + len, y0 + t), (x0, y0 + slant + t)]), 0.6));
+        }
+        group(parts)
+    };
+    // Wax Crayon, 100 × 6 pt: a dense band with small gaps in its middle and short overlapping
+    // marks along both edges.
+    let crayon = {
+        let mut g = Grain(0x00c0_a7e5);
+        let taper = |x: f64| ends(x, 0.0, 100.0, 6.0, 0.5);
+        let body = rough_band(&mut g, (0.0, 100.0), 30, 2.6, 0.2, taper);
+        let gaps = slivers(&mut g, 16, 2.6, 0.34, ((0.6, 1.6), (0.15, 0.3)), taper);
+        let mut parts = vec![holed(body, gaps, 0.9)];
+        for i in 0..36 {
+            let w = g.range(1.0, 2.2);
+            let cx = (1.0 + w).max(98.0 * (i as f64 + g.range(0.0, 1.0)) / 36.0).min(99.0 - w);
+            let side = if i % 2 == 0 { -1.0 } else { 1.0 };
+            let h = g.range(0.4, 0.6);
+            // Clear of the gaps, which stay within 0.9 pt of the middle.
+            let inner = 0.9 + h;
+            let cy = side * g.range(inner, (2.4 * taper(cx)).max(inner));
+            let f = fleck(&mut g, cx, cy, w, h);
+            parts.push(ink(f, 1.0));
+        }
+        group(parts)
+    };
+    // Charcoal Dust, 100 × 7 pt: a dark band broken into pieces, with flecks of dust either side.
+    let dust = {
+        let mut g = Grain(0xc4a2_c0a1);
+        let mut parts = vec![];
+        let mut x0 = 0.0;
+        while x0 < 100.0 {
+            let x1 = (x0 + g.range(14.0, 24.0)).min(100.0);
+            let x1 = if 100.0 - x1 < 8.0 { 100.0 } else { x1 };
+            let piece = rough_band(&mut g, (x0, x1), 10, 2.0, 0.3, |x| ends(x, 0.0, 100.0, 8.0, 0.4) * ends(x, x0, x1, 2.0, 0.3));
+            parts.push(ink(piece, 1.0));
+            x0 = x1 + g.range(1.5, 3.0);
+        }
+        for i in 0..30 {
+            let cx = 2.0 + 96.0 * (i as f64 + g.range(0.2, 0.8)) / 30.0;
+            let side = if g.next() < 0.5 { -1.0 } else { 1.0 };
+            let s = g.range(0.15, 0.3);
+            let cy = side * g.range(2.3, 3.5 - s);
+            let f = fleck(&mut g, cx, cy, s, s);
+            parts.push(ink(f, if i % 3 == 0 { 0.7 } else { 1.0 }));
+        }
+        group(parts)
+    };
+    let brushes = vec![
+        art("Chalk Grain", chalk, Colorization::Tints),
+        art("Graphite Pencil", pencil, Colorization::Tints),
+        art("Wax Crayon", crayon, Colorization::Tints),
+        art("Charcoal Dust", dust, Colorization::Tints),
+    ];
+    built("Dry Media", Document::new(100.0, 100.0), brushes)
 }
 
 // ---------- commands ----------

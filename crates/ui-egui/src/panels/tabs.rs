@@ -346,7 +346,7 @@ fn place_above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, spa
 /// Screen points per point of text `n` at the canvas zoom, as [`above_text`] sizes the ruler:
 /// across the frame for area type, the zoom for point type.
 fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
-    let xf = crate::canvas::Xf::new(app.canvas_rect?, app.view()?);
+    let xf = app.canvas_xf()?;
     let per = match &n.kind {
         NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. }) => f64::from(xf.rect_to_screen(n.geometric_bounds()?).width()) / span,
         _ => xf.zoom,
@@ -358,7 +358,7 @@ fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
 /// put 0 on the text's left edge and its marks at the canvas zoom, so each stop sits over the
 /// column it sets (#729). `span`: the ruler's length in the text's points.
 fn above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64) -> Option<()> {
-    let xf = crate::canvas::Xf::new(app.canvas_rect?, app.view()?);
+    let xf = app.canvas_xf()?;
     let on_screen = xf.rect_to_screen(n.geometric_bounds()?);
     // Screen points per point of the text: across the frame for area type (so a scaled frame
     // lines up too), the zoom for point type.
@@ -686,15 +686,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     // A click that lands on a stop's whole point or tick selects that stop and records no
                     // undo step.
                     let added = !stops.iter().any(|s| s.position == position);
-                    if added {
-                        stops.push(TabStop { position, align: ALIGNS[align_idx.min(3)].0, leader: String::new(), align_on: '.' });
-                        stops.sort_by(|a, b| a.position.total_cmp(&b.position));
-                    }
-                    let i = stops.iter().position(|s| s.position == position).unwrap_or(0);
-                    set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
-                    set_pstate(ui.ctx(), "tabs-sel", i);
-                    if added {
-                        apply(app, &stops);
+                    let max = TabStop::MAX_STOPS;
+                    if added && stops.len() >= max {
+                        // A full list takes no more stops: the click leaves the stops and the
+                        // selection as they are and shows the limit.
+                        app.status(format!("at most {max} tab stops"));
+                    } else {
+                        if added {
+                            stops.push(TabStop { position, align: ALIGNS[align_idx.min(3)].0, leader: String::new(), align_on: '.' });
+                            stops.sort_by(|a, b| a.position.total_cmp(&b.position));
+                        }
+                        let i = stops.iter().position(|s| s.position == position).unwrap_or(0);
+                        set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
+                        set_pstate(ui.ctx(), "tabs-sel", i);
+                        if added {
+                            apply(app, &stops);
+                        }
                     }
                 }
             }
@@ -729,7 +736,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // Repeat Tab: copies of the selected stop across the ruler, spaced by its distance from the
     // previous stop, or from the paragraph's left indent plus its list level's indent when it is
-    // the first stop.
+    // the first stop. The copies stop at the 256-stop limit, which the status bar then shows.
     if menu_item(ui, tl!("Repeat Tab"), sel < stops.len() && selected_marker.is_none(), false) {
         let step = match sel {
             0 => (stops[0].position - left_indent).abs(),
@@ -738,8 +745,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         .max(1.0);
         let base = stops[sel].clone();
         stops.truncate(sel + 1);
+        let max = TabStop::MAX_STOPS;
         let mut pos = base.position + step;
         while pos <= base.position + step * 20.0 && pos < 2000.0 {
+            if stops.len() >= max {
+                app.status(format!("at most {max} tab stops"));
+                break;
+            }
             stops.push(TabStop { position: pos, ..base.clone() });
             pos += step;
         }

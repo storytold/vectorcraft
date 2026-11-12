@@ -15,8 +15,8 @@ use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project
 
 use super::edit::{duplicate_in, outermost, refuse_symbol_part, selected_roots};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, id_param,
-    matrix_param, named_id, named_ids, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
+    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, matrix_param,
+    named_id, named_ids, number_or, object_param, ok, point_indices, point_param, str_param, switch_or, targets,
 };
 use crate::EngineError;
 
@@ -305,7 +305,7 @@ fn same_points(a: Option<&WidthProfile>, b: Option<&WidthProfile>) -> bool {
 
 fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.set";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let t = f64_req(p, "t", C)?.clamp(0.0, 1.0);
     let (left, right) = (f64_req(p, "left", C)?, f64_req(p, "right", C)?);
     if !(left.is_finite() && right.is_finite()) || left < 0.0 || right < 0.0 || left.max(right) > 1.0e5 {
@@ -362,7 +362,7 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.copy";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let t = f64_req(p, "t", C)?.clamp(0.0, 1.0);
     // When the profile comes out as it was (the copy replaces a side of a discontinuous point that has
     // its widths already), the document and its undo history stay as they are.
@@ -382,7 +382,7 @@ fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn width_point_remove(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.remove";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let indices = match (p.get("indices"), p.get("index")) {
         (Some(a), _) => point_indices(a),
         (None, Some(i)) => point_indices(&json!([i])),

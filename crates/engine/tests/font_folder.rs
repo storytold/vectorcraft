@@ -71,6 +71,13 @@ fn a_found_font_is_copied_without_replacing_a_file_and_its_type_redraws() {
     assert!(st.revision > revision && !st.is_dirty());
     assert_eq!(s.execute("text.missingFonts", &json!({})).unwrap()["count"], 0);
 
+    // A caller whose read roots hold the file but not the Fonts folder: the file is kept, and the
+    // reply names the copy by its file name only, without the folder.
+    let downloads = vectorcraft_engine::file_access::AutomationRoots::new(&[&root.join("Downloads")], &[]).unwrap();
+    let r = vectorcraft_engine::file_access::confine(downloads.as_ref(), || s.execute("text.addFontFiles", &json!({"files": [file]}))).unwrap();
+    assert_eq!((&r["folder"], &r["kept"]), (&Value::Null, &json!([{"from": file, "to": "Findme 2.otf"}])), "{r}");
+    assert!(!r.to_string().contains("App Fonts"), "{r}");
+
     // The same file again is kept, not copied a third time.
     let r = s.execute("text.addFontFiles", &json!({"files": [file]})).unwrap();
     assert_eq!((r["copied"].clone(), r["kept"].clone()), (json!([]), json!([{"from": file, "to": fonts.join("Findme 2.otf")}])), "{r}");

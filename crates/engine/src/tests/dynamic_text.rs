@@ -88,19 +88,17 @@ fn dynamic_text_refuses_bad_params_and_other_type() {
     assert!(err(s.execute("type.dynamicText", &json!({"on": 1}))).contains("on"));
     assert_eq!(undo_len(&s), before);
     assert!(!text(&s, id).dynamic_text);
-    // Point type alone: refused (area type takes Block, `typecmd::block_tests`).
     let point = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
-    s.execute("select.set", &json!({"ids": [point]})).unwrap();
-    assert!(err(s.execute("type.dynamicText", &json!({}))).contains("select type on a path or area type"));
     let empty = s.execute("shape.rectangle", &json!({"x": 300, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [empty]})).unwrap();
     assert!(s.execute("type.dynamicText", &json!({})).is_err());
-    // With point type selected too, only the type on a path changes.
+    // With point type selected too, both change in one undo step: the point type becomes area
+    // type with Block on (`typecmd::block_tests`).
     let before = undo_len(&s);
     s.execute("select.set", &json!({"ids": [point, id.0]})).unwrap();
     let r = s.execute("type.dynamicText", &json!({"on": true})).unwrap();
-    assert_eq!(r["ids"], json!([id.0]));
-    assert!(!text(&s, NodeId(point)).dynamic_text);
+    assert_eq!(r["ids"], json!([point, id.0]));
+    assert!(text(&s, NodeId(point)).dynamic_text && text(&s, id).dynamic_text);
     assert_eq!(undo_len(&s), before + 1);
 }
 

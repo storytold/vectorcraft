@@ -1,6 +1,7 @@
 use super::save::{
-    ask_before_losing, export_path, is_web, notes_of, remember_active_artboard, report_saved, report_write_error, saved_status, show_with_notes,
-    target_path, target_path_keeping, view_file, write_encoded, write_named, write_reporting,
+    ask_before_losing, ask_to_replace_files, checks_replaced, export_path, is_web, notes_of, remember_active_artboard, replaced_files, report_saved,
+    report_write_error, saved_status, show_with_notes, target_path, target_path_keeping, view_file, with_path, write_encoded, write_named,
+    write_reporting,
 };
 use super::{EngineError, Progress, Value, VectorcraftApp, Writer, background, cancel, fileio, json, progress};
 
@@ -44,6 +45,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
     };
     let doc = fileio::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, std::sync::Arc::new);
+    let uid = st.uid;
     let path = export_path(app, path, f)?;
     let mut again = params.clone();
     if let Some(o) = again.as_object_mut() {
@@ -68,11 +70,18 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // writing.
     let progress = Progress::new();
     let (reporting, asked) = (progress.clone(), progress.clone());
+    let (exists, allowed) = checks_replaced(app);
+    let allowed_before = allowed.clone();
+    let rerun = with_path(&again, &path);
     let work = move |write: Writer| {
         progress::scope(&reporting, || {
             cancel::check().map_err(|e| e.to_string())?;
             let enc = fileio::encode_all(&doc, f.id, &params).map_err(|e| e.to_string())?;
             cancel::check().map_err(|e| e.to_string())?;
+            let replaced = replaced_files(exists.as_ref(), &path, &allowed, enc.named(&doc, &path).iter().map(|(p, _)| p.as_str()));
+            if !replaced.is_empty() {
+                return Ok(json!({ "replaces": replaced }));
+            }
             let files = write_encoded(write, &doc, &path, &enc)?;
             let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.warnings });
             if files.len() > 1 {
@@ -90,6 +99,11 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
             return Ok(json!({ "cancelled": true }));
         }
         let r = r.inspect_err(|e| report_write_error(app, true, &failed, e))?;
+        // Nothing written: asked first.
+        if let Some(files) = r.get("replaces").and_then(Value::as_array) {
+            let files: Vec<String> = files.iter().filter_map(Value::as_str).map(str::to_string).collect();
+            return Ok(ask_to_replace_files(app, uid, &files, &allowed_before, "file.exportAs", &rerun));
+        }
         let what = match r["files"].as_array() {
             Some(files) => format!("{} files", files.len()),
             None => r["path"].as_str().unwrap_or_default().to_string(),
@@ -251,13 +265,19 @@ pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Val
 
 /// [`export_for_screens`] through command `id` (`document.exportForScreens` or `assets.export`; or
 /// `assets.export3D`, whose reply takes the same form and which always runs at once).
-/// On the desktop with Background Export on, an export into a folder is checked, journaled and
-/// prepared from the document as it is now, and the files are encoded and written on the
-/// background thread ([`background`]): this returns `{background: true, status}` at once, with the
-/// progress dialog's Cancel, and the status bar reports the files once they are written.
+/// On the desktop with Background Export on, an export into a folder (the `folder` param, else the
+/// one its `exportPreset` keeps) is checked, journaled and prepared from the document as it is now,
+/// and the files are encoded and written on the background thread ([`background`]): this returns
+/// `{background: true, status}` at once, with the progress dialog's Cancel, and the status bar
+/// reports the files once they are written.
 pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) -> Result<Value, String> {
     let open_location = params.get("openLocation").and_then(Value::as_bool).unwrap_or(false);
-    let folder = params.get("folder").and_then(Value::as_str).unwrap_or_default().to_string();
+    // The folder written into, and its name when the reply leaves it out.
+    let (folder, hidden) = if id == "assets.export3D" {
+        (params.get("folder").and_then(Value::as_str).unwrap_or_default().to_string(), None)
+    } else {
+        app.session.screen_export_folder(id, &params).unwrap_or_default()
+    };
     // Without a folder the files come back in the reply, which the caller waits for.
     let in_background =
         app.session.prefs.background_export && app.services.write_shared.is_some() && !is_web(app) && !folder.is_empty() && id != "assets.export3D";
@@ -265,7 +285,7 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
         // Made at once, after the exports and saves started before it.
         background::wait_all(app);
         let r = app.run(id, params)?;
-        return report_exported(app, r, &folder, open_location);
+        return report_exported(app, r, &folder, hidden.as_deref(), open_location);
     }
     let export = app.session.prepare_screen_export(id, &params).map_err(|e| e.to_string()).inspect_err(|e| app.ui.status = e.clone())?;
     let label = format!("Exporting {}", fileio::file_name(&folder));
@@ -285,14 +305,15 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
             return Ok(json!({ "cancelled": true }));
         }
         let r = r.inspect_err(|e| report_write_error(app, true, &folder, e))?;
-        report_exported(app, r, &folder, open_location)
+        report_exported(app, r, &folder, hidden.as_deref(), open_location)
     })
 }
 
 /// Report the files `r` (the reply of `document.exportForScreens`) in the status bar: the count
-/// written into `folder`, else the ZIP or the files downloaded (the web); with `open_location`,
-/// the file manager shows the first file written.
-fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, open_location: bool) -> Result<Value, String> {
+/// written into `folder` (named `hidden` when the reply leaves it out), else the ZIP or the files
+/// downloaded (the web); with `open_location`, the file manager shows the first file written, or
+/// the folder for a ZIP whose path the reply leaves out.
+fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, hidden: Option<&str>, open_location: bool) -> Result<Value, String> {
     let count = r["files"].as_array().map_or(0, Vec::len);
     let warned = r["warnings"].as_array().is_some_and(|w| !w.is_empty());
     // Files that came back as bytes: (name, base64).
@@ -303,15 +324,22 @@ fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, open_locati
         }
     };
     if returned.is_empty() {
-        let first = r["path"].as_str().or_else(|| r["files"][0].as_str());
-        let mut status = crate::i18n::msg_n(count as u64, "Exported {n} file to {folder}", "Exported {n} files to {folder}", &[("folder", folder)]);
+        let shown = hidden.unwrap_or(folder);
+        let first = match r["path"].as_str().or_else(|| r["files"][0].as_str()) {
+            // The reply names the files relative to a folder it leaves out, and a ZIP's files inside it.
+            Some(_) if hidden.is_some() && r.get("bytes").is_some() => Some(folder.to_string()),
+            Some(name) if hidden.is_some() => Some(format!("{folder}/{name}")),
+            first => first.map(str::to_string),
+        };
+        let mut status = crate::i18n::msg_n(count as u64, "Exported {n} file to {folder}", "Exported {n} files to {folder}", &[("folder", shown)]);
         if warned {
-            status = saved_status(r["path"].as_str().unwrap_or(folder), &r);
+            status = saved_status(r["path"].as_str().unwrap_or(shown), &r);
         }
         if open_location
             && let Some(first) = first
-            && let Err(e) = reveal_path(app, first)
+            && let Err(e) = reveal_path(app, &first)
         {
+            let e = if hidden.is_some() { e.replace(folder, shown) } else { e };
             status = format!("{status} ({e})");
         }
         show_with_notes(app, status, notes_of(&r));

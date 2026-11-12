@@ -119,7 +119,8 @@ pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
     {
         out.appearance.warp_linear_gradients(b, &|p| affine_near(w.f, p, w.eps));
     }
-    if let Some(m) = out.extras_if_any().and_then(|e| e.mask.as_mut()) {
+    // A linked opacity mask bends with the object it masks; an unlinked one stays where it is.
+    if let Some(m) = out.extras_if_any().and_then(|e| e.mask.as_mut()).filter(|m| m.linked) {
         m.art = Arc::new(map_node(&m.art, w));
     }
     match &mut out.kind {
@@ -178,29 +179,46 @@ fn affine_between(s: [Point; 3], d: [Point; 3]) -> Option<Affine> {
     a.is_finite().then_some(a)
 }
 
-/// Image `n` (`im`) pushed through the warp as a raster mesh warp: its frame cut into
-/// `w.cells`² cells of two triangles, each a clip group showing the image under the affine map
-/// that takes the triangle where the warp takes its corners (with Preserve Shape Using
-/// Transparency, the image masked by the triangle; with Anti-Alias off, drawn without smoothing).
-/// Each piece reaches a little past its edges (at most half a point) so neighbours overlap and no
-/// seams show.
+/// Image `n` (`im`) pushed through the envelope's warp as a raster mesh warp ([`mesh_warp_image`]
+/// with `w.cells` cells, Preserve Shape Using Transparency and Anti-Alias as the envelope's
+/// options say).
 fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
     let k = w.cells.max(1);
-    // Two triangles a cell, three objects each; an image an inner envelope already cut into
-    // pieces is cut again here, so the pieces count against [`MAX_GENERATED`]. Past it, the image
-    // is left out.
-    if !Generating::charge(k.saturating_mul(k).saturating_mul(6)) {
+    // An image an inner envelope already cut into pieces is cut again here, so the pieces count
+    // against [`MAX_GENERATED`]. Past it, the image is left out.
+    if !Generating::charge(mesh_warp_cost(k)) {
         let mut g = n.clone();
         g.kind = NodeKind::Group { children: vec![], clip: false };
         return g;
     }
+    mesh_warp_image(n, im, w.f, k, !w.options.anti_alias, w.options.preserve_shape == PreserveShape::Transparency)
+}
+
+/// How many objects [`mesh_warp_image`] makes of one image with `cells` rows and columns: two
+/// triangles a cell, three objects each.
+pub fn mesh_warp_cost(cells: usize) -> usize {
+    let k = cells.max(1);
+    k.saturating_mul(k).saturating_mul(6)
+}
+
+/// Image `n` (`im`) pushed through point map `f` as a raster mesh warp: its frame cut into
+/// `cells`² cells of two triangles, each a clip group showing the image under the affine map
+/// that takes the triangle where `f` takes its corners (with `masked`, the image masked by the
+/// triangle instead; with `pixelated`, drawn without smoothing). Each piece reaches a little past
+/// its edges (at most half a point) so neighbors overlap and no seams show. Each piece keeps the
+/// color `n` colorizes a grayscale image with. The result is a group with `n`'s id, name,
+/// transparency, opacity mask and appearance.
+pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, cells: usize, pixelated: bool, masked: bool) -> Node {
+    let k = cells.max(1);
+    // A grayscale image's fill color colorizes each piece; the group of pieces takes none.
+    let colorize = n.extras().colorize.clone();
     let (pw, ph) = (im.width as f64, im.height as f64);
     let at = |i: usize, j: usize| Point::new(pw * i as f64 / k as f64, ph * j as f64 / k as f64);
     let mut pieces = Vec::with_capacity(2 * k * k);
     for j in 0..k {
         for i in 0..k {
             let s = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
-            let d = s.map(|p| (w.f)(im.xf * p));
+            let d = s.map(|p| f(im.xf * p));
             for t in [[0, 1, 2], [0, 2, 3]] {
                 let (st, dt) = (t.map(|v| s[v]), t.map(|v| d[v]));
                 let Some(xf) = affine_between(st, dt) else { continue };
@@ -216,8 +234,9 @@ fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
                     .collect();
                 let shape = PathData::single(SubPath::polyline(&tri, true));
                 let mut image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
-                image.extras_mut().pixelated = !w.options.anti_alias;
-                if w.options.preserve_shape == PreserveShape::Transparency {
+                image.extras_mut().pixelated = pixelated;
+                image.extras_mut().colorize = colorize.clone();
+                if masked {
                     // Preserve Shape Using Transparency: the triangle is the piece's alpha (a
                     // white opacity mask) instead of its clipping path.
                     let white = Node::path(n.id, shape, Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
@@ -234,6 +253,9 @@ fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
     }
     let mut g = n.clone();
     g.kind = NodeKind::Group { children: pieces, clip: false };
+    if let Some(e) = g.extras_if_any() {
+        e.colorize = None;
+    }
     g
 }
 

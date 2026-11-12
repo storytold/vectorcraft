@@ -485,6 +485,50 @@ fn a_turned_or_flat_diamond_expands_as_the_canvas_draws_it() {
     }
 }
 
+/// A gradient that repeats or reflects expands, into objects or a mesh, as the canvas paints it:
+/// its stops repeated across the box, for each kind.
+#[test]
+fn a_spread_gradient_expands_as_the_canvas_paints_it() {
+    for kind in ["linear", "radial", "conic", "diamond"] {
+        for spread in ["repeat", "reflect"] {
+            for to in [json!({"steps": 240}), json!({"gradient": "mesh"})] {
+                let mut s = session();
+                let gr = json!({"kind": kind, "spread": spread, "repeats": 3, "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]});
+                gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gr, false);
+                let before = render(&s);
+                run(&mut s, "object.expand", to.clone());
+                let after = render(&s);
+                // Where Repeat starts the stops again, the hard edge may land a pixel off.
+                assert!(mean_diff(&before, &after) < 4.0, "{kind} {spread} {to}: {}", mean_diff(&before, &after));
+            }
+        }
+    }
+}
+
+/// A gradient that repeats or reflects expands into the same whole number of objects in each run,
+/// so each run starts on an object's edge: a sharp step in the middle of each of 7 runs, expanded
+/// into about 15 objects (2 a run), lands where the canvas paints it.
+#[test]
+fn a_spread_gradient_expands_into_whole_bands_for_each_run() {
+    let stops = json!([
+        {"offset": 0, "color": "#ffff00"}, {"offset": 0.5, "color": "#ffff00"},
+        {"offset": 0.5, "color": "#004080"}, {"offset": 1, "color": "#004080"}
+    ]);
+    for kind in ["linear", "conic"] {
+        for spread in ["repeat", "reflect"] {
+            let mut s = session();
+            // A conic gradient turns about the box's center.
+            let start = if kind == "conic" { [100, 100] } else { [30, 100] };
+            let gr = json!({"kind": kind, "spread": spread, "repeats": 7, "start": start, "end": [170, 100], "stops": stops});
+            gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gr, false);
+            let before = render(&s);
+            run(&mut s, "object.expand", json!({"steps": 15}));
+            let after = render(&s);
+            assert!(mean_diff(&before, &after) < 2.0, "{kind} {spread}: {}", mean_diff(&before, &after));
+        }
+    }
+}
+
 #[test]
 fn the_mesh_option_makes_a_mesh_that_paints_the_gradient() {
     for gradient in [

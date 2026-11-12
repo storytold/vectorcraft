@@ -127,6 +127,7 @@ impl VectorcraftApp {
             updates_rt: Default::default(),
             frame_rate: Default::default(),
             canvas_rect: None,
+            canvas_ui_zoom: 1.0,
             control_rotate_press: None,
             hover_doc: None,
             titlebar_from_env: false,
