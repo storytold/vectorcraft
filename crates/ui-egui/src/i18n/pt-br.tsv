@@ -7049,3 +7049,15 @@ swatch	Yellow Green	Verde-amarelado
 	Deferred Effects	Efeitos Adiados
 @msg	no plug-in effect is deferred	nenhum efeito de plug-in está adiado
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aberto com {n} efeito de plug-in adiado. Efeito › Atualizar Efeitos Adiados o executa.|Aberto com {n} efeitos de plug-in adiados. Efeito › Atualizar Efeitos Adiados os executa.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Ferramentas de Corte
+	Stencil Bridges…	Pontes de Estêncil…
+	Stencil Bridges	Pontes de Estêncil
+	Shortest Crossing	Travessia mais curta
+	Direction	Direção
+@msg	The selected art has no islands to bridge	A arte selecionada não tem ilhas para unir
+@msg	No bridge of this width fits across the selected art	Nenhuma ponte desta largura cabe na arte selecionada
+@msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
+@msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}

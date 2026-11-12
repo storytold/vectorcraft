@@ -6670,3 +6670,15 @@ breakText	Glyphs	字形
 	Deferred Effects	保留中の効果
 @msg	no plug-in effect is deferred	保留中のプラグイン効果はありません
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	プラグイン効果を {n} 件保留して開きました。「効果 › 保留中の効果を更新」で実行します。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	カッティングツール
+	Stencil Bridges…	ステンシルブリッジ…
+	Stencil Bridges	ステンシルブリッジ
+	Shortest Crossing	最短の横断
+	Direction	方向
+@msg	The selected art has no islands to bridge	選択したアートワークにはブリッジでつなぐアイランドがありません
+@msg	No bridge of this width fits across the selected art	この幅のブリッジは選択したアートワークに収まりません
+@msg	Some islands could not be joined to the area around the art	一部のアイランドをアートワークの周囲の領域につなげられませんでした
+@msg	`width` must be from {lo} to {hi} pt	`width` は {lo}～{hi} pt の範囲で指定してください
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` には 1 から {MAX_BRIDGES_PER_ISLAND} の整数を指定してください

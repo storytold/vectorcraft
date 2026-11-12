@@ -7065,3 +7065,15 @@ shape	Open	Открытый
 	Deferred Effects	Отложенные эффекты
 @msg	no plug-in effect is deferred	нет отложенных эффектов модулей
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Открыто с {n} отложенным эффектом модуля. Эффект › Обновить отложенные эффекты выполнит его.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Инструменты резки
+	Stencil Bridges…	Мостики трафарета…
+	Stencil Bridges	Мостики трафарета
+	Shortest Crossing	Кратчайшее пересечение
+	Direction	Направление
+@msg	The selected art has no islands to bridge	В выделенной графике нет островков для соединения
+@msg	No bridge of this width fits across the selected art	Мостик такой ширины не помещается поперёк выделенной графики
+@msg	Some islands could not be joined to the area around the art	Некоторые островки не удалось соединить с областью вокруг графики
+@msg	`width` must be from {lo} to {hi} pt	`width` должно быть от {lo} до {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` должно быть целым числом от 1 до {MAX_BRIDGES_PER_ISLAND}
