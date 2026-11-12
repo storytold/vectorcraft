@@ -5340,6 +5340,11 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
+	Shadows	Тени
+	Distance from Object	Расстояние от объекта
+	Shadow Bounds	Границы тени
+	Behind Object	Позади объекта
+	Below Object	Под объектом
 	3D Lighting Preset	Предустановка 3D освещения
 	Standard	Стандартное
 	Diffuse	Рассеянное
@@ -5738,6 +5743,16 @@ axis	Y Axis	Ось Y
 @msg	message must be text	message должно быть текстом
 @msg	allowContinue must be true or false	allowContinue должно быть true или false
 @msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
+	Insert Menu Item…	Вставить пункт меню…
+	Insert Menu Item	Вставить пункт меню
+	Menu Item:	Пункт меню:
+	No menu item matches.	Нет подходящих пунктов меню.
+	Several menu items match. Choose one from the list.	Подходит несколько пунктов меню. Выберите один из списка.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Пункты, открывающие диалоговое окно, и пункты меню «Файл», «Окно» и «Справка» не показаны.
+@msg	command must be text	command должно быть текстом
+@msg	no menu item that can be inserted runs this command	ни один пункт меню, который можно вставить, не выполняет эту команду
+@msg	the action already has 10,000 steps	в действии уже 10 000 шагов
+@msg	the action set would be larger than 8 MiB	набор действий стал бы больше 8 MiB
 	Playback Options	Параметры воспроизведения
 	Accelerated	Ускоренно
 	Step by Step	Пошагово

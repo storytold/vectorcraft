@@ -483,6 +483,205 @@ fn the_folder_store_reads_no_linked_entries() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// A store in memory that notes each removal of an area (its lock file and folder, then its empty
+/// folder) and whether the area was still held then.
+#[derive(Default)]
+struct Tidying {
+    inner: MemoryStore,
+    removals: std::sync::Mutex<Vec<(&'static str, bool)>>,
+}
+
+impl Tidying {
+    fn note(&self, what: &'static str, area: &str) {
+        let held = matches!(self.inner.lock(area), Ok(cmd::recovery::Lock::Busy));
+        self.removals.lock().unwrap().push((what, held));
+    }
+}
+
+impl RecoveryStore for Tidying {
+    fn list(&self) -> std::result::Result<Vec<String>, String> {
+        self.inner.list()
+    }
+    fn read(&self, name: &str) -> std::result::Result<Vec<u8>, String> {
+        self.inner.read(name)
+    }
+    fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
+        self.inner.write(name, bytes)
+    }
+    fn remove(&self, name: &str) -> std::result::Result<(), String> {
+        self.inner.remove(name)
+    }
+    fn location(&self) -> String {
+        self.inner.location()
+    }
+    fn lock(&self, area: &str) -> std::result::Result<cmd::recovery::Lock, String> {
+        self.inner.lock(area)
+    }
+    fn remove_area(&self, area: &str) {
+        self.note("area", area);
+    }
+    fn remove_empty_area(&self, area: &str) {
+        self.note("empty folder", area);
+    }
+    fn now(&self) -> Option<i64> {
+        self.inner.now()
+    }
+}
+
+/// An app tidying an area away (a crashed app's, or its own when it quits) removes it while it
+/// still holds it, so another app taking a new area of that name can't lock it in between. Once it
+/// let the area go, it removes the folder again if that is empty.
+#[test]
+fn areas_are_removed_while_still_held() {
+    let store = Arc::new(Tidying::default());
+    let app = || {
+        let mut s = Session::new();
+        s.recovery.set_store(store.clone());
+        s.execute("file.new", &json!({"width": 50, "height": 50})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap();
+        s
+    };
+    let mut a = app();
+    a.execute("file.recovery.save", &json!({})).unwrap();
+    drop(a);
+    let mut b = app();
+    assert_eq!(b.execute("file.recovery.discard", &json!({})).unwrap()["discarded"].as_array().unwrap().len(), 1);
+    b.execute("file.recovery.save", &json!({})).unwrap();
+    b.execute("file.close", &json!({})).unwrap();
+    cmd::recovery::forget_all(&mut b);
+    let tidy = [("area", true), ("empty folder", false)];
+    assert_eq!(*store.removals.lock().unwrap(), [tidy, tidy].concat(), "discard's tidy, then quitting");
+}
+
+/// Another app tidied an empty area away between this app making it and locking it: the area is
+/// busy, not held and not an error.
+#[test]
+fn an_area_tidied_away_before_it_is_locked_is_busy() {
+    use cmd::recovery::Lock;
+    let base = std::env::temp_dir().join(format!("vc-recovery-tidied-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let store = FolderStore::new(&base);
+    drop(store.lock("5-1").unwrap());
+    let area = base.join("5-1");
+    let path = area.join(".lock");
+    let open = |create: bool| std::fs::OpenOptions::new().read(true).write(true).create(create).truncate(false).open(&path).unwrap();
+    // The lock file was opened, then removed before it was locked.
+    let opened = open(false);
+    std::fs::remove_file(&path).unwrap();
+    assert!(matches!(FolderStore::take(opened, &path), Ok(Lock::Busy)));
+    // The folder went before it was checked or its lock file opened.
+    std::fs::remove_dir(&area).unwrap();
+    assert!(matches!(FolderStore::lock_area(&area), Ok(Lock::Busy)));
+    // A lock file made again under the same name is not the one opened, also where it keeps the
+    // removed one's creation time (NTFS does within 15 seconds).
+    #[cfg(any(unix, windows))]
+    {
+        std::fs::create_dir_all(&area).unwrap();
+        let opened = open(true);
+        std::fs::remove_file(&path).unwrap();
+        std::fs::write(&path, b"").unwrap();
+        assert!(matches!(FolderStore::take(opened, &path), Ok(Lock::Busy)));
+        assert!(matches!(FolderStore::take(open(false), &path), Ok(Lock::Held(_))));
+    }
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// Opening an area's lock file failed. When the folder went after it was checked, or the lock file
+/// is there but can't be opened (a removed lock file that another app still has open, on file
+/// systems that keep it until it is closed), the area is busy. A lock file that can't be made is an
+/// error.
+#[test]
+fn a_lock_file_that_is_gone_or_cannot_be_opened_is_busy() {
+    use cmd::recovery::Lock;
+    use std::io::ErrorKind::{NotFound, PermissionDenied};
+    let base = std::env::temp_dir().join(format!("vc-recovery-unopened-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    let path = base.join(".lock");
+    let failed = |kind: std::io::ErrorKind| FolderStore::open_failed(kind.into(), &path);
+    assert!(matches!(failed(NotFound), Ok(Lock::Busy)));
+    assert!(failed(PermissionDenied).is_err());
+    std::fs::write(&path, b"").unwrap();
+    assert!(matches!(failed(PermissionDenied), Ok(Lock::Busy)));
+    #[cfg(unix)]
+    if !rustix::process::geteuid().is_root() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mode = |p: &std::path::Path, m: u32| std::fs::set_permissions(p, std::fs::Permissions::from_mode(m)).unwrap();
+        // A lock file that is there but can't be opened.
+        let area = base.join("5-1");
+        std::fs::create_dir(&area).unwrap();
+        std::fs::write(area.join(".lock"), b"").unwrap();
+        mode(&area.join(".lock"), 0o400);
+        assert!(matches!(FolderStore::lock_area(&area), Ok(Lock::Busy)));
+        // A folder in which no lock file can be made.
+        let area = base.join("5-2");
+        std::fs::create_dir(&area).unwrap();
+        mode(&area, 0o500);
+        let r = FolderStore::lock_area(&area);
+        mode(&area, 0o700);
+        assert!(r.is_err());
+    }
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// A folder store in which another app tidies the first area away as soon as it is made.
+struct TidiedFirst {
+    inner: FolderStore,
+    dir: std::path::PathBuf,
+    first: std::sync::atomic::AtomicBool,
+}
+
+impl RecoveryStore for TidiedFirst {
+    fn list(&self) -> std::result::Result<Vec<String>, String> {
+        self.inner.list()
+    }
+    fn read(&self, name: &str) -> std::result::Result<Vec<u8>, String> {
+        self.inner.read(name)
+    }
+    fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
+        self.inner.write(name, bytes)
+    }
+    fn remove(&self, name: &str) -> std::result::Result<(), String> {
+        self.inner.remove(name)
+    }
+    fn location(&self) -> String {
+        self.inner.location()
+    }
+    fn areas(&self) -> std::result::Result<Vec<String>, String> {
+        self.inner.areas()
+    }
+    fn lock(&self, area: &str) -> std::result::Result<cmd::recovery::Lock, String> {
+        if !self.first.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            return self.inner.lock(area);
+        }
+        let dir = self.dir.join(area);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
+        FolderStore::lock_area(&dir)
+    }
+    fn remove_area(&self, area: &str) {
+        self.inner.remove_area(area);
+    }
+}
+
+#[test]
+fn a_recovery_save_takes_the_next_area_when_the_first_is_tidied_away() {
+    let dir = std::env::temp_dir().join(format!("vc-recovery-next-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let store = Arc::new(TidiedFirst { inner: FolderStore::new(&dir), dir: dir.clone(), first: true.into() });
+    let mut s = Session::new();
+    s.recovery.set_store(store.clone());
+    s.execute("file.new", &json!({"width": 50, "height": 50})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap();
+    let r = s.execute("file.recovery.save", &json!({})).unwrap();
+    let area = s.recovery.own_area().unwrap().to_string();
+    assert!(area.ends_with("-2"), "{area}");
+    assert_eq!(r["saved"][0]["file"], format!("{area}/Untitled-1-1").as_str(), "{r}");
+    assert!(dir.join(&area).join("Untitled-1-1.vectorcraft").is_file());
+    drop(s);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn saving_reverting_or_closing_removes_the_copy() {
     let dir = std::env::temp_dir().join(format!("vc-recovery-save-{}", std::process::id()));

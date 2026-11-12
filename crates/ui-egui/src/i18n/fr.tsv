@@ -5732,6 +5732,11 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+	Shadows	Ombres
+	Distance from Object	Distance de l'objet
+	Shadow Bounds	Limites de l'ombre
+	Behind Object	Derrière l'objet
+	Below Object	Sous l'objet
 	3D Lighting Preset	Préréglage d’éclairage 3D
 	Standard	Standard
 	Diffuse	Diffus
@@ -6122,6 +6127,16 @@ axis	Y Axis	Axe Y
 @msg	message must be text	message doit être du texte
 @msg	allowContinue must be true or false	allowContinue doit valoir true ou false
 @msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
+	Insert Menu Item…	Insérer une commande de menu…
+	Insert Menu Item	Insérer une commande de menu
+	Menu Item:	Commande de menu :
+	No menu item matches.	Aucune commande de menu ne correspond.
+	Several menu items match. Choose one from the list.	Plusieurs commandes de menu correspondent. Choisissez-en une dans la liste.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Les commandes qui ouvrent une boîte de dialogue et celles des menus Fichier, Fenêtre et Aide ne sont pas listées.
+@msg	command must be text	command doit être du texte
+@msg	no menu item that can be inserted runs this command	aucune commande de menu insérable n’exécute cette commande
+@msg	the action already has 10,000 steps	le script compte déjà 10 000 étapes
+@msg	the action set would be larger than 8 MiB	le jeu de scripts dépasserait 8 Mio
 	Playback Options	Options d’exécution
 	Accelerated	Accélérée
 	Step by Step	Pas à pas

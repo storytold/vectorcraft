@@ -5677,6 +5677,11 @@ mark-style	Japanese	Japonesas
 	Softness	Suavidad
 	Ambient Light	Luz ambiental
 	Light behind the object	Luz detrás del objeto
+	Shadows	Sombras
+	Distance from Object	Distancia del objeto
+	Shadow Bounds	Límites de la sombra
+	Behind Object	Detrás del objeto
+	Below Object	Debajo del objeto
 	3D Lighting Preset	Ajuste preestablecido de iluminación 3D
 	Standard	Estándar
 	Diffuse	Difusa
@@ -6069,6 +6074,16 @@ axis	Y Axis	Eje Y
 @msg	message must be text	message debe ser texto
 @msg	allowContinue must be true or false	allowContinue debe ser true o false
 @msg	Batch cannot play an action with a stop	Lote no puede reproducir una acción con una parada
+	Insert Menu Item…	Insertar elemento de menú…
+	Insert Menu Item	Insertar elemento de menú
+	Menu Item:	Elemento de menú:
+	No menu item matches.	Ningún elemento de menú coincide.
+	Several menu items match. Choose one from the list.	Coinciden varios elementos de menú. Elija uno de la lista.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	No se muestran los elementos que abren un cuadro de diálogo ni los de los menús Archivo, Ventana y Ayuda.
+@msg	command must be text	command debe ser texto
+@msg	no menu item that can be inserted runs this command	ningún elemento de menú que se pueda insertar ejecuta este comando
+@msg	the action already has 10,000 steps	la acción ya tiene 10 000 pasos
+@msg	the action set would be larger than 8 MiB	el conjunto de acciones superaría los 8 MiB
 	Playback Options	Opciones de reproducción
 	Accelerated	Acelerada
 	Step by Step	Paso a paso

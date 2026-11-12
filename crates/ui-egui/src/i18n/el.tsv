@@ -5415,6 +5415,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	 to set spacing and orientation	 για ορισμό απόστασης και προσανατολισμού
 	:	:
 	Light behind the object	Φως πίσω από το αντικείμενο
+	Shadows	Σκιές
+	Distance from Object	Απόσταση από το αντικείμενο
+	Shadow Bounds	Όρια σκιάς
+	Behind Object	Πίσω από το αντικείμενο
+	Below Object	Κάτω από το αντικείμενο
 	3D Lighting Preset	Προεπιλογή φωτισμού 3D
 	Standard	Τυπικός
 	Diffuse	Διάχυτος
@@ -6078,6 +6083,16 @@ axis	Y Axis	Άξονας Y
 @msg	message must be text	Το message πρέπει να είναι κείμενο
 @msg	allowContinue must be true or false	Το allowContinue πρέπει να είναι true ή false
 @msg	Batch cannot play an action with a stop	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με διακοπή
+	Insert Menu Item…	Εισαγωγή στοιχείου μενού…
+	Insert Menu Item	Εισαγωγή στοιχείου μενού
+	Menu Item:	Στοιχείο μενού:
+	No menu item matches.	Κανένα στοιχείο μενού δεν ταιριάζει.
+	Several menu items match. Choose one from the list.	Ταιριάζουν πολλά στοιχεία μενού. Επιλέξτε ένα από τη λίστα.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Τα στοιχεία που ανοίγουν παράθυρο διαλόγου και τα στοιχεία των μενού «Αρχείο», «Παράθυρο» και «Βοήθεια» δεν εμφανίζονται.
+@msg	command must be text	Το command πρέπει να είναι κείμενο
+@msg	no menu item that can be inserted runs this command	κανένα στοιχείο μενού που μπορεί να εισαχθεί δεν εκτελεί αυτή την εντολή
+@msg	the action already has 10,000 steps	η ενέργεια έχει ήδη 10.000 βήματα
+@msg	the action set would be larger than 8 MiB	το σύνολο ενεργειών θα ξεπερνούσε τα 8 MiB
 	Playback Options	Επιλογές αναπαραγωγής
 	Accelerated	Επιταχυμένα
 	Step by Step	Βήμα προς βήμα

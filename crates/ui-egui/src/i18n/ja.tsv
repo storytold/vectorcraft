@@ -5388,6 +5388,11 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+	Shadows	シャドウ
+	Distance from Object	オブジェクトからの距離
+	Shadow Bounds	シャドウの範囲
+	Behind Object	オブジェクトの背後
+	Below Object	オブジェクトの下
 	3D Lighting Preset	3D ライティングプリセット
 	Standard	標準
 	Diffuse	拡散
@@ -5809,6 +5814,16 @@ axis	Y Axis	Y 軸
 @msg	message must be text	message にはテキストを指定してください
 @msg	allowContinue must be true or false	allowContinue には true または false を指定してください
 @msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
+	Insert Menu Item…	メニュー項目を挿入…
+	Insert Menu Item	メニュー項目を挿入
+	Menu Item:	メニュー項目:
+	No menu item matches.	一致するメニュー項目がありません。
+	Several menu items match. Choose one from the list.	複数のメニュー項目が一致します。リストから 1 つ選択してください。
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	ダイアログを開く項目と、ファイル、ウィンドウ、ヘルプメニューの項目は表示されません。
+@msg	command must be text	command にはテキストを指定してください
+@msg	no menu item that can be inserted runs this command	このコマンドを実行する、挿入できるメニュー項目はありません
+@msg	the action already has 10,000 steps	アクションにはすでに 10,000 ステップがあります
+@msg	the action set would be larger than 8 MiB	アクションセットが 8 MiB を超えます
 	Playback Options	再生オプション
 	Accelerated	高速
 	Step by Step	ステップ実行

@@ -132,6 +132,44 @@ fn graphic_styles_keep_gradients_relative_to_the_bounds() {
     assert!(close(fill_geom(&s, dst).unwrap().start, Point::new(0.2, 0.5)), "legacy styles are applied as stored");
 }
 
+/// Applying a style with a placed gradient to objects of different sizes gives each its own
+/// appearance with the gradient on its own bounds, through undo and redo; a style from an older
+/// file applies the same stored gradient to each, as one shared appearance.
+#[test]
+fn a_style_places_its_gradient_on_each_object() {
+    let (mut s, src, dst) = source_and_target();
+    let other = rect(&mut s, 100.0, 300.0, 50.0, 200.0);
+    s.execute("select.set", &json!({"ids": [src.0]})).unwrap();
+    s.execute("graphicStyle.new", &json!({"name": "Glow"})).unwrap();
+    s.execute("graphicStyle.apply", &json!({"name": "Glow", "ids": [dst.0, other.0]})).unwrap();
+    let placed = |s: &Session| {
+        let (g, h) = (fill_geom(s, dst).unwrap(), fill_geom(s, other).unwrap());
+        close(g.start, Point::new(540.0, 60.0))
+            && close(g.end, Point::new(660.0, 60.0))
+            && close(h.start, Point::new(110.0, 400.0))
+            && close(h.end, Point::new(140.0, 400.0))
+    };
+    let shared = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        vectorcraft_doc::Shared::ptr_eq(&d.node(dst).unwrap().appearance, &d.node(other).unwrap().appearance)
+    };
+    assert!(placed(&s) && !shared(&s));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(placed(&s) && !shared(&s));
+
+    let glow = s.doc().unwrap().doc.graphic_styles.iter().find(|g| g.name == "Glow").cloned().unwrap();
+    let legacy = vectorcraft_doc::GraphicStyle { name: "Old".into(), id: 0, unit_box: false, ..glow };
+    s.edit("Add", |d, _| {
+        d.graphic_styles.push(legacy);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graphicStyle.apply", &json!({"name": "Old", "ids": [dst.0, other.0]})).unwrap();
+    assert!(shared(&s));
+    assert!(close(fill_geom(&s, other).unwrap().start, Point::new(0.2, 0.5)), "legacy styles are applied as stored");
+}
+
 #[test]
 fn eyedropper_options_choose_what_copy_from_takes() {
     let mut s = session();

@@ -2739,8 +2739,26 @@ already walks Image Trace. Short agent entry points:
   false) offers Continue in the message box. An action with an empty message still waits at the stop, which is
   VectorCraft's own rule. A stop in an action becomes the panel's selected step, and its action and set become the
   selected ones. An index past the last set, action or step, a param of another type, params that are not an
-  object, or no action and no recording is an error, and then nothing changes. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
+  object, no action and no recording, or a stop that would give the action more than 10,000 steps or its set's file
+  more than 8 MiB is an error, and then nothing changes. The limits count the steps that the recording in progress
+  adds to the set. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
   (`message`, `allowContinue`, `set`, `action`, `step`), whose OK runs this.
+- Actions: `ui.action.insertMenuItem {set?, action?, step?, command, params?}` inserts a menu item's command as a step
+  without running it. `command` and `params` (default: `{}`) must be those of an item in the menus that can be a step:
+  an item that runs a document command without opening a dialog first, outside the File, Window and Help menus, and
+  not Undo, Redo, a Paste command, Object › Align (its items add the Align To choice when clicked), Object › Image
+  Trace › Make or Make and Expand (the menu traces off the UI thread, with progress and Cancel), Object › Pattern ›
+  Make or Edit Pattern (the menu also opens the Pattern Options panel), a preference
+  toggle, an Actions command or a recent-font, saved-selection or saved-view slot. Disabled items are listed, and playback checks the step when it runs. With `set` and `action`, the
+  step goes into that action, after step `step`, else after its last step, becomes the panel's selected step, and the
+  command returns `{set, action, step}`. Without them it goes into the recording in progress and returns
+  `{recording: true}`. A command no such item runs, params that are not an object, an index past the last set, action
+  or step, no action and no recording, or a step that would give the action more than 10,000 steps or its set's file
+  more than 8 MiB is an error, and then nothing changes. The limits count the steps that the recording in progress
+  adds to the set. The panel menu's Insert Menu Item… opens the
+  `actionInsertMenuItem` dialog (`find`, `command`, `params`, `set`, `action`, `step`): typing in Find and pressing
+  Find picks the one item whose menu path, shown name or command id holds every word typed, or lists the matches, and
+  OK runs this.
 - Actions: `ui.action.continue {}` plays on from the stop the playing action waits at, on the document active now, and
   closes the stop's message box (`actionStopMessage`). The next step runs at once, or at Accelerated the steps up to
   the next stop as one undo step. It returns `{results, pending, atStop?}`. With no action waiting at a stop it is an
@@ -3031,6 +3049,32 @@ The document stores their numeric settings; manual edits remain possible through
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.lightingPreset","params":{"index":0,"item":null,"preset":"topLeft"}}}
+```
+
+## 3D shadows
+
+Revolve, Extrude & Bevel, Inflate and Rotate take `shadow` (boolean, default false), `shadowPosition` (`"behind"`
+or `"below"`, default `"behind"`), `shadowDistance` (0..100%, default 0) and `shadowBounds` (10..400%, default 100),
+set with `effect.apply` or `effect.setParams` in one undo step. With `shadow` on, the first light casts a
+hard-edged shadow of the solid, drawn behind the solid as one path filled black at 50% opacity times the opacity
+of the art that casts it, in that art's blending mode. `"behind"` puts it
+on a plane square to the view behind the object; `"below"` puts it on the floor under the object, square to the
+object's own vertical axis and turned with it, so with no X rotation the floor is seen edge-on and draws nothing.
+`shadowDistance` moves the plane away from the object by that share of the object's largest size. `shadowBounds`
+limits the plane to a square about the foot of the object's center, four times the object's largest size across
+at 100%. No shadow is drawn when `shade` is false, when the first light's intensity is 0, or when it does not
+reach the plane (a light behind the object for a shadow behind it); a fill, stroke or group member at 0% opacity
+casts none. Values out of range, another `shadowPosition` and a `shadow` that is not a boolean are refused before
+the document changes. A shadow is cast from at most 327,680 faces, the solids of one object together (VectorCraft's
+own limit); past that, a command is refused with "The 3D shadow is too complex; turn Shadows off or simplify the
+art", and a loaded file draws the source path, as it does for a solid past its limits. The color, the opacity and how Distance and Bounds scale are VectorCraft's own; the public
+documentation names the controls and their ranges
+([3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)).
+The settings are saved in the native file; SVG and PDF exports draw the shadow, and `effect.expandAppearance` keeps
+it as a path. Extrude & Bevel (Classic) has no shadow. See [three-d.md](three-d.md#shadows).
+
+```json
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"shadow":true,"shadowPosition":"below","shadowDistance":10,"shadowBounds":150}}}}
 ```
 
 ## 3D object type

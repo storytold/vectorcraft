@@ -5575,6 +5575,11 @@ mark-style	Japanese	Japońskie
 	Softness	Miękkość
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
+	Shadows	Cienie
+	Distance from Object	Odległość od obiektu
+	Shadow Bounds	Granice cienia
+	Behind Object	Za obiektem
+	Below Object	Pod obiektem
 	3D Lighting Preset	Ustawienie oświetlenia 3D
 	Standard	Standardowe
 	Diffuse	Rozproszone
@@ -5981,6 +5986,16 @@ axis	Y Axis	Oś Y
 @msg	message must be text	message musi być tekstem
 @msg	allowContinue must be true or false	allowContinue musi mieć wartość true lub false
 @msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
+	Insert Menu Item…	Wstaw polecenie menu…
+	Insert Menu Item	Wstaw polecenie menu
+	Menu Item:	Polecenie menu:
+	No menu item matches.	Żadne polecenie menu nie pasuje.
+	Several menu items match. Choose one from the list.	Pasuje kilka poleceń menu. Wybierz jedno z listy.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Polecenia otwierające okno dialogowe oraz polecenia menu Plik, Okno i Pomoc nie są wyświetlane.
+@msg	command must be text	command musi być tekstem
+@msg	no menu item that can be inserted runs this command	żadne polecenie menu, które można wstawić, nie uruchamia tego polecenia
+@msg	the action already has 10,000 steps	operacja ma już 10 000 kroków
+@msg	the action set would be larger than 8 MiB	zestaw operacji byłby większy niż 8 MiB
 	Playback Options	Opcje odtwarzania
 	Accelerated	Przyspieszone
 	Step by Step	Krok po kroku

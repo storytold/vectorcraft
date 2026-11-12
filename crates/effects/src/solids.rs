@@ -20,6 +20,8 @@ pub use classic::{CLASSIC_EXTRUDE, SHADING_COLORS, classic_extrude_options, clas
 mod source;
 pub(crate) use source::{resolve, resolve_for};
 
+pub(crate) mod shadow;
+
 pub const EXTRUDE: &str = "threeD.extrude";
 pub const INFLATE: &str = "threeD.inflate";
 pub const ROTATE: &str = "threeD.rotate";
@@ -192,6 +194,7 @@ fn validate_solid_params(id: &str, p: &Value) -> Result<(), String> {
         classic::validate(p)?;
     }
     crate::lighting::validate(p)?;
+    shadow::validate(p)?;
     if let Some(v) = p.get("bevel")
         && !v.as_str().is_some_and(|s| s == "none" || BevelShape::parse(s).is_some())
     {
@@ -214,17 +217,31 @@ pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
 /// [`validate_solid`] with the symbols of `doc`: a symbol instance, a blend and a clipping group
 /// build from the art they show ([`resolve`]).
 pub fn validate_solid_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    validate_solid_for(doc, n, id, p, None)
+}
+
+/// [`validate_solid_in`] for the effect on the object (`item` `None`) or on its appearance item
+/// `item`, whose shadow is cast by that item's solid alone.
+fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, item: Option<usize>) -> Result<(), String> {
     validate_solid_params(id, p)?;
     let label = label_of(id);
     let n = &*source::resolve_for(doc, n, label, id == ROTATE)?;
     if is_container(n) {
         let shapes = members(n, label)?;
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
-        return shapes.iter().try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()));
+        shapes.iter().try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()))?;
+        return cast_shadow(id, p, &shapes).map(|_| ());
     }
     let (path, rule) = object_profile(n, label)?;
     let b = path.bounds().ok_or_else(|| format!("{label} requires a shape with at least two anchors"))?;
-    facets(id, &path, rule, b, p).map(|_| ())
+    facets(id, &path, rule, b, p)?;
+    // With its shadow on, the shadow of the object's solids (or of the item's) must fit too.
+    let items = match item.and_then(|i| n.appearance.items.get(i)) {
+        Some(item) => vec![item.clone()],
+        None => solid_paints(n),
+    };
+    let shapes = [Profile { path, rule, items, opacity: 1.0, scopes: vec![] }];
+    cast_shadow(id, p, &shapes).map(|_| ())
 }
 
 /// [`profile`], or the error a command reports for object `n`: type with no outlines to build from
@@ -297,7 +314,7 @@ fn masked(id: NodeId, surfaces: Vec<(&[Scope], Arc<Node>)>) -> Vec<Arc<Node>> {
 }
 
 /// Does any of `shapes` sit in a scope with an opacity mask or a blending mode other than Normal?
-fn has_masks(shapes: &[Profile]) -> bool {
+pub(crate) fn has_masks(shapes: &[Profile]) -> bool {
     shapes.iter().any(|s| s.scopes.iter().any(composites))
 }
 
@@ -420,7 +437,8 @@ pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Va
             Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into())
         }
         Some((item, index)) if id == crate::REVOLVE => crate::revolve::validate_item_revolve(n, p, item, index),
-        _ => validate_three_d_in(doc, n, id, p),
+        Some((item, _)) => validate_solid_for(doc, n, id, p, Some(item)),
+        None => validate_three_d_in(doc, n, id, p),
     }
 }
 
@@ -551,6 +569,9 @@ pub(crate) fn reshape_members(n: &Node, before: &[Effect], shapes: &mut [Profile
     }
 }
 
+/// A 3D effect's shadow and its surfaces ([`art_for`]).
+type ShadowAndSurfaces = (Vec<Arc<Node>>, Vec<Arc<Node>>);
+
 /// The 3D art of one effect `fx` on `path` (already through the effects before it).
 /// Rotate turns every fill and stroke, each in its own paint. Extrude & Bevel and Inflate build a
 /// solid from the path for the top visible fill and one from the outline of each visible stroke,
@@ -559,8 +580,87 @@ pub(crate) fn reshape_members(n: &Node, before: &[Effect], shapes: &mut [Profile
 /// depths tie, as for the caps turned toward the viewer, in the order of the appearance);
 /// otherwise each solid is a surface of its own, in that order. A member's opacity mask and
 /// blending mode, and those of a group it is in, apply to the surfaces of the members it holds
-/// ([`masked`]).
-fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> {
+/// ([`masked`]). The art comes in two parts: the effect's shadow ([`cast_shadow`], none with it
+/// off), to be drawn behind every surface of the object, and the surfaces.
+fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<ShadowAndSurfaces> {
+    let art = surfaces_for(n, fx, shapes)?;
+    // A shadow past the limits draws the source path, as a solid past them does; commands report
+    // the error ([`validate_solid_in`]).
+    let shadow = match cast_shadow(&fx.id, &crate::merged_params(&fx.id, &fx.params), shapes).ok()? {
+        Some((caster, settings, cast)) => shadow::scoped_art(n.id, &caster, settings, cast, has_masks(shapes)),
+        None => vec![],
+    };
+    Some((shadow, art))
+}
+
+/// What the shadow of the solids [`surfaces_for`] builds for effect `id` with parameters `p` on
+/// `shapes` is cast from, on one plane: the faces of every solid, the shadow's settings and the
+/// faces of each solid of visible art with its member's scopes and ink. `None` with the shadow
+/// off, for Extrude & Bevel (Classic) or with no shapes. A stroke's solid that is not built (past
+/// the limits) casts nothing, as it draws nothing; any other solid that is not built is an error.
+/// When a member's opacity mask or blending mode applies to its solids ([`masked`]), it applies to
+/// the part of the shadow they cast too ([`shadow::scoped_art`]).
+fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<Cast<'a>>, String> {
+    if id == CLASSIC_EXTRUDE {
+        return Ok(None);
+    }
+    let (Some(settings), Some(b)) = (shadow::options(p), union_bounds(shapes)) else { return Ok(None) };
+    let view = view_options(p);
+    let mut caster = vectorcraft_three_d::ShadowCaster::new();
+    // The faces each solid of visible art added, with its member's scopes and its ink (opacity
+    // and blending mode), in order. A fully transparent fill or stroke (or member) casts nothing
+    // and does not place the plane.
+    let mut cast: Vec<shadow::Cast> = vec![];
+    let ink = |item: &AppearanceItem, member: f32| {
+        let (_, opacity, blend) = paint_of(item, member);
+        shadow::Ink { opacity, blend }
+    };
+    if id == ROTATE {
+        for s in shapes {
+            for item in s.items.iter().filter(|i| ink(i, s.opacity).opacity > 0.0) {
+                let (area, rule) = region(&s.path, s.rule, item);
+                let faces = caster.plane(&area, rule, b, view)?;
+                cast.push((s.scopes.as_slice(), ink(item, s.opacity), faces));
+            }
+        }
+    } else {
+        let (parts, bounds) = solid_parts(shapes, b);
+        let inks: Vec<shadow::Ink> = parts.iter().map(|(item, member, ..)| ink(item, *member)).collect();
+        // Inflate's eye is placed for every shape together, as the solids are.
+        let added: Vec<Result<std::ops::Range<usize>, String>> = if id == INFLATE {
+            let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _)| (area, *rule)).collect();
+            let casts: Vec<bool> = inks.iter().map(|i| i.opacity > 0.0).collect();
+            caster.inflate(&shapes, &casts, bounds, inflate_options(p), view)
+        } else {
+            let mut added = vec![];
+            for ((_, _, area, rule, _), ink) in parts.iter().zip(&inks) {
+                added.push(if ink.opacity > 0.0 { caster.extrude(area, *rule, bounds, extrude_options(p), view) } else { Ok(0..0) });
+            }
+            added
+        };
+        for (((item, _, _, _, scopes), ink), faces) in parts.iter().zip(inks).zip(added) {
+            if ink.opacity <= 0.0 {
+                continue;
+            }
+            // A stroke whose own solid is past the limits is left out; past the shadow's limit for
+            // all the solids together, the shadow is refused.
+            let faces = match faces {
+                Ok(faces) => faces,
+                Err(e) if matches!(item, AppearanceItem::Stroke(_)) && e != vectorcraft_three_d::TOO_COMPLEX_SHADOW => continue,
+                Err(e) => return Err(e),
+            };
+            cast.push((*scopes, ink, faces));
+        }
+    }
+    Ok(Some((caster, settings, cast)))
+}
+
+/// The faces a shadow is cast from, its settings, and the faces of each solid of visible art with
+/// its member's scopes and ink ([`cast_shadow`]).
+type Cast<'a> = (vectorcraft_three_d::ShadowCaster, vectorcraft_three_d::Shadow, Vec<shadow::Cast<'a>>);
+
+/// [`art_for`] without the shadow: the solids' surfaces.
+fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> {
     let b = union_bounds(shapes)?;
     let p = crate::merged_params(&fx.id, &fx.params);
     let classic = fx.id == CLASSIC_EXTRUDE;
@@ -676,7 +776,8 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
     let remaining: Vec<Effect>;
     if let Some((index, fx)) = solid(&n.appearance.effects) {
         let path = geometry(&path, n.appearance.effects.get(..index)?, &ctx);
-        children.extend(art_for(n, fx, &[Profile { path, rule, items: paints, opacity: 1.0, scopes: vec![] }])?);
+        let (shadow, surfaces) = art_for(n, fx, &[Profile { path, rule, items: paints, opacity: 1.0, scopes: vec![] }])?;
+        children.extend(shadow.into_iter().chain(surfaces));
         // Later geometry effects act on the projected art as a whole.
         remaining = n
             .appearance
@@ -689,18 +790,24 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
     } else {
         let path = geometry(&path, &n.appearance.effects, &ctx);
         remaining = n.appearance.effects.iter().filter(|e| !is_geometry(&e.id)).cloned().collect();
+        // Every item's shadow goes behind every item's art.
+        let mut shadows = vec![];
         for item in &paints {
             if let Some((index, fx)) = solid(item.effects()) {
                 let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
-                for mut art in art_for(n, fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }])? {
-                    Arc::make_mut(&mut art).appearance.effects =
-                        item.effects().iter().skip(index + 1).filter(|e| !is_three_d(&e.id)).cloned().collect();
-                    children.push(art);
-                }
+                let (shadow, surfaces) = art_for(n, fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }])?;
+                let later: Vec<Effect> = item.effects().iter().skip(index + 1).filter(|e| !is_three_d(&e.id)).cloned().collect();
+                let with_later = |mut art: Arc<Node>| {
+                    Arc::make_mut(&mut art).appearance.effects = later.clone();
+                    art
+                };
+                shadows.extend(shadow.into_iter().map(with_later));
+                children.extend(surfaces.into_iter().map(with_later));
             } else {
                 children.push(Arc::new(Node::path(n.id, path.clone(), Appearance { items: vec![item.clone()], ..Default::default() })));
             }
         }
+        children.splice(0..0, shadows);
     }
     let mut art = n.clone();
     art.kind = NodeKind::Group { children, clip: false };
@@ -716,7 +823,8 @@ fn group_solid_art(n: &Node) -> Option<Node> {
     let (index, fx) = solid(&n.appearance.effects)?;
     let mut shapes = members(n, "").ok()?;
     reshape_members(n, n.appearance.effects.get(..index)?, &mut shapes);
-    let children = art_for(n, fx, &shapes)?;
+    let (shadow, surfaces) = art_for(n, fx, &shapes)?;
+    let children = shadow.into_iter().chain(surfaces).collect();
     let remaining =
         n.appearance.effects.iter().enumerate().filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index)).map(|(_, e)| e.clone()).collect();
     let mut art = n.clone();
@@ -906,3 +1014,6 @@ mod tests_mesh;
 
 #[cfg(test)]
 mod tests_sources;
+
+#[cfg(test)]
+mod tests_shadow;
