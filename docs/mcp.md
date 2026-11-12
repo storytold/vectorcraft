@@ -8441,6 +8441,28 @@ stops, the command changes nothing and records no undo step. `text.tabs.set` rej
 holds at least that many, so stops can be removed from a paragraph that holds more. It sorts the stops by position and
 keeps the first of stops at one position.
 
+`text.setFormat {paragraphIndents: [{id, start, leftIndent?, firstLineIndent?}…]}` gives each paragraph indents of its
+own in one call: each entry names one paragraph of a type object by the byte `start` where the paragraph begins, and
+sets its `leftIndent`, its `firstLineIndent` or both, in points from -1296 to 1296. The call takes no other key, and
+at most 100000 entries. It checks every entry before it changes anything, and fails on an empty list, an unknown key, an
+entry with neither indent, a value that is not a number in range, an `id` that is not a type object, a `start` where no
+paragraph of that object begins, and two entries for one paragraph with other values (the same entry twice counts once).
+The whole change is one edit: each type object's paragraph styles are rebuilt once, and a threaded story flows through
+its frames again once, however many of its paragraphs change, where one `text.setFormat {ids, start, end}` for each
+paragraph flows it again after every paragraph. When no paragraph's indents change, the command records no edit and no
+undo step. It returns `{ids}`, the type objects the entries name. The Tabs panel's indent markers use it when the
+paragraphs they move have indents of their own, inside a `command.batch` that names the undo step after the marker.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"paragraphIndents":[{"id":12,"start":0,"firstLineIndent":36},{"id":12,"start":40,"leftIndent":24,"firstLineIndent":12}]}}}
+```
+
+The single-value form of `text.setFormat` fails, naming the key, when a number such as `leftIndent` or `baselineShift` is
+given as a string, a switch or a list, or a switch such as `underline` as anything but true or false; it changes nothing
+then. A null value of any attribute leaves that attribute as it is, as an omitted one does, so a call whose attributes
+are all null fails with "nothing to change" and records no edit and no undo step. A call whose values are the ones the
+text already has succeeds and returns its `ids`, but records no edit and no undo step.
+
 `text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
 paragraph at `start`; `paraStyle.list` counts paragraphs as uses, and `charStyle.list` counts runs; both count the type in
 the layers, opacity masks, symbols, graph designs, pattern tiles and the art of brushes. `charStyle.unused` and
