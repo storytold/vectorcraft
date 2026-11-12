@@ -415,7 +415,8 @@ fn a_marquee_selects_frame_anchors_of_area_type() {
     assert_eq!(a[0], Action::Begin("Reshape Type Area".into()));
     assert_eq!(a[1], Action::Preview("text.reshapeArea".into(), json!({"id": text.0, "anchors": [[0, 1], [0, 2]], "dx": 20.0, "dy": 20.0})));
     assert_eq!(t.pointer(&cx2, &ev(PointerKind::Up, 440.0, 360.0)), vec![Action::Commit, Action::Notify(FRAME_PICKED.into())]);
-    // The arrow keys nudge them by the keyboard increment, ten times that with Shift.
+    // The arrow keys nudge them by the keyboard increment, ten times that with Shift, a tenth with
+    // Ctrl/Cmd and one increment with both (#5258).
     let nudged = |anchors: Value, dx: f64, dy: f64| {
         vec![
             Action::Exec("text.reshapeArea".into(), json!({"id": text.0, "anchors": anchors, "dx": dx, "dy": dy})),
@@ -425,6 +426,8 @@ fn a_marquee_selects_frame_anchors_of_area_type() {
     assert!(t.claims_key(&cx2, ToolKey::Right) && !t.claims_key(&cx2, ToolKey::Enter));
     assert_eq!(t.key(&cx2, ToolKey::Right, Mods::default()), nudged(json!([[0, 1], [0, 2]]), 1.0, 0.0));
     assert_eq!(t.key(&cx2, ToolKey::Up, Mods { shift: true, ..Mods::default() }), nudged(json!([[0, 1], [0, 2]]), 0.0, -10.0));
+    assert_eq!(t.key(&cx2, ToolKey::Left, Mods { cmd: true, ..Mods::default() }), nudged(json!([[0, 1], [0, 2]]), -0.1, 0.0));
+    assert_eq!(t.key(&cx2, ToolKey::Down, Mods { shift: true, cmd: true, ..Mods::default() }), nudged(json!([[0, 1], [0, 2]]), 0.0, 1.0));
     // Any other change of the document or the selection (Deselect, then the same type selected
     // again) leaves the type selected whole: the arrow keys are no longer the tool's.
     let mut later = cx(&d, &s, &p);

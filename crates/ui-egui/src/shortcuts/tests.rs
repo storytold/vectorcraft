@@ -2095,7 +2095,6 @@ fn selected_vertical_area_and_path_type_use_vertical_spacing_chords() {
     }
 }
 
-/// #3786: Alt+arrows step a selected text object's spacing instead of copying and nudging it.
 /// #5258: Ctrl/Cmd+arrow nudges the selection by a tenth of the keyboard increment, and
 /// Shift+Ctrl/Cmd+arrow by one increment, one undo step each.
 #[test]
@@ -2118,6 +2117,7 @@ fn command_arrows_nudge_by_a_tenth_of_the_keyboard_increment() {
     }
 }
 
+/// #3786: Alt+arrows step a selected text object's spacing instead of copying and nudging it.
 #[test]
 fn alt_arrows_step_selected_type_object() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());

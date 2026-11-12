@@ -319,11 +319,12 @@ impl ToolContext<'_> {
     pub fn star_radii_label(&self, outer: f64, inner: f64) -> String {
         format!("R1: {}\nR2: {}", self.len(outer), self.len(inner))
     }
-    /// The move an arrow key nudges by: General › Keyboard Increment (ten times with Shift),
-    /// along General › Constrain Angle's axes; `None` for other keys.
+    /// The move an arrow key nudges by: General › Keyboard Increment, ten times with Shift and a
+    /// tenth with Ctrl/Cmd ([`nudge_step`]), along General › Constrain Angle's axes; `None` for
+    /// other keys.
     pub fn arrow_nudge(&self, key: crate::ToolKey, mods: crate::Mods) -> Option<Vec2> {
         use crate::ToolKey;
-        let step = self.keyboard_increment * if mods.shift { 10.0 } else { 1.0 };
+        let step = nudge_step(self.keyboard_increment, mods.shift, mods.cmd);
         let d = match key {
             ToolKey::Left => Point::new(-step, 0.0),
             ToolKey::Right => Point::new(step, 0.0),
@@ -378,5 +379,17 @@ impl ToolContext<'_> {
     /// [`HitOptions::clip_outlines`]: vectorcraft_doc::hit::HitOptions::clip_outlines
     pub fn selection_hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
         vectorcraft_doc::hit::HitOptions { clip_outlines: true, ..self.hit_options() }
+    }
+}
+
+/// The arrow keys' step: the keyboard increment, ×10 with Shift (`big`) and ÷10 with Ctrl/Cmd
+/// (`fine`), so Shift+Ctrl+arrow moves by one increment. Divided, not multiplied by 0.1, so a tenth
+/// of a 1 pt increment is the nearest `f64` to 0.1.
+pub fn nudge_step(increment: f64, big: bool, fine: bool) -> f64 {
+    match (big, fine) {
+        (true, true) => increment,
+        (true, false) => increment * 10.0,
+        (false, true) => increment / 10.0,
+        (false, false) => increment,
     }
 }

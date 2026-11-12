@@ -301,17 +301,7 @@ pub(crate) fn along_constrain_angle(dx: f64, dy: f64, deg: f64) -> (f64, f64) {
     (v.x, v.y)
 }
 
-/// The arrow keys' step: the keyboard increment, ×10 with Shift (`big`) and ÷10 with Ctrl/Cmd
-/// (`fine`), so Shift+Ctrl+arrow moves by one increment. Divided, not multiplied by 0.1, so a tenth
-/// of a 1 pt increment is the nearest `f64` to 0.1.
-pub(crate) fn nudge_step(increment: f64, big: bool, fine: bool) -> f64 {
-    match (big, fine) {
-        (true, true) => increment,
-        (true, false) => increment * 10.0,
-        (false, true) => increment / 10.0,
-        (false, false) => increment,
-    }
-}
+pub(crate) use vectorcraft_tools::nudge_step;
 
 /// `object.nudge`, the arrow keys: the selected anchors, else the selected objects (and the guides
 /// that move with them), else the selected ruler guides move by [`nudge_step`] in the arrow's

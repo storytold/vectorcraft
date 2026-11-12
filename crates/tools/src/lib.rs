@@ -57,7 +57,7 @@ mod context;
 mod cursor;
 mod input;
 
-pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, ScreenFrame, ToolContext, nudge_step};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
