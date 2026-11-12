@@ -3321,7 +3321,7 @@ fn hebrew_parallel_round3_files_values() {
         ("Go to Artboard", "מעבר למשטח עבודה"),
         (
             "Couldn't save recovery data: {e}",
-            "לא ניתן לשמור נתוני שחזור: ⁨{e}⁩",
+            "לא ניתן לשמור נתוני שחזור: \u{2068}{e}\u{2069}",
         ),
         ("Cancel Export", "ביטול הייצוא"),
         ("No artboards match.", "לא נמצאו משטחי עבודה תואמים."),
