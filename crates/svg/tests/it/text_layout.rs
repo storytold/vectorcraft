@@ -164,14 +164,19 @@ fn the_space_before_the_first_character_on_a_path_is_its_dx() {
 }
 
 /// Insert Aki: each character the layout moves by its Aki starts a `<tspan>` where the character is
-/// drawn, so a reader draws the text where the canvas does, with fewer `<tspan>`s asked for too.
-/// On a path the type is outlined.
+/// drawn, so a reader draws the text where the canvas does, on left-aligned, centered and
+/// right-aligned lines and with fewer `<tspan>`s asked for too. On a path the type is outlined.
 #[test]
 fn insert_aki_places_each_moved_character() {
     // 250/1000 em of 12 pt before the O (3 pt) and 500/1000 after it (6 pt), then a run with Aki
     // after every character, and a second line.
     let spaced = CharStyle { aki_left: 250.0, aki_right: 500.0, ..style(12.0) };
     let runs = vec![run("H", style(12.0)), run("O", spaced), run("H ", style(12.0)), run("OHO\nHO", CharStyle { aki_right: 500.0, ..style(12.0) })];
+    // A centered or right-aligned line whose characters the Aki moves is placed segment by
+    // segment, not anchored.
+    for justify in [Justify::Center, Justify::Right] {
+        assert_drawn_in_place(&area_doc(runs.clone(), 200.0, justify));
+    }
     let d = area_doc(runs, 200.0, Justify::Left);
     assert_drawn_in_place(&d);
     let plain = tspans(&export(&area_doc(vec![run("HOH OHO\nHO", style(12.0))], 200.0, Justify::Left), &ExportOptions::default())).len();

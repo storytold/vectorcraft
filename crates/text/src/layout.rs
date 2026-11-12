@@ -337,6 +337,19 @@ impl Ctx<'_> {
         n
     }
 
+    /// Does glyph `g`'s own width start where its placement sets it ([`PositionedGlyph::width_start`])?
+    /// Not for an inline graphic, nor in vertical type for an upright or tate-chu-yoko glyph, which
+    /// start their cell at the start of their advance.
+    fn places_own_width(&self, g: &SGlyph) -> bool {
+        g.inline.is_none() && !(self.vertical && (g.tcy.is_some() || (takes_cell(g) && stands_upright(g))))
+    }
+
+    /// How far glyph `g`'s own width moves when the glyph is drawn `shift` further along its
+    /// advance: `shift` when its placement sets where that width starts, otherwise 0.
+    fn own_width_shift(&self, g: &SGlyph, shift: f64) -> f64 {
+        if self.places_own_width(g) { shift } else { 0.0 }
+    }
+
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
         // Only the glyph right after an upright glyph can continue its cluster.
         let cluster = self.upright_cluster.take();
@@ -540,7 +553,7 @@ impl Ctx<'_> {
             let [a, b, ..] = pre.as_coeffs();
             a.hypot(b)
         };
-        let width_start = if g.inline.is_none() && !upright && !(self.vertical && g.tcy.is_some()) {
+        let width_start = if self.places_own_width(g) {
             Some((g.kern_shift + g.dx - g.lead) * along).filter(|s| s.is_finite()).unwrap_or(0.0)
         } else if upright {
             Some(g.kern_shift * along).filter(|s| s.is_finite()).unwrap_or(0.0)

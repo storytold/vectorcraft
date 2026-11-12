@@ -807,7 +807,8 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
     let mut cache = HashMap::new();
     let mut corrections: HashMap<[u64; 15], Option<f64>> = HashMap::new();
     let mut references: HashMap<u32, Option<f64>> = HashMap::new();
-    let shaped_advances: Vec<f64> = glyphs.iter().map(|g| g.adv).collect();
+    // The Insert Aki a cluster's last glyph holds does not make a mark its base.
+    let shaped_advances: Vec<f64> = glyphs.iter().map(|g| g.adv - g.aki).collect();
     for i in 0..glyphs.len().saturating_sub(1) {
         let Some((a, b)) = glyphs.get(i).zip(glyphs.get(i + 1)) else { continue };
         if a.level != b.level {

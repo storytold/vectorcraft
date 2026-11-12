@@ -66,6 +66,12 @@ fn optical_kerning_spaces_the_pair_as_without_the_aki() {
     assert!(near(&moved, &[0.0, 25.0, 25.0]), "{moved:?}");
     let moved = moves(&optical, &with(&optical, 0, |s| s.aki_right = 250.0), &[0, 1, 2]);
     assert!(near(&moved, &[0.0, 25.0, 25.0]), "{moved:?}");
+    // A letter with a combining mark: the pair is measured from the letter, not from the mark
+    // whose advance holds the cluster's Aki.
+    let marked = point("H\u{301}V", CharStyle { optical_kerning: true, ..style(100.0) });
+    let after = "H\u{301}".len();
+    let moved = moves(&marked, &with(&marked, 0, |s| s.aki_right = 1000.0), &[0, after]);
+    assert!(near(&moved, &[0.0, 100.0]), "{moved:?}");
 }
 
 #[test]
@@ -112,6 +118,15 @@ fn justification_does_not_stretch_or_narrow_the_aki() {
     assert!(near(&moved, &[0.0, 25.0, 25.0]), "{moved:?}");
     let moved = moves(&scaled, &with(&scaled, 1, |s| s.aki_left = 250.0), &[1, 2]);
     assert!(near(&moved, &[25.0, 25.0]), "{moved:?}");
+    // A glyph that justification widens to fill the line keeps the Aki before it at its width,
+    // and its own width, which ligature carets stand in, starts where the glyph is drawn.
+    let mut filled = area("HOH", style(100.0), Rect::new(0.0, 0.0, 600.0, 400.0), Justify::JustifyAll);
+    filled.para.justification.glyph_scaling = [100.0, 100.0, 300.0];
+    let l = layout(db(), &with(&filled, 1, |s| s.aki_left = 250.0));
+    let g = l.glyphs.iter().find(|g| g.byte == 1).unwrap();
+    assert!(g.scale > 1.0 + 1e-6, "the glyph is widened: {}", g.scale);
+    let drawn = g.xf.as_coeffs()[4];
+    assert!((g.origin.x + g.width_start - drawn).abs() < 1e-6, "{} {} {drawn}", g.origin.x, g.width_start);
     let mut spaced = point("H H", style(100.0));
     spaced.para.justification.word_spacing = [200.0, 200.0, 200.0];
     let moved = moves(&spaced, &with(&spaced, 1, |s| s.aki_right = 250.0), &[0, 2]);
