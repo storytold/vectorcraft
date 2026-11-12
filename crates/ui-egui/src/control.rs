@@ -441,13 +441,19 @@ impl Hiding {
 }
 
 /// The paths outside the read roots that `v`'s strings and keys name at any depth, written as paths
-/// ([`unreadable_path_like`]), each as a hidden library id (`loaded/<path>`) with `loaded/<file name>`
-/// shown. The error of a failed request hides them as it hides a hidden library's path, with that file
-/// name also for a hidden library shown as `loaded/<file name> (2)`, so that it reads the same whether
-/// or not a library was loaded from one of them.
+/// ([`unreadable_path_like`]) or held by a path param
+/// ([`vectorcraft_engine::file_access::is_path_key`]), a relative one too, each as a hidden library id
+/// (`loaded/<path>`) with `loaded/<file name>` shown. A reply hides them as it hides a hidden library's
+/// path, with that file name also for a hidden library shown as `loaded/<file name> (2)`, so that it
+/// reads the same whether or not a library was loaded from one of them.
 fn sent_paths(v: &Value, out: &mut Vec<(String, String)>) {
-    fn add(s: &str, out: &mut Vec<(String, String)>) {
-        if !unreadable_path_like(s) {
+    collect_sent_paths(v, false, out);
+}
+
+/// [`sent_paths`] on `v`, which a path param holds when `path_param` is set.
+fn collect_sent_paths(v: &Value, path_param: bool, out: &mut Vec<(String, String)>) {
+    fn add(s: &str, path_param: bool, out: &mut Vec<(String, String)>) {
+        if !unreadable_path_like(s) && !(path_param && !readable_value(s)) {
             return;
         }
         // A URL that names another host as the path after its scheme (`//host/share/…`).
@@ -463,12 +469,12 @@ fn sent_paths(v: &Value, out: &mut Vec<(String, String)>) {
         }
     }
     match v {
-        Value::String(s) => add(s, out),
-        Value::Array(items) => items.iter().for_each(|item| sent_paths(item, out)),
+        Value::String(s) => add(s, path_param, out),
+        Value::Array(items) => items.iter().for_each(|item| collect_sent_paths(item, path_param, out)),
         Value::Object(fields) => {
             for (key, item) in fields {
-                add(key, out);
-                sent_paths(item, out);
+                add(key, false, out);
+                collect_sent_paths(item, vectorcraft_engine::file_access::is_path_key(key), out);
             }
         }
         _ => {}
@@ -510,7 +516,7 @@ fn collect_library_panel_ids(v: &Value, ids: &mut std::collections::BTreeSet<Str
 /// ([`begins_known_id`]): a readable library's id that begins with a hidden one keeps its path. On
 /// Windows the ids and paths are matched in any case of ASCII letters.
 fn hide_library_ids(v: &mut Value, hiding: &Hiding) {
-    let pairs = hidden_text(&hiding.hidden);
+    let pairs = hidden_text(hiding);
     if pairs.is_empty() {
         return;
     }
@@ -518,16 +524,22 @@ fn hide_library_ids(v: &mut Value, hiding: &Hiding) {
 }
 
 /// The text [`hide_library_ids`] replaces, longest first: each hidden id with the id shown, and the
-/// path in it with the file name shown, the path written with either separator too, and with each `\`
-/// doubled (a path quoted with `{:?}`).
-fn hidden_text(ids: &[(String, String)]) -> Vec<(String, String)> {
+/// path in it with the file name shown, the path written with either separator too, and as `{:?}`
+/// quotes it (each `\`, quote and control character escaped).
+fn hidden_text(hiding: &Hiding) -> Vec<(String, String)> {
+    let quoted = |s: &str| {
+        let q = format!("{s:?}");
+        q[1..q.len() - 1].to_string()
+    };
     let mut pairs: Vec<(String, String)> = Vec::new();
-    for (id, shown) in ids {
+    for (id, shown) in &hiding.hidden {
         let path = &id["loaded/".len()..];
         let name = shown.strip_prefix("loaded/").unwrap_or(shown);
-        let back = path.replace('/', "\\");
-        for path in [path.to_string(), path.replace('\\', "/"), back.replace('\\', "\\\\"), back] {
-            for (from, to) in [(format!("loaded/{path}"), shown.clone()), (path, name.to_string())] {
+        let (forward, back) = (path.replace('\\', "/"), path.replace('/', "\\"));
+        let debug = [quoted(path), quoted(&forward), quoted(&back)].map(|p| (p, quoted(name)));
+        let plain = [path.to_string(), forward, back].map(|p| (p, name.to_string()));
+        for (path, name) in plain.into_iter().chain(debug) {
+            for (from, to) in [(format!("loaded/{path}"), format!("loaded/{name}")), (path, name)] {
                 if !pairs.iter().any(|(f, _)| *f == from) {
                     pairs.push((from, to));
                 }
@@ -596,44 +608,68 @@ fn occurrences(text: &str, needle: &str, fold: bool) -> Vec<usize> {
 
 /// `s` with the `from` texts of the rewrite's pairs written as their `to` texts, at each occurrence
 /// that does not begin another loaded library's id ([`begins_known_id`]). A hidden id or path written
-/// with `%XX` escapes (in a `file:` URL) is
-/// replaced too; the escapes around it stay. `None` when nothing changed.
+/// with `%XX` escapes (in a `file:` URL) is replaced too; the escapes around it stay. Every occurrence
+/// is found in `s` as it was given, longest `from` first, and one that overlaps an occurrence already
+/// found, or a loaded library's id that one began, stays: a replacement's text is not searched again.
+/// With the rewrite's `fold`, the ids and paths as written are found first, so that two libraries whose
+/// paths differ only in letter case keep their own ids, and then the ones written in another case.
+/// `None` when nothing changed.
 fn replace_text(s: &str, r: &Rewrite) -> Option<String> {
-    let replaced = replace_plain_text(s, r);
-    let text = replaced.as_deref().unwrap_or(s);
-    if !text.contains('%') {
-        return replaced;
-    }
-    let Some((decoded, spans)) = decoded_with_spans(text) else { return replaced };
-    if decoded == text {
-        return replaced;
-    }
-    // The spans of `text` to replace, found in the decoded text, longest `from` first.
-    let mut cuts: Vec<(usize, usize, &str)> = Vec::new();
-    let mut taken: Vec<(usize, usize)> = Vec::new();
-    for (from, to) in &r.pairs {
-        for at in occurrences(&decoded, from, r.fold) {
-            let end = at + from.len();
-            let free = !taken.iter().any(|&(a, b)| at < b && a < end);
-            if free && !begins_known_id(&decoded, at, end, r) {
-                taken.push((at, end));
-                cuts.push((spans[at].0, spans[end - 1].1, to.as_str()));
+    let decoded = if s.contains('%') { decoded_with_spans(s).filter(|(decoded, _)| decoded != s) } else { None };
+    let mut found = Found::default();
+    for fold in [false, true].into_iter().take(if r.fold { 2 } else { 1 }) {
+        for (from, to) in &r.pairs {
+            if let Some((text, spans)) = &decoded {
+                found.claim(text, Some(spans.as_slice()), from, to, fold, r);
             }
+            found.claim(s, None, from, to, fold, r);
         }
     }
-    if cuts.is_empty() {
-        return replaced;
+    if found.cuts.is_empty() {
+        return None;
     }
+    let mut cuts = found.cuts;
     cuts.sort_unstable_by_key(|&(start, _, _)| start);
-    let mut out = String::with_capacity(text.len());
+    let mut out = String::with_capacity(s.len());
     let mut copied = 0;
     for (start, stop, to) in cuts {
-        out.push_str(&text[copied..start]);
+        out.push_str(&s[copied..start]);
         out.push_str(to);
         copied = stop;
     }
-    out.push_str(&text[copied..]);
+    out.push_str(&s[copied..]);
     Some(out)
+}
+
+/// The spans of a text that [`replace_text`] replaces, each with its replacement, and every span it has
+/// taken: the ones it replaces and the loaded library ids it keeps.
+#[derive(Default)]
+struct Found<'a> {
+    cuts: Vec<(usize, usize, &'a str)>,
+    taken: Vec<(usize, usize)>,
+}
+
+impl<'a> Found<'a> {
+    /// Takes each occurrence of `from` in `text` that overlaps no span taken: as a span to write as `to`,
+    /// or, where it begins a loaded library's id ([`begins_known_id`]), that id's span, kept. `spans`
+    /// gives the range of the original text each byte of a decoded `text` was read from.
+    fn claim(&mut self, text: &str, spans: Option<&[(usize, usize)]>, from: &str, to: &'a str, fold: bool, r: &Rewrite) {
+        let span = |at: usize, end: usize| spans.map_or((at, end), |s| (s[at].0, s[end - 1].1));
+        for at in occurrences(text, from, fold) {
+            let end = at + from.len();
+            let (start, stop) = span(at, end);
+            if self.taken.iter().any(|&(a, b)| start < b && a < stop) || ends_a_longer_path(text, at, from) {
+                continue;
+            }
+            match begins_known_id(text, at, end, r) {
+                Some(len) => self.taken.push(span(at, at + len)),
+                None => {
+                    self.taken.push((start, stop));
+                    self.cuts.push((start, stop, to));
+                }
+            }
+        }
+    }
 }
 
 /// `text` with its `%XX` escapes decoded, and for each byte of the decoded text the range of `text`
@@ -679,44 +715,18 @@ fn decoded_with_spans(text: &str) -> Option<(String, Vec<(usize, usize)>)> {
     Some((decoded, decoded_spans))
 }
 
-/// `s` with the `from` texts of the rewrite's pairs written as their `to` texts, as [`replace_text`]
-/// writes them in text without `%XX` escapes. With the rewrite's `fold`, the ids and paths as written
-/// are replaced first, so that two libraries whose paths differ only in letter case keep their own
-/// ids, and then the ones written in another case. `None` when nothing changed.
-fn replace_plain_text(s: &str, r: &Rewrite) -> Option<String> {
-    let exact = replace_matches(s, r, false);
-    if !r.fold {
-        return exact;
-    }
-    replace_matches(exact.as_deref().unwrap_or(s), r, true).or(exact)
-}
-
-/// `s` with the `from` texts of the rewrite's pairs written as their `to` texts, matched in any case
-/// of ASCII letters with `fold`. `None` when nothing changed.
-fn replace_matches(s: &str, r: &Rewrite, fold: bool) -> Option<String> {
-    let mut out: Option<String> = None;
-    for (from, to) in &r.pairs {
-        let text = out.as_deref().unwrap_or(s);
-        let found = occurrences(text, from, fold);
-        if found.is_empty() {
-            continue;
-        }
-        let mut next = String::with_capacity(text.len());
-        let mut copied = 0;
-        for at in found {
-            let end = at + from.len();
-            if !begins_known_id(text, at, end, r) {
-                next.push_str(&text[copied..at]);
-                next.push_str(to);
-                copied = end;
-            }
-        }
-        if copied > 0 {
-            next.push_str(&text[copied..]);
-            out = Some(next);
-        }
-    }
-    out
+/// Is `from`, a relative path (one that does not start with a separator, a drive or `loaded/`), at
+/// `text[at..]` the end of a longer path: is it preceded by a letter, a digit, `_`, `-`, `.`, `~` or a
+/// separator other than one after `.` or `..`? `/work/data/icon.svg` does not hold the path
+/// `data/icon.svg`; `./data/icon.svg` does.
+fn ends_a_longer_path(text: &str, at: usize, from: &str) -> bool {
+    let absolute =
+        from.starts_with(['/', '\\']) || from.starts_with("loaded/") || matches!(from.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    let before = &text[..at];
+    !absolute
+        && !before.ends_with("./")
+        && !before.ends_with(".\\")
+        && before.ends_with(|c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '~' | '/' | '\\'))
 }
 
 /// Does text that follows a path continue it: a letter, a digit, `_` or a separator, after any `.`,
@@ -727,17 +737,18 @@ fn continues_path(rest: &str) -> bool {
 
 /// Does the occurrence `text[at..end]` begin a longer loaded library id ([`Hiding::readable`]), written
 /// with or without its `loaded/` and with no `.` or `..` part, that ends where the text stops
-/// continuing a path ([`continues_path`])?
+/// continuing a path ([`continues_path`])? The length of that id as written, when it does.
 /// A readable library's id that begins with a hidden one stays, also with a space after the hidden
 /// part; a hidden path followed by other path text (`<path>.bak`, `<path>/../x`) is still hidden.
-fn begins_known_id(text: &str, at: usize, end: usize, r: &Rewrite) -> bool {
+fn begins_known_id(text: &str, at: usize, end: usize, r: &Rewrite) -> Option<usize> {
     let rest = &text[at..];
     let same = |a: &str, b: &str| if r.fold { a.eq_ignore_ascii_case(b) } else { a == b };
     let dotted = |id: &str| id.split(['/', '\\']).any(|part| part == "." || part == "..");
     let prefixed = rest.get(.."loaded/".len()).is_some_and(|head| same(head, "loaded/"));
-    r.hiding.readable.iter().filter(|known| !dotted(known)).any(|known| {
+    r.hiding.readable.iter().filter(|known| !dotted(known)).find_map(|known| {
         let id = if prefixed { known.as_str() } else { known.strip_prefix("loaded/").unwrap_or(known) };
-        id.len() > end - at && rest.get(..id.len()).is_some_and(|head| same(head, id)) && !continues_path(&rest[id.len()..])
+        let begins = id.len() > end - at && rest.get(..id.len()).is_some_and(|head| same(head, id)) && !continues_path(&rest[id.len()..]);
+        begins.then_some(id.len())
     })
 }
 
@@ -826,11 +837,11 @@ fn readable(path: &str) -> bool {
 }
 
 /// Is `s` a path the request may not read, written as an absolute path (either separator, with or
-/// without a drive) or a `file:` URL ([`file_url_path`])? A `file:` URL that names another host is
-/// never readable.
+/// without a drive) or a `file:` URL ([`file_url_path`])? Under a read root, a `file:` URL that names
+/// another host is never readable.
 fn unreadable_absolute(s: &str) -> bool {
     match file_url_path(s) {
-        Some(path) => !path.is_some_and(|p| readable(&p)),
+        Some(path) => !readable_url_path(path),
         None => {
             let absolute = s.starts_with(['/', '\\']) || matches!(s.as_bytes(), [drive, b':', b'/' | b'\\', ..] if drive.is_ascii_alphabetic());
             absolute && !readable(s)
@@ -854,8 +865,17 @@ fn unreadable_path_like(s: &str) -> bool {
 /// May the request read the path `s` names, a path or a `file:` URL ([`file_url_path`])?
 fn readable_value(s: &str) -> bool {
     match file_url_path(s) {
-        Some(path) => path.is_some_and(|p| readable(&p)),
+        Some(path) => readable_url_path(path),
         None => readable(s),
+    }
+}
+
+/// May the request read the local path a `file:` URL names ([`file_url_path`])? A URL that names
+/// another host may be read only without a read root in force.
+fn readable_url_path(path: Option<String>) -> bool {
+    match path {
+        Some(path) => readable(&path),
+        None => vectorcraft_engine::file_access::current().is_none(),
     }
 }
 
@@ -1026,8 +1046,8 @@ const DOCKING_ACTION: &str = "action";
 /// in a [`LIBRARY_PARAMS`] param, and the reply shows that id. Under a read root, the reply shows each
 /// such library's id and path as `ui.inspect` does ([`hide_library_ids`]) in every string and key,
 /// errors included, an error from a panic too: the libraries hidden before it ran and after it. The
-/// error of a failed request also hides the paths outside the read root that the request sent
-/// ([`sent_paths`]). A reply with no `/`, `\` or `%` in it is not searched, since every hidden path
+/// reply also shows each path outside the read root that the request sent by its file name, whether it
+/// succeeded or failed ([`sent_paths`]). A reply with no `/`, `\` or `%` in it is not searched, since every hidden path
 /// holds a separator, written or escaped. A screenshot's reply is hidden when it is sent
 /// ([`hide_in_deferred_reply`]); a `ui.pointer` reply sent after the tool's edit holds no library id
 /// or path.
@@ -1062,19 +1082,17 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
     Outcome::Done(reply)
 }
 
-/// Hides in `reply` the libraries hidden now and in `before`, and for a failed request the paths
-/// outside the read root that `sent`, the request's params, holds ([`handle`]).
+/// Hides in `reply` the libraries hidden now and in `before`, and the paths outside the read root that
+/// `sent`, the request's params, holds ([`handle`]).
 fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: Hiding) {
     if !holds_a_separator(reply) {
         return;
     }
     let mut hiding = unreadable_library_ids(app);
     hiding.merge(before);
-    if reply.get("ok").and_then(Value::as_bool) == Some(false) {
-        let mut paths = Vec::new();
-        sent_paths(sent, &mut paths);
-        hiding.set_hidden(paths, cfg!(windows));
-    }
+    let mut paths = Vec::new();
+    sent_paths(sent, &mut paths);
+    hiding.set_hidden(paths, cfg!(windows));
     hide_library_ids(reply, &hiding);
 }
 

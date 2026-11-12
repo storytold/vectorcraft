@@ -157,9 +157,11 @@ the suite) keep the agent to the folders you give it:
   (`ui.palette_query`), a script's report (`scriptReport`), a screenshot's reply and the error from an internal
   fault included, for the libraries hidden before the request ran and after it. The path is also matched with `%XX` escapes as a `file:`
   URL writes it, and on Windows in any case of its letters. A hidden id or path stays only where it begins
-  another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with a hidden one stays. The error of a failed request also shows a path outside the
-  read roots that the request sent by its file name, whether or not a library was loaded from it, so that the
-  error reads the same either way. Encoded file data, a base64 string under `dataBase64`,
+  another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with a hidden one stays. A reply also shows a path outside the
+  read roots that the request sent by its file name, whether or not a library was loaded from it and whether the
+  request succeeded or failed, so that the reply reads the same either way. A path param (`path`, `file`,
+  `destinationFolder` and the like) counts with a relative path too. A relative path is not replaced where it ends a
+  longer path (`/work/data/icon.svg` keeps `data/icon.svg`). Encoded file data, a base64 string under `dataBase64`,
   `pngBase64` or `thumbnailBase64`, is sent as it is.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
